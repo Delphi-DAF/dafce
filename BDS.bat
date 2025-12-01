@@ -2,7 +2,7 @@
 setlocal enableextensions enabledelayedexpansion
 
 set SELF_NAME=%~n0
-set SELF_VS=3.1.0
+set SELF_VS=4.0.0
 
 :: Análisis de argumentos
 for %%A in (%*) do (
@@ -28,10 +28,6 @@ for %%A in (%*) do (
 )
 if not defined CMD set "CMD=start"
 
-:: to inspect command line arguments
-:: echo Command: %CMD% Args:
-:: SET ARG_
-
 set "PRJ_ROOT_KEY=USR_PRJ"
 :: Current dir without trailing backslash
 set WORK_DIR=%~dp0
@@ -56,9 +52,13 @@ for %%i IN ("%PRJ_DIR%") DO set "PRJ_NAME=%%~ni"
 
 set "PRJ_REG_KEY=%PRJ_ROOT_KEY%\%PRJ_NAME%"
 
-:: load project specific settings so we can override defaults
-call "%WORK_DIR%\project.cmd"
+if /i (%CMD%)==(help)  goto :HELP
+if /i (%CMD%)==(init)  goto :INIT
 
+if exist "%WORK_DIR%\%COMPUTERNAME%.project.cmd" (call "%WORK_DIR%\%COMPUTERNAME%.project.cmd" :on_init)
+
+:: load project specific settings so we can override defaults
+if  exist "%WORK_DIR%\project.cmd" (call "%WORK_DIR%\project.cmd" :on_init)
 
 :: add vendor_bin to path, so you can install your vendor pkg
 set PATH=%PATH%;%PRJ_VENDOR_DIR%\bin
@@ -87,7 +87,9 @@ if %IDE_VER% LEQ 7 (
     if !IDE_VER! LEQ 19 (
       set /A IDE_VER-=7
     ) else (
-      set /A IDE_VER-=6
+      if !IDE_VER! LEQ 29 (
+        set /A IDE_VER-=6
+      )
     )
   )
 )
@@ -129,6 +131,8 @@ set "BDS_APP_REG_KEY="
 :: set IDE DefaultProjectsDirectory 
 reg add "%delphi_reg%\Globals" /v "DefaultProjectsDirectory" /t REG_SZ /d "%PRJ_DIR%" /f >nul
 
+call "%rsvars%" > nul
+call "%WORK_DIR%\project.cmd" :on_start
 call :BANNER
 
 :: select command
@@ -138,18 +142,142 @@ goto :eof
 
 :: Error handling
 :ERR_PRJ_IDE_NOT_DEFINED
-echo PRJ_IDE variable not defined
+echo ERROR: PRJ_IDE variable not defined
+echo.
+echo The PRJ_IDE variable must be set in project.cmd to specify the RAD Studio version.
+echo.
+echo Example values:
+echo   set "PRJ_IDE=D270"  for RAD Studio 11.0 Alexandria 
+echo   set "PRJ_IDE=D280"  for RAD Studio 11.3 Alexandria 
+echo   set "PRJ_IDE=D290"  for RAD Studio 12.0 Athens
+echo   set "PRJ_IDE=D370"  for RAD Studio 13.0 Florence
+echo etc.
+echo.
+echo Please use INIT command to create a valid project.cmd (or edit it manually) and add the appropriate PRJ_IDE setting.
 goto :eof
 
 :ERR_IDE_VS_NOT_FOUND
-echo IDE version not found, check PRJ_IDE variable and ensure Delphi is installed
+echo ERROR: RAD Studio IDE version !IDE_VER! not found
+echo.
+echo The specified IDE version is not installed or not properly configured.
+echo.
+echo Please check:
+echo   1. RAD Studio !IDE_VER! is installed
+echo   2. PRJ_IDE variable in project.cmd matches your installed version
+echo   3. Registry entries are properly configured
+echo.
+echo Current PRJ_IDE setting: %PRJ_IDE%
+goto :eof
+
+:CREATE_PROJECT_CMD
+echo Creating default project.cmd file...
+(
+echo goto %%1
+echo.
+echo :: Called early to set PRJ_IDE and basic variables
+echo :on_init
+echo :: mandatory project vars
+echo set "PRJ_IDE=D370"
+echo.
+echo :: custom project vars
+
+echo goto :eof
+echo.
+echo :: Called after IDE detection to set final variables
+echo :on_start
+echo :: here you can assume BDS defaultvariables like BDS_INCLUDE are available
+echo goto :eof
+) > "%WORK_DIR%\project.cmd"
+echo Default project.cmd created. You may need to edit PRJ_IDE for your RAD Studio version.
 goto :eof
 
 :: Available commands
+::-------------------------------
+
+:: Show version banner
 :BANNER
-echo %SELF_NAME% v%SELF_VS%
+echo %SELF_NAME% v%SELF_VS% - Project build and management tool for EmbarcaderoRAD Studio
+echo -- (c) j.cangas@pm.me ^| Use %SELF_NAME% help to see available commands --
 exit /B 0
 
+:: to inspect command line arguments
+:DEBUG
+echo Command:
+echo %CMD%
+echo Args:
+SET ARG_
+exit /B 0
+
+::help>>
+:: HELP: Show this help
+::       Usage: help [COMMAND]
+::help<<
+:HELP
+call :BANNER
+echo.
+echo ======= Help =======
+if "%~2"=="" (
+echo Syntax: %SELF_NAME% [command] [--key:value] [--flag]
+echo        %SELF_NAME% help [COMMAND]
+echo.
+echo CONFIGURATION:
+echo This script requires a project.cmd file with project-specific settings. See INIT command to create a default one.
+echo Optional machine-specific overrides can be placed in "%%COMPUTERNAME%%.project.cmd"
+echo.
+echo COMMANDS:
+)
+set "inHelp="
+if "%~2"=="" (set "showBlock=yes") else (set "showBlock=")
+for /f "usebackq delims=" %%i in (`findstr /r /c:"^::help>>" /c:"^::help<<" /c:"^::" "%~f0"`) do (
+    set "line=%%i"
+    if "!line!"=="::help>>" (
+        set "inHelp=yes"
+        if not "%~2"=="" set "showBlock="
+    ) else if "!line!"=="::help<<" (
+        if not "%~2"=="" if defined showBlock goto :help_done
+        set "inHelp="
+        if defined showBlock echo.
+    ) else if defined inHelp (
+        if "!line:~0,2!"=="::" (
+            set "helpText=!line:~3!"
+            if not "%~2"=="" (
+                for /f "tokens=1 delims=:" %%c in ("!helpText!") do (
+                    if /i "%%c"=="%~2" set "showBlock=yes"
+                )
+            )
+            if defined showBlock echo !helpText!
+        )
+    )
+)
+:help_done
+if "%~2"=="" (
+echo EXAMPLES:
+echo   %SELF_NAME% build --64 --config:Release
+echo   %SELF_NAME% clean --config:Debug
+echo   %SELF_NAME% help init
+)
+echo ---------------------------
+goto :eof
+
+::help>>
+:: INIT: Create a default project.cmd file
+::help<<
+:INIT
+
+if exist "%WORK_DIR%\project.cmd" (
+    echo project.cmd already exists. Use --force to overwrite.
+    if not "%ARG_FORCE%"=="true" goto :eof
+)
+echo in iinit
+call :CREATE_PROJECT_CMD
+echo.
+echo project.cmd created successfully.
+echo Edit the PRJ_IDE variable to match your RAD Studio version.
+goto :eof
+
+::help>>
+:: INSPECT: Show project and BDS variables
+::help<<
 :INSPECT
 echo.
 echo    project variables
@@ -162,36 +290,70 @@ SET BDS
 echo delphi_reg=%delphi_reg%
 exit /B 0
 
+:: Create installer using Inno Setup
+::help>>
+:: INNO: Create installer using Inno Setup
+::help<<
 :INNO
 iscc /Qp .\AppSetup.iss /DBuildConfig=Release
 exit /B 0
 
+::help>>
+:: CLEAN: Clean build artifacts
+::       --config: [Debug]|Release
+::       --64: Build for 64-bit platform  
+::       --output: <path> Set output directory
+::help<<
 :CLEAN
 if (%ARG_CONFIG%)==() (
   set "ARG_CONFIG=Debug"
 ) 
+if (%ARG_64%)==(true) (
+  set "ARG_PLATFORM=Win64"
+) else  (
+  set "ARG_PLATFORM=Win32"
+)
+
 if (%ARG_OUTPUT%) neq () (
   set "PRJ_OUT_DIR=%ARG_OUTPUT%"
 ) 
 if exist "%BDSbin%" ( 
   call "%rsvars%" > nul
-  call msbuild "%PRJ_BUILD_FILE%" /t:Clean /verbosity:quiet /p:Config=%ARG_CONFIG% /p:Platform=Win32
+  call msbuild "%PRJ_BUILD_FILE%" /t:Clean /verbosity:quiet /p:Platform=%ARG_PLATFORM% /p:Config=%ARG_CONFIG%
 )
 exit /B 0
 
+::help>>
+:: MAKE: Build project using MSBuild
+::       --config: [Debug]|Release
+::       --64: Build for 64-bit platform  
+::       --output: <path> Set output directory
+::help<<
 :MAKE
 if (%ARG_CONFIG%)==() (
   set "ARG_CONFIG=Debug"
 ) 
+if (%ARG_64%)==(true) (
+  set "ARG_PLATFORM=Win64"
+) else  (
+  set "ARG_PLATFORM=Win32"
+)
+
 if (%ARG_OUTPUT%) neq () (
   set "PRJ_OUT_DIR=%ARG_OUTPUT%"
 ) 
 if exist "%BDSbin%" ( 
   call "%rsvars%" > nul
-  call msbuild "%PRJ_BUILD_FILE%" /t:make /verbosity:quiet /p:Config=%ARG_CONFIG% /p:Platform=Win32
+  call msbuild "%PRJ_BUILD_FILE%" /t:make /verbosity:quiet /p:Platform=%ARG_PLATFORM% /p:Config=%ARG_CONFIG%
 )
 exit /B 0
-
+  
+::help>>
+:: BUILD: Build project with full rebuild
+::       --config: [Debug]|Release
+::       --64: Build for 64-bit platform  
+::       --output: <path> Set output directory
+::help<<
 :BUILD
 if (%ARG_CONFIG%)==() (
   set "ARG_CONFIG=Debug"
@@ -211,10 +373,17 @@ if exist "%BDSbin%" (
 )
 exit /B 0
 
+::help>>
+:: START: Start RAD Studio IDE and load default project
+::help<<
 :START
 start "BDS" "%BDSApp%" -idecaption="%PRJ_NAME%" -r"%PRJ_REG_KEY%" "%PRJ_BUILD_FILE%" 
 exit /B 0
 
+::help>>
+:: ENV: Setup development environment
+::     --mode: [deve]|prod|test
+::help<<
 :ENV
 if (%ARG_MODE%)==() (
   set "ARG_MODE=deve"
