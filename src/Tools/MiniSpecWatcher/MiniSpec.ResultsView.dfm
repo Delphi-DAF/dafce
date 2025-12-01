@@ -1,25 +1,25 @@
 object ResultsView: TResultsView
   Left = 0
   Top = 0
-  Margins.Left = 8
-  Margins.Top = 8
-  Margins.Right = 8
-  Margins.Bottom = 8
+  Margins.Left = 14
+  Margins.Top = 14
+  Margins.Right = 14
+  Margins.Bottom = 14
   AlphaBlend = True
   BorderStyle = bsNone
   Caption = 'MiniSpec Watcher'
-  ClientHeight = 616
-  ClientWidth = 762
+  ClientHeight = 1109
+  ClientWidth = 1372
   Color = clWindow
   CustomTitleBar.CaptionAlignment = taCenter
-  CustomTitleBar.Height = 70875
+  CustomTitleBar.Height = 127575
   CustomTitleBar.SystemHeight = False
   Ctl3D = False
   DefaultMonitor = dmDesktop
   DoubleBuffered = True
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
-  Font.Height = -28
+  Font.Height = -50
   Font.Name = 'Tahoma'
   Font.Style = []
   Icon.Data = {
@@ -1808,38 +1808,38 @@ object ResultsView: TResultsView
   RoundedCorners = rcOn
   StyleElements = [seFont, seClient]
   OnShow = FormShow
-  PixelsPerInch = 240
-  TextHeight = 34
+  PixelsPerInch = 432
+  TextHeight = 60
   object PageControl: TPageControl
     AlignWithMargins = True
-    Left = 8
-    Top = 8
-    Width = 746
-    Height = 381
-    Margins.Left = 8
-    Margins.Top = 8
-    Margins.Right = 8
-    Margins.Bottom = 8
+    Left = 14
+    Top = 14
+    Width = 1344
+    Height = 689
+    Margins.Left = 14
+    Margins.Top = 14
+    Margins.Right = 14
+    Margins.Bottom = 14
     ActivePage = AboutArea
     Align = alClient
     TabOrder = 0
     object ReportArea: TTabSheet
       AlignWithMargins = True
-      Margins.Left = 8
-      Margins.Top = 8
-      Margins.Right = 8
-      Margins.Bottom = 8
+      Margins.Left = 14
+      Margins.Top = 14
+      Margins.Right = 14
+      Margins.Bottom = 14
       Caption = 'Report'
       object ReportLayout: TGridPanel
         AlignWithMargins = True
-        Left = 17
-        Top = 67
-        Width = 675
-        Height = 222
-        Margins.Left = 17
-        Margins.Top = 7
-        Margins.Right = 17
-        Margins.Bottom = 7
+        Left = 31
+        Top = 121
+        Width = 1218
+        Height = 408
+        Margins.Left = 31
+        Margins.Top = 13
+        Margins.Right = 31
+        Margins.Bottom = 13
         Align = alClient
         BevelOuter = bvNone
         ColumnCollection = <
@@ -1885,97 +1885,109 @@ object ResultsView: TResultsView
         object PassCounterCtl: TLabel
           Left = 0
           Top = 0
-          Width = 257
-          Height = 117
-          Margins.Left = 8
-          Margins.Top = 8
-          Margins.Right = 8
-          Margins.Bottom = 8
+          Width = 609
+          Height = 204
+          Margins.Left = 14
+          Margins.Top = 14
+          Margins.Right = 14
+          Margins.Bottom = 14
           Align = alClient
           Caption = 'Pass:'
           Font.Charset = DEFAULT_CHARSET
           Font.Color = clGreen
-          Font.Height = -97
+          Font.Height = -175
           Font.Name = 'Tahoma'
           Font.Style = [fsBold]
           ParentFont = False
           Layout = tlCenter
           StyleElements = [seClient, seBorder]
+          ExplicitWidth = 464
+          ExplicitHeight = 211
         end
         object FailCounterCtl: TLabel
           Left = 0
-          Top = 111
-          Width = 257
-          Height = 117
-          Margins.Left = 8
-          Margins.Top = 8
-          Margins.Right = 8
-          Margins.Bottom = 8
+          Top = 204
+          Width = 609
+          Height = 204
+          Margins.Left = 14
+          Margins.Top = 14
+          Margins.Right = 14
+          Margins.Bottom = 14
           Align = alClient
           Caption = 'Fails:'
           Font.Charset = DEFAULT_CHARSET
           Font.Color = clRed
-          Font.Height = -97
+          Font.Height = -175
           Font.Name = 'Tahoma'
           Font.Style = [fsBold]
           ParentFont = False
           Layout = tlCenter
           StyleElements = [seClient, seBorder]
+          ExplicitTop = 200
+          ExplicitWidth = 467
+          ExplicitHeight = 211
         end
         object PassValueCtl: TLabel
-          Left = 398
+          Left = 609
           Top = 0
-          Width = 278
-          Height = 117
-          Margins.Left = 8
-          Margins.Top = 8
-          Margins.Right = 8
-          Margins.Bottom = 8
+          Width = 609
+          Height = 204
+          Margins.Left = 14
+          Margins.Top = 14
+          Margins.Right = 14
+          Margins.Bottom = 14
           Align = alClient
           Alignment = taRightJustify
           Caption = '9.999'
           Color = clWindow
           Font.Charset = DEFAULT_CHARSET
           Font.Color = clGreen
-          Font.Height = -97
+          Font.Height = -175
           Font.Name = 'Tahoma'
           Font.Style = [fsBold]
           ParentColor = False
           ParentFont = False
           Layout = tlCenter
+          ExplicitLeft = 718
+          ExplicitWidth = 499
+          ExplicitHeight = 211
         end
         object FailsValueCtl: TLabel
-          Left = 398
-          Top = 111
-          Width = 278
-          Height = 117
-          Margins.Left = 8
-          Margins.Top = 8
-          Margins.Right = 8
-          Margins.Bottom = 8
+          Left = 609
+          Top = 204
+          Width = 609
+          Height = 204
+          Margins.Left = 14
+          Margins.Top = 14
+          Margins.Right = 14
+          Margins.Bottom = 14
           Align = alClient
           Alignment = taRightJustify
           Caption = '9,999'
           Color = clWindow
           Font.Charset = DEFAULT_CHARSET
           Font.Color = clRed
-          Font.Height = -97
+          Font.Height = -175
           Font.Name = 'Tahoma'
           Font.Style = [fsBold]
           ParentColor = False
           ParentFont = False
           Layout = tlCenter
+          ExplicitLeft = 718
+          ExplicitTop = 200
+          ExplicitWidth = 499
+          ExplicitHeight = 211
         end
       end
       object ReportHEaderCtl: TPanel
         Left = 0
         Top = 0
-        Width = 709
-        Height = 60
-        Margins.Left = 8
-        Margins.Top = 8
-        Margins.Right = 8
-        Margins.Bottom = 8
+        Width = 1280
+        Height = 108
+        Margins.Left = 14
+        Margins.Top = 14
+        Margins.Right = 14
+        Margins.Bottom = 14
         Align = alTop
         Anchors = []
         BevelOuter = bvNone
@@ -1983,93 +1995,93 @@ object ResultsView: TResultsView
         object TitleCtl: TLabel
           Left = 0
           Top = 0
-          Width = 709
-          Height = 60
-          Margins.Left = 8
-          Margins.Top = 8
-          Margins.Right = 8
-          Margins.Bottom = 8
+          Width = 1280
+          Height = 108
+          Margins.Left = 14
+          Margins.Top = 14
+          Margins.Right = 14
+          Margins.Bottom = 14
           Align = alClient
           Alignment = taCenter
           AutoSize = False
           Caption = 'FileName'
           Font.Charset = ANSI_CHARSET
           Font.Color = clGreen
-          Font.Height = -30
+          Font.Height = -54
           Font.Name = 'Verdana'
           Font.Style = [fsBold]
           ParentFont = False
           Layout = tlCenter
+          ExplicitWidth = 1276
         end
       end
     end
     object AboutArea: TTabSheet
-      Margins.Left = 8
-      Margins.Top = 8
-      Margins.Right = 8
-      Margins.Bottom = 8
+      Margins.Left = 14
+      Margins.Top = 14
+      Margins.Right = 14
+      Margins.Bottom = 14
       Caption = 'About'
       ImageIndex = 2
       object Label2: TLabel
         AlignWithMargins = True
-        Left = 8
-        Top = 138
-        Width = 710
-        Height = 90
-        Margins.Left = 8
-        Margins.Top = 8
-        Margins.Right = 8
-        Margins.Bottom = 8
+        Left = 14
+        Top = 248
+        Width = 1280
+        Height = 162
+        Margins.Left = 14
+        Margins.Top = 14
+        Margins.Right = 14
+        Margins.Bottom = 14
         Align = alTop
         Alignment = taCenter
         Caption = '(c) j.cangas@pm.me'
         Color = clWindow
         Font.Charset = DEFAULT_CHARSET
         Font.Color = clGreen
-        Font.Height = -37
+        Font.Height = -67
         Font.Name = 'Tahoma'
         Font.Style = [fsBold]
         ParentColor = False
         ParentFont = False
         Layout = tlCenter
         WordWrap = True
-        ExplicitTop = 80
-        ExplicitWidth = 316
+        ExplicitWidth = 572
       end
       object Label3: TLabel
         AlignWithMargins = True
-        Left = 8
-        Top = 8
-        Width = 710
-        Height = 114
-        Margins.Left = 8
-        Margins.Top = 8
-        Margins.Right = 8
-        Margins.Bottom = 8
+        Left = 14
+        Top = 14
+        Width = 1280
+        Height = 206
+        Margins.Left = 14
+        Margins.Top = 14
+        Margins.Right = 14
+        Margins.Bottom = 14
         Align = alTop
         Alignment = taCenter
         Caption = 'MiniSpec Watcher v1.0.0'
         Color = clWindow
         Font.Charset = DEFAULT_CHARSET
         Font.Color = clGreen
-        Font.Height = -47
+        Font.Height = -85
         Font.Name = 'Tahoma'
         Font.Style = [fsBold]
         ParentColor = False
         ParentFont = False
         Layout = tlCenter
         WordWrap = True
-        ExplicitWidth = 440
+        ExplicitWidth = 793
       end
       object mSpecLogo: TImage
-        Left = 260
-        Top = 138
+        Left = 468
+        Top = 248
         Width = 150
         Height = 150
-        Margins.Left = 8
-        Margins.Top = 8
-        Margins.Right = 8
-        Margins.Bottom = 8
+        Margins.Left = 14
+        Margins.Top = 14
+        Margins.Right = 14
+        Margins.Bottom = 14
         AutoSize = True
         Center = True
         Picture.Data = {
@@ -2758,15 +2770,15 @@ object ResultsView: TResultsView
   end
   object BottomBar: TGridPanel
     AlignWithMargins = True
-    Left = 8
-    Top = 405
-    Width = 746
-    Height = 141
+    Left = 14
+    Top = 731
+    Width = 1344
+    Height = 254
     Cursor = crHandPoint
-    Margins.Left = 8
-    Margins.Top = 8
-    Margins.Right = 8
-    Margins.Bottom = 8
+    Margins.Left = 14
+    Margins.Top = 14
+    Margins.Right = 14
+    Margins.Bottom = 14
     Align = alBottom
     BevelOuter = bvNone
     ColumnCollection = <
@@ -2809,15 +2821,15 @@ object ResultsView: TResultsView
     TabOrder = 1
     OnMouseDown = StatusBarMouseDown
     DesignSize = (
-      746
-      141)
+      1344
+      254)
     object OpenReportBtm: TButton
-      Left = 92
-      Top = 3
-      Width = 188
-      Height = 63
+      Left = 167
+      Top = 6
+      Width = 338
+      Height = 114
       Margins.Left = 0
-      Margins.Top = 8
+      Margins.Top = 14
       Margins.Right = 0
       Margins.Bottom = 0
       Action = SpecsViewReportAct
@@ -2826,10 +2838,10 @@ object ResultsView: TResultsView
       TabOrder = 0
     end
     object RunSpecsBtn: TButton
-      Left = 466
-      Top = 3
-      Width = 187
-      Height = 63
+      Left = 840
+      Top = 6
+      Width = 336
+      Height = 114
       Margins.Left = 0
       Margins.Top = 0
       Margins.Right = 0
@@ -2840,10 +2852,10 @@ object ResultsView: TResultsView
       TabOrder = 1
     end
     object HideBtn: TButton
-      Left = 92
-      Top = 74
-      Width = 188
-      Height = 63
+      Left = 167
+      Top = 133
+      Width = 338
+      Height = 114
       Hint = 'Close'
       Margins.Left = 0
       Margins.Top = 0
@@ -2856,10 +2868,10 @@ object ResultsView: TResultsView
       OnClick = WindowCloseActExecute
     end
     object ExitBtn: TButton
-      Left = 466
-      Top = 74
-      Width = 187
-      Height = 63
+      Left = 840
+      Top = 133
+      Width = 336
+      Height = 114
       Margins.Left = 0
       Margins.Top = 0
       Margins.Right = 0
@@ -2872,23 +2884,23 @@ object ResultsView: TResultsView
   end
   object StatusBar: TStatusBar
     AlignWithMargins = True
-    Left = 8
-    Top = 562
-    Width = 746
-    Height = 46
+    Left = 14
+    Top = 1013
+    Width = 1344
+    Height = 82
     Cursor = crHandPoint
-    Margins.Left = 8
-    Margins.Top = 8
-    Margins.Right = 8
-    Margins.Bottom = 8
+    Margins.Left = 14
+    Margins.Top = 14
+    Margins.Right = 14
+    Margins.Bottom = 14
     Anchors = []
     Panels = <
       item
-        Width = 214
+        Width = 385
       end
       item
         Alignment = taRightJustify
-        Width = 500
+        Width = 900
       end>
     OnMouseDown = StatusBarMouseDown
   end

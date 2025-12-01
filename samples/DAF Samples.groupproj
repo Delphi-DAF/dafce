@@ -1,4 +1,4 @@
-<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
     <PropertyGroup>
         <ProjectGuid>{763F15D5-4337-4E6A-A248-E9B8CBDBFA3E}</ProjectGuid>
     </PropertyGroup>
@@ -22,9 +22,6 @@
             <Dependencies/>
         </Projects>
         <Projects Include="MastermindSpecs\MasterMind.Specs.dproj">
-            <Dependencies/>
-        </Projects>
-        <Projects Include="ORMSample\ORMSample.dproj">
             <Dependencies/>
         </Projects>
     </ItemGroup>
@@ -98,23 +95,14 @@
     <Target Name="MasterMind_Specs:Make">
         <MSBuild Projects="MastermindSpecs\MasterMind.Specs.dproj" Targets="Make"/>
     </Target>
-    <Target Name="ORMSample">
-        <MSBuild Projects="ORMSample\ORMSample.dproj"/>
-    </Target>
-    <Target Name="ORMSample:Clean">
-        <MSBuild Projects="ORMSample\ORMSample.dproj" Targets="Clean"/>
-    </Target>
-    <Target Name="ORMSample:Make">
-        <MSBuild Projects="ORMSample\ORMSample.dproj" Targets="Make"/>
-    </Target>
     <Target Name="Build">
-        <CallTarget Targets="ConfigExample;MediatRSample;ConsoleSample;HostedService;PingProcess;CalculatorSpecs;MasterMind_Specs;ORMSample"/>
+        <CallTarget Targets="ConfigExample;MediatRSample;ConsoleSample;HostedService;PingProcess;CalculatorSpecs;MasterMind_Specs"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="ConfigExample:Clean;MediatRSample:Clean;ConsoleSample:Clean;HostedService:Clean;PingProcess:Clean;CalculatorSpecs:Clean;MasterMind_Specs:Clean;ORMSample:Clean"/>
+        <CallTarget Targets="ConfigExample:Clean;MediatRSample:Clean;ConsoleSample:Clean;HostedService:Clean;PingProcess:Clean;CalculatorSpecs:Clean;MasterMind_Specs:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="ConfigExample:Make;MediatRSample:Make;ConsoleSample:Make;HostedService:Make;PingProcess:Make;CalculatorSpecs:Make;MasterMind_Specs:Make;ORMSample:Make"/>
+        <CallTarget Targets="ConfigExample:Make;MediatRSample:Make;ConsoleSample:Make;HostedService:Make;PingProcess:Make;CalculatorSpecs:Make;MasterMind_Specs:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
     <ItemGroup Condition="'$(BuildGroup)'=='Debug'">
@@ -138,12 +126,6 @@
         </BuildGroupProject>
         <BuildGroupProject Include="MastermindSpecs\MasterMind.Specs.dproj">
             <ProjectGuid>{039B3194-21B0-416C-AF5E-93119EFF88E4}</ProjectGuid>
-            <Configurations>Debug</Configurations>
-            <Platforms>Win32</Platforms>
-            <Enabled>False</Enabled>
-        </BuildGroupProject>
-        <BuildGroupProject Include="ORMSample\ORMSample.dproj">
-            <ProjectGuid>{F3E00B93-E5F2-41FE-A502-314C220AED1E}</ProjectGuid>
             <Configurations>Debug</Configurations>
             <Platforms>Win32</Platforms>
             <Enabled>False</Enabled>

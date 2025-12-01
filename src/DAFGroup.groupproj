@@ -45,10 +45,7 @@
         <Projects Include="MiniSpec\Daf.MiniSpec.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="DAL.Abstractions\Daf.DAL.Abstractions.dproj">
-            <Dependencies/>
-        </Projects>
-        <Projects Include="DAL\Daf.DAL.dproj">
+        <Projects Include="Tools\MiniSpecWatcher\MiniSpecWatcher.dproj">
             <Dependencies/>
         </Projects>
     </ItemGroup>
@@ -185,32 +182,23 @@
     <Target Name="Daf_MiniSpec:Make">
         <MSBuild Projects="MiniSpec\Daf.MiniSpec.dproj" Targets="Make"/>
     </Target>
-    <Target Name="Daf_DAL_Abstractions">
-        <MSBuild Projects="DAL.Abstractions\Daf.DAL.Abstractions.dproj"/>
+    <Target Name="MiniSpecWatcher">
+        <MSBuild Projects="Tools\MiniSpecWatcher\MiniSpecWatcher.dproj"/>
     </Target>
-    <Target Name="Daf_DAL_Abstractions:Clean">
-        <MSBuild Projects="DAL.Abstractions\Daf.DAL.Abstractions.dproj" Targets="Clean"/>
+    <Target Name="MiniSpecWatcher:Clean">
+        <MSBuild Projects="Tools\MiniSpecWatcher\MiniSpecWatcher.dproj" Targets="Clean"/>
     </Target>
-    <Target Name="Daf_DAL_Abstractions:Make">
-        <MSBuild Projects="DAL.Abstractions\Daf.DAL.Abstractions.dproj" Targets="Make"/>
-    </Target>
-    <Target Name="Daf_DAL">
-        <MSBuild Projects="DAL\Daf.DAL.dproj"/>
-    </Target>
-    <Target Name="Daf_DAL:Clean">
-        <MSBuild Projects="DAL\Daf.DAL.dproj" Targets="Clean"/>
-    </Target>
-    <Target Name="Daf_DAL:Make">
-        <MSBuild Projects="DAL\Daf.DAL.dproj" Targets="Make"/>
+    <Target Name="MiniSpecWatcher:Make">
+        <MSBuild Projects="Tools\MiniSpecWatcher\MiniSpecWatcher.dproj" Targets="Make"/>
     </Target>
     <Target Name="Build">
-        <CallTarget Targets="Daf_Commons;Daf_DependencyInjection_Abstractions;Daf_Configuration_Abstractions;Daf_Logging_Abstractions;Daf_Hosting_Abstractions;Daf_MediatR_Abstractions;Daf_DependencyInjection;Daf_Configuration;Daf_Hosting;Daf_Logging;Daf_NNlog;Daf_MediatR;Daf_Application;Daf_MiniSpec;Daf_DAL_Abstractions;Daf_DAL"/>
+        <CallTarget Targets="Daf_Commons;Daf_DependencyInjection_Abstractions;Daf_Configuration_Abstractions;Daf_Logging_Abstractions;Daf_Hosting_Abstractions;Daf_MediatR_Abstractions;Daf_DependencyInjection;Daf_Configuration;Daf_Hosting;Daf_Logging;Daf_NNlog;Daf_MediatR;Daf_Application;Daf_MiniSpec;MiniSpecWatcher"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="Daf_Commons:Clean;Daf_DependencyInjection_Abstractions:Clean;Daf_Configuration_Abstractions:Clean;Daf_Logging_Abstractions:Clean;Daf_Hosting_Abstractions:Clean;Daf_MediatR_Abstractions:Clean;Daf_DependencyInjection:Clean;Daf_Configuration:Clean;Daf_Hosting:Clean;Daf_Logging:Clean;Daf_NNlog:Clean;Daf_MediatR:Clean;Daf_Application:Clean;Daf_MiniSpec:Clean;Daf_DAL_Abstractions:Clean;Daf_DAL:Clean"/>
+        <CallTarget Targets="Daf_Commons:Clean;Daf_DependencyInjection_Abstractions:Clean;Daf_Configuration_Abstractions:Clean;Daf_Logging_Abstractions:Clean;Daf_Hosting_Abstractions:Clean;Daf_MediatR_Abstractions:Clean;Daf_DependencyInjection:Clean;Daf_Configuration:Clean;Daf_Hosting:Clean;Daf_Logging:Clean;Daf_NNlog:Clean;Daf_MediatR:Clean;Daf_Application:Clean;Daf_MiniSpec:Clean;MiniSpecWatcher:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="Daf_Commons:Make;Daf_DependencyInjection_Abstractions:Make;Daf_Configuration_Abstractions:Make;Daf_Logging_Abstractions:Make;Daf_Hosting_Abstractions:Make;Daf_MediatR_Abstractions:Make;Daf_DependencyInjection:Make;Daf_Configuration:Make;Daf_Hosting:Make;Daf_Logging:Make;Daf_NNlog:Make;Daf_MediatR:Make;Daf_Application:Make;Daf_MiniSpec:Make;Daf_DAL_Abstractions:Make;Daf_DAL:Make"/>
+        <CallTarget Targets="Daf_Commons:Make;Daf_DependencyInjection_Abstractions:Make;Daf_Configuration_Abstractions:Make;Daf_Logging_Abstractions:Make;Daf_Hosting_Abstractions:Make;Daf_MediatR_Abstractions:Make;Daf_DependencyInjection:Make;Daf_Configuration:Make;Daf_Hosting:Make;Daf_Logging:Make;Daf_NNlog:Make;Daf_MediatR:Make;Daf_Application:Make;Daf_MiniSpec:Make;MiniSpecWatcher:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
     <ItemGroup Condition="'$(BuildGroup)'=='Debug'">
@@ -238,8 +226,8 @@
             <Platforms/>
             <Enabled>False</Enabled>
         </BuildGroupProject>
-        <BuildGroupProject Include="DAL.Abstractions\Daf.DAL.Abstractions.dproj">
-            <ProjectGuid>{CB9EF10C-5A35-4435-8E3D-B17BBA7B5268}</ProjectGuid>
+        <BuildGroupProject Include="Tools\MiniSpecWatcher\MiniSpecWatcher.dproj">
+            <ProjectGuid>{440C6C6A-58A7-46A2-A5F8-E90A476483D6}</ProjectGuid>
             <Configurations>Debug</Configurations>
             <Platforms>Win32</Platforms>
             <Enabled>False</Enabled>
@@ -294,12 +282,6 @@
         </BuildGroupProject>
         <BuildGroupProject Include="MediatR.Abstractions\Daf.MediatR.Abstractions.dproj">
             <ProjectGuid>{1736E07A-1665-40C1-989B-D874FA141F24}</ProjectGuid>
-            <Configurations>Debug</Configurations>
-            <Platforms>Win32</Platforms>
-            <Enabled>False</Enabled>
-        </BuildGroupProject>
-        <BuildGroupProject Include="DAL\Daf.DAL.dproj">
-            <ProjectGuid>{BB5F9451-02FA-4767-BC05-19A31543A838}</ProjectGuid>
             <Configurations>Debug</Configurations>
             <Platforms>Win32</Platforms>
             <Enabled>False</Enabled>
