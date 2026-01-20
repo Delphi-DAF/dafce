@@ -9,7 +9,8 @@ uses
 type
   TStepProc<T> = reference to procedure(World: T);
   TExamplesTable = TArray<TArray<TValue>>;
-  TSpecItemKind = (sikFeature, sikBackground, sikScenario, sikExample, sikExampleInit, sikGiven, sikWhen, sikThen);
+  TSpecItemKind = (sikFeature, sikBackground, sikScenario, sikExample, sikExampleInit, sikGiven, sikWhen, sikThen, sikAnd, sikBut);
+  TLastStepKind = (lskNone, lskGiven, lskWhen, lskThen);
   TSpecRunState =  (srsPrepared, srsSkiped, srsRunning, srsFinished);
   TSpecRunResult =  (srrNone, srrSuccess, srrFail, srrError);
   TSpecTags = record
@@ -17,10 +18,14 @@ type
     FTags: TArray<string>;
   public
     procedure AddFrom(const Text: string);
+    procedure Merge(const Other: TSpecTags);
     function Contains(const Tag: string): Boolean;overload;
     function ContainsAll(const Tags: TArray<string>): Boolean;overload;
     function ContainsAny(const Tags: TArray<string>): Boolean;
+    function ToArray: TArray<string>;
   end;
+
+  TTagMatcher = reference to function(const Tags: TSpecTags): Boolean;
 
   TSpecRunInfo = record
   public
@@ -37,6 +42,8 @@ type
   IScenarioOutlineBuilder<T: class, constructor> = interface;
   IBackgroundBuilder<T: class, constructor> = interface
     function Given(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>;
+    function &And(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>;
+    function But(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>;
     function Scenario(const Description: string): IScenarioBuilder<T>;overload;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
   end;
@@ -51,6 +58,8 @@ type
     function Given(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>;
     function When(const Desc: string; Step: TStepProc<T>) : IScenarioBuilder<T>;
     function &Then(const Desc: string; Step: TStepProc<T>) : IScenarioBuilder<T>;
+    function &And(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>;
+    function But(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>;
 
     function Scenario(const Description: string): IScenarioBuilder<T>;overload;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
@@ -60,6 +69,8 @@ type
     function Given(const Desc: string; Step: TStepProc<T> = nil) : IScenarioOutlineBuilder<T>;
     function When(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
     function &Then(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
+    function &And(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
+    function But(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
     function Examples(const Table: TExamplesTable): IFeatureBuilder<T>;
   end;
 
@@ -101,7 +112,7 @@ type
     function GetBackGround: IBackground;
     procedure SetBackGround(const Value: IBackground);
     function GetScenarios: TList<IScenario>;
-    procedure Run;
+    procedure Run(const TagMatcher: TTagMatcher = nil);
     property BackGround: IBackground read GetBackground write SetBackground;
     property Scenarios: TList<IScenario> read GetScenarios;
   end;
@@ -195,7 +206,7 @@ type
   public
     constructor Create(const Description: string);
     destructor Destroy; override;
-    procedure Run;reintroduce;
+    procedure Run(const TagMatcher: TTagMatcher = nil);reintroduce;
     property Background: IBackground read GetBackGround write SetBackGround;
   end;
 
@@ -236,6 +247,13 @@ begin
   end;
 end;
 
+procedure TSpecTags.Merge(const Other: TSpecTags);
+begin
+  for var Tag in Other.FTags do
+    if not Contains(Tag) then
+      FTags := FTags + [Tag];
+end;
+
 function TSpecTags.Contains(const Tag: string): Boolean;
 begin
   for var MyTag in FTags do
@@ -258,6 +276,11 @@ begin
     if Contains(Tag) then
       Exit(True);
   Result := False;
+end;
+
+function TSpecTags.ToArray: TArray<string>;
+begin
+  Result := FTags;
 end;
 
 { TSpecRunInfo }
@@ -582,7 +605,9 @@ begin
   Result := FScenarios;
 end;
 
-procedure TFeature<T>.Run;
+procedure TFeature<T>.Run(const TagMatcher: TTagMatcher);
+var
+  CombinedTags: TSpecTags;
 begin
   var SW := TStopwatch.StartNew;
   FRunInfo.State := srsRunning;
@@ -590,6 +615,15 @@ begin
   try
     for var Scenario in FScenarios do
     begin
+      // Saltar escenarios que no coinciden con el filtro de tags
+      // Los tags del Feature se heredan a los escenarios
+      if Assigned(TagMatcher) then
+      begin
+        CombinedTags := Self.Tags;
+        CombinedTags.Merge(Scenario.Tags);
+        if not TagMatcher(CombinedTags) then
+          Continue;
+      end;
       var World := CreateWorld;
       RunBeforeHooks;
       RunBackground(World);

@@ -33,6 +33,8 @@ type
   public
     constructor Create(const AFeature: TFeature<T>);
     function Given(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>;
+    function &And(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>;
+    function But(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>;
     function Scenario(const Description: string): IScenarioBuilder<T>;overload;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
   end;
@@ -40,12 +42,15 @@ type
   TScenarioBuilder<T: class, constructor> = class(TInterfacedObject, IScenarioBuilder<T>)
   strict private
     FScenario: TScenario<T>;
+    FLastStep: TLastStepKind;
   public
     constructor Create(const AFeature: TFeature<T>; const Description: string);
     function ExampleInit(Step: TStepProc<T>): IScenarioBuilder<T>;
     function Given(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>;
     function When(const Desc: string; Step: TStepProc<T>) : IScenarioBuilder<T>;
     function &Then(const Desc: string; Step: TStepProc<T>) : IScenarioBuilder<T>;
+    function &And(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>;
+    function But(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>;
 
     function Scenario(const Description: string): IScenarioBuilder<T>;overload;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
@@ -58,6 +63,7 @@ type
     FStepsGiven: TList<TScenarioStep<T>>;
     FStepsWhen: TList<TScenarioStep<T>>;
     FStepsThen: TList<TScenarioStep<T>>;
+    FLastStep: TLastStepKind;
     function BuildInitStep(Headers, Row: TArray<TValue>): TStepProc<T>;
   public
     constructor Create(Feature: TFeature<T>; const Desc: string);
@@ -65,6 +71,8 @@ type
     function Given(const Desc: string; Step: TStepProc<T> = nil) : IScenarioOutlineBuilder<T>;
     function When(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
     function &Then(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
+    function &And(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
+    function But(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
     function Examples(const Table: TExamplesTable): IFeatureBuilder<T>;
   end;
 
@@ -127,6 +135,20 @@ begin
   Result := Self;
 end;
 
+function TBackgroundBuilder<T>.&And(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>;
+begin
+  // And en Background siempre es un Given adicional
+  FBackground.Given(Desc, Step);
+  Result := Self;
+end;
+
+function TBackgroundBuilder<T>.But(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>;
+begin
+  // But en Background siempre es un Given adicional
+  FBackground.Given(Desc, Step);
+  Result := Self;
+end;
+
 function TBackgroundBuilder<T>.Scenario(const Description: string): IScenarioBuilder<T>;
 begin
   Result := TScenarioBuilder<T>.Create(FBackground.Feature as TFeature<T>, Description);
@@ -143,6 +165,7 @@ constructor TScenarioBuilder<T>.Create(const AFeature: TFeature<T>; const Descri
 begin
   inherited Create;
   FScenario := TScenario<T>.Create(AFeature, Description);
+  FLastStep := lskNone;
 end;
 
 function TScenarioBuilder<T>.ExampleInit(Step: TStepProc<T>): IScenarioBuilder<T>;
@@ -154,18 +177,45 @@ end;
 function TScenarioBuilder<T>.Given(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>;
 begin
   FScenario.Given(Desc, Step);
+  FLastStep := lskGiven;
   Result := Self;
 end;
 
 function TScenarioBuilder<T>.When(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>;
 begin
   FScenario.When(Desc, Step);
+  FLastStep := lskWhen;
   Result := Self;
 end;
 
 function TScenarioBuilder<T>.&Then(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>;
 begin
   FScenario.&Then(Desc, Step);
+  FLastStep := lskThen;
+  Result := Self;
+end;
+
+function TScenarioBuilder<T>.&And(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>;
+begin
+  case FLastStep of
+    lskGiven: FScenario.Given(Desc, Step);
+    lskWhen:  FScenario.When(Desc, Step);
+    lskThen:  FScenario.&Then(Desc, Step);
+  else
+    raise Exception.Create('And must follow Given, When or Then');
+  end;
+  Result := Self;
+end;
+
+function TScenarioBuilder<T>.But(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>;
+begin
+  case FLastStep of
+    lskGiven: FScenario.Given(Desc, Step);
+    lskWhen:  FScenario.When(Desc, Step);
+    lskThen:  FScenario.&Then(Desc, Step);
+  else
+    raise Exception.Create('But must follow Given, When or Then');
+  end;
   Result := Self;
 end;
 
@@ -188,6 +238,7 @@ begin
   FStepsGiven := TObjectList<TScenarioStep<T>>.Create;
   FStepsWhen := TObjectList<TScenarioStep<T>>.Create;
   FStepsThen := TObjectList<TScenarioStep<T>>.Create;
+  FLastStep := lskNone;
 end;
 
 destructor TScenarioOutlineBuilder<T>.Destroy;
@@ -201,18 +252,45 @@ end;
 function TScenarioOutlineBuilder<T>.Given(const Desc: string; Step: TStepProc<T> = nil): IScenarioOutlineBuilder<T>;
 begin
   FStepsGiven.Add(TScenarioStep<T>.Create(sikGiven, nil, Desc,Step));
+  FLastStep := lskGiven;
   Result := Self;
 end;
 
 function TScenarioOutlineBuilder<T>.When(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
 begin
   FStepsWhen.Add(TScenarioStep<T>.Create(sikWhen, nil, Desc, Step));
+  FLastStep := lskWhen;
   Result := Self;
 end;
 
 function TScenarioOutlineBuilder<T>.&Then(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
 begin
   FStepsThen.Add(TScenarioStep<T>.Create(sikThen, nil, Desc, Step));
+  FLastStep := lskThen;
+  Result := Self;
+end;
+
+function TScenarioOutlineBuilder<T>.&And(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
+begin
+  case FLastStep of
+    lskGiven: FStepsGiven.Add(TScenarioStep<T>.Create(sikAnd, nil, Desc, Step));
+    lskWhen:  FStepsWhen.Add(TScenarioStep<T>.Create(sikAnd, nil, Desc, Step));
+    lskThen:  FStepsThen.Add(TScenarioStep<T>.Create(sikAnd, nil, Desc, Step));
+  else
+    raise Exception.Create('And must follow Given, When or Then');
+  end;
+  Result := Self;
+end;
+
+function TScenarioOutlineBuilder<T>.But(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
+begin
+  case FLastStep of
+    lskGiven: FStepsGiven.Add(TScenarioStep<T>.Create(sikBut, nil, Desc, Step));
+    lskWhen:  FStepsWhen.Add(TScenarioStep<T>.Create(sikBut, nil, Desc, Step));
+    lskThen:  FStepsThen.Add(TScenarioStep<T>.Create(sikBut, nil, Desc, Step));
+  else
+    raise Exception.Create('But must follow Given, When or Then');
+  end;
   Result := Self;
 end;
 
