@@ -13,6 +13,7 @@ type
     ['{CD69B272-5B38-4CCC-A64F-2B2A57ACB540}']
     function GetFailCount: Cardinal;
     function GetPassCount: Cardinal;
+    function GetSkipCount: Cardinal;
     procedure Report(Features: TList<IFeature>);
     procedure BeginReport;
     procedure DoReport(const S: ISpecItem);
@@ -23,20 +24,24 @@ type
     property Content: string read GetContent;
     property PassCount: Cardinal read GetPassCount;
     property FailCount: Cardinal read GetFailCount;
+    property SkipCount: Cardinal read GetSkipCount;
   end;
 
   TCustomReporter = class(TInterfacedObject, ISpecReporter)
   strict private
     FPassCount: Cardinal;
     FFailCount: Cardinal;
+    FSkipCount: Cardinal;
   private
   protected
     function GetContent: string;virtual;abstract;
     procedure ResetCounters;
     procedure IncPass;
     procedure IncFail;
+    procedure IncSkip;
     function GetFailCount: Cardinal;virtual;
     function GetPassCount: Cardinal;virtual;
+    function GetSkipCount: Cardinal;virtual;
     function GetLevel(const Kind: TSpecItemKind): Byte;
     function GetKeyWord(const Kind: TSpecItemKind): string;
     function GetFileExt: string;virtual;
@@ -52,6 +57,7 @@ type
     procedure EndReport;virtual;
     property PassCount: Cardinal read GetPassCount;
     property FailCount: Cardinal read GetFailCount;
+    property SkipCount: Cardinal read GetSkipCount;
   end;
 
   TReporterDecorator = class(TCustomReporter)
@@ -60,6 +66,7 @@ type
   protected
     function GetFailCount: Cardinal;override;
     function GetPassCount: Cardinal;override;
+    function GetSkipCount: Cardinal;override;
     procedure DoReport(const S: ISpecItem);override;
   public
     constructor Create(const Decorated: ISpecReporter);
@@ -103,7 +110,7 @@ type
     procedure BeginReport;override;
     procedure EndReport;override;
     procedure Feature(const Description: string);
-    procedure Scenario(const Kind: string; const Description: string; Success: Boolean; Duration: Integer; const ErrorMessage: string = '');
+    procedure Scenario(const Kind: string; const Description: string; const Status: string; Duration: Integer; const ErrorMessage: string = '');
     procedure Step(const S: ISpecItem; Success: Boolean; Duration: Integer; const ErrorMessage: string = '');
     property Output: string read GetContent;
   end;
@@ -174,6 +181,7 @@ const
     li { font-size: 11px; margin: 0 0 0.01em 0; padding: 0.04em 0 0.01em 0; line-height: 1.13; }
     .pass { color: #090 !important; }
     .fail { color: #c00 !important; font-weight: bold; }
+    .skip { color: #888 !important; font-style: italic; }
     .duration { color: #999; font-size: 0.88em;}
     .placeholder { background: #ffe4a0; color: #a65c00; border-radius: 2px; padding: 0 2px; font-family: monospace; }
     .summary { margin-top: 0.55em; font-size: 0.98em; border-top: 1px solid #ddd; padding-top: 0.22em;}
@@ -186,11 +194,29 @@ const
 </head>
 <body>
   <main class="container">
-    <h1>MiniSpec Dashboard</h1>
-    <label for="autoreload" style="float:right; font-weight:normal; font-size:0.93em;">
-      <input type="checkbox" id="autoreload" role="switch" style="vertical-align:middle;">
-      Auto-reload
-    </label>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5em; border-bottom:1px solid #ddd; padding-bottom:0.5em;">
+      <h1 style="margin:0;">MiniSpec Dashboard</h1>
+      <div style="font-weight:normal; font-size:0.93em; white-space:nowrap;">
+        <label style="margin-right:1em; display:inline-block;">
+          <input type="checkbox" id="filter-pass" checked style="vertical-align:middle;">
+          <span class="pass">Pass</span>
+        </label>
+        <label style="margin-right:1em; display:inline-block;">
+          <input type="checkbox" id="filter-fail" checked style="vertical-align:middle;">
+          <span class="fail">Fail</span>
+        </label>
+        <label style="margin-right:1em; display:inline-block;">
+          <input type="checkbox" id="filter-skip" style="vertical-align:middle;">
+          <span class="skip">Skip</span>
+        </label>
+        <span style="border-left:1px solid #ccc; padding-left:1em; display:inline-block;">
+          <label>
+            <input type="checkbox" id="autoreload" role="switch" style="vertical-align:middle;">
+            Auto-reload
+          </label>
+        </span>
+      </div>
+    </div>
     <div id="minispec-dashboard"></div>
     <div class="summary" id="summary"></div>
     <footer>
@@ -232,38 +258,54 @@ const
       }
       return html;
     }
-    function renderReport(data) {
+    function renderReport(data, filters) {
+      filters = filters || { pass: true, fail: true, skip: false };
       if (!data || !Array.isArray(data.features)) {
         document.getElementById('minispec-dashboard').innerHTML = '<em>No results.</em>';
         return;
       }
       let html = '';
       data.features.forEach(function(feature, fidx) {
-        html += renderFeatureHeader(feature.description);
+        let featureHtml = '';
+        let hasVisibleScenarios = false;
         if (Array.isArray(feature.scenarios)) {
           feature.scenarios.forEach(function(scenario, sidx) {
-            let failed = (scenario.success === false)
-              || (scenario.steps && scenario.steps.some(step => !step.success));
-            let resultClass = failed ? "fail" : "pass";
-            html += `<details ${failed ? 'open' : ''} style="margin-bottom:0;">`;
-            html += `<summary class="${resultClass}" style="font-size:0.93em;">${scenario.kind}: ${highlightPlaceholders(preserveLineBreaks(htmlEncode(scenario.description)))}</summary>`;
-            html += `<ul>`;
-            if (scenario.steps) {
+            let status = scenario.status || 'fail';
+            let isSkip = (status === 'skip');
+            let isFail = (status === 'fail') || (!isSkip && scenario.steps && scenario.steps.some(step => !step.success));
+            let isPass = !isSkip && !isFail;
+
+            // Aplicar filtros
+            if (isPass && !filters.pass) return;
+            if (isFail && !filters.fail) return;
+            if (isSkip && !filters.skip) return;
+
+            hasVisibleScenarios = true;
+            let resultClass = isSkip ? 'skip' : (isFail ? 'fail' : 'pass');
+            featureHtml += `<details ${isFail ? 'open' : ''} style="margin-bottom:0;">`;
+            featureHtml += `<summary class="${resultClass}" style="font-size:0.93em;">${isSkip ? '?' : ''} ${scenario.kind}: ${highlightPlaceholders(preserveLineBreaks(htmlEncode(scenario.description)))}</summary>`;
+            featureHtml += `<ul>`;
+            if (scenario.steps && !isSkip) {
               scenario.steps.forEach(function(step) {
                 let stepClass = step.success ? "pass" : "fail";
                 let errorMsg = step.success ? "" : ` <span class="fail"><br>ERROR:"${htmlEncode(step.error || "")}"</span>`;
-                html += `<li class="${stepClass}">${htmlEncode(step.kind)}: ${highlightPlaceholders(preserveLineBreaks(htmlEncode(step.description)))} <span class="duration">(${step.duration} ms)</span>${errorMsg}</li>`;
+                featureHtml += `<li class="${stepClass}">${htmlEncode(step.kind)}: ${highlightPlaceholders(preserveLineBreaks(htmlEncode(step.description)))} <span class="duration">(${step.duration} ms)</span>${errorMsg}</li>`;
               });
             }
-            html += `</ul>`;
-            html += `</details>`;
+            featureHtml += `</ul>`;
+            featureHtml += `</details>`;
           });
+        }
+        if (hasVisibleScenarios) {
+          html += renderFeatureHeader(feature.description);
+          html += featureHtml;
         }
       });
       document.getElementById('minispec-dashboard').innerHTML = html;
-      let pass = data.passCount || 0, fail = data.failCount || 0;
+      let pass = data.passCount || 0, fail = data.failCount || 0, skip = data.skipCount || 0;
+      let skipHtml = skip > 0 ? ` &nbsp; Skipped: <span class="skip">${skip}</span>` : '';
       document.getElementById('summary').innerHTML =
-        `Passed: <span class="pass">${pass}</span> &nbsp; Failed: <span class="fail">${fail}</span>`;
+        `Passed: <span class="pass">${pass}</span> &nbsp; Failed: <span class="fail">${fail}</span>${skipHtml}`;
     }
 
     var minispecReloadTimeout = null;
@@ -281,7 +323,42 @@ const
     }
 
     document.addEventListener('DOMContentLoaded', function() {
-      renderReport(window.miniSpecReportData);
+      // Filtros de estado
+      var filterPass = document.getElementById('filter-pass');
+      var filterFail = document.getElementById('filter-fail');
+      var filterSkip = document.getElementById('filter-skip');
+
+      // Cargar estado de filtros desde localStorage
+      filterPass.checked = localStorage.getItem('minispec-filter-pass') !== 'false';
+      filterFail.checked = localStorage.getItem('minispec-filter-fail') !== 'false';
+      filterSkip.checked = localStorage.getItem('minispec-filter-skip') === 'true';
+
+      function getFilters() {
+        return {
+          pass: filterPass.checked,
+          fail: filterFail.checked,
+          skip: filterSkip.checked
+        };
+      }
+
+      function reRender() {
+        renderReport(window.miniSpecReportData, getFilters());
+      }
+
+      filterPass.addEventListener('change', function() {
+        localStorage.setItem('minispec-filter-pass', filterPass.checked ? 'true' : 'false');
+        reRender();
+      });
+      filterFail.addEventListener('change', function() {
+        localStorage.setItem('minispec-filter-fail', filterFail.checked ? 'true' : 'false');
+        reRender();
+      });
+      filterSkip.addEventListener('change', function() {
+        localStorage.setItem('minispec-filter-skip', filterSkip.checked ? 'true' : 'false');
+        reRender();
+      });
+
+      renderReport(window.miniSpecReportData, getFilters());
       document.getElementById('last-update').textContent = new Date().toLocaleString();
 
       var reloadCheckbox = document.getElementById('autoreload');
@@ -309,6 +386,16 @@ begin
   Inc(FPassCount);
 end;
 
+procedure TCustomReporter.IncFail;
+begin
+  Inc(FFailCount);
+end;
+
+procedure TCustomReporter.IncSkip;
+begin
+  Inc(FSkipCount);
+end;
+
 procedure TCustomReporter.BeginReport;
 begin
   ResetCounters;
@@ -316,6 +403,18 @@ end;
 
 procedure TCustomReporter.Report(Feature: IFeature);
 begin
+  // Solo reportar la Feature si tiene al menos un escenario ejecutado
+  var HasExecutedScenario := False;
+  for var Scenario in Feature.Scenarios do
+    if Scenario.RunInfo.State = srsFinished then
+    begin
+      HasExecutedScenario := True;
+      Break;
+    end;
+
+  if not HasExecutedScenario then
+    Exit;
+
   DoReport(Feature);
   Report(Feature.BackGround);
   for var Scenario in Feature.Scenarios do
@@ -332,6 +431,10 @@ end;
 
 procedure TCustomReporter.Report(Scenario: IScenario);
 begin
+  // Solo reportar escenarios que fueron ejecutados
+  if Scenario.RunInfo.State <> srsFinished then
+    Exit;
+
   DoReport(Scenario);
   for var Step in Scenario.StepsGiven do
     DoReport(Step);
@@ -344,10 +447,18 @@ end;
 procedure TCustomReporter.DoReport(const S: ISpecItem);
 begin
   if (S.Kind in [sikScenario, sikExample]) then
-  if S.RunInfo.IsSuccess then
-    IncPass
-  else
-    IncFail;
+  begin
+    // Contar escenarios según su estado
+    if S.RunInfo.State <> srsFinished then
+    begin
+      IncSkip;
+      Exit;
+    end;
+    if S.RunInfo.IsSuccess then
+      IncPass
+    else
+      IncFail;
+  end;
 end;
 
 procedure TCustomReporter.EndReport;
@@ -358,6 +469,11 @@ end;
 function TCustomReporter.GetFailCount: Cardinal;
 begin
   Result := FFailCount;
+end;
+
+function TCustomReporter.GetSkipCount: Cardinal;
+begin
+  Result := FSkipCount;
 end;
 
 function TCustomReporter.GetFileExt: string;
@@ -400,11 +516,6 @@ begin
   Result := FPassCount;
 end;
 
-procedure TCustomReporter.IncFail;
-begin
-  Inc(FFailCount);
-end;
-
 procedure TCustomReporter.Report(Features: TList<IFeature>);
 begin
   BeginReport;
@@ -417,6 +528,7 @@ procedure TCustomReporter.ResetCounters;
 begin
   FPassCount := 0;
   FFailCount := 0;
+  FSkipCount := 0;
 end;
 
 function TCustomReporter.UseConsole: Boolean;
@@ -524,7 +636,7 @@ begin
   FCurrentScenarios := TJSONArray.Create;
 end;
 
-procedure TJsonReporter.Scenario(const Kind: string; const Description: string; Success: Boolean; Duration: Integer; const ErrorMessage: string);
+procedure TJsonReporter.Scenario(const Kind: string; const Description: string; const Status: string; Duration: Integer; const ErrorMessage: string);
 begin
   if Assigned(FCurrentScenario) then
   begin
@@ -534,20 +646,31 @@ begin
   FCurrentScenario := TJSONObject.Create;
   FCurrentScenario.AddPair('kind', Kind);
   FCurrentScenario.AddPair('description', Description);
-  FCurrentScenario.AddPair('success', TJSONBool.Create(Success));
+  FCurrentScenario.AddPair('status', Status);
   FCurrentScenario.AddPair('duration', TJSONNumber.Create(Duration));
-  if not Success and (ErrorMessage <> '') then
+  if (Status = 'fail') and (ErrorMessage <> '') then
     FCurrentScenario.AddPair('error', ErrorMessage);
   FCurrentSteps := TJSONArray.Create;
 end;
 
 procedure TJsonReporter.DoReport(const S: ISpecItem);
+
+  function GetStatus(const Item: ISpecItem): string;
+  begin
+    if Item.RunInfo.State <> srsFinished then
+      Result := 'skip'
+    else if Item.RunInfo.Result = srrSuccess then
+      Result := 'pass'
+    else
+      Result := 'fail';
+  end;
+
 begin
   inherited;
   case S.Kind of
     sikFeature: Feature(S.Description);
-    sikBackground: Scenario(GetKeyWord(s.Kind), S.Description, S.RunInfo.Result = srrSuccess, S.RunInfo.ExecTimeMs, S.RunInfo.ErrMsg);
-    sikScenario, sikExample: Scenario(GetKeyWord(s.Kind), S.Description, S.RunInfo.Result = srrSuccess, S.RunInfo.ExecTimeMs, S.RunInfo.ErrMsg);
+    sikBackground: Scenario(GetKeyWord(s.Kind), S.Description, GetStatus(S), S.RunInfo.ExecTimeMs, S.RunInfo.ErrMsg);
+    sikScenario, sikExample: Scenario(GetKeyWord(s.Kind), S.Description, GetStatus(S), S.RunInfo.ExecTimeMs, S.RunInfo.ErrMsg);
     sikExampleInit: ;
     sikGiven,
     sikWhen,
@@ -597,6 +720,7 @@ begin
     Root.AddPair('features', FFeatures);
     Root.AddPair('passCount', TJSONNumber.Create(PassCount));
     Root.AddPair('failCount', TJSONNumber.Create(FailCount));
+    Root.AddPair('skipCount', TJSONNumber.Create(SkipCount));
     FOutput := Root.Format(4);
   finally
     Root.Free;
@@ -662,6 +786,12 @@ function TReporterDecorator.GetPassCount: Cardinal;
 begin
   if not Assigned(Decorated) then Exit(0);
   Result := Decorated.GetPassCount;
+end;
+
+function TReporterDecorator.GetSkipCount: Cardinal;
+begin
+  if not Assigned(Decorated) then Exit(0);
+  Result := Decorated.GetSkipCount;
 end;
 
 function TReporterDecorator.UseConsole: Boolean;
