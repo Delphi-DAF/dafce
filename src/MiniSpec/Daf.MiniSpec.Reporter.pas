@@ -6,6 +6,7 @@ uses
   System.Generics.Collections,
   System.SysUtils,
   System.JSON,
+  System.Rtti,
   Daf.MiniSpec.Types;
 
 type
@@ -17,6 +18,7 @@ type
     procedure Report(Features: TList<IFeature>);
     procedure BeginReport;
     procedure DoReport(const S: ISpecItem);
+    procedure ReportOutline(const Outline: IScenarioOutline);
     procedure EndReport;
     function GetContent: string;
     function GetFileExt: string;
@@ -42,14 +44,15 @@ type
     function GetFailCount: Cardinal;virtual;
     function GetPassCount: Cardinal;virtual;
     function GetSkipCount: Cardinal;virtual;
-    function GetLevel(const Kind: TSpecItemKind): Byte;
-    function GetKeyWord(const Kind: TSpecItemKind): string;
+    function GetLevel(const Kind: TSpecItemKind): Byte;virtual;
+    function GetKeyWord(const Kind: TSpecItemKind): string;virtual;
     function GetFileExt: string;virtual;
     procedure DoReport(const S: ISpecItem);virtual;
     procedure Report(Feature: IFeature);overload;
     procedure Report(Rule: IRule);overload;
     procedure Report(Background: IBackground);overload;
     procedure Report(Scenario: IScenario);overload;
+    procedure ReportOutline(const Outline: IScenarioOutline);virtual;
   public
     function UseConsole: Boolean;virtual;
     procedure BeginReport;virtual;
@@ -69,6 +72,7 @@ type
     function GetPassCount: Cardinal;override;
     function GetSkipCount: Cardinal;override;
     procedure DoReport(const S: ISpecItem);override;
+    procedure ReportOutline(const Outline: IScenarioOutline);override;
   public
     constructor Create(const Decorated: ISpecReporter);
     function UseConsole: Boolean;override;
@@ -86,8 +90,10 @@ type
     procedure Output(const Level: Byte; const Text: string);
     function ExtractValue(const Match: TMatch): string;
     function Level2Margin(const Level: Byte): string;
+    function FormatExampleRow(const Outline: IScenarioOutline; const Example: IScenario): string;
   protected
     function GetContent: string;override;
+    procedure ReportOutline(const Outline: IScenarioOutline);override;
   public
     function UseConsole: Boolean;override;
     procedure DoReport(const S: ISpecItem);override;
@@ -107,6 +113,7 @@ type
     function GetContent: string;override;
     function GetFileExt: string;override;
     procedure DoReport(const S: ISpecItem);override;
+    procedure ReportOutline(const Outline: IScenarioOutline);override;
   public
     procedure BeginReport;override;
     procedure EndReport;override;
@@ -276,6 +283,12 @@ const
             let isFail = (status === 'fail') || (!isSkip && scenario.steps && scenario.steps.some(step => !step.success));
             let isPass = !isSkip && !isFail;
 
+            // Para Scenario Outline, verificar si algún example falló
+            if (scenario.kind === 'Scenario Outline' && scenario.examples) {
+              isFail = scenario.examples.some(ex => ex.status === 'fail');
+              isPass = !isFail && !isSkip;
+            }
+
             // Aplicar filtros
             if (isPass && !filters.pass) return;
             if (isFail && !filters.fail) return;
@@ -284,16 +297,47 @@ const
             hasVisibleScenarios = true;
             let resultClass = isSkip ? 'skip' : (isFail ? 'fail' : 'pass');
             featureHtml += `<details ${isFail ? 'open' : ''} style="margin-bottom:0;">`;
-            featureHtml += `<summary class="${resultClass}" style="font-size:0.93em;">${isSkip ? '?' : ''} ${scenario.kind}: ${highlightPlaceholders(preserveLineBreaks(htmlEncode(scenario.description)))}</summary>`;
-            featureHtml += `<ul>`;
-            if (scenario.steps && !isSkip) {
-              scenario.steps.forEach(function(step) {
-                let stepClass = step.success ? "pass" : "fail";
-                let errorMsg = step.success ? "" : ` <span class="fail"><br>ERROR:"${htmlEncode(step.error || "")}"</span>`;
-                featureHtml += `<li class="${stepClass}">${htmlEncode(step.kind)}: ${highlightPlaceholders(preserveLineBreaks(htmlEncode(step.description)))} <span class="duration">(${step.duration} ms)</span>${errorMsg}</li>`;
+            featureHtml += `<summary class="${resultClass}" style="font-size:0.93em;">${isSkip ? '⊘' : ''} ${scenario.kind}: ${highlightPlaceholders(preserveLineBreaks(htmlEncode(scenario.description)))}</summary>`;
+
+            // Renderizar Scenario Outline con tabla
+            if (scenario.kind === 'Scenario Outline' && scenario.headers && scenario.examples) {
+              featureHtml += `<div style="margin-left:1em; margin-top:0.3em;">`;
+              featureHtml += `<strong>Examples:</strong>`;
+              featureHtml += `<table style="font-size:11px; border-collapse:collapse; margin:0.3em 0;">`;
+              featureHtml += `<tr style="background:#f0f0f0;">`;
+              featureHtml += `<th style="padding:2px 6px; border:1px solid #ccc;"></th>`;
+              scenario.headers.forEach(h => {
+                featureHtml += `<th style="padding:2px 6px; border:1px solid #ccc;">${htmlEncode(h)}</th>`;
               });
+              featureHtml += `<th style="padding:2px 6px; border:1px solid #ccc;">Time</th>`;
+              featureHtml += `</tr>`;
+              scenario.examples.forEach(ex => {
+                let exClass = ex.status === 'pass' ? 'pass' : 'fail';
+                let icon = ex.status === 'pass' ? '✅' : '❌';
+                featureHtml += `<tr class="${exClass}">`;
+                featureHtml += `<td style="padding:2px 6px; border:1px solid #ccc;">${icon}</td>`;
+                ex.values.forEach(v => {
+                  featureHtml += `<td style="padding:2px 6px; border:1px solid #ccc;">${htmlEncode(v)}</td>`;
+                });
+                featureHtml += `<td style="padding:2px 6px; border:1px solid #ccc;" class="duration">${ex.duration} ms</td>`;
+                featureHtml += `</tr>`;
+                if (ex.status === 'fail' && ex.error) {
+                  featureHtml += `<tr><td colspan="${scenario.headers.length + 2}" style="padding:2px 6px; border:1px solid #ccc;" class="fail">ERROR: ${htmlEncode(ex.error)}</td></tr>`;
+                }
+              });
+              featureHtml += `</table></div>`;
+            } else {
+              // Renderizar escenario normal con steps
+              featureHtml += `<ul>`;
+              if (scenario.steps && !isSkip) {
+                scenario.steps.forEach(function(step) {
+                  let stepClass = step.success ? "pass" : "fail";
+                  let errorMsg = step.success ? "" : ` <span class="fail"><br>ERROR:"${htmlEncode(step.error || "")}"</span>`;
+                  featureHtml += `<li class="${stepClass}">${htmlEncode(step.kind)}: ${highlightPlaceholders(preserveLineBreaks(htmlEncode(step.description)))} <span class="duration">(${step.duration} ms)</span>${errorMsg}</li>`;
+                });
+              }
+              featureHtml += `</ul>`;
             }
-            featureHtml += `</ul>`;
             featureHtml += `</details>`;
           });
         }
@@ -427,6 +471,27 @@ begin
     Report(Rule);
 end;
 
+procedure TCustomReporter.ReportOutline(const Outline: IScenarioOutline);
+begin
+  // Reportar el ScenarioOutline como header
+  DoReport(Outline);
+
+  // Reportar los steps del outline (template)
+  for var Step in Outline.StepsGiven do
+    DoReport(Step);
+  for var Step in Outline.StepsWhen do
+    DoReport(Step);
+  for var Step in Outline.StepsThen do
+    DoReport(Step);
+
+  // Reportar cada Example
+  for var Example in Outline.Examples do
+  begin
+    if Example.RunInfo.State = srsFinished then
+      DoReport(Example);
+  end;
+end;
+
 procedure TCustomReporter.Report(Rule: IRule);
 begin
   // Solo reportar la Rule si tiene al menos un escenario ejecutado
@@ -444,10 +509,21 @@ begin
   // Solo mostrar header si es Rule explícita (no ImplicitRule)
   if Rule.Kind = sikRule then
     DoReport(Rule);
-    
+
   Report(Rule.BackGround);
+
+  // Iterar scenarios - polimórficamente detectar Outlines
   for var Scenario in Rule.Scenarios do
-    Report(Scenario);
+  begin
+    if Scenario.RunInfo.State <> srsFinished then
+      Continue;
+
+    var Outline: IScenarioOutline;
+    if Supports(Scenario, IScenarioOutline, Outline) then
+      ReportOutline(Outline)
+    else
+      Report(Scenario);
+  end;
 end;
 
 procedure TCustomReporter.Report(Background: IBackground);
@@ -518,6 +594,7 @@ begin
     sikRule: Result := 'Rule';
     sikBackground: Result :=  'Background';
     sikScenario: Result :=  'Scenario';
+    sikScenarioOutline: Result := 'Scenario Outline';
     sikExample: Result :=  'Example';
     sikExampleInit: Result := '';
     sikGiven: Result := 'Given';
@@ -533,7 +610,7 @@ begin
   case Kind of
     sikFeature: Result := 0;
     sikRule: Result := 1;  // Rule está un nivel debajo de Feature
-    sikBackground, sikScenario, sikExample: Result := 1;
+    sikBackground, sikScenario, sikScenarioOutline, sikExample: Result := 1;
     sikExampleInit: Result := 2;
     sikGiven: Result := 2;
     sikWhen: Result := 2;
@@ -635,6 +712,75 @@ begin
   OutputLn(0, '');
 end;
 
+function TConsoleReporter.FormatExampleRow(const Outline: IScenarioOutline; const Example: IScenario): string;
+var
+  Cells: TArray<string>;
+  Meta: TExampleMeta;
+begin
+  Meta := Example.ExampleMeta;
+  SetLength(Cells, Length(Outline.Headers));
+  for var i := 0 to High(Outline.Headers) do
+  begin
+    if i <= High(Meta.Values) then
+      Cells[i] := Meta.Values[i].ToString
+    else
+      Cells[i] := '';
+  end;
+  Result := '| ' + string.Join(' | ', Cells) + ' |';
+end;
+
+procedure TConsoleReporter.ReportOutline(const Outline: IScenarioOutline);
+var
+  AllSuccess: Boolean;
+  TotalTime: Int64;
+begin
+  // Calcular resultado agregado
+  AllSuccess := True;
+  TotalTime := 0;
+  for var Example in Outline.Examples do
+  begin
+    if Example.RunInfo.State = srsFinished then
+    begin
+      TotalTime := TotalTime + Example.RunInfo.ExecTimeMs;
+      if not Example.RunInfo.IsSuccess then
+        AllSuccess := False;
+    end;
+  end;
+
+  // Header del Scenario Outline con resultado
+  OutputLn(1, 'Scenario Outline: ' + Outline.Description, AllSuccess, TotalTime);
+
+  // Steps template (sin tiempo individual)
+  for var Step in Outline.StepsGiven do
+    OutputLn(2, GetKeyWord(Step.Kind) + ' ' + Step.Description);
+  for var Step in Outline.StepsWhen do
+    OutputLn(2, GetKeyWord(Step.Kind) + ' ' + Step.Description);
+  for var Step in Outline.StepsThen do
+    OutputLn(2, GetKeyWord(Step.Kind) + ' ' + Step.Description);
+
+  // Tabla de Examples
+  OutputLn(2, 'Examples:');
+
+  // Header de la tabla (3 espacios para alinear con emoji ✅)
+  OutputLn(3, '   | ' + string.Join(' | ', Outline.Headers) + ' |');
+
+  // Cada fila con su resultado
+  for var Example in Outline.Examples do
+  begin
+    if Example.RunInfo.State = srsFinished then
+    begin
+      var Row := FormatExampleRow(Outline, Example);
+      OutputLn(3, Row, Example.RunInfo.IsSuccess, Example.RunInfo.ExecTimeMs, Example.RunInfo.ErrMsg);
+
+      // Contar para estadísticas
+      if Example.RunInfo.IsSuccess then
+        IncPass
+      else
+        IncFail;
+    end;
+  end;
+end;
+
 { TJsonReporter }
 
 procedure TJsonReporter.BeginReport;
@@ -711,6 +857,74 @@ begin
   end;
 end;
 
+procedure TJsonReporter.ReportOutline(const Outline: IScenarioOutline);
+
+  function GetStatus(const Item: ISpecItem): string;
+  begin
+    if Item.RunInfo.State <> srsFinished then
+      Result := 'skip'
+    else if Item.RunInfo.Result = srrSuccess then
+      Result := 'pass'
+    else
+      Result := 'fail';
+  end;
+
+var
+  OutlineObj: TJSONObject;
+  HeadersArr: TJSONArray;
+  ExamplesArr: TJSONArray;
+  ExampleObj: TJSONObject;
+  ValuesArr: TJSONArray;
+  Example: IScenario;
+  Header: string;
+  Value: TValue;
+begin
+  // Close previous scenario if needed
+  if Assigned(FCurrentScenario) then
+  begin
+    FCurrentScenario.AddPair('steps', FCurrentSteps);
+    FCurrentScenarios.AddElement(FCurrentScenario);
+    FCurrentScenario := nil;
+    FCurrentSteps := nil;
+  end;
+
+  // Create outline object
+  OutlineObj := TJSONObject.Create;
+  OutlineObj.AddPair('kind', 'Scenario Outline');
+  OutlineObj.AddPair('description', Outline.Description);
+  OutlineObj.AddPair('status', GetStatus(Outline as ISpecItem));
+  OutlineObj.AddPair('duration', TJSONNumber.Create((Outline as ISpecItem).RunInfo.ExecTimeMs));
+
+  // Add headers
+  HeadersArr := TJSONArray.Create;
+  for Header in Outline.Headers do
+    HeadersArr.Add(Header);
+  OutlineObj.AddPair('headers', HeadersArr);
+
+  // Add examples with their values and status
+  ExamplesArr := TJSONArray.Create;
+  for Example in Outline.Examples do
+  begin
+    ExampleObj := TJSONObject.Create;
+
+    ValuesArr := TJSONArray.Create;
+    for Value in Example.ExampleMeta.Values do
+      ValuesArr.Add(Value.ToString);
+    ExampleObj.AddPair('values', ValuesArr);
+
+    ExampleObj.AddPair('status', GetStatus(Example as ISpecItem));
+    ExampleObj.AddPair('duration', TJSONNumber.Create((Example as ISpecItem).RunInfo.ExecTimeMs));
+
+    if (Example as ISpecItem).RunInfo.Result = srrFail then
+      ExampleObj.AddPair('error', (Example as ISpecItem).RunInfo.ErrMsg);
+
+    ExamplesArr.AddElement(ExampleObj);
+  end;
+  OutlineObj.AddPair('examples', ExamplesArr);
+
+  FCurrentScenarios.AddElement(OutlineObj);
+end;
+
 procedure TJsonReporter.Step(const S: ISpecItem; Success: Boolean; Duration: Integer; const ErrorMessage: string);
 begin
   AddStep(GetKeyWord(S.Kind), S.Description, Success, Duration, ErrorMessage);
@@ -783,6 +997,12 @@ procedure TReporterDecorator.DoReport(const S: ISpecItem);
 begin
   if not Assigned(Decorated) then Exit;
   Decorated.DoReport(S);
+end;
+
+procedure TReporterDecorator.ReportOutline(const Outline: IScenarioOutline);
+begin
+  if not Assigned(Decorated) then Exit;
+  Decorated.ReportOutline(Outline);
 end;
 
 procedure TReporterDecorator.BeginReport;

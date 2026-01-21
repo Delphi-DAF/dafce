@@ -52,6 +52,7 @@ type
   public
     constructor Create(const ARule: IRule; const Description: string);
     function ExampleInit(Step: TStepProc<T>): IScenarioBuilder<T>;
+    procedure SetExampleMeta(const Meta: TExampleMeta);
     function Given(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>;
     function When(const Desc: string; Step: TStepProc<T>) : IScenarioBuilder<T>;
     function &Then(const Desc: string; Step: TStepProc<T>) : IScenarioBuilder<T>;
@@ -219,6 +220,11 @@ begin
   Result := Self;
 end;
 
+procedure TScenarioBuilder<T>.SetExampleMeta(const Meta: TExampleMeta);
+begin
+  FScenario.SetExampleMeta(Meta);
+end;
+
 function TScenarioBuilder<T>.Given(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>;
 begin
   FScenario.Given(Desc, Step);
@@ -372,23 +378,49 @@ begin
     raise Exception.Create('Examples must include headers and at least one data row.');
 
   var Headers := Table[0];
+  // Construir array de strings para headers
+  var HeaderStrings: TArray<string>;
+  SetLength(HeaderStrings, Length(Headers));
+  for var i := 0 to High(Headers) do
+    HeaderStrings[i] := Headers[i].AsString;
+
+  // Crear el ScenarioOutline como nodo padre
+  var Outline := TScenarioOutline<T>.Create(FRule, FDescription, HeaderStrings);
+  // Copiar los steps template al outline
+  for var Step in FStepsGiven do
+    Outline.Given(Step.Description, Step.Proc);
+  for var Step in FStepsWhen do
+    Outline.When(Step.Description, Step.Proc);
+  for var Step in FStepsThen do
+    Outline.&Then(Step.Description, Step.Proc);
+
   for var RowIdx := 1 to High(Table) do
   begin
     var CurrentRow := Table[RowIdx];
     if Length(CurrentRow) <> Length(Headers) then
       raise Exception.CreateFmt('Row %d does not match header column count.', [RowIdx]);
 
-    var ScnBuilder := TScenarioBuilder<T>.Create(FRule, FDescription);
-    ScnBuilder.ExampleInit(BuildInitStep(Headers, CurrentRow));
+    // Crear Example con el Outline como parent
+    var Example := TScenario<T>.CreateExample(Outline, FDescription);
+    Example.ExampleInit(BuildInitStep(Headers, CurrentRow));
 
+    // Asignar metadata simplificada
+    var Meta: TExampleMeta;
+    Meta.Values := CurrentRow;
+    Meta.RowIndex := RowIdx;
+    Example.SetExampleMeta(Meta);
+
+    // Copiar los steps (cada Example tiene su propia copia)
     for var Step in FStepsGiven do
-      ScnBuilder.Given(Step.Description, Step.Proc);
-
+      Example.Given(Step.Description, Step.Proc);
     for var Step in FStepsWhen do
-      ScnBuilder.When(Step.Description, Step.Proc);
-
+      Example.When(Step.Description, Step.Proc);
     for var Step in FStepsThen do
-      ScnBuilder.&Then(Step.Description, Step.Proc);
+      Example.&Then(Step.Description, Step.Proc);
+
+    // Registrar el Example solo en el Outline (no en Rule.Scenarios)
+    // El Outline ya está en Rule.Scenarios y ejecuta sus Examples
+    Outline.AddExample(Example);
   end;
 
   // Siempre devolver builder de la Rule actual

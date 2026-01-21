@@ -9,7 +9,7 @@ uses
 type
   TStepProc<T> = reference to procedure(World: T);
   TExamplesTable = TArray<TArray<TValue>>;
-  TSpecItemKind = (sikFeature, sikImplicitRule, sikRule, sikBackground, sikScenario, sikExample, sikExampleInit, sikGiven, sikWhen, sikThen, sikAnd, sikBut);
+  TSpecItemKind = (sikFeature, sikImplicitRule, sikRule, sikBackground, sikScenario, sikScenarioOutline, sikExample, sikExampleInit, sikGiven, sikWhen, sikThen, sikAnd, sikBut);
   TLastStepKind = (lskNone, lskGiven, lskWhen, lskThen);
   TSpecRunState =  (srsPrepared, srsSkiped, srsRunning, srsFinished);
   TSpecRunResult =  (srrNone, srrSuccess, srrFail, srrError);
@@ -26,6 +26,15 @@ type
   end;
 
   TTagMatcher = reference to function(const Tags: TSpecTags): Boolean;
+
+  /// <summary>
+  /// Metadata para scenarios Example (hijos de ScenarioOutline).
+  /// Solo contiene los valores de la fila; los Headers están en el padre.
+  /// </summary>
+  TExampleMeta = record
+    Values: TArray<TValue>;        // Valores de la fila
+    RowIndex: Integer;             // Índice de la fila (1-based)
+  end;
 
   TSpecRunInfo = record
   public
@@ -123,8 +132,22 @@ type
     ['{45DA94A6-DE59-4EB7-B528-6E5157DC9169}']
     function GetStepsWhen: TList<IScenarioStep>;
     function GetStepsThen: TList<IScenarioStep>;
+    function GetExampleMeta: TExampleMeta;
     property StepsWhen: TList<IScenarioStep> read GetStepsWhen;
     property StepsThen: TList<IScenarioStep> read GetStepsThen;
+    property ExampleMeta: TExampleMeta read GetExampleMeta;
+  end;
+
+  /// <summary>
+  /// ScenarioOutline agrupa Examples generados desde una tabla.
+  /// Contiene los headers de la tabla y los steps template.
+  /// </summary>
+  IScenarioOutline = interface(IScenario)
+    ['{7A8E3F21-B4C5-4D89-9E6A-1F2C3D4E5A6B}']
+    function GetHeaders: TArray<string>;
+    function GetExamples: TList<IScenario>;
+    property Headers: TArray<string> read GetHeaders;
+    property Examples: TList<IScenario> read GetExamples;
   end;
 
   IRule = interface;  // forward declaration
@@ -163,11 +186,11 @@ type
   strict private
     FTags: TSpecTags;
     FDescription: string;
-    [weak]
-    FParent: ISpecItem;
     function PlaceHolder(Template, PHName, PHValue: string): string;
     procedure ExpandPlaceholders(const World: TObject);
   protected
+    [weak]
+    FParent: ISpecItem;
     FKind: TSpecItemKind;
     FRunInfo: TSpecRunInfo;
     function GetKind: TSpecItemKind;
@@ -213,25 +236,49 @@ type
   TScenario<T: class, constructor> = class(TSpecItem, IScenario)
   strict private
     FInitExample: IScenarioStep;
+    FExampleMeta: TExampleMeta;
     FStepsGiven: TList<IScenarioStep>;
     FStepsWhen: TList<IScenarioStep>;
     FStepsThen: TList<IScenarioStep>;
     function GetStepsGiven: TList<IScenarioStep>;
     function GetStepsWhen: TList<IScenarioStep>;
     function GetStepsThen: TList<IScenarioStep>;
+    function GetExampleMeta: TExampleMeta;
   private
     function GetFeature: IFeature;
     procedure RunSteps(Steps: TList<IScenarioStep>; World: TObject);
   public
     constructor Create(const Feature: IFeature; const Description: string);overload;
     constructor Create(const Feature: IFeature; const Description: string; AddToFeatureScenarios: Boolean);overload;
+    constructor CreateExample(const Outline: IScenarioOutline; const Description: string);
     destructor Destroy;override;
     function ExampleInit(Step: TStepProc<T>): TScenario<T>;
+    procedure SetExampleMeta(const Meta: TExampleMeta);
     function Given(const Desc: string; Step: TStepProc<T>): TScenario<T>;
     function When(const Desc: string; Step: TStepProc<T>) : TScenario<T>;
     function &Then(const Desc: string; Step: TStepProc<T>) : TScenario<T>;
     procedure Run(World: TObject);override;
     property Feature: IFeature read GetFeature;
+    property ExampleMeta: TExampleMeta read GetExampleMeta;
+  end;
+
+  /// <summary>
+  /// ScenarioOutline contiene los steps template y genera Examples.
+  /// Los Examples son escenarios hijos con valores específicos de la tabla.
+  /// </summary>
+  TScenarioOutline<T: class, constructor> = class(TScenario<T>, IScenarioOutline)
+  strict private
+    FHeaders: TArray<string>;
+    FExamples: TList<IScenario>;
+    function GetHeaders: TArray<string>;
+    function GetExamples: TList<IScenario>;
+  public
+    constructor Create(const ARule: IRule; const Description: string; const Headers: TArray<string>);
+    destructor Destroy; override;
+    procedure AddExample(const Example: IScenario);
+    procedure Run(World: TObject); override;
+    property Headers: TArray<string> read GetHeaders;
+    property Examples: TList<IScenario> read GetExamples;
   end;
 
   TFeature<T: class,constructor> = class(TSpecItem, IFeature)
@@ -564,6 +611,16 @@ begin
     Feature.Scenarios.Add(Self);
 end;
 
+constructor TScenario<T>.CreateExample(const Outline: IScenarioOutline; const Description: string);
+begin
+  // Crear un Example con el ScenarioOutline como parent
+  inherited Create(sikExample, Outline, Description);
+  FStepsGiven := TList<IScenarioStep>.Create;
+  FStepsWhen := TList<IScenarioStep>.Create;
+  FStepsThen := TList<IScenarioStep>.Create;
+  // No añadir a Feature.Scenarios aquí; el Builder lo hace después
+end;
+
 destructor TScenario<T>.Destroy;
 begin
   FStepsThen.Free;
@@ -597,6 +654,16 @@ end;
 function TScenario<T>.GetStepsWhen: TList<IScenarioStep>;
 begin
   Result := FStepsWhen
+end;
+
+function TScenario<T>.GetExampleMeta: TExampleMeta;
+begin
+  Result := FExampleMeta;
+end;
+
+procedure TScenario<T>.SetExampleMeta(const Meta: TExampleMeta);
+begin
+  FExampleMeta := Meta;
 end;
 
 function TScenario<T>.Given(const Desc: string; Step: TStepProc<T>): TScenario<T>;
@@ -648,6 +715,67 @@ function TScenario<T>.&Then(const Desc: string; Step: TStepProc<T>): TScenario<T
 begin
   Result := Self;
   FStepsThen.Add(TScenarioStep<T>.Create(sikThen, Self, Desc, Step));
+end;
+
+{ TScenarioOutline<T> }
+
+constructor TScenarioOutline<T>.Create(const ARule: IRule; const Description: string; const Headers: TArray<string>);
+begin
+  // Crear como sikScenarioOutline y añadir a la Rule (polimorfismo)
+  inherited Create(ARule.Feature, Description, False);
+  FKind := sikScenarioOutline;
+  FParent := ARule;
+  FHeaders := Headers;
+  FExamples := TList<IScenario>.Create;
+  // El Outline se añade a Rule.Scenarios como cualquier otro Scenario
+  (ARule as TRule<T>).Scenarios.Add(Self);
+end;
+
+destructor TScenarioOutline<T>.Destroy;
+begin
+  FExamples.Free;
+  inherited;
+end;
+
+function TScenarioOutline<T>.GetHeaders: TArray<string>;
+begin
+  Result := FHeaders;
+end;
+
+function TScenarioOutline<T>.GetExamples: TList<IScenario>;
+begin
+  Result := FExamples;
+end;
+
+procedure TScenarioOutline<T>.AddExample(const Example: IScenario);
+begin
+  FExamples.Add(Example);
+end;
+
+procedure TScenarioOutline<T>.Run(World: TObject);
+var
+  Rule: TRule<T>;
+  ExampleWorld: T;
+begin
+  // El Outline ejecuta cada Example con su propio World
+  Rule := FParent as TRule<T>;
+  FRunInfo.State := srsRunning;
+  FRunInfo.Result := srrSuccess;
+
+  for var Example in FExamples do
+  begin
+    ExampleWorld := Rule.CreateWorld;
+    try
+      Rule.RunBackground(ExampleWorld);
+      Example.Run(ExampleWorld);
+      if not Example.RunInfo.IsSuccess then
+        FRunInfo.Result := srrFail;
+    finally
+      ExampleWorld.Free;
+    end;
+  end;
+
+  FRunInfo.State := srsFinished;
 end;
 
 { TFeature<T>}
