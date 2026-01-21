@@ -9,7 +9,7 @@ uses
 type
   TStepProc<T> = reference to procedure(World: T);
   TExamplesTable = TArray<TArray<TValue>>;
-  TSpecItemKind = (sikFeature, sikBackground, sikScenario, sikExample, sikExampleInit, sikGiven, sikWhen, sikThen, sikAnd, sikBut);
+  TSpecItemKind = (sikFeature, sikImplicitRule, sikRule, sikBackground, sikScenario, sikExample, sikExampleInit, sikGiven, sikWhen, sikThen, sikAnd, sikBut);
   TLastStepKind = (lskNone, lskGiven, lskWhen, lskThen);
   TSpecRunState =  (srsPrepared, srsSkiped, srsRunning, srsFinished);
   TSpecRunResult =  (srrNone, srrSuccess, srrFail, srrError);
@@ -40,17 +40,31 @@ type
 
   IScenarioBuilder<T: class, constructor> = interface;
   IScenarioOutlineBuilder<T: class, constructor> = interface;
+  IRuleBuilder<T: class, constructor> = interface;
+
   IBackgroundBuilder<T: class, constructor> = interface
     function Given(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>;
     function &And(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>;
     function But(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>;
     function Scenario(const Description: string): IScenarioBuilder<T>;overload;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
+    function Rule(const Description: string): IRuleBuilder<T>;
   end;
 
   IFeatureBuilder<T: class, constructor> = interface
     function Background: IBackgroundBuilder<T>;
     function Scenario(const Description: string): IScenarioBuilder<T>;overload;
+    function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
+    function Rule(const Description: string): IRuleBuilder<T>;
+  end;
+
+  /// <summary>
+  /// Builder para construir Rules dentro de una Feature.
+  /// Las Rules agrupan escenarios relacionados.
+  /// </summary>
+  IRuleBuilder<T: class, constructor> = interface
+    function Background: IBackgroundBuilder<T>;
+    function Scenario(const Description: string): IScenarioBuilder<T>;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
   end;
 
@@ -63,6 +77,7 @@ type
 
     function Scenario(const Description: string): IScenarioBuilder<T>;overload;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
+    function Rule(const Description: string): IRuleBuilder<T>;
   end;
 
   IScenarioOutlineBuilder<T: class, constructor> = interface
@@ -72,6 +87,11 @@ type
     function &And(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
     function But(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
     function Examples(const Table: TExamplesTable): IFeatureBuilder<T>;
+
+    // Continuar dentro de la misma Rule
+    function Scenario(const Description: string): IScenarioBuilder<T>;
+    function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
+    function Rule(const Description: string): IRuleBuilder<T>;
   end;
 
   ISpecItem = interface
@@ -107,12 +127,34 @@ type
     property StepsThen: TList<IScenarioStep> read GetStepsThen;
   end;
 
+  IRule = interface;  // forward declaration
+
   IFeature = interface(ISpecItem)
     ['{025FBE2B-E0B2-47D2-B50A-65A381F119AC}']
     function GetBackGround: IBackground;
     procedure SetBackGround(const Value: IBackground);
     function GetScenarios: TList<IScenario>;
+    function GetRules: TList<IRule>;
+    function HasMatchingScenarios(const TagMatcher: TTagMatcher): Boolean;
     procedure Run(const TagMatcher: TTagMatcher = nil);
+    property BackGround: IBackground read GetBackground write SetBackground;
+    property Scenarios: TList<IScenario> read GetScenarios;
+    property Rules: TList<IRule> read GetRules;
+  end;
+
+  /// <summary>
+  /// Rule agrupa escenarios relacionados dentro de una Feature.
+  /// En Gherkin: Feature > Rule > Scenario
+  /// </summary>
+  IRule = interface(ISpecItem)
+    ['{7A8B9C0D-1E2F-3A4B-5C6D-7E8F9A0B1C2D}']
+    function GetBackGround: IBackground;
+    procedure SetBackGround(const Value: IBackground);
+    function GetScenarios: TList<IScenario>;
+    function GetFeature: IFeature;
+    function HasMatchingScenarios(const TagMatcher: TTagMatcher): Boolean;
+    procedure Run(const TagMatcher: TTagMatcher = nil);
+    property Feature: IFeature read GetFeature;
     property BackGround: IBackground read GetBackground write SetBackground;
     property Scenarios: TList<IScenario> read GetScenarios;
   end;
@@ -181,7 +223,8 @@ type
     function GetFeature: IFeature;
     procedure RunSteps(Steps: TList<IScenarioStep>; World: TObject);
   public
-    constructor Create(const Feature: IFeature; const Description: string);
+    constructor Create(const Feature: IFeature; const Description: string);overload;
+    constructor Create(const Feature: IFeature; const Description: string; AddToFeatureScenarios: Boolean);overload;
     destructor Destroy;override;
     function ExampleInit(Step: TStepProc<T>): TScenario<T>;
     function Given(const Desc: string; Step: TStepProc<T>): TScenario<T>;
@@ -193,21 +236,48 @@ type
 
   TFeature<T: class,constructor> = class(TSpecItem, IFeature)
   strict private
+    FRules: TList<IRule>;
+    FImplicitRule: IRule;  // Rule implícita para escenarios/background sin Rule explícita
+    function GetBackGround: IBackground;
+    procedure SetBackGround(const Value: IBackground);
+    function GetScenarios: TList<IScenario>;
+    function GetRules: TList<IRule>;
+  public
+    constructor Create(const Description: string);
+    destructor Destroy; override;
+    function HasMatchingScenarios(const TagMatcher: TTagMatcher): Boolean;
+    procedure Run(const TagMatcher: TTagMatcher = nil);reintroduce;
+    property Background: IBackground read GetBackGround write SetBackGround;
+    property Rules: TList<IRule> read GetRules;
+    property ImplicitRule: IRule read FImplicitRule;  // Solo para builders
+  end;
+
+  /// <summary>
+  /// Rule agrupa escenarios relacionados dentro de una Feature.
+  /// Puede tener su propio Background que se ejecuta después del Background de Feature.
+  /// </summary>
+  TRule<T: class, constructor> = class(TSpecItem, IRule)
+  strict private
+    [weak]
+    FFeature: IFeature;
     FBackground: IBackground;
     FScenarios: TList<IScenario>;
     function GetBackGround: IBackground;
     procedure SetBackGround(const Value: IBackground);
+    function GetFeature: IFeature;
   private
-    procedure RunBeforeHooks;
-    procedure RunAfterHooks;
     procedure RunBackground(World: T);
     function GetScenarios: TList<IScenario>;
     function CreateWorld: T;
   public
-    constructor Create(const Description: string);
+    constructor Create(const Feature: IFeature; const Description: string);overload;
+    constructor Create(const Feature: IFeature; const Description: string; const Kind: TSpecItemKind);overload;
     destructor Destroy; override;
+    function HasMatchingScenarios(const TagMatcher: TTagMatcher): Boolean;
     procedure Run(const TagMatcher: TTagMatcher = nil);reintroduce;
+    property Feature: IFeature read GetFeature;
     property Background: IBackground read GetBackGround write SetBackGround;
+    property Scenarios: TList<IScenario> read GetScenarios;
   end;
 
 implementation
@@ -480,12 +550,18 @@ end;
 
 constructor TScenario<T>.Create(const Feature: IFeature; const Description: string);
 begin
+  Create(Feature, Description, True);  // Por defecto añade a Feature.Scenarios
+end;
+
+constructor TScenario<T>.Create(const Feature: IFeature; const Description: string; AddToFeatureScenarios: Boolean);
+begin
   inherited Create(sikScenario, Feature, Description);
   FStepsGiven := TList<IScenarioStep>.Create;
   FStepsWhen := TList<IScenarioStep>.Create;
   FStepsThen := TList<IScenarioStep>.Create;
 
-  Feature.Scenarios.Add(Self);
+  if AddToFeatureScenarios then
+    Feature.Scenarios.Add(Self);
 end;
 
 destructor TScenario<T>.Destroy;
@@ -579,59 +655,63 @@ end;
 constructor TFeature<T>.Create(const Description: string);
 begin
   inherited Create(sikFeature, nil, Description);
-  FScenarios := TList<IScenario>.Create;
+  FRules := TList<IRule>.Create;
+  // Crear Rule implícita como contenedor por defecto
+  FImplicitRule := TRule<T>.Create(Self, '', sikImplicitRule);
+  FRules.Add(FImplicitRule);
   MiniSpec.Register(Self as IFeature);
 end;
 
 destructor TFeature<T>.Destroy;
 begin
-  FScenarios.Free;
+  FRules.Free;
   inherited;
-end;
-
-procedure TFeature<T>.RunBackground(World: T);
-begin
-   if Assigned(FBackground) then
-    FBackground.Run(World);
 end;
 
 function TFeature<T>.GetBackGround: IBackground;
 begin
-  Result := FBackground;
+  Result := FImplicitRule.BackGround;
 end;
 
 function TFeature<T>.GetScenarios: TList<IScenario>;
 begin
-  Result := FScenarios;
+  // Para compatibilidad: devuelve escenarios de la Rule implícita
+  Result := FImplicitRule.Scenarios;
+end;
+
+function TFeature<T>.GetRules: TList<IRule>;
+begin
+  Result := FRules;
+end;
+
+function TFeature<T>.HasMatchingScenarios(const TagMatcher: TTagMatcher): Boolean;
+begin
+  if not Assigned(TagMatcher) then
+    Exit(True);
+
+  // Verificar escenarios en todas las Rules (incluyendo ImplicitRule)
+  for var Rule in FRules do
+    if Rule.HasMatchingScenarios(TagMatcher) then
+      Exit(True);
+
+  Result := False;
 end;
 
 procedure TFeature<T>.Run(const TagMatcher: TTagMatcher);
-var
-  CombinedTags: TSpecTags;
 begin
   var SW := TStopwatch.StartNew;
   FRunInfo.State := srsRunning;
   FRunInfo.Result := srrSuccess;
   try
-    for var Scenario in FScenarios do
+    // Ejecutar todas las Rules (incluyendo ImplicitRule)
+    for var Rule in FRules do
     begin
-      // Saltar escenarios que no coinciden con el filtro de tags
-      // Los tags del Feature se heredan a los escenarios
-      if Assigned(TagMatcher) then
+      if Rule.HasMatchingScenarios(TagMatcher) then
       begin
-        CombinedTags := Self.Tags;
-        CombinedTags.Merge(Scenario.Tags);
-        if not TagMatcher(CombinedTags) then
-          Continue;
+        Rule.Run(TagMatcher);
+        if Rule.RunInfo.Result in [srrFail, srrError] then
+          FRunInfo.Result := srrFail;
       end;
-      var World := CreateWorld;
-      RunBeforeHooks;
-      RunBackground(World);
-      Scenario.Run(World);
-      if Scenario.RunInfo.Result in [srrFail, srrError] then
-        FRunInfo.Result := srrFail;
-      RunAfterHooks;
-      World.Free;
     end;
   except
     on E: Exception do
@@ -644,22 +724,120 @@ begin
   FRunInfo.ExecTimeMs := SW.ElapsedMilliseconds;
 end;
 
-function TFeature<T>.CreateWorld: T;
-begin
-  Result := T.Create;
-end;
-
-procedure TFeature<T>.RunBeforeHooks;
-begin
-end;
-
 procedure TFeature<T>.SetBackGround(const Value: IBackground);
+begin
+  FImplicitRule.BackGround := Value;
+end;
+
+{ TRule<T> }
+
+constructor TRule<T>.Create(const Feature: IFeature; const Description: string);
+begin
+  Create(Feature, Description, sikRule);
+end;
+
+constructor TRule<T>.Create(const Feature: IFeature; const Description: string; const Kind: TSpecItemKind);
+begin
+  inherited Create(Kind, Feature, Description);
+  FFeature := Feature;
+  FScenarios := TList<IScenario>.Create;
+end;
+
+destructor TRule<T>.Destroy;
+begin
+  FScenarios.Free;
+  inherited;
+end;
+
+function TRule<T>.GetFeature: IFeature;
+begin
+  Result := FFeature;
+end;
+
+function TRule<T>.GetBackGround: IBackground;
+begin
+  Result := FBackground;
+end;
+
+procedure TRule<T>.SetBackGround(const Value: IBackground);
 begin
   FBackGround := Value;
 end;
 
-procedure TFeature<T>.RunAfterHooks;
+function TRule<T>.GetScenarios: TList<IScenario>;
 begin
+  Result := FScenarios;
+end;
+
+function TRule<T>.CreateWorld: T;
+begin
+  Result := T.Create;
+end;
+
+procedure TRule<T>.RunBackground(World: T);
+begin
+  // Primero ejecutar Background de Feature, luego el de Rule
+  if Assigned(FFeature) and Assigned(FFeature.BackGround) then
+    FFeature.BackGround.Run(World);
+  if Assigned(FBackground) then
+    FBackground.Run(World);
+end;
+
+function TRule<T>.HasMatchingScenarios(const TagMatcher: TTagMatcher): Boolean;
+var
+  CombinedTags: TSpecTags;
+begin
+  if not Assigned(TagMatcher) then
+    Exit(True);
+
+  for var Scenario in FScenarios do
+  begin
+    // Tags combinados: Feature + Rule + Scenario
+    CombinedTags := FFeature.Tags;
+    CombinedTags.Merge(Self.Tags);
+    CombinedTags.Merge(Scenario.Tags);
+    if TagMatcher(CombinedTags) then
+      Exit(True);
+  end;
+  Result := False;
+end;
+
+procedure TRule<T>.Run(const TagMatcher: TTagMatcher);
+var
+  CombinedTags: TSpecTags;
+begin
+  var SW := TStopwatch.StartNew;
+  FRunInfo.State := srsRunning;
+  FRunInfo.Result := srrSuccess;
+  try
+    for var Scenario in FScenarios do
+    begin
+      // Saltar escenarios que no coinciden con el filtro de tags
+      // Los tags se heredan: Feature > Rule > Scenario
+      if Assigned(TagMatcher) then
+      begin
+        CombinedTags := FFeature.Tags;
+        CombinedTags.Merge(Self.Tags);
+        CombinedTags.Merge(Scenario.Tags);
+        if not TagMatcher(CombinedTags) then
+          Continue;
+      end;
+      var World := CreateWorld;
+      RunBackground(World);
+      Scenario.Run(World);
+      if Scenario.RunInfo.Result in [srrFail, srrError] then
+        FRunInfo.Result := srrFail;
+      World.Free;
+    end;
+  except
+    on E: Exception do
+    begin
+      FRunInfo.Result := srrError;
+      FRunInfo.Error := E;
+    end;
+  end;
+  FRunInfo.State := srsFinished;
+  FRunInfo.ExecTimeMs := SW.ElapsedMilliseconds;
 end;
 
 end.

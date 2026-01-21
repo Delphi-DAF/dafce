@@ -47,6 +47,7 @@ type
     function GetFileExt: string;virtual;
     procedure DoReport(const S: ISpecItem);virtual;
     procedure Report(Feature: IFeature);overload;
+    procedure Report(Rule: IRule);overload;
     procedure Report(Background: IBackground);overload;
     procedure Report(Scenario: IScenario);overload;
   public
@@ -402,10 +403,35 @@ begin
 end;
 
 procedure TCustomReporter.Report(Feature: IFeature);
+
+  function HasExecutedScenarios: Boolean;
+  begin
+    // Verificar escenarios en todas las Rules (incluyendo ImplicitRule)
+    for var Rule in Feature.Rules do
+      for var Scenario in Rule.Scenarios do
+        if Scenario.RunInfo.State = srsFinished then
+          Exit(True);
+
+    Result := False;
+  end;
+
 begin
   // Solo reportar la Feature si tiene al menos un escenario ejecutado
+  if not HasExecutedScenarios then
+    Exit;
+
+  DoReport(Feature);
+
+  // Reportar todas las Rules (ImplicitRule se trata especialmente)
+  for var Rule in Feature.Rules do
+    Report(Rule);
+end;
+
+procedure TCustomReporter.Report(Rule: IRule);
+begin
+  // Solo reportar la Rule si tiene al menos un escenario ejecutado
   var HasExecutedScenario := False;
-  for var Scenario in Feature.Scenarios do
+  for var Scenario in Rule.Scenarios do
     if Scenario.RunInfo.State = srsFinished then
     begin
       HasExecutedScenario := True;
@@ -415,9 +441,12 @@ begin
   if not HasExecutedScenario then
     Exit;
 
-  DoReport(Feature);
-  Report(Feature.BackGround);
-  for var Scenario in Feature.Scenarios do
+  // Solo mostrar header si es Rule explícita (no ImplicitRule)
+  if Rule.Kind = sikRule then
+    DoReport(Rule);
+    
+  Report(Rule.BackGround);
+  for var Scenario in Rule.Scenarios do
     Report(Scenario);
 end;
 
@@ -485,6 +514,8 @@ function TCustomReporter.GetKeyWord(const Kind: TSpecItemKind): string;
 begin
   case Kind of
     sikFeature: Result := 'Feature';
+    sikImplicitRule: Result := '';  // No mostrar keyword para Rule implícita
+    sikRule: Result := 'Rule';
     sikBackground: Result :=  'Background';
     sikScenario: Result :=  'Scenario';
     sikExample: Result :=  'Example';
@@ -501,7 +532,8 @@ function TCustomReporter.GetLevel(const Kind: TSpecItemKind): Byte;
 begin
   case Kind of
     sikFeature: Result := 0;
-    sikBackground, sikScenario, sikExample: Result :=  1;
+    sikRule: Result := 1;  // Rule está un nivel debajo de Feature
+    sikBackground, sikScenario, sikExample: Result := 1;
     sikExampleInit: Result := 2;
     sikGiven: Result := 2;
     sikWhen: Result := 2;
@@ -669,6 +701,7 @@ begin
   inherited;
   case S.Kind of
     sikFeature: Feature(S.Description);
+    sikRule: Scenario(GetKeyWord(s.Kind), S.Description, GetStatus(S), S.RunInfo.ExecTimeMs, S.RunInfo.ErrMsg);
     sikBackground: Scenario(GetKeyWord(s.Kind), S.Description, GetStatus(S), S.RunInfo.ExecTimeMs, S.RunInfo.ErrMsg);
     sikScenario, sikExample: Scenario(GetKeyWord(s.Kind), S.Description, GetStatus(S), S.RunInfo.ExecTimeMs, S.RunInfo.ErrMsg);
     sikExampleInit: ;
