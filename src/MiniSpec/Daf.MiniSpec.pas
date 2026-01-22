@@ -151,6 +151,12 @@ begin
   if SameText(Name, 'json') then
     FReporter := TJsonReporter.Create
   else
+  if SameText(Name, 'gherkin') then
+    FReporter := TGherkinReporter.Create(False)
+  else
+  if SameText(Name, 'gherkin-results') then
+    FReporter := TGherkinReporter.Create(True)
+  else
     raise Exception.CreateFmt('Unknow report name: %s', [Name]);
 end;
 

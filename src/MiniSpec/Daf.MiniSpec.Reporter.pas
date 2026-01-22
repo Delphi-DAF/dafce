@@ -2,6 +2,7 @@
 
 interface
 uses
+  System.Classes,
   System.RegularExpressions,
   System.Generics.Collections,
   System.SysUtils,
@@ -90,7 +91,6 @@ type
     procedure Output(const Level: Byte; const Text: string);
     function ExtractValue(const Match: TMatch): string;
     function Level2Margin(const Level: Byte): string;
-    function FormatExampleRow(const Outline: IScenarioOutline; const Example: IScenario): string;
   protected
     function GetContent: string;override;
     procedure ReportOutline(const Outline: IScenarioOutline);override;
@@ -131,9 +131,42 @@ type
     function GetFileExt: string;override;
   end;
 
+  TGherkinReporter = class(TCustomReporter)
+  private
+    FLines: TStringList;
+    FIndent: Integer;
+    FWithResults: Boolean;
+    FCurrentFeatureName: string;
+    FOutputDir: string;
+    FFilesWritten: TStringList;
+    procedure AddLine(const Text: string);
+    procedure AddTags(const Tags: TSpecTags);
+    function GetGherkinKeyword(Kind: TSpecItemKind): string;
+    function RestorePlaceholders(const Text: string): string;
+    function IsTagLine(const Line: string): Boolean;
+    function ExtractTitle(const Desc: string): string;
+    function ExtractMotivation(const Desc: string): string;
+    procedure WriteExamplesTable(const Outline: IScenarioOutline);
+    function ResultComment(const Item: ISpecItem): string;
+    function SanitizeFileName(const Name: string): string;
+    procedure FlushCurrentFeature;
+  protected
+    function GetContent: string;override;
+    function GetFileExt: string;override;
+    procedure DoReport(const S: ISpecItem);override;
+    procedure ReportOutline(const Outline: IScenarioOutline);override;
+  public
+    constructor Create(AWithResults: Boolean = False);
+    destructor Destroy;override;
+    procedure BeginReport;override;
+    procedure EndReport;override;
+    property WithResults: Boolean read FWithResults write FWithResults;
+  end;
+
 implementation
 uses
   System.StrUtils,
+  System.IOUtils,
   Daf.MiniSpec.Utils,
   Daf.MiniSpec;
 
@@ -712,27 +745,15 @@ begin
   OutputLn(0, '');
 end;
 
-function TConsoleReporter.FormatExampleRow(const Outline: IScenarioOutline; const Example: IScenario): string;
-var
-  Cells: TArray<string>;
-  Meta: TExampleMeta;
-begin
-  Meta := Example.ExampleMeta;
-  SetLength(Cells, Length(Outline.Headers));
-  for var i := 0 to High(Outline.Headers) do
-  begin
-    if i <= High(Meta.Values) then
-      Cells[i] := Meta.Values[i].ToString
-    else
-      Cells[i] := '';
-  end;
-  Result := '| ' + string.Join(' | ', Cells) + ' |';
-end;
-
 procedure TConsoleReporter.ReportOutline(const Outline: IScenarioOutline);
 var
   AllSuccess: Boolean;
   TotalTime: Int64;
+  ColWidths: TArray<Integer>;
+  Headers: TArray<string>;
+  i: Integer;
+  HeaderLine, Row: string;
+  Values: TArray<TValue>;
 begin
   // Calcular resultado agregado
   AllSuccess := True;
@@ -758,18 +779,43 @@ begin
   for var Step in Outline.StepsThen do
     OutputLn(2, GetKeyWord(Step.Kind) + ' ' + Step.Description);
 
+  // Calcular anchos de columna
+  Headers := Outline.Headers;
+  SetLength(ColWidths, Length(Headers));
+  for i := 0 to High(Headers) do
+    ColWidths[i] := Length(Headers[i]);
+
+  for var Example in Outline.Examples do
+  begin
+    Values := Example.ExampleMeta.Values;
+    for i := 0 to High(Values) do
+      if (i <= High(ColWidths)) and (Length(Values[i].ToString) > ColWidths[i]) then
+        ColWidths[i] := Length(Values[i].ToString);
+  end;
+
   // Tabla de Examples
   OutputLn(2, 'Examples:');
 
   // Header de la tabla (3 espacios para alinear con emoji ✅)
-  OutputLn(3, '   | ' + string.Join(' | ', Outline.Headers) + ' |');
+  HeaderLine := '|';
+  for i := 0 to High(Headers) do
+    HeaderLine := HeaderLine + ' ' + Headers[i].PadRight(ColWidths[i]) + ' |';
+  OutputLn(3, '   ' + HeaderLine);
 
   // Cada fila con su resultado
   for var Example in Outline.Examples do
   begin
     if Example.RunInfo.State = srsFinished then
     begin
-      var Row := FormatExampleRow(Outline, Example);
+      Values := Example.ExampleMeta.Values;
+      Row := '|';
+      for i := 0 to High(Headers) do
+      begin
+        if i <= High(Values) then
+          Row := Row + ' ' + Values[i].ToString.PadRight(ColWidths[i]) + ' |'
+        else
+          Row := Row + ' ' + ''.PadRight(ColWidths[i]) + ' |';
+      end;
       OutputLn(3, Row, Example.RunInfo.IsSuccess, Example.RunInfo.ExecTimeMs, Example.RunInfo.ErrMsg);
 
       // Contar para estadísticas
@@ -1068,6 +1114,325 @@ end;
 function THTMLReporter.GetFileExt: string;
 begin
   Result := 'html';
+end;
+
+{ TGherkinReporter }
+
+constructor TGherkinReporter.Create(AWithResults: Boolean);
+begin
+  inherited Create;
+  FWithResults := AWithResults;
+  FLines := TStringList.Create;
+  FFilesWritten := TStringList.Create;
+  FIndent := 0;
+  FOutputDir := ExtractFilePath(ParamStr(0));
+end;
+
+destructor TGherkinReporter.Destroy;
+begin
+  FFilesWritten.Free;
+  FLines.Free;
+  inherited;
+end;
+
+procedure TGherkinReporter.BeginReport;
+begin
+  inherited;
+  FLines.Clear;
+  FFilesWritten.Clear;
+  FCurrentFeatureName := '';
+  FIndent := 0;
+end;
+
+procedure TGherkinReporter.EndReport;
+begin
+  FlushCurrentFeature; // Escribir último feature
+  inherited;
+end;
+
+function TGherkinReporter.SanitizeFileName(const Name: string): string;
+var
+  C: Char;
+begin
+  Result := '';
+  // Excluir solo caracteres ilegales en Windows: \ / : * ? " < > |
+  for C in Name do
+    if not CharInSet(C, ['\', '/', ':', '*', '?', '"', '<', '>', '|']) then
+      Result := Result + C;
+  Result := Result.Trim.Replace(' ', '_', [rfReplaceAll]);
+  if Result = '' then
+    Result := 'Feature';
+end;
+
+procedure TGherkinReporter.FlushCurrentFeature;
+var
+  FileName, FilePath: string;
+begin
+  if (FCurrentFeatureName = '') or (FLines.Count = 0) then
+    Exit;
+  FileName := SanitizeFileName(FCurrentFeatureName) + '.feature';
+  FilePath := TPath.Combine(FOutputDir, FileName);
+  TFile.WriteAllText(FilePath, FLines.Text, TEncoding.UTF8);
+  FFilesWritten.Add(FilePath);
+  FLines.Clear;
+  FCurrentFeatureName := '';
+end;
+
+procedure TGherkinReporter.AddLine(const Text: string);
+begin
+  FLines.Add(StringOfChar(' ', FIndent * 2) + Text);
+end;
+
+procedure TGherkinReporter.AddTags(const Tags: TSpecTags);
+var
+  TagArray: TArray<string>;
+begin
+  TagArray := Tags.ToArray;
+  if Length(TagArray) > 0 then
+    AddLine('@' + string.Join(' @', TagArray));
+end;
+
+function TGherkinReporter.GetGherkinKeyword(Kind: TSpecItemKind): string;
+begin
+  case Kind of
+    sikFeature: Result := 'Feature:';
+    sikRule: Result := 'Rule:';
+    sikBackground: Result := 'Background:';
+    sikScenario: Result := 'Scenario:';
+    sikScenarioOutline: Result := 'Scenario Outline:';
+    sikGiven: Result := 'Given';
+    sikWhen: Result := 'When';
+    sikThen: Result := 'Then';
+  else
+    Result := '';
+  end;
+end;
+
+function TGherkinReporter.RestorePlaceholders(const Text: string): string;
+begin
+  // Convertir #{value} a <value>
+  Result := TRegEx.Replace(Text, '#\{([^}]+)\}', '<$1>');
+end;
+
+function TGherkinReporter.IsTagLine(const Line: string): Boolean;
+begin
+  // Una línea es de tags si empieza con @ y solo contiene tags
+  Result := Line.Trim.StartsWith('@');
+end;
+
+function TGherkinReporter.ExtractTitle(const Desc: string): string;
+var
+  Lines: TArray<string>;
+  Line: string;
+begin
+  Lines := Desc.Split([#13#10, #10]);
+  for Line in Lines do
+    if (Line.Trim <> '') and not IsTagLine(Line) then
+      Exit(Line.Trim);
+  Result := Desc.Trim;
+end;
+
+function TGherkinReporter.ExtractMotivation(const Desc: string): string;
+var
+  Lines: TArray<string>;
+  FoundTitle: Boolean;
+  Motivation: TStringList;
+  Line: string;
+begin
+  Lines := Desc.Split([#13#10, #10]);
+  FoundTitle := False;
+  Motivation := TStringList.Create;
+  try
+    for Line in Lines do
+    begin
+      // Saltar líneas de tags
+      if IsTagLine(Line) then
+        Continue;
+      if not FoundTitle then
+      begin
+        if Line.Trim <> '' then
+          FoundTitle := True;
+      end
+      else
+        Motivation.Add(Line);
+    end;
+    // Trim empty lines at start and end
+    while (Motivation.Count > 0) and (Motivation[0].Trim = '') do
+      Motivation.Delete(0);
+    while (Motivation.Count > 0) and (Motivation[Motivation.Count - 1].Trim = '') do
+      Motivation.Delete(Motivation.Count - 1);
+    Result := Motivation.Text.TrimRight;
+  finally
+    Motivation.Free;
+  end;
+end;
+
+function TGherkinReporter.ResultComment(const Item: ISpecItem): string;
+begin
+  if not FWithResults then
+    Exit('');
+  if Item.RunInfo.State <> srsFinished then
+    Exit(' # skip');
+  if Item.RunInfo.IsSuccess then
+    Result := ' # pass'
+  else
+    Result := ' # FAIL';
+end;
+
+procedure TGherkinReporter.WriteExamplesTable(const Outline: IScenarioOutline);
+var
+  ColWidths: TArray<Integer>;
+  Headers: TArray<string>;
+  HeaderLine, DataLine: string;
+  i: Integer;
+  Example: IScenario;
+  Values: TArray<TValue>;
+begin
+  Headers := Outline.Headers;
+  SetLength(ColWidths, Length(Headers));
+
+  // Calculate column widths
+  for i := 0 to High(Headers) do
+    ColWidths[i] := Length(Headers[i]);
+
+  for Example in Outline.Examples do
+  begin
+    Values := Example.ExampleMeta.Values;
+    for i := 0 to High(Values) do
+      if i <= High(ColWidths) then
+        if Length(Values[i].ToString) > ColWidths[i] then
+          ColWidths[i] := Length(Values[i].ToString);
+  end;
+
+  // Write header row
+  HeaderLine := '|';
+  for i := 0 to High(Headers) do
+    HeaderLine := HeaderLine + ' ' + Headers[i].PadRight(ColWidths[i]) + ' |';
+  AddLine(HeaderLine);
+
+  // Write data rows
+  for Example in Outline.Examples do
+  begin
+    Values := Example.ExampleMeta.Values;
+    DataLine := '|';
+    for i := 0 to High(Values) do
+      if i <= High(ColWidths) then
+        DataLine := DataLine + ' ' + Values[i].ToString.PadRight(ColWidths[i]) + ' |';
+    AddLine(DataLine + ResultComment(Example));
+  end;
+end;
+
+procedure TGherkinReporter.DoReport(const S: ISpecItem);
+var
+  Motivation: string;
+  Line: string;
+  FeatureTitle: string;
+begin
+  // NO llamar inherited - no queremos contar pass/fail
+  case S.Kind of
+    sikFeature: begin
+      // Escribir feature anterior antes de empezar nuevo
+      FlushCurrentFeature;
+      // Empezar nuevo feature
+      FeatureTitle := ExtractTitle(S.Description);
+      FCurrentFeatureName := FeatureTitle;
+      FIndent := 0;
+      AddTags(S.Tags);
+      AddLine('Feature: ' + FeatureTitle);
+      Motivation := ExtractMotivation(S.Description);
+      if Motivation <> '' then
+      begin
+        Inc(FIndent);
+        for Line in Motivation.Split([#13#10, #10]) do
+          AddLine(Line);
+        Dec(FIndent);
+      end;
+      AddLine('');
+      FIndent := 1; // Scenarios at indent 1
+    end;
+
+    sikRule: begin
+      FIndent := 1;
+      AddLine('');
+      AddTags(S.Tags);
+      AddLine('Rule: ' + S.Description);
+      FIndent := 2; // Scenarios under Rule at indent 2
+    end;
+
+    sikBackground: begin
+      AddLine('Background:' + ResultComment(S));
+      FIndent := 2; // Steps at indent 2
+    end;
+
+    sikScenario: begin
+      FIndent := 1; // Reset to scenario level
+      AddLine('');
+      AddTags(S.Tags);
+      AddLine('Scenario: ' + S.Description + ResultComment(S));
+      FIndent := 2; // Steps at indent 2
+    end;
+
+    sikImplicitRule: ; // Ignorar rule implícita
+
+    sikGiven, sikWhen, sikThen: begin
+      AddLine(GetGherkinKeyword(S.Kind) + ' ' + S.Description + ResultComment(S));
+    end;
+  end;
+end;
+
+procedure TGherkinReporter.ReportOutline(const Outline: IScenarioOutline);
+var
+  Step: IScenarioStep;
+begin
+  FIndent := 1; // Reset to scenario level
+  AddLine('');
+  AddTags((Outline as ISpecItem).Tags);
+  AddLine('Scenario Outline: ' + Outline.Description + ResultComment(Outline as ISpecItem));
+  FIndent := 2; // Steps at indent 2
+
+  // Steps template con placeholders <name>
+  for Step in Outline.StepsGiven do
+    AddLine(GetGherkinKeyword(Step.Kind) + ' ' + RestorePlaceholders(Step.Description));
+  for Step in Outline.StepsWhen do
+    AddLine(GetGherkinKeyword(Step.Kind) + ' ' + RestorePlaceholders(Step.Description));
+  for Step in Outline.StepsThen do
+    AddLine(GetGherkinKeyword(Step.Kind) + ' ' + RestorePlaceholders(Step.Description));
+
+  // Tabla Examples
+  AddLine('');
+  AddLine('Examples:');
+  FIndent := 3;
+  WriteExamplesTable(Outline);
+end;
+
+function TGherkinReporter.GetContent: string;
+var
+  i: Integer;
+  FileName, FeatureName: string;
+begin
+  // Devuelve índice en formato Quarto con include-code-files
+  if FFilesWritten.Count = 0 then
+    Result := '# MiniSpec' + sLineBreak + sLineBreak + 'No features generated.'
+  else
+  begin
+    Result := '---' + sLineBreak +
+              'title: "MiniSpec Features"' + sLineBreak +
+              '---' + sLineBreak + sLineBreak +
+              'Generated **' + IntToStr(FFilesWritten.Count) + '** features.' + sLineBreak + sLineBreak;
+    for i := 0 to FFilesWritten.Count - 1 do
+    begin
+      FileName := ExtractFileName(FFilesWritten[i]);
+      FeatureName := ChangeFileExt(FileName, '').Replace('_', ' ', [rfReplaceAll]);
+      Result := Result + '## ' + FeatureName + sLineBreak + sLineBreak +
+                '```{.gherkin include="' + FileName + '"}' + sLineBreak +
+                '```' + sLineBreak + sLineBreak;
+    end;
+  end;
+end;
+
+function TGherkinReporter.GetFileExt: string;
+begin
+  Result := 'md';
 end;
 
 end.
