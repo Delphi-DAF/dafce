@@ -8,6 +8,10 @@ uses
   System.SysUtils,
   System.JSON,
   System.Rtti,
+  System.SyncObjs,
+  IdHTTPServer,
+  IdCustomHTTPServer,
+  IdContext,
   Daf.MiniSpec.Types;
 
 type
@@ -163,10 +167,44 @@ type
     property WithResults: Boolean read FWithResults write FWithResults;
   end;
 
+  TSSEReporter = class(TReporterDecorator)
+  private
+    FServer: TIdHTTPServer;
+    FPort: Integer;
+    FEvents: TStringList;
+    FEventsLock: TCriticalSection;
+    FSSEClients: TList<TIdContext>;
+    FClientsLock: TCriticalSection;
+    FReportFinished: Boolean;
+    FCurrentFeature: string;
+    FFeaturePass: Integer;
+    FFeatureFail: Integer;
+    FFeatureStartTime: TDateTime;
+    FScenarioCount: Integer; // Contador de escenarios emitidos
+    procedure HandleRequest(AContext: TIdContext;
+      ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
+    procedure BroadcastEvent(const EventJson: string);
+    function BuildEventJson(const EventType: string; const Data: TJSONObject): string;
+    procedure EmitFeatureEnd;
+    function HasConnectedClients: Boolean;
+    function StepsToJsonArray(const Steps: TList<IScenarioStep>; const StepType: string): TJSONArray;
+  protected
+    procedure DoReport(const S: ISpecItem);override;
+    procedure ReportOutline(const Outline: IScenarioOutline);override;
+  public
+    constructor Create(const Decorated: ISpecReporter; APort: Integer = 9999);
+    destructor Destroy;override;
+    procedure BeginReport;override;
+    procedure EndReport;override;
+    function GetContent: string;override;
+    property Port: Integer read FPort;
+  end;
+
 implementation
 uses
   System.StrUtils,
   System.IOUtils,
+  IdGlobal,
   Daf.MiniSpec.Utils,
   Daf.MiniSpec;
 
@@ -456,6 +494,530 @@ const
 ''';
 {$ENDREGION}
 
+{$REGION 'SSE Dashboard HTML'}
+const
+  SSE_DASHBOARD_HTML = '''
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MiniSpec Live</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+  <div x-data="dashboard()" x-init="init()" class="container mx-auto p-6">
+    <div class="flex justify-between items-center mb-6">
+      <h1 class="text-3xl font-bold">🧪 MiniSpec Live <span class="text-sm text-gray-500 font-normal">v{{MINISPEC_VERSION}}</span></h1>
+      <div class="flex items-center gap-4">
+        <span x-show="connected" class="text-green-400 flex items-center gap-1">
+          <span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span> Connected
+        </span>
+        <span x-show="!connected" class="text-red-400 flex items-center gap-1">
+          <span class="w-2 h-2 bg-red-400 rounded-full"></span> Disconnected
+        </span>
+      </div>
+    </div>
+
+    <!-- Progress Bar -->
+    <div class="mb-4 bg-gray-800 rounded-lg p-4">
+      <div class="flex justify-between mb-2">
+        <span>Progress</span>
+        <span x-text="`${pass + fail} scenarios`"></span>
+      </div>
+      <div class="w-full bg-gray-700 rounded-full h-4 overflow-hidden">
+        <div class="h-full flex">
+          <div class="bg-green-500 transition-all duration-300" :style="`width: ${passPercent}%`"></div>
+          <div class="bg-red-500 transition-all duration-300" :style="`width: ${failPercent}%`"></div>
+        </div>
+      </div>
+      <div class="flex justify-between mt-2 text-sm">
+        <span class="text-green-400" x-text="`✅ ${pass} pass`"></span>
+        <span class="text-yellow-400" x-show="skip > 0" x-text="`⏭️ ${skip} skip`"></span>
+        <span class="text-red-400" x-text="`❌ ${fail} fail`"></span>
+      </div>
+    </div>
+
+    <!-- Filters Panel -->
+    <div class="mb-4 bg-gray-800 rounded-lg p-4">
+      <div class="flex flex-wrap items-center gap-4">
+        <!-- Status Filters -->
+        <div class="flex items-center gap-3">
+          <label class="flex items-center gap-1 cursor-pointer">
+            <input type="checkbox" x-model="showPass" class="w-4 h-4 accent-green-500">
+            <span class="text-green-400 text-sm">Pass</span>
+          </label>
+          <label class="flex items-center gap-1 cursor-pointer">
+            <input type="checkbox" x-model="showFail" class="w-4 h-4 accent-red-500">
+            <span class="text-red-400 text-sm">Fail</span>
+          </label>
+          <label class="flex items-center gap-1 cursor-pointer">
+            <input type="checkbox" x-model="showSkip" class="w-4 h-4 accent-yellow-500">
+            <span class="text-yellow-400 text-sm">Skip</span>
+          </label>
+        </div>
+        
+        <!-- Regex Filter -->
+        <div class="flex items-center gap-2 flex-1 min-w-[200px]">
+          <span class="text-gray-400 text-sm">🔍</span>
+          <input type="text" x-model="filterRegex" placeholder="Filter by regex..." 
+                 class="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm flex-1 focus:outline-none focus:border-blue-500">
+          <button x-show="filterRegex" @click="filterRegex = ''" class="text-gray-400 hover:text-white text-sm">✕</button>
+        </div>
+        
+        <!-- Tag Filter -->
+        <div class="flex items-center gap-2">
+          <span class="text-gray-400 text-sm">🏷️</span>
+          <select x-model="filterTag" class="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm focus:outline-none focus:border-blue-500">
+            <option value="">All tags</option>
+            <template x-for="tag in allTags" :key="tag">
+              <option :value="tag" x-text="tag"></option>
+            </template>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Actions: First Failure & Top 10 Slowest -->
+    <div class="mb-4 flex gap-4" x-show="reportComplete">
+      <!-- First Failure -->
+      <template x-if="firstFailure">
+        <button @click="scrollToFeature(firstFailure.featureName)" 
+                class="bg-red-900/50 border border-red-700 rounded-lg px-4 py-2 text-sm hover:bg-red-900/70 transition flex items-center gap-2">
+          <span>🎯</span>
+          <span>First Failure: <span class="font-medium" x-text="firstFailure.scenarioName"></span></span>
+        </button>
+      </template>
+      
+      <!-- Top 10 Slowest Toggle -->
+      <button @click="showSlowest = !showSlowest" 
+              class="bg-yellow-900/50 border border-yellow-700 rounded-lg px-4 py-2 text-sm hover:bg-yellow-900/70 transition flex items-center gap-2">
+        <span>🐢</span>
+        <span x-text="showSlowest ? 'Hide Slowest' : 'Top 10 Slowest'"></span>
+      </button>
+    </div>
+
+    <!-- Top 10 Slowest Panel -->
+    <template x-if="showSlowest && reportComplete">
+      <div class="mb-4 bg-yellow-900/30 border border-yellow-700 rounded-lg p-4">
+        <div class="text-yellow-400 font-medium mb-2">🐢 Top 10 Slowest Scenarios</div>
+        <div class="space-y-1 text-sm">
+          <template x-for="(item, idx) in slowestScenarios" :key="idx">
+            <div class="flex items-center gap-2 py-1">
+              <span class="text-gray-500 w-6" x-text="`#${idx + 1}`"></span>
+              <span class="text-yellow-300 w-16 text-right" x-text="`${item.ms}ms`"></span>
+              <span :class="item.success ? 'text-green-400' : 'text-red-400'" x-text="item.success ? '✓' : '✗'"></span>
+              <span class="text-gray-300 truncate" x-text="item.name"></span>
+              <span class="text-gray-500 text-xs" x-text="`(${item.feature})`"></span>
+            </div>
+          </template>
+        </div>
+      </div>
+    </template>
+
+    <!-- Current Feature -->
+    <template x-if="currentFeature">
+      <div class="bg-yellow-900/30 border border-yellow-600 rounded-lg p-4 mb-4 animate-pulse">
+        <div class="flex items-center gap-2">
+          <span class="text-yellow-400 text-xl">⏳</span>
+          <span class="font-semibold" x-text="currentFeature"></span>
+        </div>
+        <div x-show="currentScenario" class="ml-6 mt-2 text-gray-400">
+          <span x-text="currentScenario"></span>
+        </div>
+      </div>
+    </template>
+
+    <!-- Completed Features -->
+    <div class="space-y-2">
+      <template x-for="feature in filteredFeatures" :key="feature.name">
+        <div :id="`feature-${feature.name.replace(/\\s+/g, '-')}`"
+             :class="feature.success ? 'bg-green-900/30 border-green-700' : 'bg-red-900/30 border-red-700'"
+             class="border rounded-lg p-4">
+          <details>
+            <summary class="cursor-pointer list-none flex justify-between items-center [&::-webkit-details-marker]:hidden">
+              <div class="flex items-center gap-2">
+                <span class="text-gray-400 text-xs">▶</span>
+                <span x-text="feature.success ? '✅' : '❌'" class="text-xl"></span>
+                <span class="font-semibold" x-text="feature.name"></span>
+                <span class="text-gray-500 text-sm" x-text="`(${feature.pass + feature.fail} examples)`"></span>
+              </div>
+              <div class="text-gray-400 text-sm">
+                <span class="text-green-400" x-text="`${feature.pass}✓`"></span>
+                <span class="text-red-400 ml-1" x-text="`${feature.fail}✗`"></span>
+                <span class="ml-2" x-text="`${feature.ms}ms`"></span>
+              </div>
+            </summary>
+            <div class="mt-3 ml-4 space-y-3 border-l border-gray-700 pl-4 max-h-[600px] overflow-y-auto">
+              <!-- Descripción del feature -->
+              <template x-if="feature.description && feature.description.includes('\n')">
+                <div class="text-gray-400 text-sm italic whitespace-pre-line" x-text="feature.description.split('\n').slice(1).join('\n').trim()"></div>
+              </template>
+              
+              <!-- Background -->
+              <template x-if="feature.background && feature.background.length > 0">
+                <div class="mb-3">
+                  <div class="text-gray-300 font-medium mb-1">Background</div>
+                  <div class="ml-4 space-y-0.5 text-xs">
+                    <template x-for="(step, idx) in feature.background" :key="idx">
+                      <div class="flex items-start gap-2 py-0.5 text-gray-400">
+                        <span class="text-blue-400 font-medium w-12 flex-shrink-0" x-text="step.type"></span>
+                        <span x-text="step.text"></span>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+              </template>
+              
+              <div x-show="feature.scenarios.length === 0" class="text-gray-500 text-sm italic">No scenarios recorded</div>
+              
+              <template x-for="(scenario, idx) in feature.scenarios" :key="idx">
+                <div class="mb-3">
+                  <!-- Scenario Outline con tabla -->
+                  <template x-if="scenario.type === 'outline'">
+                    <details :open="!scenario.success">
+                      <summary class="cursor-pointer list-none flex items-center gap-2 text-sm py-1 [&::-webkit-details-marker]:hidden" :class="scenario.success ? 'text-green-400' : 'text-red-400'">
+                        <span class="text-gray-500 text-xs">▶</span>
+                        <span x-text="scenario.success ? '✓' : '✗'" class="w-4"></span>
+                        <span class="font-medium">Scenario Outline:</span>
+                        <span x-text="scenario.name" class="flex-1"></span>
+                        <span class="text-gray-500 text-xs" x-text="`${scenario.pass}✓ ${scenario.fail}✗`"></span>
+                        <span class="text-gray-500 flex-shrink-0" x-text="`${scenario.ms}ms`"></span>
+                      </summary>
+                      <div class="ml-6 mt-2 space-y-2 text-xs">
+                        <!-- Steps template -->
+                        <div class="space-y-0.5">
+                          <template x-for="(step, stepIdx) in scenario.steps" :key="stepIdx">
+                            <div class="flex items-start gap-2 py-0.5 text-gray-400">
+                              <span class="text-blue-400 font-medium w-12 flex-shrink-0" x-text="step.type"></span>
+                              <span x-text="step.text"></span>
+                            </div>
+                          </template>
+                        </div>
+                        <!-- Examples table -->
+                        <div class="mt-2">
+                          <div class="text-gray-300 font-medium mb-1">Examples:</div>
+                          <table class="text-xs border-collapse">
+                            <thead>
+                              <tr class="text-gray-400">
+                                <th class="pr-2 text-left"></th>
+                                <template x-for="header in scenario.headers" :key="header">
+                                  <th class="px-2 py-1 text-left border-b border-gray-700" x-text="header"></th>
+                                </template>
+                                <th class="px-2 py-1 text-left border-b border-gray-700">ms</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <template x-for="(ex, exIdx) in scenario.examples" :key="exIdx">
+                                <tr :class="ex.success ? 'text-green-400' : 'text-red-400'">
+                                  <td class="pr-2" x-text="ex.success ? '✓' : '✗'"></td>
+                                  <template x-for="(val, valIdx) in ex.values" :key="valIdx">
+                                    <td class="px-2 py-0.5 border-b border-gray-800" x-text="val"></td>
+                                  </template>
+                                  <td class="px-2 py-0.5 border-b border-gray-800 text-gray-500" x-text="ex.ms"></td>
+                                </tr>
+                              </template>
+                            </tbody>
+                          </table>
+                        </div>
+                        <!-- Errors -->
+                        <template x-for="(ex, exIdx) in scenario.examples.filter(e => e.error)" :key="'err'+exIdx">
+                          <div class="mt-1 p-2 bg-red-900/50 border border-red-700 rounded text-red-300 font-mono text-xs whitespace-pre-wrap" x-text="ex.error"></div>
+                        </template>
+                      </div>
+                    </details>
+                  </template>
+                  
+                  <!-- Scenario normal -->
+                  <template x-if="scenario.type !== 'outline'">
+                    <details :open="!scenario.success">
+                      <summary class="cursor-pointer list-none flex items-center gap-2 text-sm py-1 [&::-webkit-details-marker]:hidden" :class="scenario.success ? 'text-green-400' : 'text-red-400'">
+                        <span class="text-gray-500 text-xs">▶</span>
+                        <span x-text="scenario.success ? '✓' : '✗'" class="w-4"></span>
+                        <span class="font-medium">Scenario:</span>
+                        <span x-text="scenario.name" class="flex-1"></span>
+                        <span class="text-gray-500 flex-shrink-0" x-text="`${scenario.ms}ms`"></span>
+                      </summary>
+                      <div class="ml-6 mt-1 space-y-1 text-xs">
+                        <template x-if="scenario.steps && scenario.steps.length > 0">
+                          <div class="space-y-0.5">
+                            <template x-for="(step, stepIdx) in scenario.steps" :key="stepIdx">
+                              <div class="flex items-start gap-2 py-0.5" :class="step.success ? 'text-gray-400' : 'text-red-400'">
+                                <span x-text="step.success ? '✓' : '✗'" class="w-3 flex-shrink-0"></span>
+                                <span class="text-blue-400 font-medium w-12 flex-shrink-0" x-text="step.type"></span>
+                                <span x-text="step.text" class="flex-1"></span>
+                                <span class="text-gray-600" x-text="`${step.ms}ms`"></span>
+                              </div>
+                            </template>
+                          </div>
+                        </template>
+                        <template x-if="scenario.error">
+                          <div class="mt-2 p-2 bg-red-900/50 border border-red-700 rounded text-red-300 font-mono text-xs whitespace-pre-wrap" x-text="scenario.error"></div>
+                        </template>
+                      </div>
+                    </details>
+                  </template>
+                </div>
+              </template>
+            </div>
+          </details>
+        </div>
+      </template>
+    </div>
+
+    <!-- Report Complete -->
+    <template x-if="reportComplete">
+      <div class="mt-6 bg-gray-800 rounded-lg p-6 text-center">
+        <div class="text-2xl mb-2" x-text="fail === 0 ? '🎉 All tests passed!' : '⚠️ Some tests failed'"></div>
+        <div class="text-gray-400">
+          <span class="text-green-400" x-text="`${pass} passed`"></span>
+          <span>, </span>
+          <span class="text-red-400" x-text="`${fail} failed`"></span>
+          <span x-show="skip > 0">, </span>
+          <span x-show="skip > 0" class="text-yellow-400" x-text="`${skip} skipped`"></span>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  <script>
+    function dashboard() {
+      return {
+        connected: false,
+        features: [],
+        currentFeature: null,
+        currentFeatureDescription: null,
+        currentFeatureBackground: null,
+        currentFeatureTags: [],
+        currentFeatureScenarios: [],
+        currentScenario: null,
+        pass: 0,
+        fail: 0,
+        skip: 0,
+        totalMs: 0,
+        reportComplete: false,
+        eventSource: null,
+        
+        // Filters
+        showPass: true,
+        showFail: true,
+        showSkip: true,
+        filterRegex: '',
+        filterTag: '',
+        showSlowest: false,
+
+        get passPercent() {
+          const total = this.pass + this.fail;
+          return total > 0 ? (this.pass / total * 100) : 0;
+        },
+        get failPercent() {
+          const total = this.pass + this.fail;
+          return total > 0 ? (this.fail / total * 100) : 0;
+        },
+        
+        get allTags() {
+          const tags = new Set();
+          for (const f of this.features) {
+            if (f.tags) f.tags.forEach(t => tags.add(t));
+            for (const s of f.scenarios || []) {
+              if (s.tags) s.tags.forEach(t => tags.add(t));
+            }
+          }
+          return Array.from(tags).sort();
+        },
+        
+        get filteredFeatures() {
+          let regex = null;
+          if (this.filterRegex) {
+            try { regex = new RegExp(this.filterRegex, 'i'); } catch(e) {}
+          }
+          
+          return this.features.filter(f => {
+            // Tag filter
+            if (this.filterTag && (!f.tags || !f.tags.includes(this.filterTag))) {
+              // Check scenarios for tag
+              const hasTagInScenarios = f.scenarios?.some(s => s.tags?.includes(this.filterTag));
+              if (!hasTagInScenarios) return false;
+            }
+            
+            // Regex filter
+            if (regex && !regex.test(f.name) && !regex.test(f.description || '')) {
+              const matchesScenario = f.scenarios?.some(s => regex.test(s.name));
+              if (!matchesScenario) return false;
+            }
+            
+            // Status filter
+            if (f.success && !this.showPass) return false;
+            if (!f.success && !this.showFail) return false;
+            
+            return true;
+          });
+        },
+        
+        get firstFailure() {
+          for (const f of this.features) {
+            for (const s of f.scenarios || []) {
+              if (!s.success) {
+                return { featureName: f.name, scenarioName: s.name };
+              }
+            }
+          }
+          return null;
+        },
+        
+        get slowestScenarios() {
+          const all = [];
+          for (const f of this.features) {
+            for (const s of f.scenarios || []) {
+              if (s.type === 'outline') {
+                // Para outlines, usar el tiempo total
+                all.push({ name: s.name, ms: s.ms, success: s.success, feature: f.name });
+              } else {
+                all.push({ name: s.name, ms: s.ms, success: s.success, feature: f.name });
+              }
+            }
+          }
+          return all.sort((a, b) => b.ms - a.ms).slice(0, 10);
+        },
+        
+        scrollToFeature(name) {
+          const id = 'feature-' + name.replace(/\\s+/g, '-');
+          const el = document.getElementById(id);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            el.querySelector('details')?.setAttribute('open', '');
+          }
+        },
+
+        init() {
+          this.connect();
+        },
+
+        connect() {
+          // Cerrar conexión anterior si existe
+          if (this.eventSource) {
+            this.eventSource.close();
+            this.eventSource = null;
+          }
+
+          this.eventSource = new EventSource('/events');
+
+          this.eventSource.onopen = () => {
+            this.connected = true;
+          };
+
+          this.eventSource.onerror = (e) => {
+            this.connected = false;
+            // Solo reconectar si no se ha completado el reporte
+            if (!this.reportComplete && this.eventSource) {
+              this.eventSource.close();
+              this.eventSource = null;
+              // Reconectar después de 3 segundos
+              setTimeout(() => this.connect(), 3000);
+            }
+          };
+
+          this.eventSource.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+            this.handleEvent(data);
+          };
+        },
+
+        handleEvent(data) {
+          switch(data.event) {
+            case 'report:start':
+              this.features = [];
+              this.pass = 0;
+              this.fail = 0;
+              this.skip = 0;
+              this.reportComplete = false;
+              this.currentFeatureScenarios = [];
+              this.currentFeatureDescription = null;
+              this.currentFeatureTags = [];
+              break;
+            case 'feature:start':
+              this.currentFeature = data.name;
+              this.currentFeatureDescription = data.description || null;
+              this.currentFeatureBackground = data.background || null;
+              this.currentFeatureTags = data.tags || [];
+              this.currentScenario = null;
+              this.currentFeatureScenarios = [];
+              break;
+            case 'scenario:start':
+              this.currentScenario = data.name;
+              break;
+            case 'scenario:end':
+              if (data.success) this.pass++; else this.fail++;
+              this.currentFeatureScenarios.push({
+                type: 'scenario',
+                name: data.name,
+                success: data.success,
+                ms: data.ms,
+                error: data.error || null,
+                steps: data.steps || []
+              });
+              this.currentScenario = null;
+              break;
+            case 'outline:end':
+              // Sumar todos los examples al conteo
+              this.pass += data.pass || 0;
+              this.fail += data.fail || 0;
+              this.currentFeatureScenarios.push({
+                type: 'outline',
+                name: data.name,
+                success: data.success,
+                ms: data.ms,
+                pass: data.pass,
+                fail: data.fail,
+                headers: data.headers || [],
+                steps: data.steps || [],
+                examples: data.examples || []
+              });
+              break;
+            case 'feature:end':
+              this.features.push({
+                name: data.name,
+                description: this.currentFeatureDescription,
+                background: this.currentFeatureBackground,
+                tags: this.currentFeatureTags,
+                success: data.fail === 0,
+                pass: data.pass,
+                fail: data.fail,
+                ms: data.ms,
+                scenarios: [...this.currentFeatureScenarios]
+              });
+              this.currentFeature = null;
+              this.currentFeatureDescription = null;
+              this.currentFeatureBackground = null;
+              this.currentFeatureTags = [];
+              this.currentFeatureScenarios = [];
+              break;
+            case 'report:end':
+              this.reportComplete = true;
+              this.totalMs = data.ms;
+              this.pass = data.pass;
+              this.fail = data.fail;
+              this.skip = data.skip || 0;
+              this.currentFeature = null;
+              this.currentScenario = null;
+              // Cerrar conexión - el reporte terminó
+              if (this.eventSource) {
+                this.eventSource.close();
+                this.eventSource = null;
+              }
+              this.connected = false;
+              break;
+          }
+        }
+      }
+    }
+  </script>
+</body>
+</html>
+''';
+{$ENDREGION}
+
 
 { TCustomReporter }
 
@@ -506,22 +1068,20 @@ end;
 
 procedure TCustomReporter.ReportOutline(const Outline: IScenarioOutline);
 begin
-  // Reportar el ScenarioOutline como header
-  DoReport(Outline);
-
-  // Reportar los steps del outline (template)
-  for var Step in Outline.StepsGiven do
-    DoReport(Step);
-  for var Step in Outline.StepsWhen do
-    DoReport(Step);
-  for var Step in Outline.StepsThen do
-    DoReport(Step);
-
-  // Reportar cada Example
+  // Solo contar Examples - la presentación es responsabilidad de cada reporter concreto.
+  // No llamamos a DoReport aquí para evitar que reporters concretos que llamen a inherited
+  // dupliquen la presentación.
   for var Example in Outline.Examples do
   begin
-    if Example.RunInfo.State = srsFinished then
-      DoReport(Example);
+    if Example.RunInfo.State <> srsFinished then
+    begin
+      IncSkip;
+      Continue;
+    end;
+    if Example.RunInfo.IsSuccess then
+      IncPass
+    else
+      IncFail;
   end;
 end;
 
@@ -755,7 +1315,10 @@ var
   HeaderLine, Row: string;
   Values: TArray<TValue>;
 begin
-  // Calcular resultado agregado
+  // Primero delegar al base para conteo de estadísticas
+  inherited;
+
+  // Ahora solo presentación - sin tocar contadores
   AllSuccess := True;
   TotalTime := 0;
   for var Example in Outline.Examples do
@@ -802,7 +1365,7 @@ begin
     HeaderLine := HeaderLine + ' ' + Headers[i].PadRight(ColWidths[i]) + ' |';
   OutputLn(3, '   ' + HeaderLine);
 
-  // Cada fila con su resultado
+  // Cada fila con su resultado (solo presentación, sin contar)
   for var Example in Outline.Examples do
   begin
     if Example.RunInfo.State = srsFinished then
@@ -817,12 +1380,6 @@ begin
           Row := Row + ' ' + ''.PadRight(ColWidths[i]) + ' |';
       end;
       OutputLn(3, Row, Example.RunInfo.IsSuccess, Example.RunInfo.ExecTimeMs, Example.RunInfo.ErrMsg);
-
-      // Contar para estadísticas
-      if Example.RunInfo.IsSuccess then
-        IncPass
-      else
-        IncFail;
     end;
   end;
 end;
@@ -1433,6 +1990,431 @@ end;
 function TGherkinReporter.GetFileExt: string;
 begin
   Result := 'md';
+end;
+
+{ TSSEReporter }
+
+constructor TSSEReporter.Create(const Decorated: ISpecReporter; APort: Integer);
+begin
+  inherited Create(Decorated);
+  FPort := APort;
+  FEvents := TStringList.Create;
+  FEventsLock := TCriticalSection.Create;
+  FSSEClients := TList<TIdContext>.Create;
+  FClientsLock := TCriticalSection.Create;
+  FReportFinished := False;
+  FCurrentFeature := '';
+  FFeaturePass := 0;
+  FFeatureFail := 0;
+  FFeatureStartTime := 0;
+
+  FServer := TIdHTTPServer.Create(nil);
+  FServer.DefaultPort := FPort;
+  FServer.OnCommandGet := HandleRequest;
+end;
+
+destructor TSSEReporter.Destroy;
+begin
+  if FServer.Active then
+    FServer.Active := False;
+  FServer.Free;
+  FClientsLock.Free;
+  FSSEClients.Free;
+  FEventsLock.Free;
+  FEvents.Free;
+  inherited;
+end;
+
+function TSSEReporter.HasConnectedClients: Boolean;
+begin
+  FClientsLock.Enter;
+  try
+    Result := FSSEClients.Count > 0;
+  finally
+    FClientsLock.Leave;
+  end;
+end;
+
+procedure TSSEReporter.BeginReport;
+var
+  Data: TJSONObject;
+  WaitCount: Integer;
+begin
+  inherited;
+  FReportFinished := False;
+  FEvents.Clear;
+  FScenarioCount := 0;
+
+  // Iniciar servidor HTTP
+  try
+    FServer.Active := True;
+    WriteLn(Format('SSE Dashboard: http://localhost:%d', [FPort]));
+    WriteLn('Waiting for browser connection...');
+
+    // Esperar hasta que haya al menos un cliente conectado (max 30 segundos)
+    WaitCount := 0;
+    while not HasConnectedClients and (WaitCount < 300) do
+    begin
+      Sleep(100);
+      Inc(WaitCount);
+    end;
+
+    if HasConnectedClients then
+      WriteLn('Browser connected. Running specs...')
+    else
+      WriteLn('Timeout. Running specs anyway...');
+
+  except
+    on E: Exception do
+      WriteLn('SSE server error: ' + E.Message);
+  end;
+
+  // Evento de inicio
+  Data := TJSONObject.Create;
+  try
+    Data.AddPair('timestamp', FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', Now));
+    BroadcastEvent(BuildEventJson('report:start', Data));
+  finally
+    Data.Free;
+  end;
+end;
+
+procedure TSSEReporter.EndReport;
+var
+  Data: TJSONObject;
+begin
+  // Cerrar último feature
+  EmitFeatureEnd;
+
+  // Evento de fin de reporte
+  Data := TJSONObject.Create;
+  try
+    Data.AddPair('pass', TJSONNumber.Create(Decorated.PassCount));
+    Data.AddPair('fail', TJSONNumber.Create(Decorated.FailCount));
+    Data.AddPair('skip', TJSONNumber.Create(Decorated.SkipCount));
+    Data.AddPair('ms', TJSONNumber.Create(0)); // TODO: tiempo total
+    BroadcastEvent(BuildEventJson('report:end', Data));
+  finally
+    Data.Free;
+  end;
+
+  FReportFinished := True;
+  inherited;
+
+  // Mantener servidor activo para que el usuario vea el resultado
+  WriteLn(Format('Done. %d scenarios (%d pass, %d fail, %d skip). Press Enter to exit...',
+    [FScenarioCount, Decorated.PassCount, Decorated.FailCount, Decorated.SkipCount]));
+  ReadLn;
+  FServer.Active := False;
+end;
+
+function TSSEReporter.GetContent: string;
+begin
+  Result := Format('SSE Dashboard served at http://localhost:%d', [FPort]);
+end;
+
+function TSSEReporter.BuildEventJson(const EventType: string; const Data: TJSONObject): string;
+var
+  Wrapper: TJSONObject;
+begin
+  Wrapper := TJSONObject.Create;
+  try
+    Wrapper.AddPair('event', EventType);
+    // Copiar pares de Data
+    for var Pair in Data do
+      Wrapper.AddPair(Pair.JsonString.Value, Pair.JsonValue.Clone as TJSONValue);
+    Result := Wrapper.ToJSON;
+  finally
+    Wrapper.Free;
+  end;
+end;
+
+function TSSEReporter.StepsToJsonArray(const Steps: TList<IScenarioStep>; const StepType: string): TJSONArray;
+var
+  StepObj: TJSONObject;
+  Step: IScenarioStep;
+begin
+  Result := TJSONArray.Create;
+  if Steps = nil then Exit;
+  for Step in Steps do
+  begin
+    StepObj := TJSONObject.Create;
+    StepObj.AddPair('type', StepType);
+    StepObj.AddPair('text', Step.Description);
+    StepObj.AddPair('success', TJSONBool.Create(Step.RunInfo.IsSuccess));
+    StepObj.AddPair('ms', TJSONNumber.Create(Step.RunInfo.ExecTimeMs));
+    if not Step.RunInfo.IsSuccess and (Step.RunInfo.ErrMsg <> '') then
+      StepObj.AddPair('error', Step.RunInfo.ErrMsg);
+    Result.AddElement(StepObj);
+  end;
+end;
+
+procedure TSSEReporter.BroadcastEvent(const EventJson: string);
+var
+  Client: TIdContext;
+  SSEData: string;
+begin
+  SSEData := 'data: ' + EventJson + #10#10;
+
+  // Guardar evento para nuevos clientes
+  FEventsLock.Enter;
+  try
+    FEvents.Add(EventJson);
+  finally
+    FEventsLock.Leave;
+  end;
+
+  // Enviar a clientes conectados
+  FClientsLock.Enter;
+  try
+    for Client in FSSEClients do
+    begin
+      try
+        Client.Connection.IOHandler.Write(SSEData, IndyTextEncoding_UTF8);
+      except
+        // Cliente desconectado, ignorar
+      end;
+    end;
+  finally
+    FClientsLock.Leave;
+  end;
+end;
+
+procedure TSSEReporter.HandleRequest(AContext: TIdContext;
+  ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
+var
+  Doc: string;
+begin
+  Doc := ARequestInfo.Document;
+
+  if SameText(Doc, '/events') or Doc.EndsWith('/events', True) then
+  begin
+    // SSE headers - importante: NO usar WriteHeader, enviar manualmente
+    AContext.Connection.IOHandler.WriteLn('HTTP/1.1 200 OK');
+    AContext.Connection.IOHandler.WriteLn('Content-Type: text/event-stream');
+    AContext.Connection.IOHandler.WriteLn('Cache-Control: no-cache');
+    AContext.Connection.IOHandler.WriteLn('Connection: keep-alive');
+    AContext.Connection.IOHandler.WriteLn('Access-Control-Allow-Origin: *');
+    AContext.Connection.IOHandler.WriteLn(''); // Línea vacía para terminar headers
+
+    // Registrar cliente
+    FClientsLock.Enter;
+    try
+      FSSEClients.Add(AContext);
+    finally
+      FClientsLock.Leave;
+    end;
+
+    // Enviar comentario de bienvenida
+    try
+      AContext.Connection.IOHandler.Write(': welcome'#10#10, IndyTextEncoding_UTF8);
+    except
+    end;
+
+    // Enviar eventos anteriores (replay)
+    FEventsLock.Enter;
+    try
+      for var EventJson in FEvents do
+      begin
+        try
+          AContext.Connection.IOHandler.Write('data: ' + EventJson + #10#10, IndyTextEncoding_UTF8);
+        except
+          Break;
+        end;
+      end;
+    finally
+      FEventsLock.Leave;
+    end;
+
+    // Mantener conexión abierta hasta que termine el reporte
+    // Sin keepalive agresivo - los eventos mantienen la conexión viva
+    while not FReportFinished and AContext.Connection.Connected do
+      Sleep(200);
+
+    // Desregistrar cliente
+    FClientsLock.Enter;
+    try
+      FSSEClients.Remove(AContext);
+    finally
+      FClientsLock.Leave;
+    end;
+  end
+  else
+  begin
+    // Dashboard HTML
+    AResponseInfo.ContentType := 'text/html; charset=utf-8';
+    AResponseInfo.ContentText := StringReplace(SSE_DASHBOARD_HTML,
+      '{{MINISPEC_VERSION}}', TMiniSpec.Version, [rfReplaceAll]);
+  end;
+end;
+
+procedure TSSEReporter.EmitFeatureEnd;
+var
+  Data: TJSONObject;
+  ElapsedMs: Integer;
+begin
+  if FCurrentFeature = '' then Exit;
+
+  ElapsedMs := Round((Now - FFeatureStartTime) * 24 * 60 * 60 * 1000);
+  Data := TJSONObject.Create;
+  try
+    Data.AddPair('name', FCurrentFeature);
+    Data.AddPair('pass', TJSONNumber.Create(FFeaturePass));
+    Data.AddPair('fail', TJSONNumber.Create(FFeatureFail));
+    Data.AddPair('ms', TJSONNumber.Create(ElapsedMs));
+    BroadcastEvent(BuildEventJson('feature:end', Data));
+  finally
+    Data.Free;
+  end;
+
+  FCurrentFeature := '';
+  FFeaturePass := 0;
+  FFeatureFail := 0;
+end;
+
+procedure TSSEReporter.DoReport(const S: ISpecItem);
+var
+  Data: TJSONObject;
+  TagsArray: TJSONArray;
+  FeatureName: string;
+  Feature: IFeature;
+  BgSteps: TJSONArray;
+begin
+  inherited; // Delegar al decorado
+
+  Data := TJSONObject.Create;
+  try
+    case S.Kind of
+      sikFeature: begin
+        // Cerrar feature anterior si existe
+        EmitFeatureEnd;
+
+        FeatureName := S.Description.Split([#13#10, #10])[0].Trim;
+        FCurrentFeature := FeatureName;
+        FFeaturePass := 0;
+        FFeatureFail := 0;
+        FFeatureStartTime := Now;
+
+        Data.AddPair('name', FeatureName);
+        // Enviar descripción completa (narrativa)
+        Data.AddPair('description', S.Description);
+        TagsArray := TJSONArray.Create;
+        for var Tag in S.Tags.ToArray do
+          TagsArray.Add(Tag);
+        Data.AddPair('tags', TagsArray);
+        // Agregar Background si existe
+        if Supports(S, IFeature, Feature) and (Feature.BackGround <> nil) then
+        begin
+          BgSteps := StepsToJsonArray(Feature.BackGround.StepsGiven, 'Given');
+          Data.AddPair('background', BgSteps);
+        end;
+        BroadcastEvent(BuildEventJson('feature:start', Data));
+      end;
+
+      sikScenario: begin
+        Inc(FScenarioCount);
+        // Emitir resultado del scenario
+        Data.AddPair('name', S.Description);
+        Data.AddPair('success', TJSONBool.Create(S.RunInfo.IsSuccess));
+        Data.AddPair('ms', TJSONNumber.Create(S.RunInfo.ExecTimeMs));
+        if not S.RunInfo.IsSuccess and (S.RunInfo.ErrMsg <> '') then
+          Data.AddPair('error', S.RunInfo.ErrMsg);
+        BroadcastEvent(BuildEventJson('scenario:end', Data));
+
+        // Contabilizar
+        if S.RunInfo.IsSuccess then
+          Inc(FFeaturePass)
+        else
+          Inc(FFeatureFail);
+      end;
+      // NOTA: sikExample se maneja en ReportOutline para evitar duplicados
+    end;
+  finally
+    Data.Free;
+  end;
+end;
+
+procedure TSSEReporter.ReportOutline(const Outline: IScenarioOutline);
+var
+  Data: TJSONObject;
+  StepsArray, HeadersArray, ExamplesArray, RowArray: TJSONArray;
+  ExampleObj: TJSONObject;
+  OutlinePass, OutlineFail: Integer;
+begin
+  // Primero delegar al Decorated para conteo y presentación en consola
+  inherited;
+
+  OutlinePass := 0;
+  OutlineFail := 0;
+
+  // Emitir un solo evento outline:end con toda la información
+  Data := TJSONObject.Create;
+  try
+    Data.AddPair('name', Outline.Description);
+    Data.AddPair('type', 'outline');
+    
+    // Agregar headers de la tabla de examples
+    HeadersArray := TJSONArray.Create;
+    for var H in Outline.Headers do
+      HeadersArray.Add(H);
+    Data.AddPair('headers', HeadersArray);
+    
+    // Agregar steps template (Given/When/Then)
+    StepsArray := TJSONArray.Create;
+    var TempArr := StepsToJsonArray(Outline.StepsGiven, 'Given');
+    for var i := 0 to TempArr.Count - 1 do
+      StepsArray.AddElement(TempArr.Items[i].Clone as TJSONValue);
+    TempArr.Free;
+    TempArr := StepsToJsonArray(Outline.StepsWhen, 'When');
+    for var i := 0 to TempArr.Count - 1 do
+      StepsArray.AddElement(TempArr.Items[i].Clone as TJSONValue);
+    TempArr.Free;
+    TempArr := StepsToJsonArray(Outline.StepsThen, 'Then');
+    for var i := 0 to TempArr.Count - 1 do
+      StepsArray.AddElement(TempArr.Items[i].Clone as TJSONValue);
+    TempArr.Free;
+    Data.AddPair('steps', StepsArray);
+    
+    // Agregar tabla de examples con resultados
+    ExamplesArray := TJSONArray.Create;
+    for var Example in Outline.Examples do
+    begin
+      if Example.RunInfo.State = srsFinished then
+      begin
+        Inc(FScenarioCount);
+        
+        ExampleObj := TJSONObject.Create;
+        // Valores de este example
+        RowArray := TJSONArray.Create;
+        for var Val in Example.ExampleMeta.Values do
+          RowArray.Add(Val.ToString);
+        ExampleObj.AddPair('values', RowArray);
+        ExampleObj.AddPair('success', TJSONBool.Create(Example.RunInfo.IsSuccess));
+        ExampleObj.AddPair('ms', TJSONNumber.Create(Example.RunInfo.ExecTimeMs));
+        if not Example.RunInfo.IsSuccess and (Example.RunInfo.ErrMsg <> '') then
+          ExampleObj.AddPair('error', Example.RunInfo.ErrMsg);
+        ExamplesArray.AddElement(ExampleObj);
+        
+        if Example.RunInfo.IsSuccess then
+          Inc(OutlinePass)
+        else
+          Inc(OutlineFail);
+      end;
+    end;
+    Data.AddPair('examples', ExamplesArray);
+    Data.AddPair('pass', TJSONNumber.Create(OutlinePass));
+    Data.AddPair('fail', TJSONNumber.Create(OutlineFail));
+    Data.AddPair('success', TJSONBool.Create(OutlineFail = 0));
+    Data.AddPair('ms', TJSONNumber.Create(Outline.RunInfo.ExecTimeMs));
+    
+    BroadcastEvent(BuildEventJson('outline:end', Data));
+  finally
+    Data.Free;
+  end;
+
+  // Track por feature
+  Inc(FFeaturePass, OutlinePass);
+  Inc(FFeatureFail, OutlineFail);
 end;
 
 end.

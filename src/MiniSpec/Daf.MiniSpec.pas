@@ -22,7 +22,7 @@ type
 {$SCOPEDENUMS Off}
   TMiniSpec = class
   public
-    const Version = '1.0.0';
+    const Version = '1.4.0';
   strict private
     FFeatures: TList<IFeature>;
     FReporter: ISpecReporter;
@@ -156,6 +156,9 @@ begin
   else
   if SameText(Name, 'gherkin-results') then
     FReporter := TGherkinReporter.Create(True)
+  else
+  if SameText(Name, 'live') then
+    FReporter := TSSEReporter.Create(TConsoleReporter.Create)
   else
     raise Exception.CreateFmt('Unknow report name: %s', [Name]);
 end;
@@ -415,7 +418,7 @@ begin
   WriteLn('');
   WriteLn('Options:');
   WriteLn('  -h, --help              Show this help message');
-  WriteLn('  -r, --reporter <name>   Output format: html, json (default: console)');
+  WriteLn('  -r, --reporter <name>   Output format: html, json, live (default: console)');
   WriteLn('  -o, --output <file>     Output file path');
   WriteLn('  -f, --filter <expr>     Run only scenarios matching tag expression');
   WriteLn('  -t, --tags              List all tags with scenario counts (no tests run)');
