@@ -16,7 +16,7 @@ uses
 
 type
 {$SCOPEDENUMS ON}
-  TRunMode = (rmRun, rmListTags, rmQuery, rmHelp);
+  TRunMode = (rmRun, rmListTags, rmQuery, rmHelp, rmReporterHelp);
 {$SCOPEDENUMS Off}
   TReporterOptions = TDictionary<string, string>;
 
@@ -199,6 +199,9 @@ begin
   ParseReporterSpec(LowerCase(Spec), Name, Options);
   try
     FReporter := CreateReporter(Name, Options);
+    // Check if reporter help was requested
+    if Options.ContainsKey('help') and SameText(Options['help'], 'true') then
+      FRunMode := TRunMode.rmReporterHelp;
   finally
     Options.Free;
   end;
@@ -293,6 +296,22 @@ begin
     begin
       ShowHelp;
       Exit;
+    end;
+    TRunMode.rmReporterHelp:
+    begin
+      WriteLn;
+      WriteLn('+----------------------+');
+      WriteLn('|   MiniSpec v' + Version + '    |');
+      WriteLn('| Full specs, zero fat |');
+      WriteLn('+----------------------+');
+      WriteLn;
+      if Assigned(FReporter) and FReporter.ShowHelp then
+        Exit
+      else
+      begin
+        WriteLn('No help available for this reporter.');
+        Exit;
+      end;
     end;
     TRunMode.rmListTags:
     begin

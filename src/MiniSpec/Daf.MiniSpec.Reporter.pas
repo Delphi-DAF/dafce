@@ -74,6 +74,7 @@ type
     function GetSkipCount: Cardinal;
     function GetCompletedAt: TDateTime;
     procedure Configure(const Options: TReporterOptionsDict);
+    function ShowHelp: Boolean;
     procedure Report(Features: TList<IFeature>; Options: TReportOptions);
     procedure BeginReport;
     procedure DoReport(const S: ISpecItem);
@@ -150,6 +151,7 @@ type
   public
     destructor Destroy; override;
     procedure Configure(const Options: TReporterOptionsDict);virtual;
+    function ShowHelp: Boolean;virtual;
     function UseConsole: Boolean;virtual;
     procedure BeginReport;virtual;
     procedure Report(Features: TList<IFeature>; Options: TReportOptions);overload;
@@ -173,6 +175,7 @@ type
   public
     constructor Create(const Decorated: ISpecReporter);
     procedure Configure(const Options: TReporterOptionsDict);override;
+    function ShowHelp: Boolean;override;
     function UseConsole: Boolean;override;
     function GetFileExt: string;override;
     procedure BeginReport;override;
@@ -285,6 +288,7 @@ type
     constructor Create(APort: Integer = 8080);
     destructor Destroy;override;
     procedure Configure(const Options: TReporterOptionsDict);override;
+    function ShowHelp: Boolean;override;
     procedure BeginReport;override;
     procedure EndReport;override;
     function GetContent: string;override;
@@ -1308,6 +1312,12 @@ begin
     Result := Default;
 end;
 
+function TCustomReporter.ShowHelp: Boolean;
+begin
+  // Base implementation: no help available
+  Result := False;
+end;
+
 procedure TCustomReporter.BeginReport;
 begin
   FReportCounters.Reset;
@@ -1911,6 +1921,15 @@ begin
   // Do NOT pass options to Decorated - the outer decorator handles file output
 end;
 
+function TReporterDecorator.ShowHelp: Boolean;
+begin
+  // Decorators delegate to decorated reporter
+  if Assigned(Decorated) then
+    Result := Decorated.ShowHelp
+  else
+    Result := inherited;
+end;
+
 procedure TReporterDecorator.DoReport(const S: ISpecItem);
 begin
   inherited; // Actualiza contadores del decorator
@@ -2327,6 +2346,27 @@ begin
     FServer.DefaultPort := FPort;
   end;
   FWaitClient := SameText(GetCliOption('wait', 'false'), 'true');
+end;
+
+function TLiveReporter.ShowHelp: Boolean;
+begin
+  WriteLn('Live Reporter - Real-time test results in browser');
+  WriteLn;
+  WriteLn('Options:');
+  WriteLn('  port=<number>   HTTP server port (default: 8080)');
+  WriteLn('  wait            Wait for browser connection before running tests');
+  WriteLn;
+  WriteLn('Examples:');
+  WriteLn('  -r live                 Start on default port 8080');
+  WriteLn('  -r live:port=9000       Start on port 9000');
+  WriteLn('  -r live:wait            Wait for browser before running');
+  WriteLn('  -r live:port=9000,wait  Custom port + wait for browser');
+  WriteLn;
+  WriteLn('Usage:');
+  WriteLn('  1. Run tests with -r live');
+  WriteLn('  2. Open http://localhost:<port> in browser');
+  WriteLn('  3. Watch results update in real-time');
+  Result := True;
 end;
 
 destructor TLiveReporter.Destroy;
