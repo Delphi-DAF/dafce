@@ -509,7 +509,18 @@ const
 <body class="bg-gray-900 text-white min-h-screen">
   <div x-data="dashboard()" x-init="init()" class="container mx-auto p-6">
     <div class="flex justify-between items-center mb-6">
-      <h1 class="text-3xl font-bold">🧪 MiniSpec Live <span class="text-sm text-gray-500 font-normal">v{{MINISPEC_VERSION}}</span></h1>
+      <h1 class="text-3xl font-bold flex items-center gap-3">
+        <svg width="40" height="40" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="256" height="256" rx="38" fill="#242526"/>
+          <text x="128" y="74" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="44" fill="#fff" font-weight="bold">mSpec</text>
+          <text x="38" y="172" font-family="Fira Mono, Consolas, monospace" font-size="54" fill="#cfcfcf">$&gt;</text>
+          <text x="110" y="172" font-family="Segoe UI Emoji" font-size="54" fill="#c92828">✗</text>
+          <text x="140" y="172" font-family="Fira Mono, Consolas, monospace" font-size="54" fill="#bdbdbd">.</text>
+          <text x="160" y="172" font-family="Fira Mono, Consolas, monospace" font-size="54" fill="#bdbdbd">.</text>
+          <text x="190" y="172" font-family="Segoe UI Emoji" font-size="54" fill="#34bf4a">✓</text>
+        </svg>
+        <span>MiniSpec Live <span class="text-sm text-gray-500 font-normal">v{{MINISPEC_VERSION}}</span></span>
+      </h1>
       <div class="flex items-center gap-4">
         <span x-show="connected" class="text-green-400 flex items-center gap-1">
           <span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span> Connected
@@ -766,19 +777,6 @@ const
       </template>
     </div>
 
-    <!-- Report Complete -->
-    <template x-if="reportComplete">
-      <div class="mt-6 bg-gray-800 rounded-lg p-6 text-center">
-        <div class="text-2xl mb-2" x-text="fail === 0 ? '🎉 All tests passed!' : '⚠️ Some tests failed'"></div>
-        <div class="text-gray-400">
-          <span class="text-green-400" x-text="`${pass} passed`"></span>
-          <span>, </span>
-          <span class="text-red-400" x-text="`${fail} failed`"></span>
-          <span x-show="skip > 0">, </span>
-          <span x-show="skip > 0" class="text-yellow-400" x-text="`${skip} skipped`"></span>
-        </div>
-      </div>
-    </template>
   </div>
 
   <script>
