@@ -1,4 +1,4 @@
-unit Daf.MiniSpec;
+﻿unit Daf.MiniSpec;
 
 interface
 
@@ -18,13 +18,14 @@ type
 {$SCOPEDENUMS ON}
   TRunMode = (rmRun, rmListTags, rmQuery, rmHelp);
 {$SCOPEDENUMS Off}
+  TReporterOptions = TDictionary<string, string>;
+
   TMiniSpec = class
   public
-    const Version = '1.4.0';
+    const Version = '1.5.0';
   strict private
     FFeatures: TList<IFeature>;
     FReporter: ISpecReporter;
-    FOutputFile: string;
     FPause: Boolean;
     FTags: string;
     FRunMode: TRunMode;
@@ -35,8 +36,9 @@ type
   protected
     class function CreateSingleton: TMiniSpec;
     class function Instance: TMiniSpec; static;
+    class procedure ParseReporterSpec(const Spec: string; out Name: string; out Options: TReporterOptions);
+    function CreateReporter(const Name: string; const Options: TReporterOptions): ISpecReporter;
     procedure ParseArgs;
-    function DefaultOutputFile: string;
     procedure ListTags;
     procedure QueryTags;
     procedure ShowHelp;
@@ -45,12 +47,10 @@ type
     destructor Destroy; override;
     class destructor ClasDestroy;
     {$REGION 'Fluent api for setup'}
-    function Reporter(const Name: string): TMiniSpec;overload;
+    function Reporter(const Spec: string): TMiniSpec;overload;
     function Reporter: ISpecReporter;overload;
     function Tags: string;overload;
     procedure Tags(const Value: string);overload;
-    function OutputFile: string;overload;
-    function OutputFile(const Filename: string): TMiniSpec;overload;
     function Pause: Boolean;overload;
     function Pause(const Value: Boolean): TMiniSpec;overload;
     function DryRun: Boolean;overload;
@@ -119,11 +119,6 @@ begin
   inherited;
 end;
 
-function TMiniSpec.OutputFile: string;
-begin
-  Result := FOutputFile;
-end;
-
 class destructor TMiniSpec.ClasDestroy;
 begin
   FInstance.Free;
@@ -134,48 +129,79 @@ begin
   FFeatures.Add(Feature);
 end;
 
-function TMiniSpec.DefaultOutputFile: string;
+class procedure TMiniSpec.ParseReporterSpec(const Spec: string; out Name: string; out Options: TReporterOptions);
+var
+  ColonPos, EqPos: Integer;
+  OptPart, Pair, Key, Value: string;
+  Pairs: TArray<string>;
 begin
-  Result := TPath.ChangeExtension(ParamStr(0), 'MiniSpec.' + Reporter.GetFileExt);
+  Options := TReporterOptions.Create;
+  ColonPos := Pos(':', Spec);
+  if ColonPos = 0 then
+  begin
+    Name := Spec;
+    Exit;
+  end;
+  Name := Copy(Spec, 1, ColonPos - 1);
+  OptPart := Copy(Spec, ColonPos + 1, MaxInt);
+  Pairs := OptPart.Split([',']);
+  for Pair in Pairs do
+  begin
+    EqPos := Pos('=', Pair);
+    if EqPos > 0 then
+    begin
+      Key := Copy(Pair, 1, EqPos - 1).Trim;
+      Value := Copy(Pair, EqPos + 1, MaxInt).Trim;
+      Options.AddOrSetValue(Key, Value);
+    end;
+  end;
+end;
+
+function TMiniSpec.CreateReporter(const Name: string; const Options: TReporterOptions): ISpecReporter;
+var
+  Port: Integer;
+begin
+  if SameText(Name, 'console') then
+    Result := TConsoleReporter.Create
+  else if SameText(Name, 'html') then
+    Result := THTMLReporter.Create
+  else if SameText(Name, 'json') then
+    Result := TJsonReporter.Create
+  else if SameText(Name, 'gherkin') then
+    Result := TGherkinReporter.Create(False)
+  else if SameText(Name, 'gherkin-results') then
+    Result := TGherkinReporter.Create(True)
+  else if SameText(Name, 'live') then
+  begin
+    Port := 8080;
+    if Options.ContainsKey('port') then
+      Port := StrToIntDef(Options['port'], 8080);
+    Result := TLiveReporter.Create(TConsoleReporter.Create, Port);
+  end
+  else
+    raise Exception.CreateFmt('Unknown reporter name: %s', [Name]);
+
+  Result.Configure(Options);
 end;
 
 {$REGION 'Fluent api for setup'}
-function TMiniSpec.Reporter(const Name: string): TMiniSpec;
+function TMiniSpec.Reporter(const Spec: string): TMiniSpec;
+var
+  Name: string;
+  Options: TReporterOptions;
 begin
   Result := Self;
-  if SameText(Name, 'console') then
-    FReporter := TConsoleReporter.Create
-  else
-  if SameText(Name, 'html') then
-    FReporter := THTMLReporter.Create
-  else
-  if SameText(Name, 'json') then
-    FReporter := TJsonReporter.Create
-  else
-  if SameText(Name, 'gherkin') then
-    FReporter := TGherkinReporter.Create(False)
-  else
-  if SameText(Name, 'gherkin-results') then
-    FReporter := TGherkinReporter.Create(True)
-  else
-  if SameText(Name, 'live') then
-    FReporter := TLiveReporter.Create(TConsoleReporter.Create)
-  else
-    raise Exception.CreateFmt('Unknow report name: %s', [Name]);
+  ParseReporterSpec(LowerCase(Spec), Name, Options);
+  try
+    FReporter := CreateReporter(Name, Options);
+  finally
+    Options.Free;
+  end;
 end;
 
 function TMiniSpec.Reporter: ISpecReporter;
 begin
   Result := FReporter;
-end;
-
-function TMiniSpec.OutputFile(const Filename: string): TMiniSpec;
-begin
-  Result := Self;
-  if TPath.IsRelativePath(Filename) then
-    FOutputfile := ExpandFileName(TPath.Combine(ExtractFilePath(ParamStr(0)), Filename))
-  else
-    FOutputfile := FileName;
 end;
 
 procedure TMiniSpec.Tags(const Value: string);
@@ -228,12 +254,10 @@ begin
   while idxParam <= ParamCount do
   begin
     var Param := NextArg;
-    if (Param = '--output') or (Param = '-o') then
-      OutputFile(NextArg)
-    else if (Param = '--filter') or (Param = '-f') then
+    if (Param = '--filter') or (Param = '-f') then
       Tags(NextArg)
     else if (Param = '--reporter') or (Param = '-r') then
-      Reporter(LowerCase(NextArg))
+      Reporter(NextArg)
     else if (Param = '--tags') or (Param = '-t') then
       FRunMode := TRunMode.rmListTags
     else if (Param = '--query') or (Param = '-q') then
@@ -278,9 +302,6 @@ begin
   end;
 
   // Modo normal: ejecutar tests
-  if OutputFile.IsEmpty then
-    OutputFile(DefaultOutputFile);
-
   TagFilter := TTagExpression.Parse(FTags);
   ReportOpts := TReportOptions.Create;
   try
@@ -312,15 +333,6 @@ begin
   else
     WriteLn(Format('Pass: %d | Fail: %d | Completed: %s', [FReporter.PassCount, FReporter.FailCount, FormatDateTime('yyyy-mm-dd hh:nn:ss', FReporter.CompletedAt)]));
 
-  if FReporter.UseConsole then
-  begin
-    if Pause then
-      OSShell.WaitForShutdown;
-    Exit;
-  end;
-  TFile.WriteAllText(FOutputFile, FReporter.GetContent, TEncoding.UTF8);
-  var FileURL := 'file:///' + StringReplace(FOutputfile, '\', '/', [rfReplaceAll]);
-  WriteLn('report detail: ' + FileURL);
   if Pause then
     OSShell.WaitForShutdown;
 end;
@@ -427,13 +439,20 @@ begin
   WriteLn('');
   WriteLn('Options:');
   WriteLn('  -h, --help              Show this help message');
-  WriteLn('  -r, --reporter <name>   Output format: html, json, live (default: console)');
-  WriteLn('  -o, --output <file>     Output file path');
+  WriteLn('  -r, --reporter <spec>   Reporter with options: <name>[:<key>=<value>,...]');
   WriteLn('  -f, --filter <expr>     Run only scenarios matching tag expression');
   WriteLn('  -t, --tags              List all tags with scenario counts (no tests run)');
   WriteLn('  -q, --query <expr>      Show scenarios matching expression (no tests run)');
   WriteLn('  --dry-run               Show what would run without executing tests');
   WriteLn('  --pause                 Wait for keypress before closing console');
+  WriteLn('');
+  WriteLn('Reporters:');
+  WriteLn('  console                 Console output (default)');
+  WriteLn('  html:output=<file>      HTML dashboard report');
+  WriteLn('  json:output=<file>      JSON report');
+  WriteLn('  gherkin:output=<dir>    Export .feature files');
+  WriteLn('  gherkin-results:output=<dir>  Export .feature with results');
+  WriteLn('  live:port=<port>        Live dashboard on localhost (default: 8080)');
   WriteLn('');
   WriteLn('Tag expressions:');
   WriteLn('  @tag                    Scenarios with tag');
@@ -445,7 +464,8 @@ begin
   WriteLn('Examples:');
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -f "@unit"');
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -f "@integration and ~@slow"');
-  WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -r html -o report.html');
+  WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -r html:output=report.html');
+  WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -r live:port=9000');
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -t');
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -q "@usesDB"');
 end;

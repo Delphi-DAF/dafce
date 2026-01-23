@@ -1,4 +1,4 @@
-unit Daf.MiniSpec.Reporter;
+﻿unit Daf.MiniSpec.Reporter;
 
 interface
 uses
@@ -61,12 +61,19 @@ type
     property ElapsedMs: Integer read FElapsedMs;
   end;
 
+  /// <summary>
+  /// Dictionary of string options passed from CLI to reporters.
+  /// Each reporter reads the keys it needs (e.g., 'output', 'port').
+  /// </summary>
+  TReporterOptionsDict = TDictionary<string, string>;
+
   ISpecReporter = interface(IInvokable)
     ['{CD69B272-5B38-4CCC-A64F-2B2A57ACB540}']
     function GetFailCount: Cardinal;
     function GetPassCount: Cardinal;
     function GetSkipCount: Cardinal;
     function GetCompletedAt: TDateTime;
+    procedure Configure(const Options: TReporterOptionsDict);
     procedure Report(Features: TList<IFeature>; Options: TReportOptions);
     procedure BeginReport;
     procedure DoReport(const S: ISpecItem);
@@ -95,6 +102,8 @@ type
     FCurrentOutline: IScenarioOutline;
     // Report options
     FOptions: TReportOptions;
+    // CLI options (output, port, etc.)
+    FCliOptions: TReporterOptionsDict;
     // Timestamp
     FCompletedAt: TDateTime;
   protected
@@ -136,7 +145,11 @@ type
     property ScenarioCounters: TSpecCounters read FScenarioCounters;
     property OutlineCounters: TSpecCounters read FOutlineCounters;
     property Options: TReportOptions read FOptions;
+    // CLI options for subclasses
+    function GetCliOption(const Key: string; const Default: string = ''): string;
   public
+    destructor Destroy; override;
+    procedure Configure(const Options: TReporterOptionsDict);virtual;
     function UseConsole: Boolean;virtual;
     procedure BeginReport;virtual;
     procedure Report(Features: TList<IFeature>; Options: TReportOptions);overload;
@@ -159,6 +172,7 @@ type
     procedure ReportOutline(const Outline: IScenarioOutline);override;
   public
     constructor Create(const Decorated: ISpecReporter);
+    procedure Configure(const Options: TReporterOptionsDict);override;
     function UseConsole: Boolean;override;
     function GetFileExt: string;override;
     procedure BeginReport;override;
@@ -207,11 +221,11 @@ type
   end;
 
   THTMLReporter = class(TReporterDecorator)
-  private
   public
     constructor Create;
     function GetContent: string;override;
     function GetFileExt: string;override;
+    procedure EndReport;override;
   end;
 
   TGherkinReporter = class(TCustomReporter)
@@ -417,7 +431,7 @@ const
             let isFail = (status === 'fail') || (!isSkip && scenario.steps && scenario.steps.some(step => !step.success));
             let isPass = !isSkip && !isFail;
 
-            // Para Scenario Outline, verificar si alg�n example fall�
+            // Para Scenario Outline, verificar si algún example falló
             if (scenario.kind === 'Scenario Outline' && scenario.examples) {
               isFail = scenario.examples.some(ex => ex.status === 'fail');
               isPass = !isFail && !isSkip;
@@ -967,7 +981,7 @@ const
         },
 
         connect() {
-          // Cerrar conexi�n anterior si existe
+          // Cerrar conexión anterior si existe
           if (this.eventSource) {
             this.eventSource.close();
             this.eventSource = null;
@@ -985,7 +999,7 @@ const
             if (!this.reportComplete && this.eventSource) {
               this.eventSource.close();
               this.eventSource = null;
-              // Reconectar despu�s de 3 segundos
+              // Reconectar después de 3 segundos
               setTimeout(() => this.connect(), 3000);
             }
           };
@@ -1086,7 +1100,7 @@ const
               this.skip = data.skip || 0;
               this.currentFeature = null;
               this.currentScenario = null;
-              // Cerrar conexi�n - el reporte termin�
+              // Cerrar conexión - el reporte terminó
               if (this.eventSource) {
                 this.eventSource.close();
                 this.eventSource = null;
@@ -1263,6 +1277,34 @@ begin
   FCurrentOutline := nil;
 end;
 
+destructor TCustomReporter.Destroy;
+begin
+  FCliOptions.Free;
+  inherited;
+end;
+
+procedure TCustomReporter.Configure(const Options: TReporterOptionsDict);
+var
+  Pair: TPair<string, string>;
+begin
+  // Make a copy of the options since the original may be freed
+  FreeAndNil(FCliOptions);
+  if Assigned(Options) then
+  begin
+    FCliOptions := TReporterOptionsDict.Create;
+    for Pair in Options do
+      FCliOptions.Add(Pair.Key, Pair.Value);
+  end;
+end;
+
+function TCustomReporter.GetCliOption(const Key: string; const Default: string): string;
+begin
+  if Assigned(FCliOptions) and FCliOptions.ContainsKey(Key) then
+    Result := FCliOptions[Key]
+  else
+    Result := Default;
+end;
+
 procedure TCustomReporter.BeginReport;
 begin
   FReportCounters.Reset;
@@ -1421,7 +1463,7 @@ function TCustomReporter.GetKeyWord(const Kind: TSpecItemKind): string;
 begin
   case Kind of
     sikFeature: Result := 'Feature';
-    sikImplicitRule: Result := '';  // No mostrar keyword para Rule impl�cita
+    sikImplicitRule: Result := '';  // No mostrar keyword para Rule implícita
     sikRule: Result := 'Rule';
     sikBackground: Result :=  'Background';
     sikScenario: Result :=  'Scenario';
@@ -1440,7 +1482,7 @@ function TCustomReporter.GetLevel(const Kind: TSpecItemKind): Byte;
 begin
   case Kind of
     sikFeature: Result := 0;
-    sikRule: Result := 1;  // Rule est� un nivel debajo de Feature
+    sikRule: Result := 1;  // Rule está un nivel debajo de Feature
     sikBackground, sikScenario, sikScenarioOutline, sikExample: Result := 1;
     sikExampleInit: Result := 2;
     sikGiven: Result := 2;
@@ -1500,14 +1542,17 @@ begin
 end;
 
 procedure TConsoleReporter.OutputLn(const Level: Byte; const Text: string; const Success: Boolean; const Duration: Integer; const ErrorMessage: string);
+const
+  CHECK_MARK = #$2713;  // ✓
+  CROSS_MARK = #$2717;  // ✗
 begin
   var Msg := ErrorMessage;
   if not Msg.IsEmpty then
     Msg := SLineBreak + Level2Margin(Level) + 'ERROR: "' + Msg + '"';
   if Success then
-    OutputLn(Level, Format('✓ %s (%d ms)', [Text, Duration]))
+    OutputLn(Level, Format(CHECK_MARK + ' %s (%d ms)', [Text, Duration]))
   else
-    OutputLn(Level, Format('✗ %s (%d ms)%s', [Text, Duration, Msg]));
+    OutputLn(Level, Format(CROSS_MARK + ' %s (%d ms)%s', [Text, Duration, Msg]));
 end;
 
 procedure TConsoleReporter.OutputLn(const Level: Byte; const Text: string);
@@ -1561,10 +1606,10 @@ var
   HeaderLine, Row: string;
   Values: TArray<TValue>;
 begin
-  // Primero delegar al base para conteo de estad�sticas
+  // Primero delegar al base para conteo de estadísticas
   inherited;
 
-  // Ahora solo presentaci�n - sin tocar contadores
+  // Ahora solo presentación - sin tocar contadores
   AllSuccess := True;
   TotalTime := 0;
   for var Example in Outline.Examples do
@@ -1611,7 +1656,7 @@ begin
     HeaderLine := HeaderLine + ' ' + Headers[i].PadRight(ColWidths[i]) + ' |';
   OutputLn(3, '   ' + HeaderLine);
 
-  // Cada fila con su resultado (solo presentaci�n, sin contar)
+  // Cada fila con su resultado (solo presentación, sin contar)
   for var Example in Outline.Examples do
   begin
     if Example.RunInfo.State = srsFinished then
@@ -1803,6 +1848,8 @@ begin
 end;
 
 procedure TJsonReporter.EndReport;
+var
+  OutputFile: string;
 begin
   inherited; // Primero para que CompletedAt tenga valor
   if Assigned(FCurrentScenario) then
@@ -1831,6 +1878,16 @@ begin
   finally
     Root.Free;
   end;
+
+  // Write to file if output option is set
+  OutputFile := GetCliOption('output');
+  if not OutputFile.IsEmpty then
+  begin
+    if TPath.IsRelativePath(OutputFile) then
+      OutputFile := ExpandFileName(TPath.Combine(ExtractFilePath(ParamStr(0)), OutputFile));
+    TFile.WriteAllText(OutputFile, FOutput, TEncoding.UTF8);
+    WriteLn('report detail: file:///' + StringReplace(OutputFile, '\', '/', [rfReplaceAll]));
+  end;
 end;
 
 function TJsonReporter.GetContent: string;
@@ -1849,6 +1906,12 @@ constructor TReporterDecorator.Create(const Decorated: ISpecReporter);
 begin
   inherited Create;
   FDecorated := Decorated;
+end;
+
+procedure TReporterDecorator.Configure(const Options: TReporterOptionsDict);
+begin
+  inherited;
+  // Do NOT pass options to Decorated - the outer decorator handles file output
 end;
 
 procedure TReporterDecorator.DoReport(const S: ISpecItem);
@@ -1931,6 +1994,23 @@ begin
   var JsonReport := inherited GetContent;
   Result := MINI_SPEC_DASHBOARD_HTML.Replace('{{MINISPEC_JSON}};', JsonReport);
 end;
+
+procedure THTMLReporter.EndReport;
+var
+  OutputFile: string;
+begin
+  inherited; // This generates JSON content in Decorated
+  // Write HTML to file if output option is set
+  OutputFile := GetCliOption('output');
+  if not OutputFile.IsEmpty then
+  begin
+    if TPath.IsRelativePath(OutputFile) then
+      OutputFile := ExpandFileName(TPath.Combine(ExtractFilePath(ParamStr(0)), OutputFile));
+    TFile.WriteAllText(OutputFile, GetContent, TEncoding.UTF8);
+    WriteLn('report detail: file:///' + StringReplace(OutputFile, '\', '/', [rfReplaceAll]));
+  end;
+end;
+
 function THTMLReporter.GetFileExt: string;
 begin
   Result := 'html';
@@ -1956,18 +2036,38 @@ begin
 end;
 
 procedure TGherkinReporter.BeginReport;
+var
+  OutputDir: string;
 begin
   inherited;
   FLines.Clear;
   FFilesWritten.Clear;
   FCurrentFeatureName := '';
   FIndent := 0;
+  // Read output directory from CLI options
+  OutputDir := GetCliOption('output');
+  if not OutputDir.IsEmpty then
+  begin
+    if TPath.IsRelativePath(OutputDir) then
+      OutputDir := ExpandFileName(TPath.Combine(ExtractFilePath(ParamStr(0)), OutputDir));
+    FOutputDir := OutputDir;
+    ForceDirectories(FOutputDir);
+  end;
 end;
 
 procedure TGherkinReporter.EndReport;
+var
+  FilePath: string;
 begin
   inherited; // Primero para que CompletedAt tenga valor
   FlushCurrentFeature; // Escribir último feature
+  // Show written files
+  if FFilesWritten.Count > 0 then
+  begin
+    WriteLn(Format('Gherkin: %d feature file(s) written to: %s', [FFilesWritten.Count, FOutputDir]));
+    for FilePath in FFilesWritten do
+      WriteLn('  - ' + ExtractFileName(FilePath));
+  end;
 end;
 
 function TGherkinReporter.SanitizeFileName(const Name: string): string;
@@ -2139,7 +2239,7 @@ begin
       FIndent := 2; // Steps at indent 2
     end;
 
-    sikImplicitRule: ; // Ignorar rule impl�cita
+    sikImplicitRule: ; // Ignorar rule implícita
 
     sikGiven, sikWhen, sikThen: begin
       AddLine(GetGherkinKeyword(S.Kind) + ' ' + S.Description + ResultComment(S));
@@ -2177,7 +2277,7 @@ var
   i: Integer;
   FileName, FeatureName: string;
 begin
-  // Devuelve �ndice en formato Quarto con include-code-files
+  // Devuelve índice en formato Quarto con include-code-files
   if FFilesWritten.Count = 0 then
     Result := '# MiniSpec' + sLineBreak + sLineBreak + 'No features generated.'
   else
@@ -2399,7 +2499,7 @@ begin
     AContext.Connection.IOHandler.WriteLn('Cache-Control: no-cache');
     AContext.Connection.IOHandler.WriteLn('Connection: keep-alive');
     AContext.Connection.IOHandler.WriteLn('Access-Control-Allow-Origin: *');
-    AContext.Connection.IOHandler.WriteLn(''); // L�nea vac�a para terminar headers
+    AContext.Connection.IOHandler.WriteLn(''); // Línea vacía para terminar headers
 
     // Registrar cliente
     FClientsLock.Enter;
@@ -2430,8 +2530,8 @@ begin
       FEventsLock.Leave;
     end;
 
-    // Mantener conexi�n abierta hasta que termine el reporte
-    // Sin keepalive agresivo - los eventos mantienen la conexi�n viva
+    // Mantener conexión abierta hasta que termine el reporte
+    // Sin keepalive agresivo - los eventos mantienen la conexión viva
     while not FReportFinished and AContext.Connection.Connected do
       Sleep(200);
 

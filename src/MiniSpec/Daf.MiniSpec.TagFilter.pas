@@ -1,4 +1,4 @@
-unit Daf.MiniSpec.TagFilter;
+﻿unit Daf.MiniSpec.TagFilter;
 
 interface
 
