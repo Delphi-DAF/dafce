@@ -153,6 +153,11 @@ begin
       Key := Copy(Pair, 1, EqPos - 1).Trim;
       Value := Copy(Pair, EqPos + 1, MaxInt).Trim;
       Options.AddOrSetValue(Key, Value);
+    end
+    else if Pair.Trim <> '' then
+    begin
+      // Flag sin valor: se interpreta como true
+      Options.AddOrSetValue(Pair.Trim, 'true');
     end;
   end;
 end;
@@ -176,7 +181,7 @@ begin
     Port := 8080;
     if Options.ContainsKey('port') then
       Port := StrToIntDef(Options['port'], 8080);
-    Result := TLiveReporter.Create(TConsoleReporter.Create, Port);
+    Result := TLiveReporter.Create(Port);
   end
   else
     raise Exception.CreateFmt('Unknown reporter name: %s', [Name]);
@@ -302,6 +307,14 @@ begin
   end;
 
   // Modo normal: ejecutar tests
+  OSShell.UseUTF8;
+  WriteLn;
+  WriteLn('+----------------------+');
+  WriteLn('|   MiniSpec v' + Version + '    |');
+  WriteLn('| Full specs, zero fat |');
+  WriteLn('+----------------------+');
+  WriteLn;
+
   TagFilter := TTagExpression.Parse(FTags);
   ReportOpts := TReportOptions.Create;
   try
@@ -433,7 +446,11 @@ end;
 
 procedure TMiniSpec.ShowHelp;
 begin
-  WriteLn('MiniSpec v' + Version + ' - BDD Testing Framework');
+  WriteLn;
+  WriteLn('+----------------------+');
+  WriteLn('|   MiniSpec v' + Version + '    |');
+  WriteLn('| Full specs, zero fat |');
+  WriteLn('+----------------------+');
   WriteLn('');
   WriteLn('Usage: ' + ExtractFileName(ParamStr(0)) + ' [options]');
   WriteLn('');
@@ -452,7 +469,7 @@ begin
   WriteLn('  json:output=<file>      JSON report');
   WriteLn('  gherkin:output=<dir>    Export .feature files');
   WriteLn('  gherkin-results:output=<dir>  Export .feature with results');
-  WriteLn('  live:port=<port>        Live dashboard on localhost (default: 8080)');
+  WriteLn('  live[:port=N][,wait]    Live dashboard on localhost (default port: 8080)');
   WriteLn('');
   WriteLn('Tag expressions:');
   WriteLn('  @tag                    Scenarios with tag');
@@ -466,6 +483,7 @@ begin
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -f "@integration and ~@slow"');
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -r html:output=report.html');
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -r live:port=9000');
+  WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -r live:wait');
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -t');
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -q "@usesDB"');
 end;

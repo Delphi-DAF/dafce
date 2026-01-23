@@ -257,7 +257,7 @@ type
     property WithResults: Boolean read FWithResults write FWithResults;
   end;
 
-  TLiveReporter = class(TReporterDecorator)
+  TLiveReporter = class(TCustomReporter)
   private
     FServer: TIdHTTPServer;
     FPort: Integer;
@@ -266,7 +266,8 @@ type
     FLiveClients: TList<TIdContext>;
     FClientsLock: TCriticalSection;
     FReportFinished: Boolean;
-    FScenarioCount: Integer; // Contador de escenarios emitidos
+    FScenarioCount: Integer;
+    FWaitClient: Boolean;
     procedure HandleRequest(AContext: TIdContext;
       ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
     procedure BroadcastEvent(const EventJson: string);
@@ -281,12 +282,14 @@ type
     procedure DoOutlineBegin(const Outline: IScenarioOutline);override;
     procedure DoOutlineEnd(const Outline: IScenarioOutline; const Counters: TSpecCounters);override;
   public
-    constructor Create(const Decorated: ISpecReporter; APort: Integer = 9999);
+    constructor Create(APort: Integer = 8080);
     destructor Destroy;override;
+    procedure Configure(const Options: TReporterOptionsDict);override;
     procedure BeginReport;override;
     procedure EndReport;override;
     function GetContent: string;override;
     property Port: Integer read FPort;
+    property WaitClient: Boolean read FWaitClient;
   end;
 
 implementation
@@ -1588,12 +1591,6 @@ end;
 procedure TConsoleReporter.BeginReport;
 begin
   inherited;
-  OSShell.UseUTF8;
-  Output(0, '+----------------------+');
-  Output(0, '|   MiniSpec v' +  TMiniSpec.Version + '    |');
-  Output(0, '| Full specs, zero fat |');
-  Output(0, '+----------------------+');
-  OutputLn(0, '');
 end;
 
 procedure TConsoleReporter.ReportOutline(const Outline: IScenarioOutline);
@@ -2305,10 +2302,11 @@ end;
 
 { TLiveReporter }
 
-constructor TLiveReporter.Create(const Decorated: ISpecReporter; APort: Integer);
+constructor TLiveReporter.Create(APort: Integer);
 begin
-  inherited Create(Decorated);
+  inherited Create;
   FPort := APort;
+  FWaitClient := False;
   FEvents := TStringList.Create;
   FEventsLock := TCriticalSection.Create;
   FLiveClients := TList<TIdContext>.Create;
@@ -2318,6 +2316,17 @@ begin
   FServer := TIdHTTPServer.Create(nil);
   FServer.DefaultPort := FPort;
   FServer.OnCommandGet := HandleRequest;
+end;
+
+procedure TLiveReporter.Configure(const Options: TReporterOptionsDict);
+begin
+  inherited;
+  if Options.ContainsKey('port') then
+  begin
+    FPort := StrToIntDef(Options['port'], FPort);
+    FServer.DefaultPort := FPort;
+  end;
+  FWaitClient := SameText(GetCliOption('wait', 'false'), 'true');
 end;
 
 destructor TLiveReporter.Destroy;
@@ -2356,21 +2365,23 @@ begin
   try
     FServer.Active := True;
     WriteLn(Format('Live Dashboard: http://localhost:%d', [FPort]));
-    WriteLn('Waiting for browser connection...');
 
-    // Esperar hasta que haya al menos un cliente conectado (max 30 segundos)
-    WaitCount := 0;
-    while not HasConnectedClients and (WaitCount < 300) do
+    if FWaitClient then
     begin
-      Sleep(100);
-      Inc(WaitCount);
+      WriteLn('Waiting for browser connection...');
+      // Esperar hasta que haya al menos un cliente conectado (max 30 segundos)
+      WaitCount := 0;
+      while not HasConnectedClients and (WaitCount < 300) do
+      begin
+        Sleep(100);
+        Inc(WaitCount);
+      end;
+
+      if HasConnectedClients then
+        WriteLn('Browser connected. Running specs...')
+      else
+        WriteLn('Timeout. Running specs anyway...');
     end;
-
-    if HasConnectedClients then
-      WriteLn('Browser connected. Running specs...')
-    else
-      WriteLn('Timeout. Running specs anyway...');
-
   except
     on E: Exception do
       WriteLn('Live server error: ' + E.Message);
@@ -2390,14 +2401,14 @@ procedure TLiveReporter.EndReport;
 var
   Data: TJSONObject;
 begin
-  inherited; // Primero para que CompletedAt tenga valor
+  inherited;
   // Evento de fin de reporte
   Data := TJSONObject.Create;
   try
-    Data.AddPair('pass', TJSONNumber.Create(Decorated.PassCount));
-    Data.AddPair('fail', TJSONNumber.Create(Decorated.FailCount));
-    Data.AddPair('skip', TJSONNumber.Create(Decorated.SkipCount));
-    Data.AddPair('completedAt', FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', Decorated.CompletedAt));
+    Data.AddPair('pass', TJSONNumber.Create(PassCount));
+    Data.AddPair('fail', TJSONNumber.Create(FailCount));
+    Data.AddPair('skip', TJSONNumber.Create(SkipCount));
+    Data.AddPair('completedAt', FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', CompletedAt));
     BroadcastEvent(BuildEventJson('report:end', Data));
   finally
     Data.Free;
@@ -2405,10 +2416,8 @@ begin
 
   FReportFinished := True;
 
-  // Mantener servidor activo para que el usuario vea el resultado
-  WriteLn(Format('Done. %d scenarios (%d pass, %d fail, %d skip). Press Enter to exit...',
-    [FScenarioCount, Decorated.PassCount, Decorated.FailCount, Decorated.SkipCount]));
-  ReadLn;
+  WriteLn(Format('Done. %d scenarios (%d pass, %d fail, %d skip).',
+    [FScenarioCount, PassCount, FailCount, SkipCount]));
   FServer.Active := False;
 end;
 
@@ -2557,8 +2566,6 @@ var
   Data: TJSONObject;
   TagsArray, BgSteps: TJSONArray;
 begin
-  inherited;
-
   if not Assigned(Feature) then Exit;
 
   Data := TJSONObject.Create;
@@ -2585,7 +2592,6 @@ procedure TLiveReporter.DoFeatureEnd(const Feature: IFeature; const Counters: TS
 var
   Data: TJSONObject;
 begin
-  inherited;
   if not Assigned(Feature) then Exit;
 
   Data := TJSONObject.Create;
@@ -2602,7 +2608,6 @@ end;
 
 procedure TLiveReporter.DoReport(const S: ISpecItem);
 begin
-  inherited; // Delegar al decorado
   // Feature se maneja en DoFeatureBegin/End
   // Scenario se maneja en DoScenarioEnd
   // Outline se maneja en DoOutlineEnd
@@ -2613,8 +2618,6 @@ var
   Data: TJSONObject;
   IsSkipped: Boolean;
 begin
-  inherited;
-
   Inc(FScenarioCount);
   IsSkipped := Scenario.RunInfo.State = srsSkiped;
 
@@ -2637,8 +2640,7 @@ end;
 
 procedure TLiveReporter.DoOutlineBegin(const Outline: IScenarioOutline);
 begin
-  inherited;
-  // Por ahora no emitimos eventos al inicio del outline
+  // No emitimos eventos al inicio del outline
 end;
 
 procedure TLiveReporter.DoOutlineEnd(const Outline: IScenarioOutline; const Counters: TSpecCounters);
@@ -2647,8 +2649,6 @@ var
   StepsArray, HeadersArray, ExamplesArray, RowArray: TJSONArray;
   ExampleObj: TJSONObject;
 begin
-  inherited;
-
   // Emitir un solo evento outline:end con toda la información
   Data := TJSONObject.Create;
   try
