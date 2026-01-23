@@ -29,7 +29,10 @@
 {$IMPLICITBUILD OFF}
 
 requires
-  rtl;
+  rtl,
+  IndySystem,
+  IndyCore,
+  IndyProtocols;
 
 contains
   Daf.MiniSpec in 'Daf.MiniSpec.pas',
