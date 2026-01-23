@@ -1,4 +1,4 @@
-﻿unit Daf.MiniSpec.Reporter;
+unit Daf.MiniSpec.Reporter;
 
 interface
 uses
@@ -15,12 +15,59 @@ uses
   Daf.MiniSpec.Types;
 
 type
+  /// <summary>
+  /// Opciones de reporte pasadas desde la línea de comandos.
+  /// Permite opciones estándar (DryRun, TagMatcher) y específicas por reporter.
+  /// </summary>
+  TReportOptions = class
+  public const
+    OPT_DRY_RUN = 'DryRun';
+  strict private
+    FOptions: TDictionary<string, TValue>;
+    FTagMatcher: TTagMatcher;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    procedure SetOption(const Key: string; const Value: TValue);
+    function GetOption(const Key: string; const Default: TValue): TValue;
+    function HasOption(const Key: string): Boolean;
+    // Helpers para opciones comunes
+    function DryRun: Boolean;
+    property TagMatcher: TTagMatcher read FTagMatcher write FTagMatcher;
+  end;
+
+  /// <summary>
+  /// Value object that encapsulates pass/fail/skip counters and elapsed time.
+  /// Used at Report, Feature, Scenario, and Outline levels.
+  /// </summary>
+  TSpecCounters = record
+  private
+    FPassCount: Cardinal;
+    FFailCount: Cardinal;
+    FSkipCount: Cardinal;
+    FStartTime: TDateTime;
+    FElapsedMs: Integer;
+  public
+    procedure Reset;
+    procedure Start;
+    procedure Stop;
+    procedure IncPass;
+    procedure IncFail;
+    procedure IncSkip;
+    function IsSuccess: Boolean;
+    property PassCount: Cardinal read FPassCount;
+    property FailCount: Cardinal read FFailCount;
+    property SkipCount: Cardinal read FSkipCount;
+    property ElapsedMs: Integer read FElapsedMs;
+  end;
+
   ISpecReporter = interface(IInvokable)
     ['{CD69B272-5B38-4CCC-A64F-2B2A57ACB540}']
     function GetFailCount: Cardinal;
     function GetPassCount: Cardinal;
     function GetSkipCount: Cardinal;
-    procedure Report(Features: TList<IFeature>);
+    function GetCompletedAt: TDateTime;
+    procedure Report(Features: TList<IFeature>; Options: TReportOptions);
     procedure BeginReport;
     procedure DoReport(const S: ISpecItem);
     procedure ReportOutline(const Outline: IScenarioOutline);
@@ -32,41 +79,72 @@ type
     property PassCount: Cardinal read GetPassCount;
     property FailCount: Cardinal read GetFailCount;
     property SkipCount: Cardinal read GetSkipCount;
+    property CompletedAt: TDateTime read GetCompletedAt;
   end;
 
   TCustomReporter = class(TInterfacedObject, ISpecReporter)
   strict private
-    FPassCount: Cardinal;
-    FFailCount: Cardinal;
-    FSkipCount: Cardinal;
-  private
+    // Counters at different levels
+    FReportCounters: TSpecCounters;
+    FFeatureCounters: TSpecCounters;
+    FScenarioCounters: TSpecCounters;
+    FOutlineCounters: TSpecCounters;
+    // Current context
+    FCurrentFeature: IFeature;
+    FCurrentScenario: IScenario;
+    FCurrentOutline: IScenarioOutline;
+    // Report options
+    FOptions: TReportOptions;
+    // Timestamp
+    FCompletedAt: TDateTime;
   protected
     function GetContent: string;virtual;abstract;
-    procedure ResetCounters;
-    procedure IncPass;
-    procedure IncFail;
-    procedure IncSkip;
     function GetFailCount: Cardinal;virtual;
     function GetPassCount: Cardinal;virtual;
     function GetSkipCount: Cardinal;virtual;
+    function GetCompletedAt: TDateTime;virtual;
     function GetLevel(const Kind: TSpecItemKind): Byte;virtual;
     function GetKeyWord(const Kind: TSpecItemKind): string;virtual;
     function GetFileExt: string;virtual;
     procedure DoReport(const S: ISpecItem);virtual;
+    // Template Methods (non-virtual) - define the algorithm
+    procedure BeginFeature(const Feature: IFeature);
+    procedure EndFeature(const Feature: IFeature);
+    procedure BeginScenario(const Scenario: IScenario);
+    procedure EndScenario(const Scenario: IScenario);
+    procedure BeginOutline(const Outline: IScenarioOutline);
+    procedure EndOutline(const Outline: IScenarioOutline);
+    // Hooks (virtual) - extension points for subclasses
+    procedure DoFeatureBegin(const Feature: IFeature);virtual;
+    procedure DoFeatureEnd(const Feature: IFeature; const Counters: TSpecCounters);virtual;
+    procedure DoScenarioBegin(const Scenario: IScenario);virtual;
+    procedure DoScenarioEnd(const Scenario: IScenario; const Counters: TSpecCounters);virtual;
+    procedure DoOutlineBegin(const Outline: IScenarioOutline);virtual;
+    procedure DoOutlineEnd(const Outline: IScenarioOutline; const Counters: TSpecCounters);virtual;
+    // Reporting methods
     procedure Report(Feature: IFeature);overload;
     procedure Report(Rule: IRule);overload;
     procedure Report(Background: IBackground);overload;
     procedure Report(Scenario: IScenario);overload;
     procedure ReportOutline(const Outline: IScenarioOutline);virtual;
+    // Properties for current context
+    property CurrentFeature: IFeature read FCurrentFeature;
+    property CurrentScenario: IScenario read FCurrentScenario;
+    property CurrentOutline: IScenarioOutline read FCurrentOutline;
+    property ReportCounters: TSpecCounters read FReportCounters;
+    property FeatureCounters: TSpecCounters read FFeatureCounters;
+    property ScenarioCounters: TSpecCounters read FScenarioCounters;
+    property OutlineCounters: TSpecCounters read FOutlineCounters;
+    property Options: TReportOptions read FOptions;
   public
     function UseConsole: Boolean;virtual;
     procedure BeginReport;virtual;
-    procedure Report(Features: TList<IFeature>);overload;
-
+    procedure Report(Features: TList<IFeature>; Options: TReportOptions);overload;
     procedure EndReport;virtual;
     property PassCount: Cardinal read GetPassCount;
     property FailCount: Cardinal read GetFailCount;
     property SkipCount: Cardinal read GetSkipCount;
+    property CompletedAt: TDateTime read FCompletedAt;
   end;
 
   TReporterDecorator = class(TCustomReporter)
@@ -76,6 +154,7 @@ type
     function GetFailCount: Cardinal;override;
     function GetPassCount: Cardinal;override;
     function GetSkipCount: Cardinal;override;
+    function GetCompletedAt: TDateTime;override;
     procedure DoReport(const S: ISpecItem);override;
     procedure ReportOutline(const Outline: IScenarioOutline);override;
   public
@@ -121,7 +200,7 @@ type
   public
     procedure BeginReport;override;
     procedure EndReport;override;
-    procedure Feature(const Description: string);
+    procedure Feature(const Title, Narrative: string);
     procedure Scenario(const Kind: string; const Description: string; const Status: string; Duration: Integer; const ErrorMessage: string = '');
     procedure Step(const S: ISpecItem; Success: Boolean; Duration: Integer; const ErrorMessage: string = '');
     property Output: string read GetContent;
@@ -147,9 +226,6 @@ type
     procedure AddTags(const Tags: TSpecTags);
     function GetGherkinKeyword(Kind: TSpecItemKind): string;
     function RestorePlaceholders(const Text: string): string;
-    function IsTagLine(const Line: string): Boolean;
-    function ExtractTitle(const Desc: string): string;
-    function ExtractMotivation(const Desc: string): string;
     procedure WriteExamplesTable(const Outline: IScenarioOutline);
     function ResultComment(const Item: ISpecItem): string;
     function SanitizeFileName(const Name: string): string;
@@ -167,30 +243,29 @@ type
     property WithResults: Boolean read FWithResults write FWithResults;
   end;
 
-  TSSEReporter = class(TReporterDecorator)
+  TLiveReporter = class(TReporterDecorator)
   private
     FServer: TIdHTTPServer;
     FPort: Integer;
     FEvents: TStringList;
     FEventsLock: TCriticalSection;
-    FSSEClients: TList<TIdContext>;
+    FLiveClients: TList<TIdContext>;
     FClientsLock: TCriticalSection;
     FReportFinished: Boolean;
-    FCurrentFeature: string;
-    FFeaturePass: Integer;
-    FFeatureFail: Integer;
-    FFeatureStartTime: TDateTime;
     FScenarioCount: Integer; // Contador de escenarios emitidos
     procedure HandleRequest(AContext: TIdContext;
       ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
     procedure BroadcastEvent(const EventJson: string);
     function BuildEventJson(const EventType: string; const Data: TJSONObject): string;
-    procedure EmitFeatureEnd;
     function HasConnectedClients: Boolean;
     function StepsToJsonArray(const Steps: TList<IScenarioStep>; const StepType: string): TJSONArray;
   protected
     procedure DoReport(const S: ISpecItem);override;
-    procedure ReportOutline(const Outline: IScenarioOutline);override;
+    procedure DoFeatureBegin(const Feature: IFeature);override;
+    procedure DoFeatureEnd(const Feature: IFeature; const Counters: TSpecCounters);override;
+    procedure DoScenarioEnd(const Scenario: IScenario; const Counters: TSpecCounters);override;
+    procedure DoOutlineBegin(const Outline: IScenarioOutline);override;
+    procedure DoOutlineEnd(const Outline: IScenarioOutline; const Counters: TSpecCounters);override;
   public
     constructor Create(const Decorated: ISpecReporter; APort: Integer = 9999);
     destructor Destroy;override;
@@ -318,22 +393,10 @@ const
     function preserveLineBreaks(str) {
       return str.replace(/\r\n|\n|\r/g, '<br>');
     }
-    function renderFeatureHeader(featureText) {
-      if (!featureText) return '';
-      const lines = featureText.split(/\r?\n/).map(line => line.trim());
-      let title = '', idx = 0;
-      while (idx < lines.length && lines[idx] === '') idx++;
-      if (idx < lines.length) title = lines[idx++];
-      while (idx < lines.length && lines[idx] === '') idx++;
-      let motivationArr = [];
-      while (idx < lines.length) motivationArr.push(lines[idx++]);
-      while (motivationArr.length && motivationArr[0] === '') motivationArr.shift();
-      while (motivationArr.length && motivationArr[motivationArr.length - 1] === '') motivationArr.pop();
-
-      let html = `<h2 class="feature">Feature: ${htmlEncode(title)}</h2>`;
-      if (motivationArr.length) {
-        let motivation = motivationArr.join('\n');
-        html += `<details class="motivation-block"><summary>Motivation</summary><pre class="motivation">${highlightPlaceholders(htmlEncode(motivation))}</pre></details>`;
+    function renderFeatureHeader(title, narrative) {
+      let html = `<h2 class="feature">Feature: ${htmlEncode(title || '')}</h2>`;
+      if (narrative && narrative.trim()) {
+        html += `<details class="motivation-block"><summary>Motivation</summary><pre class="motivation">${highlightPlaceholders(htmlEncode(narrative))}</pre></details>`;
       }
       return html;
     }
@@ -354,7 +417,7 @@ const
             let isFail = (status === 'fail') || (!isSkip && scenario.steps && scenario.steps.some(step => !step.success));
             let isPass = !isSkip && !isFail;
 
-            // Para Scenario Outline, verificar si algún example falló
+            // Para Scenario Outline, verificar si alg�n example fall�
             if (scenario.kind === 'Scenario Outline' && scenario.examples) {
               isFail = scenario.examples.some(ex => ex.status === 'fail');
               isPass = !isFail && !isSkip;
@@ -368,7 +431,7 @@ const
             hasVisibleScenarios = true;
             let resultClass = isSkip ? 'skip' : (isFail ? 'fail' : 'pass');
             featureHtml += `<details ${isFail ? 'open' : ''} style="margin-bottom:0;">`;
-            featureHtml += `<summary class="${resultClass}" style="font-size:0.93em;">${isSkip ? '⊘' : ''} ${scenario.kind}: ${highlightPlaceholders(preserveLineBreaks(htmlEncode(scenario.description)))}</summary>`;
+            featureHtml += `<summary class="${resultClass}" style="font-size:0.93em;">${isSkip ? '?' : ''} ${scenario.kind}: ${highlightPlaceholders(preserveLineBreaks(htmlEncode(scenario.description)))}</summary>`;
 
             // Renderizar Scenario Outline con tabla
             if (scenario.kind === 'Scenario Outline' && scenario.headers && scenario.examples) {
@@ -384,7 +447,7 @@ const
               featureHtml += `</tr>`;
               scenario.examples.forEach(ex => {
                 let exClass = ex.status === 'pass' ? 'pass' : 'fail';
-                let icon = ex.status === 'pass' ? '✅' : '❌';
+                let icon = ex.status === 'pass' ? '?' : '?';
                 featureHtml += `<tr class="${exClass}">`;
                 featureHtml += `<td style="padding:2px 6px; border:1px solid #ccc;">${icon}</td>`;
                 ex.values.forEach(v => {
@@ -413,7 +476,7 @@ const
           });
         }
         if (hasVisibleScenarios) {
-          html += renderFeatureHeader(feature.description);
+          html += renderFeatureHeader(feature.name, feature.narrative);
           html += featureHtml;
         }
       });
@@ -494,9 +557,9 @@ const
 ''';
 {$ENDREGION}
 
-{$REGION 'SSE Dashboard HTML'}
+{$REGION 'Live Dashboard HTML'}
 const
-  SSE_DASHBOARD_HTML = '''
+  LIVE_DASHBOARD_HTML = '''
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -514,10 +577,10 @@ const
           <rect width="256" height="256" rx="38" fill="#242526"/>
           <text x="128" y="74" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="44" fill="#fff" font-weight="bold">mSpec</text>
           <text x="38" y="172" font-family="Fira Mono, Consolas, monospace" font-size="54" fill="#cfcfcf">$&gt;</text>
-          <text x="110" y="172" font-family="Segoe UI Emoji" font-size="54" fill="#c92828">✗</text>
+          <text x="110" y="172" font-family="Segoe UI Emoji" font-size="54" fill="#c92828">?</text>
           <text x="140" y="172" font-family="Fira Mono, Consolas, monospace" font-size="54" fill="#bdbdbd">.</text>
           <text x="160" y="172" font-family="Fira Mono, Consolas, monospace" font-size="54" fill="#bdbdbd">.</text>
-          <text x="190" y="172" font-family="Segoe UI Emoji" font-size="54" fill="#34bf4a">✓</text>
+          <text x="190" y="172" font-family="Segoe UI Emoji" font-size="54" fill="#34bf4a">?</text>
         </svg>
         <span>MiniSpec Live <span class="text-sm text-gray-500 font-normal">v{{MINISPEC_VERSION}}</span></span>
       </h1>
@@ -533,20 +596,19 @@ const
 
     <!-- Progress Bar -->
     <div class="mb-4 bg-gray-800 rounded-lg p-4">
-      <div class="flex justify-between mb-2">
-        <span>Progress</span>
-        <span x-text="`${pass + fail} scenarios`"></span>
-      </div>
       <div class="w-full bg-gray-700 rounded-full h-4 overflow-hidden">
         <div class="h-full flex">
           <div class="bg-green-500 transition-all duration-300" :style="`width: ${passPercent}%`"></div>
           <div class="bg-red-500 transition-all duration-300" :style="`width: ${failPercent}%`"></div>
+          <div class="bg-yellow-500 transition-all duration-300" :style="`width: ${skipPercent}%`"></div>
         </div>
       </div>
-      <div class="flex justify-between mt-2 text-sm">
-        <span class="text-green-400" x-text="`✅ ${pass} pass`"></span>
-        <span class="text-yellow-400" x-show="skip > 0" x-text="`⏭️ ${skip} skip`"></span>
-        <span class="text-red-400" x-text="`❌ ${fail} fail`"></span>
+      <div class="flex justify-center gap-6 mt-2 text-sm">
+        <span class="text-green-400" x-text="`✓ ${pass} pass`"></span>
+        <span class="text-red-400" x-text="`✗ ${fail} fail`"></span>
+        <span class="text-yellow-400" x-show="skip > 0" x-text="`○ ${skip} skip`"></span>
+        <span class="text-gray-400" x-text="`${totalTests} scenarios in ${features.length} features`"></span>
+        <span class="text-gray-500" x-show="reportComplete &amp;&amp; completedAt" x-text="`at ${completedAt}`"></span>
       </div>
     </div>
 
@@ -568,15 +630,15 @@ const
             <span class="text-yellow-400 text-sm">Skip</span>
           </label>
         </div>
-        
+
         <!-- Regex Filter -->
         <div class="flex items-center gap-2 flex-1 min-w-[200px]">
           <span class="text-gray-400 text-sm">🔍</span>
-          <input type="text" x-model="filterRegex" placeholder="Filter by regex..." 
+          <input type="text" x-model="filterRegex" placeholder="Filter by regex..."
                  class="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm flex-1 focus:outline-none focus:border-blue-500">
           <button x-show="filterRegex" @click="filterRegex = ''" class="text-gray-400 hover:text-white text-sm">✕</button>
         </div>
-        
+
         <!-- Tag Filter -->
         <div class="flex items-center gap-2">
           <span class="text-gray-400 text-sm">🏷️</span>
@@ -594,15 +656,15 @@ const
     <div class="mb-4 flex gap-4" x-show="reportComplete">
       <!-- First Failure -->
       <template x-if="firstFailure">
-        <button @click="scrollToFeature(firstFailure.featureName)" 
+        <button @click="scrollToFeature(firstFailure.featureName)"
                 class="bg-red-900/50 border border-red-700 rounded-lg px-4 py-2 text-sm hover:bg-red-900/70 transition flex items-center gap-2">
-          <span>🎯</span>
+          <span>⚡</span>
           <span>First Failure: <span class="font-medium" x-text="firstFailure.scenarioName"></span></span>
         </button>
       </template>
-      
+
       <!-- Top 10 Slowest Toggle -->
-      <button @click="showSlowest = !showSlowest" 
+      <button @click="showSlowest = !showSlowest"
               class="bg-yellow-900/50 border border-yellow-700 rounded-lg px-4 py-2 text-sm hover:bg-yellow-900/70 transition flex items-center gap-2">
         <span>🐢</span>
         <span x-text="showSlowest ? 'Hide Slowest' : 'Top 10 Slowest'"></span>
@@ -631,7 +693,7 @@ const
     <template x-if="currentFeature">
       <div class="bg-yellow-900/30 border border-yellow-600 rounded-lg p-4 mb-4 animate-pulse">
         <div class="flex items-center gap-2">
-          <span class="text-yellow-400 text-xl">⏳</span>
+          <span class="text-yellow-400 text-xl">▶</span>
           <span class="font-semibold" x-text="currentFeature"></span>
         </div>
         <div x-show="currentScenario" class="ml-6 mt-2 text-gray-400">
@@ -649,8 +711,8 @@ const
           <details>
             <summary class="cursor-pointer list-none flex justify-between items-center [&::-webkit-details-marker]:hidden">
               <div class="flex items-center gap-2">
-                <span class="text-gray-400 text-xs">▶</span>
-                <span x-text="feature.success ? '✅' : '❌'" class="text-xl"></span>
+                <span class="text-gray-400 text-xs">▸</span>
+                <span x-text="feature.success ? '✓' : '✗'" class="text-xl"></span>
                 <span class="font-semibold" x-text="feature.name"></span>
                 <span class="text-gray-500 text-sm" x-text="`(${feature.pass + feature.fail} examples)`"></span>
               </div>
@@ -661,11 +723,11 @@ const
               </div>
             </summary>
             <div class="mt-3 ml-4 space-y-3 border-l border-gray-700 pl-4 max-h-[600px] overflow-y-auto">
-              <!-- Descripción del feature -->
-              <template x-if="feature.description && feature.description.includes('\n')">
-                <div class="text-gray-400 text-sm italic whitespace-pre-line" x-text="feature.description.split('\n').slice(1).join('\n').trim()"></div>
+              <!-- Narrativa del feature -->
+              <template x-if="feature.narrative">
+                <div class="text-gray-400 text-sm italic whitespace-pre-line" x-text="feature.narrative"></div>
               </template>
-              
+
               <!-- Background -->
               <template x-if="feature.background && feature.background.length > 0">
                 <div class="mb-3">
@@ -680,20 +742,21 @@ const
                   </div>
                 </div>
               </template>
-              
+
               <div x-show="feature.scenarios.length === 0" class="text-gray-500 text-sm italic">No scenarios recorded</div>
-              
+
               <template x-for="(scenario, idx) in feature.scenarios" :key="idx">
-                <div class="mb-3">
+                <div class="mb-3" x-show="(scenario.skipped && showSkip) || (!scenario.skipped && scenario.success && showPass) || (!scenario.skipped && !scenario.success && showFail)">
                   <!-- Scenario Outline con tabla -->
                   <template x-if="scenario.type === 'outline'">
-                    <details :open="!scenario.success">
-                      <summary class="cursor-pointer list-none flex items-center gap-2 text-sm py-1 [&::-webkit-details-marker]:hidden" :class="scenario.success ? 'text-green-400' : 'text-red-400'">
-                        <span class="text-gray-500 text-xs">▶</span>
-                        <span x-text="scenario.success ? '✓' : '✗'" class="w-4"></span>
+                    <details :open="!scenario.success && !scenario.skipped">
+                      <summary class="cursor-pointer list-none flex items-center gap-2 text-sm py-1 [&::-webkit-details-marker]:hidden" :class="scenario.skipped ? 'text-yellow-400' : (scenario.success ? 'text-green-400' : 'text-red-400')">
+                        <span class="text-gray-500 text-xs">▸</span>
+                        <span x-text="scenario.skipped ? '○' : (scenario.success ? '✓' : '✗')" class="w-4"></span>
                         <span class="font-medium">Scenario Outline:</span>
                         <span x-text="scenario.name" class="flex-1"></span>
-                        <span class="text-gray-500 text-xs" x-text="`${scenario.pass}✓ ${scenario.fail}✗`"></span>
+                        <span x-show="!scenario.skipped" class="text-gray-500 text-xs" x-text="`${scenario.pass}✓ ${scenario.fail}✗`"></span>
+                        <span x-show="scenario.skipped" class="text-gray-500 text-xs">(skip)</span>
                         <span class="text-gray-500 flex-shrink-0" x-text="`${scenario.ms}ms`"></span>
                       </summary>
                       <div class="ml-6 mt-2 space-y-2 text-xs">
@@ -721,12 +784,12 @@ const
                             </thead>
                             <tbody>
                               <template x-for="(ex, exIdx) in scenario.examples" :key="exIdx">
-                                <tr :class="ex.success ? 'text-green-400' : 'text-red-400'">
-                                  <td class="pr-2" x-text="ex.success ? '✓' : '✗'"></td>
+                                <tr :class="ex.skipped ? 'text-yellow-400' : (ex.success ? 'text-green-400' : 'text-red-400')">
+                                  <td class="pr-2" x-text="ex.skipped ? '○' : (ex.success ? '✓' : '✗')"></td>
                                   <template x-for="(val, valIdx) in ex.values" :key="valIdx">
                                     <td class="px-2 py-0.5 border-b border-gray-800" x-text="val"></td>
                                   </template>
-                                  <td class="px-2 py-0.5 border-b border-gray-800 text-gray-500" x-text="ex.ms"></td>
+                                  <td class="px-2 py-0.5 border-b border-gray-800 text-gray-500" x-text="ex.skipped ? 'skip' : ex.ms"></td>
                                 </tr>
                               </template>
                             </tbody>
@@ -739,15 +802,16 @@ const
                       </div>
                     </details>
                   </template>
-                  
+
                   <!-- Scenario normal -->
                   <template x-if="scenario.type !== 'outline'">
-                    <details :open="!scenario.success">
-                      <summary class="cursor-pointer list-none flex items-center gap-2 text-sm py-1 [&::-webkit-details-marker]:hidden" :class="scenario.success ? 'text-green-400' : 'text-red-400'">
-                        <span class="text-gray-500 text-xs">▶</span>
-                        <span x-text="scenario.success ? '✓' : '✗'" class="w-4"></span>
+                    <details :open="!scenario.success && !scenario.skipped">
+                      <summary class="cursor-pointer list-none flex items-center gap-2 text-sm py-1 [&::-webkit-details-marker]:hidden" :class="scenario.skipped ? 'text-yellow-400' : (scenario.success ? 'text-green-400' : 'text-red-400')">
+                        <span class="text-gray-500 text-xs">▸</span>
+                        <span x-text="scenario.skipped ? '○' : (scenario.success ? '✓' : '✗')" class="w-4"></span>
                         <span class="font-medium">Scenario:</span>
                         <span x-text="scenario.name" class="flex-1"></span>
+                        <span x-show="scenario.skipped" class="text-gray-500 text-xs">(skip)</span>
                         <span class="text-gray-500 flex-shrink-0" x-text="`${scenario.ms}ms`"></span>
                       </summary>
                       <div class="ml-6 mt-1 space-y-1 text-xs">
@@ -785,7 +849,7 @@ const
         connected: false,
         features: [],
         currentFeature: null,
-        currentFeatureDescription: null,
+        currentFeatureNarrative: null,
         currentFeatureBackground: null,
         currentFeatureTags: [],
         currentFeatureScenarios: [],
@@ -793,10 +857,10 @@ const
         pass: 0,
         fail: 0,
         skip: 0,
-        totalMs: 0,
+        completedAt: null,
         reportComplete: false,
         eventSource: null,
-        
+
         // Filters
         showPass: true,
         showFail: true,
@@ -805,15 +869,25 @@ const
         filterTag: '',
         showSlowest: false,
 
+        get totalTests() {
+          return this.pass + this.fail + this.skip;
+        },
+        get executedTests() {
+          return this.pass + this.fail;
+        },
         get passPercent() {
-          const total = this.pass + this.fail;
+          const total = this.totalTests;
           return total > 0 ? (this.pass / total * 100) : 0;
         },
         get failPercent() {
-          const total = this.pass + this.fail;
+          const total = this.totalTests;
           return total > 0 ? (this.fail / total * 100) : 0;
         },
-        
+        get skipPercent() {
+          const total = this.totalTests;
+          return total > 0 ? (this.skip / total * 100) : 0;
+        },
+
         get allTags() {
           const tags = new Set();
           for (const f of this.features) {
@@ -824,13 +898,13 @@ const
           }
           return Array.from(tags).sort();
         },
-        
+
         get filteredFeatures() {
           let regex = null;
           if (this.filterRegex) {
             try { regex = new RegExp(this.filterRegex, 'i'); } catch(e) {}
           }
-          
+
           return this.features.filter(f => {
             // Tag filter
             if (this.filterTag && (!f.tags || !f.tags.includes(this.filterTag))) {
@@ -838,21 +912,21 @@ const
               const hasTagInScenarios = f.scenarios?.some(s => s.tags?.includes(this.filterTag));
               if (!hasTagInScenarios) return false;
             }
-            
+
             // Regex filter
             if (regex && !regex.test(f.name) && !regex.test(f.description || '')) {
               const matchesScenario = f.scenarios?.some(s => regex.test(s.name));
               if (!matchesScenario) return false;
             }
-            
+
             // Status filter
             if (f.success && !this.showPass) return false;
             if (!f.success && !this.showFail) return false;
-            
+
             return true;
           });
         },
-        
+
         get firstFailure() {
           for (const f of this.features) {
             for (const s of f.scenarios || []) {
@@ -863,7 +937,7 @@ const
           }
           return null;
         },
-        
+
         get slowestScenarios() {
           const all = [];
           for (const f of this.features) {
@@ -878,7 +952,7 @@ const
           }
           return all.sort((a, b) => b.ms - a.ms).slice(0, 10);
         },
-        
+
         scrollToFeature(name) {
           const id = 'feature-' + name.replace(/\\s+/g, '-');
           const el = document.getElementById(id);
@@ -893,7 +967,7 @@ const
         },
 
         connect() {
-          // Cerrar conexión anterior si existe
+          // Cerrar conexi�n anterior si existe
           if (this.eventSource) {
             this.eventSource.close();
             this.eventSource = null;
@@ -911,7 +985,7 @@ const
             if (!this.reportComplete && this.eventSource) {
               this.eventSource.close();
               this.eventSource = null;
-              // Reconectar después de 3 segundos
+              // Reconectar despu�s de 3 segundos
               setTimeout(() => this.connect(), 3000);
             }
           };
@@ -931,12 +1005,12 @@ const
               this.skip = 0;
               this.reportComplete = false;
               this.currentFeatureScenarios = [];
-              this.currentFeatureDescription = null;
+              this.currentFeatureNarrative = null;
               this.currentFeatureTags = [];
               break;
             case 'feature:start':
               this.currentFeature = data.name;
-              this.currentFeatureDescription = data.description || null;
+              this.currentFeatureNarrative = data.narrative || null;
               this.currentFeatureBackground = data.background || null;
               this.currentFeatureTags = data.tags || [];
               this.currentScenario = null;
@@ -946,11 +1020,19 @@ const
               this.currentScenario = data.name;
               break;
             case 'scenario:end':
-              if (data.success) this.pass++; else this.fail++;
+              // Manejar skip, pass y fail
+              if (data.skipped) {
+                this.skip++;
+              } else if (data.success) {
+                this.pass++;
+              } else {
+                this.fail++;
+              }
               this.currentFeatureScenarios.push({
                 type: 'scenario',
                 name: data.name,
                 success: data.success,
+                skipped: data.skipped || false,
                 ms: data.ms,
                 error: data.error || null,
                 steps: data.steps || []
@@ -958,16 +1040,21 @@ const
               this.currentScenario = null;
               break;
             case 'outline:end':
-              // Sumar todos los examples al conteo
+              // Sumar todos los examples al conteo (incluyendo skip)
               this.pass += data.pass || 0;
               this.fail += data.fail || 0;
+              // Contar skipped de examples
+              const skipCount = (data.examples || []).filter(e => e.skipped).length;
+              this.skip += skipCount;
               this.currentFeatureScenarios.push({
                 type: 'outline',
                 name: data.name,
                 success: data.success,
+                skipped: skipCount > 0 && data.pass === 0 && data.fail === 0,
                 ms: data.ms,
                 pass: data.pass,
                 fail: data.fail,
+                skip: skipCount,
                 headers: data.headers || [],
                 steps: data.steps || [],
                 examples: data.examples || []
@@ -976,7 +1063,7 @@ const
             case 'feature:end':
               this.features.push({
                 name: data.name,
-                description: this.currentFeatureDescription,
+                narrative: this.currentFeatureNarrative,
                 background: this.currentFeatureBackground,
                 tags: this.currentFeatureTags,
                 success: data.fail === 0,
@@ -986,20 +1073,20 @@ const
                 scenarios: [...this.currentFeatureScenarios]
               });
               this.currentFeature = null;
-              this.currentFeatureDescription = null;
+              this.currentFeatureNarrative = null;
               this.currentFeatureBackground = null;
               this.currentFeatureTags = [];
               this.currentFeatureScenarios = [];
               break;
             case 'report:end':
               this.reportComplete = true;
-              this.totalMs = data.ms;
+              this.completedAt = data.completedAt;
               this.pass = data.pass;
               this.fail = data.fail;
               this.skip = data.skip || 0;
               this.currentFeature = null;
               this.currentScenario = null;
-              // Cerrar conexión - el reporte terminó
+              // Cerrar conexi�n - el reporte termin�
               if (this.eventSource) {
                 this.eventSource.close();
                 this.eventSource = null;
@@ -1016,85 +1103,226 @@ const
 ''';
 {$ENDREGION}
 
+{ TReportOptions }
 
-{ TCustomReporter }
+constructor TReportOptions.Create;
+begin
+  inherited;
+  FOptions := TDictionary<string, TValue>.Create;
+  FTagMatcher := nil;
+end;
 
-procedure TCustomReporter.IncPass;
+destructor TReportOptions.Destroy;
+begin
+  FOptions.Free;
+  inherited;
+end;
+
+procedure TReportOptions.SetOption(const Key: string; const Value: TValue);
+begin
+  FOptions.AddOrSetValue(Key, Value);
+end;
+
+function TReportOptions.GetOption(const Key: string; const Default: TValue): TValue;
+begin
+  if not FOptions.TryGetValue(Key, Result) then
+    Result := Default;
+end;
+
+function TReportOptions.HasOption(const Key: string): Boolean;
+begin
+  Result := FOptions.ContainsKey(Key);
+end;
+
+function TReportOptions.DryRun: Boolean;
+begin
+  Result := GetOption(OPT_DRY_RUN, TValue.From<Boolean>(False)).AsBoolean;
+end;
+
+{ TSpecCounters }
+
+procedure TSpecCounters.Reset;
+begin
+  FPassCount := 0;
+  FFailCount := 0;
+  FSkipCount := 0;
+  FElapsedMs := 0;
+  FStartTime := 0;
+end;
+
+procedure TSpecCounters.Start;
+begin
+  FStartTime := Now;
+end;
+
+procedure TSpecCounters.Stop;
+begin
+  FElapsedMs := Round((Now - FStartTime) * 24 * 60 * 60 * 1000);
+end;
+
+procedure TSpecCounters.IncPass;
 begin
   Inc(FPassCount);
 end;
 
-procedure TCustomReporter.IncFail;
+procedure TSpecCounters.IncFail;
 begin
   Inc(FFailCount);
 end;
 
-procedure TCustomReporter.IncSkip;
+procedure TSpecCounters.IncSkip;
 begin
   Inc(FSkipCount);
 end;
 
+function TSpecCounters.IsSuccess: Boolean;
+begin
+  Result := FFailCount = 0;
+end;
+
+{ TCustomReporter }
+
+procedure TCustomReporter.DoFeatureBegin(const Feature: IFeature);
+begin
+  // Hook - subclasses can override
+end;
+
+procedure TCustomReporter.DoFeatureEnd(const Feature: IFeature; const Counters: TSpecCounters);
+begin
+  // Hook - subclasses can override
+end;
+
+procedure TCustomReporter.DoScenarioBegin(const Scenario: IScenario);
+begin
+  // Hook - subclasses can override
+end;
+
+procedure TCustomReporter.DoScenarioEnd(const Scenario: IScenario; const Counters: TSpecCounters);
+begin
+  // Hook - subclasses can override
+end;
+
+procedure TCustomReporter.DoOutlineBegin(const Outline: IScenarioOutline);
+begin
+  // Hook - subclasses can override
+end;
+
+procedure TCustomReporter.DoOutlineEnd(const Outline: IScenarioOutline; const Counters: TSpecCounters);
+begin
+  // Hook - subclasses can override
+end;
+
+// Template Method: BeginFeature (non-virtual)
+procedure TCustomReporter.BeginFeature(const Feature: IFeature);
+begin
+  FCurrentFeature := Feature;
+  FFeatureCounters.Reset;
+  FFeatureCounters.Start;
+  DoFeatureBegin(Feature);  // Hook
+end;
+
+// Template Method: EndFeature (non-virtual)
+procedure TCustomReporter.EndFeature(const Feature: IFeature);
+begin
+  FFeatureCounters.Stop;
+  DoFeatureEnd(Feature, FFeatureCounters);  // Hook
+  FCurrentFeature := nil;
+end;
+
+// Template Method: BeginScenario (non-virtual)
+procedure TCustomReporter.BeginScenario(const Scenario: IScenario);
+begin
+  FCurrentScenario := Scenario;
+  FScenarioCounters.Reset;
+  FScenarioCounters.Start;
+  DoScenarioBegin(Scenario);  // Hook
+end;
+
+// Template Method: EndScenario (non-virtual)
+procedure TCustomReporter.EndScenario(const Scenario: IScenario);
+begin
+  FScenarioCounters.Stop;
+  DoScenarioEnd(Scenario, FScenarioCounters);  // Hook
+  FCurrentScenario := nil;
+end;
+
+// Template Method: BeginOutline (non-virtual)
+procedure TCustomReporter.BeginOutline(const Outline: IScenarioOutline);
+begin
+  FCurrentOutline := Outline;
+  FOutlineCounters.Reset;
+  FOutlineCounters.Start;
+  DoOutlineBegin(Outline);  // Hook
+end;
+
+// Template Method: EndOutline (non-virtual)
+procedure TCustomReporter.EndOutline(const Outline: IScenarioOutline);
+begin
+  FOutlineCounters.Stop;
+  DoOutlineEnd(Outline, FOutlineCounters);  // Hook
+  FCurrentOutline := nil;
+end;
+
 procedure TCustomReporter.BeginReport;
 begin
-  ResetCounters;
+  FReportCounters.Reset;
+  FFeatureCounters.Reset;
+  FOutlineCounters.Reset;
+  FCurrentFeature := nil;
+  FCurrentScenario := nil;
+  FCurrentOutline := nil;
 end;
 
 procedure TCustomReporter.Report(Feature: IFeature);
-
-  function HasExecutedScenarios: Boolean;
-  begin
-    // Verificar escenarios en todas las Rules (incluyendo ImplicitRule)
-    for var Rule in Feature.Rules do
-      for var Scenario in Rule.Scenarios do
-        if Scenario.RunInfo.State = srsFinished then
-          Exit(True);
-
-    Result := False;
-  end;
-
 begin
-  // Solo reportar la Feature si tiene al menos un escenario ejecutado
-  if not HasExecutedScenarios then
-    Exit;
-
+  BeginFeature(Feature);
   DoReport(Feature);
-
-  // Reportar todas las Rules (ImplicitRule se trata especialmente)
   for var Rule in Feature.Rules do
     Report(Rule);
+  EndFeature(Feature);
 end;
 
 procedure TCustomReporter.ReportOutline(const Outline: IScenarioOutline);
 begin
-  // Solo contar Examples - la presentación es responsabilidad de cada reporter concreto.
-  // No llamamos a DoReport aquí para evitar que reporters concretos que llamen a inherited
-  // dupliquen la presentación.
+  BeginOutline(Outline);
+
+  // Count Examples basándose en el estado real
   for var Example in Outline.Examples do
   begin
-    if Example.RunInfo.State <> srsFinished then
-    begin
-      IncSkip;
-      Continue;
+    case Example.RunInfo.State of
+      srsSkiped:
+        FReportCounters.IncSkip;
+      srsFinished:
+        if Example.RunInfo.IsSuccess then
+        begin
+          FReportCounters.IncPass;
+          FFeatureCounters.IncPass;
+          FOutlineCounters.IncPass;
+        end
+        else
+        begin
+          FReportCounters.IncFail;
+          FFeatureCounters.IncFail;
+          FOutlineCounters.IncFail;
+        end;
     end;
-    if Example.RunInfo.IsSuccess then
-      IncPass
-    else
-      IncFail;
   end;
+
+  EndOutline(Outline);
 end;
 
 procedure TCustomReporter.Report(Rule: IRule);
 begin
-  // Solo reportar la Rule si tiene al menos un escenario ejecutado
-  var HasExecutedScenario := False;
+  // Solo reportar la Rule si tiene al menos un escenario visitado (ejecutado o skipped)
+  var HasVisitedScenario := False;
   for var Scenario in Rule.Scenarios do
-    if Scenario.RunInfo.State = srsFinished then
+    if Scenario.RunInfo.State in [srsFinished, srsSkiped] then
     begin
-      HasExecutedScenario := True;
+      HasVisitedScenario := True;
       Break;
     end;
 
-  if not HasExecutedScenario then
+  if not HasVisitedScenario then
     Exit;
 
   // Solo mostrar header si es Rule explícita (no ImplicitRule)
@@ -1106,7 +1334,7 @@ begin
   // Iterar scenarios - polimórficamente detectar Outlines
   for var Scenario in Rule.Scenarios do
   begin
-    if Scenario.RunInfo.State <> srsFinished then
+    if not (Scenario.RunInfo.State in [srsFinished, srsSkiped]) then
       Continue;
 
     var Outline: IScenarioOutline;
@@ -1127,10 +1355,10 @@ end;
 
 procedure TCustomReporter.Report(Scenario: IScenario);
 begin
-  // Solo reportar escenarios que fueron ejecutados
-  if Scenario.RunInfo.State <> srsFinished then
+  if not (Scenario.RunInfo.State in [srsFinished, srsSkiped]) then
     Exit;
 
+  BeginScenario(Scenario);
   DoReport(Scenario);
   for var Step in Scenario.StepsGiven do
     DoReport(Step);
@@ -1138,38 +1366,50 @@ begin
     DoReport(Step);
   for var Step in Scenario.StepsThen do
     DoReport(Step);
+  EndScenario(Scenario);
 end;
 
 procedure TCustomReporter.DoReport(const S: ISpecItem);
 begin
   if (S.Kind in [sikScenario, sikExample]) then
   begin
-    // Contar escenarios según su estado
-    if S.RunInfo.State <> srsFinished then
-    begin
-      IncSkip;
-      Exit;
+    // Contar basándose en el estado real
+    case S.RunInfo.State of
+      srsSkiped:
+        FReportCounters.IncSkip;
+      srsFinished:
+        if S.RunInfo.IsSuccess then
+        begin
+          FReportCounters.IncPass;
+          FFeatureCounters.IncPass;
+        end
+        else
+        begin
+          FReportCounters.IncFail;
+          FFeatureCounters.IncFail;
+        end;
     end;
-    if S.RunInfo.IsSuccess then
-      IncPass
-    else
-      IncFail;
   end;
 end;
 
 procedure TCustomReporter.EndReport;
 begin
-
+  FCompletedAt := Now;
 end;
 
 function TCustomReporter.GetFailCount: Cardinal;
 begin
-  Result := FFailCount;
+  Result := FReportCounters.FailCount;
 end;
 
 function TCustomReporter.GetSkipCount: Cardinal;
 begin
-  Result := FSkipCount;
+  Result := FReportCounters.SkipCount;
+end;
+
+function TCustomReporter.GetCompletedAt: TDateTime;
+begin
+  Result := FCompletedAt;
 end;
 
 function TCustomReporter.GetFileExt: string;
@@ -1181,7 +1421,7 @@ function TCustomReporter.GetKeyWord(const Kind: TSpecItemKind): string;
 begin
   case Kind of
     sikFeature: Result := 'Feature';
-    sikImplicitRule: Result := '';  // No mostrar keyword para Rule implícita
+    sikImplicitRule: Result := '';  // No mostrar keyword para Rule impl�cita
     sikRule: Result := 'Rule';
     sikBackground: Result :=  'Background';
     sikScenario: Result :=  'Scenario';
@@ -1200,7 +1440,7 @@ function TCustomReporter.GetLevel(const Kind: TSpecItemKind): Byte;
 begin
   case Kind of
     sikFeature: Result := 0;
-    sikRule: Result := 1;  // Rule está un nivel debajo de Feature
+    sikRule: Result := 1;  // Rule est� un nivel debajo de Feature
     sikBackground, sikScenario, sikScenarioOutline, sikExample: Result := 1;
     sikExampleInit: Result := 2;
     sikGiven: Result := 2;
@@ -1213,22 +1453,16 @@ end;
 
 function TCustomReporter.GetPassCount: Cardinal;
 begin
-  Result := FPassCount;
+  Result := FReportCounters.PassCount;
 end;
 
-procedure TCustomReporter.Report(Features: TList<IFeature>);
+procedure TCustomReporter.Report(Features: TList<IFeature>; Options: TReportOptions);
 begin
+  FOptions := Options;
   BeginReport;
   for var F in Features do
     Report(F);
   EndReport;
-end;
-
-procedure TCustomReporter.ResetCounters;
-begin
-  FPassCount := 0;
-  FFailCount := 0;
-  FSkipCount := 0;
 end;
 
 function TCustomReporter.UseConsole: Boolean;
@@ -1239,11 +1473,25 @@ end;
 { TConsoleReporter }
 
 procedure TConsoleReporter.DoReport(const S: ISpecItem);
+var
+  Feat: IFeature;
+  DisplayText: string;
 begin
   inherited;
   var Kind := GetKeyWord(S.Kind);
   var Level := GetLevel(S.Kind);
-  OutputLn(Level, Kind + ' ' +  S.Description, S.RunInfo.IsSuccess, S.RunInfo.ExecTimeMs, S.RunInfo.ErrMsg);
+
+  // Para features, mostrar solo el Title
+  if (S.Kind = sikFeature) and Supports(S, IFeature, Feat) then
+    DisplayText := Feat.Title
+  else
+    DisplayText := S.Description;
+
+  // Manejar los 3 estados: Finished (Pass/Fail), Skipped
+  if S.RunInfo.State = srsSkiped then
+    OutputLn(Level, Format('- %s (skip)', [Kind + ' ' + DisplayText]))
+  else
+    OutputLn(Level, Kind + ' ' + DisplayText, S.RunInfo.IsSuccess, S.RunInfo.ExecTimeMs, S.RunInfo.ErrMsg);
 end;
 
 function TConsoleReporter.ExtractValue(const Match: TMatch): string;
@@ -1257,9 +1505,9 @@ begin
   if not Msg.IsEmpty then
     Msg := SLineBreak + Level2Margin(Level) + 'ERROR: "' + Msg + '"';
   if Success then
-    OutputLn(Level, Format('✅ %s (%d ms)', [Text, Duration]))
+    OutputLn(Level, Format('✓ %s (%d ms)', [Text, Duration]))
   else
-    OutputLn(Level, Format('❌ %s (%d ms)%s', [Text, Duration, Msg]));
+    OutputLn(Level, Format('✗ %s (%d ms)%s', [Text, Duration, Msg]));
 end;
 
 procedure TConsoleReporter.OutputLn(const Level: Byte; const Text: string);
@@ -1313,10 +1561,10 @@ var
   HeaderLine, Row: string;
   Values: TArray<TValue>;
 begin
-  // Primero delegar al base para conteo de estadísticas
+  // Primero delegar al base para conteo de estad�sticas
   inherited;
 
-  // Ahora solo presentación - sin tocar contadores
+  // Ahora solo presentaci�n - sin tocar contadores
   AllSuccess := True;
   TotalTime := 0;
   for var Example in Outline.Examples do
@@ -1357,13 +1605,13 @@ begin
   // Tabla de Examples
   OutputLn(2, 'Examples:');
 
-  // Header de la tabla (3 espacios para alinear con emoji ✅)
+  // Header de la tabla (3 espacios para alinear con emoji ?)
   HeaderLine := '|';
   for i := 0 to High(Headers) do
     HeaderLine := HeaderLine + ' ' + Headers[i].PadRight(ColWidths[i]) + ' |';
   OutputLn(3, '   ' + HeaderLine);
 
-  // Cada fila con su resultado (solo presentación, sin contar)
+  // Cada fila con su resultado (solo presentaci�n, sin contar)
   for var Example in Outline.Examples do
   begin
     if Example.RunInfo.State = srsFinished then
@@ -1394,7 +1642,7 @@ begin
   FCurrentSteps := nil;
 end;
 
-procedure TJsonReporter.Feature(const Description: string);
+procedure TJsonReporter.Feature(const Title, Narrative: string);
 begin
   if Assigned(FCurrentFeature) then
   begin
@@ -1411,7 +1659,8 @@ begin
     FCurrentScenarios := nil;
   end;
   FCurrentFeature := TJSONObject.Create;
-  FCurrentFeature.AddPair('description', Description);
+  FCurrentFeature.AddPair('title', Title);
+  FCurrentFeature.AddPair('narrative', Narrative);
   FCurrentScenarios := TJSONArray.Create;
 end;
 
@@ -1444,10 +1693,17 @@ procedure TJsonReporter.DoReport(const S: ISpecItem);
       Result := 'fail';
   end;
 
+var
+  Feat: IFeature;
 begin
   inherited;
   case S.Kind of
-    sikFeature: Feature(S.Description);
+    sikFeature: begin
+      if Supports(S, IFeature, Feat) then
+        Feature(Feat.Title, Feat.Narrative)
+      else
+        Feature(S.Description, '');
+    end;
     sikRule: Scenario(GetKeyWord(s.Kind), S.Description, GetStatus(S), S.RunInfo.ExecTimeMs, S.RunInfo.ErrMsg);
     sikBackground: Scenario(GetKeyWord(s.Kind), S.Description, GetStatus(S), S.RunInfo.ExecTimeMs, S.RunInfo.ErrMsg);
     sikScenario, sikExample: Scenario(GetKeyWord(s.Kind), S.Description, GetStatus(S), S.RunInfo.ExecTimeMs, S.RunInfo.ErrMsg);
@@ -1548,6 +1804,7 @@ end;
 
 procedure TJsonReporter.EndReport;
 begin
+  inherited; // Primero para que CompletedAt tenga valor
   if Assigned(FCurrentScenario) then
   begin
     FCurrentScenario.AddPair('steps', FCurrentSteps);
@@ -1569,11 +1826,11 @@ begin
     Root.AddPair('passCount', TJSONNumber.Create(PassCount));
     Root.AddPair('failCount', TJSONNumber.Create(FailCount));
     Root.AddPair('skipCount', TJSONNumber.Create(SkipCount));
+    Root.AddPair('completedAt', FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', CompletedAt));
     FOutput := Root.Format(4);
   finally
     Root.Free;
   end;
-  inherited;
 end;
 
 function TJsonReporter.GetContent: string;
@@ -1596,12 +1853,14 @@ end;
 
 procedure TReporterDecorator.DoReport(const S: ISpecItem);
 begin
+  inherited; // Actualiza contadores del decorator
   if not Assigned(Decorated) then Exit;
   Decorated.DoReport(S);
 end;
 
 procedure TReporterDecorator.ReportOutline(const Outline: IScenarioOutline);
 begin
+  inherited; // Procesa el outline localmente (contadores del decorator)
   if not Assigned(Decorated) then Exit;
   Decorated.ReportOutline(Outline);
 end;
@@ -1646,6 +1905,12 @@ function TReporterDecorator.GetSkipCount: Cardinal;
 begin
   if not Assigned(Decorated) then Exit(0);
   Result := Decorated.GetSkipCount;
+end;
+
+function TReporterDecorator.GetCompletedAt: TDateTime;
+begin
+  if not Assigned(Decorated) then Exit(0);
+  Result := Decorated.GetCompletedAt;
 end;
 
 function TReporterDecorator.UseConsole: Boolean;
@@ -1701,8 +1966,8 @@ end;
 
 procedure TGherkinReporter.EndReport;
 begin
+  inherited; // Primero para que CompletedAt tenga valor
   FlushCurrentFeature; // Escribir último feature
-  inherited;
 end;
 
 function TGherkinReporter.SanitizeFileName(const Name: string): string;
@@ -1769,59 +2034,6 @@ begin
   Result := TRegEx.Replace(Text, '#\{([^}]+)\}', '<$1>');
 end;
 
-function TGherkinReporter.IsTagLine(const Line: string): Boolean;
-begin
-  // Una línea es de tags si empieza con @ y solo contiene tags
-  Result := Line.Trim.StartsWith('@');
-end;
-
-function TGherkinReporter.ExtractTitle(const Desc: string): string;
-var
-  Lines: TArray<string>;
-  Line: string;
-begin
-  Lines := Desc.Split([#13#10, #10]);
-  for Line in Lines do
-    if (Line.Trim <> '') and not IsTagLine(Line) then
-      Exit(Line.Trim);
-  Result := Desc.Trim;
-end;
-
-function TGherkinReporter.ExtractMotivation(const Desc: string): string;
-var
-  Lines: TArray<string>;
-  FoundTitle: Boolean;
-  Motivation: TStringList;
-  Line: string;
-begin
-  Lines := Desc.Split([#13#10, #10]);
-  FoundTitle := False;
-  Motivation := TStringList.Create;
-  try
-    for Line in Lines do
-    begin
-      // Saltar líneas de tags
-      if IsTagLine(Line) then
-        Continue;
-      if not FoundTitle then
-      begin
-        if Line.Trim <> '' then
-          FoundTitle := True;
-      end
-      else
-        Motivation.Add(Line);
-    end;
-    // Trim empty lines at start and end
-    while (Motivation.Count > 0) and (Motivation[0].Trim = '') do
-      Motivation.Delete(0);
-    while (Motivation.Count > 0) and (Motivation[Motivation.Count - 1].Trim = '') do
-      Motivation.Delete(Motivation.Count - 1);
-    Result := Motivation.Text.TrimRight;
-  finally
-    Motivation.Free;
-  end;
-end;
-
 function TGherkinReporter.ResultComment(const Item: ISpecItem): string;
 begin
   if not FWithResults then
@@ -1879,31 +2091,31 @@ end;
 
 procedure TGherkinReporter.DoReport(const S: ISpecItem);
 var
-  Motivation: string;
   Line: string;
-  FeatureTitle: string;
+  Feature: IFeature;
 begin
   // NO llamar inherited - no queremos contar pass/fail
   case S.Kind of
     sikFeature: begin
       // Escribir feature anterior antes de empezar nuevo
       FlushCurrentFeature;
-      // Empezar nuevo feature
-      FeatureTitle := ExtractTitle(S.Description);
-      FCurrentFeatureName := FeatureTitle;
-      FIndent := 0;
-      AddTags(S.Tags);
-      AddLine('Feature: ' + FeatureTitle);
-      Motivation := ExtractMotivation(S.Description);
-      if Motivation <> '' then
+      // Empezar nuevo feature usando IFeature.Title y Narrative
+      if Supports(S, IFeature, Feature) then
       begin
-        Inc(FIndent);
-        for Line in Motivation.Split([#13#10, #10]) do
-          AddLine(Line);
-        Dec(FIndent);
+        FCurrentFeatureName := Feature.Title;
+        FIndent := 0;
+        AddTags(S.Tags);
+        AddLine('Feature: ' + Feature.Title);
+        if Feature.Narrative <> '' then
+        begin
+          Inc(FIndent);
+          for Line in Feature.Narrative.Split([#13#10, #10]) do
+            AddLine(Line);
+          Dec(FIndent);
+        end;
+        AddLine('');
+        FIndent := 1; // Scenarios at indent 1
       end;
-      AddLine('');
-      FIndent := 1; // Scenarios at indent 1
     end;
 
     sikRule: begin
@@ -1927,7 +2139,7 @@ begin
       FIndent := 2; // Steps at indent 2
     end;
 
-    sikImplicitRule: ; // Ignorar rule implícita
+    sikImplicitRule: ; // Ignorar rule impl�cita
 
     sikGiven, sikWhen, sikThen: begin
       AddLine(GetGherkinKeyword(S.Kind) + ' ' + S.Description + ResultComment(S));
@@ -1965,7 +2177,7 @@ var
   i: Integer;
   FileName, FeatureName: string;
 begin
-  // Devuelve índice en formato Quarto con include-code-files
+  // Devuelve �ndice en formato Quarto con include-code-files
   if FFilesWritten.Count = 0 then
     Result := '# MiniSpec' + sLineBreak + sLineBreak + 'No features generated.'
   else
@@ -1973,7 +2185,8 @@ begin
     Result := '---' + sLineBreak +
               'title: "MiniSpec Features"' + sLineBreak +
               '---' + sLineBreak + sLineBreak +
-              'Generated **' + IntToStr(FFilesWritten.Count) + '** features.' + sLineBreak + sLineBreak;
+              'Generated **' + IntToStr(FFilesWritten.Count) + '** features at ' +
+              FormatDateTime('yyyy-mm-dd hh:nn:ss', CompletedAt) + '.' + sLineBreak + sLineBreak;
     for i := 0 to FFilesWritten.Count - 1 do
     begin
       FileName := ExtractFileName(FFilesWritten[i]);
@@ -1990,50 +2203,46 @@ begin
   Result := 'md';
 end;
 
-{ TSSEReporter }
+{ TLiveReporter }
 
-constructor TSSEReporter.Create(const Decorated: ISpecReporter; APort: Integer);
+constructor TLiveReporter.Create(const Decorated: ISpecReporter; APort: Integer);
 begin
   inherited Create(Decorated);
   FPort := APort;
   FEvents := TStringList.Create;
   FEventsLock := TCriticalSection.Create;
-  FSSEClients := TList<TIdContext>.Create;
+  FLiveClients := TList<TIdContext>.Create;
   FClientsLock := TCriticalSection.Create;
   FReportFinished := False;
-  FCurrentFeature := '';
-  FFeaturePass := 0;
-  FFeatureFail := 0;
-  FFeatureStartTime := 0;
 
   FServer := TIdHTTPServer.Create(nil);
   FServer.DefaultPort := FPort;
   FServer.OnCommandGet := HandleRequest;
 end;
 
-destructor TSSEReporter.Destroy;
+destructor TLiveReporter.Destroy;
 begin
   if FServer.Active then
     FServer.Active := False;
   FServer.Free;
   FClientsLock.Free;
-  FSSEClients.Free;
+  FLiveClients.Free;
   FEventsLock.Free;
   FEvents.Free;
   inherited;
 end;
 
-function TSSEReporter.HasConnectedClients: Boolean;
+function TLiveReporter.HasConnectedClients: Boolean;
 begin
   FClientsLock.Enter;
   try
-    Result := FSSEClients.Count > 0;
+    Result := FLiveClients.Count > 0;
   finally
     FClientsLock.Leave;
   end;
 end;
 
-procedure TSSEReporter.BeginReport;
+procedure TLiveReporter.BeginReport;
 var
   Data: TJSONObject;
   WaitCount: Integer;
@@ -2046,7 +2255,7 @@ begin
   // Iniciar servidor HTTP
   try
     FServer.Active := True;
-    WriteLn(Format('SSE Dashboard: http://localhost:%d', [FPort]));
+    WriteLn(Format('Live Dashboard: http://localhost:%d', [FPort]));
     WriteLn('Waiting for browser connection...');
 
     // Esperar hasta que haya al menos un cliente conectado (max 30 segundos)
@@ -2064,7 +2273,7 @@ begin
 
   except
     on E: Exception do
-      WriteLn('SSE server error: ' + E.Message);
+      WriteLn('Live server error: ' + E.Message);
   end;
 
   // Evento de inicio
@@ -2077,27 +2286,24 @@ begin
   end;
 end;
 
-procedure TSSEReporter.EndReport;
+procedure TLiveReporter.EndReport;
 var
   Data: TJSONObject;
 begin
-  // Cerrar último feature
-  EmitFeatureEnd;
-
+  inherited; // Primero para que CompletedAt tenga valor
   // Evento de fin de reporte
   Data := TJSONObject.Create;
   try
     Data.AddPair('pass', TJSONNumber.Create(Decorated.PassCount));
     Data.AddPair('fail', TJSONNumber.Create(Decorated.FailCount));
     Data.AddPair('skip', TJSONNumber.Create(Decorated.SkipCount));
-    Data.AddPair('ms', TJSONNumber.Create(0)); // TODO: tiempo total
+    Data.AddPair('completedAt', FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', Decorated.CompletedAt));
     BroadcastEvent(BuildEventJson('report:end', Data));
   finally
     Data.Free;
   end;
 
   FReportFinished := True;
-  inherited;
 
   // Mantener servidor activo para que el usuario vea el resultado
   WriteLn(Format('Done. %d scenarios (%d pass, %d fail, %d skip). Press Enter to exit...',
@@ -2106,12 +2312,12 @@ begin
   FServer.Active := False;
 end;
 
-function TSSEReporter.GetContent: string;
+function TLiveReporter.GetContent: string;
 begin
-  Result := Format('SSE Dashboard served at http://localhost:%d', [FPort]);
+  Result := Format('Live Dashboard served at http://localhost:%d', [FPort]);
 end;
 
-function TSSEReporter.BuildEventJson(const EventType: string; const Data: TJSONObject): string;
+function TLiveReporter.BuildEventJson(const EventType: string; const Data: TJSONObject): string;
 var
   Wrapper: TJSONObject;
 begin
@@ -2127,7 +2333,7 @@ begin
   end;
 end;
 
-function TSSEReporter.StepsToJsonArray(const Steps: TList<IScenarioStep>; const StepType: string): TJSONArray;
+function TLiveReporter.StepsToJsonArray(const Steps: TList<IScenarioStep>; const StepType: string): TJSONArray;
 var
   StepObj: TJSONObject;
   Step: IScenarioStep;
@@ -2147,7 +2353,7 @@ begin
   end;
 end;
 
-procedure TSSEReporter.BroadcastEvent(const EventJson: string);
+procedure TLiveReporter.BroadcastEvent(const EventJson: string);
 var
   Client: TIdContext;
   SSEData: string;
@@ -2165,7 +2371,7 @@ begin
   // Enviar a clientes conectados
   FClientsLock.Enter;
   try
-    for Client in FSSEClients do
+    for Client in FLiveClients do
     begin
       try
         Client.Connection.IOHandler.Write(SSEData, IndyTextEncoding_UTF8);
@@ -2178,7 +2384,7 @@ begin
   end;
 end;
 
-procedure TSSEReporter.HandleRequest(AContext: TIdContext;
+procedure TLiveReporter.HandleRequest(AContext: TIdContext;
   ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
 var
   Doc: string;
@@ -2193,12 +2399,12 @@ begin
     AContext.Connection.IOHandler.WriteLn('Cache-Control: no-cache');
     AContext.Connection.IOHandler.WriteLn('Connection: keep-alive');
     AContext.Connection.IOHandler.WriteLn('Access-Control-Allow-Origin: *');
-    AContext.Connection.IOHandler.WriteLn(''); // Línea vacía para terminar headers
+    AContext.Connection.IOHandler.WriteLn(''); // L�nea vac�a para terminar headers
 
     // Registrar cliente
     FClientsLock.Enter;
     try
-      FSSEClients.Add(AContext);
+      FLiveClients.Add(AContext);
     finally
       FClientsLock.Leave;
     end;
@@ -2224,15 +2430,15 @@ begin
       FEventsLock.Leave;
     end;
 
-    // Mantener conexión abierta hasta que termine el reporte
-    // Sin keepalive agresivo - los eventos mantienen la conexión viva
+    // Mantener conexi�n abierta hasta que termine el reporte
+    // Sin keepalive agresivo - los eventos mantienen la conexi�n viva
     while not FReportFinished and AContext.Connection.Connected do
       Sleep(200);
 
     // Desregistrar cliente
     FClientsLock.Enter;
     try
-      FSSEClients.Remove(AContext);
+      FLiveClients.Remove(AContext);
     finally
       FClientsLock.Leave;
     end;
@@ -2241,122 +2447,120 @@ begin
   begin
     // Dashboard HTML
     AResponseInfo.ContentType := 'text/html; charset=utf-8';
-    AResponseInfo.ContentText := StringReplace(SSE_DASHBOARD_HTML,
+    AResponseInfo.ContentText := StringReplace(LIVE_DASHBOARD_HTML,
       '{{MINISPEC_VERSION}}', TMiniSpec.Version, [rfReplaceAll]);
   end;
 end;
 
-procedure TSSEReporter.EmitFeatureEnd;
+procedure TLiveReporter.DoFeatureBegin(const Feature: IFeature);
 var
   Data: TJSONObject;
-  ElapsedMs: Integer;
+  TagsArray, BgSteps: TJSONArray;
 begin
-  if FCurrentFeature = '' then Exit;
+  inherited;
 
-  ElapsedMs := Round((Now - FFeatureStartTime) * 24 * 60 * 60 * 1000);
+  if not Assigned(Feature) then Exit;
+
   Data := TJSONObject.Create;
   try
-    Data.AddPair('name', FCurrentFeature);
-    Data.AddPair('pass', TJSONNumber.Create(FFeaturePass));
-    Data.AddPair('fail', TJSONNumber.Create(FFeatureFail));
-    Data.AddPair('ms', TJSONNumber.Create(ElapsedMs));
+    Data.AddPair('name', Feature.Title);
+    Data.AddPair('narrative', Feature.Narrative);
+    TagsArray := TJSONArray.Create;
+    for var Tag in Feature.Tags.ToArray do
+      TagsArray.Add(Tag);
+    Data.AddPair('tags', TagsArray);
+    // Agregar Background si existe
+    if Feature.BackGround <> nil then
+    begin
+      BgSteps := StepsToJsonArray(Feature.BackGround.StepsGiven, 'Given');
+      Data.AddPair('background', BgSteps);
+    end;
+    BroadcastEvent(BuildEventJson('feature:start', Data));
+  finally
+    Data.Free;
+  end;
+end;
+
+procedure TLiveReporter.DoFeatureEnd(const Feature: IFeature; const Counters: TSpecCounters);
+var
+  Data: TJSONObject;
+begin
+  inherited;
+  if not Assigned(Feature) then Exit;
+
+  Data := TJSONObject.Create;
+  try
+    Data.AddPair('name', Feature.Title);
+    Data.AddPair('pass', TJSONNumber.Create(Counters.PassCount));
+    Data.AddPair('fail', TJSONNumber.Create(Counters.FailCount));
+    Data.AddPair('ms', TJSONNumber.Create(Counters.ElapsedMs));
     BroadcastEvent(BuildEventJson('feature:end', Data));
   finally
     Data.Free;
   end;
-
-  FCurrentFeature := '';
-  FFeaturePass := 0;
-  FFeatureFail := 0;
 end;
 
-procedure TSSEReporter.DoReport(const S: ISpecItem);
-var
-  Data: TJSONObject;
-  TagsArray: TJSONArray;
-  FeatureName: string;
-  Feature: IFeature;
-  BgSteps: TJSONArray;
+procedure TLiveReporter.DoReport(const S: ISpecItem);
 begin
   inherited; // Delegar al decorado
+  // Feature se maneja en DoFeatureBegin/End
+  // Scenario se maneja en DoScenarioEnd
+  // Outline se maneja en DoOutlineEnd
+end;
+
+procedure TLiveReporter.DoScenarioEnd(const Scenario: IScenario; const Counters: TSpecCounters);
+var
+  Data: TJSONObject;
+  IsSkipped: Boolean;
+begin
+  inherited;
+
+  Inc(FScenarioCount);
+  IsSkipped := Scenario.RunInfo.State = srsSkiped;
 
   Data := TJSONObject.Create;
   try
-    case S.Kind of
-      sikFeature: begin
-        // Cerrar feature anterior si existe
-        EmitFeatureEnd;
-
-        FeatureName := S.Description.Split([#13#10, #10])[0].Trim;
-        FCurrentFeature := FeatureName;
-        FFeaturePass := 0;
-        FFeatureFail := 0;
-        FFeatureStartTime := Now;
-
-        Data.AddPair('name', FeatureName);
-        // Enviar descripción completa (narrativa)
-        Data.AddPair('description', S.Description);
-        TagsArray := TJSONArray.Create;
-        for var Tag in S.Tags.ToArray do
-          TagsArray.Add(Tag);
-        Data.AddPair('tags', TagsArray);
-        // Agregar Background si existe
-        if Supports(S, IFeature, Feature) and (Feature.BackGround <> nil) then
-        begin
-          BgSteps := StepsToJsonArray(Feature.BackGround.StepsGiven, 'Given');
-          Data.AddPair('background', BgSteps);
-        end;
-        BroadcastEvent(BuildEventJson('feature:start', Data));
-      end;
-
-      sikScenario: begin
-        Inc(FScenarioCount);
-        // Emitir resultado del scenario
-        Data.AddPair('name', S.Description);
-        Data.AddPair('success', TJSONBool.Create(S.RunInfo.IsSuccess));
-        Data.AddPair('ms', TJSONNumber.Create(S.RunInfo.ExecTimeMs));
-        if not S.RunInfo.IsSuccess and (S.RunInfo.ErrMsg <> '') then
-          Data.AddPair('error', S.RunInfo.ErrMsg);
-        BroadcastEvent(BuildEventJson('scenario:end', Data));
-
-        // Contabilizar
-        if S.RunInfo.IsSuccess then
-          Inc(FFeaturePass)
-        else
-          Inc(FFeatureFail);
-      end;
-      // NOTA: sikExample se maneja en ReportOutline para evitar duplicados
-    end;
+    Data.AddPair('name', Scenario.Description);
+    Data.AddPair('skipped', TJSONBool.Create(IsSkipped));
+    if IsSkipped then
+      Data.AddPair('success', TJSONBool.Create(True)) // Skip no es fallo
+    else
+      Data.AddPair('success', TJSONBool.Create(Scenario.RunInfo.IsSuccess));
+    Data.AddPair('ms', TJSONNumber.Create(Counters.ElapsedMs));
+    if not IsSkipped and not Scenario.RunInfo.IsSuccess and (Scenario.RunInfo.ErrMsg <> '') then
+      Data.AddPair('error', Scenario.RunInfo.ErrMsg);
+    BroadcastEvent(BuildEventJson('scenario:end', Data));
   finally
     Data.Free;
   end;
 end;
 
-procedure TSSEReporter.ReportOutline(const Outline: IScenarioOutline);
+procedure TLiveReporter.DoOutlineBegin(const Outline: IScenarioOutline);
+begin
+  inherited;
+  // Por ahora no emitimos eventos al inicio del outline
+end;
+
+procedure TLiveReporter.DoOutlineEnd(const Outline: IScenarioOutline; const Counters: TSpecCounters);
 var
   Data: TJSONObject;
   StepsArray, HeadersArray, ExamplesArray, RowArray: TJSONArray;
   ExampleObj: TJSONObject;
-  OutlinePass, OutlineFail: Integer;
 begin
-  // Primero delegar al Decorated para conteo y presentación en consola
   inherited;
-
-  OutlinePass := 0;
-  OutlineFail := 0;
 
   // Emitir un solo evento outline:end con toda la información
   Data := TJSONObject.Create;
   try
     Data.AddPair('name', Outline.Description);
     Data.AddPair('type', 'outline');
-    
+
     // Agregar headers de la tabla de examples
     HeadersArray := TJSONArray.Create;
     for var H in Outline.Headers do
       HeadersArray.Add(H);
     Data.AddPair('headers', HeadersArray);
-    
+
     // Agregar steps template (Given/When/Then)
     StepsArray := TJSONArray.Create;
     var TempArr := StepsToJsonArray(Outline.StepsGiven, 'Given');
@@ -2372,47 +2576,43 @@ begin
       StepsArray.AddElement(TempArr.Items[i].Clone as TJSONValue);
     TempArr.Free;
     Data.AddPair('steps', StepsArray);
-    
+
     // Agregar tabla de examples con resultados
     ExamplesArray := TJSONArray.Create;
     for var Example in Outline.Examples do
     begin
-      if Example.RunInfo.State = srsFinished then
+      if Example.RunInfo.State in [srsFinished, srsSkiped] then
       begin
         Inc(FScenarioCount);
-        
+        var IsSkipped := Example.RunInfo.State = srsSkiped;
+
         ExampleObj := TJSONObject.Create;
         // Valores de este example
         RowArray := TJSONArray.Create;
         for var Val in Example.ExampleMeta.Values do
           RowArray.Add(Val.ToString);
         ExampleObj.AddPair('values', RowArray);
-        ExampleObj.AddPair('success', TJSONBool.Create(Example.RunInfo.IsSuccess));
+        ExampleObj.AddPair('skipped', TJSONBool.Create(IsSkipped));
+        if IsSkipped then
+          ExampleObj.AddPair('success', TJSONBool.Create(True))
+        else
+          ExampleObj.AddPair('success', TJSONBool.Create(Example.RunInfo.IsSuccess));
         ExampleObj.AddPair('ms', TJSONNumber.Create(Example.RunInfo.ExecTimeMs));
-        if not Example.RunInfo.IsSuccess and (Example.RunInfo.ErrMsg <> '') then
+        if not IsSkipped and not Example.RunInfo.IsSuccess and (Example.RunInfo.ErrMsg <> '') then
           ExampleObj.AddPair('error', Example.RunInfo.ErrMsg);
         ExamplesArray.AddElement(ExampleObj);
-        
-        if Example.RunInfo.IsSuccess then
-          Inc(OutlinePass)
-        else
-          Inc(OutlineFail);
       end;
     end;
     Data.AddPair('examples', ExamplesArray);
-    Data.AddPair('pass', TJSONNumber.Create(OutlinePass));
-    Data.AddPair('fail', TJSONNumber.Create(OutlineFail));
-    Data.AddPair('success', TJSONBool.Create(OutlineFail = 0));
-    Data.AddPair('ms', TJSONNumber.Create(Outline.RunInfo.ExecTimeMs));
-    
+    Data.AddPair('pass', TJSONNumber.Create(Counters.PassCount));
+    Data.AddPair('fail', TJSONNumber.Create(Counters.FailCount));
+    Data.AddPair('success', TJSONBool.Create(Counters.IsSuccess));
+    Data.AddPair('ms', TJSONNumber.Create(Counters.ElapsedMs));
+
     BroadcastEvent(BuildEventJson('outline:end', Data));
   finally
     Data.Free;
   end;
-
-  // Track por feature
-  Inc(FFeaturePass, OutlinePass);
-  Inc(FFeatureFail, OutlineFail);
 end;
 
 end.

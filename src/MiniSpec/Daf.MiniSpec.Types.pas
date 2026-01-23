@@ -2,6 +2,7 @@
 
 interface
 uses
+  System.Classes,
   System.Generics.Collections,
   System.Rtti,
   System.SysUtils;
@@ -106,6 +107,7 @@ type
   ISpecItem = interface
     ['{122463BA-E861-4B68-8B4B-D6E76A8B3CA0}']
     function GetTags: TSpecTags;
+    function GetEffectiveTags: TSpecTags;
     function GetDescription: string;
     function GetKind: TSpecItemKind;
     function GetRunInfo: TSpecRunInfo;
@@ -116,6 +118,7 @@ type
     property Parent: ISpecItem read GetParent;
     property Description: string read GetDescription;
     property Tags: TSpecTags read GetTags;
+    property EffectiveTags: TSpecTags read GetEffectiveTags;
     property RunInfo: TSpecRunInfo read GetRunInfo;
   end;
 
@@ -154,12 +157,16 @@ type
 
   IFeature = interface(ISpecItem)
     ['{025FBE2B-E0B2-47D2-B50A-65A381F119AC}']
+    function GetTitle: string;
+    function GetNarrative: string;
     function GetBackGround: IBackground;
     procedure SetBackGround(const Value: IBackground);
     function GetScenarios: TList<IScenario>;
     function GetRules: TList<IRule>;
     function HasMatchingScenarios(const TagMatcher: TTagMatcher): Boolean;
     procedure Run(const TagMatcher: TTagMatcher = nil);
+    property Title: string read GetTitle;
+    property Narrative: string read GetNarrative;
     property BackGround: IBackground read GetBackground write SetBackground;
     property Scenarios: TList<IScenario> read GetScenarios;
     property Rules: TList<IRule> read GetRules;
@@ -197,6 +204,7 @@ type
     function GetParent: ISpecItem;
     function GetDescription: string;
     function GetTags: TSpecTags;
+    function GetEffectiveTags: TSpecTags;
     function GetRunInfo: TSpecRunInfo;
   public
     constructor Create(const Kind: TSpecItemKind; const Parent: ISpecItem; const Description: string);
@@ -205,6 +213,7 @@ type
     property Parent: ISpecItem read FParent;
     property Description: string read GetDescription;
     property Tags: TSpecTags read GetTags;
+    property EffectiveTags: TSpecTags read GetEffectiveTags;
   end;
 
   TScenarioStep<T: class> = class(TSpecItem, IScenarioStep)
@@ -285,15 +294,22 @@ type
   strict private
     FRules: TList<IRule>;
     FImplicitRule: IRule;  // Rule implícita para escenarios/background sin Rule explícita
+    FTitle: string;
+    FNarrative: string;
+    function GetTitle: string;
+    function GetNarrative: string;
     function GetBackGround: IBackground;
     procedure SetBackGround(const Value: IBackground);
     function GetScenarios: TList<IScenario>;
     function GetRules: TList<IRule>;
+    procedure ParseDescription(const Description: string);
   public
     constructor Create(const Description: string);
     destructor Destroy; override;
     function HasMatchingScenarios(const TagMatcher: TTagMatcher): Boolean;
     procedure Run(const TagMatcher: TTagMatcher = nil);reintroduce;
+    property Title: string read GetTitle;
+    property Narrative: string read GetNarrative;
     property Background: IBackground read GetBackGround write SetBackGround;
     property Rules: TList<IRule> read GetRules;
     property ImplicitRule: IRule read FImplicitRule;  // Solo para builders
@@ -492,6 +508,14 @@ end;
 function TSpecItem.GetTags: TSpecTags;
 begin
   Result := FTags;
+end;
+
+function TSpecItem.GetEffectiveTags: TSpecTags;
+begin
+  // EffectiveTags = DeclaredTags + Parent.EffectiveTags
+  Result := FTags;
+  if Assigned(FParent) then
+    Result.Merge(FParent.EffectiveTags);
 end;
 
 { TScenarioStep<T> }
@@ -780,9 +804,75 @@ end;
 
 { TFeature<T>}
 
+procedure TFeature<T>.ParseDescription(const Description: string);
+var
+  Lines: TArray<string>;
+  I, TitleIndex, BlankAfterTitle: Integer;
+  FoundTitle, FoundBlank: Boolean;
+  NarrativeLines: TStringList;
+begin
+  // Parsear descripción: título es primera línea no vacía,
+  // narrativa empieza tras al menos una línea en blanco después del título
+  Lines := Description.Split([#13, #10]);
+  FTitle := '';
+  FNarrative := '';
+  TitleIndex := -1;
+  FoundTitle := False;
+  FoundBlank := False;
+
+  // Encontrar título (primera línea no vacía)
+  for I := 0 to High(Lines) do
+  begin
+    if Lines[I].Trim <> '' then
+    begin
+      FTitle := Lines[I].Trim;
+      TitleIndex := I;
+      FoundTitle := True;
+      Break;
+    end;
+  end;
+
+  if not FoundTitle then Exit;
+
+  // Buscar línea en blanco después del título
+  BlankAfterTitle := -1;
+  for I := TitleIndex + 1 to High(Lines) do
+  begin
+    if Lines[I].Trim = '' then
+    begin
+      BlankAfterTitle := I;
+      FoundBlank := True;
+      Break;
+    end;
+  end;
+
+  if not FoundBlank then Exit;
+
+  // Narrativa: desde primera línea no vacía después de la línea en blanco
+  NarrativeLines := TStringList.Create;
+  try
+    for I := BlankAfterTitle + 1 to High(Lines) do
+      NarrativeLines.Add(Lines[I]);
+    FNarrative := NarrativeLines.Text.Trim;
+  finally
+    NarrativeLines.Free;
+  end;
+end;
+
+function TFeature<T>.GetTitle: string;
+begin
+  Result := FTitle;
+end;
+
+function TFeature<T>.GetNarrative: string;
+begin
+  Result := FNarrative;
+end;
+
 constructor TFeature<T>.Create(const Description: string);
 begin
   inherited Create(sikFeature, nil, Description);
+  ParseDescription(Description);
   FRules := TList<IRule>.Create;
   // Crear Rule implícita como contenedor por defecto
   FImplicitRule := TRule<T>.Create(Self, '', sikImplicitRule);
@@ -832,14 +922,12 @@ begin
   FRunInfo.Result := srrSuccess;
   try
     // Ejecutar todas las Rules (incluyendo ImplicitRule)
+    // Cada Rule decide internamente qué escenarios ejecutar o marcar como Skip
     for var Rule in FRules do
     begin
-      if Rule.HasMatchingScenarios(TagMatcher) then
-      begin
-        Rule.Run(TagMatcher);
-        if Rule.RunInfo.Result in [srrFail, srrError] then
-          FRunInfo.Result := srrFail;
-      end;
+      Rule.Run(TagMatcher);
+      if Rule.RunInfo.Result in [srrFail, srrError] then
+        FRunInfo.Result := srrFail;
     end;
   except
     on E: Exception do
@@ -932,7 +1020,7 @@ end;
 
 procedure TRule<T>.Run(const TagMatcher: TTagMatcher);
 var
-  CombinedTags: TSpecTags;
+  ShouldExecute: Boolean;
 begin
   var SW := TStopwatch.StartNew;
   FRunInfo.State := srsRunning;
@@ -940,16 +1028,29 @@ begin
   try
     for var Scenario in FScenarios do
     begin
-      // Saltar escenarios que no coinciden con el filtro de tags
-      // Los tags se heredan: Feature > Rule > Scenario
+      // Decidir si ejecutar basándose en EffectiveTags y DryRun
+      ShouldExecute := True;
+
+      // Verificar filtro de tags usando EffectiveTags
       if Assigned(TagMatcher) then
+        ShouldExecute := TagMatcher(Scenario.EffectiveTags);
+
+      // Verificar modo DryRun
+      if ShouldExecute and MiniSpec.DryRun then
+        ShouldExecute := False;
+
+      if not ShouldExecute then
       begin
-        CombinedTags := FFeature.Tags;
-        CombinedTags.Merge(Self.Tags);
-        CombinedTags.Merge(Scenario.Tags);
-        if not TagMatcher(CombinedTags) then
-          Continue;
+        // Marcar como Skip y continuar (pero el escenario queda visible para el reporter)
+        TSpecItem(Scenario).FRunInfo.State := srsSkiped;
+        // Si es un Outline, marcar también todos sus Examples como skip
+        var Outline: IScenarioOutline;
+        if Supports(Scenario, IScenarioOutline, Outline) then
+          for var Example in Outline.Examples do
+            TSpecItem(Example).FRunInfo.State := srsSkiped;
+        Continue;
       end;
+
       var World := CreateWorld;
       RunBackground(World);
       Scenario.Run(World);

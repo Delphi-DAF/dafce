@@ -1,4 +1,4 @@
-﻿unit Daf.MiniSpec;
+unit Daf.MiniSpec;
 
 interface
 
@@ -16,8 +16,6 @@ uses
 
 type
 {$SCOPEDENUMS ON}
-  TOpenOutput = (Never, OnCreate, Always);
-  TWaitForUser = (Never, InConsoleReport, Always);
   TRunMode = (rmRun, rmListTags, rmQuery, rmHelp);
 {$SCOPEDENUMS Off}
   TMiniSpec = class
@@ -27,11 +25,11 @@ type
     FFeatures: TList<IFeature>;
     FReporter: ISpecReporter;
     FOutputFile: string;
-    FOpenOutputFile: TOpenOutput;
-    FWaitForUser: TWaitForUser;
+    FPause: Boolean;
     FTags: string;
     FRunMode: TRunMode;
     FQueryExpr: string;
+    FDryRun: Boolean;
     class var FInstance: TMiniSpec;
   public
   protected
@@ -53,10 +51,10 @@ type
     procedure Tags(const Value: string);overload;
     function OutputFile: string;overload;
     function OutputFile(const Filename: string): TMiniSpec;overload;
-    function OpenOutputFile: TOpenOutput;overload;
-    function OpenOutputFile(const Value: TOpenOutput): TMiniSpec;overload;
-    function WaitForUser: TWaitForUser;overload;
-    function WaitForUser(const Value: TWaitForUser): TMiniSpec;overload;
+    function Pause: Boolean;overload;
+    function Pause(const Value: Boolean): TMiniSpec;overload;
+    function DryRun: Boolean;overload;
+    function DryRun(const Value: Boolean): TMiniSpec;overload;
     {$ENDREGION}
     procedure Register(Feature: IFeature);
     procedure Run;
@@ -145,6 +143,9 @@ end;
 function TMiniSpec.Reporter(const Name: string): TMiniSpec;
 begin
   Result := Self;
+  if SameText(Name, 'console') then
+    FReporter := TConsoleReporter.Create
+  else
   if SameText(Name, 'html') then
     FReporter := THTMLReporter.Create
   else
@@ -158,7 +159,7 @@ begin
     FReporter := TGherkinReporter.Create(True)
   else
   if SameText(Name, 'live') then
-    FReporter := TSSEReporter.Create(TConsoleReporter.Create)
+    FReporter := TLiveReporter.Create(TConsoleReporter.Create)
   else
     raise Exception.CreateFmt('Unknow report name: %s', [Name]);
 end;
@@ -166,17 +167,6 @@ end;
 function TMiniSpec.Reporter: ISpecReporter;
 begin
   Result := FReporter;
-end;
-
-function TMiniSpec.OpenOutputFile(const Value: TOpenOutput): TMiniSpec;
-begin
-  Result := Self;
-  FOpenOutputFile := Value;
-end;
-
-function TMiniSpec.OpenOutputFile: TOpenOutput;
-begin
-  Result := FOpenOutputFile;
 end;
 
 function TMiniSpec.OutputFile(const Filename: string): TMiniSpec;
@@ -193,20 +183,31 @@ begin
   FTags := Value;
 end;
 
-function TMiniSpec.WaitForUser: TWaitForUser;
+function TMiniSpec.Pause: Boolean;
 begin
-  Result := FWaitForUser;
+  Result := FPause;
 end;
 
-function TMiniSpec.WaitForUser(const Value: TWaitForUser): TMiniSpec;
+function TMiniSpec.Pause(const Value: Boolean): TMiniSpec;
 begin
   Result := Self;
-  FWaitForUser := Value;
+  FPause := Value;
 end;
 
 function TMiniSpec.Tags: string;
 begin
   Result := FTags;
+end;
+
+function TMiniSpec.DryRun: Boolean;
+begin
+  Result := FDryRun;
+end;
+
+function TMiniSpec.DryRun(const Value: Boolean): TMiniSpec;
+begin
+  Result := Self;
+  FDryRun := Value;
 end;
 {$ENDREGION}
 
@@ -241,7 +242,11 @@ begin
       FQueryExpr := NextArg;
     end
     else if (Param = '--help') or (Param = '-h') then
-      FRunMode := TRunMode.rmHelp;
+      FRunMode := TRunMode.rmHelp
+    else if Param = '--dry-run' then
+      FDryRun := True
+    else if Param = '--pause' then
+      FPause := True;
   end;
 end;
 
@@ -249,6 +254,7 @@ procedure TMiniSpec.Run;
 var
   TagFilter: TTagExpression;
   Matcher: TTagMatcher;
+  ReportOpts: TReportOptions;
 begin
   ParseArgs;
 
@@ -276,7 +282,12 @@ begin
     OutputFile(DefaultOutputFile);
 
   TagFilter := TTagExpression.Parse(FTags);
+  ReportOpts := TReportOptions.Create;
   try
+    // Configurar opciones de reporte
+    if FDryRun then
+      ReportOpts.SetOption(TReportOptions.OPT_DRY_RUN, TValue.From<Boolean>(True));
+
     if TagFilter.IsEmpty then
       Matcher := nil
     else
@@ -284,35 +295,33 @@ begin
                  begin
                    Result := TagFilter.Matches(Tags);
                  end;
+    ReportOpts.TagMatcher := Matcher;
 
+    // Ejecutar TODAS las Features - el conteo debe reflejar el total definido
+    // Cada Feature/Rule/Scenario decide si se ejecuta o marca como Skip
     for var F in FFeatures do
-    begin
-      if F.HasMatchingScenarios(Matcher) then
-        F.Run(Matcher);
-    end;
+      F.Run(Matcher);
+
+    Reporter.Report(FFeatures, ReportOpts);
   finally
+    ReportOpts.Free;
     TagFilter.Free;
   end;
-  Reporter.Report(FFeatures);
   if FReporter.SkipCount > 0 then
-    WriteLn(Format('Pass: %d | Fail: %d | Skip: %d', [FReporter.PassCount, FReporter.FailCount, FReporter.SkipCount]))
+    WriteLn(Format('Pass: %d | Fail: %d | Skip: %d | Completed: %s', [FReporter.PassCount, FReporter.FailCount, FReporter.SkipCount, FormatDateTime('yyyy-mm-dd hh:nn:ss', FReporter.CompletedAt)]))
   else
-    WriteLn(Format('Pass: %d | Fail: %d', [FReporter.PassCount, FReporter.FailCount]));
+    WriteLn(Format('Pass: %d | Fail: %d | Completed: %s', [FReporter.PassCount, FReporter.FailCount, FormatDateTime('yyyy-mm-dd hh:nn:ss', FReporter.CompletedAt)]));
 
   if FReporter.UseConsole then
   begin
-    if WaitForUser <> TWaitForUser.Never then
-    OSShell.WaitForShutdown;
+    if Pause then
+      OSShell.WaitForShutdown;
     Exit;
   end;
-  var IsNewFile := not TFile.Exists(FOutputFile);
   TFile.WriteAllText(FOutputFile, FReporter.GetContent, TEncoding.UTF8);
   var FileURL := 'file:///' + StringReplace(FOutputfile, '\', '/', [rfReplaceAll]);
   WriteLn('report detail: ' + FileURL);
-  if OpenOutputFile = TOpenOutput.Never then Exit;
-  if (OpenOutputFile = TOpenOutput.Always) or IsNewFile then
-    OSShell.Open(FOutputFile);
-  if WaitForUser = TWaitForUser.Always then
+  if Pause then
     OSShell.WaitForShutdown;
 end;
 
@@ -394,7 +403,7 @@ begin
         begin
           if not FeatureShown then
           begin
-            WriteLn('Feature: ' + F.Description.Split([#13, #10])[0].Trim);
+            WriteLn('Feature: ' + F.Title);
             FeatureShown := True;
           end;
           WriteLn('  - ' + S.Description);
@@ -423,6 +432,8 @@ begin
   WriteLn('  -f, --filter <expr>     Run only scenarios matching tag expression');
   WriteLn('  -t, --tags              List all tags with scenario counts (no tests run)');
   WriteLn('  -q, --query <expr>      Show scenarios matching expression (no tests run)');
+  WriteLn('  --dry-run               Show what would run without executing tests');
+  WriteLn('  --pause                 Wait for keypress before closing console');
   WriteLn('');
   WriteLn('Tag expressions:');
   WriteLn('  @tag                    Scenarios with tag');
