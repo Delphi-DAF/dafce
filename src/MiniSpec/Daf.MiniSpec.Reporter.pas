@@ -9,6 +9,7 @@ uses
   System.JSON,
   System.Rtti,
   System.SyncObjs,
+  System.IniFiles,
   IdHTTPServer,
   IdCustomHTTPServer,
   IdContext,
@@ -16,15 +17,28 @@ uses
 
 type
   /// <summary>
-  /// Opciones de reporte pasadas desde la línea de comandos.
-  /// Permite opciones estándar (DryRun, TagMatcher) y específicas por reporter.
+  /// Dictionary of string options passed from CLI/config to reporters.
+  /// Each reporter reads the keys it needs (e.g., 'output', 'port').
   /// </summary>
-  TReportOptions = class
+  TReporterOptions = TDictionary<string, string>;
+
+  /// <summary>
+  /// Opciones globales de MiniSpec con persistencia en archivo .cfg (formato INI).
+  /// Incluye opciones de ejecución y configuración de reporters.
+  /// </summary>
+  TMiniSpecOptions = class
   public const
     OPT_DRY_RUN = 'DryRun';
+    SEC_MINISPEC = 'minispec';
+    SEC_REPORTER_PREFIX = 'reporter.';
   strict private
     FOptions: TDictionary<string, TValue>;
     FTagMatcher: TTagMatcher;
+    FFilter: string;
+    FPause: Boolean;
+    FDryRun: Boolean;
+    FReporterName: string;
+    FReporterOptions: TObjectDictionary<string, TReporterOptions>;
   public
     constructor Create;
     destructor Destroy; override;
@@ -33,7 +47,18 @@ type
     function HasOption(const Key: string): Boolean;
     // Helpers para opciones comunes
     function DryRun: Boolean;
+    // Persistencia
+    procedure LoadFromFile(const FileName: string);
+    procedure SaveToFile(const FileName: string);
+    // Reporter options
+    function GetReporterOptions(const ReporterName: string): TReporterOptions;
+    procedure SetReporterOption(const ReporterName, Key, Value: string);
+    // Properties
     property TagMatcher: TTagMatcher read FTagMatcher write FTagMatcher;
+    property Filter: string read FFilter write FFilter;
+    property Pause: Boolean read FPause write FPause;
+    property IsDryRun: Boolean read FDryRun write FDryRun;
+    property ReporterName: string read FReporterName write FReporterName;
   end;
 
   /// <summary>
@@ -61,21 +86,15 @@ type
     property ElapsedMs: Integer read FElapsedMs;
   end;
 
-  /// <summary>
-  /// Dictionary of string options passed from CLI to reporters.
-  /// Each reporter reads the keys it needs (e.g., 'output', 'port').
-  /// </summary>
-  TReporterOptionsDict = TDictionary<string, string>;
-
   ISpecReporter = interface(IInvokable)
     ['{CD69B272-5B38-4CCC-A64F-2B2A57ACB540}']
     function GetFailCount: Cardinal;
     function GetPassCount: Cardinal;
     function GetSkipCount: Cardinal;
     function GetCompletedAt: TDateTime;
-    procedure Configure(const Options: TReporterOptionsDict);
+    procedure Configure(const Options: TReporterOptions);
     function ShowHelp: Boolean;
-    procedure Report(Features: TList<IFeature>; Options: TReportOptions);
+    procedure Report(Features: TList<IFeature>; Options: TMiniSpecOptions);
     procedure BeginReport;
     procedure DoReport(const S: ISpecItem);
     procedure ReportOutline(const Outline: IScenarioOutline);
@@ -102,9 +121,9 @@ type
     FCurrentScenario: IScenario;
     FCurrentOutline: IScenarioOutline;
     // Report options
-    FOptions: TReportOptions;
+    FOptions: TMiniSpecOptions;
     // CLI options (output, port, etc.)
-    FCliOptions: TReporterOptionsDict;
+    FCliOptions: TReporterOptions;
     // Timestamp
     FCompletedAt: TDateTime;
   protected
@@ -145,16 +164,16 @@ type
     property FeatureCounters: TSpecCounters read FFeatureCounters;
     property ScenarioCounters: TSpecCounters read FScenarioCounters;
     property OutlineCounters: TSpecCounters read FOutlineCounters;
-    property Options: TReportOptions read FOptions;
+    property Options: TMiniSpecOptions read FOptions;
     // CLI options for subclasses
     function GetCliOption(const Key: string; const Default: string = ''): string;
   public
     destructor Destroy; override;
-    procedure Configure(const Options: TReporterOptionsDict);virtual;
+    procedure Configure(const Options: TReporterOptions);virtual;
     function ShowHelp: Boolean;virtual;
     function UseConsole: Boolean;virtual;
     procedure BeginReport;virtual;
-    procedure Report(Features: TList<IFeature>; Options: TReportOptions);overload;
+    procedure Report(Features: TList<IFeature>; Options: TMiniSpecOptions);overload;
     procedure EndReport;virtual;
     property PassCount: Cardinal read GetPassCount;
     property FailCount: Cardinal read GetFailCount;
@@ -174,7 +193,7 @@ type
     procedure ReportOutline(const Outline: IScenarioOutline);override;
   public
     constructor Create(const Decorated: ISpecReporter);
-    procedure Configure(const Options: TReporterOptionsDict);override;
+    procedure Configure(const Options: TReporterOptions);override;
     function ShowHelp: Boolean;override;
     function UseConsole: Boolean;override;
     function GetFileExt: string;override;
@@ -287,7 +306,7 @@ type
   public
     constructor Create(APort: Integer = 8080);
     destructor Destroy;override;
-    procedure Configure(const Options: TReporterOptionsDict);override;
+    procedure Configure(const Options: TReporterOptions);override;
     function ShowHelp: Boolean;override;
     procedure BeginReport;override;
     procedure EndReport;override;
@@ -452,7 +471,7 @@ const
             hasVisibleScenarios = true;
             let resultClass = isSkip ? 'skip' : (isFail ? 'fail' : 'pass');
             featureHtml += `<details ${isFail ? 'open' : ''} style="margin-bottom:0;">`;
-            featureHtml += `<summary class="${resultClass}" style="font-size:0.93em;">${isSkip ? '?' : ''} ${scenario.kind}: ${highlightPlaceholders(preserveLineBreaks(htmlEncode(scenario.description)))}</summary>`;
+            featureHtml += `<summary class="${resultClass}" style="font-size:0.93em;">${isSkip ? '&#9675;' : ''} ${scenario.kind}: ${highlightPlaceholders(preserveLineBreaks(htmlEncode(scenario.description)))}</summary>`;
 
             // Renderizar Scenario Outline con tabla
             if (scenario.kind === 'Scenario Outline' && scenario.headers && scenario.examples) {
@@ -468,7 +487,7 @@ const
               featureHtml += `</tr>`;
               scenario.examples.forEach(ex => {
                 let exClass = ex.status === 'pass' ? 'pass' : 'fail';
-                let icon = ex.status === 'pass' ? '?' : '?';
+                let icon = ex.status === 'pass' ? '&#10003;' : '&#10007;';
                 featureHtml += `<tr class="${exClass}">`;
                 featureHtml += `<td style="padding:2px 6px; border:1px solid #ccc;">${icon}</td>`;
                 ex.values.forEach(v => {
@@ -1124,40 +1143,157 @@ const
 ''';
 {$ENDREGION}
 
-{ TReportOptions }
+{ TMiniSpecOptions }
 
-constructor TReportOptions.Create;
+constructor TMiniSpecOptions.Create;
 begin
   inherited;
   FOptions := TDictionary<string, TValue>.Create;
+  FReporterOptions := TObjectDictionary<string, TReporterOptions>.Create([doOwnsValues]);
   FTagMatcher := nil;
+  FFilter := '';
+  FPause := False;
+  FDryRun := False;
+  FReporterName := 'console';
 end;
 
-destructor TReportOptions.Destroy;
+destructor TMiniSpecOptions.Destroy;
 begin
+  FReporterOptions.Free;
   FOptions.Free;
   inherited;
 end;
 
-procedure TReportOptions.SetOption(const Key: string; const Value: TValue);
+procedure TMiniSpecOptions.SetOption(const Key: string; const Value: TValue);
 begin
   FOptions.AddOrSetValue(Key, Value);
 end;
 
-function TReportOptions.GetOption(const Key: string; const Default: TValue): TValue;
+function TMiniSpecOptions.GetOption(const Key: string; const Default: TValue): TValue;
 begin
   if not FOptions.TryGetValue(Key, Result) then
     Result := Default;
 end;
 
-function TReportOptions.HasOption(const Key: string): Boolean;
+function TMiniSpecOptions.HasOption(const Key: string): Boolean;
 begin
   Result := FOptions.ContainsKey(Key);
 end;
 
-function TReportOptions.DryRun: Boolean;
+function TMiniSpecOptions.DryRun: Boolean;
 begin
-  Result := GetOption(OPT_DRY_RUN, TValue.From<Boolean>(False)).AsBoolean;
+  Result := FDryRun;
+end;
+
+function TMiniSpecOptions.GetReporterOptions(const ReporterName: string): TReporterOptions;
+begin
+  if not FReporterOptions.TryGetValue(LowerCase(ReporterName), Result) then
+  begin
+    Result := TReporterOptions.Create;
+    FReporterOptions.Add(LowerCase(ReporterName), Result);
+  end;
+end;
+
+procedure TMiniSpecOptions.SetReporterOption(const ReporterName, Key, Value: string);
+var
+  Opts: TReporterOptions;
+begin
+  Opts := GetReporterOptions(ReporterName);
+  Opts.AddOrSetValue(Key, Value);
+end;
+
+procedure TMiniSpecOptions.LoadFromFile(const FileName: string);
+var
+  Ini: TMemIniFile;
+  Sections, Keys: TStringList;
+  i, j: Integer;
+  Section, Key, Value, RepName: string;
+  Opts: TReporterOptions;
+begin
+  if not FileExists(FileName) then
+    Exit;
+
+  Ini := TMemIniFile.Create(FileName);
+  Sections := TStringList.Create;
+  Keys := TStringList.Create;
+  try
+    Ini.ReadSections(Sections);
+    for i := 0 to Sections.Count - 1 do
+    begin
+      Section := Sections[i];
+      Keys.Clear;
+      Ini.ReadSection(Section, Keys);
+
+      if SameText(Section, SEC_MINISPEC) then
+      begin
+        // Opciones globales
+        for j := 0 to Keys.Count - 1 do
+        begin
+          Key := Keys[j];
+          Value := Ini.ReadString(Section, Key, '');
+          if SameText(Key, 'filter') then
+            FFilter := Value
+          else if SameText(Key, 'pause') then
+            FPause := SameText(Value, 'true') or (Value = '1')
+          else if SameText(Key, 'dry-run') then
+            FDryRun := SameText(Value, 'true') or (Value = '1')
+          else if SameText(Key, 'reporter') then
+            FReporterName := Value;
+        end;
+      end
+      else if Section.StartsWith(SEC_REPORTER_PREFIX, True) then
+      begin
+        // Opciones de reporter: [reporter.html], [reporter.live], etc.
+        RepName := Copy(Section, Length(SEC_REPORTER_PREFIX) + 1, MaxInt);
+        // Si no hay reporter principal definido, usar el primero que encontremos
+        if FReporterName.IsEmpty then
+          FReporterName := RepName;
+        Opts := GetReporterOptions(RepName);
+        for j := 0 to Keys.Count - 1 do
+        begin
+          Key := Keys[j];
+          Value := Ini.ReadString(Section, Key, '');
+          Opts.AddOrSetValue(Key, Value);
+        end;
+      end;
+    end;
+  finally
+    Keys.Free;
+    Sections.Free;
+    Ini.Free;
+  end;
+end;
+
+procedure TMiniSpecOptions.SaveToFile(const FileName: string);
+var
+  Ini: TMemIniFile;
+  Pair: TPair<string, TReporterOptions>;
+  OptPair: TPair<string, string>;
+begin
+  Ini := TMemIniFile.Create(FileName);
+  try
+    // Siempre escribir sección [minispec] con reporter (aunque sea console)
+    Ini.WriteString(SEC_MINISPEC, 'reporter', IfThen(FReporterName.IsEmpty, 'console', FReporterName));
+
+    // Opciones globales
+    if not FFilter.IsEmpty then
+      Ini.WriteString(SEC_MINISPEC, 'filter', FFilter);
+    if FPause then
+      Ini.WriteString(SEC_MINISPEC, 'pause', 'true');
+    if FDryRun then
+      Ini.WriteString(SEC_MINISPEC, 'dry-run', 'true');
+
+    // Opciones por reporter
+    for Pair in FReporterOptions do
+    begin
+      for OptPair in Pair.Value do
+        Ini.WriteString(SEC_REPORTER_PREFIX + Pair.Key, OptPair.Key, OptPair.Value);
+    end;
+
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
 end;
 
 { TSpecCounters }
@@ -1290,7 +1426,7 @@ begin
   inherited;
 end;
 
-procedure TCustomReporter.Configure(const Options: TReporterOptionsDict);
+procedure TCustomReporter.Configure(const Options: TReporterOptions);
 var
   Pair: TPair<string, string>;
 begin
@@ -1298,7 +1434,7 @@ begin
   FreeAndNil(FCliOptions);
   if Assigned(Options) then
   begin
-    FCliOptions := TReporterOptionsDict.Create;
+    FCliOptions := TReporterOptions.Create;
     for Pair in Options do
       FCliOptions.Add(Pair.Key, Pair.Value);
   end;
@@ -1511,7 +1647,7 @@ begin
   Result := FReportCounters.PassCount;
 end;
 
-procedure TCustomReporter.Report(Features: TList<IFeature>; Options: TReportOptions);
+procedure TCustomReporter.Report(Features: TList<IFeature>; Options: TMiniSpecOptions);
 begin
   FOptions := Options;
   BeginReport;
@@ -1915,7 +2051,7 @@ begin
   FDecorated := Decorated;
 end;
 
-procedure TReporterDecorator.Configure(const Options: TReporterOptionsDict);
+procedure TReporterDecorator.Configure(const Options: TReporterOptions);
 begin
   inherited;
   // Do NOT pass options to Decorated - the outer decorator handles file output
@@ -2337,7 +2473,7 @@ begin
   FServer.OnCommandGet := HandleRequest;
 end;
 
-procedure TLiveReporter.Configure(const Options: TReporterOptionsDict);
+procedure TLiveReporter.Configure(const Options: TReporterOptions);
 begin
   inherited;
   if Options.ContainsKey('port') then

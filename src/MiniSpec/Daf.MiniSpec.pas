@@ -18,7 +18,6 @@ type
 {$SCOPEDENUMS ON}
   TRunMode = (rmRun, rmListTags, rmQuery, rmHelp, rmReporterHelp);
 {$SCOPEDENUMS Off}
-  TReporterOptions = TDictionary<string, string>;
 
   TMiniSpec = class
   public
@@ -26,18 +25,18 @@ type
   strict private
     FFeatures: TList<IFeature>;
     FReporter: ISpecReporter;
-    FPause: Boolean;
-    FTags: string;
+    FOptions: TMiniSpecOptions;
     FRunMode: TRunMode;
     FQueryExpr: string;
-    FDryRun: Boolean;
+    FConfigFile: string;
+    FConfigExisted: Boolean;
     class var FInstance: TMiniSpec;
-  public
   protected
     class function CreateSingleton: TMiniSpec;
     class function Instance: TMiniSpec; static;
     class procedure ParseReporterSpec(const Spec: string; out Name: string; out Options: TReporterOptions);
     function CreateReporter(const Name: string; const Options: TReporterOptions): ISpecReporter;
+    procedure LoadConfig;
     procedure ParseArgs;
     procedure ListTags;
     procedure QueryTags;
@@ -110,11 +109,15 @@ constructor TMiniSpec.Create;
 begin
   inherited;
   FFeatures := TList<IFeature>.Create;
+  FOptions := TMiniSpecOptions.Create;
   FReporter := TConsoleReporter.Create;
+  FConfigFile := ChangeFileExt(ParamStr(0), '.cfg');
+  FConfigExisted := FileExists(FConfigFile);
 end;
 
 destructor TMiniSpec.Destroy;
 begin
+  FOptions.Free;
   FFeatures.Free;
   inherited;
 end;
@@ -194,11 +197,16 @@ function TMiniSpec.Reporter(const Spec: string): TMiniSpec;
 var
   Name: string;
   Options: TReporterOptions;
+  Pair: TPair<string, string>;
 begin
   Result := Self;
   ParseReporterSpec(LowerCase(Spec), Name, Options);
   try
     FReporter := CreateReporter(Name, Options);
+    // Guardar en FOptions para persistencia
+    FOptions.ReporterName := Name;
+    for Pair in Options do
+      FOptions.SetReporterOption(Name, Pair.Key, Pair.Value);
     // Check if reporter help was requested
     if Options.ContainsKey('help') and SameText(Options['help'], 'true') then
       FRunMode := TRunMode.rmReporterHelp;
@@ -214,36 +222,51 @@ end;
 
 procedure TMiniSpec.Tags(const Value: string);
 begin
-  FTags := Value;
+  FOptions.Filter := Value;
 end;
 
 function TMiniSpec.Pause: Boolean;
 begin
-  Result := FPause;
+  Result := FOptions.Pause;
 end;
 
 function TMiniSpec.Pause(const Value: Boolean): TMiniSpec;
 begin
   Result := Self;
-  FPause := Value;
+  FOptions.Pause := Value;
 end;
 
 function TMiniSpec.Tags: string;
 begin
-  Result := FTags;
+  Result := FOptions.Filter;
 end;
 
 function TMiniSpec.DryRun: Boolean;
 begin
-  Result := FDryRun;
+  Result := FOptions.IsDryRun;
 end;
 
 function TMiniSpec.DryRun(const Value: Boolean): TMiniSpec;
 begin
   Result := Self;
-  FDryRun := Value;
+  FOptions.IsDryRun := Value;
 end;
 {$ENDREGION}
+
+procedure TMiniSpec.LoadConfig;
+var
+  RepOpts: TReporterOptions;
+begin
+  // Cargar opciones desde archivo .cfg si existe
+  FOptions.LoadFromFile(FConfigFile);
+
+  // Si el .cfg especifica un reporter, crearlo con sus opciones
+  if not FOptions.ReporterName.IsEmpty then
+  begin
+    RepOpts := FOptions.GetReporterOptions(FOptions.ReporterName);
+    FReporter := CreateReporter(FOptions.ReporterName, RepOpts);
+  end;
+end;
 
 procedure TMiniSpec.ParseArgs;
 var
@@ -257,6 +280,10 @@ var
       Result := '';
   end;
 begin
+  // Primero cargar config desde archivo
+  LoadConfig;
+
+  // Luego procesar argumentos CLI (sobrescriben config)
   idxParam := 0;
   FRunMode := TRunMode.rmRun;
   while idxParam <= ParamCount do
@@ -276,17 +303,20 @@ begin
     else if (Param = '--help') or (Param = '-h') then
       FRunMode := TRunMode.rmHelp
     else if Param = '--dry-run' then
-      FDryRun := True
+      FOptions.IsDryRun := True
     else if Param = '--pause' then
-      FPause := True;
+      FOptions.Pause := True;
   end;
+
+  // Guardar config si el archivo no existía
+  if not FConfigExisted then
+    FOptions.SaveToFile(FConfigFile);
 end;
 
 procedure TMiniSpec.Run;
 var
   TagFilter: TTagExpression;
   Matcher: TTagMatcher;
-  ReportOpts: TReportOptions;
 begin
   ParseArgs;
 
@@ -334,30 +364,24 @@ begin
   WriteLn('+----------------------+');
   WriteLn;
 
-  TagFilter := TTagExpression.Parse(FTags);
-  ReportOpts := TReportOptions.Create;
+  TagFilter := TTagExpression.Parse(Tags);
   try
-    // Configurar opciones de reporte
-    if FDryRun then
-      ReportOpts.SetOption(TReportOptions.OPT_DRY_RUN, TValue.From<Boolean>(True));
-
     if TagFilter.IsEmpty then
       Matcher := nil
     else
-      Matcher := function(const Tags: TSpecTags): Boolean
+      Matcher := function(const ATags: TSpecTags): Boolean
                  begin
-                   Result := TagFilter.Matches(Tags);
+                   Result := TagFilter.Matches(ATags);
                  end;
-    ReportOpts.TagMatcher := Matcher;
+    FOptions.TagMatcher := Matcher;
 
     // Ejecutar TODAS las Features - el conteo debe reflejar el total definido
     // Cada Feature/Rule/Scenario decide si se ejecuta o marca como Skip
     for var F in FFeatures do
       F.Run(Matcher);
 
-    Reporter.Report(FFeatures, ReportOpts);
+    Reporter.Report(FFeatures, FOptions);
   finally
-    ReportOpts.Free;
     TagFilter.Free;
   end;
   if FReporter.SkipCount > 0 then
