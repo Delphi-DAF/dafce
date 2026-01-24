@@ -1,6 +1,14 @@
-# MiniSpec v1.0.0
+# MiniSpec v1.5.0
 
 Framework BDD (Behavior-Driven Development) para Delphi, inspirado en Gherkin/Cucumber.
+
+## Novedades v1.5.0
+
+- **Archivo de configuración `MiniSpec.ini`**: Persistencia automática de opciones
+- **Live Reporter**: Dashboard en tiempo real via SSE (Server-Sent Events)
+- **Gherkin Reporter**: Exporta features a formato `.feature` estándar
+- **Dry-run mode**: Lista escenarios sin ejecutarlos
+- **Pause mode**: Espera tecla al finalizar
 
 ## Guía Rápida
 
@@ -180,12 +188,39 @@ MiApp.exe -h
 # Consola (default)
 MiApp.exe
 
-# HTML
+# HTML estático
 MiApp.exe -r html -o report.html
 
 # JSON
 MiApp.exe -r json -o report.json
+
+# Live Dashboard (tiempo real via SSE)
+MiApp.exe -r live --port 8080
+MiApp.exe -r live --port 8080 --wait-client  # Espera conexión antes de ejecutar
+
+# Gherkin (exporta a .feature)
+MiApp.exe -r gherkin -o features/
 ```
+
+### Archivo de Configuración
+
+MiniSpec crea automáticamente `MiniSpec.ini` en el directorio del ejecutable con las opciones usadas:
+
+```ini
+[minispec]
+reporter=html
+filter=@unit
+pause=true
+
+[reporter.html]
+output=report.html
+
+[reporter.live]
+port=8080
+wait-client=true
+```
+
+Las opciones de línea de comandos tienen prioridad sobre el archivo de configuración.
 
 ### And / But
 
@@ -227,8 +262,12 @@ Usa `&And` y `But` para añadir pasos al grupo anterior:
 | `-f, --filter <expr>` | Filtra tests por expresión de tags |
 | `-t, --tags` | Lista todos los tags con conteos |
 | `-q, --query <expr>` | Muestra escenarios que coinciden (sin ejecutar) |
-| `-r, --reporter <name>` | Formato: `html`, `json` (default: consola) |
-| `-o, --output <file>` | Archivo de salida para el reporte |
+| `-r, --reporter <name>` | Formato: `console`, `html`, `json`, `live`, `gherkin` |
+| `-o, --output <file>` | Archivo/directorio de salida para el reporte |
+| `-p, --pause` | Espera tecla al finalizar |
+| `-d, --dry-run` | Lista escenarios sin ejecutarlos |
+| `--port <num>` | Puerto para Live Reporter (default: 8080) |
+| `--wait-client` | Live Reporter espera conexión antes de ejecutar |
 
 ### Expresiones de Tags
 
