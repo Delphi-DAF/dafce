@@ -2,7 +2,7 @@
 setlocal enableextensions enabledelayedexpansion
 
 set SELF_NAME=%~n0
-set SELF_VS=4.0.0
+set SELF_VS=4.1.0
 
 :: Análisis de argumentos
 for %%A in (%*) do (
@@ -38,15 +38,6 @@ IF %WORK_DIR:~-1%==\ SET WORK_DIR=%WORK_DIR:~0,-1%
 set "PRJ_DIR=%WORK_DIR%"
 set "PRJ_VENDOR_DIR=%PRJ_DIR%\vendor"
 set "PRJ_OUT_DIR=%PRJ_DIR%\out"
-for /R "%PRJ_DIR%" %%F in (*.groupproj) do (
-    set "PRJ_BUILD_FILE=%%F"
-    goto :found
-)
-for /R "%PRJ_DIR%" %%F in (*.dproj) do (
-    set "PRJ_BUILD_FILE=%%F"
-    goto :found
-)
-:found
 
 for %%i IN ("%PRJ_DIR%") DO set "PRJ_NAME=%%~ni"
 
@@ -59,6 +50,23 @@ if exist "%WORK_DIR%\%COMPUTERNAME%.project.cmd" (call "%WORK_DIR%\%COMPUTERNAME
 
 :: load project specific settings so we can override defaults
 if  exist "%WORK_DIR%\project.cmd" (call "%WORK_DIR%\project.cmd" :on_init)
+
+:: Determine build file: 1) --project arg, 2) PRJ_BUILD_FILE from project.cmd, 3) first .groupproj/.dproj found
+if defined ARG_PROJECT (
+  set "PRJ_BUILD_FILE=%ARG_PROJECT%"
+  if not exist "!PRJ_BUILD_FILE!" set "PRJ_BUILD_FILE=%PRJ_DIR%\!ARG_PROJECT!"
+)
+if not defined PRJ_BUILD_FILE (
+  for /R "%PRJ_DIR%" %%F in (*.groupproj) do (
+    set "PRJ_BUILD_FILE=%%F"
+    goto :found_prj
+  )
+  for /R "%PRJ_DIR%" %%F in (*.dproj) do (
+    set "PRJ_BUILD_FILE=%%F"
+    goto :found_prj
+  )
+)
+:found_prj
 
 :: add vendor_bin to path, so you can install your vendor pkg
 set PATH=%PATH%;%PRJ_VENDOR_DIR%\bin
@@ -300,6 +308,7 @@ exit /B 0
 
 ::help>>
 :: CLEAN: Clean build artifacts
+::       --project: <file> Project file to clean (.dproj or .groupproj)
 ::       --config: [Debug]|Release
 ::       --64: Build for 64-bit platform  
 ::       --output: <path> Set output directory
@@ -325,6 +334,7 @@ exit /B 0
 
 ::help>>
 :: MAKE: Build project using MSBuild
+::       --project: <file> Project file to build (.dproj or .groupproj)
 ::       --config: [Debug]|Release
 ::       --64: Build for 64-bit platform  
 ::       --output: <path> Set output directory
@@ -350,6 +360,7 @@ exit /B 0
   
 ::help>>
 :: BUILD: Build project with full rebuild
+::       --project: <file> Project file to build (.dproj or .groupproj)
 ::       --config: [Debug]|Release
 ::       --64: Build for 64-bit platform  
 ::       --output: <path> Set output directory

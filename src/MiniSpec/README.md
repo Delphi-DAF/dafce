@@ -1,0 +1,336 @@
+# MiniSpec v1.2.0
+
+Framework BDD (Behavior-Driven Development) para Delphi, inspirado en Gherkin/Cucumber.
+
+## Novedades v1.2.0
+
+- **Archivo de configuración `MiniSpec.ini`**: Persistencia automática de opciones
+- **Live Reporter**: Dashboard en tiempo real via SSE (Server-Sent Events)
+- **Gherkin Reporter**: Exporta features a formato `.feature` estándar
+- **Dry-run mode**: Lista escenarios sin ejecutarlos
+- **Pause mode**: Espera tecla al finalizar
+
+---
+
+## Escribiendo Features
+
+### Nomenclatura Recomendada
+
+| Elemento | Convención | Ejemplo |
+|----------|------------|---------|
+| Proyecto | `<Dominio>Specs.dpr` | `CalculatorSpecs.dpr`, `EvaluationSpecs.dpr` |
+| Unit de Feature | `<Feature>.Feat.pas` | `Calculator.Add.Feat.pas`, `Login.Feat.pas` |
+| Unit de Helpers | `<Dominio>.SpecHelpers.pas` | `Calculator.SpecHelpers.pas` |
+
+### Estructura Básica
+
+```pascal
+unit MiFeature.Feat.pas;
+
+interface
+
+implementation
+
+uses
+  Daf.MiniSpec;
+
+type
+  TMyWorld = class
+  public
+    Resultado: Integer;
+    Input: string;
+  end;
+
+initialization
+
+Feature('''
+Mi Feature                         // <-- Primera línea = Título
+
+  Como usuario                       // <-- Resto = Narrativa (opcional)
+  Necesito hacer algo
+  Para lograr un objetivo
+
+  @unit @mi-tag                       // <-- Tags al final, en línea propia
+''')
+
+.UseWorld<TMyWorld>
+
+.Background
+  .Given('una precondición común', procedure(Ctx: TMyWorld)
+    begin
+      // Setup compartido por todos los escenarios
+    end)
+
+.Scenario('Mi primer escenario')
+  .Given('una condición inicial', procedure(Ctx: TMyWorld)
+    begin
+      Ctx.Input := 'valor';
+    end)
+  .When('ejecuto la acción', procedure(Ctx: TMyWorld)
+    begin
+      Ctx.Resultado := 42;
+    end)
+  .&Then('obtengo el resultado esperado', procedure(Ctx: TMyWorld)
+    begin
+      Expect(Ctx.Resultado).ToEqual(42);
+    end)
+
+end.
+```
+
+### El World
+
+El **World** es una clase que actúa como contexto compartido entre los pasos de un escenario. Cada escenario recibe una instancia nueva del World, permitiendo:
+
+- **Compartir estado** entre Given, When y Then del mismo escenario
+- **Aislar escenarios** entre sí (cada uno tiene su propia instancia)
+- **Tipar el contexto** para autocompletado y verificación en tiempo de compilación
+
+```pascal
+type
+  TCalculatorWorld = class
+  public
+    Calculator: TCalculator;
+    Result: Integer;
+    Error: string;
+    destructor Destroy; override;  // Liberar recursos si es necesario
+  end;
+
+Feature('...')
+.UseWorld<TCalculatorWorld>  // Cada escenario recibe un TCalculatorWorld nuevo
+```
+
+**Reutilización**: Un mismo World puede usarse en varias features relacionadas. Sin embargo, si las features son muy distintas, es mejor definir Worlds separados para mantener cada contexto limpio y enfocado:
+
+```pascal
+// Calculator.Add.Feat.pas
+Feature('Suma').UseWorld<TCalculatorWorld>
+
+// Login.Feat.pas  
+Feature('Login').UseWorld<TLoginWorld>
+
+// Report.Feat.pas
+Feature('Reportes').UseWorld<TReportWorld>
+```
+
+### Vocabulario Gherkin
+
+| Gherkin | MiniSpec | Nota |
+|---------|----------|------|
+| Feature | `Feature('...')` | Descripción multilínea con `'''` |
+| Rule | `.Rule('...')` | Agrupa escenarios relacionados |
+| Background | `.Background` | Pasos comunes a escenarios del Feature/Rule |
+| Scenario | `.Scenario('...')` | Un caso de prueba |
+| Scenario Outline | `.ScenarioOutline('...')` | Con tabla de ejemplos |
+| Examples | `.Examples([...])` | Tabla de datos para Outline |
+| Given | `.Given('...', proc)` | Precondición |
+| When | `.When('...', proc)` | Acción |
+| Then | `.&Then('...', proc)` | Verificación (`&` requerido) |
+| And | `.&And('...', proc)` | Paso adicional (`&` requerido) |
+| But | `.But('...', proc)` | Paso negativo |
+| @tags | `@tag` en descripción | Filtrado de tests |
+| Doc Strings | `'''..'''` | Sintaxis nativa Delphi 12+ |
+
+### And / But
+
+Usa `&And` y `But` para añadir pasos al grupo anterior (Given, When o Then):
+
+```pascal
+.Scenario('Con pasos adicionales')
+  .Given('una condición', procedure(Ctx: TMyWorld) begin end)
+  .&And('otra condición', procedure(Ctx: TMyWorld) begin end)   // Se añade a Given
+  .When('ejecuto algo', procedure(Ctx: TMyWorld) begin end)
+  .&Then('pasa esto', procedure(Ctx: TMyWorld) begin end)
+  .&And('también esto', procedure(Ctx: TMyWorld) begin end)     // Se añade a Then
+  .But('no pasa esto otro', procedure(Ctx: TMyWorld) begin end) // Se añade a Then
+```
+
+### Scenario Outline con Examples
+
+```pascal
+.ScenarioOutline('Sumar dos números')
+  .Given('tengo el número <A>', procedure(Ctx: TMyWorld) begin end)
+  .When('sumo <B>', procedure(Ctx: TMyWorld)
+    begin
+      Ctx.Resultado := Ctx.A + Ctx.B;
+    end)
+  .&Then('obtengo <Resultado>', procedure(Ctx: TMyWorld)
+    begin
+      Expect(Ctx.Resultado).ToEqual(Ctx.Esperado);
+    end)
+  .Examples([
+    [ 'A',  'B',  'Esperado'],  // Headers (nombres de campos del World)
+    [ 1,    2,    3],
+    [ 5,    5,    10],
+    [-1,    1,    0]
+  ])
+```
+
+### Tags
+
+Los tags pueden aparecer en cualquier punto del texto, pero **se recomienda añadirlos al final**, preferiblemente en línea propia, para mayor claridad:
+
+```pascal
+// En Feature: tags al final de la descripción
+Feature('''
+Mi Feature
+
+  Como usuario necesito X para Y
+
+  @unit @fast
+''')
+
+// En Scenario: tags al final de la descripción, en línea propia
+.Scenario('''
+  Escenario lento
+  @slow @integration
+''')
+
+// También válido en línea propia dentro del Scenario Outline
+.ScenarioOutline('''
+  Sumar números
+  @math @unit
+''')
+```
+
+---
+
+## Assertions (Expect)
+
+### Igualdad
+
+| Método | Descripción |
+|--------|-------------|
+| `Expect(valor).ToEqual(esperado)` | Verifica igualdad |
+| `Expect(valor).ToNotEqual(otro)` | Verifica desigualdad |
+
+### Nulos
+
+| Método | Descripción |
+|--------|-------------|
+| `Expect(obj).ToBeNull` | Verifica que sea nil |
+| `Expect(obj).ToNotBeNull` | Verifica que no sea nil |
+
+### Comparaciones Numéricas
+
+| Método | Descripción |
+|--------|-------------|
+| `Expect(num).ToBeGreaterThan(5)` | Mayor que |
+| `Expect(num).ToBeGreaterOrEqual(5)` | Mayor o igual |
+| `Expect(num).ToBeLessThan(10)` | Menor que |
+| `Expect(num).ToBeLessOrEqual(10)` | Menor o igual |
+| `Expect(num).ToBeBetween(1, 10)` | Entre dos valores (inclusivo) |
+
+### Aproximaciones
+
+| Método | Descripción |
+|--------|-------------|
+| `Expect(3.14159).ToBeCloseTo(3.14, 2)` | Igual con N decimales de precisión |
+| `Expect(105).ToBeWithinPercent(100, 10)` | Dentro de ±N% del valor |
+
+### Strings
+
+| Método | Descripción |
+|--------|-------------|
+| `Expect(str).ToStartWith('Hello')` | Empieza con |
+| `Expect(str).ToEndWith('World')` | Termina con |
+| `Expect(str).ToContain('text')` | Contiene substring |
+| `Expect(str).ToMatch('^\d+$')` | Coincide con regex |
+
+### Booleanos
+
+| Método | Descripción |
+|--------|-------------|
+| `Expect(cond).ToBeTrue` | Es verdadero |
+| `Expect(cond).ToBeFalse` | Es falso |
+
+### Excepciones
+
+| Método | Descripción |
+|--------|-------------|
+| `ExpectProc(proc).ToRaise` | Lanza cualquier excepción |
+| `ExpectProc(proc).ToRaiseType(EMyException)` | Lanza tipo específico |
+| `ExpectProc(proc).ToRaiseWithMessage('texto')` | Lanza con mensaje específico |
+| `ExpectProc(proc).ToNotRaise` | No lanza excepción |
+
+---
+
+## Línea de Comandos
+
+### Opciones Generales
+
+| Opción | Descripción |
+|--------|-------------|
+| `-h, --help` | Muestra ayuda |
+| `-f, --filter <expr>` | Filtra tests por expresión de tags |
+| `-t, --tags` | Lista todos los tags con conteos |
+| `-q, --query <expr>` | Muestra escenarios que coinciden (sin ejecutar) |
+| `-r, --reporter <spec>` | Reporter con opciones (ver abajo) |
+| `--pause` | Espera tecla al finalizar |
+| `--dry-run` | Lista escenarios sin ejecutarlos |
+
+### Expresiones de Tags
+
+```
+@tag                    # Escenarios con el tag
+~@tag                   # Escenarios SIN el tag
+@a and @b               # Ambos tags
+@a or @b                # Cualquiera de los dos
+(@a or @b) and ~@c      # Expresiones complejas
+```
+
+Ejemplos:
+
+```bash
+MiApp.exe -f "@unit"
+MiApp.exe -f "@unit and ~@slow"
+MiApp.exe -f "(@fast or @critical) and ~@skip"
+```
+
+### Reporters
+
+Sintaxis: `-r <nombre>:<opcion1>=<valor>,<opcion2>=<valor>,...`
+
+| Reporter | Opciones | Ejemplo |
+|----------|----------|---------|
+| `console` | *(ninguna)* | `-r console` |
+| `html` | `output=<file>` | `-r html:output=report.html` |
+| `json` | `output=<file>` | `-r json:output=report.json` |
+| `gherkin` | `output=<dir>` | `-r gherkin:output=features/` |
+| `live` | `port=<num>`, `wait-client` | `-r live:port=8080,wait-client` |
+
+---
+
+## Archivo de Configuración
+
+MiniSpec crea automáticamente `MiniSpec.ini` en el directorio del ejecutable:
+
+```ini
+[minispec]
+reporter=html
+filter=@unit
+pause=true
+
+[reporter.html]
+output=report.html
+
+[reporter.live]
+port=8080
+wait-client=true
+```
+
+Las opciones de línea de comandos tienen prioridad sobre el archivo.
+
+---
+
+## Archivos del Framework
+
+| Archivo | Descripción |
+|---------|-------------|
+| `Daf.MiniSpec.pas` | API principal y runner |
+| `Daf.MiniSpec.Types.pas` | Tipos e interfaces |
+| `Daf.MiniSpec.Builders.pas` | Builders fluent |
+| `Daf.MiniSpec.Expects.pas` | Assertions |
+| `Daf.MiniSpec.Reporter.pas` | Reporters (console, HTML, JSON, Live) |
+| `Daf.MiniSpec.TagFilter.pas` | Parser de expresiones de tags |
+| `Daf.MiniSpec.Utils.pas` | Utilidades |

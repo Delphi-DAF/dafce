@@ -2,6 +2,7 @@
 
 interface
 uses
+  System.Classes,
   System.Generics.Collections,
   System.Rtti,
   System.SysUtils;
@@ -9,7 +10,8 @@ uses
 type
   TStepProc<T> = reference to procedure(World: T);
   TExamplesTable = TArray<TArray<TValue>>;
-  TSpecItemKind = (sikFeature, sikBackground, sikScenario, sikExample, sikExampleInit, sikGiven, sikWhen, sikThen);
+  TSpecItemKind = (sikFeature, sikImplicitRule, sikRule, sikBackground, sikScenario, sikScenarioOutline, sikExample, sikExampleInit, sikGiven, sikWhen, sikThen, sikAnd, sikBut);
+  TLastStepKind = (lskNone, lskGiven, lskWhen, lskThen);
   TSpecRunState =  (srsPrepared, srsSkiped, srsRunning, srsFinished);
   TSpecRunResult =  (srrNone, srrSuccess, srrFail, srrError);
   TSpecTags = record
@@ -17,9 +19,22 @@ type
     FTags: TArray<string>;
   public
     procedure AddFrom(const Text: string);
+    procedure Merge(const Other: TSpecTags);
     function Contains(const Tag: string): Boolean;overload;
     function ContainsAll(const Tags: TArray<string>): Boolean;overload;
     function ContainsAny(const Tags: TArray<string>): Boolean;
+    function ToArray: TArray<string>;
+  end;
+
+  TTagMatcher = reference to function(const Tags: TSpecTags): Boolean;
+
+  /// <summary>
+  /// Metadata para scenarios Example (hijos de ScenarioOutline).
+  /// Solo contiene los valores de la fila; los Headers están en el padre.
+  /// </summary>
+  TExampleMeta = record
+    Values: TArray<TValue>;        // Valores de la fila
+    RowIndex: Integer;             // Índice de la fila (1-based)
   end;
 
   TSpecRunInfo = record
@@ -35,15 +50,31 @@ type
 
   IScenarioBuilder<T: class, constructor> = interface;
   IScenarioOutlineBuilder<T: class, constructor> = interface;
+  IRuleBuilder<T: class, constructor> = interface;
+
   IBackgroundBuilder<T: class, constructor> = interface
     function Given(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>;
+    function &And(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>;
+    function But(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>;
     function Scenario(const Description: string): IScenarioBuilder<T>;overload;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
+    function Rule(const Description: string): IRuleBuilder<T>;
   end;
 
   IFeatureBuilder<T: class, constructor> = interface
     function Background: IBackgroundBuilder<T>;
     function Scenario(const Description: string): IScenarioBuilder<T>;overload;
+    function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
+    function Rule(const Description: string): IRuleBuilder<T>;
+  end;
+
+  /// <summary>
+  /// Builder para construir Rules dentro de una Feature.
+  /// Las Rules agrupan escenarios relacionados.
+  /// </summary>
+  IRuleBuilder<T: class, constructor> = interface
+    function Background: IBackgroundBuilder<T>;
+    function Scenario(const Description: string): IScenarioBuilder<T>;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
   end;
 
@@ -51,21 +82,32 @@ type
     function Given(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>;
     function When(const Desc: string; Step: TStepProc<T>) : IScenarioBuilder<T>;
     function &Then(const Desc: string; Step: TStepProc<T>) : IScenarioBuilder<T>;
+    function &And(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>;
+    function But(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>;
 
     function Scenario(const Description: string): IScenarioBuilder<T>;overload;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
+    function Rule(const Description: string): IRuleBuilder<T>;
   end;
 
   IScenarioOutlineBuilder<T: class, constructor> = interface
     function Given(const Desc: string; Step: TStepProc<T> = nil) : IScenarioOutlineBuilder<T>;
     function When(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
     function &Then(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
+    function &And(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
+    function But(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
     function Examples(const Table: TExamplesTable): IFeatureBuilder<T>;
+
+    // Continuar dentro de la misma Rule
+    function Scenario(const Description: string): IScenarioBuilder<T>;
+    function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
+    function Rule(const Description: string): IRuleBuilder<T>;
   end;
 
   ISpecItem = interface
     ['{122463BA-E861-4B68-8B4B-D6E76A8B3CA0}']
     function GetTags: TSpecTags;
+    function GetEffectiveTags: TSpecTags;
     function GetDescription: string;
     function GetKind: TSpecItemKind;
     function GetRunInfo: TSpecRunInfo;
@@ -76,6 +118,7 @@ type
     property Parent: ISpecItem read GetParent;
     property Description: string read GetDescription;
     property Tags: TSpecTags read GetTags;
+    property EffectiveTags: TSpecTags read GetEffectiveTags;
     property RunInfo: TSpecRunInfo read GetRunInfo;
   end;
 
@@ -92,16 +135,56 @@ type
     ['{45DA94A6-DE59-4EB7-B528-6E5157DC9169}']
     function GetStepsWhen: TList<IScenarioStep>;
     function GetStepsThen: TList<IScenarioStep>;
+    function GetExampleMeta: TExampleMeta;
     property StepsWhen: TList<IScenarioStep> read GetStepsWhen;
     property StepsThen: TList<IScenarioStep> read GetStepsThen;
+    property ExampleMeta: TExampleMeta read GetExampleMeta;
   end;
+
+  /// <summary>
+  /// ScenarioOutline agrupa Examples generados desde una tabla.
+  /// Contiene los headers de la tabla y los steps template.
+  /// </summary>
+  IScenarioOutline = interface(IScenario)
+    ['{7A8E3F21-B4C5-4D89-9E6A-1F2C3D4E5A6B}']
+    function GetHeaders: TArray<string>;
+    function GetExamples: TList<IScenario>;
+    property Headers: TArray<string> read GetHeaders;
+    property Examples: TList<IScenario> read GetExamples;
+  end;
+
+  IRule = interface;  // forward declaration
 
   IFeature = interface(ISpecItem)
     ['{025FBE2B-E0B2-47D2-B50A-65A381F119AC}']
+    function GetTitle: string;
+    function GetNarrative: string;
     function GetBackGround: IBackground;
     procedure SetBackGround(const Value: IBackground);
     function GetScenarios: TList<IScenario>;
-    procedure Run;
+    function GetRules: TList<IRule>;
+    function HasMatchingScenarios(const TagMatcher: TTagMatcher): Boolean;
+    procedure Run(const TagMatcher: TTagMatcher = nil);
+    property Title: string read GetTitle;
+    property Narrative: string read GetNarrative;
+    property BackGround: IBackground read GetBackground write SetBackground;
+    property Scenarios: TList<IScenario> read GetScenarios;
+    property Rules: TList<IRule> read GetRules;
+  end;
+
+  /// <summary>
+  /// Rule agrupa escenarios relacionados dentro de una Feature.
+  /// En Gherkin: Feature > Rule > Scenario
+  /// </summary>
+  IRule = interface(ISpecItem)
+    ['{7A8B9C0D-1E2F-3A4B-5C6D-7E8F9A0B1C2D}']
+    function GetBackGround: IBackground;
+    procedure SetBackGround(const Value: IBackground);
+    function GetScenarios: TList<IScenario>;
+    function GetFeature: IFeature;
+    function HasMatchingScenarios(const TagMatcher: TTagMatcher): Boolean;
+    procedure Run(const TagMatcher: TTagMatcher = nil);
+    property Feature: IFeature read GetFeature;
     property BackGround: IBackground read GetBackground write SetBackground;
     property Scenarios: TList<IScenario> read GetScenarios;
   end;
@@ -110,17 +193,18 @@ type
   strict private
     FTags: TSpecTags;
     FDescription: string;
-    [weak]
-    FParent: ISpecItem;
     function PlaceHolder(Template, PHName, PHValue: string): string;
     procedure ExpandPlaceholders(const World: TObject);
   protected
+    [weak]
+    FParent: ISpecItem;
     FKind: TSpecItemKind;
     FRunInfo: TSpecRunInfo;
     function GetKind: TSpecItemKind;
     function GetParent: ISpecItem;
     function GetDescription: string;
     function GetTags: TSpecTags;
+    function GetEffectiveTags: TSpecTags;
     function GetRunInfo: TSpecRunInfo;
   public
     constructor Create(const Kind: TSpecItemKind; const Parent: ISpecItem; const Description: string);
@@ -129,6 +213,7 @@ type
     property Parent: ISpecItem read FParent;
     property Description: string read GetDescription;
     property Tags: TSpecTags read GetTags;
+    property EffectiveTags: TSpecTags read GetEffectiveTags;
   end;
 
   TScenarioStep<T: class> = class(TSpecItem, IScenarioStep)
@@ -160,43 +245,102 @@ type
   TScenario<T: class, constructor> = class(TSpecItem, IScenario)
   strict private
     FInitExample: IScenarioStep;
+    FExampleMeta: TExampleMeta;
     FStepsGiven: TList<IScenarioStep>;
     FStepsWhen: TList<IScenarioStep>;
     FStepsThen: TList<IScenarioStep>;
     function GetStepsGiven: TList<IScenarioStep>;
     function GetStepsWhen: TList<IScenarioStep>;
     function GetStepsThen: TList<IScenarioStep>;
+    function GetExampleMeta: TExampleMeta;
   private
     function GetFeature: IFeature;
     procedure RunSteps(Steps: TList<IScenarioStep>; World: TObject);
   public
-    constructor Create(const Feature: IFeature; const Description: string);
+    constructor Create(const Feature: IFeature; const Description: string);overload;
+    constructor Create(const Feature: IFeature; const Description: string; AddToFeatureScenarios: Boolean);overload;
+    constructor CreateExample(const Outline: IScenarioOutline; const Description: string);
     destructor Destroy;override;
     function ExampleInit(Step: TStepProc<T>): TScenario<T>;
+    procedure SetExampleMeta(const Meta: TExampleMeta);
     function Given(const Desc: string; Step: TStepProc<T>): TScenario<T>;
     function When(const Desc: string; Step: TStepProc<T>) : TScenario<T>;
     function &Then(const Desc: string; Step: TStepProc<T>) : TScenario<T>;
     procedure Run(World: TObject);override;
     property Feature: IFeature read GetFeature;
+    property ExampleMeta: TExampleMeta read GetExampleMeta;
+  end;
+
+  /// <summary>
+  /// ScenarioOutline contiene los steps template y genera Examples.
+  /// Los Examples son escenarios hijos con valores específicos de la tabla.
+  /// </summary>
+  TScenarioOutline<T: class, constructor> = class(TScenario<T>, IScenarioOutline)
+  strict private
+    FHeaders: TArray<string>;
+    FExamples: TList<IScenario>;
+    function GetHeaders: TArray<string>;
+    function GetExamples: TList<IScenario>;
+  public
+    constructor Create(const ARule: IRule; const Description: string; const Headers: TArray<string>);
+    destructor Destroy; override;
+    procedure AddExample(const Example: IScenario);
+    procedure Run(World: TObject); override;
+    property Headers: TArray<string> read GetHeaders;
+    property Examples: TList<IScenario> read GetExamples;
   end;
 
   TFeature<T: class,constructor> = class(TSpecItem, IFeature)
   strict private
+    FRules: TList<IRule>;
+    FImplicitRule: IRule;  // Rule implícita para escenarios/background sin Rule explícita
+    FTitle: string;
+    FNarrative: string;
+    function GetTitle: string;
+    function GetNarrative: string;
+    function GetBackGround: IBackground;
+    procedure SetBackGround(const Value: IBackground);
+    function GetScenarios: TList<IScenario>;
+    function GetRules: TList<IRule>;
+    procedure ParseDescription(const Description: string);
+  public
+    constructor Create(const Description: string);
+    destructor Destroy; override;
+    function HasMatchingScenarios(const TagMatcher: TTagMatcher): Boolean;
+    procedure Run(const TagMatcher: TTagMatcher = nil);reintroduce;
+    property Title: string read GetTitle;
+    property Narrative: string read GetNarrative;
+    property Background: IBackground read GetBackGround write SetBackGround;
+    property Rules: TList<IRule> read GetRules;
+    property ImplicitRule: IRule read FImplicitRule;  // Solo para builders
+  end;
+
+  /// <summary>
+  /// Rule agrupa escenarios relacionados dentro de una Feature.
+  /// Puede tener su propio Background que se ejecuta después del Background de Feature.
+  /// </summary>
+  TRule<T: class, constructor> = class(TSpecItem, IRule)
+  strict private
+    [weak]
+    FFeature: IFeature;
     FBackground: IBackground;
     FScenarios: TList<IScenario>;
     function GetBackGround: IBackground;
     procedure SetBackGround(const Value: IBackground);
+    function GetFeature: IFeature;
   private
-    procedure RunBeforeHooks;
-    procedure RunAfterHooks;
     procedure RunBackground(World: T);
     function GetScenarios: TList<IScenario>;
     function CreateWorld: T;
   public
-    constructor Create(const Description: string);
+    constructor Create(const Feature: IFeature; const Description: string);overload;
+    constructor Create(const Feature: IFeature; const Description: string; const Kind: TSpecItemKind);overload;
     destructor Destroy; override;
-    procedure Run;reintroduce;
+    function HasMatchingScenarios(const TagMatcher: TTagMatcher): Boolean;
+    procedure Run(const TagMatcher: TTagMatcher = nil);reintroduce;
+    property Feature: IFeature read GetFeature;
     property Background: IBackground read GetBackGround write SetBackGround;
+    property Scenarios: TList<IScenario> read GetScenarios;
   end;
 
 implementation
@@ -236,6 +380,13 @@ begin
   end;
 end;
 
+procedure TSpecTags.Merge(const Other: TSpecTags);
+begin
+  for var Tag in Other.FTags do
+    if not Contains(Tag) then
+      FTags := FTags + [Tag];
+end;
+
 function TSpecTags.Contains(const Tag: string): Boolean;
 begin
   for var MyTag in FTags do
@@ -258,6 +409,11 @@ begin
     if Contains(Tag) then
       Exit(True);
   Result := False;
+end;
+
+function TSpecTags.ToArray: TArray<string>;
+begin
+  Result := FTags;
 end;
 
 { TSpecRunInfo }
@@ -352,6 +508,14 @@ end;
 function TSpecItem.GetTags: TSpecTags;
 begin
   Result := FTags;
+end;
+
+function TSpecItem.GetEffectiveTags: TSpecTags;
+begin
+  // EffectiveTags = DeclaredTags + Parent.EffectiveTags
+  Result := FTags;
+  if Assigned(FParent) then
+    Result.Merge(FParent.EffectiveTags);
 end;
 
 { TScenarioStep<T> }
@@ -457,12 +621,28 @@ end;
 
 constructor TScenario<T>.Create(const Feature: IFeature; const Description: string);
 begin
+  Create(Feature, Description, True);  // Por defecto añade a Feature.Scenarios
+end;
+
+constructor TScenario<T>.Create(const Feature: IFeature; const Description: string; AddToFeatureScenarios: Boolean);
+begin
   inherited Create(sikScenario, Feature, Description);
   FStepsGiven := TList<IScenarioStep>.Create;
   FStepsWhen := TList<IScenarioStep>.Create;
   FStepsThen := TList<IScenarioStep>.Create;
 
-  Feature.Scenarios.Add(Self);
+  if AddToFeatureScenarios then
+    Feature.Scenarios.Add(Self);
+end;
+
+constructor TScenario<T>.CreateExample(const Outline: IScenarioOutline; const Description: string);
+begin
+  // Crear un Example con el ScenarioOutline como parent
+  inherited Create(sikExample, Outline, Description);
+  FStepsGiven := TList<IScenarioStep>.Create;
+  FStepsWhen := TList<IScenarioStep>.Create;
+  FStepsThen := TList<IScenarioStep>.Create;
+  // No añadir a Feature.Scenarios aquí; el Builder lo hace después
 end;
 
 destructor TScenario<T>.Destroy;
@@ -498,6 +678,16 @@ end;
 function TScenario<T>.GetStepsWhen: TList<IScenarioStep>;
 begin
   Result := FStepsWhen
+end;
+
+function TScenario<T>.GetExampleMeta: TExampleMeta;
+begin
+  Result := FExampleMeta;
+end;
+
+procedure TScenario<T>.SetExampleMeta(const Meta: TExampleMeta);
+begin
+  FExampleMeta := Meta;
 end;
 
 function TScenario<T>.Given(const Desc: string; Step: TStepProc<T>): TScenario<T>;
@@ -551,53 +741,193 @@ begin
   FStepsThen.Add(TScenarioStep<T>.Create(sikThen, Self, Desc, Step));
 end;
 
+{ TScenarioOutline<T> }
+
+constructor TScenarioOutline<T>.Create(const ARule: IRule; const Description: string; const Headers: TArray<string>);
+begin
+  // Crear como sikScenarioOutline y añadir a la Rule (polimorfismo)
+  inherited Create(ARule.Feature, Description, False);
+  FKind := sikScenarioOutline;
+  FParent := ARule;
+  FHeaders := Headers;
+  FExamples := TList<IScenario>.Create;
+  // El Outline se añade a Rule.Scenarios como cualquier otro Scenario
+  (ARule as TRule<T>).Scenarios.Add(Self);
+end;
+
+destructor TScenarioOutline<T>.Destroy;
+begin
+  FExamples.Free;
+  inherited;
+end;
+
+function TScenarioOutline<T>.GetHeaders: TArray<string>;
+begin
+  Result := FHeaders;
+end;
+
+function TScenarioOutline<T>.GetExamples: TList<IScenario>;
+begin
+  Result := FExamples;
+end;
+
+procedure TScenarioOutline<T>.AddExample(const Example: IScenario);
+begin
+  FExamples.Add(Example);
+end;
+
+procedure TScenarioOutline<T>.Run(World: TObject);
+var
+  Rule: TRule<T>;
+  ExampleWorld: T;
+begin
+  // El Outline ejecuta cada Example con su propio World
+  Rule := FParent as TRule<T>;
+  FRunInfo.State := srsRunning;
+  FRunInfo.Result := srrSuccess;
+
+  for var Example in FExamples do
+  begin
+    ExampleWorld := Rule.CreateWorld;
+    try
+      Rule.RunBackground(ExampleWorld);
+      Example.Run(ExampleWorld);
+      if not Example.RunInfo.IsSuccess then
+        FRunInfo.Result := srrFail;
+    finally
+      ExampleWorld.Free;
+    end;
+  end;
+
+  FRunInfo.State := srsFinished;
+end;
+
 { TFeature<T>}
+
+procedure TFeature<T>.ParseDescription(const Description: string);
+var
+  Lines: TArray<string>;
+  I, TitleIndex, BlankAfterTitle: Integer;
+  FoundTitle, FoundBlank: Boolean;
+  NarrativeLines: TStringList;
+begin
+  // Parsear descripción: título es primera línea no vacía,
+  // narrativa empieza tras al menos una línea en blanco después del título
+  Lines := Description.Split([#13, #10]);
+  FTitle := '';
+  FNarrative := '';
+  TitleIndex := -1;
+  FoundTitle := False;
+  FoundBlank := False;
+
+  // Encontrar título (primera línea no vacía)
+  for I := 0 to High(Lines) do
+  begin
+    if Lines[I].Trim <> '' then
+    begin
+      FTitle := Lines[I].Trim;
+      TitleIndex := I;
+      FoundTitle := True;
+      Break;
+    end;
+  end;
+
+  if not FoundTitle then Exit;
+
+  // Buscar línea en blanco después del título
+  BlankAfterTitle := -1;
+  for I := TitleIndex + 1 to High(Lines) do
+  begin
+    if Lines[I].Trim = '' then
+    begin
+      BlankAfterTitle := I;
+      FoundBlank := True;
+      Break;
+    end;
+  end;
+
+  if not FoundBlank then Exit;
+
+  // Narrativa: desde primera línea no vacía después de la línea en blanco
+  NarrativeLines := TStringList.Create;
+  try
+    for I := BlankAfterTitle + 1 to High(Lines) do
+      NarrativeLines.Add(Lines[I]);
+    FNarrative := NarrativeLines.Text.Trim;
+  finally
+    NarrativeLines.Free;
+  end;
+end;
+
+function TFeature<T>.GetTitle: string;
+begin
+  Result := FTitle;
+end;
+
+function TFeature<T>.GetNarrative: string;
+begin
+  Result := FNarrative;
+end;
 
 constructor TFeature<T>.Create(const Description: string);
 begin
   inherited Create(sikFeature, nil, Description);
-  FScenarios := TList<IScenario>.Create;
+  ParseDescription(Description);
+  FRules := TList<IRule>.Create;
+  // Crear Rule implícita como contenedor por defecto
+  FImplicitRule := TRule<T>.Create(Self, '', sikImplicitRule);
+  FRules.Add(FImplicitRule);
   MiniSpec.Register(Self as IFeature);
 end;
 
 destructor TFeature<T>.Destroy;
 begin
-  FScenarios.Free;
+  FRules.Free;
   inherited;
-end;
-
-procedure TFeature<T>.RunBackground(World: T);
-begin
-   if Assigned(FBackground) then
-    FBackground.Run(World);
 end;
 
 function TFeature<T>.GetBackGround: IBackground;
 begin
-  Result := FBackground;
+  Result := FImplicitRule.BackGround;
 end;
 
 function TFeature<T>.GetScenarios: TList<IScenario>;
 begin
-  Result := FScenarios;
+  // Para compatibilidad: devuelve escenarios de la Rule implícita
+  Result := FImplicitRule.Scenarios;
 end;
 
-procedure TFeature<T>.Run;
+function TFeature<T>.GetRules: TList<IRule>;
+begin
+  Result := FRules;
+end;
+
+function TFeature<T>.HasMatchingScenarios(const TagMatcher: TTagMatcher): Boolean;
+begin
+  if not Assigned(TagMatcher) then
+    Exit(True);
+
+  // Verificar escenarios en todas las Rules (incluyendo ImplicitRule)
+  for var Rule in FRules do
+    if Rule.HasMatchingScenarios(TagMatcher) then
+      Exit(True);
+
+  Result := False;
+end;
+
+procedure TFeature<T>.Run(const TagMatcher: TTagMatcher);
 begin
   var SW := TStopwatch.StartNew;
   FRunInfo.State := srsRunning;
   FRunInfo.Result := srrSuccess;
   try
-    for var Scenario in FScenarios do
+    // Ejecutar todas las Rules (incluyendo ImplicitRule)
+    // Cada Rule decide internamente qué escenarios ejecutar o marcar como Skip
+    for var Rule in FRules do
     begin
-      var World := CreateWorld;
-      RunBeforeHooks;
-      RunBackground(World);
-      Scenario.Run(World);
-      if Scenario.RunInfo.Result in [srrFail, srrError] then
+      Rule.Run(TagMatcher);
+      if Rule.RunInfo.Result in [srrFail, srrError] then
         FRunInfo.Result := srrFail;
-      RunAfterHooks;
-      World.Free;
     end;
   except
     on E: Exception do
@@ -610,22 +940,133 @@ begin
   FRunInfo.ExecTimeMs := SW.ElapsedMilliseconds;
 end;
 
-function TFeature<T>.CreateWorld: T;
-begin
-  Result := T.Create;
-end;
-
-procedure TFeature<T>.RunBeforeHooks;
-begin
-end;
-
 procedure TFeature<T>.SetBackGround(const Value: IBackground);
+begin
+  FImplicitRule.BackGround := Value;
+end;
+
+{ TRule<T> }
+
+constructor TRule<T>.Create(const Feature: IFeature; const Description: string);
+begin
+  Create(Feature, Description, sikRule);
+end;
+
+constructor TRule<T>.Create(const Feature: IFeature; const Description: string; const Kind: TSpecItemKind);
+begin
+  inherited Create(Kind, Feature, Description);
+  FFeature := Feature;
+  FScenarios := TList<IScenario>.Create;
+end;
+
+destructor TRule<T>.Destroy;
+begin
+  FScenarios.Free;
+  inherited;
+end;
+
+function TRule<T>.GetFeature: IFeature;
+begin
+  Result := FFeature;
+end;
+
+function TRule<T>.GetBackGround: IBackground;
+begin
+  Result := FBackground;
+end;
+
+procedure TRule<T>.SetBackGround(const Value: IBackground);
 begin
   FBackGround := Value;
 end;
 
-procedure TFeature<T>.RunAfterHooks;
+function TRule<T>.GetScenarios: TList<IScenario>;
 begin
+  Result := FScenarios;
+end;
+
+function TRule<T>.CreateWorld: T;
+begin
+  Result := T.Create;
+end;
+
+procedure TRule<T>.RunBackground(World: T);
+begin
+  // Primero ejecutar Background de Feature, luego el de Rule
+  if Assigned(FFeature) and Assigned(FFeature.BackGround) then
+    FFeature.BackGround.Run(World);
+  if Assigned(FBackground) then
+    FBackground.Run(World);
+end;
+
+function TRule<T>.HasMatchingScenarios(const TagMatcher: TTagMatcher): Boolean;
+var
+  CombinedTags: TSpecTags;
+begin
+  if not Assigned(TagMatcher) then
+    Exit(True);
+
+  for var Scenario in FScenarios do
+  begin
+    // Tags combinados: Feature + Rule + Scenario
+    CombinedTags := FFeature.Tags;
+    CombinedTags.Merge(Self.Tags);
+    CombinedTags.Merge(Scenario.Tags);
+    if TagMatcher(CombinedTags) then
+      Exit(True);
+  end;
+  Result := False;
+end;
+
+procedure TRule<T>.Run(const TagMatcher: TTagMatcher);
+var
+  ShouldExecute: Boolean;
+begin
+  var SW := TStopwatch.StartNew;
+  FRunInfo.State := srsRunning;
+  FRunInfo.Result := srrSuccess;
+  try
+    for var Scenario in FScenarios do
+    begin
+      // Decidir si ejecutar basándose en EffectiveTags y DryRun
+      ShouldExecute := True;
+
+      // Verificar filtro de tags usando EffectiveTags
+      if Assigned(TagMatcher) then
+        ShouldExecute := TagMatcher(Scenario.EffectiveTags);
+
+      // Verificar modo DryRun
+      if ShouldExecute and MiniSpec.DryRun then
+        ShouldExecute := False;
+
+      if not ShouldExecute then
+      begin
+        // Marcar como Skip y continuar (pero el escenario queda visible para el reporter)
+        TSpecItem(Scenario).FRunInfo.State := srsSkiped;
+        // Si es un Outline, marcar también todos sus Examples como skip
+        var Outline: IScenarioOutline;
+        if Supports(Scenario, IScenarioOutline, Outline) then
+          for var Example in Outline.Examples do
+            TSpecItem(Example).FRunInfo.State := srsSkiped;
+        Continue;
+      end;
+
+      var World := CreateWorld;
+      RunBackground(World);
+      Scenario.Run(World);
+      if Scenario.RunInfo.Result in [srrFail, srrError] then
+        FRunInfo.Result := srrFail;
+      World.Free;
+    end;
+  except
+    on E: Exception do
+    begin
+      FRunInfo.Result := srrError;
+      FRunInfo.Error := E;
+    end;
+  end;
+  FRunInfo.State := srsFinished;
+  FRunInfo.ExecTimeMs := SW.ElapsedMilliseconds;
 end;
 
 end.

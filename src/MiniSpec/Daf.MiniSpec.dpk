@@ -29,7 +29,10 @@
 {$IMPLICITBUILD OFF}
 
 requires
-  rtl;
+  rtl,
+  IndySystem,
+  IndyCore,
+  IndyProtocols;
 
 contains
   Daf.MiniSpec in 'Daf.MiniSpec.pas',
@@ -37,6 +40,7 @@ contains
   Daf.MiniSpec.Reporter in 'Daf.MiniSpec.Reporter.pas',
   Daf.MiniSpec.Utils in 'Daf.MiniSpec.Utils.pas',
   Daf.MiniSpec.Builders in 'Daf.MiniSpec.Builders.pas',
-  Daf.MiniSpec.Types in 'Daf.MiniSpec.Types.pas';
+  Daf.MiniSpec.Types in 'Daf.MiniSpec.Types.pas',
+  Daf.MiniSpec.TagFilter in 'Daf.MiniSpec.TagFilter.pas';
 
 end.
