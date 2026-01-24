@@ -111,7 +111,7 @@ begin
   FFeatures := TList<IFeature>.Create;
   FOptions := TMiniSpecOptions.Create;
   FReporter := TConsoleReporter.Create;
-  FConfigFile := ChangeFileExt(ParamStr(0), '.cfg');
+  FConfigFile := ExtractFilePath(ParamStr(0)) + 'MiniSpec.ini';
   FConfigExisted := FileExists(FConfigFile);
 end;
 
