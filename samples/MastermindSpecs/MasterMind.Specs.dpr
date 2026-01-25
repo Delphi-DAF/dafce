@@ -15,7 +15,5 @@ begin
   ReportMemoryLeaksOnShutdown := True;
   MiniSpec
 //  .Reporter('html')
-  .OpenOutputFile(TOpenOutput.OnCreate)
-  .WaitForUser(TWaitForUser.InConsoleReport)
-  .Run;
+    .Run;
 end.

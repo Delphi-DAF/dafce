@@ -20,7 +20,7 @@ initialization
   ''')
 
   .UseWorld<TGameContext>
-  .ScenarioOutline('Obtener puntuacion completa')
+  .ScenarioOutline('Obtener puntuacion completa @points')
     .Given('el código secreto es <Codigo>', procedure(Ctx: TGameContext)
       begin
         Ctx.Game := TMastermind.Create(Ctx.Codigo);
