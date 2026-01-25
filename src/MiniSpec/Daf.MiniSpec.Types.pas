@@ -343,6 +343,11 @@ type
     property Scenarios: TList<IScenario> read GetScenarios;
   end;
 
+/// <summary>
+/// Converts a TValue to string, with proper array formatting.
+/// </summary>
+function Val2Str(const V: TValue): string;
+
 implementation
 uses
   System.RegularExpressions,

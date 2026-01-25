@@ -68,11 +68,19 @@ type
     /// <summary>
     /// Verifica que se lanzó una excepción
     /// </summary>
-    procedure ToRaise;
+    procedure ToRaise;overload;
     /// <summary>
     /// Verifica que se lanzó una excepción del tipo especificado
     /// </summary>
-    procedure ToRaiseType(ExceptClass: ExceptClass);
+    procedure ToRaise(ExceptClass: ExceptClass);overload;
+    /// <summary>
+    /// Verifica que se lanzó una excepción del tipo genérico especificado
+    /// </summary>
+    procedure ToRaise<T: Exception>;overload;
+    /// <summary>
+    /// Verifica que se lanzó una excepción del tipo especificado (alias de ToRaise)
+    /// </summary>
+    procedure ToRaiseType(ExceptClass: ExceptClass);deprecated 'Use ToRaise(ExceptClass) instead';
     /// <summary>
     /// Verifica que se lanzó una excepción con el mensaje indicado
     /// </summary>
@@ -271,13 +279,23 @@ begin
     raise TExpect.Fail('Expected an exception to be raised');
 end;
 
-procedure TExpectException.ToRaiseType(ExceptClass: ExceptClass);
+procedure TExpectException.ToRaise(ExceptClass: ExceptClass);
 begin
   if not FCapture.WasRaised then
     raise TExpect.Fail('Expected exception of type %s but none was raised', [ExceptClass.ClassName]);
   if not FCapture.ExceptionClass.InheritsFrom(ExceptClass) then
     raise TExpect.Fail('Expected exception of type %s but got %s',
       [ExceptClass.ClassName, FCapture.ExceptionClass.ClassName]);
+end;
+
+procedure TExpectException.ToRaise<T>;
+begin
+  ToRaise(T);
+end;
+
+procedure TExpectException.ToRaiseType(ExceptClass: ExceptClass);
+begin
+  ToRaise(ExceptClass);
 end;
 
 procedure TExpectException.ToRaiseWithMessage(const Msg: string);
