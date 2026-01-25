@@ -305,7 +305,9 @@ begin
     else if Param = '--dry-run' then
       FOptions.IsDryRun := True
     else if Param = '--pause' then
-      FOptions.Pause := True;
+      FOptions.Pause := True
+    else if Param = '--stacktrace' then
+      FOptions.StackTrace := True;
   end;
 
   // Guardar config si el archivo no existía
@@ -384,10 +386,11 @@ begin
   finally
     TagFilter.Free;
   end;
-  if FReporter.SkipCount > 0 then
-    WriteLn(Format('Pass: %d | Fail: %d | Skip: %d | Completed: %s', [FReporter.PassCount, FReporter.FailCount, FReporter.SkipCount, FormatDateTime('yyyy-mm-dd hh:nn:ss', FReporter.CompletedAt)]))
-  else
-    WriteLn(Format('Pass: %d | Fail: %d | Completed: %s', [FReporter.PassCount, FReporter.FailCount, FormatDateTime('yyyy-mm-dd hh:nn:ss', FReporter.CompletedAt)]));
+  WriteLn(Format('Pass: %d | Fail: %d | Skip: %d | Total: %d Specs in %d Features | %d ms | at %s',
+    [FReporter.PassCount, FReporter.FailCount, FReporter.SkipCount,
+     FReporter.PassCount + FReporter.FailCount + FReporter.SkipCount,
+     FReporter.FeatureCount, FReporter.ElapsedMs,
+     FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', FReporter.CompletedAt)]));
 
   if Pause then
     OSShell.WaitForShutdown;
@@ -505,6 +508,7 @@ begin
   WriteLn('  -q, --query <expr>      Show scenarios matching expression (no tests run)');
   WriteLn('  --dry-run               Show what would run without executing tests');
   WriteLn('  --pause                 Wait for keypress before closing console');
+  WriteLn('  --stacktrace            Show full stack trace on errors');
   WriteLn('');
   WriteLn('Reporters:');
   WriteLn('  console                 Console output (default)');

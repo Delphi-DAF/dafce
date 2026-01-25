@@ -248,10 +248,19 @@ Mi Feature
 
 | Método | Descripción |
 |--------|-------------|
-| `ExpectProc(proc).ToRaise` | Lanza cualquier excepción |
-| `ExpectProc(proc).ToRaiseType(EMyException)` | Lanza tipo específico |
-| `ExpectProc(proc).ToRaiseWithMessage('texto')` | Lanza con mensaje específico |
-| `ExpectProc(proc).ToNotRaise` | No lanza excepción |
+| `Expect(proc).ToRaise` | Lanza cualquier excepción |
+| `Expect(proc).ToRaise(EMyException)` | Lanza tipo específico |
+| `Expect(proc).ToRaise<EMyException>` | Lanza tipo específico (genérico) |
+| `Expect(proc).ToRaiseWithMessage('texto')` | Lanza con mensaje específico |
+| `Expect(proc).ToNotRaise` | No lanza excepción |
+
+Ejemplo:
+```pascal
+Expect(procedure
+  begin
+    Calculator.Divide(10, 0);
+  end).ToRaise(EDivByZero);
+```
 
 ---
 
@@ -268,6 +277,10 @@ Mi Feature
 | `-r, --reporter <spec>` | Reporter con opciones (ver abajo) |
 | `--pause` | Espera tecla al finalizar |
 | `--dry-run` | Lista escenarios sin ejecutarlos |
+| `--stacktrace` | Muestra stack trace completo en errores |
+
+> **Nota**: `--stacktrace` requiere una librería de stack traces (JclDebug, MadExcept, EurekaLog) 
+> para mostrar información útil. Sin ella, `Exception.StackTrace` estará vacío.
 
 ### Expresiones de Tags
 

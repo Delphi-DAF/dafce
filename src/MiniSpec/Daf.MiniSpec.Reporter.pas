@@ -37,6 +37,7 @@ type
     FFilter: string;
     FPause: Boolean;
     FDryRun: Boolean;
+    FStackTrace: Boolean;
     FReporterName: string;
     FReporterOptions: TObjectDictionary<string, TReporterOptions>;
   public
@@ -58,6 +59,7 @@ type
     property Filter: string read FFilter write FFilter;
     property Pause: Boolean read FPause write FPause;
     property IsDryRun: Boolean read FDryRun write FDryRun;
+    property StackTrace: Boolean read FStackTrace write FStackTrace;
     property ReporterName: string read FReporterName write FReporterName;
   end;
 
@@ -91,6 +93,8 @@ type
     function GetFailCount: Cardinal;
     function GetPassCount: Cardinal;
     function GetSkipCount: Cardinal;
+    function GetElapsedMs: Integer;
+    function GetFeatureCount: Integer;
     function GetCompletedAt: TDateTime;
     procedure Configure(const Options: TReporterOptions);
     function ShowHelp: Boolean;
@@ -106,11 +110,14 @@ type
     property PassCount: Cardinal read GetPassCount;
     property FailCount: Cardinal read GetFailCount;
     property SkipCount: Cardinal read GetSkipCount;
+    property ElapsedMs: Integer read GetElapsedMs;
+    property FeatureCount: Integer read GetFeatureCount;
     property CompletedAt: TDateTime read GetCompletedAt;
   end;
 
   TCustomReporter = class(TInterfacedObject, ISpecReporter)
   strict private
+    FFeatureCount: Integer;
     // Counters at different levels
     FReportCounters: TSpecCounters;
     FFeatureCounters: TSpecCounters;
@@ -118,6 +125,7 @@ type
     FOutlineCounters: TSpecCounters;
     // Current context
     FCurrentFeature: IFeature;
+    FCurrentRule: IRule;
     FCurrentScenario: IScenario;
     FCurrentOutline: IScenarioOutline;
     // Report options
@@ -131,6 +139,8 @@ type
     function GetFailCount: Cardinal;virtual;
     function GetPassCount: Cardinal;virtual;
     function GetSkipCount: Cardinal;virtual;
+    function GetElapsedMs: Integer;virtual;
+    function GetFeatureCount: Integer;virtual;
     function GetCompletedAt: TDateTime;virtual;
     function GetLevel(const Kind: TSpecItemKind): Byte;virtual;
     function GetKeyWord(const Kind: TSpecItemKind): string;virtual;
@@ -158,6 +168,7 @@ type
     procedure ReportOutline(const Outline: IScenarioOutline);virtual;
     // Properties for current context
     property CurrentFeature: IFeature read FCurrentFeature;
+    property CurrentRule: IRule read FCurrentRule;
     property CurrentScenario: IScenario read FCurrentScenario;
     property CurrentOutline: IScenarioOutline read FCurrentOutline;
     property ReportCounters: TSpecCounters read FReportCounters;
@@ -167,6 +178,10 @@ type
     property Options: TMiniSpecOptions read FOptions;
     // CLI options for subclasses
     function GetCliOption(const Key: string; const Default: string = ''): string;
+    /// <summary>
+    /// Returns error message, optionally with stack trace if Options.StackTrace is enabled.
+    /// </summary>
+    function GetErrorDetail(const RunInfo: TSpecRunInfo): string;
   public
     destructor Destroy; override;
     procedure Configure(const Options: TReporterOptions);virtual;
@@ -1456,7 +1471,9 @@ end;
 
 procedure TCustomReporter.BeginReport;
 begin
+  FFeatureCount := 0;
   FReportCounters.Reset;
+  FReportCounters.Start;
   FFeatureCounters.Reset;
   FOutlineCounters.Reset;
   FCurrentFeature := nil;
@@ -1466,6 +1483,7 @@ end;
 
 procedure TCustomReporter.Report(Feature: IFeature);
 begin
+  Inc(FFeatureCount);
   BeginFeature(Feature);
   DoReport(Feature);
   for var Rule in Feature.Rules do
@@ -1516,6 +1534,10 @@ begin
   if not HasVisitedScenario then
     Exit;
 
+  // Establecer contexto de Rule actual (solo para Rules explícitas)
+  if Rule.Kind = sikRule then
+    FCurrentRule := Rule;
+
   // Solo mostrar header si es Rule explícita (no ImplicitRule)
   if Rule.Kind = sikRule then
     DoReport(Rule);
@@ -1534,6 +1556,10 @@ begin
     else
       Report(Scenario);
   end;
+
+  // Limpiar contexto de Rule
+  if Rule.Kind = sikRule then
+    FCurrentRule := nil;
 end;
 
 procedure TCustomReporter.Report(Background: IBackground);
@@ -1585,6 +1611,7 @@ end;
 
 procedure TCustomReporter.EndReport;
 begin
+  FReportCounters.Stop;
   FCompletedAt := Now;
 end;
 
@@ -1596,6 +1623,16 @@ end;
 function TCustomReporter.GetSkipCount: Cardinal;
 begin
   Result := FReportCounters.SkipCount;
+end;
+
+function TCustomReporter.GetElapsedMs: Integer;
+begin
+  Result := FReportCounters.ElapsedMs;
+end;
+
+function TCustomReporter.GetFeatureCount: Integer;
+begin
+  Result := FFeatureCount;
 end;
 
 function TCustomReporter.GetCompletedAt: TDateTime;
@@ -1629,14 +1666,13 @@ end;
 
 function TCustomReporter.GetLevel(const Kind: TSpecItemKind): Byte;
 begin
+  // Nivel base por tipo (sin considerar contexto de Rule)
   case Kind of
     sikFeature: Result := 0;
-    sikRule: Result := 1;  // Rule está un nivel debajo de Feature
+    sikRule: Result := 1;
     sikBackground, sikScenario, sikScenarioOutline, sikExample: Result := 1;
     sikExampleInit: Result := 2;
-    sikGiven: Result := 2;
-    sikWhen: Result := 2;
-    sikThen: Result := 2;
+    sikGiven, sikWhen, sikThen: Result := 2;
     else
       Result := 0;
   end;
@@ -1645,6 +1681,20 @@ end;
 function TCustomReporter.GetPassCount: Cardinal;
 begin
   Result := FReportCounters.PassCount;
+end;
+
+function TCustomReporter.GetErrorDetail(const RunInfo: TSpecRunInfo): string;
+begin
+  if not Assigned(RunInfo.Error) then
+    Exit('');
+
+  Result := RunInfo.Error.Message;
+  if Assigned(FOptions) and FOptions.StackTrace then
+  begin
+    var Stack := RunInfo.Error.StackTrace;
+    if not Stack.IsEmpty then
+      Result := Result + SLineBreak + 'Stack trace:' + SLineBreak + Stack;
+  end;
 end;
 
 procedure TCustomReporter.Report(Features: TList<IFeature>; Options: TMiniSpecOptions);
@@ -1667,14 +1717,35 @@ procedure TConsoleReporter.DoReport(const S: ISpecItem);
 var
   Feat: IFeature;
   DisplayText: string;
+  AllSkipped: Boolean;
 begin
   inherited;
   var Kind := GetKeyWord(S.Kind);
   var Level := GetLevel(S.Kind);
 
+  // Ajustar nivel si estamos dentro de una Rule explícita
+  if Assigned(CurrentRule) and (S.Kind <> sikRule) then
+    Inc(Level);
+
   // Para features, mostrar solo el Title
   if (S.Kind = sikFeature) and Supports(S, IFeature, Feat) then
-    DisplayText := Feat.Title
+  begin
+    DisplayText := Feat.Title;
+    // Verificar si todos los escenarios fueron skipped
+    AllSkipped := True;
+    for var Rule in Feat.Rules do
+      for var Scenario in Rule.Scenarios do
+        if Scenario.RunInfo.State = srsFinished then
+        begin
+          AllSkipped := False;
+          Break;
+        end;
+    if AllSkipped then
+    begin
+      OutputLn(Level, Format('- %s (skip)', [Kind + ' ' + DisplayText]));
+      Exit;
+    end;
+  end
   else
     DisplayText := S.Description;
 
@@ -1682,7 +1753,7 @@ begin
   if S.RunInfo.State = srsSkiped then
     OutputLn(Level, Format('- %s (skip)', [Kind + ' ' + DisplayText]))
   else
-    OutputLn(Level, Kind + ' ' + DisplayText, S.RunInfo.IsSuccess, S.RunInfo.ExecTimeMs, S.RunInfo.ErrMsg);
+    OutputLn(Level, Kind + ' ' + DisplayText, S.RunInfo.IsSuccess, S.RunInfo.ExecTimeMs, GetErrorDetail(S.RunInfo));
 end;
 
 function TConsoleReporter.ExtractValue(const Match: TMatch): string;
@@ -1741,7 +1812,7 @@ end;
 
 procedure TConsoleReporter.ReportOutline(const Outline: IScenarioOutline);
 var
-  AllSuccess: Boolean;
+  AllSuccess, AllSkipped: Boolean;
   TotalTime: Int64;
   ColWidths: TArray<Integer>;
   Headers: TArray<string>;
@@ -1752,29 +1823,43 @@ begin
   // Primero delegar al base para conteo de estadísticas
   inherited;
 
-  // Ahora solo presentación - sin tocar contadores
+  // Calcular nivel base (ajustado si estamos dentro de una Rule)
+  var BaseLevel: Byte := 1;
+  if Assigned(CurrentRule) then
+    Inc(BaseLevel);
+
+  // Determinar estado general del Outline
   AllSuccess := True;
+  AllSkipped := True;
   TotalTime := 0;
   for var Example in Outline.Examples do
   begin
     if Example.RunInfo.State = srsFinished then
     begin
+      AllSkipped := False;
       TotalTime := TotalTime + Example.RunInfo.ExecTimeMs;
       if not Example.RunInfo.IsSuccess then
         AllSuccess := False;
     end;
   end;
 
-  // Header del Scenario Outline con resultado
-  OutputLn(1, 'Scenario Outline: ' + Outline.Description, AllSuccess, TotalTime);
+  // Header del Scenario Outline con resultado o skip
+  if AllSkipped then
+    OutputLn(BaseLevel, Format('- Scenario Outline: %s (skip)', [Outline.Description]))
+  else
+    OutputLn(BaseLevel, 'Scenario Outline: ' + Outline.Description, AllSuccess, TotalTime);
+
+  // Si todo está skipped, no mostrar detalles
+  if AllSkipped then
+    Exit;
 
   // Steps template (sin tiempo individual)
   for var Step in Outline.StepsGiven do
-    OutputLn(2, GetKeyWord(Step.Kind) + ' ' + Step.Description);
+    OutputLn(BaseLevel + 1, GetKeyWord(Step.Kind) + ' ' + Step.Description);
   for var Step in Outline.StepsWhen do
-    OutputLn(2, GetKeyWord(Step.Kind) + ' ' + Step.Description);
+    OutputLn(BaseLevel + 1, GetKeyWord(Step.Kind) + ' ' + Step.Description);
   for var Step in Outline.StepsThen do
-    OutputLn(2, GetKeyWord(Step.Kind) + ' ' + Step.Description);
+    OutputLn(BaseLevel + 1, GetKeyWord(Step.Kind) + ' ' + Step.Description);
 
   // Calcular anchos de columna
   Headers := Outline.Headers;
@@ -1786,18 +1871,18 @@ begin
   begin
     Values := Example.ExampleMeta.Values;
     for i := 0 to High(Values) do
-      if (i <= High(ColWidths)) and (Length(Values[i].ToString) > ColWidths[i]) then
-        ColWidths[i] := Length(Values[i].ToString);
+      if (i <= High(ColWidths)) and (Length(Val2Str(Values[i])) > ColWidths[i]) then
+        ColWidths[i] := Length(Val2Str(Values[i]));
   end;
 
   // Tabla de Examples
-  OutputLn(2, 'Examples:');
+  OutputLn(BaseLevel + 1, 'Examples:');
 
   // Header de la tabla (3 espacios para alinear con emoji ?)
   HeaderLine := '|';
   for i := 0 to High(Headers) do
     HeaderLine := HeaderLine + ' ' + Headers[i].PadRight(ColWidths[i]) + ' |';
-  OutputLn(3, '   ' + HeaderLine);
+  OutputLn(BaseLevel + 2, '   ' + HeaderLine);
 
   // Cada fila con su resultado (solo presentación, sin contar)
   for var Example in Outline.Examples do
@@ -1809,11 +1894,11 @@ begin
       for i := 0 to High(Headers) do
       begin
         if i <= High(Values) then
-          Row := Row + ' ' + Values[i].ToString.PadRight(ColWidths[i]) + ' |'
+          Row := Row + ' ' + Val2Str(Values[i]).PadRight(ColWidths[i]) + ' |'
         else
           Row := Row + ' ' + ''.PadRight(ColWidths[i]) + ' |';
       end;
-      OutputLn(3, Row, Example.RunInfo.IsSuccess, Example.RunInfo.ExecTimeMs, Example.RunInfo.ErrMsg);
+      OutputLn(BaseLevel + 2, Row, Example.RunInfo.IsSuccess, Example.RunInfo.ExecTimeMs, GetErrorDetail(Example.RunInfo));
     end;
   end;
 end;
@@ -1954,7 +2039,7 @@ begin
 
     ValuesArr := TJSONArray.Create;
     for Value in Example.ExampleMeta.Values do
-      ValuesArr.Add(Value.ToString);
+      ValuesArr.Add(Val2Str(Value));
     ExampleObj.AddPair('values', ValuesArr);
 
     ExampleObj.AddPair('status', GetStatus(Example as ISpecItem));
@@ -2319,8 +2404,8 @@ begin
     Values := Example.ExampleMeta.Values;
     for i := 0 to High(Values) do
       if i <= High(ColWidths) then
-        if Length(Values[i].ToString) > ColWidths[i] then
-          ColWidths[i] := Length(Values[i].ToString);
+        if Length(Val2Str(Values[i])) > ColWidths[i] then
+          ColWidths[i] := Length(Val2Str(Values[i]));
   end;
 
   // Write header row
@@ -2336,7 +2421,7 @@ begin
     DataLine := '|';
     for i := 0 to High(Values) do
       if i <= High(ColWidths) then
-        DataLine := DataLine + ' ' + Values[i].ToString.PadRight(ColWidths[i]) + ' |';
+        DataLine := DataLine + ' ' + Val2Str(Values[i]).PadRight(ColWidths[i]) + ' |';
     AddLine(DataLine + ResultComment(Example));
   end;
 end;
@@ -2866,7 +2951,7 @@ begin
         // Valores de este example
         RowArray := TJSONArray.Create;
         for var Val in Example.ExampleMeta.Values do
-          RowArray.Add(Val.ToString);
+          RowArray.Add(Val2Str(Val));
         ExampleObj.AddPair('values', RowArray);
         ExampleObj.AddPair('skipped', TJSONBool.Create(IsSkipped));
         if IsSkipped then
