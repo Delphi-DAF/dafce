@@ -27,3 +27,5 @@ Thumbs.db
 # Release scripts
 .env
 releases/
+# Private local files
+.private/

@@ -97,12 +97,16 @@
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
         <DCCReference Include="rtl.dcp"/>
+        <DCCReference Include="IndySystem.dcp"/>
+        <DCCReference Include="IndyCore.dcp"/>
+        <DCCReference Include="IndyProtocols.dcp"/>
         <DCCReference Include="Daf.MiniSpec.pas"/>
         <DCCReference Include="Daf.MiniSpec.Expects.pas"/>
         <DCCReference Include="Daf.MiniSpec.Reporter.pas"/>
         <DCCReference Include="Daf.MiniSpec.Utils.pas"/>
         <DCCReference Include="Daf.MiniSpec.Builders.pas"/>
         <DCCReference Include="Daf.MiniSpec.Types.pas"/>
+        <DCCReference Include="Daf.MiniSpec.TagFilter.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\source.optset</DependentOn>
@@ -1006,6 +1010,7 @@
                 <ProjectRoot Platform="Win64x" Name="$(PROJECTNAME)"/>
             </Deployment>
             <Platforms>
+                <Platform value="Linux64">False</Platform>
                 <Platform value="Win32">True</Platform>
                 <Platform value="Win64">True</Platform>
                 <Platform value="Win64x">False</Platform>
