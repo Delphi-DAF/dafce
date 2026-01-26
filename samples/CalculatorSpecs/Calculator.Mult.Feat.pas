@@ -72,7 +72,7 @@ initialization
         begin
           World.Calculator.Divide(World.A, World.B);
         end)
-      .&Then('an exception is raised', procedure(World: TCalculatorWorld)
+      .&Then('an exception EDivByZero is raised', procedure(World: TCalculatorWorld)
         begin
           Expect(Raised).ToBe(EDivByZero);
         end);

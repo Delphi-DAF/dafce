@@ -402,5 +402,6 @@ Las opciones de línea de comandos tienen prioridad sobre el archivo.
 | `Daf.MiniSpec.Builders.pas` | Builders fluent |
 | `Daf.MiniSpec.Expects.pas` | Assertions |
 | `Daf.MiniSpec.Reporter.pas` | Reporters (console, HTML, JSON, Live) |
+| `Daf.MiniSpec.LiveDashboard.pas` | HTML template del Live Dashboard |
 | `Daf.MiniSpec.TagFilter.pas` | Parser de expresiones de tags |
 | `Daf.MiniSpec.Utils.pas` | Utilidades |
