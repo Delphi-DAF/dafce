@@ -16,6 +16,37 @@ const
     /* Arrow rotation for details/summary */
     details summary .arrow-icon { transition: transform 0.2s ease; }
     details[open] > summary .arrow-icon { transform: rotate(90deg); }
+
+    /* Print styles */
+    @media print {
+      body { background: white !important; color: black !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .no-print { display: none !important; }
+      details { display: block !important; }
+      /* Show summary but hide arrow and remove pointer */
+      details > summary { cursor: default !important; }
+      details > summary .arrow-icon { display: none !important; }
+      details > div, details > * { display: block !important; }
+      details[open] > summary ~ * { display: block !important; }
+      /* Force all details open */
+      details:not([open]) > summary ~ * { display: block !important; max-height: none !important; }
+      /* Reset colors for print */
+      .bg-gray-900 { background: white !important; }
+      .bg-gray-800, .bg-gray-700 { background: #f3f4f6 !important; }
+      .text-white, .text-gray-300, .text-gray-400 { color: #374151 !important; }
+      .text-green-400 { color: #059669 !important; }
+      .text-red-400 { color: #dc2626 !important; }
+      .text-yellow-400 { color: #d97706 !important; }
+      .border-green-700 { border-color: #059669 !important; }
+      .border-red-700 { border-color: #dc2626 !important; }
+      .bg-green-900\/30 { background: #d1fae5 !important; }
+      .bg-red-900\/30 { background: #fee2e2 !important; }
+      .bg-red-900\/50 { background: #fecaca !important; }
+      /* Remove scroll containers */
+      .max-h-\[600px\] { max-height: none !important; }
+      .overflow-y-auto { overflow: visible !important; }
+      /* Ensure page breaks work well */
+      .space-y-2 > div { page-break-inside: avoid; }
+    }
   </style>
 </head>
 <body class="bg-gray-900 text-white min-h-screen">
@@ -49,7 +80,7 @@ const
         </svg>
         <span>MiniSpec Live <span class="text-sm text-gray-500 font-normal">v{{MINISPEC_VERSION}}</span></span>
       </h1>
-      <div class="flex items-center gap-4">
+      <div class="flex items-center gap-4 no-print">
         <span x-show="connected" class="text-green-400 flex items-center gap-1">
           <span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span> Connected
         </span>
@@ -78,7 +109,7 @@ const
     </div>
 
     <!-- Filters Panel -->
-    <div class="mb-4 bg-gray-800 rounded-lg p-4">
+    <div class="mb-4 bg-gray-800 rounded-lg p-4 no-print">
       <div class="flex flex-wrap items-center gap-4">
         <!-- Status Filters -->
         <div class="flex items-center gap-3">
@@ -118,7 +149,7 @@ const
     </div>
 
     <!-- Quick Actions: First Failure & Top 10 Slowest -->
-    <div class="mb-4 flex gap-4" x-show="reportComplete">
+    <div class="mb-4 flex gap-4 no-print" x-show="reportComplete">
       <!-- First Failure -->
       <template x-if="firstFailure">
         <button @click="scrollToFeature(firstFailure.featureName)"
@@ -133,6 +164,19 @@ const
               class="bg-yellow-900/50 border border-yellow-700 rounded-lg px-4 py-2 text-sm hover:bg-yellow-900/70 transition flex items-center gap-2">
         <span>&#x231B;</span>
         <span x-text="showSlowest ? 'Hide Slowest' : 'Top 10 Slowest'"></span>
+      </button>
+    </div>
+
+    <!-- Print Button (visible when report complete) -->
+    <div class="mb-4 no-print flex items-center gap-3" x-show="reportComplete">
+      <input type="text" x-model="exportFilename" placeholder="report-name"
+             class="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm w-48 focus:outline-none focus:border-blue-500">
+      <button @click="printReport()"
+              class="bg-blue-900/50 border border-blue-700 rounded-lg px-4 py-2 text-sm hover:bg-blue-900/70 transition flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+        </svg>
+        <span>Export / Print</span>
       </button>
     </div>
 
@@ -339,6 +383,7 @@ const
         filterRegex: '',
         filterTag: '',
         showSlowest: false,
+        exportFilename: '',
 
         get totalTests() {
           return this.pass + this.fail + this.skip;
@@ -431,6 +476,21 @@ const
             el.scrollIntoView({ behavior: 'smooth', block: 'center' });
             el.querySelector('details')?.setAttribute('open', '');
           }
+        },
+
+        printReport() {
+          // Expand all details before printing
+          document.querySelectorAll('details').forEach(d => d.setAttribute('open', ''));
+          // Set document title for PDF filename
+          const originalTitle = document.title;
+          const filename = this.exportFilename.trim() || 'MiniSpec-Report';
+          document.title = filename;
+          // Small delay to let browser update, then print
+          setTimeout(() => {
+            window.print();
+            // Restore title after print dialog
+            setTimeout(() => { document.title = originalTitle; }, 500);
+          }, 100);
         },
 
         init() {

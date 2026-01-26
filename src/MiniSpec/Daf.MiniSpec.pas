@@ -192,8 +192,6 @@ var
 begin
   if SameText(Name, 'console') then
     Result := TConsoleReporter.Create
-  else if SameText(Name, 'html') then
-    Result := THTMLReporter.Create
   else if SameText(Name, 'json') then
     Result := TJsonReporter.Create
   else if SameText(Name, 'gherkin') then

@@ -362,9 +362,8 @@ MiApp.exe -f "(@fast or @critical) and ~@skip"
 Sintaxis: `-r <nombre>:<opcion1>=<valor>,<opcion2>=<valor>,...`
 
 | Reporter | Opciones | Ejemplo |
-|----------|----------|---------|
+|----------|----------|---------||
 | `console` | *(ninguna)* | `-r console` |
-| `html` | `output=<file>` | `-r html:output=report.html` |
 | `json` | `output=<file>` | `-r json:output=report.json` |
 | `gherkin` | `output=<dir>` | `-r gherkin:output=features/` |
 | `live` | `port=<num>`, `wait-client` | `-r live:port=8080,wait-client` |
@@ -377,12 +376,9 @@ MiniSpec crea automáticamente `MiniSpec.ini` en el directorio del ejecutable:
 
 ```ini
 [minispec]
-reporter=html
+reporter=live
 filter=@unit
 pause=true
-
-[reporter.html]
-output=report.html
 
 [reporter.live]
 port=8080
