@@ -113,6 +113,51 @@ Feature('Login').UseWorld<TLoginWorld>
 Feature('Reportes').UseWorld<TReportWorld>
 ```
 
+### TFeatureWorld: Acceso al Contexto de Ejecución
+
+Para casos avanzados donde el World necesita acceder al contexto de ejecución (step actual, scenario, feature), MiniSpec proporciona `TFeatureWorld` como clase base opcional.
+
+**Diseño**: El contexto está completamente oculto en la clase. Solo es accesible mediante cast explícito a `ISpecContext`. Esto mantiene la API del World limpia y evita exponer detalles internos del framework.
+
+```pascal
+type
+  TMyWorld = class(TFeatureWorld)
+  public
+    // Tus campos y métodos normales
+    Value: Integer;
+  end;
+
+// En los steps, acceder al contexto via ISpecContext:
+.When('ejecuto algo', procedure(World: TMyWorld)
+  var
+    Ctx: ISpecContext;
+  begin
+    Ctx := World as ISpecContext;  // Cast explícito requerido
+    
+    // Acceso al step actual
+    WriteLn('Step: ', Ctx.CurrentStep.Description);
+    
+    // Navegación directa a padres
+    WriteLn('Scenario: ', Ctx.CurrentScenario.Description);
+    WriteLn('Feature: ', Ctx.CurrentFeature.Title);
+    
+    // CurrentRule puede ser nil si no hay Rule explícita
+    if Assigned(Ctx.CurrentRule) then
+      WriteLn('Rule: ', Ctx.CurrentRule.Description);
+  end)
+```
+
+**ISpecContext proporciona**:
+
+| Propiedad/Método | Descripción |
+|------------------|-------------|
+| `CurrentStep` | El step que se está ejecutando |
+| `CurrentScenario` | El scenario (o Example) actual |
+| `CurrentRule` | La Rule contenedora (nil si no hay) |
+| `CurrentFeature` | La Feature contenedora |
+
+**Nota técnica**: `TFeatureWorld` hereda de `System.TNoRefCountObject` para evitar problemas con ARC (Automatic Reference Counting). Esto significa que las instancias del World se gestionan manualmente por el framework.
+
 ### Vocabulario Gherkin
 
 | Gherkin | MiniSpec | Nota |

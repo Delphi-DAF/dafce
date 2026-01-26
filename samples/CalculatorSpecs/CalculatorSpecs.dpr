@@ -7,7 +7,8 @@ uses
   Calculator.Add.Feature in 'Calculator.Add.Feature.pas',
   Calculator.Engine in 'Calculator.Engine.pas',
   Calculator.SpecHelpers in 'Calculator.SpecHelpers.pas',
-  Calculator.Mult.Feature in 'Calculator.Mult.Feature.pas';
+  Calculator.Mult.Feature in 'Calculator.Mult.Feature.pas',
+  FeatureWorld.Feat in 'FeatureWorld.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

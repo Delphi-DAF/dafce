@@ -206,6 +206,35 @@ type
     property Scenarios: TList<IScenario> read GetScenarios;
   end;
 
+  /// <summary>
+  /// Interfaz para acceder al contexto de ejecución desde el World.
+  /// Solo visible si se hace cast explícito: (World as ISpecContext).CurrentStep
+  /// </summary>
+  ISpecContext = interface
+    ['{B8C9D0E1-F2A3-4B5C-6D7E-8F9A0B1C2D3E}']
+    function GetCurrentStep: IScenarioStep;
+    procedure SetCurrentStep(const Value: IScenarioStep);
+    function CurrentScenario: IScenario;
+    function CurrentRule: IRule;
+    function CurrentFeature: IFeature;
+    property CurrentStep: IScenarioStep read GetCurrentStep write SetCurrentStep;
+  end;
+
+  /// <summary>
+  /// Clase base opcional para Worlds que necesitan acceso al contexto de ejecución.
+  /// Hereda de TNoRefCountObject para evitar ARC.
+  /// El contexto está oculto y solo es accesible via ISpecContext.
+  /// </summary>
+  TFeatureWorld = class(System.TNoRefCountObject, ISpecContext)
+  strict private
+    FCurrentStep: IScenarioStep;
+    function GetCurrentStep: IScenarioStep;
+    procedure SetCurrentStep(const Value: IScenarioStep);
+    function CurrentScenario: IScenario;
+    function CurrentRule: IRule;
+    function CurrentFeature: IFeature;
+  end;
+
   TSpecItem = class(TInterfacedObject, ISpecItem)
   strict private
     FTags: TSpecTags;
@@ -506,6 +535,63 @@ begin
   Result := Self.Result = srrSuccess;
 end;
 
+{ TFeatureWorld }
+
+function TFeatureWorld.GetCurrentStep: IScenarioStep;
+begin
+  Result := FCurrentStep;
+end;
+
+procedure TFeatureWorld.SetCurrentStep(const Value: IScenarioStep);
+begin
+  FCurrentStep := Value;
+end;
+
+function TFeatureWorld.CurrentScenario: IScenario;
+var
+  Parent: ISpecItem;
+begin
+  Result := nil;
+  if not Assigned(FCurrentStep) then Exit;
+  Parent := FCurrentStep.Parent;
+  while Assigned(Parent) do
+  begin
+    if Supports(Parent, IScenario, Result) then
+      Exit;
+    Parent := Parent.Parent;
+  end;
+end;
+
+function TFeatureWorld.CurrentRule: IRule;
+var
+  Parent: ISpecItem;
+begin
+  Result := nil;
+  if not Assigned(FCurrentStep) then Exit;
+  Parent := FCurrentStep.Parent;
+  while Assigned(Parent) do
+  begin
+    if Supports(Parent, IRule, Result) then
+      Exit;
+    Parent := Parent.Parent;
+  end;
+end;
+
+function TFeatureWorld.CurrentFeature: IFeature;
+var
+  Parent: ISpecItem;
+begin
+  Result := nil;
+  if not Assigned(FCurrentStep) then Exit;
+  Parent := FCurrentStep.Parent;
+  while Assigned(Parent) do
+  begin
+    if Supports(Parent, IFeature, Result) then
+      Exit;
+    Parent := Parent.Parent;
+  end;
+end;
+
 { TSpecItem }
 
 constructor TSpecItem.Create(const Kind: TSpecItemKind; const Parent: ISpecItem; const Description: string);
@@ -599,6 +685,8 @@ begin
 end;
 
 procedure TScenarioStep<T>.Run(World: TObject);
+var
+  SpecContext: ISpecContext;
 begin
   var SW := TStopwatch.StartNew;
   try
@@ -606,7 +694,12 @@ begin
     FRunInfo.State := srsRunning;
     FRunInfo.Result := srrSuccess;
     if Assigned(FProc) then
+    begin
+      // Si el World implementa ISpecContext, setear el Step actual
+      if Supports(World, ISpecContext, SpecContext) then
+        SpecContext.CurrentStep := Self;
       FProc(World as T);
+    end;
   except
     on E: ExpectFail do
     begin

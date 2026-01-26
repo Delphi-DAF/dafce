@@ -8,6 +8,11 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **MiniSpec**: `TFeatureWorld` base class for Worlds needing execution context access
+- **MiniSpec**: `ISpecContext` interface with `CurrentStep`, `CurrentScenario`, `CurrentRule`, `CurrentFeature`
+
 ## [1.2.0] - 2026-01-24
 
 ### Added
@@ -26,7 +31,7 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
 ### Changed
 
-- **MiniSpec**: New reporter CLI syntax for v1.5.0
+- **MiniSpec**: New reporter CLI syntax for v1.2.0
 - **MiniSpec**: TLiveReporter refactored to independent reporter
 - **MiniSpec**: CLI cleanup - DryRun, Pause, CompletedAt options
 - **BDS.bat**: Updated to v4.1.0 with `--project` option
