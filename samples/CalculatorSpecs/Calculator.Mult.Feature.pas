@@ -70,13 +70,10 @@ initialization
         end)
       .When('division is attempted', procedure(World: TCalculatorWorld)
         begin
-          // Exception will be caught by Then
+          World.Calculator.Divide(World.A, World.B);
         end)
       .&Then('an exception is raised', procedure(World: TCalculatorWorld)
         begin
-          Expect(procedure
-            begin
-              World.Calculator.Divide(World.A, World.B);
-            end).ToRaise(EDivByZero);
+          Expect(Raised).ToBe(EDivByZero);
         end);
 end.

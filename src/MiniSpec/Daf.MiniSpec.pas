@@ -61,6 +61,12 @@ type
 
 function Expect(const Value: Variant): TExpect; overload;
 function Expect(Proc: TProc): TExpectException; overload;
+function Expect(const Capture: TCapturedRaise): TExpectException; overload;
+/// <summary>
+/// Returns the captured exception from a When step.
+/// Use in Then step: Expect(Raised).ToBe(EDivByZero)
+/// </summary>
+function Raised: TCapturedRaise;
 function Feature(const Description: string): TFeatureBuilder;
 function MiniSpec: TMiniSpec;inline;
 
@@ -84,6 +90,21 @@ end;
 function Expect(Proc: TProc): TExpectException;
 begin
   Result := TExpectException.Create(TExceptionCapture.Create(Proc));
+end;
+
+function Expect(const Capture: TCapturedRaise): TExpectException;
+begin
+  Result := TExpectException.Create(TExceptionCapture.CreateFrom(Capture));
+end;
+
+function Raised: TCapturedRaise;
+var
+  Scenario: IScenario;
+begin
+  Scenario := GetCurrentScenario;
+  if not Assigned(Scenario) then
+    raise TExpect.Fail('Raised called outside of a scenario context');
+  Result := Scenario.ConsumeCapturedRaise;
 end;
 
 function Feature(const Description: string): TFeatureBuilder;

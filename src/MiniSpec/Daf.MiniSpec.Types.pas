@@ -37,6 +37,18 @@ type
     RowIndex: Integer;             // Índice de la fila (1-based)
   end;
 
+  /// <summary>
+  /// Captures exception info from When step without keeping the Exception object.
+  /// This avoids memory leaks from AcquireExceptionObject.
+  /// </summary>
+  TCapturedRaise = record
+    WasRaised: Boolean;
+    ExceptionClass: ExceptClass;
+    ExceptionMessage: string;
+    class function Empty: TCapturedRaise; static;
+    class function From(E: Exception): TCapturedRaise; static;
+  end;
+
   TSpecRunInfo = record
   public
     State: TSpecRunState;
@@ -136,9 +148,14 @@ type
     function GetStepsWhen: TList<IScenarioStep>;
     function GetStepsThen: TList<IScenarioStep>;
     function GetExampleMeta: TExampleMeta;
+    function GetCapturedRaise: TCapturedRaise;
+    procedure SetCapturedRaise(const Value: TCapturedRaise);
+    procedure ClearCapturedRaise;
+    function ConsumeCapturedRaise: TCapturedRaise;
     property StepsWhen: TList<IScenarioStep> read GetStepsWhen;
     property StepsThen: TList<IScenarioStep> read GetStepsThen;
     property ExampleMeta: TExampleMeta read GetExampleMeta;
+    property CapturedRaise: TCapturedRaise read GetCapturedRaise write SetCapturedRaise;
   end;
 
   /// <summary>
@@ -249,13 +266,18 @@ type
     FStepsGiven: TList<IScenarioStep>;
     FStepsWhen: TList<IScenarioStep>;
     FStepsThen: TList<IScenarioStep>;
+    FCapturedRaise: TCapturedRaise;
     function GetStepsGiven: TList<IScenarioStep>;
     function GetStepsWhen: TList<IScenarioStep>;
     function GetStepsThen: TList<IScenarioStep>;
     function GetExampleMeta: TExampleMeta;
+    function GetCapturedRaise: TCapturedRaise;
+    procedure SetCapturedRaise(const Value: TCapturedRaise);
   private
     function GetFeature: IFeature;
     procedure RunSteps(Steps: TList<IScenarioStep>; World: TObject);
+    procedure ClearCapturedRaise;
+    function ConsumeCapturedRaise: TCapturedRaise;
   public
     constructor Create(const Feature: IFeature; const Description: string);overload;
     constructor Create(const Feature: IFeature; const Description: string; AddToFeatureScenarios: Boolean);overload;
@@ -348,12 +370,52 @@ type
 /// </summary>
 function Val2Str(const V: TValue): string;
 
+/// <summary>
+/// Returns the currently executing scenario. Used by ExpectRaised to access pending exceptions.
+/// </summary>
+function GetCurrentScenario: IScenario;
+
+/// <summary>
+/// Sets the currently executing scenario. Used internally by TScenario.Run.
+/// </summary>
+procedure SetCurrentScenario(const Value: IScenario);
+
 implementation
 uses
   System.RegularExpressions,
   System.Diagnostics,
   Daf.MiniSpec.Expects,
   Daf.MiniSpec;
+
+threadvar
+  /// <summary>
+  /// The currently executing scenario. Used by Expect functions to access pending exceptions.
+  /// </summary>
+  CurrentScenario: IScenario;
+
+{ TCapturedRaise }
+
+class function TCapturedRaise.Empty: TCapturedRaise;
+begin
+  Result.WasRaised := False;
+  Result.ExceptionClass := nil;
+  Result.ExceptionMessage := '';
+end;
+
+class function TCapturedRaise.From(E: Exception): TCapturedRaise;
+begin
+  Result.WasRaised := Assigned(E);
+  if Result.WasRaised then
+  begin
+    Result.ExceptionClass := ExceptClass(E.ClassType);
+    Result.ExceptionMessage := E.Message;
+  end
+  else
+  begin
+    Result.ExceptionClass := nil;
+    Result.ExceptionMessage := '';
+  end;
+end;
 
 function Val2Str(const V: TValue): string;
 begin
@@ -467,8 +529,7 @@ end;
 
 destructor TSpecItem.Destroy;
 begin
- if Assigned(FRunInfo.Error) then;
-   FRunInfo.Error.Free;
+  FreeAndNil(FRunInfo.Error);
   inherited;
 end;
 
@@ -554,8 +615,19 @@ begin
     end;
     on E: Exception do
     begin
-      FRunInfo.Result := srrError;
-      FRunInfo.Error := Exception(AcquireExceptionObject);
+      // For When steps, capture exception info instead of marking as error
+      // The Then step will verify it with ExpectRaised
+      var Scenario := GetCurrentScenario;
+      if (FKind = sikWhen) and Assigned(Scenario) then
+      begin
+        Scenario.CapturedRaise := TCapturedRaise.From(E);
+        FRunInfo.Result := srrSuccess;  // Don't fail yet, wait for Then to verify
+      end
+      else
+      begin
+        FRunInfo.Result := srrError;
+        FRunInfo.Error := Exception(AcquireExceptionObject);
+      end;
     end;
   end;
   FRunInfo.State := srsFinished;
@@ -690,6 +762,27 @@ begin
   Result := FExampleMeta;
 end;
 
+function TScenario<T>.GetCapturedRaise: TCapturedRaise;
+begin
+  Result := FCapturedRaise;
+end;
+
+procedure TScenario<T>.SetCapturedRaise(const Value: TCapturedRaise);
+begin
+  FCapturedRaise := Value;
+end;
+
+procedure TScenario<T>.ClearCapturedRaise;
+begin
+  FCapturedRaise := TCapturedRaise.Empty;
+end;
+
+function TScenario<T>.ConsumeCapturedRaise: TCapturedRaise;
+begin
+  Result := FCapturedRaise;
+  FCapturedRaise := TCapturedRaise.Empty;
+end;
+
 procedure TScenario<T>.SetExampleMeta(const Meta: TExampleMeta);
 begin
   FExampleMeta := Meta;
@@ -712,9 +805,14 @@ begin
 end;
 
 procedure TScenario<T>.Run(World: TObject);
+var
+  OldScenario: IScenario;
 begin
   var SW := TStopwatch.StartNew;
+  OldScenario := GetCurrentScenario;
+  SetCurrentScenario(Self);
   try
+    FCapturedRaise := TCapturedRaise.Empty;  // Clear any captured raise from previous run
     if Assigned(FInitExample) then
       FInitExample.Run(World);
     inherited;
@@ -722,14 +820,25 @@ begin
     FRunInfo.Result := srrSuccess;
     if FRunInfo.Result = srrSuccess then RunSteps(GetStepsGiven, World);
     if FRunInfo.Result = srrSuccess then RunSteps(GetStepsWhen, World);
+    // Always run Then steps, even if When raised an exception (it's captured now)
     if FRunInfo.Result = srrSuccess then RunSteps(GetStepsThen, World);
+    // After Then: check if there's an unconsumed captured raise
+    if (FRunInfo.Result = srrSuccess) and FCapturedRaise.WasRaised then
+    begin
+      FRunInfo.Result := srrError;
+      // Create a new exception to report the unconsumed raise
+      FRunInfo.Error := FCapturedRaise.ExceptionClass.Create(
+        'Unhandled exception from When step: ' + FCapturedRaise.ExceptionMessage);
+      FCapturedRaise := TCapturedRaise.Empty;
+    end;
   except
     on E: Exception do
     begin
       FRunInfo.Result := srrError;
-      FRunInfo.Error := E;
+      FRunInfo.Error := Exception(AcquireExceptionObject);
     end;
   end;
+  SetCurrentScenario(OldScenario);
   FRunInfo.State := srsFinished;
   FRunInfo.ExecTimeMs := SW.ElapsedMilliseconds;
 end;
@@ -1072,6 +1181,16 @@ begin
   end;
   FRunInfo.State := srsFinished;
   FRunInfo.ExecTimeMs := SW.ElapsedMilliseconds;
+end;
+
+function GetCurrentScenario: IScenario;
+begin
+  Result := CurrentScenario;
+end;
+
+procedure SetCurrentScenario(const Value: IScenario);
+begin
+  CurrentScenario := Value;
 end;
 
 end.

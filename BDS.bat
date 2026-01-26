@@ -26,7 +26,7 @@ for %%A in (%*) do (
     )
   )
 )
-if not defined CMD set "CMD=start"
+if not defined CMD set "CMD=help"
 
 set "PRJ_ROOT_KEY=USR_PRJ"
 :: Current dir without trailing backslash
@@ -328,6 +328,7 @@ if (%ARG_OUTPUT%) neq () (
 ) 
 if exist "%BDSbin%" ( 
   call "%rsvars%" > nul
+  echo msbuild "%PRJ_BUILD_FILE%" /t:Clean /verbosity:quiet /p:Platform=%ARG_PLATFORM% /p:Config=%ARG_CONFIG%
   call msbuild "%PRJ_BUILD_FILE%" /t:Clean /verbosity:quiet /p:Platform=%ARG_PLATFORM% /p:Config=%ARG_CONFIG%
 )
 exit /B 0
@@ -354,6 +355,7 @@ if (%ARG_OUTPUT%) neq () (
 ) 
 if exist "%BDSbin%" ( 
   call "%rsvars%" > nul
+  echo msbuild "%PRJ_BUILD_FILE%" /t:make /verbosity:quiet /p:Platform=%ARG_PLATFORM% /p:Config=%ARG_CONFIG%
   call msbuild "%PRJ_BUILD_FILE%" /t:make /verbosity:quiet /p:Platform=%ARG_PLATFORM% /p:Config=%ARG_CONFIG%
 )
 exit /B 0
@@ -380,6 +382,7 @@ if (%ARG_OUTPUT%) neq () (
 ) 
 if exist "%BDSbin%" ( 
   call "%rsvars%" > nul
+  echo msbuild "%PRJ_BUILD_FILE%" /t:Build /verbosity:quiet /p:Platform=%ARG_PLATFORM% /p:Config=%ARG_CONFIG%
   call msbuild "%PRJ_BUILD_FILE%" /t:Build /verbosity:quiet /p:Platform=%ARG_PLATFORM% /p:Config=%ARG_CONFIG% 
 )
 exit /B 0

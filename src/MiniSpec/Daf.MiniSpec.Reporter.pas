@@ -1156,6 +1156,7 @@ const
 </body>
 </html>
 ''';
+
 {$ENDREGION}
 
 { TMiniSpecOptions }

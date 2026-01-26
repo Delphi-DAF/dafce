@@ -3,7 +3,8 @@
 interface
 uses
   System.SysUtils,
-  System.Math;
+  System.Math,
+  Daf.MiniSpec.Types;
 
 type
   ExpectFail = class(Exception);
@@ -17,7 +18,9 @@ type
     FExceptionMessage: string;
     FWasRaised: Boolean;
   public
-    constructor Create(Proc: TProc);
+    constructor Create(Proc: TProc); overload;
+    constructor Create(E: Exception); overload;
+    constructor CreateFrom(const Captured: TCapturedRaise);
     property WasRaised: Boolean read FWasRaised;
     property ExceptionClass: ExceptClass read FExceptionClass;
     property ExceptionMessage: string read FExceptionMessage;
@@ -66,29 +69,29 @@ type
   public
     constructor Create(const ACapture: TExceptionCapture);
     /// <summary>
-    /// Verifica que se lanzó una excepción
+    /// Verifica que se lanzó una excepción (de cualquier tipo)
     /// </summary>
-    procedure ToRaise;overload;
+    procedure ToBeAny;
     /// <summary>
     /// Verifica que se lanzó una excepción del tipo especificado
     /// </summary>
-    procedure ToRaise(ExceptClass: ExceptClass);overload;
+    procedure ToBe(ExceptClass: ExceptClass);overload;
     /// <summary>
     /// Verifica que se lanzó una excepción del tipo genérico especificado
     /// </summary>
-    procedure ToRaise<T: Exception>;overload;
+    procedure ToBe<T: Exception>;overload;
     /// <summary>
-    /// Verifica que se lanzó una excepción del tipo especificado (alias de ToRaise)
+    /// Verifica que se lanzó una excepción con el mensaje indicado (substring)
     /// </summary>
-    procedure ToRaiseType(ExceptClass: ExceptClass);deprecated 'Use ToRaise(ExceptClass) instead';
+    procedure ToHaveMessage(const Msg: string);
     /// <summary>
-    /// Verifica que se lanzó una excepción con el mensaje indicado
+    /// Verifica que el mensaje de la excepción matchea el patrón regex
     /// </summary>
-    procedure ToRaiseWithMessage(const Msg: string);
+    procedure ToMatchMessage(const Pattern: string);
     /// <summary>
     /// Verifica que NO se lanzó ninguna excepción
     /// </summary>
-    procedure ToNotRaise;
+    procedure ToBeNone;
   end;
 
 implementation
@@ -96,6 +99,22 @@ uses
   System.StrUtils,
   System.Variants,
   System.RegularExpressions;
+
+procedure CheckNoPendingException;
+var
+  Scenario: IScenario;
+  Captured: TCapturedRaise;
+begin
+  Scenario := GetCurrentScenario;
+  if Assigned(Scenario) then
+  begin
+    Captured := Scenario.CapturedRaise;
+    if Captured.WasRaised then
+      raise ExpectFail.CreateFmt(
+        'Unhandled exception from When step: %s. Use ExpectRaised.ToRaise() to verify it.',
+        [Captured.ExceptionMessage]);
+  end;
+end;
 
 { TExceptionCapture }
 
@@ -116,6 +135,29 @@ begin
   end;
 end;
 
+constructor TExceptionCapture.Create(E: Exception);
+begin
+  if Assigned(E) then
+  begin
+    FWasRaised := True;
+    FExceptionClass := ExceptClass(E.ClassType);
+    FExceptionMessage := E.Message;
+  end
+  else
+  begin
+    FWasRaised := False;
+    FExceptionClass := nil;
+    FExceptionMessage := '';
+  end;
+end;
+
+constructor TExceptionCapture.CreateFrom(const Captured: TCapturedRaise);
+begin
+  FWasRaised := Captured.WasRaised;
+  FExceptionClass := Captured.ExceptionClass;
+  FExceptionMessage := Captured.ExceptionMessage;
+end;
+
 { TExpect }
 
 class function TExpect.Fail(Text: string): ExpectFail;
@@ -130,6 +172,7 @@ end;
 
 constructor TExpect.Create(const AValue: Variant);
 begin
+  CheckNoPendingException;
   FValue := AValue;
 end;
 
@@ -273,13 +316,13 @@ begin
   FCapture := ACapture;
 end;
 
-procedure TExpectException.ToRaise;
+procedure TExpectException.ToBeAny;
 begin
   if not FCapture.WasRaised then
     raise TExpect.Fail('Expected an exception to be raised');
 end;
 
-procedure TExpectException.ToRaise(ExceptClass: ExceptClass);
+procedure TExpectException.ToBe(ExceptClass: ExceptClass);
 begin
   if not FCapture.WasRaised then
     raise TExpect.Fail('Expected exception of type %s but none was raised', [ExceptClass.ClassName]);
@@ -288,17 +331,12 @@ begin
       [ExceptClass.ClassName, FCapture.ExceptionClass.ClassName]);
 end;
 
-procedure TExpectException.ToRaise<T>;
+procedure TExpectException.ToBe<T>;
 begin
-  ToRaise(T);
+  ToBe(T);
 end;
 
-procedure TExpectException.ToRaiseType(ExceptClass: ExceptClass);
-begin
-  ToRaise(ExceptClass);
-end;
-
-procedure TExpectException.ToRaiseWithMessage(const Msg: string);
+procedure TExpectException.ToHaveMessage(const Msg: string);
 begin
   if not FCapture.WasRaised then
     raise TExpect.Fail('Expected exception with message "%s" but none was raised', [Msg]);
@@ -307,7 +345,16 @@ begin
       [Msg, FCapture.ExceptionMessage]);
 end;
 
-procedure TExpectException.ToNotRaise;
+procedure TExpectException.ToMatchMessage(const Pattern: string);
+begin
+  if not FCapture.WasRaised then
+    raise TExpect.Fail('Expected exception with message matching "%s" but none was raised', [Pattern]);
+  if not TRegEx.IsMatch(FCapture.ExceptionMessage, Pattern) then
+    raise TExpect.Fail('Expected exception message to match "%s" but got "%s"',
+      [Pattern, FCapture.ExceptionMessage]);
+end;
+
+procedure TExpectException.ToBeNone;
 begin
   if FCapture.WasRaised then
     raise TExpect.Fail('Expected no exception but got %s: %s',
