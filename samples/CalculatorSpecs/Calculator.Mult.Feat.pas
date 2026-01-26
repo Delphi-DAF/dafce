@@ -1,4 +1,4 @@
-﻿unit Calculator.Mult.Feature;
+﻿unit Calculator.Mult.Feat;
 
 interface
 
