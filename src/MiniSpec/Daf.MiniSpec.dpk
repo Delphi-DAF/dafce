@@ -37,6 +37,7 @@ requires
 contains
   Daf.MiniSpec in 'Daf.MiniSpec.pas',
   Daf.MiniSpec.Expects in 'Daf.MiniSpec.Expects.pas',
+  Daf.MiniSpec.LiveDashboard in 'Daf.MiniSpec.LiveDashboard.pas',
   Daf.MiniSpec.Reporter in 'Daf.MiniSpec.Reporter.pas',
   Daf.MiniSpec.Utils in 'Daf.MiniSpec.Utils.pas',
   Daf.MiniSpec.Builders in 'Daf.MiniSpec.Builders.pas',
