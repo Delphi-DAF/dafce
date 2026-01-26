@@ -512,13 +512,12 @@ const
 
           this.eventSource.onerror = (e) => {
             this.connected = false;
-            // Solo reconectar si no se ha completado el reporte
-            if (!this.reportComplete && this.eventSource) {
+            if (this.eventSource) {
               this.eventSource.close();
               this.eventSource = null;
-              // Reconectar después de 3 segundos
-              setTimeout(() => this.connect(), 3000);
             }
+            // Siempre reconectar después de 2 segundos (esperar nuevo run)
+            setTimeout(() => this.connect(), 2000);
           };
 
           this.eventSource.onmessage = (e) => {
@@ -613,12 +612,8 @@ const
               this.skip = data.skip || 0;
               this.currentFeature = null;
               this.currentScenario = null;
-              // Cerrar conexión - el reporte terminó
-              if (this.eventSource) {
-                this.eventSource.close();
-                this.eventSource = null;
-              }
-              this.connected = false;
+              // Mantener conexión abierta para detectar nuevo run
+              // Si el servidor cierra, onerror reconectará automáticamente
               break;
           }
         }
