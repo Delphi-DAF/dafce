@@ -246,21 +246,33 @@ Mi Feature
 
 ### Excepciones
 
+La acción se ejecuta en el step When y la excepción se captura automáticamente. En el Then se verifica con `Expect(Raised)`:
+
+```pascal
+.Scenario('División por cero')
+  .Given('los números 10 y 0', procedure(World: TWorld)
+    begin
+      World.A := 10;
+      World.B := 0;
+    end)
+  .When('se divide', procedure(World: TWorld)
+    begin
+      World.Calculator.Divide(World.A, World.B);  // Excepción capturada
+    end)
+  .&Then('lanza EDivByZero', procedure(World: TWorld)
+    begin
+      Expect(Raised).ToBe(EDivByZero);
+    end);
+```
+
 | Método | Descripción |
 |--------|-------------|
-| `Expect(proc).ToRaise` | Lanza cualquier excepción |
-| `Expect(proc).ToRaise(EMyException)` | Lanza tipo específico |
-| `Expect(proc).ToRaise<EMyException>` | Lanza tipo específico (genérico) |
-| `Expect(proc).ToRaiseWithMessage('texto')` | Lanza con mensaje específico |
-| `Expect(proc).ToNotRaise` | No lanza excepción |
-
-Ejemplo:
-```pascal
-Expect(procedure
-  begin
-    Calculator.Divide(10, 0);
-  end).ToRaise(EDivByZero);
-```
+| `Expect(Raised).ToBeAny` | Se lanzó cualquier excepción |
+| `Expect(Raised).ToBe(EMyException)` | Se lanzó tipo específico |
+| `Expect(Raised).ToBe<EMyException>` | Se lanzó tipo específico (genérico) |
+| `Expect(Raised).ToHaveMessage('texto')` | Mensaje contiene substring |
+| `Expect(Raised).ToMatchMessage('patron')` | Mensaje coincide con regex |
+| `Expect(Raised).ToBeNone` | No se lanzó excepción |
 
 ---
 
