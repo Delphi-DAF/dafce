@@ -88,6 +88,79 @@ type
     property ElapsedMs: Integer read FElapsedMs;
   end;
 
+  /// <summary>
+  /// Read-only context passed to listeners during spec execution.
+  /// Provides access to counters, current feature/scenario, and options.
+  /// </summary>
+  IRunContext = interface
+    ['{A1B2C3D4-E5F6-7A8B-9C0D-1E2F3A4B5C6D}']
+    function GetReportCounters: TSpecCounters;
+    function GetFeatureCounters: TSpecCounters;
+    function GetScenarioCounters: TSpecCounters;
+    function GetOutlineCounters: TSpecCounters;
+    function GetCurrentFeature: IFeature;
+    function GetCurrentRule: IRule;
+    function GetCurrentScenario: IScenario;
+    function GetCurrentOutline: IScenarioOutline;
+    function GetOptions: TMiniSpecOptions;
+    function GetCompletedAt: TDateTime;
+    function GetErrorDetail(const RunInfo: TSpecRunInfo): string;
+    property ReportCounters: TSpecCounters read GetReportCounters;
+    property FeatureCounters: TSpecCounters read GetFeatureCounters;
+    property ScenarioCounters: TSpecCounters read GetScenarioCounters;
+    property OutlineCounters: TSpecCounters read GetOutlineCounters;
+    property CurrentFeature: IFeature read GetCurrentFeature;
+    property CurrentRule: IRule read GetCurrentRule;
+    property CurrentScenario: IScenario read GetCurrentScenario;
+    property CurrentOutline: IScenarioOutline read GetCurrentOutline;
+    property Options: TMiniSpecOptions read GetOptions;
+    property CompletedAt: TDateTime read GetCompletedAt;
+  end;
+
+  /// <summary>
+  /// Observer interface for spec execution events.
+  /// Listeners receive notifications but cannot modify execution.
+  /// </summary>
+  ISpecListener = interface
+    ['{F8A1B2C3-D4E5-6F7A-8B9C-0D1E2F3A4B5C}']
+    procedure Configure(const Options: TReporterOptions);
+    function ShowHelp: Boolean;
+    procedure OnBeginReport(const Context: IRunContext);
+    procedure OnEndReport(const Context: IRunContext);
+    procedure OnBeginFeature(const Context: IRunContext; const Feature: IFeature);
+    procedure OnEndFeature(const Context: IRunContext; const Feature: IFeature; const Counters: TSpecCounters);
+    procedure OnBeginScenario(const Context: IRunContext; const Scenario: IScenario);
+    procedure OnEndScenario(const Context: IRunContext; const Scenario: IScenario; const Counters: TSpecCounters);
+    procedure OnBeginOutline(const Context: IRunContext; const Outline: IScenarioOutline);
+    procedure OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline; const Counters: TSpecCounters);
+    procedure OnItem(const Context: IRunContext; const Item: ISpecItem);
+  end;
+
+  /// <summary>
+  /// Base class for spec listeners with empty implementations.
+  /// Subclass and override only the methods you need.
+  /// </summary>
+  TCustomListener = class(TInterfacedObject, ISpecListener)
+  protected
+    FCliOptions: TReporterOptions;
+    function GetCliOption(const Key: string; const Default: string = ''): string;
+  public
+    procedure Configure(const Options: TReporterOptions); virtual;
+    function ShowHelp: Boolean; virtual;
+    procedure OnBeginReport(const Context: IRunContext); virtual;
+    procedure OnEndReport(const Context: IRunContext); virtual;
+    procedure OnBeginFeature(const Context: IRunContext; const Feature: IFeature); virtual;
+    procedure OnEndFeature(const Context: IRunContext; const Feature: IFeature; const Counters: TSpecCounters); virtual;
+    procedure OnBeginScenario(const Context: IRunContext; const Scenario: IScenario); virtual;
+    procedure OnEndScenario(const Context: IRunContext; const Scenario: IScenario; const Counters: TSpecCounters); virtual;
+    procedure OnBeginOutline(const Context: IRunContext; const Outline: IScenarioOutline); virtual;
+    procedure OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline; const Counters: TSpecCounters); virtual;
+    procedure OnItem(const Context: IRunContext; const Item: ISpecItem); virtual;
+    function GetContent: string; virtual;
+    function GetFileExt: string; virtual;
+    function UseConsole: Boolean; virtual;
+  end;
+
   ISpecReporter = interface(IInvokable)
     ['{CD69B272-5B38-4CCC-A64F-2B2A57ACB540}']
     function GetFailCount: Cardinal;
@@ -98,6 +171,7 @@ type
     function GetCompletedAt: TDateTime;
     procedure Configure(const Options: TReporterOptions);
     function ShowHelp: Boolean;
+    procedure AddListener(const Listener: ISpecListener);
     procedure Report(Features: TList<IFeature>; Options: TMiniSpecOptions);
     procedure BeginReport;
     procedure DoReport(const S: ISpecItem);
@@ -115,7 +189,7 @@ type
     property CompletedAt: TDateTime read GetCompletedAt;
   end;
 
-  TCustomReporter = class(TInterfacedObject, ISpecReporter)
+  TSpecRunner = class(TInterfacedObject, ISpecReporter, IRunContext)
   strict private
     FFeatureCount: Integer;
     // Counters at different levels
@@ -134,8 +208,45 @@ type
     FCliOptions: TReporterOptions;
     // Timestamp
     FCompletedAt: TDateTime;
+    // Listeners
+    FListeners: TList<ISpecListener>;
+    // IRunContext getters
+    function IRunContext.GetReportCounters = GetReportCountersImpl;
+    function IRunContext.GetFeatureCounters = GetFeatureCountersImpl;
+    function IRunContext.GetScenarioCounters = GetScenarioCountersImpl;
+    function IRunContext.GetOutlineCounters = GetOutlineCountersImpl;
+    function IRunContext.GetCurrentFeature = GetCurrentFeatureImpl;
+    function IRunContext.GetCurrentRule = GetCurrentRuleImpl;
+    function IRunContext.GetCurrentScenario = GetCurrentScenarioImpl;
+    function IRunContext.GetCurrentOutline = GetCurrentOutlineImpl;
+    function IRunContext.GetOptions = GetOptionsImpl;
+    function IRunContext.GetCompletedAt = GetCompletedAtImpl;
+    function IRunContext.GetErrorDetail = GetErrorDetailImpl;
   protected
-    function GetContent: string;virtual;abstract;
+    // IRunContext implementation
+    function GetReportCountersImpl: TSpecCounters;
+    function GetFeatureCountersImpl: TSpecCounters;
+    function GetScenarioCountersImpl: TSpecCounters;
+    function GetOutlineCountersImpl: TSpecCounters;
+    function GetCurrentFeatureImpl: IFeature;
+    function GetCurrentRuleImpl: IRule;
+    function GetCurrentScenarioImpl: IScenario;
+    function GetCurrentOutlineImpl: IScenarioOutline;
+    function GetOptionsImpl: TMiniSpecOptions;
+    function GetCompletedAtImpl: TDateTime;
+    function GetErrorDetailImpl(const RunInfo: TSpecRunInfo): string;
+    // Listener notifications
+    procedure NotifyBeginReport;
+    procedure NotifyEndReport;
+    procedure NotifyBeginFeature(const Feature: IFeature);
+    procedure NotifyEndFeature(const Feature: IFeature; const Counters: TSpecCounters);
+    procedure NotifyBeginScenario(const Scenario: IScenario);
+    procedure NotifyEndScenario(const Scenario: IScenario; const Counters: TSpecCounters);
+    procedure NotifyBeginOutline(const Outline: IScenarioOutline);
+    procedure NotifyEndOutline(const Outline: IScenarioOutline; const Counters: TSpecCounters);
+    procedure NotifyItem(const Item: ISpecItem);
+    // Original protected members
+    function GetContent: string;virtual;
     function GetFailCount: Cardinal;virtual;
     function GetPassCount: Cardinal;virtual;
     function GetSkipCount: Cardinal;virtual;
@@ -183,7 +294,11 @@ type
     /// </summary>
     function GetErrorDetail(const RunInfo: TSpecRunInfo): string;
   public
+    constructor Create;
     destructor Destroy; override;
+    // Listener management
+    procedure AddListener(const Listener: ISpecListener);
+    procedure RemoveListener(const Listener: ISpecListener);
     procedure Configure(const Options: TReporterOptions);virtual;
     function ShowHelp: Boolean;virtual;
     function UseConsole: Boolean;virtual;
@@ -193,48 +308,39 @@ type
     property PassCount: Cardinal read GetPassCount;
     property FailCount: Cardinal read GetFailCount;
     property SkipCount: Cardinal read GetSkipCount;
+    property ElapsedMs: Integer read GetElapsedMs;
+    property FeatureCount: Integer read GetFeatureCount;
     property CompletedAt: TDateTime read FCompletedAt;
+    property Listeners: TList<ISpecListener> read FListeners;
   end;
 
-  TReporterDecorator = class(TCustomReporter)
-  strict private
-    FDecorated: ISpecReporter;
-  protected
-    function GetFailCount: Cardinal;override;
-    function GetPassCount: Cardinal;override;
-    function GetSkipCount: Cardinal;override;
-    function GetCompletedAt: TDateTime;override;
-    procedure DoReport(const S: ISpecItem);override;
-    procedure ReportOutline(const Outline: IScenarioOutline);override;
-  public
-    constructor Create(const Decorated: ISpecReporter);
-    procedure Configure(const Options: TReporterOptions);override;
-    function ShowHelp: Boolean;override;
-    function UseConsole: Boolean;override;
-    function GetFileExt: string;override;
-    procedure BeginReport;override;
-    procedure EndReport;override;
-    function GetContent: string;override;
-    property Decorated: ISpecReporter read FDecorated;
-  end;
-
-  TConsoleReporter = class(TCustomReporter)
+  /// <summary>
+  /// Console listener - outputs test results to console in hierarchical format.
+  /// Implements ISpecListener for pure observer pattern.
+  /// </summary>
+  TConsoleListener = class(TCustomListener)
   private
+    FCurrentRule: IRule;
     procedure OutputLn(const Level: Byte; const Text: string; const Success: Boolean; const Duration: Integer; const ErrorMessage: string = '');overload;
     procedure OutputLn(const Level: Byte; const Text: string);overload;
     procedure Output(const Level: Byte; const Text: string);
     function ExtractValue(const Match: TMatch): string;
     function Level2Margin(const Level: Byte): string;
-  protected
-    function GetContent: string;override;
-    procedure ReportOutline(const Outline: IScenarioOutline);override;
+    function GetKeyWord(const Kind: TSpecItemKind): string;
+    function GetLevel(const Kind: TSpecItemKind): Byte;
   public
     function UseConsole: Boolean;override;
-    procedure DoReport(const S: ISpecItem);override;
-    procedure BeginReport;override;
+    procedure OnBeginReport(const Context: IRunContext);override;
+    procedure OnEndReport(const Context: IRunContext);override;
+    procedure OnItem(const Context: IRunContext; const Item: ISpecItem);override;
+    procedure OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline; const Counters: TSpecCounters);override;
   end;
 
-  TJsonReporter = class(TCustomReporter)
+  /// <summary>
+  /// JSON listener - builds JSON output from test results.
+  /// Implements ISpecListener for pure observer pattern.
+  /// </summary>
+  TJsonListener = class(TCustomListener)
   private
     FOutput: string;
     FFeatures: TJSONArray;
@@ -243,21 +349,24 @@ type
     FCurrentScenario: TJSONObject;
     FCurrentSteps: TJSONArray;
     procedure AddStep(const Kind, Description: string; Success: Boolean; Duration: Integer; const ErrorMessage: string = '');
-  protected
+    procedure CloseCurrentScenario;
+    procedure CloseCurrentFeature;
+    function GetStatus(const Item: ISpecItem): string;
+    function GetKeyWord(const Kind: TSpecItemKind): string;
+  public
     function GetContent: string;override;
     function GetFileExt: string;override;
-    procedure DoReport(const S: ISpecItem);override;
-    procedure ReportOutline(const Outline: IScenarioOutline);override;
-  public
-    procedure BeginReport;override;
-    procedure EndReport;override;
-    procedure Feature(const Title, Narrative: string);
-    procedure Scenario(const Kind: string; const Description: string; const Status: string; Duration: Integer; const ErrorMessage: string = '');
-    procedure Step(const S: ISpecItem; Success: Boolean; Duration: Integer; const ErrorMessage: string = '');
-    property Output: string read GetContent;
+    procedure OnBeginReport(const Context: IRunContext);override;
+    procedure OnEndReport(const Context: IRunContext);override;
+    procedure OnItem(const Context: IRunContext; const Item: ISpecItem);override;
+    procedure OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline; const Counters: TSpecCounters);override;
   end;
 
-  TGherkinReporter = class(TCustomReporter)
+  /// <summary>
+  /// Gherkin listener - generates .feature files from test results.
+  /// Implements ISpecListener for pure observer pattern.
+  /// </summary>
+  TGherkinListener = class(TCustomListener)
   private
     FLines: TStringList;
     FIndent: Integer;
@@ -273,20 +382,24 @@ type
     function ResultComment(const Item: ISpecItem): string;
     function SanitizeFileName(const Name: string): string;
     procedure FlushCurrentFeature;
-  protected
-    function GetContent: string;override;
-    function GetFileExt: string;override;
-    procedure DoReport(const S: ISpecItem);override;
-    procedure ReportOutline(const Outline: IScenarioOutline);override;
   public
     constructor Create(AWithResults: Boolean = False);
     destructor Destroy;override;
-    procedure BeginReport;override;
-    procedure EndReport;override;
+    procedure Configure(const Options: TReporterOptions);override;
+    function GetContent: string;override;
+    function GetFileExt: string;override;
+    procedure OnBeginReport(const Context: IRunContext);override;
+    procedure OnEndReport(const Context: IRunContext);override;
+    procedure OnItem(const Context: IRunContext; const Item: ISpecItem);override;
+    procedure OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline; const Counters: TSpecCounters);override;
     property WithResults: Boolean read FWithResults write FWithResults;
   end;
 
-  TLiveReporter = class(TCustomReporter)
+  /// <summary>
+  /// Live listener - broadcasts test results via SSE to browser dashboard.
+  /// Implements ISpecListener for pure observer pattern.
+  /// </summary>
+  TLiveListener = class(TCustomListener)
   private
     FServer: TIdHTTPServer;
     FPort: Integer;
@@ -296,27 +409,26 @@ type
     FClientsLock: TCriticalSection;
     FReportFinished: Boolean;
     FWaitClient: Boolean;
+    FContext: IRunContext;
     procedure HandleRequest(AContext: TIdContext;
       ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
     procedure BroadcastEvent(const EventJson: string);
     function BuildEventJson(const EventType: string; const Data: TJSONObject): string;
     function HasConnectedClients: Boolean;
     function StepsToJsonArray(const Steps: TList<IScenarioStep>; const StepType: string): TJSONArray;
-  protected
-    procedure DoReport(const S: ISpecItem);override;
-    procedure DoFeatureBegin(const Feature: IFeature);override;
-    procedure DoFeatureEnd(const Feature: IFeature; const Counters: TSpecCounters);override;
-    procedure DoScenarioEnd(const Scenario: IScenario; const Counters: TSpecCounters);override;
-    procedure DoOutlineBegin(const Outline: IScenarioOutline);override;
-    procedure DoOutlineEnd(const Outline: IScenarioOutline; const Counters: TSpecCounters);override;
   public
     constructor Create(APort: Integer = 8080);
     destructor Destroy;override;
     procedure Configure(const Options: TReporterOptions);override;
     function ShowHelp: Boolean;override;
-    procedure BeginReport;override;
-    procedure EndReport;override;
+    function UseConsole: Boolean;override;
     function GetContent: string;override;
+    procedure OnBeginReport(const Context: IRunContext);override;
+    procedure OnEndReport(const Context: IRunContext);override;
+    procedure OnBeginFeature(const Context: IRunContext; const Feature: IFeature);override;
+    procedure OnEndFeature(const Context: IRunContext; const Feature: IFeature; const Counters: TSpecCounters);override;
+    procedure OnEndScenario(const Context: IRunContext; const Scenario: IScenario; const Counters: TSpecCounters);override;
+    procedure OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline; const Counters: TSpecCounters);override;
     property Port: Integer read FPort;
     property WaitClient: Boolean read FWaitClient;
   end;
@@ -329,6 +441,85 @@ uses
   Daf.MiniSpec.Utils,
   Daf.MiniSpec,
   Daf.MiniSpec.LiveDashboard;
+
+{ TCustomListener }
+
+procedure TCustomListener.Configure(const Options: TReporterOptions);
+begin
+  FCliOptions := Options;
+end;
+
+function TCustomListener.ShowHelp: Boolean;
+begin
+  Result := False;
+end;
+
+function TCustomListener.GetCliOption(const Key: string; const Default: string): string;
+begin
+  Result := Default;
+  if Assigned(FCliOptions) and FCliOptions.ContainsKey(Key) then
+    Result := FCliOptions[Key];
+end;
+
+procedure TCustomListener.OnBeginReport(const Context: IRunContext);
+begin
+  // Empty - override in subclasses
+end;
+
+procedure TCustomListener.OnEndReport(const Context: IRunContext);
+begin
+  // Empty - override in subclasses
+end;
+
+procedure TCustomListener.OnBeginFeature(const Context: IRunContext; const Feature: IFeature);
+begin
+  // Empty - override in subclasses
+end;
+
+procedure TCustomListener.OnEndFeature(const Context: IRunContext; const Feature: IFeature; const Counters: TSpecCounters);
+begin
+  // Empty - override in subclasses
+end;
+
+procedure TCustomListener.OnBeginScenario(const Context: IRunContext; const Scenario: IScenario);
+begin
+  // Empty - override in subclasses
+end;
+
+procedure TCustomListener.OnEndScenario(const Context: IRunContext; const Scenario: IScenario; const Counters: TSpecCounters);
+begin
+  // Empty - override in subclasses
+end;
+
+procedure TCustomListener.OnBeginOutline(const Context: IRunContext; const Outline: IScenarioOutline);
+begin
+  // Empty - override in subclasses
+end;
+
+procedure TCustomListener.OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline; const Counters: TSpecCounters);
+begin
+  // Empty - override in subclasses
+end;
+
+procedure TCustomListener.OnItem(const Context: IRunContext; const Item: ISpecItem);
+begin
+  // Empty - override in subclasses
+end;
+
+function TCustomListener.GetContent: string;
+begin
+  Result := '';
+end;
+
+function TCustomListener.GetFileExt: string;
+begin
+  Result := 'txt';
+end;
+
+function TCustomListener.UseConsole: Boolean;
+begin
+  Result := False;
+end;
 
 { TMiniSpecOptions }
 
@@ -524,40 +715,186 @@ begin
   Result := FFailCount = 0;
 end;
 
-{ TCustomReporter }
+{ TSpecRunner }
 
-procedure TCustomReporter.DoFeatureBegin(const Feature: IFeature);
+constructor TSpecRunner.Create;
 begin
-  // Hook - subclasses can override
+  inherited Create;
+  FListeners := TList<ISpecListener>.Create;
 end;
 
-procedure TCustomReporter.DoFeatureEnd(const Feature: IFeature; const Counters: TSpecCounters);
+procedure TSpecRunner.AddListener(const Listener: ISpecListener);
 begin
-  // Hook - subclasses can override
+  if not FListeners.Contains(Listener) then
+    FListeners.Add(Listener);
 end;
 
-procedure TCustomReporter.DoScenarioBegin(const Scenario: IScenario);
+procedure TSpecRunner.RemoveListener(const Listener: ISpecListener);
 begin
-  // Hook - subclasses can override
+  FListeners.Remove(Listener);
 end;
 
-procedure TCustomReporter.DoScenarioEnd(const Scenario: IScenario; const Counters: TSpecCounters);
+// IRunContext implementation
+function TSpecRunner.GetReportCountersImpl: TSpecCounters;
 begin
-  // Hook - subclasses can override
+  Result := FReportCounters;
 end;
 
-procedure TCustomReporter.DoOutlineBegin(const Outline: IScenarioOutline);
+function TSpecRunner.GetFeatureCountersImpl: TSpecCounters;
 begin
-  // Hook - subclasses can override
+  Result := FFeatureCounters;
 end;
 
-procedure TCustomReporter.DoOutlineEnd(const Outline: IScenarioOutline; const Counters: TSpecCounters);
+function TSpecRunner.GetScenarioCountersImpl: TSpecCounters;
 begin
-  // Hook - subclasses can override
+  Result := FScenarioCounters;
+end;
+
+function TSpecRunner.GetOutlineCountersImpl: TSpecCounters;
+begin
+  Result := FOutlineCounters;
+end;
+
+function TSpecRunner.GetCurrentFeatureImpl: IFeature;
+begin
+  Result := FCurrentFeature;
+end;
+
+function TSpecRunner.GetCurrentRuleImpl: IRule;
+begin
+  Result := FCurrentRule;
+end;
+
+function TSpecRunner.GetCurrentScenarioImpl: IScenario;
+begin
+  Result := FCurrentScenario;
+end;
+
+function TSpecRunner.GetCurrentOutlineImpl: IScenarioOutline;
+begin
+  Result := FCurrentOutline;
+end;
+
+function TSpecRunner.GetOptionsImpl: TMiniSpecOptions;
+begin
+  Result := FOptions;
+end;
+
+function TSpecRunner.GetCompletedAtImpl: TDateTime;
+begin
+  Result := FCompletedAt;
+end;
+
+function TSpecRunner.GetErrorDetailImpl(const RunInfo: TSpecRunInfo): string;
+begin
+  Result := GetErrorDetail(RunInfo);
+end;
+
+// Listener notifications
+procedure TSpecRunner.NotifyBeginReport;
+var
+  i: Integer;
+begin
+  for i := 0 to FListeners.Count - 1 do
+    FListeners[i].OnBeginReport(Self as IRunContext);
+end;
+
+procedure TSpecRunner.NotifyEndReport;
+var
+  Listener: ISpecListener;
+begin
+  for Listener in FListeners do
+    Listener.OnEndReport(Self as IRunContext);
+end;
+
+procedure TSpecRunner.NotifyBeginFeature(const Feature: IFeature);
+var
+  Listener: ISpecListener;
+begin
+  for Listener in FListeners do
+    Listener.OnBeginFeature(Self as IRunContext, Feature);
+end;
+
+procedure TSpecRunner.NotifyEndFeature(const Feature: IFeature; const Counters: TSpecCounters);
+var
+  Listener: ISpecListener;
+begin
+  for Listener in FListeners do
+    Listener.OnEndFeature(Self as IRunContext, Feature, Counters);
+end;
+
+procedure TSpecRunner.NotifyBeginScenario(const Scenario: IScenario);
+var
+  Listener: ISpecListener;
+begin
+  for Listener in FListeners do
+    Listener.OnBeginScenario(Self as IRunContext, Scenario);
+end;
+
+procedure TSpecRunner.NotifyEndScenario(const Scenario: IScenario; const Counters: TSpecCounters);
+var
+  Listener: ISpecListener;
+begin
+  for Listener in FListeners do
+    Listener.OnEndScenario(Self as IRunContext, Scenario, Counters);
+end;
+
+procedure TSpecRunner.NotifyBeginOutline(const Outline: IScenarioOutline);
+var
+  Listener: ISpecListener;
+begin
+  for Listener in FListeners do
+    Listener.OnBeginOutline(Self as IRunContext, Outline);
+end;
+
+procedure TSpecRunner.NotifyEndOutline(const Outline: IScenarioOutline; const Counters: TSpecCounters);
+var
+  Listener: ISpecListener;
+begin
+  for Listener in FListeners do
+    Listener.OnEndOutline(Self as IRunContext, Outline, Counters);
+end;
+
+procedure TSpecRunner.NotifyItem(const Item: ISpecItem);
+var
+  Listener: ISpecListener;
+begin
+  for Listener in FListeners do
+    Listener.OnItem(Self as IRunContext, Item);
+end;
+
+procedure TSpecRunner.DoFeatureBegin(const Feature: IFeature);
+begin
+  NotifyBeginFeature(Feature);
+end;
+
+procedure TSpecRunner.DoFeatureEnd(const Feature: IFeature; const Counters: TSpecCounters);
+begin
+  NotifyEndFeature(Feature, Counters);
+end;
+
+procedure TSpecRunner.DoScenarioBegin(const Scenario: IScenario);
+begin
+  NotifyBeginScenario(Scenario);
+end;
+
+procedure TSpecRunner.DoScenarioEnd(const Scenario: IScenario; const Counters: TSpecCounters);
+begin
+  NotifyEndScenario(Scenario, Counters);
+end;
+
+procedure TSpecRunner.DoOutlineBegin(const Outline: IScenarioOutline);
+begin
+  NotifyBeginOutline(Outline);
+end;
+
+procedure TSpecRunner.DoOutlineEnd(const Outline: IScenarioOutline; const Counters: TSpecCounters);
+begin
+  NotifyEndOutline(Outline, Counters);
 end;
 
 // Template Method: BeginFeature (non-virtual)
-procedure TCustomReporter.BeginFeature(const Feature: IFeature);
+procedure TSpecRunner.BeginFeature(const Feature: IFeature);
 begin
   FCurrentFeature := Feature;
   FFeatureCounters.Reset;
@@ -566,7 +903,7 @@ begin
 end;
 
 // Template Method: EndFeature (non-virtual)
-procedure TCustomReporter.EndFeature(const Feature: IFeature);
+procedure TSpecRunner.EndFeature(const Feature: IFeature);
 begin
   FFeatureCounters.Stop;
   DoFeatureEnd(Feature, FFeatureCounters);  // Hook
@@ -574,7 +911,7 @@ begin
 end;
 
 // Template Method: BeginScenario (non-virtual)
-procedure TCustomReporter.BeginScenario(const Scenario: IScenario);
+procedure TSpecRunner.BeginScenario(const Scenario: IScenario);
 begin
   FCurrentScenario := Scenario;
   FScenarioCounters.Reset;
@@ -583,7 +920,7 @@ begin
 end;
 
 // Template Method: EndScenario (non-virtual)
-procedure TCustomReporter.EndScenario(const Scenario: IScenario);
+procedure TSpecRunner.EndScenario(const Scenario: IScenario);
 begin
   FScenarioCounters.Stop;
   DoScenarioEnd(Scenario, FScenarioCounters);  // Hook
@@ -591,7 +928,7 @@ begin
 end;
 
 // Template Method: BeginOutline (non-virtual)
-procedure TCustomReporter.BeginOutline(const Outline: IScenarioOutline);
+procedure TSpecRunner.BeginOutline(const Outline: IScenarioOutline);
 begin
   FCurrentOutline := Outline;
   FOutlineCounters.Reset;
@@ -600,20 +937,21 @@ begin
 end;
 
 // Template Method: EndOutline (non-virtual)
-procedure TCustomReporter.EndOutline(const Outline: IScenarioOutline);
+procedure TSpecRunner.EndOutline(const Outline: IScenarioOutline);
 begin
   FOutlineCounters.Stop;
   DoOutlineEnd(Outline, FOutlineCounters);  // Hook
   FCurrentOutline := nil;
 end;
 
-destructor TCustomReporter.Destroy;
+destructor TSpecRunner.Destroy;
 begin
+  FListeners.Free;
   FCliOptions.Free;
   inherited;
 end;
 
-procedure TCustomReporter.Configure(const Options: TReporterOptions);
+procedure TSpecRunner.Configure(const Options: TReporterOptions);
 var
   Pair: TPair<string, string>;
 begin
@@ -627,7 +965,7 @@ begin
   end;
 end;
 
-function TCustomReporter.GetCliOption(const Key: string; const Default: string): string;
+function TSpecRunner.GetCliOption(const Key: string; const Default: string): string;
 begin
   if Assigned(FCliOptions) and FCliOptions.ContainsKey(Key) then
     Result := FCliOptions[Key]
@@ -635,13 +973,13 @@ begin
     Result := Default;
 end;
 
-function TCustomReporter.ShowHelp: Boolean;
+function TSpecRunner.ShowHelp: Boolean;
 begin
   // Base implementation: no help available
   Result := False;
 end;
 
-procedure TCustomReporter.BeginReport;
+procedure TSpecRunner.BeginReport;
 begin
   FFeatureCount := 0;
   FReportCounters.Reset;
@@ -651,9 +989,10 @@ begin
   FCurrentFeature := nil;
   FCurrentScenario := nil;
   FCurrentOutline := nil;
+  NotifyBeginReport;
 end;
 
-procedure TCustomReporter.Report(Feature: IFeature);
+procedure TSpecRunner.Report(Feature: IFeature);
 begin
   Inc(FFeatureCount);
   BeginFeature(Feature);
@@ -663,7 +1002,7 @@ begin
   EndFeature(Feature);
 end;
 
-procedure TCustomReporter.ReportOutline(const Outline: IScenarioOutline);
+procedure TSpecRunner.ReportOutline(const Outline: IScenarioOutline);
 begin
   BeginOutline(Outline);
 
@@ -692,7 +1031,7 @@ begin
   EndOutline(Outline);
 end;
 
-procedure TCustomReporter.Report(Rule: IRule);
+procedure TSpecRunner.Report(Rule: IRule);
 begin
   // Solo reportar la Rule si tiene al menos un escenario visitado (ejecutado o skipped)
   var HasVisitedScenario := False;
@@ -734,7 +1073,7 @@ begin
     FCurrentRule := nil;
 end;
 
-procedure TCustomReporter.Report(Background: IBackground);
+procedure TSpecRunner.Report(Background: IBackground);
 begin
   if not Assigned(Background) then Exit;
   DoReport(Background);
@@ -742,7 +1081,7 @@ begin
     DoReport(Step);
 end;
 
-procedure TCustomReporter.Report(Scenario: IScenario);
+procedure TSpecRunner.Report(Scenario: IScenario);
 begin
   if not (Scenario.RunInfo.State in [srsFinished, srsSkiped]) then
     Exit;
@@ -758,7 +1097,7 @@ begin
   EndScenario(Scenario);
 end;
 
-procedure TCustomReporter.DoReport(const S: ISpecItem);
+procedure TSpecRunner.DoReport(const S: ISpecItem);
 begin
   if (S.Kind in [sikScenario, sikExample]) then
   begin
@@ -779,45 +1118,52 @@ begin
         end;
     end;
   end;
+  NotifyItem(S);
 end;
 
-procedure TCustomReporter.EndReport;
+procedure TSpecRunner.EndReport;
 begin
   FReportCounters.Stop;
   FCompletedAt := Now;
+  NotifyEndReport;
 end;
 
-function TCustomReporter.GetFailCount: Cardinal;
+function TSpecRunner.GetFailCount: Cardinal;
 begin
   Result := FReportCounters.FailCount;
 end;
 
-function TCustomReporter.GetSkipCount: Cardinal;
+function TSpecRunner.GetSkipCount: Cardinal;
 begin
   Result := FReportCounters.SkipCount;
 end;
 
-function TCustomReporter.GetElapsedMs: Integer;
+function TSpecRunner.GetElapsedMs: Integer;
 begin
   Result := FReportCounters.ElapsedMs;
 end;
 
-function TCustomReporter.GetFeatureCount: Integer;
+function TSpecRunner.GetFeatureCount: Integer;
 begin
   Result := FFeatureCount;
 end;
 
-function TCustomReporter.GetCompletedAt: TDateTime;
+function TSpecRunner.GetCompletedAt: TDateTime;
 begin
   Result := FCompletedAt;
 end;
 
-function TCustomReporter.GetFileExt: string;
+function TSpecRunner.GetContent: string;
 begin
   Result := '';
 end;
 
-function TCustomReporter.GetKeyWord(const Kind: TSpecItemKind): string;
+function TSpecRunner.GetFileExt: string;
+begin
+  Result := '';
+end;
+
+function TSpecRunner.GetKeyWord(const Kind: TSpecItemKind): string;
 begin
   case Kind of
     sikFeature: Result := 'Feature';
@@ -836,7 +1182,7 @@ begin
   end;
 end;
 
-function TCustomReporter.GetLevel(const Kind: TSpecItemKind): Byte;
+function TSpecRunner.GetLevel(const Kind: TSpecItemKind): Byte;
 begin
   // Nivel base por tipo (sin considerar contexto de Rule)
   case Kind of
@@ -850,12 +1196,12 @@ begin
   end;
 end;
 
-function TCustomReporter.GetPassCount: Cardinal;
+function TSpecRunner.GetPassCount: Cardinal;
 begin
   Result := FReportCounters.PassCount;
 end;
 
-function TCustomReporter.GetErrorDetail(const RunInfo: TSpecRunInfo): string;
+function TSpecRunner.GetErrorDetail(const RunInfo: TSpecRunInfo): string;
 begin
   if not Assigned(RunInfo.Error) then
     Exit('');
@@ -869,7 +1215,7 @@ begin
   end;
 end;
 
-procedure TCustomReporter.Report(Features: TList<IFeature>; Options: TMiniSpecOptions);
+procedure TSpecRunner.Report(Features: TList<IFeature>; Options: TMiniSpecOptions);
 begin
   FOptions := Options;
   BeginReport;
@@ -878,35 +1224,135 @@ begin
   EndReport;
 end;
 
-function TCustomReporter.UseConsole: Boolean;
+function TSpecRunner.UseConsole: Boolean;
 begin
   Result := False;
 end;
 
-{ TConsoleReporter }
+{ TConsoleListener }
 
-procedure TConsoleReporter.DoReport(const S: ISpecItem);
+function TConsoleListener.UseConsole: Boolean;
+begin
+  Result := True;
+end;
+
+function TConsoleListener.GetKeyWord(const Kind: TSpecItemKind): string;
+begin
+  case Kind of
+    sikFeature: Result := 'Feature';
+    sikImplicitRule: Result := '';
+    sikRule: Result := 'Rule';
+    sikBackground: Result := 'Background';
+    sikScenario: Result := 'Scenario';
+    sikScenarioOutline: Result := 'Scenario Outline';
+    sikExample: Result := 'Example';
+    sikExampleInit: Result := '';
+    sikGiven: Result := 'Given';
+    sikWhen: Result := 'When';
+    sikThen: Result := 'Then';
+    else
+      Result := '';
+  end;
+end;
+
+function TConsoleListener.GetLevel(const Kind: TSpecItemKind): Byte;
+begin
+  case Kind of
+    sikFeature: Result := 0;
+    sikRule: Result := 1;
+    sikBackground, sikScenario, sikScenarioOutline, sikExample: Result := 1;
+    sikExampleInit: Result := 2;
+    sikGiven, sikWhen, sikThen: Result := 2;
+    else
+      Result := 0;
+  end;
+end;
+
+function TConsoleListener.ExtractValue(const Match: TMatch): string;
+begin
+  Result := Match.Groups[1].Value;
+end;
+
+function TConsoleListener.Level2Margin(const Level: Byte): string;
+begin
+  Result := DupeString(' ', 2 * Level);
+end;
+
+procedure TConsoleListener.Output(const Level: Byte; const Text: string);
+var
+  Margin, OutputText: string;
+  Regex: TRegEx;
+begin
+  Margin := Level2Margin(Level);
+  Regex := TRegEx.Create('#\{([^\}]+)\}');
+  OutputText := Regex.Replace(Text, ExtractValue);
+  if Level = 0 then
+    Margin := SLineBreak + Margin;
+  Write(Margin + OutputText);
+end;
+
+procedure TConsoleListener.OutputLn(const Level: Byte; const Text: string);
+begin
+  Output(Level, Text + SLineBreak);
+end;
+
+procedure TConsoleListener.OutputLn(const Level: Byte; const Text: string; const Success: Boolean; const Duration: Integer; const ErrorMessage: string);
+const
+  CHECK_MARK = #$2713;  // ✓
+  CROSS_MARK = #$2717;  // ✗
+var
+  Msg: string;
+begin
+  Msg := ErrorMessage;
+  if not Msg.IsEmpty then
+    Msg := SLineBreak + Level2Margin(Level) + 'ERROR: "' + Msg + '"';
+  if Success then
+    OutputLn(Level, Format(CHECK_MARK + ' %s (%d ms)', [Text, Duration]))
+  else
+    OutputLn(Level, Format(CROSS_MARK + ' %s (%d ms)%s', [Text, Duration, Msg]));
+end;
+
+procedure TConsoleListener.OnBeginReport(const Context: IRunContext);
+begin
+  // Nothing to initialize for console output
+end;
+
+procedure TConsoleListener.OnEndReport(const Context: IRunContext);
+begin
+  // Summary is printed by TReportSummaryWriter decorator, not here
+end;
+
+procedure TConsoleListener.OnItem(const Context: IRunContext; const Item: ISpecItem);
 var
   Feat: IFeature;
+  Rule: IRule;
   DisplayText: string;
   AllSkipped: Boolean;
+  Kind: string;
+  Level: Byte;
 begin
-  inherited;
-  var Kind := GetKeyWord(S.Kind);
-  var Level := GetLevel(S.Kind);
+  Kind := GetKeyWord(Item.Kind);
+  Level := GetLevel(Item.Kind);
 
-  // Ajustar nivel si estamos dentro de una Rule explícita
-  if Assigned(CurrentRule) and (S.Kind <> sikRule) then
+  // Track current rule for indentation
+  if Supports(Item, IRule, Rule) then
+  begin
+    if Rule.Kind = sikRule then
+      FCurrentRule := Rule;
+  end;
+
+  // Adjust level if inside an explicit Rule
+  if Assigned(FCurrentRule) and not (Item.Kind in [sikFeature, sikRule]) then
     Inc(Level);
 
-  // Para features, mostrar solo el Title
-  if (S.Kind = sikFeature) and Supports(S, IFeature, Feat) then
+  // For features, show only the Title
+  if (Item.Kind = sikFeature) and Supports(Item, IFeature, Feat) then
   begin
     DisplayText := Feat.Title;
-    // Verificar si todos los escenarios fueron skipped
+    // Check if all scenarios were skipped
     AllSkipped := True;
-    for var Rule in Feat.Rules do
-      for var Scenario in Rule.Scenarios do
+    for var R in Feat.Rules do
+      for var Scenario in R.Scenarios do
         if Scenario.RunInfo.State = srsFinished then
         begin
           AllSkipped := False;
@@ -919,70 +1365,22 @@ begin
     end;
   end
   else
-    DisplayText := S.Description;
+    DisplayText := Item.Description;
 
-  // Manejar los 3 estados: Finished (Pass/Fail), Skipped
-  if S.RunInfo.State = srsSkiped then
+  // Handle 3 states: Finished (Pass/Fail), Skipped
+  if Item.RunInfo.State = srsSkiped then
     OutputLn(Level, Format('- %s (skip)', [Kind + ' ' + DisplayText]))
   else
-    OutputLn(Level, Kind + ' ' + DisplayText, S.RunInfo.IsSuccess, S.RunInfo.ExecTimeMs, GetErrorDetail(S.RunInfo));
+    OutputLn(Level, Kind + ' ' + DisplayText, Item.RunInfo.IsSuccess, Item.RunInfo.ExecTimeMs, Context.GetErrorDetail(Item.RunInfo));
+
+  // Clear rule context when rule ends
+  if (Item.Kind = sikRule) and Assigned(FCurrentRule) then
+  begin
+    // Rule end will be triggered separately; for now just keep tracking
+  end;
 end;
 
-function TConsoleReporter.ExtractValue(const Match: TMatch): string;
-begin
-  Result := Match.Groups[1].Value;
-end;
-
-procedure TConsoleReporter.OutputLn(const Level: Byte; const Text: string; const Success: Boolean; const Duration: Integer; const ErrorMessage: string);
-const
-  CHECK_MARK = #$2713;  // ✓
-  CROSS_MARK = #$2717;  // ✗
-begin
-  var Msg := ErrorMessage;
-  if not Msg.IsEmpty then
-    Msg := SLineBreak + Level2Margin(Level) + 'ERROR: "' + Msg + '"';
-  if Success then
-    OutputLn(Level, Format(CHECK_MARK + ' %s (%d ms)', [Text, Duration]))
-  else
-    OutputLn(Level, Format(CROSS_MARK + ' %s (%d ms)%s', [Text, Duration, Msg]));
-end;
-
-procedure TConsoleReporter.OutputLn(const Level: Byte; const Text: string);
-begin
-  Output(Level, Text + SLineBreak);
-end;
-
-function TConsoleReporter.Level2Margin(const Level: Byte):string;
-begin
-  Result := DupeString(' ', 2 * Level);
-end;
-
-procedure TConsoleReporter.Output(const Level: Byte; const Text: string);
-begin
-  var Margin := Level2Margin(Level);
-  var Regex := TRegEx.Create('#\{([^\}]+)\}');
-  var OutputText := Regex.Replace(Text, ExtractValue);
-  if Level = 0 then
-    Margin := SLineBreak + Margin;
-  Write(Margin + OutputText);
-end;
-
-function TConsoleReporter.UseConsole: Boolean;
-begin
-  Result := True;
-end;
-
-function TConsoleReporter.GetContent: string;
-begin
-  Result := '';
-end;
-
-procedure TConsoleReporter.BeginReport;
-begin
-  inherited;
-end;
-
-procedure TConsoleReporter.ReportOutline(const Outline: IScenarioOutline);
+procedure TConsoleListener.OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline; const Counters: TSpecCounters);
 var
   AllSuccess, AllSkipped: Boolean;
   TotalTime: Int64;
@@ -991,16 +1389,14 @@ var
   i: Integer;
   HeaderLine, Row: string;
   Values: TArray<TValue>;
+  BaseLevel: Byte;
 begin
-  // Primero delegar al base para conteo de estadísticas
-  inherited;
-
-  // Calcular nivel base (ajustado si estamos dentro de una Rule)
-  var BaseLevel: Byte := 1;
-  if Assigned(CurrentRule) then
+  // Calculate base level (adjusted if inside a Rule)
+  BaseLevel := 1;
+  if Assigned(FCurrentRule) then
     Inc(BaseLevel);
 
-  // Determinar estado general del Outline
+  // Determine overall Outline state
   AllSuccess := True;
   AllSkipped := True;
   TotalTime := 0;
@@ -1015,17 +1411,17 @@ begin
     end;
   end;
 
-  // Header del Scenario Outline con resultado o skip
+  // Header of Scenario Outline with result or skip
   if AllSkipped then
     OutputLn(BaseLevel, Format('- Scenario Outline: %s (skip)', [Outline.Description]))
   else
     OutputLn(BaseLevel, 'Scenario Outline: ' + Outline.Description, AllSuccess, TotalTime);
 
-  // Si todo está skipped, no mostrar detalles
+  // If all skipped, don't show details
   if AllSkipped then
     Exit;
 
-  // Steps template (sin tiempo individual)
+  // Steps template (without individual time)
   for var Step in Outline.StepsGiven do
     OutputLn(BaseLevel + 1, GetKeyWord(Step.Kind) + ' ' + Step.Description);
   for var Step in Outline.StepsWhen do
@@ -1033,7 +1429,7 @@ begin
   for var Step in Outline.StepsThen do
     OutputLn(BaseLevel + 1, GetKeyWord(Step.Kind) + ' ' + Step.Description);
 
-  // Calcular anchos de columna
+  // Calculate column widths
   Headers := Outline.Headers;
   SetLength(ColWidths, Length(Headers));
   for i := 0 to High(Headers) do
@@ -1047,16 +1443,16 @@ begin
         ColWidths[i] := Length(Val2Str(Values[i]));
   end;
 
-  // Tabla de Examples
+  // Examples table
   OutputLn(BaseLevel + 1, 'Examples:');
 
-  // Header de la tabla (3 espacios para alinear con emoji ?)
+  // Table header (3 spaces to align with emoji)
   HeaderLine := '|';
   for i := 0 to High(Headers) do
     HeaderLine := HeaderLine + ' ' + Headers[i].PadRight(ColWidths[i]) + ' |';
   OutputLn(BaseLevel + 2, '   ' + HeaderLine);
 
-  // Cada fila con su resultado (solo presentación, sin contar)
+  // Each row with its result
   for var Example in Outline.Examples do
   begin
     if Example.RunInfo.State = srsFinished then
@@ -1070,118 +1466,44 @@ begin
         else
           Row := Row + ' ' + ''.PadRight(ColWidths[i]) + ' |';
       end;
-      OutputLn(BaseLevel + 2, Row, Example.RunInfo.IsSuccess, Example.RunInfo.ExecTimeMs, GetErrorDetail(Example.RunInfo));
+      OutputLn(BaseLevel + 2, Row, Example.RunInfo.IsSuccess, Example.RunInfo.ExecTimeMs, Context.GetErrorDetail(Example.RunInfo));
     end;
   end;
 end;
 
-{ TJsonReporter }
+{ TJsonListener }
 
-procedure TJsonReporter.BeginReport;
+function TJsonListener.GetKeyWord(const Kind: TSpecItemKind): string;
 begin
-  inherited;
-  FFeatures := TJSONArray.Create;
-  FCurrentFeature := nil;
-  FCurrentScenarios := nil;
-  FCurrentScenario := nil;
-  FCurrentSteps := nil;
-end;
-
-procedure TJsonReporter.Feature(const Title, Narrative: string);
-begin
-  if Assigned(FCurrentFeature) then
-  begin
-    if Assigned(FCurrentScenario) then
-    begin
-      FCurrentScenario.AddPair('steps', FCurrentSteps);
-      FCurrentScenarios.AddElement(FCurrentScenario);
-      FCurrentScenario := nil;
-      FCurrentSteps := nil;
-    end;
-    FCurrentFeature.AddPair('scenarios', FCurrentScenarios);
-    FFeatures.AddElement(FCurrentFeature);
-    FCurrentFeature := nil;
-    FCurrentScenarios := nil;
-  end;
-  FCurrentFeature := TJSONObject.Create;
-  FCurrentFeature.AddPair('title', Title);
-  FCurrentFeature.AddPair('narrative', Narrative);
-  FCurrentScenarios := TJSONArray.Create;
-end;
-
-procedure TJsonReporter.Scenario(const Kind: string; const Description: string; const Status: string; Duration: Integer; const ErrorMessage: string);
-begin
-  if Assigned(FCurrentScenario) then
-  begin
-    FCurrentScenario.AddPair('steps', FCurrentSteps);
-    FCurrentScenarios.AddElement(FCurrentScenario);
-  end;
-  FCurrentScenario := TJSONObject.Create;
-  FCurrentScenario.AddPair('kind', Kind);
-  FCurrentScenario.AddPair('description', Description);
-  FCurrentScenario.AddPair('status', Status);
-  FCurrentScenario.AddPair('duration', TJSONNumber.Create(Duration));
-  if (Status = 'fail') and (ErrorMessage <> '') then
-    FCurrentScenario.AddPair('error', ErrorMessage);
-  FCurrentSteps := TJSONArray.Create;
-end;
-
-procedure TJsonReporter.DoReport(const S: ISpecItem);
-
-  function GetStatus(const Item: ISpecItem): string;
-  begin
-    if Item.RunInfo.State <> srsFinished then
-      Result := 'skip'
-    else if Item.RunInfo.Result = srrSuccess then
-      Result := 'pass'
+  case Kind of
+    sikFeature: Result := 'Feature';
+    sikImplicitRule: Result := '';
+    sikRule: Result := 'Rule';
+    sikBackground: Result := 'Background';
+    sikScenario: Result := 'Scenario';
+    sikScenarioOutline: Result := 'Scenario Outline';
+    sikExample: Result := 'Example';
+    sikExampleInit: Result := '';
+    sikGiven: Result := 'Given';
+    sikWhen: Result := 'When';
+    sikThen: Result := 'Then';
     else
-      Result := 'fail';
-  end;
-
-var
-  Feat: IFeature;
-begin
-  inherited;
-  case S.Kind of
-    sikFeature: begin
-      if Supports(S, IFeature, Feat) then
-        Feature(Feat.Title, Feat.Narrative)
-      else
-        Feature(S.Description, '');
-    end;
-    sikRule: Scenario(GetKeyWord(s.Kind), S.Description, GetStatus(S), S.RunInfo.ExecTimeMs, S.RunInfo.ErrMsg);
-    sikBackground: Scenario(GetKeyWord(s.Kind), S.Description, GetStatus(S), S.RunInfo.ExecTimeMs, S.RunInfo.ErrMsg);
-    sikScenario, sikExample: Scenario(GetKeyWord(s.Kind), S.Description, GetStatus(S), S.RunInfo.ExecTimeMs, S.RunInfo.ErrMsg);
-    sikExampleInit: ;
-    sikGiven,
-    sikWhen,
-    sikThen: Step(S, S.RunInfo.Result = srrSuccess, S.RunInfo.ExecTimeMs, S.RunInfo.ErrMsg);
+      Result := '';
   end;
 end;
 
-procedure TJsonReporter.ReportOutline(const Outline: IScenarioOutline);
-
-  function GetStatus(const Item: ISpecItem): string;
-  begin
-    if Item.RunInfo.State <> srsFinished then
-      Result := 'skip'
-    else if Item.RunInfo.Result = srrSuccess then
-      Result := 'pass'
-    else
-      Result := 'fail';
-  end;
-
-var
-  OutlineObj: TJSONObject;
-  HeadersArr: TJSONArray;
-  ExamplesArr: TJSONArray;
-  ExampleObj: TJSONObject;
-  ValuesArr: TJSONArray;
-  Example: IScenario;
-  Header: string;
-  Value: TValue;
+function TJsonListener.GetStatus(const Item: ISpecItem): string;
 begin
-  // Close previous scenario if needed
+  if Item.RunInfo.State <> srsFinished then
+    Result := 'skip'
+  else if Item.RunInfo.Result = srrSuccess then
+    Result := 'pass'
+  else
+    Result := 'fail';
+end;
+
+procedure TJsonListener.CloseCurrentScenario;
+begin
   if Assigned(FCurrentScenario) then
   begin
     FCurrentScenario.AddPair('steps', FCurrentSteps);
@@ -1189,50 +1511,21 @@ begin
     FCurrentScenario := nil;
     FCurrentSteps := nil;
   end;
-
-  // Create outline object
-  OutlineObj := TJSONObject.Create;
-  OutlineObj.AddPair('kind', 'Scenario Outline');
-  OutlineObj.AddPair('description', Outline.Description);
-  OutlineObj.AddPair('status', GetStatus(Outline as ISpecItem));
-  OutlineObj.AddPair('duration', TJSONNumber.Create((Outline as ISpecItem).RunInfo.ExecTimeMs));
-
-  // Add headers
-  HeadersArr := TJSONArray.Create;
-  for Header in Outline.Headers do
-    HeadersArr.Add(Header);
-  OutlineObj.AddPair('headers', HeadersArr);
-
-  // Add examples with their values and status
-  ExamplesArr := TJSONArray.Create;
-  for Example in Outline.Examples do
-  begin
-    ExampleObj := TJSONObject.Create;
-
-    ValuesArr := TJSONArray.Create;
-    for Value in Example.ExampleMeta.Values do
-      ValuesArr.Add(Val2Str(Value));
-    ExampleObj.AddPair('values', ValuesArr);
-
-    ExampleObj.AddPair('status', GetStatus(Example as ISpecItem));
-    ExampleObj.AddPair('duration', TJSONNumber.Create((Example as ISpecItem).RunInfo.ExecTimeMs));
-
-    if (Example as ISpecItem).RunInfo.Result = srrFail then
-      ExampleObj.AddPair('error', (Example as ISpecItem).RunInfo.ErrMsg);
-
-    ExamplesArr.AddElement(ExampleObj);
-  end;
-  OutlineObj.AddPair('examples', ExamplesArr);
-
-  FCurrentScenarios.AddElement(OutlineObj);
 end;
 
-procedure TJsonReporter.Step(const S: ISpecItem; Success: Boolean; Duration: Integer; const ErrorMessage: string);
+procedure TJsonListener.CloseCurrentFeature;
 begin
-  AddStep(GetKeyWord(S.Kind), S.Description, Success, Duration, ErrorMessage);
+  CloseCurrentScenario;
+  if Assigned(FCurrentFeature) then
+  begin
+    FCurrentFeature.AddPair('scenarios', FCurrentScenarios);
+    FFeatures.AddElement(FCurrentFeature);
+    FCurrentFeature := nil;
+    FCurrentScenarios := nil;
+  end;
 end;
 
-procedure TJsonReporter.AddStep(const Kind, Description: string; Success: Boolean; Duration: Integer; const ErrorMessage: string);
+procedure TJsonListener.AddStep(const Kind, Description: string; Success: Boolean; Duration: Integer; const ErrorMessage: string);
 var
   StepObj: TJSONObject;
 begin
@@ -1247,33 +1540,30 @@ begin
   FCurrentSteps.AddElement(StepObj);
 end;
 
-procedure TJsonReporter.EndReport;
+procedure TJsonListener.OnBeginReport(const Context: IRunContext);
+begin
+  FFeatures := TJSONArray.Create;
+  FCurrentFeature := nil;
+  FCurrentScenarios := nil;
+  FCurrentScenario := nil;
+  FCurrentSteps := nil;
+  FOutput := '';
+end;
+
+procedure TJsonListener.OnEndReport(const Context: IRunContext);
 var
   OutputFile: string;
+  Root: TJSONObject;
 begin
-  inherited; // Primero para que CompletedAt tenga valor
-  if Assigned(FCurrentScenario) then
-  begin
-    FCurrentScenario.AddPair('steps', FCurrentSteps);
-    FCurrentScenarios.AddElement(FCurrentScenario);
-    FCurrentScenario := nil;
-    FCurrentSteps := nil;
-  end;
-  if Assigned(FCurrentFeature) then
-  begin
-    FCurrentFeature.AddPair('scenarios', FCurrentScenarios);
-    FFeatures.AddElement(FCurrentFeature);
-    FCurrentFeature := nil;
-    FCurrentScenarios := nil;
-  end;
+  CloseCurrentFeature;
 
-  var Root := TJSONObject.Create;
+  Root := TJSONObject.Create;
   try
     Root.AddPair('features', FFeatures);
-    Root.AddPair('passCount', TJSONNumber.Create(PassCount));
-    Root.AddPair('failCount', TJSONNumber.Create(FailCount));
-    Root.AddPair('skipCount', TJSONNumber.Create(SkipCount));
-    Root.AddPair('completedAt', FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', CompletedAt));
+    Root.AddPair('passCount', TJSONNumber.Create(Context.ReportCounters.PassCount));
+    Root.AddPair('failCount', TJSONNumber.Create(Context.ReportCounters.FailCount));
+    Root.AddPair('skipCount', TJSONNumber.Create(Context.ReportCounters.SkipCount));
+    Root.AddPair('completedAt', FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', Context.CompletedAt));
     FOutput := Root.Format(4);
   finally
     Root.Free;
@@ -1290,110 +1580,105 @@ begin
   end;
 end;
 
-function TJsonReporter.GetContent: string;
+procedure TJsonListener.OnItem(const Context: IRunContext; const Item: ISpecItem);
+var
+  Feat: IFeature;
+begin
+  case Item.Kind of
+    sikFeature: begin
+      if Supports(Item, IFeature, Feat) then
+      begin
+        CloseCurrentFeature;
+        FCurrentFeature := TJSONObject.Create;
+        FCurrentFeature.AddPair('title', Feat.Title);
+        FCurrentFeature.AddPair('narrative', Feat.Narrative);
+        FCurrentScenarios := TJSONArray.Create;
+      end;
+    end;
+    sikRule, sikBackground: begin
+      CloseCurrentScenario;
+      FCurrentScenario := TJSONObject.Create;
+      FCurrentScenario.AddPair('kind', GetKeyWord(Item.Kind));
+      FCurrentScenario.AddPair('description', Item.Description);
+      FCurrentScenario.AddPair('status', GetStatus(Item));
+      FCurrentScenario.AddPair('duration', TJSONNumber.Create(Item.RunInfo.ExecTimeMs));
+      if (GetStatus(Item) = 'fail') and (Item.RunInfo.ErrMsg <> '') then
+        FCurrentScenario.AddPair('error', Item.RunInfo.ErrMsg);
+      FCurrentSteps := TJSONArray.Create;
+    end;
+    sikScenario, sikExample: begin
+      CloseCurrentScenario;
+      FCurrentScenario := TJSONObject.Create;
+      FCurrentScenario.AddPair('kind', GetKeyWord(Item.Kind));
+      FCurrentScenario.AddPair('description', Item.Description);
+      FCurrentScenario.AddPair('status', GetStatus(Item));
+      FCurrentScenario.AddPair('duration', TJSONNumber.Create(Item.RunInfo.ExecTimeMs));
+      if (GetStatus(Item) = 'fail') and (Item.RunInfo.ErrMsg <> '') then
+        FCurrentScenario.AddPair('error', Item.RunInfo.ErrMsg);
+      FCurrentSteps := TJSONArray.Create;
+    end;
+    sikExampleInit: ;
+    sikGiven, sikWhen, sikThen: begin
+      AddStep(GetKeyWord(Item.Kind), Item.Description, Item.RunInfo.Result = srrSuccess,
+              Item.RunInfo.ExecTimeMs, Item.RunInfo.ErrMsg);
+    end;
+  end;
+end;
+
+procedure TJsonListener.OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline; const Counters: TSpecCounters);
+var
+  OutlineObj: TJSONObject;
+  HeadersArr, ExamplesArr, ValuesArr: TJSONArray;
+  ExampleObj: TJSONObject;
+  Example: IScenario;
+  Header: string;
+  Value: TValue;
+begin
+  CloseCurrentScenario;
+
+  OutlineObj := TJSONObject.Create;
+  OutlineObj.AddPair('kind', 'Scenario Outline');
+  OutlineObj.AddPair('description', Outline.Description);
+  OutlineObj.AddPair('status', GetStatus(Outline as ISpecItem));
+  OutlineObj.AddPair('duration', TJSONNumber.Create((Outline as ISpecItem).RunInfo.ExecTimeMs));
+
+  HeadersArr := TJSONArray.Create;
+  for Header in Outline.Headers do
+    HeadersArr.Add(Header);
+  OutlineObj.AddPair('headers', HeadersArr);
+
+  ExamplesArr := TJSONArray.Create;
+  for Example in Outline.Examples do
+  begin
+    ExampleObj := TJSONObject.Create;
+    ValuesArr := TJSONArray.Create;
+    for Value in Example.ExampleMeta.Values do
+      ValuesArr.Add(Val2Str(Value));
+    ExampleObj.AddPair('values', ValuesArr);
+    ExampleObj.AddPair('status', GetStatus(Example as ISpecItem));
+    ExampleObj.AddPair('duration', TJSONNumber.Create((Example as ISpecItem).RunInfo.ExecTimeMs));
+    if (Example as ISpecItem).RunInfo.Result = srrFail then
+      ExampleObj.AddPair('error', (Example as ISpecItem).RunInfo.ErrMsg);
+    ExamplesArr.AddElement(ExampleObj);
+  end;
+  OutlineObj.AddPair('examples', ExamplesArr);
+
+  FCurrentScenarios.AddElement(OutlineObj);
+end;
+
+function TJsonListener.GetContent: string;
 begin
   Result := FOutput;
 end;
 
-function TJsonReporter.GetFileExt: string;
+function TJsonListener.GetFileExt: string;
 begin
   Result := 'json';
 end;
 
-{ TReporterDecorator }
+{ TGherkinListener }
 
-constructor TReporterDecorator.Create(const Decorated: ISpecReporter);
-begin
-  inherited Create;
-  FDecorated := Decorated;
-end;
-
-procedure TReporterDecorator.Configure(const Options: TReporterOptions);
-begin
-  inherited;
-  // Do NOT pass options to Decorated - the outer decorator handles file output
-end;
-
-function TReporterDecorator.ShowHelp: Boolean;
-begin
-  // Decorators delegate to decorated reporter
-  if Assigned(Decorated) then
-    Result := Decorated.ShowHelp
-  else
-    Result := inherited;
-end;
-
-procedure TReporterDecorator.DoReport(const S: ISpecItem);
-begin
-  inherited; // Actualiza contadores del decorator
-  if not Assigned(Decorated) then Exit;
-  Decorated.DoReport(S);
-end;
-
-procedure TReporterDecorator.ReportOutline(const Outline: IScenarioOutline);
-begin
-  inherited; // Procesa el outline localmente (contadores del decorator)
-  if not Assigned(Decorated) then Exit;
-  Decorated.ReportOutline(Outline);
-end;
-
-procedure TReporterDecorator.BeginReport;
-begin
-  if not Assigned(Decorated) then Exit;
-  Decorated.BeginReport;
-end;
-
-procedure TReporterDecorator.EndReport;
-begin
-  if not Assigned(Decorated) then Exit;
-  Decorated.EndReport;
-end;
-
-function TReporterDecorator.GetContent: string;
-begin
-  if not Assigned(Decorated) then Exit('');
-  Result := Decorated.Content;
-end;
-
-function TReporterDecorator.GetFailCount: Cardinal;
-begin
-  if not Assigned(Decorated) then Exit(0);
-  Result := Decorated.GetFailCount;
-end;
-
-function TReporterDecorator.GetFileExt: string;
-begin
-  if not Assigned(Decorated) then Exit('');
-  Result := Decorated.GetFileExt;
-end;
-
-function TReporterDecorator.GetPassCount: Cardinal;
-begin
-  if not Assigned(Decorated) then Exit(0);
-  Result := Decorated.GetPassCount;
-end;
-
-function TReporterDecorator.GetSkipCount: Cardinal;
-begin
-  if not Assigned(Decorated) then Exit(0);
-  Result := Decorated.GetSkipCount;
-end;
-
-function TReporterDecorator.GetCompletedAt: TDateTime;
-begin
-  if not Assigned(Decorated) then Exit(0);
-  Result := Decorated.GetCompletedAt;
-end;
-
-function TReporterDecorator.UseConsole: Boolean;
-begin
-  if not Assigned(Decorated) then Exit(False);
-  Result := Decorated.UseConsole;
-end;
-
-{ TGherkinReporter }
-
-constructor TGherkinReporter.Create(AWithResults: Boolean);
+constructor TGherkinListener.Create(AWithResults: Boolean);
 begin
   inherited Create;
   FWithResults := AWithResults;
@@ -1403,82 +1688,27 @@ begin
   FOutputDir := ExtractFilePath(ParamStr(0));
 end;
 
-destructor TGherkinReporter.Destroy;
+destructor TGherkinListener.Destroy;
 begin
   FFilesWritten.Free;
   FLines.Free;
   inherited;
 end;
 
-procedure TGherkinReporter.BeginReport;
-var
-  OutputDir: string;
+procedure TGherkinListener.Configure(const Options: TReporterOptions);
 begin
   inherited;
-  FLines.Clear;
-  FFilesWritten.Clear;
-  FCurrentFeatureName := '';
-  FIndent := 0;
-  // Read output directory from CLI options
-  OutputDir := GetCliOption('output');
-  if not OutputDir.IsEmpty then
-  begin
-    if TPath.IsRelativePath(OutputDir) then
-      OutputDir := ExpandFileName(TPath.Combine(ExtractFilePath(ParamStr(0)), OutputDir));
-    FOutputDir := OutputDir;
-    ForceDirectories(FOutputDir);
-  end;
+  // WithResults option
+  if Assigned(Options) and Options.ContainsKey('results') then
+    FWithResults := SameText(Options['results'], 'true');
 end;
 
-procedure TGherkinReporter.EndReport;
-var
-  FilePath: string;
-begin
-  inherited; // Primero para que CompletedAt tenga valor
-  FlushCurrentFeature; // Escribir último feature
-  // Show written files
-  if FFilesWritten.Count > 0 then
-  begin
-    WriteLn(Format('Gherkin: %d feature file(s) written to: %s', [FFilesWritten.Count, FOutputDir]));
-    for FilePath in FFilesWritten do
-      WriteLn('  - ' + ExtractFileName(FilePath));
-  end;
-end;
-
-function TGherkinReporter.SanitizeFileName(const Name: string): string;
-var
-  C: Char;
-begin
-  Result := '';
-  // Excluir solo caracteres ilegales en Windows: \ / : * ? " < > |
-  for C in Name do
-    if not CharInSet(C, ['\', '/', ':', '*', '?', '"', '<', '>', '|']) then
-      Result := Result + C;
-  Result := Result.Trim.Replace(' ', '_', [rfReplaceAll]);
-  if Result = '' then
-    Result := 'Feature';
-end;
-
-procedure TGherkinReporter.FlushCurrentFeature;
-var
-  FileName, FilePath: string;
-begin
-  if (FCurrentFeatureName = '') or (FLines.Count = 0) then
-    Exit;
-  FileName := SanitizeFileName(FCurrentFeatureName) + '.feature';
-  FilePath := TPath.Combine(FOutputDir, FileName);
-  TFile.WriteAllText(FilePath, FLines.Text, TEncoding.UTF8);
-  FFilesWritten.Add(FilePath);
-  FLines.Clear;
-  FCurrentFeatureName := '';
-end;
-
-procedure TGherkinReporter.AddLine(const Text: string);
+procedure TGherkinListener.AddLine(const Text: string);
 begin
   FLines.Add(StringOfChar(' ', FIndent * 2) + Text);
 end;
 
-procedure TGherkinReporter.AddTags(const Tags: TSpecTags);
+procedure TGherkinListener.AddTags(const Tags: TSpecTags);
 var
   TagArray: TArray<string>;
 begin
@@ -1487,7 +1717,7 @@ begin
     AddLine('@' + string.Join(' @', TagArray));
 end;
 
-function TGherkinReporter.GetGherkinKeyword(Kind: TSpecItemKind): string;
+function TGherkinListener.GetGherkinKeyword(Kind: TSpecItemKind): string;
 begin
   case Kind of
     sikFeature: Result := 'Feature:';
@@ -1503,13 +1733,12 @@ begin
   end;
 end;
 
-function TGherkinReporter.RestorePlaceholders(const Text: string): string;
+function TGherkinListener.RestorePlaceholders(const Text: string): string;
 begin
-  // Convertir #{value} a <value>
   Result := TRegEx.Replace(Text, '#\{([^}]+)\}', '<$1>');
 end;
 
-function TGherkinReporter.ResultComment(const Item: ISpecItem): string;
+function TGherkinListener.ResultComment(const Item: ISpecItem): string;
 begin
   if not FWithResults then
     Exit('');
@@ -1521,7 +1750,34 @@ begin
     Result := ' # FAIL';
 end;
 
-procedure TGherkinReporter.WriteExamplesTable(const Outline: IScenarioOutline);
+function TGherkinListener.SanitizeFileName(const Name: string): string;
+var
+  C: Char;
+begin
+  Result := '';
+  for C in Name do
+    if not CharInSet(C, ['\', '/', ':', '*', '?', '"', '<', '>', '|']) then
+      Result := Result + C;
+  Result := Result.Trim.Replace(' ', '_', [rfReplaceAll]);
+  if Result = '' then
+    Result := 'Feature';
+end;
+
+procedure TGherkinListener.FlushCurrentFeature;
+var
+  FileName, FilePath: string;
+begin
+  if (FCurrentFeatureName = '') or (FLines.Count = 0) then
+    Exit;
+  FileName := SanitizeFileName(FCurrentFeatureName) + '.feature';
+  FilePath := TPath.Combine(FOutputDir, FileName);
+  TFile.WriteAllText(FilePath, FLines.Text, TEncoding.UTF8);
+  FFilesWritten.Add(FilePath);
+  FLines.Clear;
+  FCurrentFeatureName := '';
+end;
+
+procedure TGherkinListener.WriteExamplesTable(const Outline: IScenarioOutline);
 var
   ColWidths: TArray<Integer>;
   Headers: TArray<string>;
@@ -1533,7 +1789,6 @@ begin
   Headers := Outline.Headers;
   SetLength(ColWidths, Length(Headers));
 
-  // Calculate column widths
   for i := 0 to High(Headers) do
     ColWidths[i] := Length(Headers[i]);
 
@@ -1546,13 +1801,11 @@ begin
           ColWidths[i] := Length(Val2Str(Values[i]));
   end;
 
-  // Write header row
   HeaderLine := '|';
   for i := 0 to High(Headers) do
     HeaderLine := HeaderLine + ' ' + Headers[i].PadRight(ColWidths[i]) + ' |';
   AddLine(HeaderLine);
 
-  // Write data rows
   for Example in Outline.Examples do
   begin
     Values := Example.ExampleMeta.Values;
@@ -1564,22 +1817,50 @@ begin
   end;
 end;
 
-procedure TGherkinReporter.DoReport(const S: ISpecItem);
+procedure TGherkinListener.OnBeginReport(const Context: IRunContext);
 var
-  Line: string;
-  Feature: IFeature;
+  OutputDir: string;
 begin
-  // NO llamar inherited - no queremos contar pass/fail
-  case S.Kind of
+  FLines.Clear;
+  FFilesWritten.Clear;
+  FCurrentFeatureName := '';
+  FIndent := 0;
+  OutputDir := GetCliOption('output');
+  if not OutputDir.IsEmpty then
+  begin
+    if TPath.IsRelativePath(OutputDir) then
+      OutputDir := ExpandFileName(TPath.Combine(ExtractFilePath(ParamStr(0)), OutputDir));
+    FOutputDir := OutputDir;
+    ForceDirectories(FOutputDir);
+  end;
+end;
+
+procedure TGherkinListener.OnEndReport(const Context: IRunContext);
+var
+  FilePath: string;
+begin
+  FlushCurrentFeature;
+  if FFilesWritten.Count > 0 then
+  begin
+    WriteLn(Format('Gherkin: %d feature file(s) written to: %s', [FFilesWritten.Count, FOutputDir]));
+    for FilePath in FFilesWritten do
+      WriteLn('  - ' + ExtractFileName(FilePath));
+  end;
+end;
+
+procedure TGherkinListener.OnItem(const Context: IRunContext; const Item: ISpecItem);
+var
+  Feature: IFeature;
+  Line: string;
+begin
+  case Item.Kind of
     sikFeature: begin
-      // Escribir feature anterior antes de empezar nuevo
       FlushCurrentFeature;
-      // Empezar nuevo feature usando IFeature.Title y Narrative
-      if Supports(S, IFeature, Feature) then
+      if Supports(Item, IFeature, Feature) then
       begin
         FCurrentFeatureName := Feature.Title;
         FIndent := 0;
-        AddTags(S.Tags);
+        AddTags(Item.Tags);
         AddLine('Feature: ' + Feature.Title);
         if Feature.Narrative <> '' then
         begin
@@ -1589,50 +1870,49 @@ begin
           Dec(FIndent);
         end;
         AddLine('');
-        FIndent := 1; // Scenarios at indent 1
+        FIndent := 1;
       end;
     end;
 
     sikRule: begin
       FIndent := 1;
       AddLine('');
-      AddTags(S.Tags);
-      AddLine('Rule: ' + S.Description);
-      FIndent := 2; // Scenarios under Rule at indent 2
+      AddTags(Item.Tags);
+      AddLine('Rule: ' + Item.Description);
+      FIndent := 2;
     end;
 
     sikBackground: begin
-      AddLine('Background:' + ResultComment(S));
-      FIndent := 2; // Steps at indent 2
+      AddLine('Background:' + ResultComment(Item));
+      FIndent := 2;
     end;
 
     sikScenario: begin
-      FIndent := 1; // Reset to scenario level
+      FIndent := 1;
       AddLine('');
-      AddTags(S.Tags);
-      AddLine('Scenario: ' + S.Description + ResultComment(S));
-      FIndent := 2; // Steps at indent 2
+      AddTags(Item.Tags);
+      AddLine('Scenario: ' + Item.Description + ResultComment(Item));
+      FIndent := 2;
     end;
 
-    sikImplicitRule: ; // Ignorar rule implícita
+    sikImplicitRule: ;
 
     sikGiven, sikWhen, sikThen: begin
-      AddLine(GetGherkinKeyword(S.Kind) + ' ' + S.Description + ResultComment(S));
+      AddLine(GetGherkinKeyword(Item.Kind) + ' ' + Item.Description + ResultComment(Item));
     end;
   end;
 end;
 
-procedure TGherkinReporter.ReportOutline(const Outline: IScenarioOutline);
+procedure TGherkinListener.OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline; const Counters: TSpecCounters);
 var
   Step: IScenarioStep;
 begin
-  FIndent := 1; // Reset to scenario level
+  FIndent := 1;
   AddLine('');
   AddTags((Outline as ISpecItem).Tags);
   AddLine('Scenario Outline: ' + Outline.Description + ResultComment(Outline as ISpecItem));
-  FIndent := 2; // Steps at indent 2
+  FIndent := 2;
 
-  // Steps template con placeholders <name>
   for Step in Outline.StepsGiven do
     AddLine(GetGherkinKeyword(Step.Kind) + ' ' + RestorePlaceholders(Step.Description));
   for Step in Outline.StepsWhen do
@@ -1640,19 +1920,17 @@ begin
   for Step in Outline.StepsThen do
     AddLine(GetGherkinKeyword(Step.Kind) + ' ' + RestorePlaceholders(Step.Description));
 
-  // Tabla Examples
   AddLine('');
   AddLine('Examples:');
   FIndent := 3;
   WriteExamplesTable(Outline);
 end;
 
-function TGherkinReporter.GetContent: string;
+function TGherkinListener.GetContent: string;
 var
   i: Integer;
   FileName, FeatureName: string;
 begin
-  // Devuelve índice en formato Quarto con include-code-files
   if FFilesWritten.Count = 0 then
     Result := '# MiniSpec' + sLineBreak + sLineBreak + 'No features generated.'
   else
@@ -1660,8 +1938,7 @@ begin
     Result := '---' + sLineBreak +
               'title: "MiniSpec Features"' + sLineBreak +
               '---' + sLineBreak + sLineBreak +
-              'Generated **' + IntToStr(FFilesWritten.Count) + '** features at ' +
-              FormatDateTime('yyyy-mm-dd hh:nn:ss', CompletedAt) + '.' + sLineBreak + sLineBreak;
+              'Generated **' + IntToStr(FFilesWritten.Count) + '** features.' + sLineBreak + sLineBreak;
     for i := 0 to FFilesWritten.Count - 1 do
     begin
       FileName := ExtractFileName(FFilesWritten[i]);
@@ -1673,14 +1950,14 @@ begin
   end;
 end;
 
-function TGherkinReporter.GetFileExt: string;
+function TGherkinListener.GetFileExt: string;
 begin
   Result := 'md';
 end;
 
-{ TLiveReporter }
+{ TLiveListener }
 
-constructor TLiveReporter.Create(APort: Integer);
+constructor TLiveListener.Create(APort: Integer);
 begin
   inherited Create;
   FPort := APort;
@@ -1690,16 +1967,29 @@ begin
   FLiveClients := TList<TIdContext>.Create;
   FClientsLock := TCriticalSection.Create;
   FReportFinished := False;
+  FContext := nil;
 
   FServer := TIdHTTPServer.Create(nil);
   FServer.DefaultPort := FPort;
   FServer.OnCommandGet := HandleRequest;
 end;
 
-procedure TLiveReporter.Configure(const Options: TReporterOptions);
+destructor TLiveListener.Destroy;
+begin
+  if FServer.Active then
+    FServer.Active := False;
+  FServer.Free;
+  FClientsLock.Free;
+  FLiveClients.Free;
+  FEventsLock.Free;
+  FEvents.Free;
+  inherited;
+end;
+
+procedure TLiveListener.Configure(const Options: TReporterOptions);
 begin
   inherited;
-  if Options.ContainsKey('port') then
+  if Assigned(Options) and Options.ContainsKey('port') then
   begin
     FPort := StrToIntDef(Options['port'], FPort);
     FServer.DefaultPort := FPort;
@@ -1707,9 +1997,9 @@ begin
   FWaitClient := SameText(GetCliOption('wait', 'false'), 'true');
 end;
 
-function TLiveReporter.ShowHelp: Boolean;
+function TLiveListener.ShowHelp: Boolean;
 begin
-  WriteLn('Live Reporter - Real-time test results in browser');
+  WriteLn('Live Listener - Real-time test results in browser');
   WriteLn;
   WriteLn('Options:');
   WriteLn('  port=<number>   HTTP server port (default: 8080)');
@@ -1728,19 +2018,17 @@ begin
   Result := True;
 end;
 
-destructor TLiveReporter.Destroy;
+function TLiveListener.UseConsole: Boolean;
 begin
-  if FServer.Active then
-    FServer.Active := False;
-  FServer.Free;
-  FClientsLock.Free;
-  FLiveClients.Free;
-  FEventsLock.Free;
-  FEvents.Free;
-  inherited;
+  Result := True;
 end;
 
-function TLiveReporter.HasConnectedClients: Boolean;
+function TLiveListener.GetContent: string;
+begin
+  Result := Format('Live Dashboard served at http://localhost:%d', [FPort]);
+end;
+
+function TLiveListener.HasConnectedClients: Boolean;
 begin
   FClientsLock.Enter;
   try
@@ -1750,85 +2038,13 @@ begin
   end;
 end;
 
-procedure TLiveReporter.BeginReport;
-var
-  Data: TJSONObject;
-  WaitCount: Integer;
-begin
-  inherited;
-  FReportFinished := False;
-  FEvents.Clear;
-
-  // Iniciar servidor HTTP
-  try
-    FServer.Active := True;
-    WriteLn(Format('Live Dashboard: http://localhost:%d', [FPort]));
-
-    if FWaitClient then
-    begin
-      WriteLn('Waiting for browser connection...');
-      // Esperar hasta que haya al menos un cliente conectado (max 30 segundos)
-      WaitCount := 0;
-      while not HasConnectedClients and (WaitCount < 300) do
-      begin
-        Sleep(100);
-        Inc(WaitCount);
-      end;
-
-      if HasConnectedClients then
-        WriteLn('Browser connected. Running specs...')
-      else
-        WriteLn('Timeout. Running specs anyway...');
-    end;
-  except
-    on E: Exception do
-      WriteLn('Live server error: ' + E.Message);
-  end;
-
-  // Evento de inicio
-  Data := TJSONObject.Create;
-  try
-    Data.AddPair('timestamp', FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', Now));
-    BroadcastEvent(BuildEventJson('report:start', Data));
-  finally
-    Data.Free;
-  end;
-end;
-
-procedure TLiveReporter.EndReport;
-var
-  Data: TJSONObject;
-begin
-  inherited;
-  // Evento de fin de reporte
-  Data := TJSONObject.Create;
-  try
-    Data.AddPair('pass', TJSONNumber.Create(PassCount));
-    Data.AddPair('fail', TJSONNumber.Create(FailCount));
-    Data.AddPair('skip', TJSONNumber.Create(SkipCount));
-    Data.AddPair('completedAt', FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', CompletedAt));
-    BroadcastEvent(BuildEventJson('report:end', Data));
-  finally
-    Data.Free;
-  end;
-
-  FReportFinished := True;
-  FServer.Active := False;
-end;
-
-function TLiveReporter.GetContent: string;
-begin
-  Result := Format('Live Dashboard served at http://localhost:%d', [FPort]);
-end;
-
-function TLiveReporter.BuildEventJson(const EventType: string; const Data: TJSONObject): string;
+function TLiveListener.BuildEventJson(const EventType: string; const Data: TJSONObject): string;
 var
   Wrapper: TJSONObject;
 begin
   Wrapper := TJSONObject.Create;
   try
     Wrapper.AddPair('event', EventType);
-    // Copiar pares de Data
     for var Pair in Data do
       Wrapper.AddPair(Pair.JsonString.Value, Pair.JsonValue.Clone as TJSONValue);
     Result := Wrapper.ToJSON;
@@ -1837,7 +2053,7 @@ begin
   end;
 end;
 
-function TLiveReporter.StepsToJsonArray(const Steps: TList<IScenarioStep>; const StepType: string): TJSONArray;
+function TLiveListener.StepsToJsonArray(const Steps: TList<IScenarioStep>; const StepType: string): TJSONArray;
 var
   StepObj: TJSONObject;
   Step: IScenarioStep;
@@ -1857,14 +2073,13 @@ begin
   end;
 end;
 
-procedure TLiveReporter.BroadcastEvent(const EventJson: string);
+procedure TLiveListener.BroadcastEvent(const EventJson: string);
 var
   Client: TIdContext;
   SSEData: string;
 begin
   SSEData := 'data: ' + EventJson + #10#10;
 
-  // Guardar evento para nuevos clientes
   FEventsLock.Enter;
   try
     FEvents.Add(EventJson);
@@ -1872,7 +2087,6 @@ begin
     FEventsLock.Leave;
   end;
 
-  // Enviar a clientes conectados
   FClientsLock.Enter;
   try
     for Client in FLiveClients do
@@ -1880,7 +2094,6 @@ begin
       try
         Client.Connection.IOHandler.Write(SSEData, IndyTextEncoding_UTF8);
       except
-        // Cliente desconectado, ignorar
       end;
     end;
   finally
@@ -1888,7 +2101,7 @@ begin
   end;
 end;
 
-procedure TLiveReporter.HandleRequest(AContext: TIdContext;
+procedure TLiveListener.HandleRequest(AContext: TIdContext;
   ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
 var
   Doc: string;
@@ -1897,15 +2110,13 @@ begin
 
   if SameText(Doc, '/events') or Doc.EndsWith('/events', True) then
   begin
-    // SSE headers - importante: NO usar WriteHeader, enviar manualmente
     AContext.Connection.IOHandler.WriteLn('HTTP/1.1 200 OK');
     AContext.Connection.IOHandler.WriteLn('Content-Type: text/event-stream');
     AContext.Connection.IOHandler.WriteLn('Cache-Control: no-cache');
     AContext.Connection.IOHandler.WriteLn('Connection: keep-alive');
     AContext.Connection.IOHandler.WriteLn('Access-Control-Allow-Origin: *');
-    AContext.Connection.IOHandler.WriteLn(''); // Línea vacía para terminar headers
+    AContext.Connection.IOHandler.WriteLn('');
 
-    // Registrar cliente
     FClientsLock.Enter;
     try
       FLiveClients.Add(AContext);
@@ -1913,13 +2124,11 @@ begin
       FClientsLock.Leave;
     end;
 
-    // Enviar comentario de bienvenida
     try
       AContext.Connection.IOHandler.Write(': welcome'#10#10, IndyTextEncoding_UTF8);
     except
     end;
 
-    // Enviar eventos anteriores (replay)
     FEventsLock.Enter;
     try
       for var EventJson in FEvents do
@@ -1934,12 +2143,9 @@ begin
       FEventsLock.Leave;
     end;
 
-    // Mantener conexión abierta hasta que termine el reporte
-    // Sin keepalive agresivo - los eventos mantienen la conexión viva
     while not FReportFinished and AContext.Connection.Connected do
       Sleep(200);
 
-    // Desregistrar cliente
     FClientsLock.Enter;
     try
       FLiveClients.Remove(AContext);
@@ -1949,14 +2155,75 @@ begin
   end
   else
   begin
-    // Dashboard HTML
     AResponseInfo.ContentType := 'text/html; charset=utf-8';
     AResponseInfo.ContentText := StringReplace(LIVE_DASHBOARD_HTML,
       '{{MINISPEC_VERSION}}', TMiniSpec.Version, [rfReplaceAll]);
   end;
 end;
 
-procedure TLiveReporter.DoFeatureBegin(const Feature: IFeature);
+procedure TLiveListener.OnBeginReport(const Context: IRunContext);
+var
+  Data: TJSONObject;
+  WaitCount: Integer;
+begin
+  FContext := Context;
+  FReportFinished := False;
+  FEvents.Clear;
+
+  try
+    FServer.Active := True;
+    WriteLn(Format('Live Dashboard: http://localhost:%d', [FPort]));
+
+    if FWaitClient then
+    begin
+      WriteLn('Waiting for browser connection...');
+      WaitCount := 0;
+      while not HasConnectedClients and (WaitCount < 300) do
+      begin
+        Sleep(100);
+        Inc(WaitCount);
+      end;
+
+      if HasConnectedClients then
+        WriteLn('Browser connected. Running specs...')
+      else
+        WriteLn('Timeout. Running specs anyway...');
+    end;
+  except
+    on E: Exception do
+      WriteLn('Live server error: ' + E.Message);
+  end;
+
+  Data := TJSONObject.Create;
+  try
+    Data.AddPair('timestamp', FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', Now));
+    BroadcastEvent(BuildEventJson('report:start', Data));
+  finally
+    Data.Free;
+  end;
+end;
+
+procedure TLiveListener.OnEndReport(const Context: IRunContext);
+var
+  Data: TJSONObject;
+begin
+  Data := TJSONObject.Create;
+  try
+    Data.AddPair('pass', TJSONNumber.Create(Context.ReportCounters.PassCount));
+    Data.AddPair('fail', TJSONNumber.Create(Context.ReportCounters.FailCount));
+    Data.AddPair('skip', TJSONNumber.Create(Context.ReportCounters.SkipCount));
+    Data.AddPair('completedAt', FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', Context.CompletedAt));
+    BroadcastEvent(BuildEventJson('report:end', Data));
+  finally
+    Data.Free;
+  end;
+
+  FReportFinished := True;
+  FServer.Active := False;
+  FContext := nil;
+end;
+
+procedure TLiveListener.OnBeginFeature(const Context: IRunContext; const Feature: IFeature);
 var
   Data: TJSONObject;
   TagsArray, BgSteps: TJSONArray;
@@ -1971,7 +2238,6 @@ begin
     for var Tag in Feature.Tags.ToArray do
       TagsArray.Add(Tag);
     Data.AddPair('tags', TagsArray);
-    // Agregar Background si existe
     if Feature.BackGround <> nil then
     begin
       BgSteps := StepsToJsonArray(Feature.BackGround.StepsGiven, 'Given');
@@ -1983,7 +2249,7 @@ begin
   end;
 end;
 
-procedure TLiveReporter.DoFeatureEnd(const Feature: IFeature; const Counters: TSpecCounters);
+procedure TLiveListener.OnEndFeature(const Context: IRunContext; const Feature: IFeature; const Counters: TSpecCounters);
 var
   Data: TJSONObject;
 begin
@@ -2001,15 +2267,7 @@ begin
   end;
 end;
 
-procedure TLiveReporter.DoReport(const S: ISpecItem);
-begin
-  inherited; // Incrementa contadores para Scenarios
-  // Feature se maneja en DoFeatureBegin/End
-  // Scenario se maneja en DoScenarioEnd
-  // Outline se maneja en DoOutlineEnd
-end;
-
-procedure TLiveReporter.DoScenarioEnd(const Scenario: IScenario; const Counters: TSpecCounters);
+procedure TLiveListener.OnEndScenario(const Context: IRunContext; const Scenario: IScenario; const Counters: TSpecCounters);
 var
   Data: TJSONObject;
   StepsArray, TempArr: TJSONArray;
@@ -2022,14 +2280,13 @@ begin
     Data.AddPair('name', Scenario.Description);
     Data.AddPair('skipped', TJSONBool.Create(IsSkipped));
     if IsSkipped then
-      Data.AddPair('success', TJSONBool.Create(True)) // Skip no es fallo
+      Data.AddPair('success', TJSONBool.Create(True))
     else
       Data.AddPair('success', TJSONBool.Create(Scenario.RunInfo.IsSuccess));
     Data.AddPair('ms', TJSONNumber.Create(Counters.ElapsedMs));
     if not IsSkipped and not Scenario.RunInfo.IsSuccess and (Scenario.RunInfo.ErrMsg <> '') then
       Data.AddPair('error', Scenario.RunInfo.ErrMsg);
 
-    // Agregar steps (Given/When/Then)
     StepsArray := TJSONArray.Create;
     TempArr := StepsToJsonArray(Scenario.StepsGiven, 'Given');
     for var i := 0 to TempArr.Count - 1 do
@@ -2045,42 +2302,33 @@ begin
     TempArr.Free;
     Data.AddPair('steps', StepsArray);
 
-    // Enviar contadores acumulados para que el dashboard los muestre
-    Data.AddPair('totalPass', TJSONNumber.Create(PassCount));
-    Data.AddPair('totalFail', TJSONNumber.Create(FailCount));
-    Data.AddPair('totalSkip', TJSONNumber.Create(SkipCount));
+    Data.AddPair('totalPass', TJSONNumber.Create(Context.ReportCounters.PassCount));
+    Data.AddPair('totalFail', TJSONNumber.Create(Context.ReportCounters.FailCount));
+    Data.AddPair('totalSkip', TJSONNumber.Create(Context.ReportCounters.SkipCount));
     BroadcastEvent(BuildEventJson('scenario:end', Data));
   finally
     Data.Free;
   end;
 end;
 
-procedure TLiveReporter.DoOutlineBegin(const Outline: IScenarioOutline);
-begin
-  // No emitimos eventos al inicio del outline
-end;
-
-procedure TLiveReporter.DoOutlineEnd(const Outline: IScenarioOutline; const Counters: TSpecCounters);
+procedure TLiveListener.OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline; const Counters: TSpecCounters);
 var
   Data: TJSONObject;
-  StepsArray, HeadersArray, ExamplesArray, RowArray: TJSONArray;
+  StepsArray, HeadersArray, ExamplesArray, RowArray, TempArr: TJSONArray;
   ExampleObj: TJSONObject;
 begin
-  // Emitir un solo evento outline:end con toda la información
   Data := TJSONObject.Create;
   try
     Data.AddPair('name', Outline.Description);
     Data.AddPair('type', 'outline');
 
-    // Agregar headers de la tabla de examples
     HeadersArray := TJSONArray.Create;
     for var H in Outline.Headers do
       HeadersArray.Add(H);
     Data.AddPair('headers', HeadersArray);
 
-    // Agregar steps template (Given/When/Then)
     StepsArray := TJSONArray.Create;
-    var TempArr := StepsToJsonArray(Outline.StepsGiven, 'Given');
+    TempArr := StepsToJsonArray(Outline.StepsGiven, 'Given');
     for var i := 0 to TempArr.Count - 1 do
       StepsArray.AddElement(TempArr.Items[i].Clone as TJSONValue);
     TempArr.Free;
@@ -2094,7 +2342,6 @@ begin
     TempArr.Free;
     Data.AddPair('steps', StepsArray);
 
-    // Agregar tabla de examples con resultados
     ExamplesArray := TJSONArray.Create;
     for var Example in Outline.Examples do
     begin
@@ -2103,7 +2350,6 @@ begin
         var IsSkipped := Example.RunInfo.State = srsSkiped;
 
         ExampleObj := TJSONObject.Create;
-        // Valores de este example
         RowArray := TJSONArray.Create;
         for var Val in Example.ExampleMeta.Values do
           RowArray.Add(Val2Str(Val));
@@ -2124,10 +2370,10 @@ begin
     Data.AddPair('fail', TJSONNumber.Create(Counters.FailCount));
     Data.AddPair('success', TJSONBool.Create(Counters.IsSuccess));
     Data.AddPair('ms', TJSONNumber.Create(Counters.ElapsedMs));
-    // Enviar contadores acumulados para que el dashboard los muestre
-    Data.AddPair('totalPass', TJSONNumber.Create(PassCount));
-    Data.AddPair('totalFail', TJSONNumber.Create(FailCount));
-    Data.AddPair('totalSkip', TJSONNumber.Create(SkipCount));
+
+    Data.AddPair('totalPass', TJSONNumber.Create(Context.ReportCounters.PassCount));
+    Data.AddPair('totalFail', TJSONNumber.Create(Context.ReportCounters.FailCount));
+    Data.AddPair('totalSkip', TJSONNumber.Create(Context.ReportCounters.SkipCount));
 
     BroadcastEvent(BuildEventJson('outline:end', Data));
   finally

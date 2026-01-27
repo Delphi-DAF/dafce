@@ -24,7 +24,8 @@ type
     const Version = '1.2.0';
   strict private
     FFeatures: TList<IFeature>;
-    FReporter: ISpecReporter;
+    FRunner: ISpecReporter;
+    FListeners: TList<ISpecListener>;
     FOptions: TMiniSpecOptions;
     FRunMode: TRunMode;
     FQueryExpr: string;
@@ -35,7 +36,7 @@ type
     class function CreateSingleton: TMiniSpec;
     class function Instance: TMiniSpec; static;
     class procedure ParseReporterSpec(const Spec: string; out Name: string; out Options: TReporterOptions);
-    function CreateReporter(const Name: string; const Options: TReporterOptions): ISpecReporter;
+    function CreateListener(const Name: string; const Options: TReporterOptions): ISpecListener;
     procedure LoadConfig;
     procedure ParseArgs;
     procedure ListTags;
@@ -47,7 +48,7 @@ type
     class destructor ClasDestroy;
     {$REGION 'Fluent api for setup'}
     function Reporter(const Spec: string): TMiniSpec;overload;
-    function Reporter: ISpecReporter;overload;
+    function Runner: ISpecReporter;
     function Tags: string;overload;
     procedure Tags(const Value: string);overload;
     function Pause: Boolean;overload;
@@ -131,13 +132,16 @@ begin
   inherited;
   FFeatures := TList<IFeature>.Create;
   FOptions := TMiniSpecOptions.Create;
-  FReporter := TConsoleReporter.Create;
+  FRunner := TSpecRunner.Create;
+  FListeners := TList<ISpecListener>.Create;
   FConfigFile := ExtractFilePath(ParamStr(0)) + 'MiniSpec.ini';
   FConfigExisted := FileExists(FConfigFile);
 end;
 
 destructor TMiniSpec.Destroy;
 begin
+  FListeners.Free;
+  FRunner := nil;
   FOptions.Free;
   FFeatures.Free;
   inherited;
@@ -186,24 +190,24 @@ begin
   end;
 end;
 
-function TMiniSpec.CreateReporter(const Name: string; const Options: TReporterOptions): ISpecReporter;
+function TMiniSpec.CreateListener(const Name: string; const Options: TReporterOptions): ISpecListener;
 var
   Port: Integer;
 begin
   if SameText(Name, 'console') then
-    Result := TConsoleReporter.Create
+    Result := TConsoleListener.Create
   else if SameText(Name, 'json') then
-    Result := TJsonReporter.Create
+    Result := TJsonListener.Create
   else if SameText(Name, 'gherkin') then
-    Result := TGherkinReporter.Create(False)
+    Result := TGherkinListener.Create(False)
   else if SameText(Name, 'gherkin-results') then
-    Result := TGherkinReporter.Create(True)
+    Result := TGherkinListener.Create(True)
   else if SameText(Name, 'live') then
   begin
     Port := 8080;
     if Options.ContainsKey('port') then
       Port := StrToIntDef(Options['port'], 8080);
-    Result := TLiveReporter.Create(Port);
+    Result := TLiveListener.Create(Port);
   end
   else
     raise Exception.CreateFmt('Unknown reporter name: %s', [Name]);
@@ -217,11 +221,13 @@ var
   Name: string;
   Options: TReporterOptions;
   Pair: TPair<string, string>;
+  Listener: ISpecListener;
 begin
   Result := Self;
   ParseReporterSpec(LowerCase(Spec), Name, Options);
   try
-    FReporter := CreateReporter(Name, Options);
+    Listener := CreateListener(Name, Options);
+    FListeners.Add(Listener);
     // Guardar en FOptions para persistencia
     FOptions.ReporterName := Name;
     for Pair in Options do
@@ -234,9 +240,9 @@ begin
   end;
 end;
 
-function TMiniSpec.Reporter: ISpecReporter;
+function TMiniSpec.Runner: ISpecReporter;
 begin
-  Result := FReporter;
+  Result := FRunner;
 end;
 
 procedure TMiniSpec.Tags(const Value: string);
@@ -275,15 +281,17 @@ end;
 procedure TMiniSpec.LoadConfig;
 var
   RepOpts: TReporterOptions;
+  Listener: ISpecListener;
 begin
   // Cargar opciones desde archivo .cfg si existe
   FOptions.LoadFromFile(FConfigFile);
 
-  // Si el .cfg especifica un reporter, crearlo con sus opciones
+  // Si el .cfg especifica un reporter, crearlo como listener
   if not FOptions.ReporterName.IsEmpty then
   begin
     RepOpts := FOptions.GetReporterOptions(FOptions.ReporterName);
-    FReporter := CreateReporter(FOptions.ReporterName, RepOpts);
+    Listener := CreateListener(FOptions.ReporterName, RepOpts);
+    FListeners.Add(Listener);
   end;
 end;
 
@@ -338,6 +346,7 @@ procedure TMiniSpec.Run;
 var
   TagFilter: TTagExpression;
   Matcher: TTagMatcher;
+  Listener: ISpecListener;
 begin
   ParseArgs;
 
@@ -356,7 +365,8 @@ begin
       WriteLn('| Full specs, zero fat |');
       WriteLn('+----------------------+');
       WriteLn;
-      if Assigned(FReporter) and FReporter.ShowHelp then
+      // Show help for the last listener added
+      if (FListeners.Count > 0) and FListeners.Last.ShowHelp then
         Exit
       else
       begin
@@ -375,6 +385,14 @@ begin
       Exit;
     end;
   end;
+
+  // Si no hay listeners, agregar console por defecto
+  if FListeners.Count = 0 then
+    FListeners.Add(TConsoleListener.Create);
+
+  // Agregar todos los listeners al runner
+  for Listener in FListeners do
+    FRunner.AddListener(Listener);
 
   // Modo normal: ejecutar tests
   OSShell.UseUTF8;
@@ -401,15 +419,16 @@ begin
     for var F in FFeatures do
       F.Run(Matcher);
 
-    Reporter.Report(FFeatures, FOptions);
+    // Usar el runner para reportar (notificará a todos los listeners)
+    FRunner.Report(FFeatures, FOptions);
   finally
     TagFilter.Free;
   end;
   WriteLn(Format('Pass: %d | Fail: %d | Skip: %d | Total: %d Specs in %d Features | %d ms | at %s',
-    [FReporter.PassCount, FReporter.FailCount, FReporter.SkipCount,
-     FReporter.PassCount + FReporter.FailCount + FReporter.SkipCount,
-     FReporter.FeatureCount, FReporter.ElapsedMs,
-     FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', FReporter.CompletedAt)]));
+    [FRunner.PassCount, FRunner.FailCount, FRunner.SkipCount,
+     FRunner.PassCount + FRunner.FailCount + FRunner.SkipCount,
+     FRunner.FeatureCount, FRunner.ElapsedMs,
+     FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', FRunner.CompletedAt)]));
 
   if Pause then
     OSShell.WaitForShutdown;

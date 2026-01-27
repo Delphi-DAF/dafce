@@ -106,7 +106,7 @@ Feature('...')
 // Calculator.Add.Feat.pas
 Feature('Suma').UseWorld<TCalculatorWorld>
 
-// Login.Feat.pas  
+// Login.Feat.pas
 Feature('Login').UseWorld<TLoginWorld>
 
 // Report.Feat.pas
@@ -133,14 +133,14 @@ type
     Ctx: ISpecContext;
   begin
     Ctx := World as ISpecContext;  // Cast explícito requerido
-    
+
     // Acceso al step actual
     WriteLn('Step: ', Ctx.CurrentStep.Description);
-    
+
     // Navegación directa a padres
     WriteLn('Scenario: ', Ctx.CurrentScenario.Description);
     WriteLn('Feature: ', Ctx.CurrentFeature.Title);
-    
+
     // CurrentRule puede ser nil si no hay Rule explícita
     if Assigned(Ctx.CurrentRule) then
       WriteLn('Rule: ', Ctx.CurrentRule.Description);
@@ -336,7 +336,7 @@ La acción se ejecuta en el step When y la excepción se captura automáticament
 | `--dry-run` | Lista escenarios sin ejecutarlos |
 | `--stacktrace` | Muestra stack trace completo en errores |
 
-> **Nota**: `--stacktrace` requiere una librería de stack traces (JclDebug, MadExcept, EurekaLog) 
+> **Nota**: `--stacktrace` requiere una librería de stack traces (JclDebug, MadExcept, EurekaLog)
 > para mostrar información útil. Sin ella, `Exception.StackTrace` estará vacío.
 
 ### Expresiones de Tags
