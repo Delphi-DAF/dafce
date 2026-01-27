@@ -140,8 +140,8 @@ end;
 
 destructor TMiniSpec.Destroy;
 begin
+  FRunner := nil;  // Release runner first, it has refs to listeners
   FListeners.Free;
-  FRunner := nil;
   FOptions.Free;
   FFeatures.Free;
   inherited;
@@ -279,20 +279,10 @@ end;
 {$ENDREGION}
 
 procedure TMiniSpec.LoadConfig;
-var
-  RepOpts: TReporterOptions;
-  Listener: ISpecListener;
 begin
-  // Cargar opciones desde archivo .cfg si existe
+  // Solo cargar opciones desde archivo .ini si existe
+  // No crear listeners aquí - se hace en Run() basándose en la config final
   FOptions.LoadFromFile(FConfigFile);
-
-  // Si el .cfg especifica un reporter, crearlo como listener
-  if not FOptions.ReporterName.IsEmpty then
-  begin
-    RepOpts := FOptions.GetReporterOptions(FOptions.ReporterName);
-    Listener := CreateListener(FOptions.ReporterName, RepOpts);
-    FListeners.Add(Listener);
-  end;
 end;
 
 procedure TMiniSpec.ParseArgs;
@@ -386,9 +376,17 @@ begin
     end;
   end;
 
-  // Si no hay listeners, agregar console por defecto
+  // Si no hay listeners explícitos, crear desde config o usar console por defecto
   if FListeners.Count = 0 then
-    FListeners.Add(TConsoleListener.Create);
+  begin
+    if not FOptions.ReporterName.IsEmpty then
+    begin
+      var RepOpts := FOptions.GetReporterOptions(FOptions.ReporterName);
+      FListeners.Add(CreateListener(FOptions.ReporterName, RepOpts));
+    end
+    else
+      FListeners.Add(TConsoleListener.Create);
+  end;
 
   // Agregar todos los listeners al runner
   for Listener in FListeners do

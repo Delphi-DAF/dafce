@@ -145,6 +145,7 @@ type
     FCliOptions: TReporterOptions;
     function GetCliOption(const Key: string; const Default: string = ''): string;
   public
+    destructor Destroy; override;
     procedure Configure(const Options: TReporterOptions); virtual;
     function ShowHelp: Boolean; virtual;
     procedure OnBeginReport(const Context: IRunContext); virtual;
@@ -444,9 +445,24 @@ uses
 
 { TCustomListener }
 
-procedure TCustomListener.Configure(const Options: TReporterOptions);
+destructor TCustomListener.Destroy;
 begin
-  FCliOptions := Options;
+  FCliOptions.Free;
+  inherited;
+end;
+
+procedure TCustomListener.Configure(const Options: TReporterOptions);
+var
+  Pair: TPair<string, string>;
+begin
+  // Make a copy of the options since the original may be freed
+  FreeAndNil(FCliOptions);
+  if Assigned(Options) then
+  begin
+    FCliOptions := TReporterOptions.Create;
+    for Pair in Options do
+      FCliOptions.Add(Pair.Key, Pair.Value);
+  end;
 end;
 
 function TCustomListener.ShowHelp: Boolean;
@@ -532,7 +548,7 @@ begin
   FFilter := '';
   FPause := False;
   FDryRun := False;
-  FReporterName := 'console';
+  FReporterName := '';  // No default reporter - will use console if none specified
 end;
 
 destructor TMiniSpecOptions.Destroy;
@@ -1560,6 +1576,7 @@ begin
   Root := TJSONObject.Create;
   try
     Root.AddPair('features', FFeatures);
+    FFeatures := nil; // Root now owns FFeatures
     Root.AddPair('passCount', TJSONNumber.Create(Context.ReportCounters.PassCount));
     Root.AddPair('failCount', TJSONNumber.Create(Context.ReportCounters.FailCount));
     Root.AddPair('skipCount', TJSONNumber.Create(Context.ReportCounters.SkipCount));
