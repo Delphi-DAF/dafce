@@ -32,6 +32,13 @@ type
   /// Metadata para scenarios Example (hijos de ScenarioOutline).
   /// Solo contiene los valores de la fila; los Headers están en el padre.
   /// </summary>
+  /// <remarks>
+  /// Los valores en Example.Description usan el formato #{valor} intencionalmente
+  /// (ej: "Outline: N=#{1}" en vez de "Outline: N=1").
+  /// Esto permite a los Listeners/Reporters distinguir valores de Examples
+  /// y formatearlos según su necesidad (ej: convertir a &lt;1&gt; para Gherkin).
+  /// Los valores reales están disponibles en ExampleMeta.Values.
+  /// </remarks>
   TExampleMeta = record
     Values: TArray<TValue>;        // Valores de la fila
     RowIndex: Integer;             // Índice de la fila (1-based)
@@ -310,6 +317,7 @@ type
   public
     constructor Create(const Feature: IFeature; const Description: string);overload;
     constructor Create(const Feature: IFeature; const Description: string; AddToFeatureScenarios: Boolean);overload;
+    constructor Create(const ARule: IRule; const Description: string);overload;
     constructor CreateExample(const Outline: IScenarioOutline; const Description: string);
     destructor Destroy;override;
     function ExampleInit(Step: TStepProc<T>): TScenario<T>;
@@ -805,6 +813,16 @@ begin
     Feature.Scenarios.Add(Self);
 end;
 
+constructor TScenario<T>.Create(const ARule: IRule; const Description: string);
+begin
+  // Crear escenario con Rule como parent para correcta navegación del contexto
+  inherited Create(sikScenario, ARule, Description);
+  FStepsGiven := TList<IScenarioStep>.Create;
+  FStepsWhen := TList<IScenarioStep>.Create;
+  FStepsThen := TList<IScenarioStep>.Create;
+  // El Builder es responsable de añadirlo a Rule.Scenarios
+end;
+
 constructor TScenario<T>.CreateExample(const Outline: IScenarioOutline; const Description: string);
 begin
   // Crear un Example con el ScenarioOutline como parent
@@ -1258,12 +1276,23 @@ begin
         Continue;
       end;
 
-      var World := CreateWorld;
-      RunBackground(World);
-      Scenario.Run(World);
-      if Scenario.RunInfo.Result in [srrFail, srrError] then
-        FRunInfo.Result := srrFail;
-      World.Free;
+      // ScenarioOutline maneja sus propios Worlds (uno por Example)
+      // No crear World aquí para evitar Worlds fantasma
+      if Supports(Scenario, IScenarioOutline) then
+      begin
+        Scenario.Run(nil);
+        if Scenario.RunInfo.Result in [srrFail, srrError] then
+          FRunInfo.Result := srrFail;
+      end
+      else
+      begin
+        var World := CreateWorld;
+        RunBackground(World);
+        Scenario.Run(World);
+        if Scenario.RunInfo.Result in [srrFail, srrError] then
+          FRunInfo.Result := srrFail;
+        World.Free;
+      end;
     end;
   except
     on E: Exception do

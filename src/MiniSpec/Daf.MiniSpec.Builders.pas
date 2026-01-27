@@ -209,8 +209,8 @@ begin
   inherited Create;
   FRule := TRule<T>(ARule);
   FLastStep := lskNone;
-  // Crear escenario sin añadirlo a Feature.Scenarios (False)
-  FScenario := TScenario<T>.Create(FRule.Feature, Description, False);
+  // Crear escenario con Rule como parent para correcta navegación del contexto
+  FScenario := TScenario<T>.Create(ARule, Description);
   FRule.Scenarios.Add(FScenario);
 end;
 

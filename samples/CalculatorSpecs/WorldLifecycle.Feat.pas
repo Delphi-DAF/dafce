@@ -162,6 +162,25 @@ World Lifecycle @meta @lifecycle
       Expect(Assigned(World)).ToEqual(True);
     end)
 
+// === Outline directly in feature (no rule) - must be before Rules ===
+.ScenarioOutline('Direct outline: X=<X>')
+  .Given('an outline runs directly', procedure(World: TLifecycleWorld)
+    begin
+      World.LogCreate;
+    end)
+  .When('I check the value', procedure(World: TLifecycleWorld)
+    begin
+      Expect(World.X <> '').ToEqual(True);
+    end)
+  .&Then('each example works', procedure(World: TLifecycleWorld)
+    begin
+      Expect(Assigned(World)).ToEqual(True);
+    end)
+  .Examples(
+    [['X'],
+     ['A'],
+     ['B']])
+
 // === First Rule with scenarios ===
 .Rule('Basic Rules')
   .Scenario('Scenario in first rule')
@@ -226,25 +245,6 @@ World Lifecycle @meta @lifecycle
        [1],
        [2],
        [3]])
-
-// === Outline directly in feature (no rule) ===
-.ScenarioOutline('Direct outline: X=<X>')
-  .Given('an outline runs directly', procedure(World: TLifecycleWorld)
-    begin
-      World.LogCreate;
-    end)
-  .When('I check the value', procedure(World: TLifecycleWorld)
-    begin
-      Expect(World.X <> '').ToEqual(True);
-    end)
-  .&Then('each example works', procedure(World: TLifecycleWorld)
-    begin
-      Expect(Assigned(World)).ToEqual(True);
-    end)
-  .Examples(
-    [['X'],
-     ['A'],
-     ['B']])
 ;
 
 finalization
