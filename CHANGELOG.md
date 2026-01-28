@@ -18,6 +18,7 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 - **MiniSpec**: Live Dashboard export/print support
 - **MiniSpec**: Cleaner exception testing API - `Expect(Raised).ToBe<EException>`
 - **MiniSpec**: Dedicated test project for framework tests (`src/MiniSpec/test/`)
+- **MiniSpec**: `Before`/`After` hooks for feature-level setup/teardown (run once per feature)
 
 ### Changed
 
