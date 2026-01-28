@@ -18,6 +18,8 @@ type
     constructor Create(const Description: string; const Category: string = '');overload;
     function Category(const Name: string): IFeatureBuilder<T>; overload;
     function Category(AClass: TClass): IFeatureBuilder<T>; overload;
+    function Before(const Description: string; Hook: THookProc): IFeatureBuilder<T>;
+    function After(const Description: string; Hook: THookProc): IFeatureBuilder<T>;
     function Background: IBackgroundBuilder<T>;
     function Scenario(const Description: string): IScenarioBuilder<T>;overload;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
@@ -106,6 +108,8 @@ type
     // IRuleBuilder + IFeatureBuilder
     function Category(const Name: string): IFeatureBuilder<T>; overload;
     function Category(AClass: TClass): IFeatureBuilder<T>; overload;
+    function Before(const Description: string; Hook: THookProc): IFeatureBuilder<T>;
+    function After(const Description: string; Hook: THookProc): IFeatureBuilder<T>;
     function Background: IBackgroundBuilder<T>;
     function Scenario(const Description: string): IScenarioBuilder<T>;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
@@ -150,6 +154,18 @@ begin
     FFeature.Category := QualifiedName.Substring(0, DotPos)
   else
     FFeature.Category := QualifiedName;
+  Result := Self;
+end;
+
+function TFeatureBuilder<T>.Before(const Description: string; Hook: THookProc): IFeatureBuilder<T>;
+begin
+  FFeature.BeforeHooks.Add(THook.Create(sikBefore, FFeature, Description, Hook));
+  Result := Self;
+end;
+
+function TFeatureBuilder<T>.After(const Description: string; Hook: THookProc): IFeatureBuilder<T>;
+begin
+  FFeature.AfterHooks.Add(THook.Create(sikAfter, FFeature, Description, Hook));
   Result := Self;
 end;
 
@@ -524,6 +540,18 @@ begin
     FFeature.Category := QualifiedName.Substring(0, DotPos)
   else
     FFeature.Category := QualifiedName;
+  Result := Self;
+end;
+
+function TRuleBuilder<T>.Before(const Description: string; Hook: THookProc): IFeatureBuilder<T>;
+begin
+  FFeature.BeforeHooks.Add(THook.Create(sikBefore, FFeature, Description, Hook));
+  Result := Self;
+end;
+
+function TRuleBuilder<T>.After(const Description: string; Hook: THookProc): IFeatureBuilder<T>;
+begin
+  FFeature.AfterHooks.Add(THook.Create(sikAfter, FFeature, Description, Hook));
   Result := Self;
 end;
 

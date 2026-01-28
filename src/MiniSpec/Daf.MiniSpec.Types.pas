@@ -9,8 +9,9 @@ uses
 
 type
   TStepProc<T> = reference to procedure(World: T);
+  THookProc = reference to procedure;  // For Before/After hooks (no World)
   TExamplesTable = TArray<TArray<TValue>>;
-  TSpecItemKind = (sikFeature, sikImplicitRule, sikRule, sikBackground, sikScenario, sikScenarioOutline, sikExample, sikExampleInit, sikGiven, sikWhen, sikThen, sikAnd, sikBut);
+  TSpecItemKind = (sikFeature, sikImplicitRule, sikRule, sikBackground, sikScenario, sikScenarioOutline, sikExample, sikExampleInit, sikGiven, sikWhen, sikThen, sikAnd, sikBut, sikBefore, sikAfter);
   TLastStepKind = (lskNone, lskGiven, lskWhen, lskThen);
   TSpecRunState =  (srsPrepared, srsSkiped, srsRunning, srsFinished);
   TSpecRunResult =  (srrNone, srrSuccess, srrFail, srrError);
@@ -99,6 +100,14 @@ type
     /// Convention: declare TCategory = class end; in each feature unit.
     /// </summary>
     function Category(AClass: TClass): IFeatureBuilder<T>; overload;
+    /// <summary>
+    /// Adds a Before hook that runs once before all scenarios in the feature.
+    /// </summary>
+    function Before(const Description: string; Hook: THookProc): IFeatureBuilder<T>;
+    /// <summary>
+    /// Adds an After hook that runs once after all scenarios in the feature.
+    /// </summary>
+    function After(const Description: string; Hook: THookProc): IFeatureBuilder<T>;
     function Background: IBackgroundBuilder<T>;
     function Scenario(const Description: string): IScenarioBuilder<T>;overload;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
@@ -194,6 +203,15 @@ type
     ['{3F16A9FA-0F64-4B4C-985F-D09087DD7404}']
   end;
 
+  /// <summary>
+  /// Hook for Before/After feature execution.
+  /// Unlike steps, hooks don't receive a World parameter.
+  /// </summary>
+  IHook = interface(ISpecItem)
+    ['{8B7C6D5E-4F3A-2B1C-0D9E-8F7A6B5C4D3E}']
+    procedure Execute;
+  end;
+
   IBackground = interface(ISpecItem)
     function GetStepsGiven: TList<IScenarioStep>;
     property StepsGiven: TList<IScenarioStep> read GetStepsGiven;
@@ -238,6 +256,8 @@ type
     procedure SetBackGround(const Value: IBackground);
     function GetScenarios: TList<IScenario>;
     function GetRules: TList<IRule>;
+    function GetBeforeHooks: TList<IHook>;
+    function GetAfterHooks: TList<IHook>;
     function HasMatchingScenarios(const Matcher: TSpecMatcher): Boolean;
     procedure Run(const Matcher: TSpecMatcher = nil);
     property Title: string read GetTitle;
@@ -250,6 +270,14 @@ type
     property BackGround: IBackground read GetBackground write SetBackground;
     property Scenarios: TList<IScenario> read GetScenarios;
     property Rules: TList<IRule> read GetRules;
+    /// <summary>
+    /// Hooks that run once before all scenarios in the feature.
+    /// </summary>
+    property BeforeHooks: TList<IHook> read GetBeforeHooks;
+    /// <summary>
+    /// Hooks that run once after all scenarios in the feature.
+    /// </summary>
+    property AfterHooks: TList<IHook> read GetAfterHooks;
   end;
 
   /// <summary>
@@ -340,6 +368,18 @@ type
     property Proc: TStepProc<T> read FProc;
   end;
 
+  /// <summary>
+  /// Hook for Before/After feature execution.
+  /// Wraps a THookProc (no World parameter) in the standard TSpecItem infrastructure.
+  /// </summary>
+  THook = class(TSpecItem, IHook)
+  strict private
+    FProc: THookProc;
+  public
+    constructor Create(const Kind: TSpecItemKind; const Parent: ISpecItem; const Description: string; const Proc: THookProc);
+    procedure Execute;
+  end;
+
   TBackground<T: class, constructor> = class(TSpecItem, IBackground)
   strict private
     FStepsGiven: TList<IScenarioStep>;
@@ -416,6 +456,8 @@ type
     FTitle: string;
     FNarrative: string;
     FCategory: string;
+    FBeforeHooks: TList<IHook>;
+    FAfterHooks: TList<IHook>;
     function GetTitle: string;
     function GetNarrative: string;
     function GetCategory: string;
@@ -424,6 +466,8 @@ type
     procedure SetBackGround(const Value: IBackground);
     function GetScenarios: TList<IScenario>;
     function GetRules: TList<IRule>;
+    function GetBeforeHooks: TList<IHook>;
+    function GetAfterHooks: TList<IHook>;
     procedure ParseDescription(const Description: string);
   public
     constructor Create(const Description: string);
@@ -435,6 +479,8 @@ type
     property Category: string read GetCategory write SetCategory;
     property Background: IBackground read GetBackGround write SetBackGround;
     property Rules: TList<IRule> read GetRules;
+    property BeforeHooks: TList<IHook> read GetBeforeHooks;
+    property AfterHooks: TList<IHook> read GetAfterHooks;
     property ImplicitRule: IRule read FImplicitRule;  // Solo para builders
   end;
 
@@ -830,6 +876,34 @@ begin
   FRunInfo.ExecTimeMs := SW.ElapsedMilliseconds;
 end;
 
+{ THook }
+
+constructor THook.Create(const Kind: TSpecItemKind; const Parent: ISpecItem; const Description: string; const Proc: THookProc);
+begin
+  inherited Create(Kind, Parent, Description);
+  FProc := Proc;
+end;
+
+procedure THook.Execute;
+begin
+  var SW := TStopwatch.StartNew;
+  FRunInfo.State := srsRunning;
+  FRunInfo.Result := srrSuccess;
+  try
+    if Assigned(FProc) then
+      FProc();
+  except
+    on E: Exception do
+    begin
+      FRunInfo.Result := srrError;
+      FRunInfo.Error := Exception(AcquireExceptionObject);
+      raise;  // Re-raise to stop feature execution
+    end;
+  end;
+  FRunInfo.State := srsFinished;
+  FRunInfo.ExecTimeMs := SW.ElapsedMilliseconds;
+end;
+
 { TBackground<T> }
 
 constructor TBackground<T>.Create(const Feature: IFeature);
@@ -1204,6 +1278,8 @@ begin
   inherited Create(sikFeature, nil, Description);
   ParseDescription(Description);
   FRules := TList<IRule>.Create;
+  FBeforeHooks := TList<IHook>.Create;
+  FAfterHooks := TList<IHook>.Create;
   // Crear Rule implícita como contenedor por defecto
   FImplicitRule := TRule<T>.Create(Self, '', sikImplicitRule);
   FRules.Add(FImplicitRule);
@@ -1212,6 +1288,8 @@ end;
 
 destructor TFeature<T>.Destroy;
 begin
+  FAfterHooks.Free;
+  FBeforeHooks.Free;
   FRules.Free;
   inherited;
 end;
@@ -1230,6 +1308,16 @@ end;
 function TFeature<T>.GetRules: TList<IRule>;
 begin
   Result := FRules;
+end;
+
+function TFeature<T>.GetBeforeHooks: TList<IHook>;
+begin
+  Result := FBeforeHooks;
+end;
+
+function TFeature<T>.GetAfterHooks: TList<IHook>;
+begin
+  Result := FAfterHooks;
 end;
 
 function TFeature<T>.HasMatchingScenarios(const Matcher: TSpecMatcher): Boolean;
@@ -1251,6 +1339,10 @@ begin
   FRunInfo.State := srsRunning;
   FRunInfo.Result := srrSuccess;
   try
+    // Execute Before hooks (once before all scenarios)
+    for var Hook in FBeforeHooks do
+      Hook.Execute;
+
     // Ejecutar todas las Rules (incluyendo ImplicitRule)
     // Cada Rule decide internamente qué escenarios ejecutar o marcar como Skip
     for var Rule in FRules do
@@ -1266,6 +1358,19 @@ begin
       FRunInfo.Error := E;
     end;
   end;
+
+  // Execute After hooks (once after all scenarios, even if there were errors)
+  try
+    for var Hook in FAfterHooks do
+      Hook.Execute;
+  except
+    on E: Exception do
+    begin
+      FRunInfo.Result := srrError;
+      FRunInfo.Error := E;
+    end;
+  end;
+
   FRunInfo.State := srsFinished;
   FRunInfo.ExecTimeMs := SW.ElapsedMilliseconds;
 end;
