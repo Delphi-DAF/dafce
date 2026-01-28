@@ -101,12 +101,19 @@
         <DCCReference Include="IndyCore.dcp"/>
         <DCCReference Include="IndyProtocols.dcp"/>
         <DCCReference Include="Daf.MiniSpec.pas"/>
+        <DCCReference Include="Daf.MiniSpec.DataTable.pas"/>
         <DCCReference Include="Daf.MiniSpec.Expects.pas"/>
-        <DCCReference Include="Daf.MiniSpec.Reporter.pas"/>
+        <DCCReference Include="Daf.MiniSpec.LiveDashboard.pas"/>
+        <DCCReference Include="Daf.MiniSpec.Runner.pas"/>
         <DCCReference Include="Daf.MiniSpec.Utils.pas"/>
         <DCCReference Include="Daf.MiniSpec.Builders.pas"/>
         <DCCReference Include="Daf.MiniSpec.Types.pas"/>
         <DCCReference Include="Daf.MiniSpec.TagFilter.pas"/>
+        <DCCReference Include="Daf.MiniSpec.Filter.pas"/>
+        <DCCReference Include="Daf.MiniSpec.Reporter.Console.pas"/>
+        <DCCReference Include="Daf.MiniSpec.Reporter.Gherkin.pas"/>
+        <DCCReference Include="Daf.MiniSpec.Reporter.Json.pas"/>
+        <DCCReference Include="Daf.MiniSpec.Reporter.Live.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\source.optset</DependentOn>
@@ -152,6 +159,12 @@
                     </Platform>
                 </DeployFile>
                 <DeployFile LocalName="..\..\out\bin\Daf.MiniSpec.bpl" Configuration="Debug" Class="ProjectOutput">
+                    <Platform Name="Win32">
+                        <RemoteName>Daf.MiniSpec.bpl</RemoteName>
+                        <Overwrite>true</Overwrite>
+                    </Platform>
+                </DeployFile>
+                <DeployFile LocalName="..\..\out\bin\Daf.MiniSpec.bpl" Configuration="Release" Class="ProjectOutput">
                     <Platform Name="Win32">
                         <RemoteName>Daf.MiniSpec.bpl</RemoteName>
                         <Overwrite>true</Overwrite>

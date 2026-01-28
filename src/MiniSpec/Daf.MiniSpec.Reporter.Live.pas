@@ -11,11 +11,11 @@ uses
   IdCustomHTTPServer,
   IdContext,
   Daf.MiniSpec.Types,
-  Daf.MiniSpec.Reporter;
+  Daf.MiniSpec.Runner;
 
 type
   /// <summary>
-  /// Live reporter - broadcasts test results via SSE to browser dashboard.
+  /// Live listener - broadcasts test results via SSE to browser dashboard.
   /// Implements ISpecListener for pure observer pattern.
   /// </summary>
   TLiveReporter = class(TCustomListener)
@@ -38,7 +38,7 @@ type
   public
     constructor Create(APort: Integer = 8080);
     destructor Destroy;override;
-    procedure Configure(const Options: TReporterOptions);override;
+    procedure Configure(const Options: TRunnerOptions);override;
     function ShowHelp: Boolean;override;
     function UseConsole: Boolean;override;
     function GetContent: string;override;
@@ -94,7 +94,7 @@ begin
   inherited;
 end;
 
-procedure TLiveReporter.Configure(const Options: TReporterOptions);
+procedure TLiveReporter.Configure(const Options: TRunnerOptions);
 begin
   inherited;
   if Assigned(Options) and Options.ContainsKey('port') then

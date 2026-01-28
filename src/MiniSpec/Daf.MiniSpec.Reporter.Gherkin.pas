@@ -6,11 +6,11 @@ uses
   System.Classes,
   Daf.MiniSpec.Types,
   Daf.MiniSpec.DataTable,
-  Daf.MiniSpec.Reporter;
+  Daf.MiniSpec.Runner;
 
 type
   /// <summary>
-  /// Gherkin reporter - generates .feature files from test results.
+  /// Gherkin listener - generates .feature files from test results.
   /// Implements ISpecListener for pure observer pattern.
   /// </summary>
   TGherkinReporter = class(TCustomListener)
@@ -34,7 +34,7 @@ type
   public
     constructor Create(AWithResults: Boolean = False);
     destructor Destroy;override;
-    procedure Configure(const Options: TReporterOptions);override;
+    procedure Configure(const Options: TRunnerOptions);override;
     function GetContent: string;override;
     function GetFileExt: string;override;
     procedure OnBeginSuite(const Context: IRunContext; const Suite: ISpecSuite);override;
@@ -72,7 +72,7 @@ begin
   inherited;
 end;
 
-procedure TGherkinReporter.Configure(const Options: TReporterOptions);
+procedure TGherkinReporter.Configure(const Options: TRunnerOptions);
 begin
   inherited;
   // WithResults option

@@ -5,11 +5,11 @@ interface
 uses
   System.JSON,
   Daf.MiniSpec.Types,
-  Daf.MiniSpec.Reporter;
+  Daf.MiniSpec.Runner;
 
 type
   /// <summary>
-  /// JSON reporter - builds JSON output from test results.
+  /// JSON listener - builds JSON output from test results.
   /// Implements ISpecListener for pure observer pattern.
   /// </summary>
   TJsonReporter = class(TCustomListener)

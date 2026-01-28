@@ -39,7 +39,7 @@ contains
   Daf.MiniSpec.DataTable in 'Daf.MiniSpec.DataTable.pas',
   Daf.MiniSpec.Expects in 'Daf.MiniSpec.Expects.pas',
   Daf.MiniSpec.LiveDashboard in 'Daf.MiniSpec.LiveDashboard.pas',
-  Daf.MiniSpec.Reporter in 'Daf.MiniSpec.Reporter.pas',
+  Daf.MiniSpec.Runner in 'Daf.MiniSpec.Runner.pas',
   Daf.MiniSpec.Utils in 'Daf.MiniSpec.Utils.pas',
   Daf.MiniSpec.Builders in 'Daf.MiniSpec.Builders.pas',
   Daf.MiniSpec.Types in 'Daf.MiniSpec.Types.pas',

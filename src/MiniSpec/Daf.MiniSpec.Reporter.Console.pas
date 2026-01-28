@@ -6,11 +6,11 @@ uses
   System.RegularExpressions,
   Daf.MiniSpec.Types,
   Daf.MiniSpec.DataTable,
-  Daf.MiniSpec.Reporter;
+  Daf.MiniSpec.Runner;
 
 type
   /// <summary>
-  /// Console reporter - outputs test results to console in hierarchical format.
+  /// Console listener - outputs test results to console in hierarchical format.
   /// Implements ISpecListener for pure observer pattern.
   /// </summary>
   TConsoleReporter = class(TCustomListener)

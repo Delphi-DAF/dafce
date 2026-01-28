@@ -1,4 +1,4 @@
-﻿unit Daf.MiniSpec.Reporter;
+﻿unit Daf.MiniSpec.Runner;
 
 interface
 uses
@@ -16,7 +16,7 @@ type
   /// Dictionary of string options passed from CLI/config to reporters.
   /// Each reporter reads the keys it needs (e.g., 'output', 'port').
   /// </summary>
-  TReporterOptions = TDictionary<string, string>;
+  TRunnerOptions = TDictionary<string, string>;
 
   /// <summary>
   /// Opciones globales de MiniSpec con persistencia en archivo .cfg (formato INI).
@@ -35,7 +35,7 @@ type
     FDryRun: Boolean;
     FStackTrace: Boolean;
     FReporterName: string;
-    FReporterOptions: TObjectDictionary<string, TReporterOptions>;
+    FReporterOptions: TObjectDictionary<string, TRunnerOptions>;
   public
     constructor Create;
     destructor Destroy; override;
@@ -48,7 +48,7 @@ type
     procedure LoadFromFile(const FileName: string);
     procedure SaveToFile(const FileName: string);
     // Reporter options
-    function GetReporterOptions(const ReporterName: string): TReporterOptions;
+    function GetReporterOptions(const ReporterName: string): TRunnerOptions;
     procedure SetReporterOption(const ReporterName, Key, Value: string);
     // Properties
     property SpecMatcher: TSpecMatcher read FSpecMatcher write FSpecMatcher;
@@ -121,7 +121,7 @@ type
   /// </summary>
   ISpecListener = interface
     ['{F8A1B2C3-D4E5-6F7A-8B9C-0D1E2F3A4B5C}']
-    procedure Configure(const Options: TReporterOptions);
+    procedure Configure(const Options: TRunnerOptions);
     function ShowHelp: Boolean;
     procedure OnBeginSuite(const Context: IRunContext; const Suite: ISpecSuite);
     procedure OnEndSuite(const Context: IRunContext; const Suite: ISpecSuite; const Counters: TSpecCounters);
@@ -147,7 +147,7 @@ type
     function GetElapsedMs: Integer;
     function GetFeatureCount: Integer;
     function GetCompletedAt: TDateTime;
-    procedure Configure(const Options: TReporterOptions);
+    procedure Configure(const Options: TRunnerOptions);
     function ShowHelp: Boolean;
     procedure AddListener(const Listener: ISpecListener);
     procedure Report(Suite: ISpecSuite; Options: TMiniSpecOptions);
@@ -166,11 +166,11 @@ type
   /// </summary>
   TCustomListener = class(TInterfacedObject, ISpecListener)
   protected
-    FCliOptions: TReporterOptions;
+    FCliOptions: TRunnerOptions;
     function GetCliOption(const Key: string; const Default: string = ''): string;
   public
     destructor Destroy; override;
-    procedure Configure(const Options: TReporterOptions); virtual;
+    procedure Configure(const Options: TRunnerOptions); virtual;
     function ShowHelp: Boolean; virtual;
     procedure OnBeginSuite(const Context: IRunContext; const Suite: ISpecSuite); virtual;
     procedure OnEndSuite(const Context: IRunContext; const Suite: ISpecSuite; const Counters: TSpecCounters); virtual;
@@ -206,7 +206,7 @@ type
     // Report options
     FOptions: TMiniSpecOptions;
     // CLI options (output, port, etc.)
-    FCliOptions: TReporterOptions;
+    FCliOptions: TRunnerOptions;
     // Timestamp
     FCompletedAt: TDateTime;
     // Listeners
@@ -302,7 +302,7 @@ type
     // Listener management
     procedure AddListener(const Listener: ISpecListener);
     procedure RemoveListener(const Listener: ISpecListener);
-    procedure Configure(const Options: TReporterOptions);virtual;
+    procedure Configure(const Options: TRunnerOptions);virtual;
     function ShowHelp: Boolean;virtual;
     function UseConsole: Boolean;virtual;
     procedure BeginReport;virtual;
@@ -334,7 +334,7 @@ begin
   inherited;
 end;
 
-procedure TCustomListener.Configure(const Options: TReporterOptions);
+procedure TCustomListener.Configure(const Options: TRunnerOptions);
 var
   Pair: TPair<string, string>;
 begin
@@ -342,7 +342,7 @@ begin
   FreeAndNil(FCliOptions);
   if Assigned(Options) then
   begin
-    FCliOptions := TReporterOptions.Create;
+    FCliOptions := TRunnerOptions.Create;
     for Pair in Options do
       FCliOptions.Add(Pair.Key, Pair.Value);
   end;
@@ -436,12 +436,12 @@ constructor TMiniSpecOptions.Create;
 begin
   inherited;
   FOptions := TDictionary<string, TValue>.Create;
-  FReporterOptions := TObjectDictionary<string, TReporterOptions>.Create([doOwnsValues]);
+  FReporterOptions := TObjectDictionary<string, TRunnerOptions>.Create([doOwnsValues]);
   FSpecMatcher := nil;
   FFilter := '';
   FPause := False;
   FDryRun := False;
-  FReporterName := '';  // No default reporter - will use console if none specified
+  FReporterName := '';  // No default listener - will use console if none specified
 end;
 
 destructor TMiniSpecOptions.Destroy;
@@ -472,18 +472,18 @@ begin
   Result := FDryRun;
 end;
 
-function TMiniSpecOptions.GetReporterOptions(const ReporterName: string): TReporterOptions;
+function TMiniSpecOptions.GetReporterOptions(const ReporterName: string): TRunnerOptions;
 begin
   if not FReporterOptions.TryGetValue(LowerCase(ReporterName), Result) then
   begin
-    Result := TReporterOptions.Create;
+    Result := TRunnerOptions.Create;
     FReporterOptions.Add(LowerCase(ReporterName), Result);
   end;
 end;
 
 procedure TMiniSpecOptions.SetReporterOption(const ReporterName, Key, Value: string);
 var
-  Opts: TReporterOptions;
+  Opts: TRunnerOptions;
 begin
   Opts := GetReporterOptions(ReporterName);
   Opts.AddOrSetValue(Key, Value);
@@ -495,7 +495,7 @@ var
   Sections, Keys: TStringList;
   i, j: Integer;
   Section, Key, Value, RepName: string;
-  Opts: TReporterOptions;
+  Opts: TRunnerOptions;
 begin
   if not FileExists(FileName) then
     Exit;
@@ -530,7 +530,7 @@ begin
       end
       else if Section.StartsWith(SEC_REPORTER_PREFIX, True) then
       begin
-        // Opciones de reporter: [reporter.html], [reporter.live], etc.
+        // Opciones de reporter: [listener.html], [listener.live], etc.
         RepName := Copy(Section, Length(SEC_REPORTER_PREFIX) + 1, MaxInt);
         // Si no hay reporter principal definido, usar el primero que encontremos
         if FReporterName.IsEmpty then
@@ -554,12 +554,12 @@ end;
 procedure TMiniSpecOptions.SaveToFile(const FileName: string);
 var
   Ini: TMemIniFile;
-  Pair: TPair<string, TReporterOptions>;
+  Pair: TPair<string, TRunnerOptions>;
   OptPair: TPair<string, string>;
 begin
   Ini := TMemIniFile.Create(FileName);
   try
-    // Siempre escribir sección [minispec] con reporter (aunque sea console)
+    // Siempre escribir sección [minispec] con listener (aunque sea console)
     Ini.WriteString(SEC_MINISPEC, 'reporter', IfThen(FReporterName.IsEmpty, 'console', FReporterName));
 
     // Opciones globales
@@ -570,7 +570,7 @@ begin
     if FDryRun then
       Ini.WriteString(SEC_MINISPEC, 'dry-run', 'true');
 
-    // Opciones por reporter
+    // Opciones por listener
     for Pair in FReporterOptions do
     begin
       for OptPair in Pair.Value do
@@ -881,7 +881,7 @@ begin
   inherited;
 end;
 
-procedure TSpecRunner.Configure(const Options: TReporterOptions);
+procedure TSpecRunner.Configure(const Options: TRunnerOptions);
 var
   Pair: TPair<string, string>;
 begin
@@ -889,7 +889,7 @@ begin
   FreeAndNil(FCliOptions);
   if Assigned(Options) then
   begin
-    FCliOptions := TReporterOptions.Create;
+    FCliOptions := TRunnerOptions.Create;
     for Pair in Options do
       FCliOptions.Add(Pair.Key, Pair.Value);
   end;

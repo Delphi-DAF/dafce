@@ -11,7 +11,7 @@ uses
   System.Classes,
   Daf.MiniSpec.Types,
   Daf.MiniSpec.Builders,
-  Daf.MiniSpec.Reporter,
+  Daf.MiniSpec.Runner,
   Daf.MiniSpec.Reporter.Console,
   Daf.MiniSpec.Reporter.Json,
   Daf.MiniSpec.Reporter.Gherkin,
@@ -39,8 +39,8 @@ type
   protected
     class function CreateSingleton: TMiniSpec;
     class function Instance: TMiniSpec; static;
-    class procedure ParseReporterSpec(const Spec: string; out Name: string; out Options: TReporterOptions);
-    function CreateListener(const Name: string; const Options: TReporterOptions): ISpecListener;
+    class procedure ParseReporterSpec(const Spec: string; out Name: string; out Options: TRunnerOptions);
+    function CreateListener(const Name: string; const Options: TRunnerOptions): ISpecListener;
     procedure LoadConfig;
     procedure ParseArgs;
     procedure ListTags;
@@ -200,13 +200,13 @@ begin
   FSuite.AddFeature(Feature);
 end;
 
-class procedure TMiniSpec.ParseReporterSpec(const Spec: string; out Name: string; out Options: TReporterOptions);
+class procedure TMiniSpec.ParseReporterSpec(const Spec: string; out Name: string; out Options: TRunnerOptions);
 var
   ColonPos, EqPos: Integer;
   OptPart, Pair, Key, Value: string;
   Pairs: TArray<string>;
 begin
-  Options := TReporterOptions.Create;
+  Options := TRunnerOptions.Create;
   ColonPos := Pos(':', Spec);
   if ColonPos = 0 then
   begin
@@ -233,7 +233,7 @@ begin
   end;
 end;
 
-function TMiniSpec.CreateListener(const Name: string; const Options: TReporterOptions): ISpecListener;
+function TMiniSpec.CreateListener(const Name: string; const Options: TRunnerOptions): ISpecListener;
 var
   Port: Integer;
 begin
@@ -262,7 +262,7 @@ end;
 function TMiniSpec.Reporter(const Spec: string): TMiniSpec;
 var
   Name: string;
-  Options: TReporterOptions;
+  Options: TRunnerOptions;
   Pair: TPair<string, string>;
   Listener: ISpecListener;
 begin
@@ -398,7 +398,7 @@ begin
       WriteLn('| Full specs, zero fat |');
       WriteLn('+----------------------+');
       WriteLn;
-      // Show help for the last listener added
+      // Show help for the last reporter added
       if (FListeners.Count > 0) and FListeners.Last.ShowHelp then
         Exit
       else
