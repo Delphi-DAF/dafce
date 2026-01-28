@@ -409,7 +409,7 @@ type
     FLiveClients: TList<TIdContext>;
     FClientsLock: TCriticalSection;
     FReportFinished: Boolean;
-    FWaitClient: Boolean;
+    FWaitTimeout: Integer;  // ms to wait for browser, 0 = no wait
     FContext: IRunContext;
     procedure HandleRequest(AContext: TIdContext;
       ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
@@ -431,7 +431,7 @@ type
     procedure OnEndScenario(const Context: IRunContext; const Scenario: IScenario; const Counters: TSpecCounters);override;
     procedure OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline; const Counters: TSpecCounters);override;
     property Port: Integer read FPort;
-    property WaitClient: Boolean read FWaitClient;
+    property WaitTimeout: Integer read FWaitTimeout;  // ms, 0 = no wait
   end;
 
 implementation
@@ -1978,7 +1978,7 @@ constructor TLiveListener.Create(APort: Integer);
 begin
   inherited Create;
   FPort := APort;
-  FWaitClient := False;
+  FWaitTimeout := 3000;  // default 3 seconds
   FEvents := TStringList.Create;
   FEventsLock := TCriticalSection.Create;
   FLiveClients := TList<TIdContext>.Create;
@@ -2011,7 +2011,9 @@ begin
     FPort := StrToIntDef(Options['port'], FPort);
     FServer.DefaultPort := FPort;
   end;
-  FWaitClient := SameText(GetCliOption('wait', 'false'), 'true');
+  // wait=<ms> por defecto 3000ms, wait=0 para deshabilitar
+  var WaitOpt := GetCliOption('wait', '3000');  // default 3 seconds
+  FWaitTimeout := StrToIntDef(WaitOpt, 3000);
 end;
 
 function TLiveListener.ShowHelp: Boolean;
@@ -2020,13 +2022,14 @@ begin
   WriteLn;
   WriteLn('Options:');
   WriteLn('  port=<number>   HTTP server port (default: 8080)');
-  WriteLn('  wait            Wait for browser connection before running tests');
+  WriteLn('  wait=<ms>       Wait for browser connection (default: 3000ms, 0 to disable)');
   WriteLn;
   WriteLn('Examples:');
-  WriteLn('  -r live                 Start on default port 8080');
-  WriteLn('  -r live:port=9000       Start on port 9000');
-  WriteLn('  -r live:wait            Wait for browser before running');
-  WriteLn('  -r live:port=9000,wait  Custom port + wait for browser');
+  WriteLn('  -r live                  Start with default wait (3s)');
+  WriteLn('  -r live:port=9000        Custom port, default wait');
+  WriteLn('  -r live:wait=5000        Wait 5 seconds for browser');
+  WriteLn('  -r live:wait=0           No wait for browser');
+  WriteLn('  -r live:port=9000,wait=0 Custom port, no wait');
   WriteLn;
   WriteLn('Usage:');
   WriteLn('  1. Run tests with -r live');
@@ -2191,11 +2194,12 @@ begin
     FServer.Active := True;
     WriteLn(Format('Live Dashboard: http://localhost:%d', [FPort]));
 
-    if FWaitClient then
+    if FWaitTimeout > 0 then
     begin
-      WriteLn('Waiting for browser connection...');
+      WriteLn(Format('Waiting for browser connection (%d ms)...', [FWaitTimeout]));
       WaitCount := 0;
-      while not HasConnectedClients and (WaitCount < 300) do
+      var MaxWait := FWaitTimeout div 100;
+      while not HasConnectedClients and (WaitCount < MaxWait) do
       begin
         Sleep(100);
         Inc(WaitCount);

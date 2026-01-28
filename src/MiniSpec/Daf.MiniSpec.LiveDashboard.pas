@@ -516,8 +516,8 @@ const
               this.eventSource.close();
               this.eventSource = null;
             }
-            // Siempre reconectar después de 2 segundos (esperar nuevo run)
-            setTimeout(() => this.connect(), 2000);
+            // Reconexión rápida (300ms) para detectar nuevo run casi inmediatamente
+            setTimeout(() => this.connect(), 300);
           };
 
           this.eventSource.onmessage = (e) => {
