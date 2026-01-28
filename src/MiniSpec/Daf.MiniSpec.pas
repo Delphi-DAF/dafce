@@ -45,6 +45,7 @@ type
     procedure ParseArgs;
     procedure ListTags;
     procedure QueryTags;
+    procedure ShowBanner;
     procedure ShowHelp;
   public
     constructor Create;
@@ -392,12 +393,7 @@ begin
     end;
     TRunMode.rmReporterHelp:
     begin
-      WriteLn;
-      WriteLn('+----------------------+');
-      WriteLn('|   MiniSpec v' + Version + '    |');
-      WriteLn('| Full specs, zero fat |');
-      WriteLn('+----------------------+');
-      WriteLn;
+      ShowBanner;
       // Show help for the last reporter added
       if (FListeners.Count > 0) and FListeners.Last.ShowHelp then
         Exit
@@ -436,13 +432,7 @@ begin
     FRunner.AddListener(Listener);
 
   // Modo normal: ejecutar tests
-  OSShell.UseUTF8;
-  WriteLn;
-  WriteLn('+----------------------+');
-  WriteLn('|   MiniSpec v' + Version + '    |');
-  WriteLn('| Full specs, zero fat |');
-  WriteLn('+----------------------+');
-  WriteLn;
+  ShowBanner;
 
   SpecFilter := TSpecFilter.Parse(Tags);
   try
@@ -580,14 +570,20 @@ begin
   end;
 end;
 
-procedure TMiniSpec.ShowHelp;
+procedure TMiniSpec.ShowBanner;
 begin
+  OSShell.UseUTF8;
   WriteLn;
   WriteLn('+----------------------+');
   WriteLn('|   MiniSpec v' + Version + '    |');
   WriteLn('| Full specs, zero fat |');
   WriteLn('+----------------------+');
-  WriteLn('');
+  WriteLn;
+end;
+
+procedure TMiniSpec.ShowHelp;
+begin
+  ShowBanner;
   WriteLn('Usage: ' + ExtractFileName(ParamStr(0)) + ' [options]');
   WriteLn('');
   WriteLn('Options:');
@@ -632,7 +628,7 @@ begin
 end;
 
 initialization
- TRttiContext.KeepContext;
+  TRttiContext.KeepContext;
 finalization
- TRttiContext.DropContext;
+  TRttiContext.DropContext;
 end.
