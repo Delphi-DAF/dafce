@@ -21,6 +21,7 @@ type
     FCurrentScenario: TJSONObject;
     FCurrentSteps: TJSONArray;
     procedure AddStep(const Kind, Description: string; Success: Boolean; Duration: Integer; const ErrorMessage: string = '');
+    procedure AddStepWithTable(const Step: IScenarioStep);
     procedure CloseCurrentScenario;
     procedure CloseCurrentFeature;
     function GetStatus(const Item: ISpecItem): string;
@@ -38,7 +39,8 @@ implementation
 uses
   System.SysUtils,
   System.IOUtils,
-  System.Rtti;
+  System.Rtti,
+  Daf.MiniSpec.DataTable;
 
 { TJsonReporter }
 
@@ -75,6 +77,29 @@ begin
   end;
 end;
 
+function DataTableToJsonArray(const Table: TDataTableObj): TJSONArray;
+var
+  Row: TArray<TValue>;
+  RowArr: TJSONArray;
+  V: TValue;
+begin
+  Result := TJSONArray.Create;
+  if Table = nil then Exit;
+  // Add headers
+  RowArr := TJSONArray.Create;
+  for var H in Table.Headers do
+    RowArr.Add(H);
+  Result.AddElement(RowArr);
+  // Add data rows
+  for Row in Table.Rows do
+  begin
+    RowArr := TJSONArray.Create;
+    for V in Row do
+      RowArr.Add(V.ToString);
+    Result.AddElement(RowArr);
+  end;
+end;
+
 procedure TJsonReporter.AddStep(const Kind, Description: string; Success: Boolean; Duration: Integer; const ErrorMessage: string);
 var
   StepObj: TJSONObject;
@@ -87,6 +112,23 @@ begin
   StepObj.AddPair('duration', TJSONNumber.Create(Duration));
   if not Success and (ErrorMessage <> '') then
     StepObj.AddPair('error', ErrorMessage);
+  FCurrentSteps.AddElement(StepObj);
+end;
+
+procedure TJsonReporter.AddStepWithTable(const Step: IScenarioStep);
+var
+  StepObj: TJSONObject;
+begin
+  if not Assigned(FCurrentSteps) then Exit;
+  StepObj := TJSONObject.Create;
+  StepObj.AddPair('kind', Step.KeyWord);
+  StepObj.AddPair('description', Step.Description);
+  StepObj.AddPair('success', TJSONBool.Create(Step.RunInfo.IsSuccess));
+  StepObj.AddPair('duration', TJSONNumber.Create(Step.RunInfo.ExecTimeMs));
+  if not Step.RunInfo.IsSuccess and (Step.RunInfo.ErrMsg <> '') then
+    StepObj.AddPair('error', Step.RunInfo.ErrMsg);
+  if Assigned(Step.DataTable) then
+    StepObj.AddPair('dataTable', DataTableToJsonArray(Step.DataTable));
   FCurrentSteps.AddElement(StepObj);
 end;
 
@@ -170,8 +212,12 @@ begin
     end;
     sikExampleInit: ;
     sikGiven, sikWhen, sikThen: begin
-      AddStep(Item.KeyWord, Item.Description, Item.RunInfo.Result = srrSuccess,
-              Item.RunInfo.ExecTimeMs, Item.RunInfo.ErrMsg);
+      var Step: IScenarioStep;
+      if Supports(Item, IScenarioStep, Step) then
+        AddStepWithTable(Step)
+      else
+        AddStep(Item.KeyWord, Item.Description, Item.RunInfo.Result = srrSuccess,
+                Item.RunInfo.ExecTimeMs, Item.RunInfo.ErrMsg);
     end;
   end;
 end;

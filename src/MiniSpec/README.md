@@ -4,6 +4,8 @@ Framework BDD (Behavior-Driven Development) para Delphi, inspirado en Gherkin/Cu
 
 ## Novedades v1.2.0
 
+- **DataTables**: Tablas inline en steps para datos estructurados (estándar Gherkin)
+- **Before/After Hooks**: Setup/teardown a nivel de Feature (una vez por feature)
 - **Archivo de configuración `MiniSpec.ini`**: Persistencia automática de opciones
 - **Live Reporter**: Dashboard en tiempo real via SSE (Server-Sent Events)
 - **Gherkin Reporter**: Exporta features a formato `.feature` estándar
@@ -217,6 +219,63 @@ Feature('Database Tests')
 | `Background` | Antes de cada scenario | Preparar datos del test |
 
 **Nota**: Los hooks no reciben World porque se ejecutan antes de que exista cualquier instancia.
+
+### DataTables
+
+Las DataTables permiten pasar datos estructurados a los steps, siguiendo el estándar Gherkin:
+
+```pascal
+.Scenario('Crear usuarios desde tabla')
+  .Given('los siguientes usuarios:', [
+    ['name',  'email'],           // Primera fila = headers
+    ['Alice', 'alice@test.com'],
+    ['Bob',   'bob@test.com'],
+    ['Carol', 'carol@test.com']
+  ], procedure(World: TMyWorld)
+    var
+      Table: TDataTableObj;
+      I: Integer;
+    begin
+      Table := (World as ISpecContext).DataTable;
+      for I := 0 to Table.RowCount - 1 do
+        World.Users.Add(Table.Cell[I, 'name'], Table.Cell[I, 'email']);
+    end)
+  .When('cuento los usuarios', procedure(World: TMyWorld)
+    begin
+      World.Count := World.Users.Count;
+    end)
+  .&Then('debería tener 3 usuarios', procedure(World: TMyWorld)
+    begin
+      Expect(World.Count).ToEqual(3);
+    end);
+```
+
+**Acceso a la DataTable**:
+
+```pascal
+var
+  Table: TDataTableObj;
+begin
+  Table := (World as ISpecContext).DataTable;  // Cast a ISpecContext
+  
+  // Propiedades disponibles:
+  Table.RowCount;           // Número de filas (sin headers)
+  Table.ColCount;           // Número de columnas
+  Table.Headers;            // TArray<string> con nombres de columnas
+  Table.Row[0];             // TArray<TValue> primera fila de datos
+  Table.Cell[0, 0];         // TValue por índice de columna
+  Table.Cell[0, 'name'];    // TValue por nombre de columna
+end;
+```
+
+**Los reporters muestran las DataTables automáticamente**:
+
+| Reporter | Formato |
+|----------|--------|
+| Console | Tabla ASCII con bordes |
+| JSON | `"dataTable": [["name","email"],["Alice","alice@test.com"]...]` |
+| Gherkin | Formato estándar con pipes: `\| name \| email \|` |
+| Live | Tabla en el dashboard |
 
 ### Category para Agrupar Features
 
@@ -497,6 +556,7 @@ Las opciones de línea de comandos tienen prioridad sobre el archivo.
 | `Daf.MiniSpec.Types.pas` | Tipos e interfaces (ISpecItem, TSpecMatcher, etc.) |
 | `Daf.MiniSpec.Builders.pas` | Builders fluent |
 | `Daf.MiniSpec.Expects.pas` | Assertions |
+| `Daf.MiniSpec.DataTable.pas` | Tipos TDataTable y TDataTableObj |
 | `Daf.MiniSpec.Reporter.pas` | Base de reporters (ISpecRunner, ISpecListener, TSpecRunner) |
 | `Daf.MiniSpec.Reporter.Console.pas` | Reporter de consola |
 | `Daf.MiniSpec.Reporter.Json.pas` | Reporter JSON |

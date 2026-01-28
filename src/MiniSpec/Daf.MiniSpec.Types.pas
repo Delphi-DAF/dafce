@@ -5,7 +5,8 @@ uses
   System.Classes,
   System.Generics.Collections,
   System.Rtti,
-  System.SysUtils;
+  System.SysUtils,
+  Daf.MiniSpec.DataTable;
 
 type
   TStepProc<T> = reference to procedure(World: T);
@@ -139,11 +140,16 @@ type
   end;
 
   IScenarioBuilder<T: class, constructor> = interface
-    function Given(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>;
-    function When(const Desc: string; Step: TStepProc<T>) : IScenarioBuilder<T>;
-    function &Then(const Desc: string; Step: TStepProc<T>) : IScenarioBuilder<T>;
-    function &And(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>;
-    function But(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>;
+    function Given(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function Given(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function When(const Desc: string; Step: TStepProc<T>) : IScenarioBuilder<T>; overload;
+    function When(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function &Then(const Desc: string; Step: TStepProc<T>) : IScenarioBuilder<T>; overload;
+    function &Then(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function &And(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function &And(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function But(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function But(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
 
     function Scenario(const Description: string): IScenarioBuilder<T>;overload;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
@@ -201,6 +207,8 @@ type
 
   IScenarioStep = interface(ISpecItem)
     ['{3F16A9FA-0F64-4B4C-985F-D09087DD7404}']
+    function GetDataTable: TDataTableObj;
+    property DataTable: TDataTableObj read GetDataTable;
   end;
 
   /// <summary>
@@ -305,10 +313,16 @@ type
     ['{B8C9D0E1-F2A3-4B5C-6D7E-8F9A0B1C2D3E}']
     function GetCurrentStep: IScenarioStep;
     procedure SetCurrentStep(const Value: IScenarioStep);
+    function GetDataTable: TDataTableObj;
+    procedure SetDataTable(const Value: TDataTableObj);
     function CurrentScenario: IScenario;
     function CurrentRule: IRule;
     function CurrentFeature: IFeature;
     property CurrentStep: IScenarioStep read GetCurrentStep write SetCurrentStep;
+    /// <summary>
+    /// Returns the DataTable for the current step, or nil if none.
+    /// </summary>
+    property DataTable: TDataTableObj read GetDataTable write SetDataTable;
   end;
 
   /// <summary>
@@ -319,8 +333,11 @@ type
   TFeatureWorld = class(System.TNoRefCountObject, ISpecContext)
   strict private
     FCurrentStep: IScenarioStep;
+    FDataTable: TDataTableObj;
     function GetCurrentStep: IScenarioStep;
     procedure SetCurrentStep(const Value: IScenarioStep);
+    function GetDataTable: TDataTableObj;
+    procedure SetDataTable(const Value: TDataTableObj);
     function CurrentScenario: IScenario;
     function CurrentRule: IRule;
     function CurrentFeature: IFeature;
@@ -360,12 +377,16 @@ type
   TScenarioStep<T: class> = class(TSpecItem, IScenarioStep)
   strict private
     FProc: TStepProc<T>;
+    FDataTable: TDataTableObj;
+    function GetDataTable: TDataTableObj;
   protected
   public
-    constructor Create(const Kind: TSpecItemKind; const Parent: ISpecItem; const Description: string; const Proc: TStepProc<T>);
+    constructor Create(const Kind: TSpecItemKind; const Parent: ISpecItem; const Description: string; const Proc: TStepProc<T>); overload;
+    constructor Create(const Kind: TSpecItemKind; const Parent: ISpecItem; const Description: string; const Proc: TStepProc<T>; const ADataTable: TDataTable); overload;
     destructor Destroy;override;
     procedure Run(World: TObject);override;
     property Proc: TStepProc<T> read FProc;
+    property DataTable: TDataTableObj read GetDataTable;
   end;
 
   /// <summary>
@@ -422,9 +443,12 @@ type
     destructor Destroy;override;
     function ExampleInit(Step: TStepProc<T>): TScenario<T>;
     procedure SetExampleMeta(const Meta: TExampleMeta);
-    function Given(const Desc: string; Step: TStepProc<T>): TScenario<T>;
-    function When(const Desc: string; Step: TStepProc<T>) : TScenario<T>;
-    function &Then(const Desc: string; Step: TStepProc<T>) : TScenario<T>;
+    function Given(const Desc: string; Step: TStepProc<T>): TScenario<T>; overload;
+    function Given(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): TScenario<T>; overload;
+    function When(const Desc: string; Step: TStepProc<T>) : TScenario<T>; overload;
+    function When(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): TScenario<T>; overload;
+    function &Then(const Desc: string; Step: TStepProc<T>) : TScenario<T>; overload;
+    function &Then(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): TScenario<T>; overload;
     procedure Run(World: TObject);override;
     property Feature: IFeature read GetFeature;
     property ExampleMeta: TExampleMeta read GetExampleMeta;
@@ -665,6 +689,16 @@ begin
   FCurrentStep := Value;
 end;
 
+function TFeatureWorld.GetDataTable: TDataTableObj;
+begin
+  Result := FDataTable;
+end;
+
+procedure TFeatureWorld.SetDataTable(const Value: TDataTableObj);
+begin
+  FDataTable := Value;
+end;
+
 function TFeatureWorld.CurrentScenario: IScenario;
 var
   Parent: ISpecItem;
@@ -825,12 +859,29 @@ constructor TScenarioStep<T>.Create(const Kind: TSpecItemKind; const Parent: ISp
 begin
   inherited Create(Kind, Parent, Description);
   FProc := Proc;
+  FDataTable := nil;
+end;
+
+constructor TScenarioStep<T>.Create(const Kind: TSpecItemKind; const Parent: ISpecItem; const Description: string; const Proc: TStepProc<T>; const ADataTable: TDataTable);
+begin
+  inherited Create(Kind, Parent, Description);
+  FProc := Proc;
+  if Length(ADataTable) > 0 then
+    FDataTable := TDataTableObj.Create(ADataTable)
+  else
+    FDataTable := nil;
 end;
 
 destructor TScenarioStep<T>.Destroy;
 begin
   FProc := nil;
+  FDataTable.Free;
   inherited;
+end;
+
+function TScenarioStep<T>.GetDataTable: TDataTableObj;
+begin
+  Result := FDataTable;
 end;
 
 procedure TScenarioStep<T>.Run(World: TObject);
@@ -844,10 +895,16 @@ begin
     FRunInfo.Result := srrSuccess;
     if Assigned(FProc) then
     begin
-      // Si el World implementa ISpecContext, setear el Step actual
+      // Si el World implementa ISpecContext, setear el Step actual y DataTable
       if Supports(World, ISpecContext, SpecContext) then
+      begin
         SpecContext.CurrentStep := Self;
+        SpecContext.DataTable := FDataTable;
+      end;
       FProc(World as T);
+      // Clear DataTable after step execution
+      if Assigned(SpecContext) then
+        SpecContext.DataTable := nil;
     end;
   except
     on E: ExpectFail do
@@ -1074,6 +1131,12 @@ begin
   FStepsGiven.Add(TScenarioStep<T>.Create(sikGiven, Self, Desc, Step));
 end;
 
+function TScenario<T>.Given(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): TScenario<T>;
+begin
+  Result := Self;
+  FStepsGiven.Add(TScenarioStep<T>.Create(sikGiven, Self, Desc, Step, Table));
+end;
+
 procedure TScenario<T>.RunSteps(Steps: TList<IScenarioStep>; World: TObject);
 begin
   for var Step in Steps do
@@ -1129,10 +1192,22 @@ begin
   FStepsWhen.Add(TScenarioStep<T>.Create(sikWhen, Self, Desc, Step));
 end;
 
+function TScenario<T>.When(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): TScenario<T>;
+begin
+  Result := Self;
+  FStepsWhen.Add(TScenarioStep<T>.Create(sikWhen, Self, Desc, Step, Table));
+end;
+
 function TScenario<T>.&Then(const Desc: string; Step: TStepProc<T>): TScenario<T>;
 begin
   Result := Self;
   FStepsThen.Add(TScenarioStep<T>.Create(sikThen, Self, Desc, Step));
+end;
+
+function TScenario<T>.&Then(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): TScenario<T>;
+begin
+  Result := Self;
+  FStepsThen.Add(TScenarioStep<T>.Create(sikThen, Self, Desc, Step, Table));
 end;
 
 { TScenarioOutline<T> }

@@ -333,11 +333,36 @@ const
                         <template x-if="scenario.steps && scenario.steps.length > 0">
                           <div class="space-y-0.5">
                             <template x-for="(step, stepIdx) in scenario.steps" :key="stepIdx">
-                              <div class="flex items-start gap-2 py-0.5" :class="step.success ? 'text-gray-400' : 'text-red-400'">
-                                <svg class="w-3 h-3 flex-shrink-0"><use :href="step.success ? '#icon-pass' : '#icon-fail'"></use></svg>
-                                <span class="text-blue-400 font-medium w-12 flex-shrink-0" x-text="step.type"></span>
-                                <span x-text="step.text" class="flex-1"></span>
-                                <span class="text-gray-600" x-text="`${step.ms}ms`"></span>
+                              <div>
+                                <div class="flex items-start gap-2 py-0.5" :class="step.success ? 'text-gray-400' : 'text-red-400'">
+                                  <svg class="w-3 h-3 flex-shrink-0"><use :href="step.success ? '#icon-pass' : '#icon-fail'"></use></svg>
+                                  <span class="text-blue-400 font-medium w-12 flex-shrink-0" x-text="step.type"></span>
+                                  <span x-text="step.text" class="flex-1"></span>
+                                  <span class="text-gray-600" x-text="`${step.ms}ms`"></span>
+                                </div>
+                                <!-- DataTable -->
+                                <template x-if="step.dataTable && step.dataTable.length > 0">
+                                  <div class="ml-16 mt-1 mb-2">
+                                    <table class="text-xs border-collapse border border-gray-700">
+                                      <thead>
+                                        <tr class="bg-gray-800">
+                                          <template x-for="(cell, cellIdx) in step.dataTable[0]" :key="'h'+cellIdx">
+                                            <th class="px-2 py-1 text-left border border-gray-700 text-gray-300" x-text="cell"></th>
+                                          </template>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        <template x-for="(row, rowIdx) in step.dataTable.slice(1)" :key="'r'+rowIdx">
+                                          <tr>
+                                            <template x-for="(cell, cellIdx) in row" :key="'c'+cellIdx">
+                                              <td class="px-2 py-0.5 border border-gray-700 text-gray-400" x-text="cell"></td>
+                                            </template>
+                                          </tr>
+                                        </template>
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </template>
                               </div>
                             </template>
                           </div>

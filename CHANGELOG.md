@@ -10,8 +10,11 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
 ### Added
 
+- **MiniSpec**: DataTables support - inline data tables for steps (Gherkin standard)
+- **MiniSpec**: `TDataTable` type and `TDataTableObj` wrapper with Row/Cell/Headers access
+- **MiniSpec**: All reporters display DataTables (Console ASCII, JSON array, Gherkin pipes)
 - **MiniSpec**: `TFeatureWorld` base class for Worlds needing execution context access
-- **MiniSpec**: `ISpecContext` interface with `CurrentStep`, `CurrentScenario`, `CurrentRule`, `CurrentFeature`
+- **MiniSpec**: `ISpecContext` interface with `CurrentStep`, `CurrentScenario`, `CurrentRule`, `CurrentFeature`, `DataTable`
 - **MiniSpec**: Extended filter system with `Feat:`, `Scen:`, `Rule:`, `Cat:` prefixes
 - **MiniSpec**: `EndRule` method to return to Feature context from Rule
 - **MiniSpec**: Live Dashboard auto-reconnect for new test runs

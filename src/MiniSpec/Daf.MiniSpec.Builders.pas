@@ -5,6 +5,7 @@ uses
   System.Generics.Collections,
   System.Rtti,
   System.SysUtils,
+  Daf.MiniSpec.DataTable,
   Daf.MiniSpec.Types;
 
 type
@@ -54,16 +55,22 @@ type
   strict private
     FScenario: TScenario<T>;
     FLastStep: TLastStepKind;
+    FLastTable: TDataTable;
     FRule: TRule<T>;  // Siempre es una Rule (explícita o implícita)
   public
     constructor Create(const ARule: IRule; const Description: string);
     function ExampleInit(Step: TStepProc<T>): IScenarioBuilder<T>;
     procedure SetExampleMeta(const Meta: TExampleMeta);
-    function Given(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>;
-    function When(const Desc: string; Step: TStepProc<T>) : IScenarioBuilder<T>;
-    function &Then(const Desc: string; Step: TStepProc<T>) : IScenarioBuilder<T>;
-    function &And(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>;
-    function But(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>;
+    function Given(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function Given(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function When(const Desc: string; Step: TStepProc<T>) : IScenarioBuilder<T>; overload;
+    function When(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function &Then(const Desc: string; Step: TStepProc<T>) : IScenarioBuilder<T>; overload;
+    function &Then(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function &And(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function &And(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function But(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function But(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
 
     function Scenario(const Description: string): IScenarioBuilder<T>;overload;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
@@ -293,6 +300,15 @@ function TScenarioBuilder<T>.Given(const Desc: string; Step: TStepProc<T>): ISce
 begin
   FScenario.Given(Desc, Step);
   FLastStep := lskGiven;
+  FLastTable := nil;
+  Result := Self;
+end;
+
+function TScenarioBuilder<T>.Given(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>;
+begin
+  FScenario.Given(Desc, Table, Step);
+  FLastStep := lskGiven;
+  FLastTable := Table;
   Result := Self;
 end;
 
@@ -300,6 +316,15 @@ function TScenarioBuilder<T>.When(const Desc: string; Step: TStepProc<T>): IScen
 begin
   FScenario.When(Desc, Step);
   FLastStep := lskWhen;
+  FLastTable := nil;
+  Result := Self;
+end;
+
+function TScenarioBuilder<T>.When(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>;
+begin
+  FScenario.When(Desc, Table, Step);
+  FLastStep := lskWhen;
+  FLastTable := Table;
   Result := Self;
 end;
 
@@ -307,6 +332,15 @@ function TScenarioBuilder<T>.&Then(const Desc: string; Step: TStepProc<T>): ISce
 begin
   FScenario.&Then(Desc, Step);
   FLastStep := lskThen;
+  FLastTable := nil;
+  Result := Self;
+end;
+
+function TScenarioBuilder<T>.&Then(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>;
+begin
+  FScenario.&Then(Desc, Table, Step);
+  FLastStep := lskThen;
+  FLastTable := Table;
   Result := Self;
 end;
 
@@ -322,12 +356,36 @@ begin
   Result := Self;
 end;
 
+function TScenarioBuilder<T>.&And(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>;
+begin
+  case FLastStep of
+    lskGiven: FScenario.Given(Desc, Table, Step);
+    lskWhen:  FScenario.When(Desc, Table, Step);
+    lskThen:  FScenario.&Then(Desc, Table, Step);
+  else
+    raise Exception.Create('And must follow Given, When or Then');
+  end;
+  Result := Self;
+end;
+
 function TScenarioBuilder<T>.But(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>;
 begin
   case FLastStep of
     lskGiven: FScenario.Given(Desc, Step);
     lskWhen:  FScenario.When(Desc, Step);
     lskThen:  FScenario.&Then(Desc, Step);
+  else
+    raise Exception.Create('But must follow Given, When or Then');
+  end;
+  Result := Self;
+end;
+
+function TScenarioBuilder<T>.But(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>;
+begin
+  case FLastStep of
+    lskGiven: FScenario.Given(Desc, Table, Step);
+    lskWhen:  FScenario.When(Desc, Table, Step);
+    lskThen:  FScenario.&Then(Desc, Table, Step);
   else
     raise Exception.Create('But must follow Given, When or Then');
   end;

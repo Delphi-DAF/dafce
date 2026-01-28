@@ -5,6 +5,7 @@ interface
 uses
   System.Classes,
   Daf.MiniSpec.Types,
+  Daf.MiniSpec.DataTable,
   Daf.MiniSpec.Reporter;
 
 type
@@ -25,6 +26,7 @@ type
     function GetGherkinKeyword(Kind: TSpecItemKind): string;
     function RestorePlaceholders(const Text: string): string;
     procedure WriteExamplesTable(const Outline: IScenarioOutline);
+    procedure WriteDataTable(const Table: TDataTableObj);
     function ResultComment(const Item: ISpecItem): string;
     function SanitizeFileName(const Name: string): string;
     procedure FlushCurrentFeature;
@@ -190,6 +192,47 @@ begin
   end;
 end;
 
+procedure TGherkinReporter.WriteDataTable(const Table: TDataTableObj);
+var
+  ColWidths: TArray<Integer>;
+  Row: TArray<TValue>;
+  I, J: Integer;
+  Line: string;
+begin
+  if Table = nil then Exit;
+  
+  // Calculate column widths
+  SetLength(ColWidths, Table.ColCount);
+  for I := 0 to Table.ColCount - 1 do
+    ColWidths[I] := 0;
+  
+  // Check headers
+  for I := 0 to High(Table.Headers) do
+    if Length(Table.Headers[I]) > ColWidths[I] then
+      ColWidths[I] := Length(Table.Headers[I]);
+  
+  // Check data rows
+  for Row in Table.Rows do
+    for J := 0 to High(Row) do
+      if Row[J].ToString.Length > ColWidths[J] then
+        ColWidths[J] := Row[J].ToString.Length;
+  
+  // Output header row
+  Line := '|';
+  for I := 0 to High(Table.Headers) do
+    Line := Line + ' ' + Table.Headers[I].PadRight(ColWidths[I]) + ' |';
+  AddLine(Line);
+  
+  // Output data rows  
+  for Row in Table.Rows do
+  begin
+    Line := '|';
+    for J := 0 to High(Row) do
+      Line := Line + ' ' + Row[J].ToString.PadRight(ColWidths[J]) + ' |';
+    AddLine(Line);
+  end;
+end;
+
 procedure TGherkinReporter.OnBeginReport(const Context: IRunContext);
 var
   OutputDir: string;
@@ -271,7 +314,14 @@ begin
     sikImplicitRule: ;
 
     sikGiven, sikWhen, sikThen: begin
+      var Step: IScenarioStep;
       AddLine(GetGherkinKeyword(Item.Kind) + ' ' + Item.Description + ResultComment(Item));
+      if Supports(Item, IScenarioStep, Step) and Assigned(Step.DataTable) then
+      begin
+        Inc(FIndent);
+        WriteDataTable(Step.DataTable);
+        Dec(FIndent);
+      end;
     end;
   end;
 end;

@@ -59,6 +59,7 @@ uses
   System.Rtti,
   IdGlobal,
   Daf.MiniSpec,
+  Daf.MiniSpec.DataTable,
   Daf.MiniSpec.LiveDashboard;
 
 { TLiveReporter }
@@ -166,6 +167,9 @@ function TLiveReporter.StepsToJsonArray(const Steps: TList<IScenarioStep>; const
 var
   StepObj: TJSONObject;
   Step: IScenarioStep;
+  TableArr, RowArr: TJSONArray;
+  Row: TArray<TValue>;
+  V: TValue;
 begin
   Result := TJSONArray.Create;
   if Steps = nil then Exit;
@@ -178,6 +182,25 @@ begin
     StepObj.AddPair('ms', TJSONNumber.Create(Step.RunInfo.ExecTimeMs));
     if not Step.RunInfo.IsSuccess and (Step.RunInfo.ErrMsg <> '') then
       StepObj.AddPair('error', Step.RunInfo.ErrMsg);
+    // Add DataTable if present
+    if Assigned(Step.DataTable) then
+    begin
+      TableArr := TJSONArray.Create;
+      // Add headers
+      RowArr := TJSONArray.Create;
+      for var H in Step.DataTable.Headers do
+        RowArr.Add(H);
+      TableArr.AddElement(RowArr);
+      // Add data rows
+      for Row in Step.DataTable.Rows do
+      begin
+        RowArr := TJSONArray.Create;
+        for V in Row do
+          RowArr.Add(V.ToString);
+        TableArr.AddElement(RowArr);
+      end;
+      StepObj.AddPair('dataTable', TableArr);
+    end;
     Result.AddElement(StepObj);
   end;
 end;
