@@ -17,7 +17,7 @@ type
     FeatureTitle: string;
     ScenarioDescription: string;
     RuleDescription: string;
-    SourceUnit: string;
+    Category: string;
     class function FromScenario(const Scenario: IScenario): TSpecFilterContext; static;
   end;
 
@@ -27,10 +27,10 @@ type
   ///   @tag           - tiene el tag
   ///   ~@tag          - NO tiene el tag (negación)
   ///   not @tag       - NO tiene el tag (alternativa)
-  ///   F:texto        - Feature title contiene texto (case-insensitive)
-  ///   S:texto        - Scenario description contiene texto
-  ///   R:texto        - Rule description contiene texto
-  ///   U:texto        - SourceUnit contiene texto
+  ///   Feat:texto     - Feature title contiene texto (case-insensitive)
+  ///   Scen:texto     - Scenario description contiene texto
+  ///   Rule:texto     - Rule description contiene texto
+  ///   Cat:texto      - Category contiene texto
   ///   @a and @b      - tiene ambos
   ///   @a or @b       - tiene alguno
   ///   @a,@b          - atajo para OR
@@ -38,13 +38,13 @@ type
   /// </summary>
   TSpecFilter = record
   private type
-    TTokenKind = (tkTag, tkFeature, tkScenario, tkRule, tkUnit,
+    TTokenKind = (tkTag, tkFeature, tkScenario, tkRule, tkCategory,
                   tkNot, tkAnd, tkOr, tkLParen, tkRParen, tkEOF);
     TToken = record
       Kind: TTokenKind;
       Value: string;
     end;
-    TNodeKind = (nkTag, nkFeature, nkScenario, nkRule, nkUnit, nkNot, nkAnd, nkOr);
+    TNodeKind = (nkTag, nkFeature, nkScenario, nkRule, nkCategory, nkNot, nkAnd, nkOr);
     PNode = ^TNode;
     TNode = record
       Kind: TNodeKind;
@@ -88,7 +88,7 @@ begin
   Result.ScenarioDescription := Scenario.Description;
   Result.RuleDescription := '';
   Result.FeatureTitle := '';
-  Result.SourceUnit := '';
+  Result.Category := '';
 
   // Navegar hacia arriba para obtener Rule y Feature
   Parent := Scenario.Parent;
@@ -103,7 +103,7 @@ begin
     else if Supports(Parent, IFeature, Feature) then
     begin
       Result.FeatureTitle := Feature.Title;
-      Result.SourceUnit := Feature.SourceUnit;
+      Result.Category := Feature.Category;
       Break;
     end
     else
@@ -223,27 +223,32 @@ begin
         Inc(i);
       AddToken(tkTag, Copy(Expr, StartPos, i - StartPos));
     end
-    // Filtros F:, S:, R:, U:
-    else if (i + 1 <= Len) and CharInSet(Expr[i], ['F', 'f', 'S', 's', 'R', 'r', 'U', 'u']) and (Expr[i + 1] = ':') then
-    begin
-      var FilterType := UpCase(Expr[i]);
-      Inc(i, 2); // Saltar X:
-      var FilterValue := ReadUntilSpace;
-      case FilterType of
-        'F': AddToken(tkFeature, FilterValue);
-        'S': AddToken(tkScenario, FilterValue);
-        'R': AddToken(tkRule, FilterValue);
-        'U': AddToken(tkUnit, FilterValue);
-      end;
-    end
-    // Palabras clave: and, or, not
-    else if CharInSet(Expr[i], ['a'..'z', 'A'..'Z']) then
+    // Filtros Feat:, Scen:, Rule:, Cat:
+    else if (i <= Len) and CharInSet(Expr[i], ['a'..'z', 'A'..'Z']) then
     begin
       var StartPos := i;
       while (i <= Len) and CharInSet(Expr[i], ['a'..'z', 'A'..'Z']) do
         Inc(i);
       var Word := LowerCase(Copy(Expr, StartPos, i - StartPos));
-      if Word = 'and' then
+
+      // Check if it's a filter prefix (followed by :)
+      if (i <= Len) and (Expr[i] = ':') then
+      begin
+        Inc(i); // Skip :
+        var FilterValue := ReadUntilSpace;
+        if Word = 'feat' then
+          AddToken(tkFeature, FilterValue)
+        else if Word = 'scen' then
+          AddToken(tkScenario, FilterValue)
+        else if Word = 'rule' then
+          AddToken(tkRule, FilterValue)
+        else if Word = 'cat' then
+          AddToken(tkCategory, FilterValue)
+        else
+          raise Exception.CreateFmt('Filtro desconocido: %s:', [Word]);
+      end
+      // Keywords: and, or, not
+      else if Word = 'and' then
         AddToken(tkAnd)
       else if Word = 'or' then
         AddToken(tkOr)
@@ -340,9 +345,9 @@ begin
         Result := NewNode(nkRule, CurrentToken.Value);
         Advance;
       end;
-    tkUnit:
+    tkCategory:
       begin
-        Result := NewNode(nkUnit, CurrentToken.Value);
+        Result := NewNode(nkCategory, CurrentToken.Value);
         Advance;
       end;
     tkLParen:
@@ -372,8 +377,8 @@ begin
       Result := ContainsText(Context.ScenarioDescription, Node.Value);
     nkRule:
       Result := ContainsText(Context.RuleDescription, Node.Value);
-    nkUnit:
-      Result := ContainsText(Context.SourceUnit, Node.Value);
+    nkCategory:
+      Result := ContainsText(Context.Category, Node.Value);
     nkNot:
       Result := not EvalNode(Node.Left, Context);
     nkAnd:

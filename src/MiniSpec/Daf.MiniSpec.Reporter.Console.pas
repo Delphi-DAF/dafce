@@ -20,8 +20,6 @@ type
     procedure Output(const Level: Byte; const Text: string);
     function ExtractValue(const Match: TMatch): string;
     function Level2Margin(const Level: Byte): string;
-    function GetKeyWord(const Kind: TSpecItemKind): string;
-    function GetLevel(const Kind: TSpecItemKind): Byte;
   public
     function UseConsole: Boolean;override;
     procedure OnBeginReport(const Context: IRunContext);override;
@@ -42,38 +40,6 @@ uses
 function TConsoleReporter.UseConsole: Boolean;
 begin
   Result := True;
-end;
-
-function TConsoleReporter.GetKeyWord(const Kind: TSpecItemKind): string;
-begin
-  case Kind of
-    sikFeature: Result := 'Feature';
-    sikImplicitRule: Result := '';
-    sikRule: Result := 'Rule';
-    sikBackground: Result := 'Background';
-    sikScenario: Result := 'Scenario';
-    sikScenarioOutline: Result := 'Scenario Outline';
-    sikExample: Result := 'Example';
-    sikExampleInit: Result := '';
-    sikGiven: Result := 'Given';
-    sikWhen: Result := 'When';
-    sikThen: Result := 'Then';
-    else
-      Result := '';
-  end;
-end;
-
-function TConsoleReporter.GetLevel(const Kind: TSpecItemKind): Byte;
-begin
-  case Kind of
-    sikFeature: Result := 0;
-    sikRule: Result := 1;
-    sikBackground, sikScenario, sikScenarioOutline, sikExample: Result := 1;
-    sikExampleInit: Result := 2;
-    sikGiven, sikWhen, sikThen: Result := 2;
-    else
-      Result := 0;
-  end;
 end;
 
 function TConsoleReporter.ExtractValue(const Match: TMatch): string;
@@ -139,8 +105,8 @@ var
   Kind: string;
   Level: Byte;
 begin
-  Kind := GetKeyWord(Item.Kind);
-  Level := GetLevel(Item.Kind);
+  Kind := Item.KeyWord;
+  Level := Item.Level;
 
   // Track current rule for indentation
   if Supports(Item, IRule, Rule) then
@@ -231,11 +197,11 @@ begin
 
   // Steps template (without individual time)
   for var Step in Outline.StepsGiven do
-    OutputLn(BaseLevel + 1, GetKeyWord(Step.Kind) + ' ' + Step.Description);
+    OutputLn(BaseLevel + 1, Step.KeyWord + ' ' + Step.Description);
   for var Step in Outline.StepsWhen do
-    OutputLn(BaseLevel + 1, GetKeyWord(Step.Kind) + ' ' + Step.Description);
+    OutputLn(BaseLevel + 1, Step.KeyWord + ' ' + Step.Description);
   for var Step in Outline.StepsThen do
-    OutputLn(BaseLevel + 1, GetKeyWord(Step.Kind) + ' ' + Step.Description);
+    OutputLn(BaseLevel + 1, Step.KeyWord + ' ' + Step.Description);
 
   // Calculate column widths
   Headers := Outline.Headers;

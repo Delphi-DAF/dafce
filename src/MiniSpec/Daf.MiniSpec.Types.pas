@@ -28,6 +28,15 @@ type
 
   TTagMatcher = reference to function(const Tags: TSpecTags): Boolean;
 
+  // Forward declaration
+  IScenario = interface;
+
+  /// <summary>
+  /// Matcher function for filtering scenarios based on full context.
+  /// Used by Feat:, Scen:, Rule:, Cat: filters in addition to @tag filters.
+  /// </summary>
+  TSpecMatcher = reference to function(const Scenario: IScenario): Boolean;
+
   /// <summary>
   /// Metadata para scenarios Example (hijos de ScenarioOutline).
   /// Solo contiene los valores de la fila; los Headers están en el padre.
@@ -82,14 +91,14 @@ type
 
   IFeatureBuilder<T: class, constructor> = interface
     /// <summary>
-    /// Establece el nombre de la unit fuente para filtrado con U:.
+    /// Sets the category name for filtering with C:.
     /// </summary>
-    function InUnit(const UnitName: string): IFeatureBuilder<T>; overload;
+    function Category(const Name: string): IFeatureBuilder<T>; overload;
     /// <summary>
-    /// Establece la unit fuente extrayendo el nombre del QualifiedClassName.
-    /// Convenio: declarar TSourceUnit = class end; en cada unit de feature.
+    /// Sets the category extracting the name from QualifiedClassName.
+    /// Convention: declare TCategory = class end; in each feature unit.
     /// </summary>
-    function InUnit(AClass: TClass): IFeatureBuilder<T>; overload;
+    function Category(AClass: TClass): IFeatureBuilder<T>; overload;
     function Background: IBackgroundBuilder<T>;
     function Scenario(const Description: string): IScenarioBuilder<T>;overload;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
@@ -159,6 +168,8 @@ type
     function GetKind: TSpecItemKind;
     function GetRunInfo: TSpecRunInfo;
     function GetParent: ISpecItem;
+    function GetKeyWord: string;
+    function GetLevel: Byte;
 
     procedure Run(World: TObject);
     property Kind: TSpecItemKind read GetKind;
@@ -167,6 +178,16 @@ type
     property Tags: TSpecTags read GetTags;
     property EffectiveTags: TSpecTags read GetEffectiveTags;
     property RunInfo: TSpecRunInfo read GetRunInfo;
+    /// <summary>
+    /// Returns the Gherkin keyword for this item (Feature, Scenario, Given, etc.)
+    /// Centralized for consistency and future i18n support.
+    /// </summary>
+    property KeyWord: string read GetKeyWord;
+    /// <summary>
+    /// Returns the nesting level of this item (Feature=0, Rule/Scenario=1, Step=2, etc.)
+    /// Calculated as Parent.Level + 1, with Feature being level 0.
+    /// </summary>
+    property Level: Byte read GetLevel;
   end;
 
   IScenarioStep = interface(ISpecItem)
@@ -211,21 +232,21 @@ type
     ['{025FBE2B-E0B2-47D2-B50A-65A381F119AC}']
     function GetTitle: string;
     function GetNarrative: string;
-    function GetSourceUnit: string;
-    procedure SetSourceUnit(const Value: string);
+    function GetCategory: string;
+    procedure SetCategory(const Value: string);
     function GetBackGround: IBackground;
     procedure SetBackGround(const Value: IBackground);
     function GetScenarios: TList<IScenario>;
     function GetRules: TList<IRule>;
-    function HasMatchingScenarios(const TagMatcher: TTagMatcher): Boolean;
-    procedure Run(const TagMatcher: TTagMatcher = nil);
+    function HasMatchingScenarios(const Matcher: TSpecMatcher): Boolean;
+    procedure Run(const Matcher: TSpecMatcher = nil);
     property Title: string read GetTitle;
     property Narrative: string read GetNarrative;
     /// <summary>
-    /// Nombre de la unit donde se define la Feature.
-    /// Se establece automáticamente o manualmente con .InUnit('nombre').
+    /// Category for grouping/filtering features.
+    /// Set automatically or manually with .Category('name').
     /// </summary>
-    property SourceUnit: string read GetSourceUnit write SetSourceUnit;
+    property Category: string read GetCategory write SetCategory;
     property BackGround: IBackground read GetBackground write SetBackground;
     property Scenarios: TList<IScenario> read GetScenarios;
     property Rules: TList<IRule> read GetRules;
@@ -241,8 +262,8 @@ type
     procedure SetBackGround(const Value: IBackground);
     function GetScenarios: TList<IScenario>;
     function GetFeature: IFeature;
-    function HasMatchingScenarios(const TagMatcher: TTagMatcher): Boolean;
-    procedure Run(const TagMatcher: TTagMatcher = nil);
+    function HasMatchingScenarios(const Matcher: TSpecMatcher): Boolean;
+    procedure Run(const Matcher: TSpecMatcher = nil);
     property Feature: IFeature read GetFeature;
     property BackGround: IBackground read GetBackground write SetBackground;
     property Scenarios: TList<IScenario> read GetScenarios;
@@ -294,6 +315,8 @@ type
     function GetTags: TSpecTags;
     function GetEffectiveTags: TSpecTags;
     function GetRunInfo: TSpecRunInfo;
+    function GetKeyWord: string;virtual;
+    function GetLevel: Byte;virtual;
   public
     constructor Create(const Kind: TSpecItemKind; const Parent: ISpecItem; const Description: string);
     destructor Destroy;override;
@@ -302,6 +325,8 @@ type
     property Description: string read GetDescription;
     property Tags: TSpecTags read GetTags;
     property EffectiveTags: TSpecTags read GetEffectiveTags;
+    property KeyWord: string read GetKeyWord;
+    property Level: Byte read GetLevel;
   end;
 
   TScenarioStep<T: class> = class(TSpecItem, IScenarioStep)
@@ -390,11 +415,11 @@ type
     FImplicitRule: IRule;  // Rule implícita para escenarios/background sin Rule explícita
     FTitle: string;
     FNarrative: string;
-    FSourceUnit: string;
+    FCategory: string;
     function GetTitle: string;
     function GetNarrative: string;
-    function GetSourceUnit: string;
-    procedure SetSourceUnit(const Value: string);
+    function GetCategory: string;
+    procedure SetCategory(const Value: string);
     function GetBackGround: IBackground;
     procedure SetBackGround(const Value: IBackground);
     function GetScenarios: TList<IScenario>;
@@ -403,11 +428,11 @@ type
   public
     constructor Create(const Description: string);
     destructor Destroy; override;
-    function HasMatchingScenarios(const TagMatcher: TTagMatcher): Boolean;
-    procedure Run(const TagMatcher: TTagMatcher = nil);reintroduce;
+    function HasMatchingScenarios(const Matcher: TSpecMatcher): Boolean;
+    procedure Run(const Matcher: TSpecMatcher = nil);reintroduce;
     property Title: string read GetTitle;
     property Narrative: string read GetNarrative;
-    property SourceUnit: string read GetSourceUnit write SetSourceUnit;
+    property Category: string read GetCategory write SetCategory;
     property Background: IBackground read GetBackGround write SetBackGround;
     property Rules: TList<IRule> read GetRules;
     property ImplicitRule: IRule read FImplicitRule;  // Solo para builders
@@ -434,8 +459,8 @@ type
     constructor Create(const Feature: IFeature; const Description: string);overload;
     constructor Create(const Feature: IFeature; const Description: string; const Kind: TSpecItemKind);overload;
     destructor Destroy; override;
-    function HasMatchingScenarios(const TagMatcher: TTagMatcher): Boolean;
-    procedure Run(const TagMatcher: TTagMatcher = nil);reintroduce;
+    function HasMatchingScenarios(const Matcher: TSpecMatcher): Boolean;
+    procedure Run(const Matcher: TSpecMatcher = nil);reintroduce;
     property Feature: IFeature read GetFeature;
     property Background: IBackground read GetBackGround write SetBackGround;
     property Scenarios: TList<IScenario> read GetScenarios;
@@ -715,6 +740,37 @@ begin
   Result := FTags;
   if Assigned(FParent) then
     Result.Merge(FParent.EffectiveTags);
+end;
+
+function TSpecItem.GetKeyWord: string;
+begin
+  case FKind of
+    sikFeature: Result := 'Feature';
+    sikImplicitRule: Result := '';
+    sikRule: Result := 'Rule';
+    sikBackground: Result := 'Background';
+    sikScenario: Result := 'Scenario';
+    sikScenarioOutline: Result := 'Scenario Outline';
+    sikExample: Result := 'Example';
+    sikExampleInit: Result := '';
+    sikGiven: Result := 'Given';
+    sikWhen: Result := 'When';
+    sikThen: Result := 'Then';
+    sikAnd: Result := 'And';
+    sikBut: Result := 'But';
+    else
+      Result := '';
+  end;
+end;
+
+function TSpecItem.GetLevel: Byte;
+begin
+  if FKind = sikFeature then
+    Result := 0
+  else if Assigned(FParent) then
+    Result := FParent.Level + 1
+  else
+    Result := 0;
 end;
 
 { TScenarioStep<T> }
@@ -1133,14 +1189,14 @@ begin
   Result := FNarrative;
 end;
 
-function TFeature<T>.GetSourceUnit: string;
+function TFeature<T>.GetCategory: string;
 begin
-  Result := FSourceUnit;
+  Result := FCategory;
 end;
 
-procedure TFeature<T>.SetSourceUnit(const Value: string);
+procedure TFeature<T>.SetCategory(const Value: string);
 begin
-  FSourceUnit := Value;
+  FCategory := Value;
 end;
 
 constructor TFeature<T>.Create(const Description: string);
@@ -1176,20 +1232,20 @@ begin
   Result := FRules;
 end;
 
-function TFeature<T>.HasMatchingScenarios(const TagMatcher: TTagMatcher): Boolean;
+function TFeature<T>.HasMatchingScenarios(const Matcher: TSpecMatcher): Boolean;
 begin
-  if not Assigned(TagMatcher) then
+  if not Assigned(Matcher) then
     Exit(True);
 
   // Verificar escenarios en todas las Rules (incluyendo ImplicitRule)
   for var Rule in FRules do
-    if Rule.HasMatchingScenarios(TagMatcher) then
+    if Rule.HasMatchingScenarios(Matcher) then
       Exit(True);
 
   Result := False;
 end;
 
-procedure TFeature<T>.Run(const TagMatcher: TTagMatcher);
+procedure TFeature<T>.Run(const Matcher: TSpecMatcher);
 begin
   var SW := TStopwatch.StartNew;
   FRunInfo.State := srsRunning;
@@ -1199,7 +1255,7 @@ begin
     // Cada Rule decide internamente qué escenarios ejecutar o marcar como Skip
     for var Rule in FRules do
     begin
-      Rule.Run(TagMatcher);
+      Rule.Run(Matcher);
       if Rule.RunInfo.Result in [srrFail, srrError] then
         FRunInfo.Result := srrFail;
     end;
@@ -1273,26 +1329,20 @@ begin
     FBackground.Run(World);
 end;
 
-function TRule<T>.HasMatchingScenarios(const TagMatcher: TTagMatcher): Boolean;
-var
-  CombinedTags: TSpecTags;
+function TRule<T>.HasMatchingScenarios(const Matcher: TSpecMatcher): Boolean;
 begin
-  if not Assigned(TagMatcher) then
+  if not Assigned(Matcher) then
     Exit(True);
 
   for var Scenario in FScenarios do
   begin
-    // Tags combinados: Feature + Rule + Scenario
-    CombinedTags := FFeature.Tags;
-    CombinedTags.Merge(Self.Tags);
-    CombinedTags.Merge(Scenario.Tags);
-    if TagMatcher(CombinedTags) then
+    if Matcher(Scenario) then
       Exit(True);
   end;
   Result := False;
 end;
 
-procedure TRule<T>.Run(const TagMatcher: TTagMatcher);
+procedure TRule<T>.Run(const Matcher: TSpecMatcher);
 var
   ShouldExecute: Boolean;
 begin
@@ -1302,12 +1352,12 @@ begin
   try
     for var Scenario in FScenarios do
     begin
-      // Decidir si ejecutar basándose en EffectiveTags y DryRun
+      // Decidir si ejecutar basándose en Matcher y DryRun
       ShouldExecute := True;
 
-      // Verificar filtro de tags usando EffectiveTags
-      if Assigned(TagMatcher) then
-        ShouldExecute := TagMatcher(Scenario.EffectiveTags);
+      // Verificar filtro usando el Matcher completo
+      if Assigned(Matcher) then
+        ShouldExecute := Matcher(Scenario);
 
       // Verificar modo DryRun
       if ShouldExecute and MiniSpec.DryRun then

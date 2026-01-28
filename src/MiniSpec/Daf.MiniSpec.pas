@@ -28,7 +28,7 @@ type
     const Version = '1.2.0';
   strict private
     FFeatures: TList<IFeature>;
-    FRunner: ISpecListener;
+    FRunner: ISpecRunner;
     FListeners: TList<ISpecListener>;
     FOptions: TMiniSpecOptions;
     FRunMode: TRunMode;
@@ -52,7 +52,7 @@ type
     class destructor ClasDestroy;
     {$REGION 'Fluent api for setup'}
     function Reporter(const Spec: string): TMiniSpec;overload;
-    function Runner: ISpecListener;
+    function Runner: ISpecRunner;
     function Tags: string;overload;
     procedure Tags(const Value: string);overload;
     function Pause: Boolean;overload;
@@ -244,7 +244,7 @@ begin
   end;
 end;
 
-function TMiniSpec.Runner: ISpecListener;
+function TMiniSpec.Runner: ISpecRunner;
 begin
   Result := FRunner;
 end;
@@ -339,7 +339,7 @@ end;
 procedure TMiniSpec.Run;
 var
   SpecFilter: TSpecFilter;
-  Matcher: TTagMatcher;
+  Matcher: TSpecMatcher;
   Listener: ISpecListener;
 begin
   ParseArgs;
@@ -410,11 +410,14 @@ begin
     if SpecFilter.IsEmpty then
       Matcher := nil
     else
-      Matcher := function(const ATags: TSpecTags): Boolean
+      Matcher := function(const Scenario: IScenario): Boolean
+                 var
+                   Context: TSpecFilterContext;
                  begin
-                   Result := SpecFilter.MatchesTags(ATags);
+                   Context := TSpecFilterContext.FromScenario(Scenario);
+                   Result := SpecFilter.Matches(Context);
                  end;
-    FOptions.TagMatcher := Matcher;
+    FOptions.SpecMatcher := Matcher;
 
     // Ejecutar TODAS las Features - el conteo debe reflejar el total definido
     // Cada Feature/Rule/Scenario decide si se ejecuta o marca como Skip
@@ -562,10 +565,10 @@ begin
   WriteLn('Filter expressions:');
   WriteLn('  @tag                    Scenarios with tag');
   WriteLn('  ~@tag                   Scenarios without tag (also: not @tag)');
-  WriteLn('  F:text                  Feature title contains text (case-insensitive)');
-  WriteLn('  S:text                  Scenario description contains text');
-  WriteLn('  R:text                  Rule description contains text');
-  WriteLn('  U:text                  Source unit name contains text');
+  WriteLn('  Feat:text               Feature title contains text (case-insensitive)');
+  WriteLn('  Scen:text               Scenario description contains text');
+  WriteLn('  Rule:text               Rule description contains text');
+  WriteLn('  Cat:text                Category name contains text');
   WriteLn('  @a and @b               Match both conditions');
   WriteLn('  @a or @b                Match either condition');
   WriteLn('  (expr) and ~@c          Complex expressions with parentheses');
@@ -573,9 +576,9 @@ begin
   WriteLn('Examples:');
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -f "@unit"');
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -f "@integration and ~@slow"');
-  WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -f "F:Calculator"');
-  WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -f "U:WorldLifecycle"');
-  WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -f "S:division and @arithmetic"');
+  WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -f "Feat:Calculator"');
+  WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -f "Cat:Lifecycle"');
+  WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -f "Scen:division and @arithmetic"');
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -r html:output=report.html');
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -r live:port=9000');
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -t');

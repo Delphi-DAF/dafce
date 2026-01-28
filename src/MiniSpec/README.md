@@ -9,9 +9,11 @@ Framework BDD (Behavior-Driven Development) para Delphi, inspirado en Gherkin/Cu
 - **Gherkin Reporter**: Exporta features a formato `.feature` estándar
 - **Dry-run mode**: Lista escenarios sin ejecutarlos
 - **Pause mode**: Espera tecla al finalizar
-- **Filtros extendidos**: Además de `@tag`, soporta `F:texto`, `S:texto`, `R:texto`, `U:texto`
-- **InUnit(TSourceUnit)**: Permite filtrar por unit de origen
+- **Filtros extendidos**: Además de `@tag`, soporta `Feat:texto`, `Scen:texto`, `Rule:texto`, `Cat:texto`
+- **Category**: Permite agrupar features por categoría (ej: usando el nombre de la unit)
 - **EndRule**: Permite volver de una Rule a la Feature para añadir más Rules o scenarios
+- **Reporters modulares**: Cada reporter en su propia unit para mejor mantenibilidad
+- **ISpecRunner**: Nueva interfaz para el runner con gestión de listeners
 
 ---
 
@@ -178,9 +180,10 @@ type
 | But | `.But('...', proc)` | Paso negativo |
 | @tags | `@tag` en descripción | Filtrado de tests |
 | Doc Strings | `'''..'''` | Sintaxis nativa Delphi 12+ |
-### InUnit para Filtrado por SourceUnit
 
-Para habilitar el filtro `U:texto`, cada unit de feature puede declarar un tipo marker y usar `.InUnit()`:
+### Category para Agrupar Features
+
+Las features pueden asignarse a una categoría para facilitar el filtrado con `Cat:texto`. Una forma conveniente es usar un tipo marker para extraer automáticamente el nombre de la unit:
 
 ```pascal
 unit Calculator.Add.Feat;
@@ -188,7 +191,7 @@ unit Calculator.Add.Feat;
 interface
 
 type
-  TSourceUnit = class end;  // Tipo marker para identificar la unit
+  TUnitMarker = class end;  // Tipo marker para identificar la unit
 
 implementation
 uses Daf.MiniSpec;
@@ -196,16 +199,16 @@ uses Daf.MiniSpec;
 initialization
 
 Feature('Calculator Addition')
-  .InUnit(TSourceUnit)  // Extrae "Calculator.Add.Feat" del QualifiedClassName
+  .Category(TUnitMarker)  // Extrae "Calculator.Add.Feat" del QualifiedClassName
   .UseWorld<TCalculatorWorld>
   // ...
 ```
 
-Ahora puedes filtrar por unit:
+Ahora puedes filtrar por categoría:
 
 ```bash
-MiApp.exe -f "U:Calculator"     # Todas las features en units que contengan "Calculator"
-MiApp.exe -f "U:Add.Feat"       # Solo Calculator.Add.Feat
+MiApp.exe -f "Cat:Calculator"     # Features cuya categoría contenga "Calculator"
+MiApp.exe -f "Cat:Add.Feat"       # Features cuya categoría contenga "Add.Feat"
 ```
 
 ### EndRule para Volver a Feature
@@ -226,6 +229,7 @@ Feature('...')
     .Scenario('Test 2')
       // ...
 ```
+
 ### And / But
 
 Usa `&And` y `But` para añadir pasos al grupo anterior (Given, When o Then):
@@ -394,13 +398,13 @@ La acción se ejecuta en el step When y la excepción se captura automáticament
 ```
 @tag                    # Escenarios con el tag
 ~@tag                   # Escenarios SIN el tag
-F:texto                 # Feature title contiene texto
-S:texto                 # Scenario description contiene texto
-R:texto                 # Rule description contiene texto
-U:texto                 # SourceUnit contiene texto
+Feat:texto              # Feature title contiene texto
+Scen:texto              # Scenario description contiene texto
+Rule:texto              # Rule description contiene texto
+Cat:texto               # Category contiene texto
 @a and @b               # Ambos tags
 @a or @b                # Cualquiera de los dos
-(F:Login or @auth) and ~@slow  # Expresiones complejas
+(Feat:Login or @auth) and ~@slow  # Expresiones complejas
 ```
 
 Ejemplos:
@@ -408,9 +412,10 @@ Ejemplos:
 ```bash
 MiApp.exe -f "@unit"
 MiApp.exe -f "@unit and ~@slow"
-MiApp.exe -f "F:Calculator"
-MiApp.exe -f "U:Login.Feat"
-MiApp.exe -f "S:division and @arithmetic"
+MiApp.exe -f "Feat:Calculator"
+MiApp.exe -f "Cat:Login.Feat"
+MiApp.exe -f "Scen:division and @arithmetic"
+MiApp.exe -f "Rule:Division"
 ```
 
 ### Reporters
@@ -452,10 +457,14 @@ Las opciones de línea de comandos tienen prioridad sobre el archivo.
 | Archivo | Descripción |
 |---------|-------------|
 | `Daf.MiniSpec.pas` | API principal y runner |
-| `Daf.MiniSpec.Types.pas` | Tipos e interfaces |
+| `Daf.MiniSpec.Types.pas` | Tipos e interfaces (ISpecItem, TSpecMatcher, etc.) |
 | `Daf.MiniSpec.Builders.pas` | Builders fluent |
 | `Daf.MiniSpec.Expects.pas` | Assertions |
-| `Daf.MiniSpec.Reporter.pas` | Reporters (console, HTML, JSON, Live) |
+| `Daf.MiniSpec.Reporter.pas` | Base de reporters (ISpecRunner, ISpecListener, TSpecRunner) |
+| `Daf.MiniSpec.Reporter.Console.pas` | Reporter de consola |
+| `Daf.MiniSpec.Reporter.Json.pas` | Reporter JSON |
+| `Daf.MiniSpec.Reporter.Gherkin.pas` | Reporter Gherkin (.feature) |
+| `Daf.MiniSpec.Reporter.Live.pas` | Reporter Live Dashboard (SSE) |
 | `Daf.MiniSpec.LiveDashboard.pas` | HTML template del Live Dashboard |
 | `Daf.MiniSpec.Filter.pas` | Parser de expresiones de filtro |
 | `Daf.MiniSpec.TagFilter.pas` | Parser legacy de tags (deprecated) |

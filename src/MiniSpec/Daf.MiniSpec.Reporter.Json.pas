@@ -24,7 +24,6 @@ type
     procedure CloseCurrentScenario;
     procedure CloseCurrentFeature;
     function GetStatus(const Item: ISpecItem): string;
-    function GetKeyWord(const Kind: TSpecItemKind): string;
   public
     function GetContent: string;override;
     function GetFileExt: string;override;
@@ -42,25 +41,6 @@ uses
   System.Rtti;
 
 { TJsonReporter }
-
-function TJsonReporter.GetKeyWord(const Kind: TSpecItemKind): string;
-begin
-  case Kind of
-    sikFeature: Result := 'Feature';
-    sikImplicitRule: Result := '';
-    sikRule: Result := 'Rule';
-    sikBackground: Result := 'Background';
-    sikScenario: Result := 'Scenario';
-    sikScenarioOutline: Result := 'Scenario Outline';
-    sikExample: Result := 'Example';
-    sikExampleInit: Result := '';
-    sikGiven: Result := 'Given';
-    sikWhen: Result := 'When';
-    sikThen: Result := 'Then';
-    else
-      Result := '';
-  end;
-end;
 
 function TJsonReporter.GetStatus(const Item: ISpecItem): string;
 begin
@@ -169,7 +149,7 @@ begin
     sikRule, sikBackground: begin
       CloseCurrentScenario;
       FCurrentScenario := TJSONObject.Create;
-      FCurrentScenario.AddPair('kind', GetKeyWord(Item.Kind));
+      FCurrentScenario.AddPair('kind', Item.KeyWord);
       FCurrentScenario.AddPair('description', Item.Description);
       FCurrentScenario.AddPair('status', GetStatus(Item));
       FCurrentScenario.AddPair('duration', TJSONNumber.Create(Item.RunInfo.ExecTimeMs));
@@ -180,7 +160,7 @@ begin
     sikScenario, sikExample: begin
       CloseCurrentScenario;
       FCurrentScenario := TJSONObject.Create;
-      FCurrentScenario.AddPair('kind', GetKeyWord(Item.Kind));
+      FCurrentScenario.AddPair('kind', Item.KeyWord);
       FCurrentScenario.AddPair('description', Item.Description);
       FCurrentScenario.AddPair('status', GetStatus(Item));
       FCurrentScenario.AddPair('duration', TJSONNumber.Create(Item.RunInfo.ExecTimeMs));
@@ -190,7 +170,7 @@ begin
     end;
     sikExampleInit: ;
     sikGiven, sikWhen, sikThen: begin
-      AddStep(GetKeyWord(Item.Kind), Item.Description, Item.RunInfo.Result = srrSuccess,
+      AddStep(Item.KeyWord, Item.Description, Item.RunInfo.Result = srrSuccess,
               Item.RunInfo.ExecTimeMs, Item.RunInfo.ErrMsg);
     end;
   end;

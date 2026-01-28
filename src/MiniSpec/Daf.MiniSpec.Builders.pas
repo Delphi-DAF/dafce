@@ -15,9 +15,9 @@ type
     FFeature: TFeature<T>;
   public
     constructor Create(const Feature: TFeature<T>);overload;
-    constructor Create(const Description: string; const SourceUnit: string = '');overload;
-    function InUnit(const UnitName: string): IFeatureBuilder<T>; overload;
-    function InUnit(AClass: TClass): IFeatureBuilder<T>; overload;
+    constructor Create(const Description: string; const Category: string = '');overload;
+    function Category(const Name: string): IFeatureBuilder<T>; overload;
+    function Category(AClass: TClass): IFeatureBuilder<T>; overload;
     function Background: IBackgroundBuilder<T>;
     function Scenario(const Description: string): IScenarioBuilder<T>;overload;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
@@ -27,10 +27,10 @@ type
   TFeatureBuilder = class
   strict private
     FDescription: string;
-    FSourceUnit: string;
+    FCategory: string;
   public
     constructor Create(const Description: string);
-    function InUnit(AClass: TClass): TFeatureBuilder;
+    function Category(AClass: TClass): TFeatureBuilder;
     function UseWorld<T: class, constructor>: IFeatureBuilder<T>;
   end;
 
@@ -104,8 +104,8 @@ type
     constructor Create(const AFeature: TFeature<T>; const Description: string);overload;
     constructor Create(const ARule: TRule<T>);overload;  // Para continuar dentro de una Rule existente
     // IRuleBuilder + IFeatureBuilder
-    function InUnit(const UnitName: string): IFeatureBuilder<T>; overload;
-    function InUnit(AClass: TClass): IFeatureBuilder<T>; overload;
+    function Category(const Name: string): IFeatureBuilder<T>; overload;
+    function Category(AClass: TClass): IFeatureBuilder<T>; overload;
     function Background: IBackgroundBuilder<T>;
     function Scenario(const Description: string): IScenarioBuilder<T>;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
@@ -123,33 +123,33 @@ begin
   FFeature := Feature;
 end;
 
-constructor TFeatureBuilder<T>.Create(const Description: string; const SourceUnit: string);
+constructor TFeatureBuilder<T>.Create(const Description: string; const Category: string);
 begin
   inherited Create;
   FFeature := TFeature<T>.Create(Description);
-  if SourceUnit <> '' then
-    FFeature.SourceUnit := SourceUnit;
+  if Category <> '' then
+    FFeature.Category := Category;
 end;
 
-function TFeatureBuilder<T>.InUnit(const UnitName: string): IFeatureBuilder<T>;
+function TFeatureBuilder<T>.Category(const Name: string): IFeatureBuilder<T>;
 begin
-  FFeature.SourceUnit := UnitName;
+  FFeature.Category := Name;
   Result := Self;
 end;
 
-function TFeatureBuilder<T>.InUnit(AClass: TClass): IFeatureBuilder<T>;
+function TFeatureBuilder<T>.Category(AClass: TClass): IFeatureBuilder<T>;
 var
   QualifiedName: string;
   DotPos: Integer;
 begin
-  // AClass.QualifiedClassName devuelve 'UnitName.TSourceUnit'
-  // Extraemos la parte antes del último punto
+  // AClass.QualifiedClassName returns 'UnitName.TCategory'
+  // Extract the part before the last dot
   QualifiedName := AClass.QualifiedClassName;
   DotPos := QualifiedName.LastIndexOf('.');
   if DotPos > 0 then
-    FFeature.SourceUnit := QualifiedName.Substring(0, DotPos)
+    FFeature.Category := QualifiedName.Substring(0, DotPos)
   else
-    FFeature.SourceUnit := QualifiedName;
+    FFeature.Category := QualifiedName;
   Result := Self;
 end;
 
@@ -182,28 +182,28 @@ constructor TFeatureBuilder.Create(const Description: string);
 begin
   inherited Create;
   FDescription := Description;
-  FSourceUnit := '';
+  FCategory := '';
 end;
 
-function TFeatureBuilder.InUnit(AClass: TClass): TFeatureBuilder;
+function TFeatureBuilder.Category(AClass: TClass): TFeatureBuilder;
 var
   QualifiedName: string;
   DotPos: Integer;
 begin
-  // AClass.QualifiedClassName devuelve 'UnitName.TSourceUnit'
-  // Extraemos la parte antes del último punto
+  // AClass.QualifiedClassName returns 'UnitName.TCategory'
+  // Extract the part before the last dot
   QualifiedName := AClass.QualifiedClassName;
   DotPos := QualifiedName.LastIndexOf('.');
   if DotPos > 0 then
-    FSourceUnit := QualifiedName.Substring(0, DotPos)
+    FCategory := QualifiedName.Substring(0, DotPos)
   else
-    FSourceUnit := QualifiedName;
+    FCategory := QualifiedName;
   Result := Self;
 end;
 
 function TFeatureBuilder.UseWorld<T>: IFeatureBuilder<T>;
 begin
-  Result := TFeatureBuilder<T>.Create(FDescription, FSourceUnit);
+  Result := TFeatureBuilder<T>.Create(FDescription, FCategory);
   Free;
 end;
 
@@ -507,13 +507,13 @@ begin
   FFeature := ARule.Feature as TFeature<T>;
 end;
 
-function TRuleBuilder<T>.InUnit(const UnitName: string): IFeatureBuilder<T>;
+function TRuleBuilder<T>.Category(const Name: string): IFeatureBuilder<T>;
 begin
-  FFeature.SourceUnit := UnitName;
+  FFeature.Category := Name;
   Result := Self;
 end;
 
-function TRuleBuilder<T>.InUnit(AClass: TClass): IFeatureBuilder<T>;
+function TRuleBuilder<T>.Category(AClass: TClass): IFeatureBuilder<T>;
 var
   QualifiedName: string;
   DotPos: Integer;
@@ -521,9 +521,9 @@ begin
   QualifiedName := AClass.QualifiedClassName;
   DotPos := QualifiedName.LastIndexOf('.');
   if DotPos > 0 then
-    FFeature.SourceUnit := QualifiedName.Substring(0, DotPos)
+    FFeature.Category := QualifiedName.Substring(0, DotPos)
   else
-    FFeature.SourceUnit := QualifiedName;
+    FFeature.Category := QualifiedName;
   Result := Self;
 end;
 

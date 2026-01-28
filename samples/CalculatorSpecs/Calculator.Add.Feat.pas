@@ -5,9 +5,9 @@ interface
 type
   /// <summary>
   /// Marker type for unit identification.
-  /// Convention: Use .InUnit(TSourceUnit) to enable U: filter.
+  /// Convention: Use .Category(TUnitMarker) to enable Cat: filter.
   /// </summary>
-  TSourceUnit = class end;
+  TUnitMarker = class end;
 
 implementation
 uses
@@ -27,7 +27,7 @@ initialization
     I need to add and subtract numbers
     In order to complete my calculations
   ''')
-  .InUnit(TSourceUnit)
+  .Category(TUnitMarker)
   .UseWorld<TCalculatorWorld>
   .Background
     .Given('I have a calculator', procedure(World: TCalculatorWorld)

@@ -29,7 +29,7 @@ type
     SEC_REPORTER_PREFIX = 'reporter.';
   strict private
     FOptions: TDictionary<string, TValue>;
-    FTagMatcher: TTagMatcher;
+    FSpecMatcher: TSpecMatcher;
     FFilter: string;
     FPause: Boolean;
     FDryRun: Boolean;
@@ -51,7 +51,7 @@ type
     function GetReporterOptions(const ReporterName: string): TReporterOptions;
     procedure SetReporterOption(const ReporterName, Key, Value: string);
     // Properties
-    property TagMatcher: TTagMatcher read FTagMatcher write FTagMatcher;
+    property SpecMatcher: TSpecMatcher read FSpecMatcher write FSpecMatcher;
     property Filter: string read FFilter write FFilter;
     property Pause: Boolean read FPause write FPause;
     property IsDryRun: Boolean read FDryRun write FDryRun;
@@ -133,6 +133,30 @@ type
   end;
 
   /// <summary>
+  /// Interface for the spec runner that coordinates execution and listener management.
+  /// </summary>
+  ISpecRunner = interface
+    ['{E7F8A9B0-C1D2-E3F4-A5B6-C7D8E9F0A1B2}']
+    function GetPassCount: Cardinal;
+    function GetFailCount: Cardinal;
+    function GetSkipCount: Cardinal;
+    function GetElapsedMs: Integer;
+    function GetFeatureCount: Integer;
+    function GetCompletedAt: TDateTime;
+    procedure Configure(const Options: TReporterOptions);
+    function ShowHelp: Boolean;
+    procedure AddListener(const Listener: ISpecListener);
+    procedure Report(Features: TList<IFeature>; Options: TMiniSpecOptions);
+    function UseConsole: Boolean;
+    property PassCount: Cardinal read GetPassCount;
+    property FailCount: Cardinal read GetFailCount;
+    property SkipCount: Cardinal read GetSkipCount;
+    property ElapsedMs: Integer read GetElapsedMs;
+    property FeatureCount: Integer read GetFeatureCount;
+    property CompletedAt: TDateTime read GetCompletedAt;
+  end;
+
+  /// <summary>
   /// Base class for spec listeners with empty implementations.
   /// Subclass and override only the methods you need.
   /// </summary>
@@ -158,35 +182,7 @@ type
     function UseConsole: Boolean; virtual;
   end;
 
-  ISpecListener = interface(IInvokable)
-    ['{CD69B272-5B38-4CCC-A64F-2B2A57ACB540}']
-    function GetFailCount: Cardinal;
-    function GetPassCount: Cardinal;
-    function GetSkipCount: Cardinal;
-    function GetElapsedMs: Integer;
-    function GetFeatureCount: Integer;
-    function GetCompletedAt: TDateTime;
-    procedure Configure(const Options: TReporterOptions);
-    function ShowHelp: Boolean;
-    procedure AddListener(const Listener: ISpecListener);
-    procedure Report(Features: TList<IFeature>; Options: TMiniSpecOptions);
-    procedure BeginReport;
-    procedure DoReport(const S: ISpecItem);
-    procedure ReportOutline(const Outline: IScenarioOutline);
-    procedure EndReport;
-    function GetContent: string;
-    function GetFileExt: string;
-    function UseConsole: Boolean;
-    property Content: string read GetContent;
-    property PassCount: Cardinal read GetPassCount;
-    property FailCount: Cardinal read GetFailCount;
-    property SkipCount: Cardinal read GetSkipCount;
-    property ElapsedMs: Integer read GetElapsedMs;
-    property FeatureCount: Integer read GetFeatureCount;
-    property CompletedAt: TDateTime read GetCompletedAt;
-  end;
-
-  TSpecRunner = class(TInterfacedObject, ISpecListener, IRunContext)
+  TSpecRunner = class(TInterfacedObject, ISpecRunner, IRunContext)
   strict private
     FFeatureCount: Integer;
     // Counters at different levels
@@ -250,8 +246,6 @@ type
     function GetElapsedMs: Integer;virtual;
     function GetFeatureCount: Integer;virtual;
     function GetCompletedAt: TDateTime;virtual;
-    function GetLevel(const Kind: TSpecItemKind): Byte;virtual;
-    function GetKeyWord(const Kind: TSpecItemKind): string;virtual;
     function GetFileExt: string;virtual;
     procedure DoReport(const S: ISpecItem);virtual;
     // Template Methods (non-virtual) - define the algorithm
@@ -421,7 +415,7 @@ begin
   inherited;
   FOptions := TDictionary<string, TValue>.Create;
   FReporterOptions := TObjectDictionary<string, TReporterOptions>.Create([doOwnsValues]);
-  FTagMatcher := nil;
+  FSpecMatcher := nil;
   FFilter := '';
   FPause := False;
   FDryRun := False;
@@ -1054,39 +1048,6 @@ end;
 function TSpecRunner.GetFileExt: string;
 begin
   Result := '';
-end;
-
-function TSpecRunner.GetKeyWord(const Kind: TSpecItemKind): string;
-begin
-  case Kind of
-    sikFeature: Result := 'Feature';
-    sikImplicitRule: Result := '';  // No mostrar keyword para Rule implícita
-    sikRule: Result := 'Rule';
-    sikBackground: Result :=  'Background';
-    sikScenario: Result :=  'Scenario';
-    sikScenarioOutline: Result := 'Scenario Outline';
-    sikExample: Result :=  'Example';
-    sikExampleInit: Result := '';
-    sikGiven: Result := 'Given';
-    sikWhen: Result := 'When';
-    sikThen: Result := 'Then';
-    else
-      Result := '';
-  end;
-end;
-
-function TSpecRunner.GetLevel(const Kind: TSpecItemKind): Byte;
-begin
-  // Nivel base por tipo (sin considerar contexto de Rule)
-  case Kind of
-    sikFeature: Result := 0;
-    sikRule: Result := 1;
-    sikBackground, sikScenario, sikScenarioOutline, sikExample: Result := 1;
-    sikExampleInit: Result := 2;
-    sikGiven, sikWhen, sikThen: Result := 2;
-    else
-      Result := 0;
-  end;
 end;
 
 function TSpecRunner.GetPassCount: Cardinal;
