@@ -82,7 +82,7 @@ type
     function &Then(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
     function &And(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
     function But(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
-    function Examples(const Table: TExamplesTable): IFeatureBuilder<T>;
+    function Examples(const Table: TExamplesTable): IRuleBuilder<T>;
     function Scenario(const Description: string): IScenarioBuilder<T>;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
     function Rule(const Description: string): IRuleBuilder<T>;
@@ -104,6 +104,7 @@ type
     function Scenario(const Description: string): IScenarioBuilder<T>;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
     function Rule(const Description: string): IRuleBuilder<T>;  // Requerido por IFeatureBuilder
+    function EndRule: IFeatureBuilder<T>;  // Vuelve a Feature (IRuleBuilder)
   end;
 
 implementation
@@ -372,7 +373,7 @@ begin
     end;
 end;
 
-function TScenarioOutlineBuilder<T>.Examples(const Table: TExamplesTable): IFeatureBuilder<T>;
+function TScenarioOutlineBuilder<T>.Examples(const Table: TExamplesTable): IRuleBuilder<T>;
 begin
   if Length(Table) < 2 then
     raise Exception.Create('Examples must include headers and at least one data row.');
@@ -478,6 +479,12 @@ function TRuleBuilder<T>.Rule(const Description: string): IRuleBuilder<T>;
 begin
   // Nueva Rule hermana en la misma Feature (requerido por IFeatureBuilder)
   Result := TRuleBuilder<T>.Create(FFeature, Description);
+end;
+
+function TRuleBuilder<T>.EndRule: IFeatureBuilder<T>;
+begin
+  // Volver a Feature para añadir scenarios en ImplicitRule o nuevas Rules
+  Result := TFeatureBuilder<T>.Create(FFeature);
 end;
 
 end.

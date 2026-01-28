@@ -245,6 +245,25 @@ World Lifecycle @meta @lifecycle
        [1],
        [2],
        [3]])
+
+// === Scenario after Rules using EndRule ===
+.EndRule  // Volver a Feature para añadir scenarios sin Rule
+.Scenario('Scenario after rules using EndRule')
+  .Given('a scenario is added after EndRule', procedure(World: TLifecycleWorld)
+    begin
+      World.LogCreate;
+    end)
+  .When('I check the rule', procedure(World: TLifecycleWorld)
+    begin
+      // CurrentRule debería ser ImplicitRule (sikImplicitRule)
+      var Rule := (World as ISpecContext).CurrentRule;
+      Expect(Assigned(Rule)).ToEqual(True);
+      Expect(Rule.Kind = sikImplicitRule).ToEqual(True);
+    end)
+  .&Then('it is in the implicit rule', procedure(World: TLifecycleWorld)
+    begin
+      Expect(Assigned(World)).ToEqual(True);
+    end)
 ;
 
 finalization

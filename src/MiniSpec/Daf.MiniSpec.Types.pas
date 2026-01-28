@@ -91,10 +91,24 @@ type
   /// Builder para construir Rules dentro de una Feature.
   /// Las Rules agrupan escenarios relacionados.
   /// </summary>
+  /// <remarks>
+  /// Nota: Tras Examples() el fluent API permanece en la Rule actual.
+  /// Para añadir scenarios sin Rule después de una Rule, usar EndRule
+  /// para volver a Feature, o escribir los scenarios sin Rule al principio.
+  /// </remarks>
   IRuleBuilder<T: class, constructor> = interface
     function Background: IBackgroundBuilder<T>;
     function Scenario(const Description: string): IScenarioBuilder<T>;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
+    /// <summary>
+    /// Inicia una nueva Rule hermana en la misma Feature.
+    /// </summary>
+    function Rule(const Description: string): IRuleBuilder<T>;
+    /// <summary>
+    /// Cierra la Rule actual y vuelve a Feature para añadir
+    /// scenarios en ImplicitRule o iniciar nuevas Rules.
+    /// </summary>
+    function EndRule: IFeatureBuilder<T>;
   end;
 
   IScenarioBuilder<T: class, constructor> = interface
@@ -115,7 +129,12 @@ type
     function &Then(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
     function &And(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
     function But(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
-    function Examples(const Table: TExamplesTable): IFeatureBuilder<T>;
+    /// <summary>
+    /// Define los ejemplos para el ScenarioOutline.
+    /// Devuelve IRuleBuilder para continuar en la Rule actual
+    /// o usar EndRule para volver a Feature.
+    /// </summary>
+    function Examples(const Table: TExamplesTable): IRuleBuilder<T>;
 
     // Continuar dentro de la misma Rule
     function Scenario(const Description: string): IScenarioBuilder<T>;
