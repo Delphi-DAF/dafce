@@ -81,6 +81,15 @@ type
   end;
 
   IFeatureBuilder<T: class, constructor> = interface
+    /// <summary>
+    /// Establece el nombre de la unit fuente para filtrado con U:.
+    /// </summary>
+    function InUnit(const UnitName: string): IFeatureBuilder<T>; overload;
+    /// <summary>
+    /// Establece la unit fuente extrayendo el nombre del QualifiedClassName.
+    /// Convenio: declarar TSourceUnit = class end; en cada unit de feature.
+    /// </summary>
+    function InUnit(AClass: TClass): IFeatureBuilder<T>; overload;
     function Background: IBackgroundBuilder<T>;
     function Scenario(const Description: string): IScenarioBuilder<T>;overload;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
@@ -202,6 +211,8 @@ type
     ['{025FBE2B-E0B2-47D2-B50A-65A381F119AC}']
     function GetTitle: string;
     function GetNarrative: string;
+    function GetSourceUnit: string;
+    procedure SetSourceUnit(const Value: string);
     function GetBackGround: IBackground;
     procedure SetBackGround(const Value: IBackground);
     function GetScenarios: TList<IScenario>;
@@ -210,6 +221,11 @@ type
     procedure Run(const TagMatcher: TTagMatcher = nil);
     property Title: string read GetTitle;
     property Narrative: string read GetNarrative;
+    /// <summary>
+    /// Nombre de la unit donde se define la Feature.
+    /// Se establece automáticamente o manualmente con .InUnit('nombre').
+    /// </summary>
+    property SourceUnit: string read GetSourceUnit write SetSourceUnit;
     property BackGround: IBackground read GetBackground write SetBackground;
     property Scenarios: TList<IScenario> read GetScenarios;
     property Rules: TList<IRule> read GetRules;
@@ -374,8 +390,11 @@ type
     FImplicitRule: IRule;  // Rule implícita para escenarios/background sin Rule explícita
     FTitle: string;
     FNarrative: string;
+    FSourceUnit: string;
     function GetTitle: string;
     function GetNarrative: string;
+    function GetSourceUnit: string;
+    procedure SetSourceUnit(const Value: string);
     function GetBackGround: IBackground;
     procedure SetBackGround(const Value: IBackground);
     function GetScenarios: TList<IScenario>;
@@ -388,6 +407,7 @@ type
     procedure Run(const TagMatcher: TTagMatcher = nil);reintroduce;
     property Title: string read GetTitle;
     property Narrative: string read GetNarrative;
+    property SourceUnit: string read GetSourceUnit write SetSourceUnit;
     property Background: IBackground read GetBackGround write SetBackGround;
     property Rules: TList<IRule> read GetRules;
     property ImplicitRule: IRule read FImplicitRule;  // Solo para builders
@@ -1111,6 +1131,16 @@ end;
 function TFeature<T>.GetNarrative: string;
 begin
   Result := FNarrative;
+end;
+
+function TFeature<T>.GetSourceUnit: string;
+begin
+  Result := FSourceUnit;
+end;
+
+procedure TFeature<T>.SetSourceUnit(const Value: string);
+begin
+  FSourceUnit := Value;
 end;
 
 constructor TFeature<T>.Create(const Description: string);

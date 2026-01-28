@@ -15,7 +15,9 @@ type
     FFeature: TFeature<T>;
   public
     constructor Create(const Feature: TFeature<T>);overload;
-    constructor Create(const Description: string);overload;
+    constructor Create(const Description: string; const SourceUnit: string = '');overload;
+    function InUnit(const UnitName: string): IFeatureBuilder<T>; overload;
+    function InUnit(AClass: TClass): IFeatureBuilder<T>; overload;
     function Background: IBackgroundBuilder<T>;
     function Scenario(const Description: string): IScenarioBuilder<T>;overload;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
@@ -25,8 +27,10 @@ type
   TFeatureBuilder = class
   strict private
     FDescription: string;
+    FSourceUnit: string;
   public
     constructor Create(const Description: string);
+    function InUnit(AClass: TClass): TFeatureBuilder;
     function UseWorld<T: class, constructor>: IFeatureBuilder<T>;
   end;
 
@@ -100,6 +104,8 @@ type
     constructor Create(const AFeature: TFeature<T>; const Description: string);overload;
     constructor Create(const ARule: TRule<T>);overload;  // Para continuar dentro de una Rule existente
     // IRuleBuilder + IFeatureBuilder
+    function InUnit(const UnitName: string): IFeatureBuilder<T>; overload;
+    function InUnit(AClass: TClass): IFeatureBuilder<T>; overload;
     function Background: IBackgroundBuilder<T>;
     function Scenario(const Description: string): IScenarioBuilder<T>;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
@@ -117,10 +123,34 @@ begin
   FFeature := Feature;
 end;
 
-constructor TFeatureBuilder<T>.Create(const Description: string);
+constructor TFeatureBuilder<T>.Create(const Description: string; const SourceUnit: string);
 begin
   inherited Create;
   FFeature := TFeature<T>.Create(Description);
+  if SourceUnit <> '' then
+    FFeature.SourceUnit := SourceUnit;
+end;
+
+function TFeatureBuilder<T>.InUnit(const UnitName: string): IFeatureBuilder<T>;
+begin
+  FFeature.SourceUnit := UnitName;
+  Result := Self;
+end;
+
+function TFeatureBuilder<T>.InUnit(AClass: TClass): IFeatureBuilder<T>;
+var
+  QualifiedName: string;
+  DotPos: Integer;
+begin
+  // AClass.QualifiedClassName devuelve 'UnitName.TSourceUnit'
+  // Extraemos la parte antes del último punto
+  QualifiedName := AClass.QualifiedClassName;
+  DotPos := QualifiedName.LastIndexOf('.');
+  if DotPos > 0 then
+    FFeature.SourceUnit := QualifiedName.Substring(0, DotPos)
+  else
+    FFeature.SourceUnit := QualifiedName;
+  Result := Self;
 end;
 
 function TFeatureBuilder<T>.Background: IBackgroundBuilder<T>;
@@ -152,11 +182,28 @@ constructor TFeatureBuilder.Create(const Description: string);
 begin
   inherited Create;
   FDescription := Description;
+  FSourceUnit := '';
+end;
+
+function TFeatureBuilder.InUnit(AClass: TClass): TFeatureBuilder;
+var
+  QualifiedName: string;
+  DotPos: Integer;
+begin
+  // AClass.QualifiedClassName devuelve 'UnitName.TSourceUnit'
+  // Extraemos la parte antes del último punto
+  QualifiedName := AClass.QualifiedClassName;
+  DotPos := QualifiedName.LastIndexOf('.');
+  if DotPos > 0 then
+    FSourceUnit := QualifiedName.Substring(0, DotPos)
+  else
+    FSourceUnit := QualifiedName;
+  Result := Self;
 end;
 
 function TFeatureBuilder.UseWorld<T>: IFeatureBuilder<T>;
 begin
-  Result := TFeatureBuilder<T>.Create(FDescription);
+  Result := TFeatureBuilder<T>.Create(FDescription, FSourceUnit);
   Free;
 end;
 
@@ -458,6 +505,26 @@ begin
   inherited Create;
   FRule := ARule;
   FFeature := ARule.Feature as TFeature<T>;
+end;
+
+function TRuleBuilder<T>.InUnit(const UnitName: string): IFeatureBuilder<T>;
+begin
+  FFeature.SourceUnit := UnitName;
+  Result := Self;
+end;
+
+function TRuleBuilder<T>.InUnit(AClass: TClass): IFeatureBuilder<T>;
+var
+  QualifiedName: string;
+  DotPos: Integer;
+begin
+  QualifiedName := AClass.QualifiedClassName;
+  DotPos := QualifiedName.LastIndexOf('.');
+  if DotPos > 0 then
+    FFeature.SourceUnit := QualifiedName.Substring(0, DotPos)
+  else
+    FFeature.SourceUnit := QualifiedName;
+  Result := Self;
 end;
 
 function TRuleBuilder<T>.Background: IBackgroundBuilder<T>;

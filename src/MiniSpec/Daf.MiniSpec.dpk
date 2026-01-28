@@ -42,6 +42,7 @@ contains
   Daf.MiniSpec.Utils in 'Daf.MiniSpec.Utils.pas',
   Daf.MiniSpec.Builders in 'Daf.MiniSpec.Builders.pas',
   Daf.MiniSpec.Types in 'Daf.MiniSpec.Types.pas',
-  Daf.MiniSpec.TagFilter in 'Daf.MiniSpec.TagFilter.pas';
+  Daf.MiniSpec.TagFilter in 'Daf.MiniSpec.TagFilter.pas',
+  Daf.MiniSpec.Filter in 'Daf.MiniSpec.Filter.pas';
 
 end.

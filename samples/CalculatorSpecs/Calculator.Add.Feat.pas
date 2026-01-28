@@ -1,6 +1,14 @@
 ﻿unit Calculator.Add.Feat;
 
 interface
+
+type
+  /// <summary>
+  /// Marker type for unit identification.
+  /// Convention: Use .InUnit(TSourceUnit) to enable U: filter.
+  /// </summary>
+  TSourceUnit = class end;
+
 implementation
 uses
   Calculator.Engine,
@@ -19,6 +27,7 @@ initialization
     I need to add and subtract numbers
     In order to complete my calculations
   ''')
+  .InUnit(TSourceUnit)
   .UseWorld<TCalculatorWorld>
   .Background
     .Given('I have a calculator', procedure(World: TCalculatorWorld)

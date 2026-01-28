@@ -76,7 +76,7 @@ uses
   System.IOUtils,
   System.TypInfo,
   Daf.MiniSpec.Utils,
-  Daf.MiniSpec.TagFilter;
+  Daf.MiniSpec.Filter;
 
 function MiniSpec: TMiniSpec;
 begin
@@ -334,7 +334,7 @@ end;
 
 procedure TMiniSpec.Run;
 var
-  TagFilter: TTagExpression;
+  SpecFilter: TSpecFilter;
   Matcher: TTagMatcher;
   Listener: ISpecListener;
 begin
@@ -401,14 +401,14 @@ begin
   WriteLn('+----------------------+');
   WriteLn;
 
-  TagFilter := TTagExpression.Parse(Tags);
+  SpecFilter := TSpecFilter.Parse(Tags);
   try
-    if TagFilter.IsEmpty then
+    if SpecFilter.IsEmpty then
       Matcher := nil
     else
       Matcher := function(const ATags: TSpecTags): Boolean
                  begin
-                   Result := TagFilter.Matches(ATags);
+                   Result := SpecFilter.MatchesTags(ATags);
                  end;
     FOptions.TagMatcher := Matcher;
 
@@ -420,7 +420,7 @@ begin
     // Usar el runner para reportar (notificará a todos los listeners)
     FRunner.Report(FFeatures, FOptions);
   finally
-    TagFilter.Free;
+    SpecFilter.Free;
   end;
   WriteLn(Format('Pass: %d | Fail: %d | Skip: %d | Total: %d Specs in %d Features | %d ms | at %s',
     [FRunner.PassCount, FRunner.FailCount, FRunner.SkipCount,
@@ -480,17 +480,17 @@ end;
 
 procedure TMiniSpec.QueryTags;
 var
-  TagFilter: TTagExpression;
+  SpecFilter: TSpecFilter;
   MatchCount: Integer;
 begin
   if FQueryExpr.IsEmpty then
   begin
-    WriteLn('Error: --query requires a tag expression');
-    WriteLn('Usage: --query "@tag1 and @tag2"');
+    WriteLn('Error: --query requires a filter expression');
+    WriteLn('Usage: --query "@tag1 and @tag2" or --query "F:Calculator"');
     Exit;
   end;
 
-  TagFilter := TTagExpression.Parse(FQueryExpr);
+  SpecFilter := TSpecFilter.Parse(FQueryExpr);
   try
     MatchCount := 0;
     WriteLn(Format('Query: %s', [FQueryExpr]));
@@ -500,29 +500,30 @@ begin
     begin
       var FeatureShown := False;
 
-      for var S in F.Scenarios do
-      begin
-        // Combinar tags de Feature y Scenario
-        var CombinedTags := F.Tags;
-        CombinedTags.Merge(S.Tags);
-
-        if TagFilter.Matches(CombinedTags) then
+      for var R in F.Rules do
+        for var S in R.Scenarios do
         begin
-          if not FeatureShown then
+          var Context := TSpecFilterContext.FromScenario(S);
+
+          if SpecFilter.Matches(Context) then
           begin
-            WriteLn('Feature: ' + F.Title);
-            FeatureShown := True;
+            if not FeatureShown then
+            begin
+              WriteLn('Feature: ' + F.Title);
+              FeatureShown := True;
+            end;
+            if (R.Kind = sikRule) then
+              WriteLn('  Rule: ' + R.Description);
+            WriteLn('    - ' + S.Description);
+            Inc(MatchCount);
           end;
-          WriteLn('  - ' + S.Description);
-          Inc(MatchCount);
         end;
-      end;
     end;
 
     WriteLn('');
     WriteLn(Format('Matching scenarios: %d', [MatchCount]));
   finally
-    TagFilter.Free;
+    SpecFilter.Free;
   end;
 end;
 
@@ -554,21 +555,27 @@ begin
   WriteLn('  gherkin-results:output=<dir>  Export .feature with results');
   WriteLn('  live[:port=N][,wait]    Live dashboard on localhost (default port: 8080)');
   WriteLn('');
-  WriteLn('Tag expressions:');
+  WriteLn('Filter expressions:');
   WriteLn('  @tag                    Scenarios with tag');
-  WriteLn('  ~@tag                   Scenarios without tag');
-  WriteLn('  @a and @b               Scenarios with both tags');
-  WriteLn('  @a or @b                Scenarios with either tag');
-  WriteLn('  (@a or @b) and ~@c      Complex expressions with parentheses');
+  WriteLn('  ~@tag                   Scenarios without tag (also: not @tag)');
+  WriteLn('  F:text                  Feature title contains text (case-insensitive)');
+  WriteLn('  S:text                  Scenario description contains text');
+  WriteLn('  R:text                  Rule description contains text');
+  WriteLn('  U:text                  Source unit name contains text');
+  WriteLn('  @a and @b               Match both conditions');
+  WriteLn('  @a or @b                Match either condition');
+  WriteLn('  (expr) and ~@c          Complex expressions with parentheses');
   WriteLn('');
   WriteLn('Examples:');
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -f "@unit"');
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -f "@integration and ~@slow"');
+  WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -f "F:Calculator"');
+  WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -f "U:WorldLifecycle"');
+  WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -f "S:division and @arithmetic"');
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -r html:output=report.html');
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -r live:port=9000');
-  WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -r live:wait');
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -t');
-  WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -q "@usesDB"');
+  WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -q "F:Calculator"');
 end;
 
 initialization
