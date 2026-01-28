@@ -12,6 +12,10 @@ uses
   Daf.MiniSpec.Types,
   Daf.MiniSpec.Builders,
   Daf.MiniSpec.Reporter,
+  Daf.MiniSpec.Reporter.Console,
+  Daf.MiniSpec.Reporter.Json,
+  Daf.MiniSpec.Reporter.Gherkin,
+  Daf.MiniSpec.Reporter.Live,
   Daf.MiniSpec.Expects;
 
 type
@@ -24,7 +28,7 @@ type
     const Version = '1.2.0';
   strict private
     FFeatures: TList<IFeature>;
-    FRunner: ISpecReporter;
+    FRunner: ISpecListener;
     FListeners: TList<ISpecListener>;
     FOptions: TMiniSpecOptions;
     FRunMode: TRunMode;
@@ -48,7 +52,7 @@ type
     class destructor ClasDestroy;
     {$REGION 'Fluent api for setup'}
     function Reporter(const Spec: string): TMiniSpec;overload;
-    function Runner: ISpecReporter;
+    function Runner: ISpecListener;
     function Tags: string;overload;
     procedure Tags(const Value: string);overload;
     function Pause: Boolean;overload;
@@ -195,19 +199,19 @@ var
   Port: Integer;
 begin
   if SameText(Name, 'console') then
-    Result := TConsoleListener.Create
+    Result := TConsoleReporter.Create
   else if SameText(Name, 'json') then
-    Result := TJsonListener.Create
+    Result := TJsonReporter.Create
   else if SameText(Name, 'gherkin') then
-    Result := TGherkinListener.Create(False)
+    Result := TGherkinReporter.Create(False)
   else if SameText(Name, 'gherkin-results') then
-    Result := TGherkinListener.Create(True)
+    Result := TGherkinReporter.Create(True)
   else if SameText(Name, 'live') then
   begin
     Port := 8080;
     if Options.ContainsKey('port') then
       Port := StrToIntDef(Options['port'], 8080);
-    Result := TLiveListener.Create(Port);
+    Result := TLiveReporter.Create(Port);
   end
   else
     raise Exception.CreateFmt('Unknown reporter name: %s', [Name]);
@@ -240,7 +244,7 @@ begin
   end;
 end;
 
-function TMiniSpec.Runner: ISpecReporter;
+function TMiniSpec.Runner: ISpecListener;
 begin
   Result := FRunner;
 end;
@@ -385,7 +389,7 @@ begin
       FListeners.Add(CreateListener(FOptions.ReporterName, RepOpts));
     end
     else
-      FListeners.Add(TConsoleListener.Create);
+      FListeners.Add(TConsoleReporter.Create);
   end;
 
   // Agregar todos los listeners al runner

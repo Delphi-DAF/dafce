@@ -38,7 +38,7 @@ type
   /// </summary>
   TSpecFilter = record
   private type
-    TTokenKind = (tkTag, tkFeature, tkScenario, tkRule, tkUnit, 
+    TTokenKind = (tkTag, tkFeature, tkScenario, tkRule, tkUnit,
                   tkNot, tkAnd, tkOr, tkLParen, tkRParen, tkEOF);
     TToken = record
       Kind: TTokenKind;
@@ -89,7 +89,7 @@ begin
   Result.RuleDescription := '';
   Result.FeatureTitle := '';
   Result.SourceUnit := '';
-  
+
   // Navegar hacia arriba para obtener Rule y Feature
   Parent := Scenario.Parent;
   while Assigned(Parent) do
