@@ -145,14 +145,26 @@ end;
 procedure TJsonReporter.OnEndReport(const Context: IRunContext);
 var
   OutputFile: string;
-  Root: TJSONObject;
+  Root, SuiteObj: TJSONObject;
 begin
   CloseCurrentFeature;
 
   Root := TJSONObject.Create;
   try
-    Root.AddPair('features', FFeatures);
-    FFeatures := nil; // Root now owns FFeatures
+    // Add suite info if available
+    if Assigned(Context.Suite) and not Context.Suite.Title.IsEmpty then
+    begin
+      SuiteObj := TJSONObject.Create;
+      SuiteObj.AddPair('title', Context.Suite.Title);
+      SuiteObj.AddPair('features', FFeatures);
+      FFeatures := nil;
+      Root.AddPair('suite', SuiteObj);
+    end
+    else
+    begin
+      Root.AddPair('features', FFeatures);
+      FFeatures := nil; // Root now owns FFeatures
+    end;
     Root.AddPair('passCount', TJSONNumber.Create(Context.ReportCounters.PassCount));
     Root.AddPair('failCount', TJSONNumber.Create(Context.ReportCounters.FailCount));
     Root.AddPair('skipCount', TJSONNumber.Create(Context.ReportCounters.SkipCount));

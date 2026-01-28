@@ -27,7 +27,7 @@ type
   public
     const Version = '1.2.0';
   strict private
-    FFeatures: TList<IFeature>;
+    FSuite: ISpecSuite;
     FRunner: ISpecRunner;
     FListeners: TList<ISpecListener>;
     FOptions: TMiniSpecOptions;
@@ -59,9 +59,25 @@ type
     function Pause(const Value: Boolean): TMiniSpec;overload;
     function DryRun: Boolean;overload;
     function DryRun(const Value: Boolean): TMiniSpec;overload;
+    /// <summary>
+    /// Sets the title/description of the test suite.
+    /// </summary>
+    function Category(const Name: string): TMiniSpec;
+    /// <summary>
+    /// Adds a Before hook that runs once before all features.
+    /// </summary>
+    function Before(const Description: string; Hook: THookProc): TMiniSpec;
+    /// <summary>
+    /// Adds an After hook that runs once after all features.
+    /// </summary>
+    function After(const Description: string; Hook: THookProc): TMiniSpec;
     {$ENDREGION}
     procedure Register(Feature: IFeature);
     procedure Run;
+    /// <summary>
+    /// Returns the test suite containing all features.
+    /// </summary>
+    function Suite: ISpecSuite;
  end;
 
 function Expect(const Value: Variant): TExpect; overload;
@@ -134,7 +150,7 @@ end;
 constructor TMiniSpec.Create;
 begin
   inherited;
-  FFeatures := TList<IFeature>.Create;
+  FSuite := TSpecSuite.Create;
   FOptions := TMiniSpecOptions.Create;
   FRunner := TSpecRunner.Create;
   FListeners := TList<ISpecListener>.Create;
@@ -147,7 +163,7 @@ begin
   FRunner := nil;  // Release runner first, it has refs to listeners
   FListeners.Free;
   FOptions.Free;
-  FFeatures.Free;
+  FSuite := nil;  // Release via ARC
   inherited;
 end;
 
@@ -156,9 +172,32 @@ begin
   FInstance.Free;
 end;
 
+function TMiniSpec.Suite: ISpecSuite;
+begin
+  Result := FSuite;
+end;
+
+function TMiniSpec.Category(const Name: string): TMiniSpec;
+begin
+  Result := Self;
+  FSuite.Title := Name;
+end;
+
+function TMiniSpec.Before(const Description: string; Hook: THookProc): TMiniSpec;
+begin
+  Result := Self;
+  FSuite.AddBeforeHook(Description, Hook);
+end;
+
+function TMiniSpec.After(const Description: string; Hook: THookProc): TMiniSpec;
+begin
+  Result := Self;
+  FSuite.AddAfterHook(Description, Hook);
+end;
+
 procedure TMiniSpec.Register(Feature: IFeature);
 begin
-  FFeatures.Add(Feature);
+  FSuite.AddFeature(Feature);
 end;
 
 class procedure TMiniSpec.ParseReporterSpec(const Spec: string; out Name: string; out Options: TReporterOptions);
@@ -419,13 +458,20 @@ begin
                  end;
     FOptions.SpecMatcher := Matcher;
 
-    // Ejecutar TODAS las Features - el conteo debe reflejar el total definido
-    // Cada Feature/Rule/Scenario decide si se ejecuta o marca como Skip
-    for var F in FFeatures do
-      F.Run(Matcher);
+    // Run suite-level Before hooks
+    FSuite.RunBeforeHooks;
+    try
+      // Ejecutar TODAS las Features - el conteo debe reflejar el total definido
+      // Cada Feature/Rule/Scenario decide si se ejecuta o marca como Skip
+      for var F in FSuite.Features do
+        F.Run(Matcher);
+    finally
+      // Run suite-level After hooks
+      FSuite.RunAfterHooks;
+    end;
 
     // Usar el runner para reportar (notificará a todos los listeners)
-    FRunner.Report(FFeatures, FOptions);
+    FRunner.Report(FSuite, FOptions);
   finally
     SpecFilter.Free;
   end;
@@ -464,7 +510,7 @@ begin
     FeatureCount := 0;
     ScenarioCount := 0;
 
-    for var F in FFeatures do
+    for var F in FSuite.Features do
     begin
       Inc(FeatureCount);
       CollectTags(F.Tags);
@@ -503,7 +549,7 @@ begin
     WriteLn(Format('Query: %s', [FQueryExpr]));
     WriteLn('');
 
-    for var F in FFeatures do
+    for var F in FSuite.Features do
     begin
       var FeatureShown := False;
 

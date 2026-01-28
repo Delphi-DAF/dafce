@@ -21,6 +21,7 @@ type
     FCurrentFeatureName: string;
     FOutputDir: string;
     FFilesWritten: TStringList;
+    FSuiteTitle: string;
     procedure AddLine(const Text: string);
     procedure AddTags(const Tags: TSpecTags);
     function GetGherkinKeyword(Kind: TSpecItemKind): string;
@@ -36,6 +37,7 @@ type
     procedure Configure(const Options: TReporterOptions);override;
     function GetContent: string;override;
     function GetFileExt: string;override;
+    procedure OnBeginSuite(const Context: IRunContext; const Suite: ISpecSuite);override;
     procedure OnBeginReport(const Context: IRunContext);override;
     procedure OnEndReport(const Context: IRunContext);override;
     procedure OnItem(const Context: IRunContext; const Item: ISpecItem);override;
@@ -200,30 +202,30 @@ var
   Line: string;
 begin
   if Table = nil then Exit;
-  
+
   // Calculate column widths
   SetLength(ColWidths, Table.ColCount);
   for I := 0 to Table.ColCount - 1 do
     ColWidths[I] := 0;
-  
+
   // Check headers
   for I := 0 to High(Table.Headers) do
     if Length(Table.Headers[I]) > ColWidths[I] then
       ColWidths[I] := Length(Table.Headers[I]);
-  
+
   // Check data rows
   for Row in Table.Rows do
     for J := 0 to High(Row) do
       if Row[J].ToString.Length > ColWidths[J] then
         ColWidths[J] := Row[J].ToString.Length;
-  
+
   // Output header row
   Line := '|';
   for I := 0 to High(Table.Headers) do
     Line := Line + ' ' + Table.Headers[I].PadRight(ColWidths[I]) + ' |';
   AddLine(Line);
-  
-  // Output data rows  
+
+  // Output data rows
   for Row in Table.Rows do
   begin
     Line := '|';
@@ -231,6 +233,11 @@ begin
       Line := Line + ' ' + Row[J].ToString.PadRight(ColWidths[J]) + ' |';
     AddLine(Line);
   end;
+end;
+
+procedure TGherkinReporter.OnBeginSuite(const Context: IRunContext; const Suite: ISpecSuite);
+begin
+  FSuiteTitle := Suite.Title;
 end;
 
 procedure TGherkinReporter.OnBeginReport(const Context: IRunContext);
@@ -276,6 +283,9 @@ begin
       begin
         FCurrentFeatureName := Feature.Title;
         FIndent := 0;
+        // Add suite comment if available
+        if not FSuiteTitle.IsEmpty then
+          AddLine('# Suite: ' + FSuiteTitle);
         AddTags(Item.Tags);
         AddLine('Feature: ' + Feature.Title);
         if Feature.Narrative <> '' then

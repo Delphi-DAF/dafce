@@ -90,6 +90,7 @@ type
   /// </summary>
   IRunContext = interface
     ['{A1B2C3D4-E5F6-7A8B-9C0D-1E2F3A4B5C6D}']
+    function GetSuite: ISpecSuite;
     function GetReportCounters: TSpecCounters;
     function GetFeatureCounters: TSpecCounters;
     function GetScenarioCounters: TSpecCounters;
@@ -101,6 +102,7 @@ type
     function GetOptions: TMiniSpecOptions;
     function GetCompletedAt: TDateTime;
     function GetErrorDetail(const RunInfo: TSpecRunInfo): string;
+    property Suite: ISpecSuite read GetSuite;
     property ReportCounters: TSpecCounters read GetReportCounters;
     property FeatureCounters: TSpecCounters read GetFeatureCounters;
     property ScenarioCounters: TSpecCounters read GetScenarioCounters;
@@ -121,6 +123,8 @@ type
     ['{F8A1B2C3-D4E5-6F7A-8B9C-0D1E2F3A4B5C}']
     procedure Configure(const Options: TReporterOptions);
     function ShowHelp: Boolean;
+    procedure OnBeginSuite(const Context: IRunContext; const Suite: ISpecSuite);
+    procedure OnEndSuite(const Context: IRunContext; const Suite: ISpecSuite; const Counters: TSpecCounters);
     procedure OnBeginReport(const Context: IRunContext);
     procedure OnEndReport(const Context: IRunContext);
     procedure OnBeginFeature(const Context: IRunContext; const Feature: IFeature);
@@ -146,7 +150,7 @@ type
     procedure Configure(const Options: TReporterOptions);
     function ShowHelp: Boolean;
     procedure AddListener(const Listener: ISpecListener);
-    procedure Report(Features: TList<IFeature>; Options: TMiniSpecOptions);
+    procedure Report(Suite: ISpecSuite; Options: TMiniSpecOptions);
     function UseConsole: Boolean;
     property PassCount: Cardinal read GetPassCount;
     property FailCount: Cardinal read GetFailCount;
@@ -168,6 +172,8 @@ type
     destructor Destroy; override;
     procedure Configure(const Options: TReporterOptions); virtual;
     function ShowHelp: Boolean; virtual;
+    procedure OnBeginSuite(const Context: IRunContext; const Suite: ISpecSuite); virtual;
+    procedure OnEndSuite(const Context: IRunContext; const Suite: ISpecSuite; const Counters: TSpecCounters); virtual;
     procedure OnBeginReport(const Context: IRunContext); virtual;
     procedure OnEndReport(const Context: IRunContext); virtual;
     procedure OnBeginFeature(const Context: IRunContext; const Feature: IFeature); virtual;
@@ -185,6 +191,8 @@ type
   TSpecRunner = class(TInterfacedObject, ISpecRunner, IRunContext)
   strict private
     FFeatureCount: Integer;
+    // Suite
+    FSuite: ISpecSuite;
     // Counters at different levels
     FReportCounters: TSpecCounters;
     FFeatureCounters: TSpecCounters;
@@ -204,6 +212,7 @@ type
     // Listeners
     FListeners: TList<ISpecListener>;
     // IRunContext getters
+    function IRunContext.GetSuite = GetSuiteImpl;
     function IRunContext.GetReportCounters = GetReportCountersImpl;
     function IRunContext.GetFeatureCounters = GetFeatureCountersImpl;
     function IRunContext.GetScenarioCounters = GetScenarioCountersImpl;
@@ -217,6 +226,7 @@ type
     function IRunContext.GetErrorDetail = GetErrorDetailImpl;
   protected
     // IRunContext implementation
+    function GetSuiteImpl: ISpecSuite;
     function GetReportCountersImpl: TSpecCounters;
     function GetFeatureCountersImpl: TSpecCounters;
     function GetScenarioCountersImpl: TSpecCounters;
@@ -229,6 +239,8 @@ type
     function GetCompletedAtImpl: TDateTime;
     function GetErrorDetailImpl(const RunInfo: TSpecRunInfo): string;
     // Listener notifications
+    procedure NotifyBeginSuite(const Suite: ISpecSuite);
+    procedure NotifyEndSuite(const Suite: ISpecSuite; const Counters: TSpecCounters);
     procedure NotifyBeginReport;
     procedure NotifyEndReport;
     procedure NotifyBeginFeature(const Feature: IFeature);
@@ -294,7 +306,7 @@ type
     function ShowHelp: Boolean;virtual;
     function UseConsole: Boolean;virtual;
     procedure BeginReport;virtual;
-    procedure Report(Features: TList<IFeature>; Options: TMiniSpecOptions);overload;
+    procedure Report(Suite: ISpecSuite; Options: TMiniSpecOptions);overload;
     procedure EndReport;virtual;
     property PassCount: Cardinal read GetPassCount;
     property FailCount: Cardinal read GetFailCount;
@@ -346,6 +358,16 @@ begin
   Result := Default;
   if Assigned(FCliOptions) and FCliOptions.ContainsKey(Key) then
     Result := FCliOptions[Key];
+end;
+
+procedure TCustomListener.OnBeginSuite(const Context: IRunContext; const Suite: ISpecSuite);
+begin
+  // Empty - override in subclasses
+end;
+
+procedure TCustomListener.OnEndSuite(const Context: IRunContext; const Suite: ISpecSuite; const Counters: TSpecCounters);
+begin
+  // Empty - override in subclasses
 end;
 
 procedure TCustomListener.OnBeginReport(const Context: IRunContext);
@@ -622,6 +644,11 @@ begin
 end;
 
 // IRunContext implementation
+function TSpecRunner.GetSuiteImpl: ISpecSuite;
+begin
+  Result := FSuite;
+end;
+
 function TSpecRunner.GetReportCountersImpl: TSpecCounters;
 begin
   Result := FReportCounters;
@@ -678,6 +705,22 @@ begin
 end;
 
 // Listener notifications
+procedure TSpecRunner.NotifyBeginSuite(const Suite: ISpecSuite);
+var
+  Listener: ISpecListener;
+begin
+  for Listener in FListeners do
+    Listener.OnBeginSuite(Self as IRunContext, Suite);
+end;
+
+procedure TSpecRunner.NotifyEndSuite(const Suite: ISpecSuite; const Counters: TSpecCounters);
+var
+  Listener: ISpecListener;
+begin
+  for Listener in FListeners do
+    Listener.OnEndSuite(Self as IRunContext, Suite, Counters);
+end;
+
 procedure TSpecRunner.NotifyBeginReport;
 var
   i: Integer;
@@ -1069,13 +1112,16 @@ begin
   end;
 end;
 
-procedure TSpecRunner.Report(Features: TList<IFeature>; Options: TMiniSpecOptions);
+procedure TSpecRunner.Report(Suite: ISpecSuite; Options: TMiniSpecOptions);
 begin
   FOptions := Options;
+  FSuite := Suite;
+  NotifyBeginSuite(Suite);
   BeginReport;
-  for var F in Features do
+  for var F in Suite.Features do
     Report(F);
   EndReport;
+  NotifyEndSuite(Suite, FReportCounters);
 end;
 
 function TSpecRunner.UseConsole: Boolean;

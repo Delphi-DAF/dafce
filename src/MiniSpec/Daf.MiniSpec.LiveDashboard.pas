@@ -90,6 +90,11 @@ const
       </div>
     </div>
 
+    <!-- Suite Title -->
+    <div x-show="suiteTitle" class="mb-4 text-xl text-gray-300 font-semibold">
+      Suite: <span x-text="suiteTitle"></span>
+    </div>
+
     <!-- Progress Bar -->
     <div class="mb-4 bg-gray-800 rounded-lg p-4">
       <div class="w-full bg-gray-700 rounded-full h-4 overflow-hidden">
@@ -387,6 +392,7 @@ const
     function dashboard() {
       return {
         connected: false,
+        suiteTitle: '',
         features: [],
         currentFeature: null,
         currentFeatureNarrative: null,
@@ -553,6 +559,9 @@ const
 
         handleEvent(data) {
           switch(data.event) {
+            case 'suite:start':
+              this.suiteTitle = data.title || '';
+              break;
             case 'report:start':
               this.features = [];
               this.pass = 0;

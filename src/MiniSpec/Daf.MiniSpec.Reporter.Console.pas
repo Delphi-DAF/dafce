@@ -24,6 +24,7 @@ type
     function Level2Margin(const Level: Byte): string;
   public
     function UseConsole: Boolean;override;
+    procedure OnBeginSuite(const Context: IRunContext; const Suite: ISpecSuite);override;
     procedure OnBeginReport(const Context: IRunContext);override;
     procedure OnEndReport(const Context: IRunContext);override;
     procedure OnItem(const Context: IRunContext; const Item: ISpecItem);override;
@@ -127,6 +128,12 @@ begin
       Line := Line + Format('%-*s | ', [ColWidths[J], Row[J].ToString]);
     OutputLn(Level, Line);
   end;
+end;
+
+procedure TConsoleReporter.OnBeginSuite(const Context: IRunContext; const Suite: ISpecSuite);
+begin
+  if not Suite.Title.IsEmpty then
+    OutputLn(0, 'Suite: ' + Suite.Title);
 end;
 
 procedure TConsoleReporter.OnBeginReport(const Context: IRunContext);

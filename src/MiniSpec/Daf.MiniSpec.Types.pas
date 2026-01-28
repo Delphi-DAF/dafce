@@ -12,7 +12,7 @@ type
   TStepProc<T> = reference to procedure(World: T);
   THookProc = reference to procedure;  // For Before/After hooks (no World)
   TExamplesTable = TArray<TArray<TValue>>;
-  TSpecItemKind = (sikFeature, sikImplicitRule, sikRule, sikBackground, sikScenario, sikScenarioOutline, sikExample, sikExampleInit, sikGiven, sikWhen, sikThen, sikAnd, sikBut, sikBefore, sikAfter);
+  TSpecItemKind = (sikSuite, sikFeature, sikImplicitRule, sikRule, sikBackground, sikScenario, sikScenarioOutline, sikExample, sikExampleInit, sikGiven, sikWhen, sikThen, sikAnd, sikBut, sikBefore, sikAfter);
   TLastStepKind = (lskNone, lskGiven, lskWhen, lskThen);
   TSpecRunState =  (srsPrepared, srsSkiped, srsRunning, srsFinished);
   TSpecRunResult =  (srrNone, srrSuccess, srrFail, srrError);
@@ -289,6 +289,40 @@ type
   end;
 
   /// <summary>
+  /// Suite is the root node containing all Features.
+  /// Provides global setup/teardown and aggregated counters.
+  /// </summary>
+  ISpecSuite = interface(ISpecItem)
+    ['{A1B2C3D4-E5F6-7A8B-9C0D-1E2F3A4B5C6D}']
+    function GetTitle: string;
+    procedure SetTitle(const Value: string);
+    function GetFeatures: TList<IFeature>;
+    function GetBeforeHooks: TList<IHook>;
+    function GetAfterHooks: TList<IHook>;
+    procedure AddFeature(const Feature: IFeature);
+    procedure AddBeforeHook(const Description: string; const Hook: THookProc);
+    procedure AddAfterHook(const Description: string; const Hook: THookProc);
+    procedure RunBeforeHooks;
+    procedure RunAfterHooks;
+    /// <summary>
+    /// Title of the test suite (set via MiniSpec.Category).
+    /// </summary>
+    property Title: string read GetTitle write SetTitle;
+    /// <summary>
+    /// All features registered in this suite.
+    /// </summary>
+    property Features: TList<IFeature> read GetFeatures;
+    /// <summary>
+    /// Hooks that run once before all features in the suite.
+    /// </summary>
+    property BeforeHooks: TList<IHook> read GetBeforeHooks;
+    /// <summary>
+    /// Hooks that run once after all features in the suite.
+    /// </summary>
+    property AfterHooks: TList<IHook> read GetAfterHooks;
+  end;
+
+  /// <summary>
   /// Rule agrupa escenarios relacionados dentro de una Feature.
   /// En Gherkin: Feature > Rule > Scenario
   /// </summary>
@@ -506,6 +540,35 @@ type
     property BeforeHooks: TList<IHook> read GetBeforeHooks;
     property AfterHooks: TList<IHook> read GetAfterHooks;
     property ImplicitRule: IRule read FImplicitRule;  // Solo para builders
+  end;
+
+  /// <summary>
+  /// Suite is the root node containing all Features.
+  /// Provides global setup/teardown for the entire test run.
+  /// </summary>
+  TSpecSuite = class(TSpecItem, ISpecSuite)
+  strict private
+    FTitle: string;
+    FFeatures: TList<IFeature>;
+    FBeforeHooks: TList<IHook>;
+    FAfterHooks: TList<IHook>;
+    function GetTitle: string;
+    procedure SetTitle(const Value: string);
+    function GetFeatures: TList<IFeature>;
+    function GetBeforeHooks: TList<IHook>;
+    function GetAfterHooks: TList<IHook>;
+  public
+    constructor Create(const ATitle: string = '');
+    destructor Destroy; override;
+    procedure AddFeature(const Feature: IFeature);
+    procedure AddBeforeHook(const Description: string; const Hook: THookProc);
+    procedure AddAfterHook(const Description: string; const Hook: THookProc);
+    procedure RunBeforeHooks;
+    procedure RunAfterHooks;
+    property Title: string read GetTitle write SetTitle;
+    property Features: TList<IFeature> read GetFeatures;
+    property BeforeHooks: TList<IHook> read GetBeforeHooks;
+    property AfterHooks: TList<IHook> read GetAfterHooks;
   end;
 
   /// <summary>
@@ -1453,6 +1516,77 @@ end;
 procedure TFeature<T>.SetBackGround(const Value: IBackground);
 begin
   FImplicitRule.BackGround := Value;
+end;
+
+{ TSpecSuite }
+
+constructor TSpecSuite.Create(const ATitle: string = '');
+begin
+  inherited Create(sikSuite, nil, ATitle);
+  FTitle := ATitle;
+  FFeatures := TList<IFeature>.Create;
+  FBeforeHooks := TList<IHook>.Create;
+  FAfterHooks := TList<IHook>.Create;
+end;
+
+destructor TSpecSuite.Destroy;
+begin
+  FAfterHooks.Free;
+  FBeforeHooks.Free;
+  FFeatures.Free;
+  inherited;
+end;
+
+function TSpecSuite.GetTitle: string;
+begin
+  Result := FTitle;
+end;
+
+procedure TSpecSuite.SetTitle(const Value: string);
+begin
+  FTitle := Value;
+end;
+
+function TSpecSuite.GetFeatures: TList<IFeature>;
+begin
+  Result := FFeatures;
+end;
+
+function TSpecSuite.GetBeforeHooks: TList<IHook>;
+begin
+  Result := FBeforeHooks;
+end;
+
+function TSpecSuite.GetAfterHooks: TList<IHook>;
+begin
+  Result := FAfterHooks;
+end;
+
+procedure TSpecSuite.AddFeature(const Feature: IFeature);
+begin
+  FFeatures.Add(Feature);
+end;
+
+procedure TSpecSuite.AddBeforeHook(const Description: string; const Hook: THookProc);
+begin
+  FBeforeHooks.Add(THook.Create(sikBefore, Self, Description, Hook));
+end;
+
+procedure TSpecSuite.AddAfterHook(const Description: string; const Hook: THookProc);
+begin
+  FAfterHooks.Add(THook.Create(sikAfter, Self, Description, Hook));
+end;
+
+procedure TSpecSuite.RunBeforeHooks;
+begin
+  for var Hook in FBeforeHooks do
+    Hook.Execute;
+end;
+
+procedure TSpecSuite.RunAfterHooks;
+begin
+  for var Hook in FAfterHooks do
+    Hook.Execute;
 end;
 
 { TRule<T> }

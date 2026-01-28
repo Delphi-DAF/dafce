@@ -42,6 +42,7 @@ type
     function ShowHelp: Boolean;override;
     function UseConsole: Boolean;override;
     function GetContent: string;override;
+    procedure OnBeginSuite(const Context: IRunContext; const Suite: ISpecSuite);override;
     procedure OnBeginReport(const Context: IRunContext);override;
     procedure OnEndReport(const Context: IRunContext);override;
     procedure OnBeginFeature(const Context: IRunContext; const Feature: IFeature);override;
@@ -290,6 +291,20 @@ begin
     AResponseInfo.ContentType := 'text/html; charset=utf-8';
     AResponseInfo.ContentText := StringReplace(LIVE_DASHBOARD_HTML,
       '{{MINISPEC_VERSION}}', TMiniSpec.Version, [rfReplaceAll]);
+  end;
+end;
+
+procedure TLiveReporter.OnBeginSuite(const Context: IRunContext; const Suite: ISpecSuite);
+var
+  Data: TJSONObject;
+begin
+  if Suite.Title.IsEmpty then Exit;
+  Data := TJSONObject.Create;
+  try
+    Data.AddPair('title', Suite.Title);
+    BroadcastEvent(BuildEventJson('suite:start', Data));
+  finally
+    Data.Free;
   end;
 end;
 

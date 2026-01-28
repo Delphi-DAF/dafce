@@ -10,6 +10,12 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
 ### Added
 
+- **MiniSpec**: SpecSuite - root node containing all Features with title and hooks
+- **MiniSpec**: `Category(Title)` - fluent API to set Suite title
+- **MiniSpec**: `Before(Description, Hook)` / `After(Description, Hook)` - Suite-level hooks
+- **MiniSpec**: `ISpecSuite` interface and `TSpecSuite` implementation
+- **MiniSpec**: Suite events: `OnBeginSuite` / `OnEndSuite` for listeners
+- **MiniSpec**: All reporters display Suite title (Console, JSON, Gherkin comment, Live header)
 - **MiniSpec**: DataTables support - inline data tables for steps (Gherkin standard)
 - **MiniSpec**: `TDataTable` type and `TDataTableObj` wrapper with Row/Cell/Headers access
 - **MiniSpec**: All reporters display DataTables (Console ASCII, JSON array, Gherkin pipes)
