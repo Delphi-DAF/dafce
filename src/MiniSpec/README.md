@@ -162,6 +162,113 @@ type
 | `Step` | El step que se está ejecutando |
 | `DataTable` | La tabla de datos del step (nil si no tiene) |
 
+### FeatureContext: Estado Compartido entre Escenarios
+
+A diferencia del **World** (que se crea nuevo para cada escenario), el **FeatureContext** permite compartir estado entre todos los escenarios de una Feature. Es útil para recursos costosos de crear:
+
+```pascal
+type
+  TSharedContext = class
+  public
+    Connection: TDbConnection;
+    Cache: TDictionary<string, TObject>;
+  end;
+
+  TScenarioWorld = class
+  private
+    [Inject] FShared: TSharedContext;  // Inyectado automáticamente
+  public
+    LocalData: string;
+    property Shared: TSharedContext read FShared;
+  end;
+
+Feature('Database operations')
+  .ShareContext<TSharedContext>  // Crea UNA instancia para toda la Feature
+  .UseContext<TScenarioWorld>    // Cada escenario recibe su propio World
+  
+  .Scenario('First query')
+    .When('query data', procedure(W: TScenarioWorld)
+      begin
+        // W.Shared apunta al mismo TSharedContext
+        W.Shared.Cache.Add('key', SomeObject);
+      end)
+  
+  .Scenario('Second query')
+    .When('use cached data', procedure(W: TScenarioWorld)
+      begin
+        // Accede a datos creados en el escenario anterior
+        var Obj := W.Shared.Cache['key'];
+      end)
+```
+
+**Ciclo de vida**:
+- El FeatureContext se crea al inicio de la Feature
+- Se destruye al finalizar la Feature
+- Cada ScenarioWorld recibe la inyección del mismo FeatureContext
+
+### Inyección de Dependencias con [Inject]
+
+MiniSpec incluye un sistema ligero de inyección de dependencias para propiedades marcadas con `[Inject]`.
+
+**Uso básico** (inyección automática del FeatureContext):
+
+```pascal
+uses
+  Daf.MiniSpec,
+  Daf.MiniSpec.Injection;  // Para el atributo [Inject]
+
+type
+  TFeatureContext = class
+  public
+    SharedValue: Integer;
+  end;
+
+  TWorld = class
+  private
+    [Inject] FCtx: TFeatureContext;  // Inyectado automáticamente
+  public
+    property Ctx: TFeatureContext read FCtx;
+  end;
+
+Feature('...')
+  .ShareContext<TFeatureContext>  // Registra TFeatureContext en el Injector
+  .UseContext<TWorld>             // Al crear World, inyecta FCtx
+```
+
+**Servicios personalizados a nivel de Suite**:
+
+```pascal
+MiniSpec
+  .Before('Setup services', procedure
+    begin
+      TInjectorService.Register(TDatabaseMock.Create);
+      TInjectorService.Register(THttpClientMock.Create);
+    end)
+  .After('Cleanup', procedure
+    begin
+      TInjectorService.Clear;  // Libera todos los servicios
+    end);
+```
+
+**API del TInjectorService**:
+
+| Método | Descripción |
+|--------|-------------|
+| `Register(Instance)` | Registra un servicio (la clase del objeto es la clave) |
+| `Unregister(Instance)` | Elimina el registro de un servicio |
+| `Resolve(AClass)` | Obtiene el servicio registrado para esa clase |
+| `Resolve<T>` | Versión genérica de Resolve |
+| `InjectInto(Target)` | Inyecta servicios en propiedades marcadas con `[Inject]` |
+| `Clear` | Libera y elimina todos los servicios registrados |
+
+**Errores de inyección**:
+
+Si una propiedad marcada con `[Inject]` no puede ser inyectada, se lanza `EInjectionError`:
+
+- Propiedad no es de tipo clase
+- Propiedad no tiene setter
+- No hay servicio registrado compatible con el tipo
+
 ### Vocabulario Gherkin
 
 | Gherkin | MiniSpec | Nota |
@@ -567,3 +674,4 @@ Las opciones de línea de comandos tienen prioridad sobre el archivo.
 | `Daf.MiniSpec.Filter.pas` | Parser de expresiones de filtro |
 | `Daf.MiniSpec.TagFilter.pas` | Parser legacy de tags (deprecated) |
 | `Daf.MiniSpec.Utils.pas` | Utilidades |
+| `Daf.MiniSpec.Injection.pas` | Inyección de dependencias (`[Inject]`, `TInjectorService`) |
