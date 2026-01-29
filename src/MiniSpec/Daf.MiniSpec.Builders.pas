@@ -34,7 +34,10 @@ type
   public
     constructor Create(const Description: string);
     function Category(AClass: TClass): TFeatureBuilder;
-    function UseWorld<T: class, constructor>: IFeatureBuilder<T>;
+    /// <summary>Define el tipo de contexto (World) para los escenarios de esta Feature</summary>
+    function UseContext<T: class, constructor>: IFeatureBuilder<T>;
+    /// <summary>Deprecated: Use UseContext instead</summary>
+    function UseWorld<T: class, constructor>: IFeatureBuilder<T>; deprecated 'Use UseContext instead';
   end;
 
   TBackgroundBuilder<T: class, constructor> = class(TInterfacedObject, IBackgroundBuilder<T>)
@@ -224,10 +227,15 @@ begin
   Result := Self;
 end;
 
-function TFeatureBuilder.UseWorld<T>: IFeatureBuilder<T>;
+function TFeatureBuilder.UseContext<T>: IFeatureBuilder<T>;
 begin
   Result := TFeatureBuilder<T>.Create(FDescription, FCategory);
   Free;
+end;
+
+function TFeatureBuilder.UseWorld<T>: IFeatureBuilder<T>;
+begin
+  Result := UseContext<T>;
 end;
 
 { TBackgroundBuilder<T> }

@@ -130,7 +130,7 @@ World Lifecycle @meta @lifecycle
   So I can ensure there are no memory leaks
 ''')
 
-.UseWorld<TLifecycleWorld>
+.UseContext<TLifecycleWorld>
 
 // === Scenarios directly in feature (no rule) ===
 .Scenario('Direct scenario without rule')

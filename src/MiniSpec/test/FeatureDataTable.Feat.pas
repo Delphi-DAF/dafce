@@ -39,7 +39,7 @@ Feature DataTable @datatable
   So I can provide structured test data concisely
 ''')
 
-.UseWorld<TDataTableWorld>
+.UseContext<TDataTableWorld>
 
 .Scenario('Access DataTable from step via SpecContext')
   .Given('the following users:',

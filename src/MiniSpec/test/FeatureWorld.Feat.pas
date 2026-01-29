@@ -38,7 +38,7 @@ FeatureWorld Demo @meta
   So I can implement advanced test patterns
 ''')
 
-.UseWorld<TMyWorld>
+.UseContext<TMyWorld>
 
 .Scenario('Access step info via global SpecContext')
   .Given('I have a simple World class', procedure(World: TMyWorld)

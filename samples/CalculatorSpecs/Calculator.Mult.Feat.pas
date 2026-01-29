@@ -19,7 +19,7 @@ initialization
     I need to multiply and divide numbers
     In order to complete my calculations
   ''')
-  .UseWorld<TCalculatorWorld>
+  .UseContext<TCalculatorWorld>
   .Background
     .Given('I have a calculator', procedure(World: TCalculatorWorld)
     begin

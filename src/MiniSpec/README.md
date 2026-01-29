@@ -60,7 +60,7 @@ Mi Feature                         // <-- Primera línea = Título
   @unit @mi-tag                       // <-- Tags al final, en línea propia
 ''')
 
-.UseWorld<TMyWorld>
+.UseContext<TMyWorld>
 
 .Background
   .Given('una precondición común', procedure(Ctx: TMyWorld)
@@ -104,66 +104,63 @@ type
   end;
 
 Feature('...')
-.UseWorld<TCalculatorWorld>  // Cada escenario recibe un TCalculatorWorld nuevo
+.UseContext<TCalculatorWorld>  // Cada escenario recibe un TCalculatorWorld nuevo
 ```
 
 **Reutilización**: Un mismo World puede usarse en varias features relacionadas. Sin embargo, si las features son muy distintas, es mejor definir Worlds separados para mantener cada contexto limpio y enfocado:
 
 ```pascal
 // Calculator.Add.Feat.pas
-Feature('Suma').UseWorld<TCalculatorWorld>
+Feature('Suma').UseContext<TCalculatorWorld>
 
 // Login.Feat.pas
-Feature('Login').UseWorld<TLoginWorld>
+Feature('Login').UseContext<TLoginWorld>
 
 // Report.Feat.pas
-Feature('Reportes').UseWorld<TReportWorld>
+Feature('Reportes').UseContext<TReportWorld>
 ```
 
-### TFeatureWorld: Acceso al Contexto de Ejecución
+### SpecContext: Acceso al Contexto de Ejecución
 
-Para casos avanzados donde el World necesita acceder al contexto de ejecución (step actual, scenario, feature), MiniSpec proporciona `TFeatureWorld` como clase base opcional.
-
-**Diseño**: El contexto está completamente oculto en la clase. Solo es accesible mediante cast explícito a `ISpecContext`. Esto mantiene la API del World limpia y evita exponer detalles internos del framework.
+Para casos avanzados donde necesitas acceder al contexto de ejecución (step actual, scenario, feature), MiniSpec proporciona la función global `SpecContext`.
 
 ```pascal
 type
-  TMyWorld = class(TFeatureWorld)
+  TMyWorld = class  // Clase simple, sin herencia especial requerida
   public
-    // Tus campos y métodos normales
     Value: Integer;
   end;
 
-// En los steps, acceder al contexto via ISpecContext:
+// En los steps, acceder al contexto via SpecContext:
 .When('ejecuto algo', procedure(World: TMyWorld)
-  var
-    Ctx: ISpecContext;
   begin
-    Ctx := World as ISpecContext;  // Cast explícito requerido
-
     // Acceso al step actual
-    WriteLn('Step: ', Ctx.CurrentStep.Description);
+    WriteLn('Step: ', SpecContext.Step.Description);
 
     // Navegación directa a padres
-    WriteLn('Scenario: ', Ctx.CurrentScenario.Description);
-    WriteLn('Feature: ', Ctx.CurrentFeature.Title);
+    WriteLn('Scenario: ', SpecContext.Scenario.Description);
+    WriteLn('Feature: ', SpecContext.Feature.Title);
 
-    // CurrentRule puede ser nil si no hay Rule explícita
-    if Assigned(Ctx.CurrentRule) then
-      WriteLn('Rule: ', Ctx.CurrentRule.Description);
+    // Rule puede ser nil si no hay Rule explícita
+    if Assigned(SpecContext.Rule) then
+      WriteLn('Rule: ', SpecContext.Rule.Description);
+    
+    // DataTable del step actual (nil si no tiene)
+    if Assigned(SpecContext.DataTable) then
+      WriteLn('Rows: ', SpecContext.DataTable.RowCount);
   end)
 ```
 
 **ISpecContext proporciona**:
 
-| Propiedad/Método | Descripción |
-|------------------|-------------|
-| `CurrentStep` | El step que se está ejecutando |
-| `CurrentScenario` | El scenario (o Example) actual |
-| `CurrentRule` | La Rule contenedora (nil si no hay) |
-| `CurrentFeature` | La Feature contenedora |
-
-**Nota técnica**: `TFeatureWorld` hereda de `System.TNoRefCountObject` para evitar problemas con ARC (Automatic Reference Counting). Esto significa que las instancias del World se gestionan manualmente por el framework.
+| Propiedad | Descripción |
+|-----------|-------------|
+| `Suite` | La Suite contenedora |
+| `Feature` | La Feature contenedora |
+| `Rule` | La Rule contenedora (nil si no hay) |
+| `Scenario` | El scenario (o Example) actual |
+| `Step` | El step que se está ejecutando |
+| `DataTable` | La tabla de datos del step (nil si no tiene) |
 
 ### Vocabulario Gherkin
 
@@ -189,7 +186,7 @@ Los hooks `Before` y `After` ejecutan código **una sola vez** por Feature, a di
 
 ```pascal
 Feature('Database Tests')
-  .UseWorld<TDbWorld>
+  .UseContext<TDbWorld>
   
   .Before('Start test database', procedure
     begin
@@ -296,7 +293,7 @@ initialization
 
 Feature('Calculator Addition')
   .Category(TUnitMarker)  // Extrae "Calculator.Add.Feat" del QualifiedClassName
-  .UseWorld<TCalculatorWorld>
+  .UseContext<TCalculatorWorld>
   // ...
 ```
 
@@ -313,7 +310,7 @@ Cuando necesitas añadir Rules hermanas o volver a la Feature después de una Ru
 
 ```pascal
 Feature('...')
-  .UseWorld<TWorld>
+  .UseContext<TWorld>
   
   .Rule('Primera regla')
     .Scenario('Test 1')
