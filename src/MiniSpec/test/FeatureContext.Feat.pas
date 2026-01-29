@@ -1,4 +1,4 @@
-unit FeatureContext.Feat;
+﻿unit FeatureContext.Feat;
 
 interface
 
@@ -61,7 +61,7 @@ FeatureContext Demo @featurecontext
   I want to share a context across all scenarios in a feature
   So I can maintain expensive resources without recreating them
 ''')
-.ShareContext(TSharedFeatureContext)
+.ShareContext<TSharedFeatureContext>
 .UseContext<TScenarioContext>
 
 .Before('Initialize shared counter',

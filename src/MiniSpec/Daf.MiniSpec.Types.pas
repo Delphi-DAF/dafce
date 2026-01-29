@@ -6,7 +6,8 @@ uses
   System.Generics.Collections,
   System.Rtti,
   System.SysUtils,
-  Daf.MiniSpec.DataTable;
+  Daf.MiniSpec.DataTable,
+  Daf.MiniSpec.Injection;
 
 type
   TStepProc<T> = reference to procedure(World: T);
@@ -1365,6 +1366,7 @@ begin
   for var Example in FExamples do
   begin
     ExampleWorld := Rule.CreateWorld;
+    TInjectorService.InjectInto(ExampleWorld);
     try
       Rule.RunBackground(ExampleWorld);
       Example.Run(ExampleWorld);
@@ -1528,6 +1530,7 @@ begin
   if Assigned(FContextCreator) then
   begin
     FFeatureContext := FContextCreator();
+    TInjectorService.Register(FFeatureContext);
     Ctx := SpecContext as TSpecContextImpl;
     Ctx.SetFeatureContext(FFeatureContext);
   end;
@@ -1568,6 +1571,7 @@ begin
   // Destruir FeatureContext
   if Assigned(FFeatureContext) then
   begin
+    TInjectorService.Unregister(FFeatureContext);
     Ctx := SpecContext as TSpecContextImpl;
     Ctx.SetFeatureContext(nil);
     FreeAndNil(FFeatureContext);
@@ -1837,6 +1841,7 @@ begin
       else
       begin
         var World := CreateWorld;
+        TInjectorService.InjectInto(World);
         RunBackground(World);
         Scenario.Run(World);
         if Scenario.RunInfo.Result in [srrFail, srrError] then

@@ -37,9 +37,7 @@ type
     constructor Create(const Description: string);
     function Category(AClass: TClass): TFeatureBuilder;
     /// <summary>Define un contexto compartido para toda la Feature. Debe invocarse antes de UseContext.</summary>
-    function ShareContext<T: class, constructor>: TFeatureBuilder; overload;
-    /// <summary>Define un contexto compartido para toda la Feature usando metaclass.</summary>
-    function ShareContext(AClass: TClass): TFeatureBuilder; overload;
+    function ShareContext<T: class, constructor>: TFeatureBuilder;
     /// <summary>Define el tipo de contexto (World) para los escenarios de esta Feature</summary>
     function UseContext<T: class, constructor>: IFeatureBuilder<T>;
     /// <summary>Deprecated: Use UseContext instead</summary>
@@ -238,32 +236,6 @@ begin
   FContextCreator := function: TObject
     begin
       Result := T.Create;
-    end;
-  Result := Self;
-end;
-
-function TFeatureBuilder.ShareContext(AClass: TClass): TFeatureBuilder;
-var
-  LClass: TClass;
-begin
-  LClass := AClass;
-  FContextCreator := function: TObject
-    var
-      RttiCtx: TRttiContext;
-      RttiType: TRttiType;
-      RttiMethod: TRttiMethod;
-    begin
-      RttiCtx := TRttiContext.Create;
-      try
-        RttiType := RttiCtx.GetType(LClass);
-        RttiMethod := RttiType.GetMethod('Create');
-        if Assigned(RttiMethod) and RttiMethod.IsConstructor then
-          Result := RttiMethod.Invoke(LClass, []).AsObject
-        else
-          Result := LClass.Create;  // Fallback
-      finally
-        RttiCtx.Free;
-      end;
     end;
   Result := Self;
 end;
