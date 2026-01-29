@@ -18,7 +18,11 @@ type
     Email: string;
   end;
 
-  TDataTableWorld = class(TFeatureWorld)
+  /// <summary>
+  /// World simple - ya no necesita heredar de TFeatureWorld.
+  /// El contexto es accesible globalmente via SpecContext.
+  /// </summary>
+  TDataTableWorld = class
   public
     Users: TArray<TUser>;
     Table: TDataTableObj;
@@ -37,7 +41,7 @@ Feature DataTable @datatable
 
 .UseWorld<TDataTableWorld>
 
-.Scenario('Access DataTable from step via ISpecContext')
+.Scenario('Access DataTable from step via SpecContext')
   .Given('the following users:',
     [['name',  'email'],
      ['Alice', 'alice@test.com'],
@@ -45,12 +49,10 @@ Feature DataTable @datatable
      ['Carol', 'carol@test.com']],
     procedure(World: TDataTableWorld)
     var
-      Ctx: ISpecContext;
       Row: TArray<TValue>;
       User: TUser;
     begin
-      Ctx := World as ISpecContext;
-      World.Table := Ctx.DataTable;
+      World.Table := SpecContext.DataTable;
       // Store users from table
       for Row in World.Table.Rows do
       begin
@@ -75,7 +77,7 @@ Feature DataTable @datatable
      ['c',    'd']],
     procedure(World: TDataTableWorld)
     begin
-      World.Table := (World as ISpecContext).DataTable;
+      World.Table := SpecContext.DataTable;
     end)
   .When('I check the row count', procedure(World: TDataTableWorld)
     begin
@@ -92,7 +94,7 @@ Feature DataTable @datatable
      ['1', '2', '3']],
     procedure(World: TDataTableWorld)
     begin
-      World.Table := (World as ISpecContext).DataTable;
+      World.Table := SpecContext.DataTable;
     end)
   .When('I check the column count', procedure(World: TDataTableWorld)
     begin
@@ -110,7 +112,7 @@ Feature DataTable @datatable
      ['Bob',   '25']],
     procedure(World: TDataTableWorld)
     begin
-      World.Table := (World as ISpecContext).DataTable;
+      World.Table := SpecContext.DataTable;
     end)
   .When('I access cell by column name', procedure(World: TDataTableWorld)
     begin
@@ -125,7 +127,7 @@ Feature DataTable @datatable
 .Scenario('DataTable is nil when step has no table')
   .Given('a step without a table', procedure(World: TDataTableWorld)
     begin
-      World.Table := (World as ISpecContext).DataTable;
+      World.Table := SpecContext.DataTable;
     end)
   .When('I check the DataTable', procedure(World: TDataTableWorld)
     begin

@@ -359,41 +359,61 @@ type
   end;
 
   /// <summary>
-  /// Interfaz para acceder al contexto de ejecución desde el World.
-  /// Solo visible si se hace cast explícito: (World as ISpecContext).CurrentStep
+  /// Interfaz global para acceder al contexto de ejecución.
+  /// Accesible desde cualquier lugar via función SpecContext.
   /// </summary>
   ISpecContext = interface
     ['{B8C9D0E1-F2A3-4B5C-6D7E-8F9A0B1C2D3E}']
-    function GetCurrentStep: IScenarioStep;
-    procedure SetCurrentStep(const Value: IScenarioStep);
-    function GetDataTable: TDataTableObj;
+    // Metadatos de ejecución
+    function Suite: ISpecSuite;
+    function Feature: IFeature;
+    function Rule: IRule;
+    function Scenario: IScenario;
+    function Step: IScenarioStep;
+    function DataTable: TDataTableObj;
+    // Contexts del usuario (para UseContext)
+    function SuiteContext: TObject;
+    function FeatureContext: TObject;
+    function ScenarioContext: TObject;
+    // Setters internos
+    procedure SetStep(const Value: IScenarioStep);
     procedure SetDataTable(const Value: TDataTableObj);
-    function CurrentScenario: IScenario;
-    function CurrentRule: IRule;
-    function CurrentFeature: IFeature;
-    property CurrentStep: IScenarioStep read GetCurrentStep write SetCurrentStep;
-    /// <summary>
-    /// Returns the DataTable for the current step, or nil if none.
-    /// </summary>
-    property DataTable: TDataTableObj read GetDataTable write SetDataTable;
+    procedure SetScenario(const Value: IScenario);
   end;
 
   /// <summary>
-  /// Clase base opcional para Worlds que necesitan acceso al contexto de ejecución.
-  /// Hereda de TNoRefCountObject para evitar ARC.
-  /// El contexto está oculto y solo es accesible via ISpecContext.
+  /// Implementación del contexto de ejecución global.
   /// </summary>
-  TFeatureWorld = class(System.TNoRefCountObject, ISpecContext)
+  TSpecContextImpl = class(TInterfacedObject, ISpecContext)
   strict private
-    FCurrentStep: IScenarioStep;
+    FSuite: ISpecSuite;
+    FFeature: IFeature;
+    FRule: IRule;
+    FScenario: IScenario;
+    FStep: IScenarioStep;
     FDataTable: TDataTableObj;
-    function GetCurrentStep: IScenarioStep;
-    procedure SetCurrentStep(const Value: IScenarioStep);
-    function GetDataTable: TDataTableObj;
+    FSuiteContext: TObject;
+    FFeatureContext: TObject;
+    FScenarioContext: TObject;
+  public
+    function Suite: ISpecSuite;
+    function Feature: IFeature;
+    function Rule: IRule;
+    function Scenario: IScenario;
+    function Step: IScenarioStep;
+    function DataTable: TDataTableObj;
+    function SuiteContext: TObject;
+    function FeatureContext: TObject;
+    function ScenarioContext: TObject;
+    procedure SetStep(const Value: IScenarioStep);
     procedure SetDataTable(const Value: TDataTableObj);
-    function CurrentScenario: IScenario;
-    function CurrentRule: IRule;
-    function CurrentFeature: IFeature;
+    procedure SetScenario(const Value: IScenario);
+    procedure SetSuite(const Value: ISpecSuite);
+    procedure SetFeature(const Value: IFeature);
+    procedure SetRule(const Value: IRule);
+    procedure SetSuiteContext(const Value: TObject);
+    procedure SetFeatureContext(const Value: TObject);
+    procedure SetScenarioContext(const Value: TObject);
   end;
 
   TSpecItem = class(TInterfacedObject, ISpecItem)
@@ -626,6 +646,11 @@ type
 function Val2Str(const V: TValue): string;
 
 /// <summary>
+/// Global execution context. Returns current ISpecContext.
+/// </summary>
+function SpecContext: ISpecContext;
+
+/// <summary>
 /// Returns the currently executing scenario. Used by ExpectRaised to access pending exceptions.
 /// </summary>
 function GetCurrentScenario: IScenario;
@@ -644,9 +669,9 @@ uses
 
 threadvar
   /// <summary>
-  /// The currently executing scenario. Used by Expect functions to access pending exceptions.
+  /// Global execution context. Access via SpecContext function.
   /// </summary>
-  CurrentScenario: IScenario;
+  GSpecContext: ISpecContext;
 
 { TCapturedRaise }
 
@@ -782,73 +807,6 @@ end;
 function TSpecRunInfo.TotalCount: Cardinal;
 begin
   Result := Counts[rkPass] + Counts[rkFail] + Counts[rkSkip];
-end;
-
-{ TFeatureWorld }
-
-function TFeatureWorld.GetCurrentStep: IScenarioStep;
-begin
-  Result := FCurrentStep;
-end;
-
-procedure TFeatureWorld.SetCurrentStep(const Value: IScenarioStep);
-begin
-  FCurrentStep := Value;
-end;
-
-function TFeatureWorld.GetDataTable: TDataTableObj;
-begin
-  Result := FDataTable;
-end;
-
-procedure TFeatureWorld.SetDataTable(const Value: TDataTableObj);
-begin
-  FDataTable := Value;
-end;
-
-function TFeatureWorld.CurrentScenario: IScenario;
-var
-  Parent: ISpecItem;
-begin
-  Result := nil;
-  if not Assigned(FCurrentStep) then Exit;
-  Parent := FCurrentStep.Parent;
-  while Assigned(Parent) do
-  begin
-    if Supports(Parent, IScenario, Result) then
-      Exit;
-    Parent := Parent.Parent;
-  end;
-end;
-
-function TFeatureWorld.CurrentRule: IRule;
-var
-  Parent: ISpecItem;
-begin
-  Result := nil;
-  if not Assigned(FCurrentStep) then Exit;
-  Parent := FCurrentStep.Parent;
-  while Assigned(Parent) do
-  begin
-    if Supports(Parent, IRule, Result) then
-      Exit;
-    Parent := Parent.Parent;
-  end;
-end;
-
-function TFeatureWorld.CurrentFeature: IFeature;
-var
-  Parent: ISpecItem;
-begin
-  Result := nil;
-  if not Assigned(FCurrentStep) then Exit;
-  Parent := FCurrentStep.Parent;
-  while Assigned(Parent) do
-  begin
-    if Supports(Parent, IFeature, Result) then
-      Exit;
-    Parent := Parent.Parent;
-  end;
 end;
 
 { TSpecItem }
@@ -1005,7 +963,7 @@ end;
 
 procedure TScenarioStep<T>.Run(World: TObject);
 var
-  SpecContext: ISpecContext;
+  Ctx: TSpecContextImpl;
 begin
   var SW := TStopwatch.StartNew;
   try
@@ -1014,16 +972,13 @@ begin
     FRunInfo.Result := srrSuccess;
     if Assigned(FProc) then
     begin
-      // Si el World implementa ISpecContext, setear el Step actual y DataTable
-      if Supports(World, ISpecContext, SpecContext) then
-      begin
-        SpecContext.CurrentStep := Self;
-        SpecContext.DataTable := FDataTable;
-      end;
+      // Usar contexto global
+      Ctx := TSpecContextImpl(SpecContext);
+      Ctx.SetStep(Self);
+      Ctx.SetDataTable(FDataTable);
       FProc(World as T);
       // Clear DataTable after step execution
-      if Assigned(SpecContext) then
-        SpecContext.DataTable := nil;
+      Ctx.SetDataTable(nil);
     end;
   except
     on E: ExpectFail do
@@ -1788,14 +1743,152 @@ begin
   FRunInfo.ExecTimeMs := SW.ElapsedMilliseconds;
 end;
 
+{ TSpecContextImpl }
+
+function TSpecContextImpl.Suite: ISpecSuite;
+begin
+  Result := FSuite;
+end;
+
+function TSpecContextImpl.Feature: IFeature;
+begin
+  Result := FFeature;
+end;
+
+function TSpecContextImpl.Rule: IRule;
+begin
+  Result := FRule;
+end;
+
+function TSpecContextImpl.Scenario: IScenario;
+begin
+  Result := FScenario;
+end;
+
+function TSpecContextImpl.Step: IScenarioStep;
+begin
+  Result := FStep;
+end;
+
+function TSpecContextImpl.DataTable: TDataTableObj;
+begin
+  Result := FDataTable;
+end;
+
+function TSpecContextImpl.SuiteContext: TObject;
+begin
+  Result := FSuiteContext;
+end;
+
+function TSpecContextImpl.FeatureContext: TObject;
+begin
+  Result := FFeatureContext;
+end;
+
+function TSpecContextImpl.ScenarioContext: TObject;
+begin
+  Result := FScenarioContext;
+end;
+
+procedure TSpecContextImpl.SetStep(const Value: IScenarioStep);
+begin
+  FStep := Value;
+end;
+
+procedure TSpecContextImpl.SetDataTable(const Value: TDataTableObj);
+begin
+  FDataTable := Value;
+end;
+
+procedure TSpecContextImpl.SetScenario(const Value: IScenario);
+begin
+  FScenario := Value;
+end;
+
+procedure TSpecContextImpl.SetSuite(const Value: ISpecSuite);
+begin
+  FSuite := Value;
+end;
+
+procedure TSpecContextImpl.SetFeature(const Value: IFeature);
+begin
+  FFeature := Value;
+end;
+
+procedure TSpecContextImpl.SetRule(const Value: IRule);
+begin
+  FRule := Value;
+end;
+
+procedure TSpecContextImpl.SetSuiteContext(const Value: TObject);
+begin
+  FSuiteContext := Value;
+end;
+
+procedure TSpecContextImpl.SetFeatureContext(const Value: TObject);
+begin
+  FFeatureContext := Value;
+end;
+
+procedure TSpecContextImpl.SetScenarioContext(const Value: TObject);
+begin
+  FScenarioContext := Value;
+end;
+
+{ Global SpecContext }
+
+function SpecContext: ISpecContext;
+begin
+  if GSpecContext = nil then
+    GSpecContext := TSpecContextImpl.Create;
+  Result := GSpecContext;
+end;
+
 function GetCurrentScenario: IScenario;
 begin
-  Result := CurrentScenario;
+  Result := SpecContext.Scenario;
 end;
 
 procedure SetCurrentScenario(const Value: IScenario);
+var
+  Ctx: TSpecContextImpl;
+  Parent: ISpecItem;
 begin
-  CurrentScenario := Value;
+  Ctx := TSpecContextImpl(SpecContext);
+  Ctx.SetScenario(Value);
+
+  // Derivar Feature y Rule del Scenario navegando por parents usando Kind
+  if Assigned(Value) then
+  begin
+    Parent := Value.Parent;
+    while Assigned(Parent) do
+    begin
+      case Parent.Kind of
+        sikRule, sikImplicitRule:
+          if Ctx.Rule = nil then
+            Ctx.SetRule(Parent as IRule);
+        sikFeature:
+          begin
+            Ctx.SetFeature(Parent as IFeature);
+            Break;  // Feature es el nivel más alto
+          end;
+      end;
+      Parent := Parent.Parent;
+    end;
+  end
+  else
+  begin
+    // Limpiar cuando se setea nil
+    Ctx.SetRule(nil);
+    Ctx.SetFeature(nil);
+  end;
 end;
+
+initialization
+  // Nada que inicializar
+
+finalization
+  // Liberar singleton del thread principal para evitar memory leak
+  GSpecContext := nil;
 
 end.

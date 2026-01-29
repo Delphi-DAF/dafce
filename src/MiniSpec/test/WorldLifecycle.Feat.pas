@@ -16,7 +16,11 @@ var
   DestroyCount: Integer = 0;
 
 type
-  TLifecycleWorld = class(TFeatureWorld)
+  /// <summary>
+  /// World simple - ya no necesita heredar de TFeatureWorld.
+  /// El contexto es accesible globalmente via SpecContext.
+  /// </summary>
+  TLifecycleWorld = class
   private
     FLogEntry: string;
     function BuildLogEntry(const Action: string): string;
@@ -30,18 +34,15 @@ type
 
 function TLifecycleWorld.BuildLogEntry(const Action: string): string;
 var
-  Ctx: ISpecContext;
   FeatureName, RuleName, ScenarioName: string;
   Rule: IRule;
   Scenario: IScenario;
   Outline: IScenarioOutline;
 begin
-  Ctx := Self as ISpecContext;
-
   // Feature title (sin tags)
-  if Assigned(Ctx.CurrentFeature) then
+  if Assigned(SpecContext.Feature) then
   begin
-    FeatureName := Ctx.CurrentFeature.Title;
+    FeatureName := SpecContext.Feature.Title;
     // Quitar tags del título si los hay
     if Pos('@', FeatureName) > 0 then
       FeatureName := Trim(Copy(FeatureName, 1, Pos('@', FeatureName) - 1));
@@ -50,14 +51,13 @@ begin
     FeatureName := '?';
 
   // Rule - solo si es explícito (no sikImplicitRule)
-  Rule := Ctx.CurrentRule;
-  if Assigned(Rule) and (Rule.Kind = sikRule) then
+  if Supports(SpecContext.Scenario.Parent, IRule, Rule) and (Rule.Kind = sikRule) then
     RuleName := Rule.Description + '/'
   else
     RuleName := '';
 
   // Scenario
-  Scenario := Ctx.CurrentScenario;
+  Scenario := SpecContext.Scenario;
   if Assigned(Scenario) then
   begin
     case Scenario.Kind of
@@ -80,7 +80,7 @@ begin
             ScenarioName := Scenario.Description;
         end;
       sikScenarioOutline:
-        // No deberíamos llegar aquí - el CurrentScenario debería ser el Example
+        // No deberíamos llegar aquí - el Scenario debería ser el Example
         ScenarioName := Scenario.Description + ' (outline)';
     else
       ScenarioName := Scenario.Description;
@@ -141,11 +141,11 @@ World Lifecycle @meta @lifecycle
     end)
   .When('I check the feature', procedure(World: TLifecycleWorld)
     begin
-      Expect((World as ISpecContext).CurrentFeature).ToNotBeNull;
+      Expect(SpecContext.Feature).ToNotBeNull;
     end)
   .&Then('the feature title is correct', procedure(World: TLifecycleWorld)
     begin
-      Expect((World as ISpecContext).CurrentFeature.Title).ToContain('World Lifecycle');
+      Expect(SpecContext.Feature.Title).ToContain('World Lifecycle');
     end)
 
 .Scenario('Another direct scenario')
@@ -190,11 +190,11 @@ World Lifecycle @meta @lifecycle
       end)
     .When('I check the scenario', procedure(World: TLifecycleWorld)
       begin
-        Expect((World as ISpecContext).CurrentScenario).ToNotBeNull;
+        Expect(SpecContext.Scenario).ToNotBeNull;
       end)
     .&Then('the scenario description is correct', procedure(World: TLifecycleWorld)
       begin
-        Expect((World as ISpecContext).CurrentScenario.Description).ToContain('first rule');
+        Expect(SpecContext.Scenario.Description).ToContain('first rule');
       end)
 
   .Scenario('Another scenario in first rule')
@@ -224,7 +224,7 @@ World Lifecycle @meta @lifecycle
       end)
     .&Then('it works', procedure(World: TLifecycleWorld)
       begin
-        Expect((World as ISpecContext).CurrentScenario.Description).ToContain('second rule');
+        Expect(SpecContext.Scenario.Description).ToContain('second rule');
       end)
 
   .ScenarioOutline('Outline in rule: N=<N>')
@@ -254,9 +254,11 @@ World Lifecycle @meta @lifecycle
       World.LogCreate;
     end)
   .When('I check the rule', procedure(World: TLifecycleWorld)
+    var
+      Rule: IRule;
     begin
-      // CurrentRule debería ser ImplicitRule (sikImplicitRule)
-      var Rule := (World as ISpecContext).CurrentRule;
+      // Parent del Scenario debería ser ImplicitRule (sikImplicitRule)
+      Supports(SpecContext.Scenario.Parent, IRule, Rule);
       Expect(Assigned(Rule)).ToEqual(True);
       Expect(Rule.Kind = sikImplicitRule).ToEqual(True);
     end)

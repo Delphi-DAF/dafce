@@ -16,7 +16,10 @@ uses
   Daf.MiniSpec.Types;
 
 type
-  TSuiteWorld = class(TFeatureWorld)
+  /// <summary>
+  /// World simple - ya no necesita heredar de nada especial.
+  /// </summary>
+  TSuiteWorld = class
   end;
 
 initialization
