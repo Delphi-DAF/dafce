@@ -569,6 +569,8 @@ type
     FCategory: string;
     FBeforeHooks: TList<IHook>;
     FAfterHooks: TList<IHook>;
+    FContextCreator: TFunc<TObject>;  // Creador del FeatureContext (si se usa ShareContext)
+    FFeatureContext: TObject;  // Instancia del FeatureContext
     function GetTitle: string;
     function GetNarrative: string;
     function GetCategory: string;
@@ -593,6 +595,7 @@ type
     property BeforeHooks: TList<IHook> read GetBeforeHooks;
     property AfterHooks: TList<IHook> read GetAfterHooks;
     property ImplicitRule: IRule read FImplicitRule;  // Solo para builders
+    procedure SetContextCreator(const Creator: TFunc<TObject>);  // Para builders
   end;
 
   /// <summary>
@@ -1467,6 +1470,7 @@ end;
 
 destructor TFeature<T>.Destroy;
 begin
+  FFeatureContext.Free;
   FAfterHooks.Free;
   FBeforeHooks.Free;
   FRules.Free;
@@ -1513,10 +1517,21 @@ begin
 end;
 
 procedure TFeature<T>.Run(const Matcher: TSpecMatcher);
+var
+  Ctx: TSpecContextImpl;
 begin
   var SW := TStopwatch.StartNew;
   FRunInfo.State := srsRunning;
   FRunInfo.Result := srrSuccess;
+
+  // Crear FeatureContext si se configuró uno
+  if Assigned(FContextCreator) then
+  begin
+    FFeatureContext := FContextCreator();
+    Ctx := SpecContext as TSpecContextImpl;
+    Ctx.SetFeatureContext(FFeatureContext);
+  end;
+
   try
     // Execute Before hooks (once before all scenarios)
     for var Hook in FBeforeHooks do
@@ -1550,6 +1565,14 @@ begin
     end;
   end;
 
+  // Destruir FeatureContext
+  if Assigned(FFeatureContext) then
+  begin
+    Ctx := SpecContext as TSpecContextImpl;
+    Ctx.SetFeatureContext(nil);
+    FreeAndNil(FFeatureContext);
+  end;
+
   FRunInfo.State := srsFinished;
   FRunInfo.ExecTimeMs := SW.ElapsedMilliseconds;
 end;
@@ -1557,6 +1580,11 @@ end;
 procedure TFeature<T>.SetBackGround(const Value: IBackground);
 begin
   FImplicitRule.BackGround := Value;
+end;
+
+procedure TFeature<T>.SetContextCreator(const Creator: TFunc<TObject>);
+begin
+  FContextCreator := Creator;
 end;
 
 { TSpecSuite }

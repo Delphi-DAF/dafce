@@ -5,11 +5,12 @@ program MiniSpecSpecs;
 uses
   Daf.MiniSpec,
   Daf.MiniSpec.DataTable,
-  Context.Feat in 'Context.Feat.pas',
+  SpecContextAccess.Feat in 'SpecContextAccess.Feat.pas',
   Lifecycle.Feat in 'Lifecycle.Feat.pas',
   Hooks.Feat in 'Hooks.Feat.pas',
   DataTable.Feat in 'DataTable.Feat.pas',
-  SpecSuite.Feat in 'SpecSuite.Feat.pas';
+  SpecSuite.Feat in 'SpecSuite.Feat.pas',
+  FeatureContext.Feat in 'FeatureContext.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

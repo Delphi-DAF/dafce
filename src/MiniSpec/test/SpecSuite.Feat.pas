@@ -17,9 +17,9 @@ uses
 
 type
   /// <summary>
-  /// World simple - ya no necesita heredar de nada especial.
+  /// Contexto individual para cada escenario de esta feature.
   /// </summary>
-  TSuiteWorld = class
+  TScenarioContext = class
   end;
 
 initialization
@@ -32,16 +32,16 @@ Feature SpecSuite @suite
   So I can provide a title and run hooks before/after all tests
 ''')
 
-.UseContext<TSuiteWorld>
+.UseContext<TScenarioContext>
 
 .Scenario('Suite has the title set via Category()')
   .Given('the Suite was configured with Category',
-    procedure(World: TSuiteWorld)
+    procedure(Ctx: TScenarioContext)
     begin
       // Category('MiniSpec Framework Tests') was called in program
     end)
   .&Then('the Suite Title matches what was set',
-    procedure(World: TSuiteWorld)
+    procedure(Ctx: TScenarioContext)
     begin
       Assert(SuiteTitle = 'MiniSpec Framework Tests',
         Format('Expected "MiniSpec Framework Tests" but got "%s"', [SuiteTitle]));
@@ -49,12 +49,12 @@ Feature SpecSuite @suite
 
 .Scenario('Suite Before hook runs before all Features')
   .Given('the Suite has a Before hook registered',
-    procedure(World: TSuiteWorld)
+    procedure(Ctx: TScenarioContext)
     begin
       // .Before() was called in program before .Run()
     end)
   .&Then('the Before hook marker is set',
-    procedure(World: TSuiteWorld)
+    procedure(Ctx: TScenarioContext)
     begin
       Assert(SuiteBeforeHookCalled,
         'Suite Before hook should have been called before any Feature runs');

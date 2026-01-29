@@ -1,4 +1,4 @@
-unit Context.Feat;
+unit SpecContextAccess.Feat;
 
 interface
 
@@ -11,10 +11,10 @@ uses
 
 type
   /// <summary>
-  /// World simple - ya no necesita heredar de TFeatureWorld.
+  /// Contexto individual para cada escenario.
   /// El contexto de ejecución es accesible globalmente via SpecContext.
   /// </summary>
-  TMyWorld = class
+  TScenarioContext = class
   public
     StepDescription: string;
     ScenarioDescription: string;
@@ -31,77 +31,77 @@ initialization
 GBeforeExecuted := False;
 
 Feature('''
-FeatureWorld Demo @meta
+SpecContext Demo @meta
 
   As a test author
-  I want to access the execution context from my World
+  I want to access the execution context via SpecContext
   So I can implement advanced test patterns
 ''')
 
-.UseContext<TMyWorld>
+.UseContext<TScenarioContext>
 
 .Scenario('Access step info via global SpecContext')
-  .Given('I have a simple World class', procedure(World: TMyWorld)
+  .Given('I have a simple ScenarioContext class', procedure(Ctx: TScenarioContext)
     begin
       GBeforeExecuted := True;
       // SpecContext es accesible globalmente
       Expect(SpecContext.Step <> nil).ToBeTrue;
     end)
-  .When('I access the Step property', procedure(World: TMyWorld)
+  .When('I access the Step property', procedure(Ctx: TScenarioContext)
     begin
-      World.StepDescription := SpecContext.Step.Description;
+      Ctx.StepDescription := SpecContext.Step.Description;
     end)
-  .&Then('I can read the step description', procedure(World: TMyWorld)
+  .&Then('I can read the step description', procedure(Ctx: TScenarioContext)
     begin
-      Expect(World.StepDescription).ToContain('I access the Step');
+      Expect(Ctx.StepDescription).ToContain('I access the Step');
     end)
 
 .Scenario('Access Scenario via global SpecContext')
-  .Given('I have a simple World class', procedure(World: TMyWorld)
+  .Given('I have a simple ScenarioContext class', procedure(Ctx: TScenarioContext)
     begin
       Expect(SpecContext.Scenario).ToNotBeNull;
     end)
-  .When('I access Scenario', procedure(World: TMyWorld)
+  .When('I access Scenario', procedure(Ctx: TScenarioContext)
     begin
-      World.ScenarioDescription := SpecContext.Scenario.Description;
+      Ctx.ScenarioDescription := SpecContext.Scenario.Description;
     end)
-  .&Then('I can read the scenario description', procedure(World: TMyWorld)
+  .&Then('I can read the scenario description', procedure(Ctx: TScenarioContext)
     begin
-      Expect(World.ScenarioDescription).ToContain('Access Scenario');
+      Expect(Ctx.ScenarioDescription).ToContain('Access Scenario');
     end)
 
 .Scenario('Access Feature via global SpecContext')
-  .Given('I have a simple World class', procedure(World: TMyWorld)
+  .Given('I have a simple ScenarioContext class', procedure(Ctx: TScenarioContext)
     begin
       Expect(SpecContext.Feature).ToNotBeNull;
     end)
-  .When('I access Feature', procedure(World: TMyWorld)
+  .When('I access Feature', procedure(Ctx: TScenarioContext)
     begin
-      World.FeatureTitle := SpecContext.Feature.Title;
+      Ctx.FeatureTitle := SpecContext.Feature.Title;
     end)
-  .&Then('I can read the feature title', procedure(World: TMyWorld)
+  .&Then('I can read the feature title', procedure(Ctx: TScenarioContext)
     begin
-      Expect(World.FeatureTitle).ToContain('FeatureWorld Demo');
+      Expect(Ctx.FeatureTitle).ToContain('SpecContext Demo');
     end)
 
 .ScenarioOutline('Context works in ScenarioOutline with value <Value>')
-  .Given('a value <Value>', procedure(World: TMyWorld)
+  .Given('a value <Value>', procedure(Ctx: TScenarioContext)
     begin
       // En cada Example, Step apunta al step actual
       Expect(SpecContext.Step).ToNotBeNull;
     end)
-  .When('I check the context', procedure(World: TMyWorld)
+  .When('I check the context', procedure(Ctx: TScenarioContext)
     begin
       // Scenario apunta al Example (un IScenario hijo del Outline)
-      World.ScenarioDescription := SpecContext.Scenario.Description;
-      World.ExampleRowIndex := SpecContext.Scenario.ExampleMeta.RowIndex;
+      Ctx.ScenarioDescription := SpecContext.Scenario.Description;
+      Ctx.ExampleRowIndex := SpecContext.Scenario.ExampleMeta.RowIndex;
     end)
-  .&Then('I can access Example metadata', procedure(World: TMyWorld)
+  .&Then('I can access Example metadata', procedure(Ctx: TScenarioContext)
     begin
       // Verificar que tenemos acceso al row index del Example
-      Expect(World.ExampleRowIndex > 0).ToBeTrue;
+      Expect(Ctx.ExampleRowIndex > 0).ToBeTrue;
       // El Scenario description contiene los valores sustituidos
-      Expect(World.ScenarioDescription).ToContain('value');
+      Expect(Ctx.ScenarioDescription).ToContain('value');
     end)
   .Examples([
     ['Value'],

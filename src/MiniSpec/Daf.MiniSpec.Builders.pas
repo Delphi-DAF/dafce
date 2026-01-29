@@ -25,15 +25,21 @@ type
     function Scenario(const Description: string): IScenarioBuilder<T>;overload;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
     function Rule(const Description: string): IRuleBuilder<T>;
+    property Feature: TFeature<T> read FFeature;  // Para configuración desde TFeatureBuilder
   end;
 
   TFeatureBuilder = class
   strict private
     FDescription: string;
     FCategory: string;
+    FContextCreator: TFunc<TObject>;  // Creador del FeatureContext (si se usa ShareContext)
   public
     constructor Create(const Description: string);
     function Category(AClass: TClass): TFeatureBuilder;
+    /// <summary>Define un contexto compartido para toda la Feature. Debe invocarse antes de UseContext.</summary>
+    function ShareContext<T: class, constructor>: TFeatureBuilder; overload;
+    /// <summary>Define un contexto compartido para toda la Feature usando metaclass.</summary>
+    function ShareContext(AClass: TClass): TFeatureBuilder; overload;
     /// <summary>Define el tipo de contexto (World) para los escenarios de esta Feature</summary>
     function UseContext<T: class, constructor>: IFeatureBuilder<T>;
     /// <summary>Deprecated: Use UseContext instead</summary>
@@ -227,9 +233,50 @@ begin
   Result := Self;
 end;
 
-function TFeatureBuilder.UseContext<T>: IFeatureBuilder<T>;
+function TFeatureBuilder.ShareContext<T>: TFeatureBuilder;
 begin
-  Result := TFeatureBuilder<T>.Create(FDescription, FCategory);
+  FContextCreator := function: TObject
+    begin
+      Result := T.Create;
+    end;
+  Result := Self;
+end;
+
+function TFeatureBuilder.ShareContext(AClass: TClass): TFeatureBuilder;
+var
+  LClass: TClass;
+begin
+  LClass := AClass;
+  FContextCreator := function: TObject
+    var
+      RttiCtx: TRttiContext;
+      RttiType: TRttiType;
+      RttiMethod: TRttiMethod;
+    begin
+      RttiCtx := TRttiContext.Create;
+      try
+        RttiType := RttiCtx.GetType(LClass);
+        RttiMethod := RttiType.GetMethod('Create');
+        if Assigned(RttiMethod) and RttiMethod.IsConstructor then
+          Result := RttiMethod.Invoke(LClass, []).AsObject
+        else
+          Result := LClass.Create;  // Fallback
+      finally
+        RttiCtx.Free;
+      end;
+    end;
+  Result := Self;
+end;
+
+function TFeatureBuilder.UseContext<T>: IFeatureBuilder<T>;
+var
+  Builder: TFeatureBuilder<T>;
+begin
+  Builder := TFeatureBuilder<T>.Create(FDescription, FCategory);
+  // Si se configuró un FeatureContext, pasarlo a la Feature
+  if Assigned(FContextCreator) then
+    Builder.Feature.SetContextCreator(FContextCreator);
+  Result := Builder;
   Free;
 end;
 
