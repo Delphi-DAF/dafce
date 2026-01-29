@@ -492,7 +492,7 @@ La acción se ejecuta en el step When y la excepción se captura automáticament
 ### Expresiones de Filtro
 
 ```
-@tag                    # Escenarios con el tag
+@tag                    # Escenarios con el tag (@ es obligatorio)
 ~@tag                   # Escenarios SIN el tag
 Feat:texto              # Feature title contiene texto
 Scen:texto              # Scenario description contiene texto
@@ -502,6 +502,10 @@ Cat:texto               # Category contiene texto
 @a or @b                # Cualquiera de los dos
 (Feat:Login or @auth) and ~@slow  # Expresiones complejas
 ```
+
+> **Importante**: Los tags DEBEN comenzar con `@`. Escribir `--filter datatable` dará error;
+> use `--filter @datatable`. Si la expresión de filtro es inválida, el programa muestra
+> un mensaje de error y termina con código de salida 1.
 
 Ejemplos:
 

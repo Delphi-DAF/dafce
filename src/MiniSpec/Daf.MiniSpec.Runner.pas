@@ -60,41 +60,12 @@ type
   end;
 
   /// <summary>
-  /// Value object that encapsulates pass/fail/skip counters and elapsed time.
-  /// Used at Report, Feature, Scenario, and Outline levels.
-  /// </summary>
-  TSpecCounters = record
-  private
-    FPassCount: Cardinal;
-    FFailCount: Cardinal;
-    FSkipCount: Cardinal;
-    FStartTime: TDateTime;
-    FElapsedMs: Integer;
-  public
-    procedure Reset;
-    procedure Start;
-    procedure Stop;
-    procedure IncPass;
-    procedure IncFail;
-    procedure IncSkip;
-    function IsSuccess: Boolean;
-    property PassCount: Cardinal read FPassCount;
-    property FailCount: Cardinal read FFailCount;
-    property SkipCount: Cardinal read FSkipCount;
-    property ElapsedMs: Integer read FElapsedMs;
-  end;
-
-  /// <summary>
   /// Read-only context passed to listeners during spec execution.
-  /// Provides access to counters, current feature/scenario, and options.
+  /// Provides access to current feature/scenario and options.
   /// </summary>
   IRunContext = interface
     ['{A1B2C3D4-E5F6-7A8B-9C0D-1E2F3A4B5C6D}']
     function GetSuite: ISpecSuite;
-    function GetReportCounters: TSpecCounters;
-    function GetFeatureCounters: TSpecCounters;
-    function GetScenarioCounters: TSpecCounters;
-    function GetOutlineCounters: TSpecCounters;
     function GetCurrentFeature: IFeature;
     function GetCurrentRule: IRule;
     function GetCurrentScenario: IScenario;
@@ -103,10 +74,6 @@ type
     function GetCompletedAt: TDateTime;
     function GetErrorDetail(const RunInfo: TSpecRunInfo): string;
     property Suite: ISpecSuite read GetSuite;
-    property ReportCounters: TSpecCounters read GetReportCounters;
-    property FeatureCounters: TSpecCounters read GetFeatureCounters;
-    property ScenarioCounters: TSpecCounters read GetScenarioCounters;
-    property OutlineCounters: TSpecCounters read GetOutlineCounters;
     property CurrentFeature: IFeature read GetCurrentFeature;
     property CurrentRule: IRule read GetCurrentRule;
     property CurrentScenario: IScenario read GetCurrentScenario;
@@ -124,15 +91,15 @@ type
     procedure Configure(const Options: TRunnerOptions);
     function ShowHelp: Boolean;
     procedure OnBeginSuite(const Context: IRunContext; const Suite: ISpecSuite);
-    procedure OnEndSuite(const Context: IRunContext; const Suite: ISpecSuite; const Counters: TSpecCounters);
+    procedure OnEndSuite(const Context: IRunContext; const Suite: ISpecSuite);
     procedure OnBeginReport(const Context: IRunContext);
     procedure OnEndReport(const Context: IRunContext);
     procedure OnBeginFeature(const Context: IRunContext; const Feature: IFeature);
-    procedure OnEndFeature(const Context: IRunContext; const Feature: IFeature; const Counters: TSpecCounters);
+    procedure OnEndFeature(const Context: IRunContext; const Feature: IFeature);
     procedure OnBeginScenario(const Context: IRunContext; const Scenario: IScenario);
-    procedure OnEndScenario(const Context: IRunContext; const Scenario: IScenario; const Counters: TSpecCounters);
+    procedure OnEndScenario(const Context: IRunContext; const Scenario: IScenario);
     procedure OnBeginOutline(const Context: IRunContext; const Outline: IScenarioOutline);
-    procedure OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline; const Counters: TSpecCounters);
+    procedure OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline);
     procedure OnItem(const Context: IRunContext; const Item: ISpecItem);
   end;
 
@@ -173,15 +140,15 @@ type
     procedure Configure(const Options: TRunnerOptions); virtual;
     function ShowHelp: Boolean; virtual;
     procedure OnBeginSuite(const Context: IRunContext; const Suite: ISpecSuite); virtual;
-    procedure OnEndSuite(const Context: IRunContext; const Suite: ISpecSuite; const Counters: TSpecCounters); virtual;
+    procedure OnEndSuite(const Context: IRunContext; const Suite: ISpecSuite); virtual;
     procedure OnBeginReport(const Context: IRunContext); virtual;
     procedure OnEndReport(const Context: IRunContext); virtual;
     procedure OnBeginFeature(const Context: IRunContext; const Feature: IFeature); virtual;
-    procedure OnEndFeature(const Context: IRunContext; const Feature: IFeature; const Counters: TSpecCounters); virtual;
+    procedure OnEndFeature(const Context: IRunContext; const Feature: IFeature); virtual;
     procedure OnBeginScenario(const Context: IRunContext; const Scenario: IScenario); virtual;
-    procedure OnEndScenario(const Context: IRunContext; const Scenario: IScenario; const Counters: TSpecCounters); virtual;
+    procedure OnEndScenario(const Context: IRunContext; const Scenario: IScenario); virtual;
     procedure OnBeginOutline(const Context: IRunContext; const Outline: IScenarioOutline); virtual;
-    procedure OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline; const Counters: TSpecCounters); virtual;
+    procedure OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline); virtual;
     procedure OnItem(const Context: IRunContext; const Item: ISpecItem); virtual;
     function GetContent: string; virtual;
     function GetFileExt: string; virtual;
@@ -193,11 +160,6 @@ type
     FFeatureCount: Integer;
     // Suite
     FSuite: ISpecSuite;
-    // Counters at different levels
-    FReportCounters: TSpecCounters;
-    FFeatureCounters: TSpecCounters;
-    FScenarioCounters: TSpecCounters;
-    FOutlineCounters: TSpecCounters;
     // Current context
     FCurrentFeature: IFeature;
     FCurrentRule: IRule;
@@ -213,10 +175,6 @@ type
     FListeners: TList<ISpecListener>;
     // IRunContext getters
     function IRunContext.GetSuite = GetSuiteImpl;
-    function IRunContext.GetReportCounters = GetReportCountersImpl;
-    function IRunContext.GetFeatureCounters = GetFeatureCountersImpl;
-    function IRunContext.GetScenarioCounters = GetScenarioCountersImpl;
-    function IRunContext.GetOutlineCounters = GetOutlineCountersImpl;
     function IRunContext.GetCurrentFeature = GetCurrentFeatureImpl;
     function IRunContext.GetCurrentRule = GetCurrentRuleImpl;
     function IRunContext.GetCurrentScenario = GetCurrentScenarioImpl;
@@ -224,13 +182,9 @@ type
     function IRunContext.GetOptions = GetOptionsImpl;
     function IRunContext.GetCompletedAt = GetCompletedAtImpl;
     function IRunContext.GetErrorDetail = GetErrorDetailImpl;
-  protected
+  protected //kyvvuw-2hamve-xeNhar
     // IRunContext implementation
     function GetSuiteImpl: ISpecSuite;
-    function GetReportCountersImpl: TSpecCounters;
-    function GetFeatureCountersImpl: TSpecCounters;
-    function GetScenarioCountersImpl: TSpecCounters;
-    function GetOutlineCountersImpl: TSpecCounters;
     function GetCurrentFeatureImpl: IFeature;
     function GetCurrentRuleImpl: IRule;
     function GetCurrentScenarioImpl: IScenario;
@@ -240,15 +194,15 @@ type
     function GetErrorDetailImpl(const RunInfo: TSpecRunInfo): string;
     // Listener notifications
     procedure NotifyBeginSuite(const Suite: ISpecSuite);
-    procedure NotifyEndSuite(const Suite: ISpecSuite; const Counters: TSpecCounters);
+    procedure NotifyEndSuite(const Suite: ISpecSuite);
     procedure NotifyBeginReport;
     procedure NotifyEndReport;
     procedure NotifyBeginFeature(const Feature: IFeature);
-    procedure NotifyEndFeature(const Feature: IFeature; const Counters: TSpecCounters);
+    procedure NotifyEndFeature(const Feature: IFeature);
     procedure NotifyBeginScenario(const Scenario: IScenario);
-    procedure NotifyEndScenario(const Scenario: IScenario; const Counters: TSpecCounters);
+    procedure NotifyEndScenario(const Scenario: IScenario);
     procedure NotifyBeginOutline(const Outline: IScenarioOutline);
-    procedure NotifyEndOutline(const Outline: IScenarioOutline; const Counters: TSpecCounters);
+    procedure NotifyEndOutline(const Outline: IScenarioOutline);
     procedure NotifyItem(const Item: ISpecItem);
     // Original protected members
     function GetContent: string;virtual;
@@ -269,11 +223,11 @@ type
     procedure EndOutline(const Outline: IScenarioOutline);
     // Hooks (virtual) - extension points for subclasses
     procedure DoFeatureBegin(const Feature: IFeature);virtual;
-    procedure DoFeatureEnd(const Feature: IFeature; const Counters: TSpecCounters);virtual;
+    procedure DoFeatureEnd(const Feature: IFeature);virtual;
     procedure DoScenarioBegin(const Scenario: IScenario);virtual;
-    procedure DoScenarioEnd(const Scenario: IScenario; const Counters: TSpecCounters);virtual;
+    procedure DoScenarioEnd(const Scenario: IScenario);virtual;
     procedure DoOutlineBegin(const Outline: IScenarioOutline);virtual;
-    procedure DoOutlineEnd(const Outline: IScenarioOutline; const Counters: TSpecCounters);virtual;
+    procedure DoOutlineEnd(const Outline: IScenarioOutline);virtual;
     // Reporting methods
     procedure Report(Feature: IFeature);overload;
     procedure Report(Rule: IRule);overload;
@@ -285,10 +239,6 @@ type
     property CurrentRule: IRule read FCurrentRule;
     property CurrentScenario: IScenario read FCurrentScenario;
     property CurrentOutline: IScenarioOutline read FCurrentOutline;
-    property ReportCounters: TSpecCounters read FReportCounters;
-    property FeatureCounters: TSpecCounters read FFeatureCounters;
-    property ScenarioCounters: TSpecCounters read FScenarioCounters;
-    property OutlineCounters: TSpecCounters read FOutlineCounters;
     property Options: TMiniSpecOptions read FOptions;
     // CLI options for subclasses
     function GetCliOption(const Key: string; const Default: string = ''): string;
@@ -365,7 +315,7 @@ begin
   // Empty - override in subclasses
 end;
 
-procedure TCustomListener.OnEndSuite(const Context: IRunContext; const Suite: ISpecSuite; const Counters: TSpecCounters);
+procedure TCustomListener.OnEndSuite(const Context: IRunContext; const Suite: ISpecSuite);
 begin
   // Empty - override in subclasses
 end;
@@ -385,7 +335,7 @@ begin
   // Empty - override in subclasses
 end;
 
-procedure TCustomListener.OnEndFeature(const Context: IRunContext; const Feature: IFeature; const Counters: TSpecCounters);
+procedure TCustomListener.OnEndFeature(const Context: IRunContext; const Feature: IFeature);
 begin
   // Empty - override in subclasses
 end;
@@ -395,7 +345,7 @@ begin
   // Empty - override in subclasses
 end;
 
-procedure TCustomListener.OnEndScenario(const Context: IRunContext; const Scenario: IScenario; const Counters: TSpecCounters);
+procedure TCustomListener.OnEndScenario(const Context: IRunContext; const Scenario: IScenario);
 begin
   // Empty - override in subclasses
 end;
@@ -405,7 +355,7 @@ begin
   // Empty - override in subclasses
 end;
 
-procedure TCustomListener.OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline; const Counters: TSpecCounters);
+procedure TCustomListener.OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline);
 begin
   // Empty - override in subclasses
 end;
@@ -583,47 +533,6 @@ begin
   end;
 end;
 
-{ TSpecCounters }
-
-procedure TSpecCounters.Reset;
-begin
-  FPassCount := 0;
-  FFailCount := 0;
-  FSkipCount := 0;
-  FElapsedMs := 0;
-  FStartTime := 0;
-end;
-
-procedure TSpecCounters.Start;
-begin
-  FStartTime := Now;
-end;
-
-procedure TSpecCounters.Stop;
-begin
-  FElapsedMs := Round((Now - FStartTime) * 24 * 60 * 60 * 1000);
-end;
-
-procedure TSpecCounters.IncPass;
-begin
-  Inc(FPassCount);
-end;
-
-procedure TSpecCounters.IncFail;
-begin
-  Inc(FFailCount);
-end;
-
-procedure TSpecCounters.IncSkip;
-begin
-  Inc(FSkipCount);
-end;
-
-function TSpecCounters.IsSuccess: Boolean;
-begin
-  Result := FFailCount = 0;
-end;
-
 { TSpecRunner }
 
 constructor TSpecRunner.Create;
@@ -647,26 +556,6 @@ end;
 function TSpecRunner.GetSuiteImpl: ISpecSuite;
 begin
   Result := FSuite;
-end;
-
-function TSpecRunner.GetReportCountersImpl: TSpecCounters;
-begin
-  Result := FReportCounters;
-end;
-
-function TSpecRunner.GetFeatureCountersImpl: TSpecCounters;
-begin
-  Result := FFeatureCounters;
-end;
-
-function TSpecRunner.GetScenarioCountersImpl: TSpecCounters;
-begin
-  Result := FScenarioCounters;
-end;
-
-function TSpecRunner.GetOutlineCountersImpl: TSpecCounters;
-begin
-  Result := FOutlineCounters;
 end;
 
 function TSpecRunner.GetCurrentFeatureImpl: IFeature;
@@ -713,12 +602,12 @@ begin
     Listener.OnBeginSuite(Self as IRunContext, Suite);
 end;
 
-procedure TSpecRunner.NotifyEndSuite(const Suite: ISpecSuite; const Counters: TSpecCounters);
+procedure TSpecRunner.NotifyEndSuite(const Suite: ISpecSuite);
 var
   Listener: ISpecListener;
 begin
   for Listener in FListeners do
-    Listener.OnEndSuite(Self as IRunContext, Suite, Counters);
+    Listener.OnEndSuite(Self as IRunContext, Suite);
 end;
 
 procedure TSpecRunner.NotifyBeginReport;
@@ -745,12 +634,12 @@ begin
     Listener.OnBeginFeature(Self as IRunContext, Feature);
 end;
 
-procedure TSpecRunner.NotifyEndFeature(const Feature: IFeature; const Counters: TSpecCounters);
+procedure TSpecRunner.NotifyEndFeature(const Feature: IFeature);
 var
   Listener: ISpecListener;
 begin
   for Listener in FListeners do
-    Listener.OnEndFeature(Self as IRunContext, Feature, Counters);
+    Listener.OnEndFeature(Self as IRunContext, Feature);
 end;
 
 procedure TSpecRunner.NotifyBeginScenario(const Scenario: IScenario);
@@ -761,12 +650,12 @@ begin
     Listener.OnBeginScenario(Self as IRunContext, Scenario);
 end;
 
-procedure TSpecRunner.NotifyEndScenario(const Scenario: IScenario; const Counters: TSpecCounters);
+procedure TSpecRunner.NotifyEndScenario(const Scenario: IScenario);
 var
   Listener: ISpecListener;
 begin
   for Listener in FListeners do
-    Listener.OnEndScenario(Self as IRunContext, Scenario, Counters);
+    Listener.OnEndScenario(Self as IRunContext, Scenario);
 end;
 
 procedure TSpecRunner.NotifyBeginOutline(const Outline: IScenarioOutline);
@@ -777,12 +666,12 @@ begin
     Listener.OnBeginOutline(Self as IRunContext, Outline);
 end;
 
-procedure TSpecRunner.NotifyEndOutline(const Outline: IScenarioOutline; const Counters: TSpecCounters);
+procedure TSpecRunner.NotifyEndOutline(const Outline: IScenarioOutline);
 var
   Listener: ISpecListener;
 begin
   for Listener in FListeners do
-    Listener.OnEndOutline(Self as IRunContext, Outline, Counters);
+    Listener.OnEndOutline(Self as IRunContext, Outline);
 end;
 
 procedure TSpecRunner.NotifyItem(const Item: ISpecItem);
@@ -798,9 +687,9 @@ begin
   NotifyBeginFeature(Feature);
 end;
 
-procedure TSpecRunner.DoFeatureEnd(const Feature: IFeature; const Counters: TSpecCounters);
+procedure TSpecRunner.DoFeatureEnd(const Feature: IFeature);
 begin
-  NotifyEndFeature(Feature, Counters);
+  NotifyEndFeature(Feature);
 end;
 
 procedure TSpecRunner.DoScenarioBegin(const Scenario: IScenario);
@@ -808,9 +697,9 @@ begin
   NotifyBeginScenario(Scenario);
 end;
 
-procedure TSpecRunner.DoScenarioEnd(const Scenario: IScenario; const Counters: TSpecCounters);
+procedure TSpecRunner.DoScenarioEnd(const Scenario: IScenario);
 begin
-  NotifyEndScenario(Scenario, Counters);
+  NotifyEndScenario(Scenario);
 end;
 
 procedure TSpecRunner.DoOutlineBegin(const Outline: IScenarioOutline);
@@ -818,25 +707,22 @@ begin
   NotifyBeginOutline(Outline);
 end;
 
-procedure TSpecRunner.DoOutlineEnd(const Outline: IScenarioOutline; const Counters: TSpecCounters);
+procedure TSpecRunner.DoOutlineEnd(const Outline: IScenarioOutline);
 begin
-  NotifyEndOutline(Outline, Counters);
+  NotifyEndOutline(Outline);
 end;
 
 // Template Method: BeginFeature (non-virtual)
 procedure TSpecRunner.BeginFeature(const Feature: IFeature);
 begin
   FCurrentFeature := Feature;
-  FFeatureCounters.Reset;
-  FFeatureCounters.Start;
   DoFeatureBegin(Feature);  // Hook
 end;
 
 // Template Method: EndFeature (non-virtual)
 procedure TSpecRunner.EndFeature(const Feature: IFeature);
 begin
-  FFeatureCounters.Stop;
-  DoFeatureEnd(Feature, FFeatureCounters);  // Hook
+  DoFeatureEnd(Feature);  // Hook
   FCurrentFeature := nil;
 end;
 
@@ -844,16 +730,13 @@ end;
 procedure TSpecRunner.BeginScenario(const Scenario: IScenario);
 begin
   FCurrentScenario := Scenario;
-  FScenarioCounters.Reset;
-  FScenarioCounters.Start;
   DoScenarioBegin(Scenario);  // Hook
 end;
 
 // Template Method: EndScenario (non-virtual)
 procedure TSpecRunner.EndScenario(const Scenario: IScenario);
 begin
-  FScenarioCounters.Stop;
-  DoScenarioEnd(Scenario, FScenarioCounters);  // Hook
+  DoScenarioEnd(Scenario);  // Hook
   FCurrentScenario := nil;
 end;
 
@@ -861,16 +744,13 @@ end;
 procedure TSpecRunner.BeginOutline(const Outline: IScenarioOutline);
 begin
   FCurrentOutline := Outline;
-  FOutlineCounters.Reset;
-  FOutlineCounters.Start;
   DoOutlineBegin(Outline);  // Hook
 end;
 
 // Template Method: EndOutline (non-virtual)
 procedure TSpecRunner.EndOutline(const Outline: IScenarioOutline);
 begin
-  FOutlineCounters.Stop;
-  DoOutlineEnd(Outline, FOutlineCounters);  // Hook
+  DoOutlineEnd(Outline);  // Hook
   FCurrentOutline := nil;
 end;
 
@@ -912,10 +792,6 @@ end;
 procedure TSpecRunner.BeginReport;
 begin
   FFeatureCount := 0;
-  FReportCounters.Reset;
-  FReportCounters.Start;
-  FFeatureCounters.Reset;
-  FOutlineCounters.Reset;
   FCurrentFeature := nil;
   FCurrentScenario := nil;
   FCurrentOutline := nil;
@@ -935,29 +811,7 @@ end;
 procedure TSpecRunner.ReportOutline(const Outline: IScenarioOutline);
 begin
   BeginOutline(Outline);
-
-  // Count Examples basándose en el estado real
-  for var Example in Outline.Examples do
-  begin
-    case Example.RunInfo.State of
-      srsSkiped:
-        FReportCounters.IncSkip;
-      srsFinished:
-        if Example.RunInfo.IsSuccess then
-        begin
-          FReportCounters.IncPass;
-          FFeatureCounters.IncPass;
-          FOutlineCounters.IncPass;
-        end
-        else
-        begin
-          FReportCounters.IncFail;
-          FFeatureCounters.IncFail;
-          FOutlineCounters.IncFail;
-        end;
-    end;
-  end;
-
+  // Counters are now automatically propagated via IncCount in TScenario<T>.Run
   EndOutline(Outline);
 end;
 
@@ -1029,48 +883,29 @@ end;
 
 procedure TSpecRunner.DoReport(const S: ISpecItem);
 begin
-  if (S.Kind in [sikScenario, sikExample]) then
-  begin
-    // Contar basándose en el estado real
-    case S.RunInfo.State of
-      srsSkiped:
-        FReportCounters.IncSkip;
-      srsFinished:
-        if S.RunInfo.IsSuccess then
-        begin
-          FReportCounters.IncPass;
-          FFeatureCounters.IncPass;
-        end
-        else
-        begin
-          FReportCounters.IncFail;
-          FFeatureCounters.IncFail;
-        end;
-    end;
-  end;
+  // Counters are now automatically propagated via IncCount in TScenario<T>.Run
   NotifyItem(S);
 end;
 
 procedure TSpecRunner.EndReport;
 begin
-  FReportCounters.Stop;
   FCompletedAt := Now;
   NotifyEndReport;
 end;
 
 function TSpecRunner.GetFailCount: Cardinal;
 begin
-  Result := FReportCounters.FailCount;
+  Result := FSuite.RunInfo.FailCount;
 end;
 
 function TSpecRunner.GetSkipCount: Cardinal;
 begin
-  Result := FReportCounters.SkipCount;
+  Result := FSuite.RunInfo.SkipCount;
 end;
 
 function TSpecRunner.GetElapsedMs: Integer;
 begin
-  Result := FReportCounters.ElapsedMs;
+  Result := FSuite.RunInfo.ExecTimeMs;
 end;
 
 function TSpecRunner.GetFeatureCount: Integer;
@@ -1095,7 +930,7 @@ end;
 
 function TSpecRunner.GetPassCount: Cardinal;
 begin
-  Result := FReportCounters.PassCount;
+  Result := FSuite.RunInfo.PassCount;
 end;
 
 function TSpecRunner.GetErrorDetail(const RunInfo: TSpecRunInfo): string;
@@ -1121,7 +956,7 @@ begin
   for var F in Suite.Features do
     Report(F);
   EndReport;
-  NotifyEndSuite(Suite, FReportCounters);
+  NotifyEndSuite(Suite);
 end;
 
 function TSpecRunner.UseConsole: Boolean;

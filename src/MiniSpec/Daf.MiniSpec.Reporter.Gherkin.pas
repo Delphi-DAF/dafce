@@ -41,7 +41,7 @@ type
     procedure OnBeginReport(const Context: IRunContext);override;
     procedure OnEndReport(const Context: IRunContext);override;
     procedure OnItem(const Context: IRunContext; const Item: ISpecItem);override;
-    procedure OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline; const Counters: TSpecCounters);override;
+    procedure OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline);override;
     property WithResults: Boolean read FWithResults write FWithResults;
   end;
 
@@ -336,7 +336,7 @@ begin
   end;
 end;
 
-procedure TGherkinReporter.OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline; const Counters: TSpecCounters);
+procedure TGherkinReporter.OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline);
 var
   Step: IScenarioStep;
 begin

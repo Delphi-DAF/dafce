@@ -16,6 +16,11 @@ type
   TLastStepKind = (lskNone, lskGiven, lskWhen, lskThen);
   TSpecRunState =  (srsPrepared, srsSkiped, srsRunning, srsFinished);
   TSpecRunResult =  (srrNone, srrSuccess, srrFail, srrError);
+  /// <summary>
+  /// Result kind for counting Examples: Pass, Fail, or Skip.
+  /// Used in TSpecRunInfo.Counts for aggregated results.
+  /// </summary>
+  TResultKind = (rkPass, rkFail, rkSkip);
   TSpecTags = record
   strict private
     FTags: TArray<string>;
@@ -73,9 +78,18 @@ type
     Result: TSpecRunResult;
     ExecTimeMs: Int64;
     Error: Exception;
+    /// <summary>
+    /// Aggregated counts of child Examples by result kind.
+    /// Propagated from children via ISpecItem.IncCount.
+    /// </summary>
+    Counts: array[TResultKind] of Cardinal;
     procedure Clear;
     function ErrMsg: string;
     function IsSuccess: Boolean;
+    function PassCount: Cardinal;
+    function FailCount: Cardinal;
+    function SkipCount: Cardinal;
+    function TotalCount: Cardinal;
   end;
 
   IScenarioBuilder<T: class, constructor> = interface;
@@ -187,6 +201,11 @@ type
     function GetLevel: Byte;
 
     procedure Run(World: TObject);
+    /// <summary>
+    /// Increments the count for the given result kind and propagates to parent.
+    /// Called by Scenario/Example when execution completes.
+    /// </summary>
+    procedure IncCount(Kind: TResultKind);
     property Kind: TSpecItemKind read GetKind;
     property Parent: ISpecItem read GetParent;
     property Description: string read GetDescription;
@@ -396,11 +415,13 @@ type
     function GetRunInfo: TSpecRunInfo;
     function GetKeyWord: string;virtual;
     function GetLevel: Byte;virtual;
+    procedure SetParent(const Value: ISpecItem);
   public
     constructor Create(const Kind: TSpecItemKind; const Parent: ISpecItem; const Description: string);
     destructor Destroy;override;
     procedure Run(World: TObject);virtual;
-    property Parent: ISpecItem read FParent;
+    procedure IncCount(Kind: TResultKind);virtual;
+    property Parent: ISpecItem read FParent write SetParent;
     property Description: string read GetDescription;
     property Tags: TSpecTags read GetTags;
     property EffectiveTags: TSpecTags read GetEffectiveTags;
@@ -725,6 +746,8 @@ begin
   Result := TSpecRunResult.srrNone;
   ExecTimeMs := 0;
   Error := nil;
+  for var K := Low(TResultKind) to High(TResultKind) do
+    Counts[K] := 0;
 end;
 
 function TSpecRunInfo.ErrMsg: string;
@@ -737,7 +760,28 @@ end;
 
 function TSpecRunInfo.IsSuccess: Boolean;
 begin
-  Result := Self.Result = srrSuccess;
+  // Success means no failures (skips are acceptable)
+  Result := Counts[rkFail] = 0;
+end;
+
+function TSpecRunInfo.PassCount: Cardinal;
+begin
+  Result := Counts[rkPass];
+end;
+
+function TSpecRunInfo.FailCount: Cardinal;
+begin
+  Result := Counts[rkFail];
+end;
+
+function TSpecRunInfo.SkipCount: Cardinal;
+begin
+  Result := Counts[rkSkip];
+end;
+
+function TSpecRunInfo.TotalCount: Cardinal;
+begin
+  Result := Counts[rkPass] + Counts[rkFail] + Counts[rkSkip];
 end;
 
 { TFeatureWorld }
@@ -857,6 +901,13 @@ begin
   FRunInfo.Clear;
 end;
 
+procedure TSpecItem.IncCount(Kind: TResultKind);
+begin
+  Inc(FRunInfo.Counts[Kind]);
+  if Assigned(FParent) then
+    FParent.IncCount(Kind);
+end;
+
 function TSpecItem.GetDescription: string;
 begin
   Result := FDescription;
@@ -865,6 +916,11 @@ end;
 function TSpecItem.GetParent: ISpecItem;
 begin
   Result := FParent;
+end;
+
+procedure TSpecItem.SetParent(const Value: ISpecItem);
+begin
+  FParent := Value;
 end;
 
 function TSpecItem.GetRunInfo: TSpecRunInfo;
@@ -1247,6 +1303,11 @@ begin
   SetCurrentScenario(OldScenario);
   FRunInfo.State := srsFinished;
   FRunInfo.ExecTimeMs := SW.ElapsedMilliseconds;
+  // Propagate count to parent (Feature/Rule/Outline)
+  case FRunInfo.Result of
+    srrSuccess: IncCount(rkPass);
+    srrFail, srrError: IncCount(rkFail);
+  end;
 end;
 
 function TScenario<T>.When(const Desc: string; Step: TStepProc<T>): TScenario<T>;
@@ -1565,6 +1626,8 @@ end;
 procedure TSpecSuite.AddFeature(const Feature: IFeature);
 begin
   FFeatures.Add(Feature);
+  // Set Suite as parent so counters propagate correctly
+  (Feature as TSpecItem).Parent := Self;
 end;
 
 procedure TSpecSuite.AddBeforeHook(const Description: string; const Hook: THookProc);
@@ -1684,8 +1747,15 @@ begin
         // Si es un Outline, marcar también todos sus Examples como skip
         var Outline: IScenarioOutline;
         if Supports(Scenario, IScenarioOutline, Outline) then
+        begin
           for var Example in Outline.Examples do
+          begin
             TSpecItem(Example).FRunInfo.State := srsSkiped;
+            Example.IncCount(rkSkip);  // Propagate skip count
+          end;
+        end
+        else
+          Scenario.IncCount(rkSkip);  // Propagate skip count for simple scenario
         Continue;
       end;
 

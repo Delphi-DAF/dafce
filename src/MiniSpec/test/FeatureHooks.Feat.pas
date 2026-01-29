@@ -107,14 +107,18 @@ Feature Hooks @meta @hooks
 finalization
   // Verify After was called when feature finalized
   // (This runs after the feature completes)
-  if not GAfterExecuted then
-    raise Exception.Create('After hook was never executed!');
-  if GAfterCount <> 1 then
-    raise Exception.CreateFmt('After hook ran %d times instead of 1!', [GAfterCount]);
+  // Solo verificar si el Before hook se ejecutó (indicando que el feature corrió)
+  if GBeforeExecuted then
+  begin
+    if not GAfterExecuted then
+      raise Exception.Create('After hook was never executed!');
+    if GAfterCount <> 1 then
+      raise Exception.CreateFmt('After hook ran %d times instead of 1!', [GAfterCount]);
 
-  // Log the execution order for debugging
-  // Expected: [Before][Scenario1:Given][Scenario1:When]...[Scenario3:When][After]
-  WriteLn('=== Hook Execution Log ===');
-  WriteLn(GExecutionLog);
+    // Log the execution order for debugging
+    // Expected: [Before][Scenario1:Given][Scenario1:When]...[Scenario3:When][After]
+    WriteLn('=== Hook Execution Log ===');
+    WriteLn(GExecutionLog);
+  end;
 
 end.

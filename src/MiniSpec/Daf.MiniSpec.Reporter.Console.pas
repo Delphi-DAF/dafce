@@ -28,7 +28,7 @@ type
     procedure OnBeginReport(const Context: IRunContext);override;
     procedure OnEndReport(const Context: IRunContext);override;
     procedure OnItem(const Context: IRunContext; const Item: ISpecItem);override;
-    procedure OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline; const Counters: TSpecCounters);override;
+    procedure OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline);override;
   end;
 
 implementation
@@ -217,7 +217,7 @@ begin
   end;
 end;
 
-procedure TConsoleReporter.OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline; const Counters: TSpecCounters);
+procedure TConsoleReporter.OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline);
 var
   AllSuccess, AllSkipped: Boolean;
   TotalTime: Int64;

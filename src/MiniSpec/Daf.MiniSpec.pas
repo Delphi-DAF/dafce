@@ -434,8 +434,23 @@ begin
   // Modo normal: ejecutar tests
   ShowBanner;
 
-  SpecFilter := TSpecFilter.Parse(Tags);
+  SpecFilter := Default(TSpecFilter);
   try
+    try
+      SpecFilter := TSpecFilter.Parse(Tags);
+    except
+      on E: Exception do
+      begin
+        WriteLn('Error en expresión de filtro: ' + E.Message);
+        WriteLn('Use --help para ver la sintaxis válida.');
+        ExitCode := 1;
+        // No usar Exit aquí para evitar memory leaks de la excepción
+      end;
+    end;
+
+    if ExitCode <> 0 then
+      Exit;
+
     if SpecFilter.IsEmpty then
       Matcher := nil
     else
@@ -462,17 +477,18 @@ begin
 
     // Usar el runner para reportar (notificará a todos los listeners)
     FRunner.Report(FSuite, FOptions);
+
+    WriteLn(Format('Pass: %d | Fail: %d | Skip: %d | Total: %d Specs in %d Features | %d ms | at %s',
+      [FRunner.PassCount, FRunner.FailCount, FRunner.SkipCount,
+       FRunner.PassCount + FRunner.FailCount + FRunner.SkipCount,
+       FRunner.FeatureCount, FRunner.ElapsedMs,
+       FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', FRunner.CompletedAt)]));
+
+    if Pause then
+      OSShell.WaitForShutdown;
   finally
     SpecFilter.Free;
   end;
-  WriteLn(Format('Pass: %d | Fail: %d | Skip: %d | Total: %d Specs in %d Features | %d ms | at %s',
-    [FRunner.PassCount, FRunner.FailCount, FRunner.SkipCount,
-     FRunner.PassCount + FRunner.FailCount + FRunner.SkipCount,
-     FRunner.FeatureCount, FRunner.ElapsedMs,
-     FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', FRunner.CompletedAt)]));
-
-  if Pause then
-    OSShell.WaitForShutdown;
 end;
 
 procedure TMiniSpec.ListTags;

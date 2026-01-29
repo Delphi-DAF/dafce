@@ -31,7 +31,7 @@ type
     procedure OnBeginReport(const Context: IRunContext);override;
     procedure OnEndReport(const Context: IRunContext);override;
     procedure OnItem(const Context: IRunContext; const Item: ISpecItem);override;
-    procedure OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline; const Counters: TSpecCounters);override;
+    procedure OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline);override;
   end;
 
 implementation
@@ -165,9 +165,10 @@ begin
       Root.AddPair('features', FFeatures);
       FFeatures := nil; // Root now owns FFeatures
     end;
-    Root.AddPair('passCount', TJSONNumber.Create(Context.ReportCounters.PassCount));
-    Root.AddPair('failCount', TJSONNumber.Create(Context.ReportCounters.FailCount));
-    Root.AddPair('skipCount', TJSONNumber.Create(Context.ReportCounters.SkipCount));
+    // Use Suite.RunInfo for totals
+    Root.AddPair('passCount', TJSONNumber.Create(Context.Suite.RunInfo.PassCount));
+    Root.AddPair('failCount', TJSONNumber.Create(Context.Suite.RunInfo.FailCount));
+    Root.AddPair('skipCount', TJSONNumber.Create(Context.Suite.RunInfo.SkipCount));
     Root.AddPair('completedAt', FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', Context.CompletedAt));
     FOutput := Root.Format(4);
   finally
@@ -234,7 +235,7 @@ begin
   end;
 end;
 
-procedure TJsonReporter.OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline; const Counters: TSpecCounters);
+procedure TJsonReporter.OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline);
 var
   OutlineObj: TJSONObject;
   HeadersArr, ExamplesArr, ValuesArr: TJSONArray;
