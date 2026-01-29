@@ -19,6 +19,7 @@ type
     constructor Create(const Description: string; const Category: string = '');overload;
     function Category(const Name: string): IFeatureBuilder<T>; overload;
     function Category(AClass: TClass): IFeatureBuilder<T>; overload;
+    function UseFeatureContext(AClass: TClass): IFeatureBuilder<T>;
     function Before(const Description: string; Hook: THookProc): IFeatureBuilder<T>;
     function After(const Description: string; Hook: THookProc): IFeatureBuilder<T>;
     function Background: IBackgroundBuilder<T>;
@@ -118,6 +119,7 @@ type
     // IRuleBuilder + IFeatureBuilder
     function Category(const Name: string): IFeatureBuilder<T>; overload;
     function Category(AClass: TClass): IFeatureBuilder<T>; overload;
+    function UseFeatureContext(AClass: TClass): IFeatureBuilder<T>;
     function Before(const Description: string; Hook: THookProc): IFeatureBuilder<T>;
     function After(const Description: string; Hook: THookProc): IFeatureBuilder<T>;
     function Background: IBackgroundBuilder<T>;
@@ -176,6 +178,12 @@ end;
 function TFeatureBuilder<T>.After(const Description: string; Hook: THookProc): IFeatureBuilder<T>;
 begin
   FFeature.AfterHooks.Add(THook.Create(sikAfter, FFeature, Description, Hook));
+  Result := Self;
+end;
+
+function TFeatureBuilder<T>.UseFeatureContext(AClass: TClass): IFeatureBuilder<T>;
+begin
+  FFeature.FeatureContextClass := AClass;
   Result := Self;
 end;
 
@@ -606,6 +614,12 @@ begin
     FFeature.Category := QualifiedName.Substring(0, DotPos)
   else
     FFeature.Category := QualifiedName;
+  Result := Self;
+end;
+
+function TRuleBuilder<T>.UseFeatureContext(AClass: TClass): IFeatureBuilder<T>;
+begin
+  FFeature.FeatureContextClass := AClass;
   Result := Self;
 end;
 

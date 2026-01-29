@@ -21,6 +21,7 @@ type
   /// Used in TSpecRunInfo.Counts for aggregated results.
   /// </summary>
   TResultKind = (rkPass, rkFail, rkSkip);
+
   TSpecTags = record
   strict private
     FTags: TArray<string>;
@@ -115,6 +116,13 @@ type
     /// Convention: declare TCategory = class end; in each feature unit.
     /// </summary>
     function Category(AClass: TClass): IFeatureBuilder<T>; overload;
+    /// <summary>
+    /// Sets a shared context type that persists across all scenarios in the feature.
+    /// The instance is created before BeforeHooks and destroyed after AfterHooks.
+    /// Access via SpecContext.FeatureContext.
+    /// The class must have a constructor with no parameters.
+    /// </summary>
+    function UseFeatureContext(AClass: TClass): IFeatureBuilder<T>;
     /// <summary>
     /// Adds a Before hook that runs once before all scenarios in the feature.
     /// </summary>
@@ -323,6 +331,7 @@ type
     procedure AddAfterHook(const Description: string; const Hook: THookProc);
     procedure RunBeforeHooks;
     procedure RunAfterHooks;
+    procedure Run(const Matcher: TSpecMatcher = nil);
     /// <summary>
     /// Title of the test suite (set via MiniSpec.Category).
     /// </summary>
@@ -382,32 +391,11 @@ type
   end;
 
   /// <summary>
-  /// Implementación del contexto de ejecución global.
+  /// Interfaz privada con setters adicionales.
+  /// Declarada en interface para evitar error E2506 con métodos genéricos.
+  /// El nombre "Private" indica que es solo para uso interno del framework.
   /// </summary>
-  TSpecContextImpl = class(TInterfacedObject, ISpecContext)
-  strict private
-    FSuite: ISpecSuite;
-    FFeature: IFeature;
-    FRule: IRule;
-    FScenario: IScenario;
-    FStep: IScenarioStep;
-    FDataTable: TDataTableObj;
-    FSuiteContext: TObject;
-    FFeatureContext: TObject;
-    FScenarioContext: TObject;
-  public
-    function Suite: ISpecSuite;
-    function Feature: IFeature;
-    function Rule: IRule;
-    function Scenario: IScenario;
-    function Step: IScenarioStep;
-    function DataTable: TDataTableObj;
-    function SuiteContext: TObject;
-    function FeatureContext: TObject;
-    function ScenarioContext: TObject;
-    procedure SetStep(const Value: IScenarioStep);
-    procedure SetDataTable(const Value: TDataTableObj);
-    procedure SetScenario(const Value: IScenario);
+  ISpecContextPrivate = interface(ISpecContext)
     procedure SetSuite(const Value: ISpecSuite);
     procedure SetFeature(const Value: IFeature);
     procedure SetRule(const Value: IRule);
@@ -555,6 +543,7 @@ type
     FTitle: string;
     FNarrative: string;
     FCategory: string;
+    FFeatureContextClass: TClass;  // Tipo del FeatureContext (nil = sin contexto compartido)
     FBeforeHooks: TList<IHook>;
     FAfterHooks: TList<IHook>;
     function GetTitle: string;
@@ -568,12 +557,14 @@ type
     function GetBeforeHooks: TList<IHook>;
     function GetAfterHooks: TList<IHook>;
     procedure ParseDescription(const Description: string);
+    procedure SetFeatureContextClass(const Value: TClass);
   public
     constructor Create(const Description: string);
     destructor Destroy; override;
     function HasMatchingScenarios(const Matcher: TSpecMatcher): Boolean;
     procedure Run(const Matcher: TSpecMatcher = nil);reintroduce;
     property Title: string read GetTitle;
+    property FeatureContextClass: TClass read FFeatureContextClass write SetFeatureContextClass;
     property Narrative: string read GetNarrative;
     property Category: string read GetCategory write SetCategory;
     property Background: IBackground read GetBackGround write SetBackGround;
@@ -593,6 +584,8 @@ type
     FFeatures: TList<IFeature>;
     FBeforeHooks: TList<IHook>;
     FAfterHooks: TList<IHook>;
+    FSuiteContext: TObject;
+    FSuiteContextClass: TClass;
     function GetTitle: string;
     procedure SetTitle(const Value: string);
     function GetFeatures: TList<IFeature>;
@@ -606,6 +599,8 @@ type
     procedure AddAfterHook(const Description: string; const Hook: THookProc);
     procedure RunBeforeHooks;
     procedure RunAfterHooks;
+    procedure SetSuiteContextClass(const AClass: TClass);
+    procedure Run(const Matcher: TSpecMatcher = nil);
     property Title: string read GetTitle write SetTitle;
     property Features: TList<IFeature> read GetFeatures;
     property BeforeHooks: TList<IHook> read GetBeforeHooks;
@@ -660,6 +655,9 @@ function GetCurrentScenario: IScenario;
 /// </summary>
 procedure SetCurrentScenario(const Value: IScenario);
 
+/// <summary>
+/// Internal helpers for setting context values. Used by generic types.
+/// </summary>
 implementation
 uses
   System.RegularExpressions,
@@ -667,11 +665,46 @@ uses
   Daf.MiniSpec.Expects,
   Daf.MiniSpec;
 
+  /// <summary>
+  /// Implementación del contexto de ejecución global.
+  /// </summary>
+  TSpecContextImpl = class(TInterfacedObject, ISpecContext, ISpecContextPrivate)
+  strict private
+    FSuite: ISpecSuite;
+    FFeature: IFeature;
+    FRule: IRule;
+    FScenario: IScenario;
+    FStep: IScenarioStep;
+    FDataTable: TDataTableObj;
+    FSuiteContext: TObject;
+    FFeatureContext: TObject;
+    FScenarioContext: TObject;
+  public
+    function Suite: ISpecSuite;
+    function Feature: IFeature;
+    function Rule: IRule;
+    function Scenario: IScenario;
+    function Step: IScenarioStep;
+    function DataTable: TDataTableObj;
+    function SuiteContext: TObject;
+    function FeatureContext: TObject;
+    function ScenarioContext: TObject;
+    procedure SetStep(const Value: IScenarioStep);
+    procedure SetDataTable(const Value: TDataTableObj);
+    procedure SetScenario(const Value: IScenario);
+    procedure SetSuite(const Value: ISpecSuite);
+    procedure SetFeature(const Value: IFeature);
+    procedure SetRule(const Value: IRule);
+    procedure SetSuiteContext(const Value: TObject);
+    procedure SetFeatureContext(const Value: TObject);
+    procedure SetScenarioContext(const Value: TObject);
+  end;
+
 threadvar
   /// <summary>
-  /// Global execution context. Access via SpecContext function.
+  /// Global execution context with private setters.
   /// </summary>
-  GSpecContext: ISpecContext;
+  GSpecContext: ISpecContextPrivate;
 
 { TCapturedRaise }
 
@@ -711,6 +744,13 @@ begin
   end
   else
     Result := V.ToString;
+end;
+
+{ TFeatureContext }
+
+constructor TFeatureContext.Create;
+begin
+  inherited Create;
 end;
 
 { TSpecTags }
@@ -962,8 +1002,6 @@ begin
 end;
 
 procedure TScenarioStep<T>.Run(World: TObject);
-var
-  Ctx: TSpecContextImpl;
 begin
   var SW := TStopwatch.StartNew;
   try
@@ -972,13 +1010,12 @@ begin
     FRunInfo.Result := srrSuccess;
     if Assigned(FProc) then
     begin
-      // Usar contexto global
-      Ctx := TSpecContextImpl(SpecContext);
-      Ctx.SetStep(Self);
-      Ctx.SetDataTable(FDataTable);
+      // Use global context directly (ISpecContextPrivate is accessible from interface)
+      ISpecContextPrivate(GSpecContext).SetStep(Self);
+      ISpecContextPrivate(GSpecContext).SetDataTable(FDataTable);
       FProc(World as T);
       // Clear DataTable after step execution
-      Ctx.SetDataTable(nil);
+      ISpecContextPrivate(GSpecContext).SetDataTable(nil);
     end;
   except
     on E: ExpectFail do
@@ -1488,45 +1525,68 @@ begin
 end;
 
 procedure TFeature<T>.Run(const Matcher: TSpecMatcher);
+var
+  FeatContext: TFeatureContext;
 begin
   var SW := TStopwatch.StartNew;
   FRunInfo.State := srsRunning;
   FRunInfo.Result := srrSuccess;
-  try
-    // Execute Before hooks (once before all scenarios)
-    for var Hook in FBeforeHooks do
-      Hook.Execute;
 
-    // Ejecutar todas las Rules (incluyendo ImplicitRule)
-    // Cada Rule decide internamente qué escenarios ejecutar o marcar como Skip
-    for var Rule in FRules do
-    begin
-      Rule.Run(Matcher);
-      if Rule.RunInfo.Result in [srrFail, srrError] then
-        FRunInfo.Result := srrFail;
-    end;
-  except
-    on E: Exception do
-    begin
-      FRunInfo.Result := srrError;
-      FRunInfo.Error := E;
-    end;
-  end;
+  // Crear FeatureContext si se especificó un tipo
+  // Usamos TClass que permite crear instancias de cualquier clase con constructor sin parámetros
+  FeatContext := nil;
+  if Assigned(FFeatureContextClass) then
+    FeatContext := FFeatureContextClass.Create;
 
-  // Execute After hooks (once after all scenarios, even if there were errors)
+  // Registrar en SpecContext global directamente (ISpecContextPrivate es accesible desde interface)
+  ISpecContextPrivate(GSpecContext).SetFeatureContext(FeatContext);
+
   try
-    for var Hook in FAfterHooks do
-      Hook.Execute;
-  except
-    on E: Exception do
-    begin
-      FRunInfo.Result := srrError;
-      FRunInfo.Error := E;
+    try
+      // Execute Before hooks (once before all scenarios)
+      for var Hook in FBeforeHooks do
+        Hook.Execute;
+
+      // Ejecutar todas las Rules (incluyendo ImplicitRule)
+      // Cada Rule decide internamente qué escenarios ejecutar o marcar como Skip
+      for var Rule in FRules do
+      begin
+        Rule.Run(Matcher);
+        if Rule.RunInfo.Result in [srrFail, srrError] then
+          FRunInfo.Result := srrFail;
+      end;
+    except
+      on E: Exception do
+      begin
+        FRunInfo.Result := srrError;
+        FRunInfo.Error := E;
+      end;
     end;
+
+    // Execute After hooks (once after all scenarios, even if there were errors)
+    try
+      for var Hook in FAfterHooks do
+        Hook.Execute;
+    except
+      on E: Exception do
+      begin
+        FRunInfo.Result := srrError;
+        FRunInfo.Error := E;
+      end;
+    end;
+  finally
+    // Limpiar SpecContext y destruir FeatureContext
+    ISpecContextPrivate(GSpecContext).SetFeatureContext(nil);
+    FeatContext.Free;
   end;
 
   FRunInfo.State := srsFinished;
   FRunInfo.ExecTimeMs := SW.ElapsedMilliseconds;
+end;
+
+procedure TFeature<T>.SetFeatureContextClass(const Value: TClass);
+begin
+  FFeatureContextClass := Value;
 end;
 
 procedure TFeature<T>.SetBackGround(const Value: IBackground);
@@ -1543,6 +1603,8 @@ begin
   FFeatures := TList<IFeature>.Create;
   FBeforeHooks := TList<IHook>.Create;
   FAfterHooks := TList<IHook>.Create;
+  FSuiteContext := nil;
+  FSuiteContextClass := nil;
 end;
 
 destructor TSpecSuite.Destroy;
@@ -1550,6 +1612,7 @@ begin
   FAfterHooks.Free;
   FBeforeHooks.Free;
   FFeatures.Free;
+  FSuiteContext.Free;
   inherited;
 end;
 
@@ -1605,6 +1668,68 @@ procedure TSpecSuite.RunAfterHooks;
 begin
   for var Hook in FAfterHooks do
     Hook.Execute;
+end;
+
+procedure TSpecSuite.SetSuiteContextClass(const AClass: TSuiteContextClass);
+begin
+  FSuiteContextClass := AClass;
+end;
+
+procedure TSpecSuite.Run(const Matcher: TSpecMatcher = nil);
+begin
+  var SW := TStopwatch.StartNew;
+  FRunInfo.State := srsRunning;
+  FRunInfo.Result := srrSuccess;
+  
+  // Crear SuiteContext si se especificó un tipo
+  // Usamos TSuiteContextClass que tiene constructor virtual
+  FSuiteContext := nil;
+  if Assigned(FSuiteContextClass) then
+    FSuiteContext := FSuiteContextClass.Create;
+  
+  // Registrar en SpecContext global directamente (ISpecContextPrivate es accesible desde interface)
+  ISpecContextPrivate(GSpecContext).SetSuiteContext(FSuiteContext);
+  
+  try
+    try
+      // Execute Before hooks (once before all features)
+      RunBeforeHooks;
+
+      // Ejecutar todas las Features
+      for var Feature in FFeatures do
+      begin
+        (Feature as TSpecItem).Run(Matcher);
+        if Feature.RunInfo.Result in [srrFail, srrError] then
+          FRunInfo.Result := srrFail;
+        IncCount(Feature.RunInfo.Result);
+      end;
+    except
+      on E: Exception do
+      begin
+        FRunInfo.Result := srrError;
+        FRunInfo.Error := E;
+      end;
+    end;
+
+    // Execute After hooks (once after all features, even if there were errors)
+    try
+      RunAfterHooks;
+    except
+      on E: Exception do
+      begin
+        FRunInfo.Result := srrError;
+        FRunInfo.Error := E;
+      end;
+    end;
+  finally
+    // Limpiar SpecContext y destruir SuiteContext
+    ISpecContextPrivate(GSpecContext).SetSuiteContext(nil);
+    FSuiteContext.Free;
+    FSuiteContext := nil;
+  end;
+
+  FRunInfo.State := srsFinished;
+  FRunInfo.ExecTimeMs := SW.ElapsedMilliseconds;
 end;
 
 { TRule<T> }
@@ -1851,11 +1976,10 @@ end;
 
 procedure SetCurrentScenario(const Value: IScenario);
 var
-  Ctx: TSpecContextImpl;
   Parent: ISpecItem;
 begin
-  Ctx := TSpecContextImpl(SpecContext);
-  Ctx.SetScenario(Value);
+  SpecContext;  // Ensure initialized
+  GSpecContext.SetScenario(Value);
 
   // Derivar Feature y Rule del Scenario navegando por parents usando Kind
   if Assigned(Value) then
@@ -1865,11 +1989,11 @@ begin
     begin
       case Parent.Kind of
         sikRule, sikImplicitRule:
-          if Ctx.Rule = nil then
-            Ctx.SetRule(Parent as IRule);
+          if GSpecContext.Rule = nil then
+            GSpecContext.SetRule(Parent as IRule);
         sikFeature:
           begin
-            Ctx.SetFeature(Parent as IFeature);
+            GSpecContext.SetFeature(Parent as IFeature);
             Break;  // Feature es el nivel más alto
           end;
       end;
@@ -1879,8 +2003,8 @@ begin
   else
   begin
     // Limpiar cuando se setea nil
-    Ctx.SetRule(nil);
-    Ctx.SetFeature(nil);
+    GSpecContext.SetRule(nil);
+    GSpecContext.SetFeature(nil);
   end;
 end;
 

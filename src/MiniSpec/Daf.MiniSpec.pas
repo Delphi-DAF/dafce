@@ -72,6 +72,10 @@ type
     /// Adds an After hook that runs once after all features.
     /// </summary>
     function After(const Description: string; Hook: THookProc): TMiniSpec;
+    /// <summary>
+    /// Defines the SuiteContext type to be created once for all features.
+    /// </summary>
+    function UseContext<T: class, constructor>: TMiniSpec;
     {$ENDREGION}
     procedure Register(Feature: IFeature);
     procedure Run;
@@ -194,6 +198,12 @@ function TMiniSpec.After(const Description: string; Hook: THookProc): TMiniSpec;
 begin
   Result := Self;
   FSuite.AddAfterHook(Description, Hook);
+end;
+
+function TMiniSpec.UseContext<T>: TMiniSpec;
+begin
+  Result := Self;
+  (FSuite as TSpecSuite).SetSuiteContextClass(T);
 end;
 
 procedure TMiniSpec.Register(Feature: IFeature);
