@@ -10,7 +10,8 @@ uses
   Hooks.Feat in 'Hooks.Feat.pas',
   DataTable.Feat in 'DataTable.Feat.pas',
   SpecSuite.Feat in 'SpecSuite.Feat.pas',
-  FeatureContext.Feat in 'FeatureContext.Feat.pas';
+  FeatureContext.Feat in 'FeatureContext.Feat.pas',
+  PropertyInjection.Feat in 'PropertyInjection.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;
