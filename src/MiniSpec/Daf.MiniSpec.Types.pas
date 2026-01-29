@@ -92,6 +92,34 @@ type
     function TotalCount: Cardinal;
   end;
 
+  /// <summary>
+  /// Clase base para contexto a nivel Suite.
+  /// Puede ser subclaseada para agregar funcionalidad específica.
+  /// </summary>
+  TSuiteContext = class
+  public
+    constructor Create; virtual;
+  end;
+
+  /// <summary>
+  /// Metaclase para TSuiteContext - permite creación polimórfica.
+  /// </summary>
+  TSuiteContextClass = class of TSuiteContext;
+
+  /// <summary>
+  /// Clase base para contexto a nivel Feature.
+  /// Puede ser subclaseada para agregar funcionalidad específica.
+  /// </summary>
+  TFeatureContext = class
+  public
+    constructor Create; virtual;
+  end;
+
+  /// <summary>
+  /// Metaclase para TFeatureContext - permite creación polimórfica.
+  /// </summary>
+  TFeatureContextClass = class of TFeatureContext;
+
   IScenarioBuilder<T: class, constructor> = interface;
   IScenarioOutlineBuilder<T: class, constructor> = interface;
   IRuleBuilder<T: class, constructor> = interface;
@@ -323,6 +351,7 @@ type
     procedure AddAfterHook(const Description: string; const Hook: THookProc);
     procedure RunBeforeHooks;
     procedure RunAfterHooks;
+    procedure SetSuiteContextClass(const AClass: TClass);
     /// <summary>
     /// Title of the test suite (set via MiniSpec.Category).
     /// </summary>
@@ -379,6 +408,9 @@ type
     procedure SetStep(const Value: IScenarioStep);
     procedure SetDataTable(const Value: TDataTableObj);
     procedure SetScenario(const Value: IScenario);
+    procedure SetSuiteContext(const Value: TObject);
+    procedure SetFeatureContext(const Value: TObject);
+    procedure SetScenarioContext(const Value: TObject);
   end;
 
   /// <summary>
@@ -593,6 +625,8 @@ type
     FFeatures: TList<IFeature>;
     FBeforeHooks: TList<IHook>;
     FAfterHooks: TList<IHook>;
+    FSuiteContext: TObject;
+    FSuiteContextClass: TClass;
     function GetTitle: string;
     procedure SetTitle(const Value: string);
     function GetFeatures: TList<IFeature>;
@@ -606,6 +640,8 @@ type
     procedure AddAfterHook(const Description: string; const Hook: THookProc);
     procedure RunBeforeHooks;
     procedure RunAfterHooks;
+    procedure SetSuiteContextClass(const AClass: TClass);
+    procedure Run(const Matcher: TSpecMatcher = nil);
     property Title: string read GetTitle write SetTitle;
     property Features: TList<IFeature> read GetFeatures;
     property BeforeHooks: TList<IHook> read GetBeforeHooks;
@@ -1607,6 +1643,60 @@ begin
     Hook.Execute;
 end;
 
+procedure TSpecSuite.SetSuiteContextClass(const AClass: TClass);
+begin
+  FSuiteContextClass := AClass;
+end;
+
+procedure TSpecSuite.Run(const Matcher: TSpecMatcher = nil);
+begin
+  var SW := TStopwatch.StartNew;
+  FRunInfo.State := srsRunning;
+  FRunInfo.Result := srrSuccess;
+  
+  // Crear SuiteContext si se especificó un tipo
+  FSuiteContext := nil;
+  if Assigned(FSuiteContextClass) then
+    FSuiteContext := FSuiteContextClass.Create;
+  
+  // Registrar en SpecContext global
+  SpecContext.SetSuiteContext(FSuiteContext);
+  
+  try
+    try
+      RunBeforeHooks;
+      for var Feature in FFeatures do
+      begin
+        if Assigned(Matcher) then
+        begin
+          if not Feature.HasMatchingScenarios(Matcher) then
+            Continue;
+        end;
+        Feature.Run(Matcher);
+        if Feature.RunInfo.Result = srrFail then
+          FRunInfo.Result := srrFail;
+        FRunInfo.Counts[rkPass] := FRunInfo.Counts[rkPass] + Feature.RunInfo.PassCount;
+        FRunInfo.Counts[rkFail] := FRunInfo.Counts[rkFail] + Feature.RunInfo.FailCount;
+        FRunInfo.Counts[rkSkip] := FRunInfo.Counts[rkSkip] + Feature.RunInfo.SkipCount;
+      end;
+      RunAfterHooks;
+    except
+      on E: Exception do
+      begin
+        FRunInfo.Result := srrError;
+        FRunInfo.Error := E;
+      end;
+    end;
+  finally
+    // Limpiar SuiteContext y destruirlo
+    SpecContext.SetSuiteContext(nil);
+    FSuiteContext.Free;
+  end;
+
+  FRunInfo.State := srsFinished;
+  FRunInfo.ExecTimeMs := SW.ElapsedMilliseconds;
+end;
+
 { TRule<T> }
 
 constructor TRule<T>.Create(const Feature: IFeature; const Description: string);
@@ -1741,6 +1831,20 @@ begin
   end;
   FRunInfo.State := srsFinished;
   FRunInfo.ExecTimeMs := SW.ElapsedMilliseconds;
+end;
+
+{ TSuiteContext }
+
+constructor TSuiteContext.Create;
+begin
+  // Base class - no special initialization
+end;
+
+{ TFeatureContext }
+
+constructor TFeatureContext.Create;
+begin
+  // Base class - no special initialization
 end;
 
 { TSpecContextImpl }

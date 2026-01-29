@@ -102,6 +102,7 @@
         <DCCReference Include="FeatureHooks.Feat.pas"/>
         <DCCReference Include="FeatureDataTable.Feat.pas"/>
         <DCCReference Include="FeatureSpecSuite.Feat.pas"/>
+        <DCCReference Include="SuiteContext.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>test.optset</DependentOn>

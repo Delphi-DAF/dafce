@@ -9,7 +9,8 @@ uses
   WorldLifecycle.Feat in 'WorldLifecycle.Feat.pas',
   FeatureHooks.Feat in 'FeatureHooks.Feat.pas',
   FeatureDataTable.Feat in 'FeatureDataTable.Feat.pas',
-  FeatureSpecSuite.Feat in 'FeatureSpecSuite.Feat.pas';
+  FeatureSpecSuite.Feat in 'FeatureSpecSuite.Feat.pas',
+  SuiteContext.Feat in 'SuiteContext.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;
