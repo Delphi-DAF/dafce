@@ -92,34 +92,6 @@ type
     function TotalCount: Cardinal;
   end;
 
-  /// <summary>
-  /// Clase base para contexto a nivel Suite.
-  /// Puede ser subclaseada para agregar funcionalidad específica.
-  /// </summary>
-  TSuiteContext = class
-  public
-    constructor Create; virtual;
-  end;
-
-  /// <summary>
-  /// Metaclase para TSuiteContext - permite creación polimórfica.
-  /// </summary>
-  TSuiteContextClass = class of TSuiteContext;
-
-  /// <summary>
-  /// Clase base para contexto a nivel Feature.
-  /// Puede ser subclaseada para agregar funcionalidad específica.
-  /// </summary>
-  TFeatureContext = class
-  public
-    constructor Create; virtual;
-  end;
-
-  /// <summary>
-  /// Metaclase para TFeatureContext - permite creación polimórfica.
-  /// </summary>
-  TFeatureContextClass = class of TFeatureContext;
-
   IScenarioBuilder<T: class, constructor> = interface;
   IScenarioOutlineBuilder<T: class, constructor> = interface;
   IRuleBuilder<T: class, constructor> = interface;
@@ -351,7 +323,6 @@ type
     procedure AddAfterHook(const Description: string; const Hook: THookProc);
     procedure RunBeforeHooks;
     procedure RunAfterHooks;
-    procedure SetSuiteContextClass(const AClass: TClass);
     /// <summary>
     /// Title of the test suite (set via MiniSpec.Category).
     /// </summary>
@@ -368,6 +339,15 @@ type
     /// Hooks that run once after all features in the suite.
     /// </summary>
     property AfterHooks: TList<IHook> read GetAfterHooks;
+  end;
+
+  /// <summary>
+  /// Suite genérica que crea un contexto de tipo T.
+  /// T puede ser cualquier clase con constructor sin parámetros.
+  /// Marker interface - la creación del contexto es interna via DoCreateContext.
+  /// </summary>
+  ISpecSuite<T: class, constructor> = interface(ISpecSuite)
+    ['{E1F2A3B4-C5D6-7E8F-9A0B-1C2D3E4F5A6B}']
   end;
 
   /// <summary>
@@ -626,12 +606,13 @@ type
     FBeforeHooks: TList<IHook>;
     FAfterHooks: TList<IHook>;
     FSuiteContext: TObject;
-    FSuiteContextClass: TClass;
     function GetTitle: string;
     procedure SetTitle(const Value: string);
     function GetFeatures: TList<IFeature>;
     function GetBeforeHooks: TList<IHook>;
     function GetAfterHooks: TList<IHook>;
+  protected
+    function CreateContext: TObject; virtual;
   public
     constructor Create(const ATitle: string = '');
     destructor Destroy; override;
@@ -640,12 +621,20 @@ type
     procedure AddAfterHook(const Description: string; const Hook: THookProc);
     procedure RunBeforeHooks;
     procedure RunAfterHooks;
-    procedure SetSuiteContextClass(const AClass: TClass);
     procedure Run(const Matcher: TSpecMatcher = nil);
     property Title: string read GetTitle write SetTitle;
     property Features: TList<IFeature> read GetFeatures;
     property BeforeHooks: TList<IHook> read GetBeforeHooks;
     property AfterHooks: TList<IHook> read GetAfterHooks;
+  end;
+
+  /// <summary>
+  /// Suite genérica que crea y gestiona un contexto de tipo T.
+  /// T puede ser cualquier clase con constructor sin parámetros.
+  /// </summary>
+  TSpecSuite<T: class, constructor> = class(TSpecSuite, ISpecSuite<T>)
+  protected
+    function CreateContext: TObject; override;
   end;
 
   /// <summary>
@@ -1643,9 +1632,9 @@ begin
     Hook.Execute;
 end;
 
-procedure TSpecSuite.SetSuiteContextClass(const AClass: TClass);
+function TSpecSuite.CreateContext: TObject;
 begin
-  FSuiteContextClass := AClass;
+  Result := nil;
 end;
 
 procedure TSpecSuite.Run(const Matcher: TSpecMatcher = nil);
@@ -1653,15 +1642,13 @@ begin
   var SW := TStopwatch.StartNew;
   FRunInfo.State := srsRunning;
   FRunInfo.Result := srrSuccess;
-  
-  // Crear SuiteContext si se especificó un tipo
-  FSuiteContext := nil;
-  if Assigned(FSuiteContextClass) then
-    FSuiteContext := FSuiteContextClass.Create;
-  
+
+  // Crear SuiteContext via método virtual (override en TSpecSuite<T>)
+  FSuiteContext := CreateContext;
+
   // Registrar en SpecContext global
   SpecContext.SetSuiteContext(FSuiteContext);
-  
+
   try
     try
       RunBeforeHooks;
@@ -1695,6 +1682,13 @@ begin
 
   FRunInfo.State := srsFinished;
   FRunInfo.ExecTimeMs := SW.ElapsedMilliseconds;
+end;
+
+{ TSpecSuite<T> }
+
+function TSpecSuite<T>.CreateContext: TObject;
+begin
+  Result := T.Create;
 end;
 
 { TRule<T> }
@@ -1831,20 +1825,6 @@ begin
   end;
   FRunInfo.State := srsFinished;
   FRunInfo.ExecTimeMs := SW.ElapsedMilliseconds;
-end;
-
-{ TSuiteContext }
-
-constructor TSuiteContext.Create;
-begin
-  // Base class - no special initialization
-end;
-
-{ TFeatureContext }
-
-constructor TFeatureContext.Create;
-begin
-  // Base class - no special initialization
 end;
 
 { TSpecContextImpl }

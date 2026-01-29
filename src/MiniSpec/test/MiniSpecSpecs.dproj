@@ -97,12 +97,11 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
-        <DCCReference Include="FeatureWorld.Feat.pas"/>
-        <DCCReference Include="WorldLifecycle.Feat.pas"/>
-        <DCCReference Include="FeatureHooks.Feat.pas"/>
-        <DCCReference Include="FeatureDataTable.Feat.pas"/>
-        <DCCReference Include="FeatureSpecSuite.Feat.pas"/>
-        <DCCReference Include="SuiteContext.Feat.pas"/>
+        <DCCReference Include="Context.Feat.pas"/>
+        <DCCReference Include="Lifecycle.Feat.pas"/>
+        <DCCReference Include="Hooks.Feat.pas"/>
+        <DCCReference Include="DataTable.Feat.pas"/>
+        <DCCReference Include="SpecSuite.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>test.optset</DependentOn>

@@ -202,9 +202,23 @@ begin
 end;
 
 function TMiniSpec.UseContext<T>: TMiniSpec;
+var
+  OldSuite: ISpecSuite;
+  NewSuite: TSpecSuite<T>;
 begin
   Result := Self;
-  (FSuite as TSpecSuite).SetSuiteContextClass(T);
+  // Crear nueva suite genérica que puede crear contexto de tipo T
+  NewSuite := TSpecSuite<T>.Create(FSuite.Title);
+  // Migrar features y hooks de la suite anterior
+  OldSuite := FSuite;
+  for var Feature in OldSuite.Features do
+    NewSuite.AddFeature(Feature);
+  for var Hook in OldSuite.BeforeHooks do
+    NewSuite.BeforeHooks.Add(Hook);
+  for var Hook in OldSuite.AfterHooks do
+    NewSuite.AfterHooks.Add(Hook);
+  // Reemplazar suite
+  FSuite := NewSuite;
 end;
 
 procedure TMiniSpec.Register(Feature: IFeature);
