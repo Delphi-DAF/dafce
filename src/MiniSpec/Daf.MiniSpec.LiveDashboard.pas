@@ -108,6 +108,7 @@ const
         <span class="text-green-400 flex items-center gap-1"><svg class="w-4 h-4"><use href="#icon-pass"></use></svg> pass: <span x-text="pass"></span></span>
         <span class="text-red-400 flex items-center gap-1"><svg class="w-4 h-4"><use href="#icon-fail"></use></svg> fail: <span x-text="fail"></span></span>
         <span class="text-yellow-400 flex items-center gap-1"><svg class="w-4 h-4"><use href="#icon-skip"></use></svg> skip: <span x-text="skip"></span></span>
+        <span class="text-orange-400 flex items-center gap-1"><svg class="w-4 h-4"><use href="#icon-skip"></use></svg> pending: <span x-text="pending"></span></span>
         <span class="text-gray-400" x-text="`${totalTests} specs in ${features.length} features`"></span>
         <span class="text-gray-500" x-show="reportComplete &amp;&amp; completedAt" x-text="`at ${completedAt}`"></span>
       </div>
@@ -403,6 +404,7 @@ const
         pass: 0,
         fail: 0,
         skip: 0,
+        pending: 0,
         completedAt: null,
         reportComplete: false,
         eventSource: null,
@@ -417,7 +419,7 @@ const
         exportFilename: '',
 
         get totalTests() {
-          return this.pass + this.fail + this.skip;
+          return this.pass + this.fail + this.skip + this.pending;
         },
         get executedTests() {
           return this.pass + this.fail;
@@ -588,6 +590,7 @@ const
               this.pass = data.totalPass || this.pass;
               this.fail = data.totalFail || this.fail;
               this.skip = data.totalSkip || this.skip;
+              this.pending = data.totalPending || this.pending;
               this.currentFeatureScenarios.push({
                 type: 'scenario',
                 name: data.name,
@@ -604,6 +607,7 @@ const
               this.pass = data.totalPass || this.pass;
               this.fail = data.totalFail || this.fail;
               this.skip = data.totalSkip || this.skip;
+              this.pending = data.totalPending || this.pending;
               // Contar skipped de examples para la UI
               const skipCount = (data.examples || []).filter(e => e.skipped).length;
               this.currentFeatureScenarios.push({
@@ -644,6 +648,7 @@ const
               this.pass = data.pass;
               this.fail = data.fail;
               this.skip = data.skip || 0;
+              this.pending = data.pending || 0;
               this.currentFeature = null;
               this.currentScenario = null;
               // Mantener conexión abierta para detectar nuevo run

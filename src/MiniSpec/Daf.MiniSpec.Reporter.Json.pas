@@ -169,6 +169,7 @@ begin
     Root.AddPair('passCount', TJSONNumber.Create(Context.Suite.RunInfo.PassCount));
     Root.AddPair('failCount', TJSONNumber.Create(Context.Suite.RunInfo.FailCount));
     Root.AddPair('skipCount', TJSONNumber.Create(Context.Suite.RunInfo.SkipCount));
+    Root.AddPair('pendingCount', TJSONNumber.Create(Context.Suite.RunInfo.PendingCount));
     Root.AddPair('completedAt', FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', Context.CompletedAt));
     FOutput := Root.Format(4);
   finally

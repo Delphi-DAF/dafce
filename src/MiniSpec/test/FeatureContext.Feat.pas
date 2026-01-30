@@ -61,8 +61,8 @@ FeatureContext Demo @featurecontext
   I want to share a context across all scenarios in a feature
   So I can maintain expensive resources without recreating them
 ''')
-.ShareContext<TSharedFeatureContext>
-.UseContext<TScenarioContext>
+.UseFeatureContext<TSharedFeatureContext>
+.UseWorld<TScenarioContext>
 
 .Before('Initialize shared counter',
   procedure

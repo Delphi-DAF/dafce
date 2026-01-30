@@ -32,7 +32,7 @@ Feature SpecSuite @suite
   So I can provide a title and run hooks before/after all tests
 ''')
 
-.UseContext<TScenarioContext>
+.UseWorld<TScenarioContext>
 
 .Scenario('Suite has the title set via Category()')
   .Given('the Suite was configured with Category',

@@ -73,7 +73,7 @@ initialization
     I want to define step bindings as methods with regex patterns
     So I can reuse steps across multiple features without duplicating code
   ''')
-  .UseContext<TBindingWorld>
+  .UseWorld<TBindingWorld>
 
   .Scenario('Steps can be bound via [Given] attribute with regex')
     .Given('the numbers 10 and 5')   // No lambda - uses binding

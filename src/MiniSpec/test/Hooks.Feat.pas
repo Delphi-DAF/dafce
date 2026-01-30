@@ -40,7 +40,7 @@ Feature Hooks @meta @hooks
   So I can manage expensive resources efficiently
 ''')
 
-.UseContext<THooksWorld>
+.UseWorld<THooksWorld>
 
 .Before('Initialize test environment', procedure
   begin

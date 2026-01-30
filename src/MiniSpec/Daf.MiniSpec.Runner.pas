@@ -111,6 +111,7 @@ type
     function GetPassCount: Cardinal;
     function GetFailCount: Cardinal;
     function GetSkipCount: Cardinal;
+    function GetPendingCount: Cardinal;
     function GetElapsedMs: Integer;
     function GetFeatureCount: Integer;
     function GetCompletedAt: TDateTime;
@@ -122,6 +123,7 @@ type
     property PassCount: Cardinal read GetPassCount;
     property FailCount: Cardinal read GetFailCount;
     property SkipCount: Cardinal read GetSkipCount;
+    property PendingCount: Cardinal read GetPendingCount;
     property ElapsedMs: Integer read GetElapsedMs;
     property FeatureCount: Integer read GetFeatureCount;
     property CompletedAt: TDateTime read GetCompletedAt;
@@ -209,6 +211,7 @@ type
     function GetFailCount: Cardinal;virtual;
     function GetPassCount: Cardinal;virtual;
     function GetSkipCount: Cardinal;virtual;
+    function GetPendingCount: Cardinal;virtual;
     function GetElapsedMs: Integer;virtual;
     function GetFeatureCount: Integer;virtual;
     function GetCompletedAt: TDateTime;virtual;
@@ -901,6 +904,11 @@ end;
 function TSpecRunner.GetSkipCount: Cardinal;
 begin
   Result := FSuite.RunInfo.SkipCount;
+end;
+
+function TSpecRunner.GetPendingCount: Cardinal;
+begin
+  Result := FSuite.RunInfo.PendingCount;
 end;
 
 function TSpecRunner.GetElapsedMs: Integer;

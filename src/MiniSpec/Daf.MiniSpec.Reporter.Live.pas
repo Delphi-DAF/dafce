@@ -361,6 +361,7 @@ begin
     Data.AddPair('pass', TJSONNumber.Create(Context.Suite.RunInfo.PassCount));
     Data.AddPair('fail', TJSONNumber.Create(Context.Suite.RunInfo.FailCount));
     Data.AddPair('skip', TJSONNumber.Create(Context.Suite.RunInfo.SkipCount));
+    Data.AddPair('pending', TJSONNumber.Create(Context.Suite.RunInfo.PendingCount));
     Data.AddPair('completedAt', FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', Context.CompletedAt));
     BroadcastEvent(BuildEventJson('report:end', Data));
   finally
@@ -457,6 +458,7 @@ begin
     Data.AddPair('totalPass', TJSONNumber.Create(Context.Suite.RunInfo.PassCount));
     Data.AddPair('totalFail', TJSONNumber.Create(Context.Suite.RunInfo.FailCount));
     Data.AddPair('totalSkip', TJSONNumber.Create(Context.Suite.RunInfo.SkipCount));
+    Data.AddPair('totalPending', TJSONNumber.Create(Context.Suite.RunInfo.PendingCount));
     BroadcastEvent(BuildEventJson('scenario:end', Data));
   finally
     Data.Free;
@@ -528,6 +530,7 @@ begin
     Data.AddPair('totalPass', TJSONNumber.Create(Context.Suite.RunInfo.PassCount));
     Data.AddPair('totalFail', TJSONNumber.Create(Context.Suite.RunInfo.FailCount));
     Data.AddPair('totalSkip', TJSONNumber.Create(Context.Suite.RunInfo.SkipCount));
+    Data.AddPair('totalPending', TJSONNumber.Create(Context.Suite.RunInfo.PendingCount));
 
     BroadcastEvent(BuildEventJson('outline:end', Data));
   finally

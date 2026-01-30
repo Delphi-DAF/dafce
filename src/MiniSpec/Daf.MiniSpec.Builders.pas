@@ -34,22 +34,21 @@ type
   strict private
     FDescription: string;
     FCategory: string;
-    FContextCreator: TFunc<TObject>;  // Creador del FeatureContext (si se usa ShareContext)
+    FContextCreator: TFunc<TObject>;  // Creador del FeatureContext (si se usa UseFeatureContext)
   public
     constructor Create(const Description: string);
     function Category(AClass: TClass): TFeatureBuilder;
-    /// <summary>Define un contexto compartido para toda la Feature. Debe invocarse antes de UseContext.</summary>
-    function ShareContext<T: class, constructor>: TFeatureBuilder;
+    /// <summary>Define un contexto compartido para toda la Feature. Debe invocarse antes de UseWorld.</summary>
+    function UseFeatureContext<T: class, constructor>: TFeatureBuilder;
     /// <summary>Define el tipo de contexto (World) para los escenarios de esta Feature</summary>
-    function UseContext<T: class, constructor>: IFeatureBuilder<T>;
-    /// <summary>Deprecated: Use UseContext instead</summary>
-    function UseWorld<T: class, constructor>: IFeatureBuilder<T>; deprecated 'Use UseContext instead';
+    function UseWorld<T: class, constructor>: IFeatureBuilder<T>;
   end;
 
   TBackgroundBuilder<T: class, constructor> = class(TInterfacedObject, IBackgroundBuilder<T>)
   strict private
     FBackground: TBackground<T>;
     FRule: TRule<T>;  // Siempre es una Rule (explícita o implícita)
+    class procedure PendingStep(World: T); static;
   public
     constructor Create(const ARule: IRule);
     function Given(const Desc: string): IBackgroundBuilder<T>; overload;
@@ -69,6 +68,7 @@ type
     FLastStep: TLastStepKind;
     FLastTable: TDataTable;
     FRule: TRule<T>;  // Siempre es una Rule (explícita o implícita)
+    class procedure PendingStep(World: T); static;
     function CreateBindingStep(Kind: TStepKind; const Desc: string): TStepProc<T>;
   public
     constructor Create(const ARule: IRule; const Description: string);
@@ -105,6 +105,7 @@ type
     FLastStep: TLastStepKind;
     function BuildInitStep(Headers, Row: TArray<TValue>): TStepProc<T>;
     function GetFeature: TFeature<T>;
+    class procedure PendingStep(World: T); static;
     function CreateBindingStep(Kind: TStepKind; const Desc: string): TStepProc<T>;
   public
     constructor Create(const ARule: IRule; const Desc: string);
@@ -248,7 +249,7 @@ begin
   Result := Self;
 end;
 
-function TFeatureBuilder.ShareContext<T>: TFeatureBuilder;
+function TFeatureBuilder.UseFeatureContext<T>: TFeatureBuilder;
 begin
   FContextCreator := function: TObject
     begin
@@ -257,7 +258,7 @@ begin
   Result := Self;
 end;
 
-function TFeatureBuilder.UseContext<T>: IFeatureBuilder<T>;
+function TFeatureBuilder.UseWorld<T>: IFeatureBuilder<T>;
 var
   Builder: TFeatureBuilder<T>;
 begin
@@ -267,11 +268,6 @@ begin
     Builder.Feature.SetContextCreator(FContextCreator);
   Result := Builder;
   Free;
-end;
-
-function TFeatureBuilder.UseWorld<T>: IFeatureBuilder<T>;
-begin
-  Result := UseContext<T>;
 end;
 
 { TBackgroundBuilder<T> }
@@ -284,17 +280,23 @@ begin
   FRule.BackGround := FBackground;
 end;
 
+class procedure TBackgroundBuilder<T>.PendingStep(World: T);
+begin
+  SpecContext.Step.MarkAsPending;
+end;
+
 function TBackgroundBuilder<T>.Given(const Desc: string): IBackgroundBuilder<T>;
 var
   Binding: TStepBinding;
   Captures: TArray<string>;
 begin
-  if not Bindings.FindBinding(skGiven, Desc, Binding, Captures) then
-    raise EBindingError.CreateFmt('No binding found for Given: "%s"', [Desc]);
-  Result := Given(Desc, procedure(World: T)
-    begin
-      Bindings.Invoke(Binding, World, Captures);
-    end);
+  if Bindings.FindBinding(skGiven, Desc, Binding, Captures) then
+    Result := Given(Desc, procedure(World: T)
+      begin
+        Bindings.Invoke(Binding, World, Captures);
+      end)
+  else
+    Result := Given(Desc, PendingStep);
 end;
 
 function TBackgroundBuilder<T>.Given(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>;
@@ -352,18 +354,23 @@ begin
   FRule.Scenarios.Add(FScenario);
 end;
 
+class procedure TScenarioBuilder<T>.PendingStep(World: T);
+begin
+  SpecContext.Step.MarkAsPending;
+end;
+
 function TScenarioBuilder<T>.CreateBindingStep(Kind: TStepKind; const Desc: string): TStepProc<T>;
 var
   Binding: TStepBinding;
   Captures: TArray<string>;
 begin
-  if not Bindings.FindBinding(Kind, Desc, Binding, Captures) then
-    raise EBindingError.CreateFmt('No binding found for %s: "%s"',
-      [GetEnumName(TypeInfo(TStepKind), Ord(Kind)), Desc]);
-  Result := procedure(World: T)
-    begin
-      Bindings.Invoke(Binding, World, Captures);
-    end;
+  if Bindings.FindBinding(Kind, Desc, Binding, Captures) then
+    Result := procedure(World: T)
+      begin
+        Bindings.Invoke(Binding, World, Captures);
+      end
+  else
+    Result := PendingStep;
 end;
 
 function TScenarioBuilder<T>.ExampleInit(Step: TStepProc<T>): IScenarioBuilder<T>;
@@ -556,18 +563,23 @@ begin
   inherited;
 end;
 
+class procedure TScenarioOutlineBuilder<T>.PendingStep(World: T);
+begin
+  SpecContext.Step.MarkAsPending;
+end;
+
 function TScenarioOutlineBuilder<T>.CreateBindingStep(Kind: TStepKind; const Desc: string): TStepProc<T>;
 var
   Binding: TStepBinding;
   Captures: TArray<string>;
 begin
-  if not Bindings.FindBinding(Kind, Desc, Binding, Captures) then
-    raise EBindingError.CreateFmt('No binding found for %s: "%s"',
-      [GetEnumName(TypeInfo(TStepKind), Ord(Kind)), Desc]);
-  Result := procedure(World: T)
-    begin
-      Bindings.Invoke(Binding, World, Captures);
-    end;
+  if Bindings.FindBinding(Kind, Desc, Binding, Captures) then
+    Result := procedure(World: T)
+      begin
+        Bindings.Invoke(Binding, World, Captures);
+      end
+  else
+    Result := PendingStep;
 end;
 
 function TScenarioOutlineBuilder<T>.Given(const Desc: string): IScenarioOutlineBuilder<T>;

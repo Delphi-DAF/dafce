@@ -58,8 +58,8 @@ Property Injection Demo @injection
   I want FeatureContext to be auto-injected into ScenarioContext
   So I can access shared state without manual casting
 ''')
-.ShareContext<TSharedContext>
-.UseContext<TScenarioContext>
+.UseFeatureContext<TSharedContext>
+.UseWorld<TScenarioContext>
 
 .Scenario('FeatureContext is auto-injected via [Inject] property')
   .Given('I have a ScenarioContext with [Inject] property', procedure(Ctx: TScenarioContext)

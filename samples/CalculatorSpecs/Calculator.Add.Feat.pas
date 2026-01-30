@@ -28,7 +28,7 @@ initialization
     In order to complete my calculations
   ''')
   .Category(TUnitMarker)
-  .UseContext<TCalculatorWorld>
+  .UseWorld<TCalculatorWorld>
   .Background
     .Given('I have a calculator', procedure(World: TCalculatorWorld)
     begin

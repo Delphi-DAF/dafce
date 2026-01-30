@@ -5,7 +5,7 @@ Framework BDD (Behavior-Driven Development) para Delphi, inspirado en Gherkin/Cu
 ## Novedades v1.2.0
 
 - **Step Bindings**: Pasos reutilizables como métodos con atributos regex (`[Given]`, `[When]`, `[Then]`)
-- **Property Injection**: Inyección automática vía `[Inject]` con `ShareContext<T>`
+- **Property Injection**: Inyección automática vía `[Inject]` con `UseFeatureContext<T>`
 - **DataTables**: Tablas inline en steps para datos estructurados (estándar Gherkin)
 - **Before/After Hooks**: Setup/teardown a nivel de Feature (una vez por feature)
 - **Archivo de configuración `MiniSpec.ini`**: Persistencia automática de opciones
@@ -62,7 +62,7 @@ Mi Feature                         // <-- Primera línea = Título
   @unit @mi-tag                       // <-- Tags al final, en línea propia
 ''')
 
-.UseContext<TMyWorld>
+.UseWorld<TMyWorld>
 
 .Background
   .Given('una precondición común', procedure(Ctx: TMyWorld)
@@ -106,20 +106,20 @@ type
   end;
 
 Feature('...')
-.UseContext<TCalculatorWorld>  // Cada escenario recibe un TCalculatorWorld nuevo
+.UseWorld<TCalculatorWorld>  // Cada escenario recibe un TCalculatorWorld nuevo
 ```
 
 **Reutilización**: Un mismo World puede usarse en varias features relacionadas. Sin embargo, si las features son muy distintas, es mejor definir Worlds separados para mantener cada contexto limpio y enfocado:
 
 ```pascal
 // Calculator.Add.Feat.pas
-Feature('Suma').UseContext<TCalculatorWorld>
+Feature('Suma').UseWorld<TCalculatorWorld>
 
 // Login.Feat.pas
-Feature('Login').UseContext<TLoginWorld>
+Feature('Login').UseWorld<TLoginWorld>
 
 // Report.Feat.pas
-Feature('Reportes').UseContext<TReportWorld>
+Feature('Reportes').UseWorld<TReportWorld>
 ```
 
 ### SpecContext: Acceso al Contexto de Ejecución
@@ -185,8 +185,8 @@ type
   end;
 
 Feature('Database operations')
-  .ShareContext<TSharedContext>  // Crea UNA instancia para toda la Feature
-  .UseContext<TScenarioWorld>    // Cada escenario recibe su propio World
+  .UseFeatureContext<TSharedContext>  // Crea UNA instancia para toda la Feature
+  .UseWorld<TScenarioWorld>    // Cada escenario recibe su propio World
   
   .Scenario('First query')
     .When('query data', procedure(W: TScenarioWorld)
@@ -233,8 +233,8 @@ type
   end;
 
 Feature('...')
-  .ShareContext<TFeatureContext>  // Registra TFeatureContext en el Injector
-  .UseContext<TWorld>             // Al crear World, inyecta FCtx
+  .UseFeatureContext<TFeatureContext>  // Registra TFeatureContext en el Injector
+  .UseWorld<TWorld>             // Al crear World, inyecta FCtx
 ```
 
 **Servicios personalizados a nivel de Suite**:
@@ -319,7 +319,7 @@ initialization
   Bindings.RegisterSteps<TCalculatorBindings>;  // Registrar la clase
   
   Feature('Calculator')
-  .UseContext<TMyWorld>
+  .UseWorld<TMyWorld>
   
   .Scenario('Add numbers')
     .Given('the numbers 10 and 5')  // Sin lambda: usa binding
@@ -372,7 +372,7 @@ Los hooks `Before` y `After` ejecutan código **una sola vez** por Feature, a di
 
 ```pascal
 Feature('Database Tests')
-  .UseContext<TDbWorld>
+  .UseWorld<TDbWorld>
   
   .Before('Start test database', procedure
     begin
@@ -479,7 +479,7 @@ initialization
 
 Feature('Calculator Addition')
   .Category(TUnitMarker)  // Extrae "Calculator.Add.Feat" del QualifiedClassName
-  .UseContext<TCalculatorWorld>
+  .UseWorld<TCalculatorWorld>
   // ...
 ```
 
@@ -496,7 +496,7 @@ Cuando necesitas añadir Rules hermanas o volver a la Feature después de una Ru
 
 ```pascal
 Feature('...')
-  .UseContext<TWorld>
+  .UseWorld<TWorld>
   
   .Rule('Primera regla')
     .Scenario('Test 1')

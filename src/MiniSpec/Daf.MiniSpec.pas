@@ -78,7 +78,7 @@ type
     /// Configures a context class to be shared across all features in the suite.
     /// The context is created once before all features and destroyed after all features.
     /// </summary>
-    function UseContext<T: class, constructor>: TMiniSpec;
+    function UseSuiteContext<T: class, constructor>: TMiniSpec;
     {$ENDREGION}
     procedure Register(Feature: IFeature);
     procedure Run;
@@ -203,7 +203,7 @@ begin
   FSuite.AddAfterHook(Description, Hook);
 end;
 
-function TMiniSpec.UseContext<T>: TMiniSpec;
+function TMiniSpec.UseSuiteContext<T>: TMiniSpec;
 var
   OldSuite: ISpecSuite;
   NewSuite: TSpecSuite<T>;
@@ -507,8 +507,8 @@ begin
     // Usar el runner para reportar (notificará a todos los listeners)
     FRunner.Report(FSuite, FOptions);
 
-    WriteLn(Format('Pass: %d | Fail: %d | Skip: %d | Total: %d Specs in %d Features | %d ms | at %s',
-      [FRunner.PassCount, FRunner.FailCount, FRunner.SkipCount,
+    WriteLn(Format('Pass: %d | Fail: %d | Skip: %d (Pending: %d) | Total: %d Specs in %d Features | %d ms | at %s',
+      [FRunner.PassCount, FRunner.FailCount, FRunner.SkipCount, FRunner.PendingCount,
        FRunner.PassCount + FRunner.FailCount + FRunner.SkipCount,
        FRunner.FeatureCount, FRunner.ElapsedMs,
        FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', FRunner.CompletedAt)]));

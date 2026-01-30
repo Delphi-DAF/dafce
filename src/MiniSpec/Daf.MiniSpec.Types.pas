@@ -16,12 +16,12 @@ type
   TSpecItemKind = (sikSuite, sikFeature, sikImplicitRule, sikRule, sikBackground, sikScenario, sikScenarioOutline, sikExample, sikExampleInit, sikGiven, sikWhen, sikThen, sikAnd, sikBut, sikBefore, sikAfter);
   TLastStepKind = (lskNone, lskGiven, lskWhen, lskThen);
   TSpecRunState =  (srsPrepared, srsSkiped, srsRunning, srsFinished);
-  TSpecRunResult =  (srrNone, srrSuccess, srrFail, srrError);
+  TSpecRunResult =  (srrNone, srrSuccess, srrFail, srrError, srrPending);
   /// <summary>
-  /// Result kind for counting Examples: Pass, Fail, or Skip.
+  /// Result kind for counting Examples: Pass, Fail, Skip, or Pending.
   /// Used in TSpecRunInfo.Counts for aggregated results.
   /// </summary>
-  TResultKind = (rkPass, rkFail, rkSkip);
+  TResultKind = (rkPass, rkFail, rkSkip, rkPending);
   TSpecTags = record
   strict private
     FTags: TArray<string>;
@@ -90,6 +90,7 @@ type
     function PassCount: Cardinal;
     function FailCount: Cardinal;
     function SkipCount: Cardinal;
+    function PendingCount: Cardinal;
     function TotalCount: Cardinal;
   end;
 
@@ -215,6 +216,11 @@ type
     function GetLevel: Byte;
 
     procedure Run(World: TObject);
+    /// <summary>
+    /// Marks this item as Pending (step not yet implemented).
+    /// Sets RunInfo.Result to srrPending.
+    /// </summary>
+    procedure MarkAsPending;
     /// <summary>
     /// Increments the count for the given result kind and propagates to parent.
     /// Called by Scenario/Example when execution completes.
@@ -394,7 +400,7 @@ type
     function Scenario: IScenario;
     function Step: IScenarioStep;
     function DataTable: TDataTableObj;
-    // Contexts del usuario (para UseContext)
+    // Contexts del usuario (para UseWorld/UseFeatureContext/UseSuiteContext)
     function SuiteContext: TObject;
     function FeatureContext: TObject;
     function ScenarioContext: TObject;
@@ -466,6 +472,7 @@ type
     constructor Create(const Kind: TSpecItemKind; const Parent: ISpecItem; const Description: string);
     destructor Destroy;override;
     procedure Run(World: TObject);virtual;
+    procedure MarkAsPending;
     procedure IncCount(Kind: TResultKind);virtual;
     property Parent: ISpecItem read FParent write SetParent;
     property Description: string read GetDescription;
@@ -583,7 +590,7 @@ type
     FCategory: string;
     FBeforeHooks: TList<IHook>;
     FAfterHooks: TList<IHook>;
-    FContextCreator: TFunc<TObject>;  // Creador del FeatureContext (si se usa ShareContext)
+    FContextCreator: TFunc<TObject>;  // Creador del FeatureContext (si se usa UseFeatureContext)
     FFeatureContext: TObject;  // Instancia del FeatureContext
     function GetTitle: string;
     function GetNarrative: string;
@@ -846,8 +853,14 @@ begin
   Result := Counts[rkSkip];
 end;
 
+function TSpecRunInfo.PendingCount: Cardinal;
+begin
+  Result := Counts[rkPending];
+end;
+
 function TSpecRunInfo.TotalCount: Cardinal;
 begin
+  // Pending is already included in Skip, so don't count it twice
   Result := Counts[rkPass] + Counts[rkFail] + Counts[rkSkip];
 end;
 
@@ -899,6 +912,12 @@ procedure TSpecItem.Run(World: TObject);
 begin
   ExpandPlaceholders(World);
   FRunInfo.Clear;
+end;
+
+procedure TSpecItem.MarkAsPending;
+begin
+  FRunInfo.Result := srrPending;
+  FRunInfo.State := srsFinished;
 end;
 
 procedure TSpecItem.IncCount(Kind: TResultKind);
