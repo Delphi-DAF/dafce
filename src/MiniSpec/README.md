@@ -4,6 +4,8 @@ Framework BDD (Behavior-Driven Development) para Delphi, inspirado en Gherkin/Cu
 
 ## Novedades v1.2.0
 
+- **Step Bindings**: Pasos reutilizables como métodos con atributos regex (`[Given]`, `[When]`, `[Then]`)
+- **Property Injection**: Inyección automática vía `[Inject]` con `ShareContext<T>`
 - **DataTables**: Tablas inline en steps para datos estructurados (estándar Gherkin)
 - **Before/After Hooks**: Setup/teardown a nivel de Feature (una vez por feature)
 - **Archivo de configuración `MiniSpec.ini`**: Persistencia automática de opciones
@@ -268,6 +270,83 @@ Si una propiedad marcada con `[Inject]` no puede ser inyectada, se lanza `EInjec
 - Propiedad no es de tipo clase
 - Propiedad no tiene setter
 - No hay servicio registrado compatible con el tipo
+
+### Step Bindings: Pasos Reutilizables
+
+Step Bindings permite definir pasos como métodos de una clase, usando atributos con patrones regex. Esto permite reutilizar pasos entre múltiples Features sin duplicar código.
+
+**Definir bindings**:
+
+```pascal
+uses
+  Daf.MiniSpec,
+  Daf.MiniSpec.Binding;
+
+type
+  TCalculatorBindings = class
+  public
+    [Given('the numbers (\d+) and (\d+)')]
+    procedure SetNumbers(World: TMyWorld; A, B: Integer);
+    
+    [When('I add them')]
+    procedure AddNumbers(World: TMyWorld);
+    
+    [ThenAttribute('the result should be (\d+)')]
+    procedure CheckResult(World: TMyWorld; Expected: Integer);
+  end;
+
+procedure TCalculatorBindings.SetNumbers(World: TMyWorld; A, B: Integer);
+begin
+  World.A := A;
+  World.B := B;
+end;
+
+procedure TCalculatorBindings.AddNumbers(World: TMyWorld);
+begin
+  World.Result := World.A + World.B;
+end;
+
+procedure TCalculatorBindings.CheckResult(World: TMyWorld; Expected: Integer);
+begin
+  Expect(World.Result).ToEqual(Expected);
+end;
+```
+
+**Registrar y usar**:
+
+```pascal
+initialization
+  Bindings.RegisterSteps<TCalculatorBindings>;  // Registrar la clase
+  
+  Feature('Calculator')
+  .UseContext<TMyWorld>
+  
+  .Scenario('Add numbers')
+    .Given('the numbers 10 and 5')  // Sin lambda: usa binding
+    .When('I add them')
+    .&Then('the result should be 15')
+    
+  .Scenario('Mix with lambdas')
+    .Given('the numbers 7 and 3')  // Binding
+    .When('I add them', procedure(W: TMyWorld)
+      begin
+        W.Result := W.A + W.B + 100;  // Lambda tiene prioridad
+      end)
+    .&Then('the result should be 110');
+```
+
+**Características**:
+
+| Característica | Descripción |
+|----------------|-------------|
+| Atributos | `[Given('regex')]`, `[When('regex')]`, `[ThenAttribute('regex')]` |
+| Parámetros | Los grupos de captura del regex se convierten automáticamente |
+| Tipos soportados | `Integer`, `Int64`, `Float`, `string`, `Boolean` |
+| Primer parámetro | Siempre el World (contexto del escenario) |
+| Prioridad | Si pasas lambda, tiene prioridad sobre el binding |
+| Singleton | `Bindings` es un singleton global vía `Bindings()` |
+
+**And/But**: Heredan el tipo del step anterior (Given → Given, When → When, etc.)
 
 ### Vocabulario Gherkin
 

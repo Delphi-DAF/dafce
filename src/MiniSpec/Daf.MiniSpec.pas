@@ -11,6 +11,7 @@ uses
   System.Classes,
   Daf.MiniSpec.Types,
   Daf.MiniSpec.Builders,
+  Daf.MiniSpec.Binding,
   Daf.MiniSpec.Runner,
   Daf.MiniSpec.Reporter.Console,
   Daf.MiniSpec.Reporter.Json,

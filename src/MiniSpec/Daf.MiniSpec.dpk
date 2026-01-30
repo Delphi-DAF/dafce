@@ -48,6 +48,8 @@ contains
   Daf.MiniSpec.Reporter.Console in 'Daf.MiniSpec.Reporter.Console.pas',
   Daf.MiniSpec.Reporter.Gherkin in 'Daf.MiniSpec.Reporter.Gherkin.pas',
   Daf.MiniSpec.Reporter.Json in 'Daf.MiniSpec.Reporter.Json.pas',
-  Daf.MiniSpec.Reporter.Live in 'Daf.MiniSpec.Reporter.Live.pas';
+  Daf.MiniSpec.Reporter.Live in 'Daf.MiniSpec.Reporter.Live.pas',
+  Daf.MiniSpec.Binding in 'Daf.MiniSpec.Binding.pas',
+  Daf.MiniSpec.Injection in 'Daf.MiniSpec.Injection.pas';
 
 end.

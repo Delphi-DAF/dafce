@@ -98,9 +98,12 @@ type
   IRuleBuilder<T: class, constructor> = interface;
 
   IBackgroundBuilder<T: class, constructor> = interface
-    function Given(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>;
-    function &And(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>;
-    function But(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>;
+    function Given(const Desc: string): IBackgroundBuilder<T>; overload;
+    function Given(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>; overload;
+    function &And(const Desc: string): IBackgroundBuilder<T>; overload;
+    function &And(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>; overload;
+    function But(const Desc: string): IBackgroundBuilder<T>; overload;
+    function But(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>; overload;
     function Scenario(const Description: string): IScenarioBuilder<T>;overload;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
     function Rule(const Description: string): IRuleBuilder<T>;
@@ -155,14 +158,19 @@ type
   end;
 
   IScenarioBuilder<T: class, constructor> = interface
+    function Given(const Desc: string): IScenarioBuilder<T>; overload;
     function Given(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
     function Given(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function When(const Desc: string): IScenarioBuilder<T>; overload;
     function When(const Desc: string; Step: TStepProc<T>) : IScenarioBuilder<T>; overload;
     function When(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function &Then(const Desc: string): IScenarioBuilder<T>; overload;
     function &Then(const Desc: string; Step: TStepProc<T>) : IScenarioBuilder<T>; overload;
     function &Then(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function &And(const Desc: string): IScenarioBuilder<T>; overload;
     function &And(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
     function &And(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function But(const Desc: string): IScenarioBuilder<T>; overload;
     function But(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
     function But(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
 
@@ -172,11 +180,16 @@ type
   end;
 
   IScenarioOutlineBuilder<T: class, constructor> = interface
-    function Given(const Desc: string; Step: TStepProc<T> = nil) : IScenarioOutlineBuilder<T>;
-    function When(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
-    function &Then(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
-    function &And(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
-    function But(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
+    function Given(const Desc: string): IScenarioOutlineBuilder<T>; overload;
+    function Given(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
+    function When(const Desc: string): IScenarioOutlineBuilder<T>; overload;
+    function When(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
+    function &Then(const Desc: string): IScenarioOutlineBuilder<T>; overload;
+    function &Then(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
+    function &And(const Desc: string): IScenarioOutlineBuilder<T>; overload;
+    function &And(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
+    function But(const Desc: string): IScenarioOutlineBuilder<T>; overload;
+    function But(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
     /// <summary>
     /// Define los ejemplos para el ScenarioOutline.
     /// Devuelve IRuleBuilder para continuar en la Rule actual
