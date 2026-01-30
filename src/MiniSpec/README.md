@@ -1,819 +1,170 @@
-# MiniSpec v1.2.0
+# MiniSpec
 
-Framework BDD (Behavior-Driven Development) para Delphi, inspirado en Gherkin/Cucumber.
+**Framework BDD para Delphi** — Escribe especificaciones ejecutables con sintaxis fluida inspirada en Gherkin/Cucumber.
 
-## Novedades v1.2.0
-
-- **Step Bindings**: Pasos reutilizables como métodos con atributos regex (`[Given]`, `[When]`, `[Then]`)
-- **Property Injection**: Inyección automática vía `[Inject]` con `UseFeatureContext<T>`
-- **DataTables**: Tablas inline en steps para datos estructurados (estándar Gherkin)
-- **Before/After Hooks**: Setup/teardown a nivel de Feature (una vez por feature)
-- **Archivo de configuración `MiniSpec.ini`**: Persistencia automática de opciones
-- **Live Reporter**: Dashboard en tiempo real via SSE (Server-Sent Events)
-- **Gherkin Reporter**: Exporta features a formato `.feature` estándar
-- **Dry-run mode**: Lista escenarios sin ejecutarlos
-- **Pause mode**: Espera tecla al finalizar
-- **Filtros extendidos**: Además de `@tag`, soporta `Feat:texto`, `Scen:texto`, `Rule:texto`, `Cat:texto`
-- **Category**: Permite agrupar features por categoría (ej: usando el nombre de la unit)
-- **EndRule**: Permite volver de una Rule a la Feature para añadir más Rules o scenarios
-- **Reporters modulares**: Cada reporter en su propia unit para mejor mantenibilidad
-- **ISpecRunner**: Nueva interfaz para el runner con gestión de listeners
+[![Delphi 12+](https://img.shields.io/badge/Delphi-12%2B-red.svg)](https://www.embarcadero.com/products/delphi)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](../../legal/LICENSE.md)
 
 ---
 
-## Escribiendo Features
+## ¿Por qué MiniSpec?
 
-### Nomenclatura Recomendada
+- 🎯 **Sintaxis Gherkin nativa** — Given/When/Then directamente en código Delphi
+- 🔄 **API fluida** — Encadenamiento natural sin archivos `.feature` externos
+- 🧪 **Type-safe** — Autocompletado y verificación en tiempo de compilación
+- 📊 **Múltiples reporters** — Consola, JSON, JUnit (CI/CD), Live Dashboard
+- 🏷️ **Filtrado potente** — Por tags, features, scenarios, categorías
+- 💉 **Inyección de dependencias** — Sistema ligero integrado
 
-| Elemento | Convención | Ejemplo |
-|----------|------------|---------|
-| Proyecto | `<Dominio>Specs.dpr` | `CalculatorSpecs.dpr`, `EvaluationSpecs.dpr` |
-| Unit de Feature | `<Feature>.Feat.pas` | `Calculator.Add.Feat.pas`, `Login.Feat.pas` |
-| Unit de Helpers | `<Dominio>.SpecHelpers.pas` | `Calculator.SpecHelpers.pas` |
+---
 
-### Estructura Básica
-
-```pascal
-unit MiFeature.Feat.pas;
-
-interface
-
-implementation
-
-uses
-  Daf.MiniSpec;
-
-type
-  TMyWorld = class
-  public
-    Resultado: Integer;
-    Input: string;
-  end;
-
-initialization
-
-Feature('''
-Mi Feature                         // <-- Primera línea = Título
-
-  Como usuario                       // <-- Resto = Narrativa (opcional)
-  Necesito hacer algo
-  Para lograr un objetivo
-
-  @unit @mi-tag                       // <-- Tags al final, en línea propia
-''')
-
-.UseWorld<TMyWorld>
-
-.Background
-  .Given('una precondición común', procedure(Ctx: TMyWorld)
-    begin
-      // Setup compartido por todos los escenarios
-    end)
-
-.Scenario('Mi primer escenario')
-  .Given('una condición inicial', procedure(Ctx: TMyWorld)
-    begin
-      Ctx.Input := 'valor';
-    end)
-  .When('ejecuto la acción', procedure(Ctx: TMyWorld)
-    begin
-      Ctx.Resultado := 42;
-    end)
-  .&Then('obtengo el resultado esperado', procedure(Ctx: TMyWorld)
-    begin
-      Expect(Ctx.Resultado).ToEqual(42);
-    end)
-
-end.
-```
-
-### El World
-
-El **World** es una clase que actúa como contexto compartido entre los pasos de un escenario. Cada escenario recibe una instancia nueva del World, permitiendo:
-
-- **Compartir estado** entre Given, When y Then del mismo escenario
-- **Aislar escenarios** entre sí (cada uno tiene su propia instancia)
-- **Tipar el contexto** para autocompletado y verificación en tiempo de compilación
-
-```pascal
-type
-  TCalculatorWorld = class
-  public
-    Calculator: TCalculator;
-    Result: Integer;
-    Error: string;
-    destructor Destroy; override;  // Liberar recursos si es necesario
-  end;
-
-Feature('...')
-.UseWorld<TCalculatorWorld>  // Cada escenario recibe un TCalculatorWorld nuevo
-```
-
-**Reutilización**: Un mismo World puede usarse en varias features relacionadas. Sin embargo, si las features son muy distintas, es mejor definir Worlds separados para mantener cada contexto limpio y enfocado:
-
-```pascal
-// Calculator.Add.Feat.pas
-Feature('Suma').UseWorld<TCalculatorWorld>
-
-// Login.Feat.pas
-Feature('Login').UseWorld<TLoginWorld>
-
-// Report.Feat.pas
-Feature('Reportes').UseWorld<TReportWorld>
-```
-
-### SpecContext: Acceso al Contexto de Ejecución
-
-Para casos avanzados donde necesitas acceder al contexto de ejecución (step actual, scenario, feature), MiniSpec proporciona la función global `SpecContext`.
-
-```pascal
-type
-  TMyWorld = class  // Clase simple, sin herencia especial requerida
-  public
-    Value: Integer;
-  end;
-
-// En los steps, acceder al contexto via SpecContext:
-.When('ejecuto algo', procedure(World: TMyWorld)
-  begin
-    // Acceso al step actual
-    WriteLn('Step: ', SpecContext.Step.Description);
-
-    // Navegación directa a padres
-    WriteLn('Scenario: ', SpecContext.Scenario.Description);
-    WriteLn('Feature: ', SpecContext.Feature.Title);
-
-    // Rule puede ser nil si no hay Rule explícita
-    if Assigned(SpecContext.Rule) then
-      WriteLn('Rule: ', SpecContext.Rule.Description);
-    
-    // DataTable del step actual (nil si no tiene)
-    if Assigned(SpecContext.DataTable) then
-      WriteLn('Rows: ', SpecContext.DataTable.RowCount);
-  end)
-```
-
-**ISpecContext proporciona**:
-
-| Propiedad | Descripción |
-|-----------|-------------|
-| `Suite` | La Suite contenedora |
-| `Feature` | La Feature contenedora |
-| `Rule` | La Rule contenedora (nil si no hay) |
-| `Scenario` | El scenario (o Example) actual |
-| `Step` | El step que se está ejecutando |
-| `DataTable` | La tabla de datos del step (nil si no tiene) |
-
-### FeatureContext: Estado Compartido entre Escenarios
-
-A diferencia del **World** (que se crea nuevo para cada escenario), el **FeatureContext** permite compartir estado entre todos los escenarios de una Feature. Es útil para recursos costosos de crear:
-
-```pascal
-type
-  TSharedContext = class
-  public
-    Connection: TDbConnection;
-    Cache: TDictionary<string, TObject>;
-  end;
-
-  TScenarioWorld = class
-  private
-    [Inject] FShared: TSharedContext;  // Inyectado automáticamente
-  public
-    LocalData: string;
-    property Shared: TSharedContext read FShared;
-  end;
-
-Feature('Database operations')
-  .UseFeatureContext<TSharedContext>  // Crea UNA instancia para toda la Feature
-  .UseWorld<TScenarioWorld>    // Cada escenario recibe su propio World
-  
-  .Scenario('First query')
-    .When('query data', procedure(W: TScenarioWorld)
-      begin
-        // W.Shared apunta al mismo TSharedContext
-        W.Shared.Cache.Add('key', SomeObject);
-      end)
-  
-  .Scenario('Second query')
-    .When('use cached data', procedure(W: TScenarioWorld)
-      begin
-        // Accede a datos creados en el escenario anterior
-        var Obj := W.Shared.Cache['key'];
-      end)
-```
-
-**Ciclo de vida**:
-- El FeatureContext se crea al inicio de la Feature
-- Se destruye al finalizar la Feature
-- Cada ScenarioWorld recibe la inyección del mismo FeatureContext
-
-### Inyección de Dependencias con [Inject]
-
-MiniSpec incluye un sistema ligero de inyección de dependencias para propiedades marcadas con `[Inject]`.
-
-**Uso básico** (inyección automática del FeatureContext):
-
-```pascal
-uses
-  Daf.MiniSpec,
-  Daf.MiniSpec.Injection;  // Para el atributo [Inject]
-
-type
-  TFeatureContext = class
-  public
-    SharedValue: Integer;
-  end;
-
-  TWorld = class
-  private
-    [Inject] FCtx: TFeatureContext;  // Inyectado automáticamente
-  public
-    property Ctx: TFeatureContext read FCtx;
-  end;
-
-Feature('...')
-  .UseFeatureContext<TFeatureContext>  // Registra TFeatureContext en el Injector
-  .UseWorld<TWorld>             // Al crear World, inyecta FCtx
-```
-
-**Servicios personalizados a nivel de Suite**:
-
-```pascal
-MiniSpec
-  .Before('Setup services', procedure
-    begin
-      TInjectorService.Register(TDatabaseMock.Create);
-      TInjectorService.Register(THttpClientMock.Create);
-    end)
-  .After('Cleanup', procedure
-    begin
-      TInjectorService.Clear;  // Libera todos los servicios
-    end);
-```
-
-**API del TInjectorService**:
-
-| Método | Descripción |
-|--------|-------------|
-| `Register(Instance)` | Registra un servicio (la clase del objeto es la clave) |
-| `Unregister(Instance)` | Elimina el registro de un servicio |
-| `Resolve(AClass)` | Obtiene el servicio registrado para esa clase |
-| `Resolve<T>` | Versión genérica de Resolve |
-| `InjectInto(Target)` | Inyecta servicios en propiedades marcadas con `[Inject]` |
-| `Clear` | Libera y elimina todos los servicios registrados |
-
-**Errores de inyección**:
-
-Si una propiedad marcada con `[Inject]` no puede ser inyectada, se lanza `EInjectionError`:
-
-- Propiedad no es de tipo clase
-- Propiedad no tiene setter
-- No hay servicio registrado compatible con el tipo
-
-### Step Bindings: Pasos Reutilizables
-
-Step Bindings permite definir pasos como métodos de una clase, usando atributos con patrones regex. Esto permite reutilizar pasos entre múltiples Features sin duplicar código.
-
-**Definir bindings**:
-
-```pascal
-uses
-  Daf.MiniSpec,
-  Daf.MiniSpec.Binding;
-
-type
-  TCalculatorBindings = class
-  public
-    [Given('the numbers (\d+) and (\d+)')]
-    procedure SetNumbers(World: TMyWorld; A, B: Integer);
-    
-    [When('I add them')]
-    procedure AddNumbers(World: TMyWorld);
-    
-    [ThenAttribute('the result should be (\d+)')]
-    procedure CheckResult(World: TMyWorld; Expected: Integer);
-  end;
-
-procedure TCalculatorBindings.SetNumbers(World: TMyWorld; A, B: Integer);
-begin
-  World.A := A;
-  World.B := B;
-end;
-
-procedure TCalculatorBindings.AddNumbers(World: TMyWorld);
-begin
-  World.Result := World.A + World.B;
-end;
-
-procedure TCalculatorBindings.CheckResult(World: TMyWorld; Expected: Integer);
-begin
-  Expect(World.Result).ToEqual(Expected);
-end;
-```
-
-**Registrar y usar**:
-
-```pascal
-initialization
-  Bindings.RegisterSteps<TCalculatorBindings>;  // Registrar la clase
-  
-  Feature('Calculator')
-  .UseWorld<TMyWorld>
-  
-  .Scenario('Add numbers')
-    .Given('the numbers 10 and 5')  // Sin lambda: usa binding
-    .When('I add them')
-    .&Then('the result should be 15')
-    
-  .Scenario('Mix with lambdas')
-    .Given('the numbers 7 and 3')  // Binding
-    .When('I add them', procedure(W: TMyWorld)
-      begin
-        W.Result := W.A + W.B + 100;  // Lambda tiene prioridad
-      end)
-    .&Then('the result should be 110');
-```
-
-**Características**:
-
-| Característica | Descripción |
-|----------------|-------------|
-| Atributos | `[Given('regex')]`, `[When('regex')]`, `[ThenAttribute('regex')]` |
-| Parámetros | Los grupos de captura del regex se convierten automáticamente |
-| Tipos soportados | `Integer`, `Int64`, `Float`, `string`, `Boolean` |
-| Primer parámetro | Siempre el World (contexto del escenario) |
-| Prioridad | Si pasas lambda, tiene prioridad sobre el binding |
-| Singleton | `Bindings` es un singleton global vía `Bindings()` |
-
-**And/But**: Heredan el tipo del step anterior (Given → Given, When → When, etc.)
-
-### Vocabulario Gherkin
-
-| Gherkin | MiniSpec | Nota |
-|---------|----------|------|
-| Feature | `Feature('...')` | Descripción multilínea con `'''` |
-| Rule | `.Rule('...')` | Agrupa escenarios relacionados |
-| Background | `.Background` | Pasos comunes a escenarios del Feature/Rule |
-| Scenario | `.Scenario('...')` | Un caso de prueba |
-| Scenario Outline | `.ScenarioOutline('...')` | Con tabla de ejemplos |
-| Examples | `.Examples([...])` | Tabla de datos para Outline |
-| Given | `.Given('...', proc)` | Precondición |
-| When | `.When('...', proc)` | Acción |
-| Then | `.&Then('...', proc)` | Verificación (`&` requerido) |
-| And | `.&And('...', proc)` | Paso adicional (`&` requerido) |
-| But | `.But('...', proc)` | Paso negativo |
-| @tags | `@tag` en descripción | Filtrado de tests |
-| Doc Strings | `'''..''` | Sintaxis nativa Delphi 12+ |
-
-### Before / After Hooks
-
-Los hooks `Before` y `After` ejecutan código **una sola vez** por Feature, a diferencia de `Background` que ejecuta por cada scenario:
-
-```pascal
-Feature('Database Tests')
-  .UseWorld<TDbWorld>
-  
-  .Before('Start test database', procedure
-    begin
-      GTestDb := TTestDatabase.Create;
-      GTestDb.Start;
-    end)
-  
-  .After('Stop test database', procedure
-    begin
-      GTestDb.Free;
-    end)
-  
-  .Background
-    .Given('a fresh transaction', procedure(W: TDbWorld)
-      begin
-        W.Tx := GTestDb.BeginTransaction;  // Se ejecuta por cada scenario
-      end)
-  
-  .Scenario('Insert record')
-    // ...
-```
-
-| Elemento | Ejecuta | Uso típico |
-|----------|---------|------------|
-| `Before` | Una vez antes de todos los scenarios | Iniciar servidor, crear BD |
-| `After` | Una vez después de todos los scenarios | Liberar recursos costosos |
-| `Background` | Antes de cada scenario | Preparar datos del test |
-
-**Nota**: Los hooks no reciben World porque se ejecutan antes de que exista cualquier instancia.
-
-### DataTables
-
-Las DataTables permiten pasar datos estructurados a los steps, siguiendo el estándar Gherkin:
-
-```pascal
-.Scenario('Crear usuarios desde tabla')
-  .Given('los siguientes usuarios:', [
-    ['name',  'email'],           // Primera fila = headers
-    ['Alice', 'alice@test.com'],
-    ['Bob',   'bob@test.com'],
-    ['Carol', 'carol@test.com']
-  ], procedure(World: TMyWorld)
-    var
-      Table: TDataTableObj;
-      I: Integer;
-    begin
-      Table := (World as ISpecContext).DataTable;
-      for I := 0 to Table.RowCount - 1 do
-        World.Users.Add(Table.Cell[I, 'name'], Table.Cell[I, 'email']);
-    end)
-  .When('cuento los usuarios', procedure(World: TMyWorld)
-    begin
-      World.Count := World.Users.Count;
-    end)
-  .&Then('debería tener 3 usuarios', procedure(World: TMyWorld)
-    begin
-      Expect(World.Count).ToEqual(3);
-    end);
-```
-
-**Acceso a la DataTable**:
-
-```pascal
-var
-  Table: TDataTableObj;
-begin
-  Table := (World as ISpecContext).DataTable;  // Cast a ISpecContext
-  
-  // Propiedades disponibles:
-  Table.RowCount;           // Número de filas (sin headers)
-  Table.ColCount;           // Número de columnas
-  Table.Headers;            // TArray<string> con nombres de columnas
-  Table.Row[0];             // TArray<TValue> primera fila de datos
-  Table.Cell[0, 0];         // TValue por índice de columna
-  Table.Cell[0, 'name'];    // TValue por nombre de columna
-end;
-```
-
-**Los reporters muestran las DataTables automáticamente**:
-
-| Reporter | Formato |
-|----------|--------|
-| Console | Tabla ASCII con bordes |
-| JSON | `"dataTable": [["name","email"],["Alice","alice@test.com"]...]` |
-| Gherkin | Formato estándar con pipes: `\| name \| email \|` |
-| Live | Tabla en el dashboard |
-
-### Category para Agrupar Features
-
-Las features pueden asignarse a una categoría para facilitar el filtrado con `Cat:texto`. Una forma conveniente es usar un tipo marker para extraer automáticamente el nombre de la unit:
+## Quick Start
 
 ```pascal
 unit Calculator.Add.Feat;
 
 interface
-
-type
-  TUnitMarker = class end;  // Tipo marker para identificar la unit
-
 implementation
 uses Daf.MiniSpec;
+
+type
+  TWorld = class
+    A, B, Result: Integer;
+  end;
 
 initialization
 
 Feature('Calculator Addition')
-  .Category(TUnitMarker)  // Extrae "Calculator.Add.Feat" del QualifiedClassName
-  .UseWorld<TCalculatorWorld>
-  // ...
+.UseWorld<TWorld>
+
+.Scenario('Add two numbers')
+  .Given('I have entered 50 into the calculator', procedure(W: TWorld)
+    begin
+      W.A := 50;
+    end)
+  .&And('I have entered 70 into the calculator', procedure(W: TWorld)
+    begin
+      W.B := 70;
+    end)
+  .When('I press add', procedure(W: TWorld)
+    begin
+      W.Result := W.A + W.B;
+    end)
+  .&Then('the result should be 120', procedure(W: TWorld)
+    begin
+      Expect(W.Result).ToEqual(120);
+    end)
+
+end.
 ```
 
-Ahora puedes filtrar por categoría:
+**Ejecutar:**
 
 ```bash
-MiApp.exe -f "Cat:Calculator"     # Features cuya categoría contenga "Calculator"
-MiApp.exe -f "Cat:Add.Feat"       # Features cuya categoría contenga "Add.Feat"
-```
-
-### EndRule para Volver a Feature
-
-Cuando necesitas añadir Rules hermanas o volver a la Feature después de una Rule:
-
-```pascal
-Feature('...')
-  .UseWorld<TWorld>
-  
-  .Rule('Primera regla')
-    .Scenario('Test 1')
-      // ...
-    
-  .EndRule  // Vuelve a Feature
-  
-  .Rule('Segunda regla')
-    .Scenario('Test 2')
-      // ...
-```
-
-### And / But
-
-Usa `&And` y `But` para añadir pasos al grupo anterior (Given, When o Then):
-
-```pascal
-.Scenario('Con pasos adicionales')
-  .Given('una condición', procedure(Ctx: TMyWorld) begin end)
-  .&And('otra condición', procedure(Ctx: TMyWorld) begin end)   // Se añade a Given
-  .When('ejecuto algo', procedure(Ctx: TMyWorld) begin end)
-  .&Then('pasa esto', procedure(Ctx: TMyWorld) begin end)
-  .&And('también esto', procedure(Ctx: TMyWorld) begin end)     // Se añade a Then
-  .But('no pasa esto otro', procedure(Ctx: TMyWorld) begin end) // Se añade a Then
-```
-
-### Scenario Outline con Examples
-
-```pascal
-.ScenarioOutline('Sumar dos números')
-  .Given('tengo el número <A>', procedure(Ctx: TMyWorld) begin end)
-  .When('sumo <B>', procedure(Ctx: TMyWorld)
-    begin
-      Ctx.Resultado := Ctx.A + Ctx.B;
-    end)
-  .&Then('obtengo <Resultado>', procedure(Ctx: TMyWorld)
-    begin
-      Expect(Ctx.Resultado).ToEqual(Ctx.Esperado);
-    end)
-  .Examples([
-    [ 'A',  'B',  'Esperado'],  // Headers (nombres de campos del World)
-    [ 1,    2,    3],
-    [ 5,    5,    10],
-    [-1,    1,    0]
-  ])
-```
-
-### Tags
-
-Los tags pueden aparecer en cualquier punto del texto, pero **se recomienda añadirlos al final**, preferiblemente en línea propia, para mayor claridad:
-
-```pascal
-// En Feature: tags al final de la descripción
-Feature('''
-Mi Feature
-
-  Como usuario necesito X para Y
-
-  @unit @fast
-''')
-
-// En Scenario: tags al final de la descripción, en línea propia
-.Scenario('''
-  Escenario lento
-  @slow @integration
-''')
-
-// También válido en línea propia dentro del Scenario Outline
-.ScenarioOutline('''
-  Sumar números
-  @math @unit
-''')
+CalculatorSpecs.exe                    # Ejecutar todos los tests
+CalculatorSpecs.exe -f "@unit"         # Solo tests con tag @unit
+CalculatorSpecs.exe -r live            # Dashboard en tiempo real
+CalculatorSpecs.exe -r junit:output=results.xml  # Para CI/CD
 ```
 
 ---
 
-## Assertions (Expect)
+## Características Principales
 
-### Igualdad
-
-| Método | Descripción |
-|--------|-------------|
-| `Expect(valor).ToEqual(esperado)` | Verifica igualdad |
-| `Expect(valor).ToNotEqual(otro)` | Verifica desigualdad |
-
-### Nulos
-
-| Método | Descripción |
-|--------|-------------|
-| `Expect(obj).ToBeNull` | Verifica que sea nil |
-| `Expect(obj).ToNotBeNull` | Verifica que no sea nil |
-
-### Comparaciones Numéricas
-
-| Método | Descripción |
-|--------|-------------|
-| `Expect(num).ToBeGreaterThan(5)` | Mayor que |
-| `Expect(num).ToBeGreaterOrEqual(5)` | Mayor o igual |
-| `Expect(num).ToBeLessThan(10)` | Menor que |
-| `Expect(num).ToBeLessOrEqual(10)` | Menor o igual |
-| `Expect(num).ToBeBetween(1, 10)` | Entre dos valores (inclusivo) |
-
-### Aproximaciones
-
-| Método | Descripción |
-|--------|-------------|
-| `Expect(3.14159).ToBeCloseTo(3.14, 2)` | Igual con N decimales de precisión |
-| `Expect(105).ToBeWithinPercent(100, 10)` | Dentro de ±N% del valor |
-
-### Strings
-
-| Método | Descripción |
-|--------|-------------|
-| `Expect(str).ToStartWith('Hello')` | Empieza con |
-| `Expect(str).ToEndWith('World')` | Termina con |
-| `Expect(str).ToContain('text')` | Contiene substring |
-| `Expect(str).ToMatch('^\d+$')` | Coincide con regex |
-
-### Booleanos
-
-| Método | Descripción |
-|--------|-------------|
-| `Expect(cond).ToBeTrue` | Es verdadero |
-| `Expect(cond).ToBeFalse` | Es falso |
-
-### Excepciones
-
-La acción se ejecuta en el step When y la excepción se captura automáticamente. En el Then se verifica con `Expect(Raised)`:
-
-```pascal
-.Scenario('División por cero')
-  .Given('los números 10 y 0', procedure(World: TWorld)
-    begin
-      World.A := 10;
-      World.B := 0;
-    end)
-  .When('se divide', procedure(World: TWorld)
-    begin
-      World.Calculator.Divide(World.A, World.B);  // Excepción capturada
-    end)
-  .&Then('lanza EDivByZero', procedure(World: TWorld)
-    begin
-      Expect(Raised).ToBe(EDivByZero);
-    end);
-```
-
-| Método | Descripción |
-|--------|-------------|
-| `Expect(Raised).ToBeAny` | Se lanzó cualquier excepción |
-| `Expect(Raised).ToBe(EMyException)` | Se lanzó tipo específico |
-| `Expect(Raised).ToBe<EMyException>` | Se lanzó tipo específico (genérico) |
-| `Expect(Raised).ToHaveMessage('texto')` | Mensaje contiene substring |
-| `Expect(Raised).ToMatchMessage('patron')` | Mensaje coincide con regex |
-| `Expect(Raised).ToBeNone` | No se lanzó excepción |
+| Característica | Descripción |
+|----------------|-------------|
+| **Vocabulario Gherkin** | Feature, Scenario, Given, When, Then, And, But, Background, Rule |
+| **Scenario Outline** | Tests data-driven con tabla de Examples |
+| **DataTables** | Datos estructurados inline en steps |
+| **Step Bindings** | Pasos reutilizables con atributos regex |
+| **Before/After** | Hooks a nivel de Feature |
+| **Tags & Filtros** | `@tag`, `Feat:`, `Scen:`, `Rule:`, `Cat:` |
+| **Assertions** | API `Expect()` completa con matchers |
+| **Reporters** | Console, JSON, JUnit, Gherkin, Live Dashboard |
 
 ---
 
-## Línea de Comandos
+## Instalación
 
-### Opciones Generales
-
-| Opción | Descripción |
-|--------|-------------|
-| `-h, --help` | Muestra ayuda |
-| `-f, --filter <expr>` | Filtra tests por expresión de tags |
-| `-t, --tags` | Lista todos los tags con conteos |
-| `-q, --query <expr>` | Muestra escenarios que coinciden (sin ejecutar) |
-| `-r, --reporter <spec>` | Reporter con opciones (ver abajo) |
-| `--pause` | Espera tecla al finalizar |
-| `--dry-run` | Lista escenarios sin ejecutarlos |
-| `--stacktrace` | Muestra stack trace completo en errores |
-
-> **Nota**: `--stacktrace` requiere una librería de stack traces (JclDebug, MadExcept, EurekaLog)
-> para mostrar información útil. Sin ella, `Exception.StackTrace` estará vacío.
-
-### Expresiones de Filtro
-
-```
-@tag                    # Escenarios con el tag (@ es obligatorio)
-~@tag                   # Escenarios SIN el tag
-Feat:texto              # Feature title contiene texto
-Scen:texto              # Scenario description contiene texto
-Rule:texto              # Rule description contiene texto
-Cat:texto               # Category contiene texto
-@a and @b               # Ambos tags
-@a or @b                # Cualquiera de los dos
-(Feat:Login or @auth) and ~@slow  # Expresiones complejas
-```
-
-> **Importante**: Los tags DEBEN comenzar con `@`. Escribir `--filter datatable` dará error;
-> use `--filter @datatable`. Si la expresión de filtro es inválida, el programa muestra
-> un mensaje de error y termina con código de salida 1.
-
-Ejemplos:
+### Boss (recomendado)
 
 ```bash
-MiApp.exe -f "@unit"
-MiApp.exe -f "@unit and ~@slow"
-MiApp.exe -f "Feat:Calculator"
-MiApp.exe -f "Cat:Login.Feat"
-MiApp.exe -f "Scen:division and @arithmetic"
-MiApp.exe -f "Rule:Division"
+boss install delphi-daf/dafce
 ```
 
-### Reporters
+### Manual
 
-Sintaxis: `-r <nombre>:<opcion1>=<valor>,<opcion2>=<valor>,...`
-
-| Reporter | Opciones | Ejemplo |
-|----------|----------|---------|
-| `console` | *(ninguna)* | `-r console` |
-| `json` | `output=<file>` | `-r json:output=report.json` |
-| `junit` | `output=<file>` | `-r junit:output=results.xml` |
-| `gherkin` | `output=<dir>` | `-r gherkin:output=features/` |
-| `live` | `port=<num>`, `wait=<ms>` | `-r live:port=8080,wait=5000` |
-
-**JUnit Reporter**: Genera XML en formato JUnit para integración CI/CD. Compatible con GitHub Actions, GitLab CI, Jenkins, Azure DevOps.
-
-**Live Reporter**: Por defecto espera 3 segundos para conexión del navegador. Usa `wait=0` para deshabilitar.
+1. Clona el repositorio
+2. Añade `src/MiniSpec` al Library Path de Delphi
+3. Usa `Daf.MiniSpec` en tus units
 
 ---
 
-## Archivo de Configuración
+## Estructura de Proyecto Recomendada
 
-MiniSpec crea automáticamente `MiniSpec.ini` en el directorio del ejecutable:
-
-```ini
-[minispec]
-reporter=live
-filter=@unit
-pause=true
-
-[reporter.live]
-port=8080
-wait=3000
 ```
-
-Las opciones de línea de comandos tienen prioridad sobre el archivo.
+MyProject/
+├── src/                    # Código de producción
+├── specs/
+│   ├── MySpecs.dpr        # Proyecto de specs
+│   ├── Calculator.Add.Feat.pas
+│   ├── Calculator.Mult.Feat.pas
+│   └── Calculator.SpecHelpers.pas
+```
 
 ---
 
-## Archivos del Framework
+## Documentación
 
-| Archivo | Descripción |
+| Recurso | Descripción |
 |---------|-------------|
-| `Daf.MiniSpec.pas` | API principal y runner |
-| `Daf.MiniSpec.Types.pas` | Tipos e interfaces (ISpecItem, TSpecMatcher, etc.) |
-| `Daf.MiniSpec.Builders.pas` | Builders fluent |
-| `Daf.MiniSpec.Expects.pas` | Assertions |
-| `Daf.MiniSpec.DataTable.pas` | Tipos TDataTable y TDataTableObj |
-| `Daf.MiniSpec.Reporter.pas` | Base de reporters (ISpecRunner, ISpecListener, TSpecRunner) |
-| `Daf.MiniSpec.Reporter.Console.pas` | Reporter de consola |
-| `Daf.MiniSpec.Reporter.Json.pas` | Reporter JSON |
-| `Daf.MiniSpec.Reporter.JUnit.pas` | Reporter JUnit XML para CI/CD |
-| `Daf.MiniSpec.Reporter.Gherkin.pas` | Reporter Gherkin (.feature) |
-| `Daf.MiniSpec.Reporter.Live.pas` | Reporter Live Dashboard (SSE) |
-| `Daf.MiniSpec.LiveDashboard.pas` | HTML template del Live Dashboard |
-| `Daf.MiniSpec.Filter.pas` | Parser de expresiones de filtro |
+| [**Guía de Usuario**](GUIDE.md) | Documentación completa de todas las características |
+| [**Samples**](../../samples/CalculatorSpecs/) | Ejemplos funcionales |
+| [**Changelog**](../../CHANGELOG.md) | Historial de cambios |
 
 ---
 
-## Integración CI/CD
+## Reporters
 
-El reporter JUnit genera XML compatible con las principales plataformas CI/CD.
+### Consola (por defecto)
+```
+Feature: Calculator Addition
+  Scenario: Add two numbers
+    ✓ Given I have entered 50 into the calculator
+    ✓ And I have entered 70 into the calculator
+    ✓ When I press add
+    ✓ Then the result should be 120
 
-### GitHub Actions
-
-```yaml
-- name: Run Tests
-  run: ./MyTests.exe -r junit:output=test-results.xml
-
-- name: Publish Test Results
-  uses: dorny/test-reporter@v1
-  if: always()
-  with:
-    name: MiniSpec Tests
-    path: test-results.xml
-    reporter: java-junit
+Pass: 4 | Fail: 0 | Skip: 0 | Total: 4 Steps
 ```
 
-### GitLab CI
-
-```yaml
-test:
-  script:
-    - ./MyTests.exe -r junit:output=test-results.xml
-  artifacts:
-    reports:
-      junit: test-results.xml
+### Live Dashboard
+```bash
+MySpecs.exe -r live:port=8080
 ```
+Dashboard interactivo en tiempo real via Server-Sent Events.
 
-### Jenkins
-
-```groovy
-stage('Test') {
-    steps {
-        sh './MyTests.exe -r junit:output=test-results.xml'
-    }
-    post {
-        always {
-            junit 'test-results.xml'
-        }
-    }
-}
+### JUnit (CI/CD)
+```bash
+MySpecs.exe -r junit:output=test-results.xml
 ```
+Compatible con GitHub Actions, GitLab CI, Jenkins, Azure DevOps.
 
-### Azure DevOps
+---
 
-```yaml
-- script: ./MyTests.exe -r junit:output=test-results.xml
-  displayName: 'Run Tests'
+## Requisitos
 
-- task: PublishTestResults@2
-  inputs:
-    testResultsFormat: 'JUnit'
-    testResultsFiles: '**/test-results.xml'
-```
-| `Daf.MiniSpec.TagFilter.pas` | Parser legacy de tags (deprecated) |
-| `Daf.MiniSpec.Utils.pas` | Utilidades |
-| `Daf.MiniSpec.Injection.pas` | Inyección de dependencias (`[Inject]`, `TInjectorService`) |
+- **Delphi 12 Athens** o superior (requiere multi-line strings `'''`)
+- Windows (32/64 bit)
+
+---
+
+## Licencia
+
+[Apache License 2.0](../../legal/LICENSE.md)
+
+---
+
+## Contribuir
+
+¿Encontraste un bug? ¿Tienes una idea? Abre un [issue](https://github.com/delphi-daf/dafce/issues) o envía un PR.

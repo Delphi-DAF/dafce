@@ -13,7 +13,8 @@ uses
   FeatureContext.Feat in 'FeatureContext.Feat.pas',
   PropertyInjection.Feat in 'PropertyInjection.Feat.pas',
   StepBinding.Feat in 'StepBinding.Feat.pas',
-  PendingSteps.Feat in 'PendingSteps.Feat.pas';
+  PendingSteps.Feat in 'PendingSteps.Feat.pas',
+  NoActionSteps.Feat in 'NoActionSteps.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

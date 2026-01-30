@@ -49,6 +49,7 @@ type
     FBackground: TBackground<T>;
     FRule: TRule<T>;  // Siempre es una Rule (explícita o implícita)
     class procedure PendingStep(World: T); static;
+    class procedure NoActionStep(World: T); static;
   public
     constructor Create(const ARule: IRule);
     function Given(const Desc: string): IBackgroundBuilder<T>; overload;
@@ -58,6 +59,7 @@ type
     function But(const Desc: string): IBackgroundBuilder<T>; overload;
     function But(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>; overload;
     function Pending: IBackgroundBuilder<T>;
+    function NoAction: IBackgroundBuilder<T>;
     function Scenario(const Description: string): IScenarioBuilder<T>;overload;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
     function Rule(const Description: string): IRuleBuilder<T>;
@@ -70,6 +72,7 @@ type
     FLastTable: TDataTable;
     FRule: TRule<T>;  // Siempre es una Rule (explícita o implícita)
     class procedure PendingStep(World: T); static;
+    class procedure NoActionStep(World: T); static;
     function CreateBindingStep(Kind: TStepKind; const Desc: string): TStepProc<T>;
   public
     constructor Create(const ARule: IRule; const Description: string);
@@ -79,7 +82,7 @@ type
     function Given(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
     function Given(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
     function When(const Desc: string): IScenarioBuilder<T>; overload;
-    function When(const Desc: string; Step: TStepProc<T>) : IScenarioBuilder<T>; overload;
+    function When(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
     function When(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
     function &Then(const Desc: string): IScenarioBuilder<T>; overload;
     function &Then(const Desc: string; Step: TStepProc<T>) : IScenarioBuilder<T>; overload;
@@ -91,6 +94,7 @@ type
     function But(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
     function But(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
     function Pending: IScenarioBuilder<T>;
+    function NoAction: IScenarioBuilder<T>;
 
     function Scenario(const Description: string): IScenarioBuilder<T>;overload;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
@@ -108,6 +112,7 @@ type
     function BuildInitStep(Headers, Row: TArray<TValue>): TStepProc<T>;
     function GetFeature: TFeature<T>;
     class procedure PendingStep(World: T); static;
+    class procedure NoActionStep(World: T); static;
     function CreateBindingStep(Kind: TStepKind; const Desc: string): TStepProc<T>;
   public
     constructor Create(const ARule: IRule; const Desc: string);
@@ -123,6 +128,7 @@ type
     function But(const Desc: string): IScenarioOutlineBuilder<T>; overload;
     function But(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
     function Pending: IScenarioOutlineBuilder<T>;
+    function NoAction: IScenarioOutlineBuilder<T>;
     function Examples(const Table: TExamplesTable): IRuleBuilder<T>;
     function Scenario(const Description: string): IScenarioBuilder<T>;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
@@ -288,6 +294,11 @@ begin
   SpecContext.Step.MarkAsPending;
 end;
 
+class procedure TBackgroundBuilder<T>.NoActionStep(World: T);
+begin
+  // Intentionally empty - step passes without doing anything
+end;
+
 function TBackgroundBuilder<T>.Given(const Desc: string): IBackgroundBuilder<T>;
 var
   Binding: TStepBinding;
@@ -337,6 +348,13 @@ begin
   Result := Self;
 end;
 
+function TBackgroundBuilder<T>.NoAction: IBackgroundBuilder<T>;
+begin
+  if FBackground.StepsGiven.Count > 0 then
+    TScenarioStep<T>(FBackground.StepsGiven.Last).SetProc(NoActionStep);
+  Result := Self;
+end;
+
 function TBackgroundBuilder<T>.Scenario(const Description: string): IScenarioBuilder<T>;
 begin
   Result := TScenarioBuilder<T>.Create(FRule, Description);
@@ -367,6 +385,11 @@ end;
 class procedure TScenarioBuilder<T>.PendingStep(World: T);
 begin
   SpecContext.Step.MarkAsPending;
+end;
+
+class procedure TScenarioBuilder<T>.NoActionStep(World: T);
+begin
+  // Intentionally empty - step passes without doing anything
 end;
 
 function TScenarioBuilder<T>.CreateBindingStep(Kind: TStepKind; const Desc: string): TStepProc<T>;
@@ -546,6 +569,17 @@ begin
   Result := Self;
 end;
 
+function TScenarioBuilder<T>.NoAction: IScenarioBuilder<T>;
+begin
+  case FLastStep of
+    lskGiven: if FScenario.StepsGiven.Count > 0 then
+                TScenarioStep<T>(FScenario.StepsGiven.Last).SetProc(NoActionStep);
+    lskWhen:  if FScenario.StepsWhen.Count > 0 then
+                TScenarioStep<T>(FScenario.StepsWhen.Last).SetProc(NoActionStep);
+  end;
+  Result := Self;
+end;
+
 function TScenarioBuilder<T>.Scenario(const Description: string): IScenarioBuilder<T>;
 begin
   Result := TScenarioBuilder<T>.Create(FRule, Description);
@@ -589,6 +623,11 @@ end;
 class procedure TScenarioOutlineBuilder<T>.PendingStep(World: T);
 begin
   SpecContext.Step.MarkAsPending;
+end;
+
+class procedure TScenarioOutlineBuilder<T>.NoActionStep(World: T);
+begin
+  // Intentionally empty - step passes without doing anything
 end;
 
 function TScenarioOutlineBuilder<T>.CreateBindingStep(Kind: TStepKind; const Desc: string): TStepProc<T>;
@@ -703,6 +742,17 @@ begin
                 FStepsWhen.Last.MarkAsPending;
     lskThen:  if FStepsThen.Count > 0 then
                 FStepsThen.Last.MarkAsPending;
+  end;
+  Result := Self;
+end;
+
+function TScenarioOutlineBuilder<T>.NoAction: IScenarioOutlineBuilder<T>;
+begin
+  case FLastStep of
+    lskGiven: if FStepsGiven.Count > 0 then
+                FStepsGiven.Last.SetProc(NoActionStep);
+    lskWhen:  if FStepsWhen.Count > 0 then
+                FStepsWhen.Last.SetProc(NoActionStep);
   end;
   Result := Self;
 end;

@@ -126,6 +126,12 @@ type
     function But(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>; overload;
     /// <summary>Marks the last added step as pending.</summary>
     function Pending: IBackgroundBuilder<T>;
+    /// <summary>
+    /// Marks the last step as a no-operation (descriptive only).
+    /// The step passes without executing code, but appears in reports.
+    /// Only valid after Given steps.
+    /// </summary>
+    function NoAction: IBackgroundBuilder<T>;
     function Scenario(const Description: string): IScenarioBuilder<T>;overload;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
     function Rule(const Description: string): IRuleBuilder<T>;
@@ -197,6 +203,12 @@ type
     function But(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
     /// <summary>Marks the last added step as pending.</summary>
     function Pending: IScenarioBuilder<T>;
+    /// <summary>
+    /// Marks the last step as a no-operation (descriptive only).
+    /// The step passes without executing code, but appears in reports.
+    /// Only valid after Given or When steps. Raises exception if used after Then.
+    /// </summary>
+    function NoAction: IScenarioBuilder<T>;
 
     function Scenario(const Description: string): IScenarioBuilder<T>;overload;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
@@ -216,6 +228,12 @@ type
     function But(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
     /// <summary>Marks the last added step as pending.</summary>
     function Pending: IScenarioOutlineBuilder<T>;
+    /// <summary>
+    /// Marks the last step as a no-operation (descriptive only).
+    /// The step passes without executing code, but appears in reports.
+    /// Only valid after Given or When steps. Raises exception if used after Then.
+    /// </summary>
+    function NoAction: IScenarioOutlineBuilder<T>;
     /// <summary>
     /// Define los ejemplos para el ScenarioOutline.
     /// Devuelve IRuleBuilder para continuar en la Rule actual
@@ -528,6 +546,10 @@ type
     constructor Create(const Kind: TSpecItemKind; const Parent: ISpecItem; const Description: string; const Proc: TStepProc<T>; const ADataTable: TDataTable); overload;
     destructor Destroy;override;
     procedure Run(World: TObject);override;
+    /// <summary>
+    /// Replaces the step procedure. Used by NoAction to replace a pending step with an empty one.
+    /// </summary>
+    procedure SetProc(const AProc: TStepProc<T>);
     property Proc: TStepProc<T> read FProc;
     property DataTable: TDataTableObj read GetDataTable;
   end;
@@ -1072,6 +1094,11 @@ begin
   FProc := nil;
   FDataTable.Free;
   inherited;
+end;
+
+procedure TScenarioStep<T>.SetProc(const AProc: TStepProc<T>);
+begin
+  FProc := AProc;
 end;
 
 function TScenarioStep<T>.GetDataTable: TDataTableObj;
