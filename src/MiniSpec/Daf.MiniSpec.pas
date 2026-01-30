@@ -15,6 +15,7 @@ uses
   Daf.MiniSpec.Runner,
   Daf.MiniSpec.Reporter.Console,
   Daf.MiniSpec.Reporter.Json,
+  Daf.MiniSpec.Reporter.JUnit,
   Daf.MiniSpec.Reporter.Gherkin,
   Daf.MiniSpec.Reporter.Live,
   Daf.MiniSpec.Expects;
@@ -268,6 +269,8 @@ begin
     Result := TConsoleReporter.Create
   else if SameText(Name, 'json') then
     Result := TJsonReporter.Create
+  else if SameText(Name, 'junit') then
+    Result := TJUnitReporter.Create
   else if SameText(Name, 'gherkin') then
     Result := TGherkinReporter.Create(False)
   else if SameText(Name, 'gherkin-results') then

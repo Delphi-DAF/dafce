@@ -638,7 +638,7 @@ type
     procedure AddAfterHook(const Description: string; const Hook: THookProc);
     procedure RunBeforeHooks;
     procedure RunAfterHooks;
-    procedure Run(const Matcher: TSpecMatcher = nil);
+    procedure Run(const Matcher: TSpecMatcher = nil); reintroduce;
     property Title: string read GetTitle write SetTitle;
     property Features: TList<IFeature> read GetFeatures;
     property BeforeHooks: TList<IHook> read GetBeforeHooks;

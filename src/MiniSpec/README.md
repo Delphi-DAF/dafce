@@ -709,8 +709,11 @@ Sintaxis: `-r <nombre>:<opcion1>=<valor>,<opcion2>=<valor>,...`
 |----------|----------|---------|
 | `console` | *(ninguna)* | `-r console` |
 | `json` | `output=<file>` | `-r json:output=report.json` |
+| `junit` | `output=<file>` | `-r junit:output=results.xml` |
 | `gherkin` | `output=<dir>` | `-r gherkin:output=features/` |
 | `live` | `port=<num>`, `wait=<ms>` | `-r live:port=8080,wait=5000` |
+
+**JUnit Reporter**: Genera XML en formato JUnit para integración CI/CD. Compatible con GitHub Actions, GitLab CI, Jenkins, Azure DevOps.
 
 **Live Reporter**: Por defecto espera 3 segundos para conexión del navegador. Usa `wait=0` para deshabilitar.
 
@@ -747,10 +750,70 @@ Las opciones de línea de comandos tienen prioridad sobre el archivo.
 | `Daf.MiniSpec.Reporter.pas` | Base de reporters (ISpecRunner, ISpecListener, TSpecRunner) |
 | `Daf.MiniSpec.Reporter.Console.pas` | Reporter de consola |
 | `Daf.MiniSpec.Reporter.Json.pas` | Reporter JSON |
+| `Daf.MiniSpec.Reporter.JUnit.pas` | Reporter JUnit XML para CI/CD |
 | `Daf.MiniSpec.Reporter.Gherkin.pas` | Reporter Gherkin (.feature) |
 | `Daf.MiniSpec.Reporter.Live.pas` | Reporter Live Dashboard (SSE) |
 | `Daf.MiniSpec.LiveDashboard.pas` | HTML template del Live Dashboard |
 | `Daf.MiniSpec.Filter.pas` | Parser de expresiones de filtro |
+
+---
+
+## Integración CI/CD
+
+El reporter JUnit genera XML compatible con las principales plataformas CI/CD.
+
+### GitHub Actions
+
+```yaml
+- name: Run Tests
+  run: ./MyTests.exe -r junit:output=test-results.xml
+
+- name: Publish Test Results
+  uses: dorny/test-reporter@v1
+  if: always()
+  with:
+    name: MiniSpec Tests
+    path: test-results.xml
+    reporter: java-junit
+```
+
+### GitLab CI
+
+```yaml
+test:
+  script:
+    - ./MyTests.exe -r junit:output=test-results.xml
+  artifacts:
+    reports:
+      junit: test-results.xml
+```
+
+### Jenkins
+
+```groovy
+stage('Test') {
+    steps {
+        sh './MyTests.exe -r junit:output=test-results.xml'
+    }
+    post {
+        always {
+            junit 'test-results.xml'
+        }
+    }
+}
+```
+
+### Azure DevOps
+
+```yaml
+- script: ./MyTests.exe -r junit:output=test-results.xml
+  displayName: 'Run Tests'
+
+- task: PublishTestResults@2
+  inputs:
+    testResultsFormat: 'JUnit'
+    testResultsFiles: '**/test-results.xml'
+```
 | `Daf.MiniSpec.TagFilter.pas` | Parser legacy de tags (deprecated) |
 | `Daf.MiniSpec.Utils.pas` | Utilidades |
 | `Daf.MiniSpec.Injection.pas` | Inyección de dependencias (`[Inject]`, `TInjectorService`) |
