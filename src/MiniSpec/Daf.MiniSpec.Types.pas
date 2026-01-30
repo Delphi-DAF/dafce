@@ -112,6 +112,8 @@ type
     function &And(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>; overload;
     function But(const Desc: string): IBackgroundBuilder<T>; overload;
     function But(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>; overload;
+    /// <summary>Marks the last added step as pending.</summary>
+    function Pending: IBackgroundBuilder<T>;
     function Scenario(const Description: string): IScenarioBuilder<T>;overload;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
     function Rule(const Description: string): IRuleBuilder<T>;
@@ -181,6 +183,8 @@ type
     function But(const Desc: string): IScenarioBuilder<T>; overload;
     function But(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
     function But(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    /// <summary>Marks the last added step as pending.</summary>
+    function Pending: IScenarioBuilder<T>;
 
     function Scenario(const Description: string): IScenarioBuilder<T>;overload;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
@@ -198,6 +202,8 @@ type
     function &And(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
     function But(const Desc: string): IScenarioOutlineBuilder<T>; overload;
     function But(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
+    /// <summary>Marks the last added step as pending.</summary>
+    function Pending: IScenarioOutlineBuilder<T>;
     /// <summary>
     /// Define los ejemplos para el ScenarioOutline.
     /// Devuelve IRuleBuilder para continuar en la Rule actual
@@ -529,6 +535,7 @@ type
     function Given(const Desc: string; Step: TStepProc<T>): TBackground<T>;
     procedure Run(World: TObject);override;
     property Feature: IFeature read GetFeature;
+    property StepsGiven: TList<IScenarioStep> read GetStepsGiven;
   end;
 
   TScenario<T: class, constructor> = class(TSpecItem, IScenario)
@@ -567,6 +574,9 @@ type
     procedure Run(World: TObject);override;
     property Feature: IFeature read GetFeature;
     property ExampleMeta: TExampleMeta read GetExampleMeta;
+    property StepsGiven: TList<IScenarioStep> read GetStepsGiven;
+    property StepsWhen: TList<IScenarioStep> read GetStepsWhen;
+    property StepsThen: TList<IScenarioStep> read GetStepsThen;
   end;
 
   /// <summary>
@@ -1033,6 +1043,10 @@ procedure TScenarioStep<T>.Run(World: TObject);
 var
   Ctx: TSpecContextImpl;
 begin
+  // If already marked as pending, don't execute the step
+  if FRunInfo.Result = srrPending then
+    Exit;
+
   var SW := TStopwatch.StartNew;
   try
     inherited Run(World);
@@ -1285,7 +1299,15 @@ begin
   begin
     Step.Run(World);
     if Step.RunInfo.Result in [srrFail, srrError] then
+    begin
       FRunInfo.Result := srrFail;
+      Break;
+    end
+    else if Step.RunInfo.Result = srrPending then
+    begin
+      FRunInfo.Result := srrPending;
+      Break;
+    end;
   end;
 end;
 
@@ -1330,6 +1352,10 @@ begin
   case FRunInfo.Result of
     srrSuccess: IncCount(rkPass);
     srrFail, srrError: IncCount(rkFail);
+    srrPending: begin
+                  IncCount(rkSkip);    // Pending counts as skip for totals
+                  IncCount(rkPending); // Also track pending separately
+                end;
   end;
 end;
 
@@ -1591,7 +1617,7 @@ begin
     on E: Exception do
     begin
       FRunInfo.Result := srrError;
-      FRunInfo.Error := E;
+      FRunInfo.Error := Exception(AcquireExceptionObject);
     end;
   end;
 
@@ -1603,7 +1629,7 @@ begin
     on E: Exception do
     begin
       FRunInfo.Result := srrError;
-      FRunInfo.Error := E;
+      FRunInfo.Error := Exception(AcquireExceptionObject);
     end;
   end;
 

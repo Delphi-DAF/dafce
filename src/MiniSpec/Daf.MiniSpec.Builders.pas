@@ -57,6 +57,7 @@ type
     function &And(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>; overload;
     function But(const Desc: string): IBackgroundBuilder<T>; overload;
     function But(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>; overload;
+    function Pending: IBackgroundBuilder<T>;
     function Scenario(const Description: string): IScenarioBuilder<T>;overload;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
     function Rule(const Description: string): IRuleBuilder<T>;
@@ -89,6 +90,7 @@ type
     function But(const Desc: string): IScenarioBuilder<T>; overload;
     function But(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
     function But(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function Pending: IScenarioBuilder<T>;
 
     function Scenario(const Description: string): IScenarioBuilder<T>;overload;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
@@ -120,6 +122,7 @@ type
     function &And(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
     function But(const Desc: string): IScenarioOutlineBuilder<T>; overload;
     function But(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
+    function Pending: IScenarioOutlineBuilder<T>;
     function Examples(const Table: TExamplesTable): IRuleBuilder<T>;
     function Scenario(const Description: string): IScenarioBuilder<T>;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
@@ -327,6 +330,13 @@ begin
   Result := Self;
 end;
 
+function TBackgroundBuilder<T>.Pending: IBackgroundBuilder<T>;
+begin
+  if FBackground.StepsGiven.Count > 0 then
+    FBackground.StepsGiven.Last.MarkAsPending;
+  Result := Self;
+end;
+
 function TBackgroundBuilder<T>.Scenario(const Description: string): IScenarioBuilder<T>;
 begin
   Result := TScenarioBuilder<T>.Create(FRule, Description);
@@ -523,6 +533,19 @@ begin
   Result := Self;
 end;
 
+function TScenarioBuilder<T>.Pending: IScenarioBuilder<T>;
+begin
+  case FLastStep of
+    lskGiven: if FScenario.StepsGiven.Count > 0 then
+                FScenario.StepsGiven.Last.MarkAsPending;
+    lskWhen:  if FScenario.StepsWhen.Count > 0 then
+                FScenario.StepsWhen.Last.MarkAsPending;
+    lskThen:  if FScenario.StepsThen.Count > 0 then
+                FScenario.StepsThen.Last.MarkAsPending;
+  end;
+  Result := Self;
+end;
+
 function TScenarioBuilder<T>.Scenario(const Description: string): IScenarioBuilder<T>;
 begin
   Result := TScenarioBuilder<T>.Create(FRule, Description);
@@ -667,6 +690,19 @@ begin
     lskThen:  FStepsThen.Add(TScenarioStep<T>.Create(sikBut, nil, Desc, Step));
   else
     raise Exception.Create('But must follow Given, When or Then');
+  end;
+  Result := Self;
+end;
+
+function TScenarioOutlineBuilder<T>.Pending: IScenarioOutlineBuilder<T>;
+begin
+  case FLastStep of
+    lskGiven: if FStepsGiven.Count > 0 then
+                FStepsGiven.Last.MarkAsPending;
+    lskWhen:  if FStepsWhen.Count > 0 then
+                FStepsWhen.Last.MarkAsPending;
+    lskThen:  if FStepsThen.Count > 0 then
+                FStepsThen.Last.MarkAsPending;
   end;
   Result := Self;
 end;

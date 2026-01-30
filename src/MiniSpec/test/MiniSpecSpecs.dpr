@@ -12,7 +12,8 @@ uses
   SpecSuite.Feat in 'SpecSuite.Feat.pas',
   FeatureContext.Feat in 'FeatureContext.Feat.pas',
   PropertyInjection.Feat in 'PropertyInjection.Feat.pas',
-  StepBinding.Feat in 'StepBinding.Feat.pas';
+  StepBinding.Feat in 'StepBinding.Feat.pas',
+  PendingSteps.Feat in 'PendingSteps.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;
