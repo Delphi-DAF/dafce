@@ -9,6 +9,13 @@ uses
   Daf.MiniSpec.DataTable,
   Daf.MiniSpec.Injection;
 
+const
+  /// <summary>
+  /// Reserved tag for explicitly skipping scenarios.
+  /// Scenarios tagged with @skip are always excluded from execution.
+  /// </summary>
+  SKIP_TAG = 'skip';
+
 type
   TStepProc<T> = reference to procedure(World: T);
   THookProc = reference to procedure;  // For Before/After hooks (no World)

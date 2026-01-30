@@ -466,7 +466,13 @@ begin
   SpecFilter := Default(TSpecFilter);
   try
     try
-      SpecFilter := TSpecFilter.Parse(Tags);
+      // Always exclude @skip tag, wrap user filter with "not @skip and (...)"
+      var EffectiveFilter := Tags;
+      if EffectiveFilter.IsEmpty then
+        EffectiveFilter := 'not @' + SKIP_TAG
+      else
+        EffectiveFilter := 'not @' + SKIP_TAG + ' and (' + EffectiveFilter + ')';
+      SpecFilter := TSpecFilter.Parse(EffectiveFilter);
     except
       on E: Exception do
       begin
@@ -652,6 +658,7 @@ begin
   WriteLn('Filter expressions:');
   WriteLn('  @tag                    Scenarios with tag');
   WriteLn('  ~@tag                   Scenarios without tag (also: not @tag)');
+  WriteLn('  @skip                   Reserved: always excluded (mark broken tests)');
   WriteLn('  Feat:text               Feature title contains text (case-insensitive)');
   WriteLn('  Scen:text               Scenario description contains text');
   WriteLn('  Rule:text               Rule description contains text');
