@@ -522,6 +522,8 @@ begin
     if Pause then
       OSShell.WaitForShutdown;
   finally
+    // Release suite to trigger destruction of entire spec tree
+    FSuite := nil;
     SpecFilter.Free;
   end;
 end;

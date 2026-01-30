@@ -92,6 +92,18 @@ type
     /// </summary>
     Counts: array[TResultKind] of Cardinal;
     procedure Clear;
+    /// <summary>
+    /// Sets the error, acquiring ownership via AcquireExceptionObject.
+    /// Frees any previous error before assigning the new one.
+    /// Must be called from within an except block.
+    /// </summary>
+    procedure SetError; overload;
+    /// <summary>
+    /// Sets the error to a provided exception instance.
+    /// Takes ownership of the exception (will be freed in Clear or destructor).
+    /// Frees any previous error before assigning the new one.
+    /// </summary>
+    procedure SetError(E: Exception); overload;
     function ErrMsg: string;
     function IsSuccess: Boolean;
     function PassCount: Cardinal;
@@ -320,6 +332,11 @@ type
     function GetAfterHooks: TList<IHook>;
     function HasMatchingScenarios(const Matcher: TSpecMatcher): Boolean;
     procedure Run(const Matcher: TSpecMatcher = nil);
+    /// <summary>
+    /// Clears all internal references to break reference cycles.
+    /// Call when the feature is no longer needed.
+    /// </summary>
+    procedure Clear;
     property Title: string read GetTitle;
     property Narrative: string read GetNarrative;
     /// <summary>
@@ -356,6 +373,11 @@ type
     procedure AddAfterHook(const Description: string; const Hook: THookProc);
     procedure RunBeforeHooks;
     procedure RunAfterHooks;
+    /// <summary>
+    /// Clears all features and hooks to break reference cycles.
+    /// Call when the suite execution is complete.
+    /// </summary>
+    procedure Clear;
     /// <summary>
     /// Title of the test suite (set via MiniSpec.Category).
     /// </summary>
@@ -431,11 +453,11 @@ type
   /// </summary>
   TSpecContextImpl = class(TInterfacedObject, ISpecContext)
   strict private
-    FSuite: ISpecSuite;
-    FFeature: IFeature;
-    FRule: IRule;
-    FScenario: IScenario;
-    FStep: IScenarioStep;
+    [weak] FSuite: ISpecSuite;
+    [weak] FFeature: IFeature;
+    [weak] FRule: IRule;
+    [weak] FScenario: IScenario;
+    [weak] FStep: IScenarioStep;
     FDataTable: TDataTableObj;
     FSuiteContext: TObject;
     FFeatureContext: TObject;
@@ -625,6 +647,7 @@ type
     destructor Destroy; override;
     function HasMatchingScenarios(const Matcher: TSpecMatcher): Boolean;
     procedure Run(const Matcher: TSpecMatcher = nil);reintroduce;
+    procedure Clear;
     property Title: string read GetTitle;
     property Narrative: string read GetNarrative;
     property Category: string read GetCategory write SetCategory;
@@ -662,6 +685,7 @@ type
     procedure AddAfterHook(const Description: string; const Hook: THookProc);
     procedure RunBeforeHooks;
     procedure RunAfterHooks;
+    procedure Clear;
     procedure Run(const Matcher: TSpecMatcher = nil); reintroduce;
     property Title: string read GetTitle write SetTitle;
     property Features: TList<IFeature> read GetFeatures;
@@ -836,9 +860,25 @@ begin
   State := TSpecRunState.srsPrepared;
   Result := TSpecRunResult.srrNone;
   ExecTimeMs := 0;
-  Error := nil;
+  FreeAndNil(Error);
   for var K := Low(TResultKind) to High(TResultKind) do
     Counts[K] := 0;
+end;
+
+procedure TSpecRunInfo.SetError;
+begin
+  // Free any previous error to avoid memory leaks
+  FreeAndNil(Error);
+  // Acquire ownership of the current exception
+  Error := Exception(AcquireExceptionObject);
+end;
+
+procedure TSpecRunInfo.SetError(E: Exception);
+begin
+  // Free any previous error to avoid memory leaks
+  FreeAndNil(Error);
+  // Take ownership of the provided exception
+  Error := E;
 end;
 
 function TSpecRunInfo.ErrMsg: string;
@@ -1066,7 +1106,7 @@ begin
     on E: ExpectFail do
     begin
       FRunInfo.Result := srrFail;
-      FRunInfo.Error := Exception(AcquireExceptionObject);
+      FRunInfo.SetError;
     end;
     on E: Exception do
     begin
@@ -1081,7 +1121,7 @@ begin
       else
       begin
         FRunInfo.Result := srrError;
-        FRunInfo.Error := Exception(AcquireExceptionObject);
+        FRunInfo.SetError;
       end;
     end;
   end;
@@ -1109,8 +1149,8 @@ begin
     on E: Exception do
     begin
       FRunInfo.Result := srrError;
-      FRunInfo.Error := Exception(AcquireExceptionObject);
-      raise;  // Re-raise to stop feature execution
+      FRunInfo.SetError;
+      // Note: Don't re-raise. Feature.Run will check RunInfo.Result
     end;
   end;
   FRunInfo.State := srsFinished;
@@ -1160,7 +1200,7 @@ begin
     on E: Exception do
     begin
       FRunInfo.Result := srrError;
-      FRunInfo.Error := E;
+      FRunInfo.SetError;
     end;
   end;
   FRunInfo.State := srsFinished;
@@ -1334,15 +1374,15 @@ begin
     begin
       FRunInfo.Result := srrError;
       // Create a new exception to report the unconsumed raise
-      FRunInfo.Error := FCapturedRaise.ExceptionClass.Create(
-        'Unhandled exception from When step: ' + FCapturedRaise.ExceptionMessage);
+      FRunInfo.SetError(FCapturedRaise.ExceptionClass.Create(
+        'Unhandled exception from When step: ' + FCapturedRaise.ExceptionMessage));
       FCapturedRaise := TCapturedRaise.Empty;
     end;
   except
     on E: Exception do
     begin
       FRunInfo.Result := srrError;
-      FRunInfo.Error := Exception(AcquireExceptionObject);
+      FRunInfo.SetError;
     end;
   end;
   SetCurrentScenario(OldScenario);
@@ -1544,6 +1584,15 @@ begin
   inherited;
 end;
 
+procedure TFeature<T>.Clear;
+begin
+  // Clear the lists - [weak] references on FParent handle cycle breaking
+  FImplicitRule := nil;
+  FBeforeHooks.Clear;
+  FAfterHooks.Clear;
+  FRules.Clear;
+end;
+
 function TFeature<T>.GetBackGround: IBackground;
 begin
   Result := FImplicitRule.BackGround;
@@ -1603,33 +1652,45 @@ begin
   try
     // Execute Before hooks (once before all scenarios)
     for var Hook in FBeforeHooks do
-      Hook.Execute;
-
-    // Ejecutar todas las Rules (incluyendo ImplicitRule)
-    // Cada Rule decide internamente qué escenarios ejecutar o marcar como Skip
-    for var Rule in FRules do
     begin
-      Rule.Run(Matcher);
-      if Rule.RunInfo.Result in [srrFail, srrError] then
-        FRunInfo.Result := srrFail;
+      Hook.Execute;
+      if Hook.RunInfo.Result in [srrFail, srrError] then
+      begin
+        FRunInfo.Result := srrError;
+        FRunInfo.SetError(Exception.Create(Hook.RunInfo.ErrMsg));
+        Break;  // Stop on first hook failure
+      end;
+    end;
+
+    // Only run scenarios if Before hooks succeeded
+    if FRunInfo.Result = srrSuccess then
+    begin
+      // Ejecutar todas las Rules (incluyendo ImplicitRule)
+      // Cada Rule decide internamente qué escenarios ejecutar o marcar como Skip
+      for var Rule in FRules do
+      begin
+        Rule.Run(Matcher);
+        if Rule.RunInfo.Result in [srrFail, srrError] then
+          FRunInfo.Result := srrFail;
+      end;
     end;
   except
     on E: Exception do
     begin
       FRunInfo.Result := srrError;
-      FRunInfo.Error := Exception(AcquireExceptionObject);
+      FRunInfo.SetError;
     end;
   end;
 
   // Execute After hooks (once after all scenarios, even if there were errors)
-  try
-    for var Hook in FAfterHooks do
-      Hook.Execute;
-  except
-    on E: Exception do
+  for var Hook in FAfterHooks do
+  begin
+    Hook.Execute;
+    if Hook.RunInfo.Result in [srrFail, srrError] then
     begin
       FRunInfo.Result := srrError;
-      FRunInfo.Error := Exception(AcquireExceptionObject);
+      FRunInfo.SetError(Exception.Create(Hook.RunInfo.ErrMsg));
+      // Continue executing remaining After hooks for cleanup
     end;
   end;
 
@@ -1673,6 +1734,25 @@ begin
   FBeforeHooks.Free;
   FFeatures.Free;
   inherited;
+end;
+
+procedure TSpecSuite.Clear;
+var
+  Ctx: TSpecContextImpl;
+begin
+  // Clear global context to release references to suite items
+  Ctx := TSpecContextImpl(SpecContext);
+  Ctx.SetScenario(nil);
+  Ctx.SetRule(nil);
+  Ctx.SetFeature(nil);
+  Ctx.SetSuite(nil);
+  // First clear each feature to break their internal cycles
+  for var Feature in FFeatures do
+    Feature.Clear;
+  // Then clear our own lists
+  FBeforeHooks.Clear;
+  FAfterHooks.Clear;
+  FFeatures.Clear;
 end;
 
 function TSpecSuite.GetTitle: string;
@@ -1768,7 +1848,7 @@ begin
       on E: Exception do
       begin
         FRunInfo.Result := srrError;
-        FRunInfo.Error := E;
+        FRunInfo.SetError;
       end;
     end;
   finally
@@ -1918,7 +1998,7 @@ begin
     on E: Exception do
     begin
       FRunInfo.Result := srrError;
-      FRunInfo.Error := E;
+      FRunInfo.SetError;
     end;
   end;
   FRunInfo.State := srsFinished;
