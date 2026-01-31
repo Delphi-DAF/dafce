@@ -88,6 +88,7 @@ CalculatorSpecs.exe -r junit:output=results.xml  # Para CI/CD
 | **Before/After** | Hooks a nivel de Feature |
 | **Tags & Filtros** | `@tag`, `Feat:`, `Scen:`, `Rule:`, `Cat:` |
 | **Assertions** | API `Expect()` completa con matchers |
+| **Test Doubles** | API elegante `Stub<T>`, `Mock<T>`, `SpyOn<T>` |
 | **Reporters** | Console, JSON, JUnit, Gherkin, Live Dashboard |
 
 ---
@@ -97,6 +98,7 @@ CalculatorSpecs.exe -r junit:output=results.xml  # Para CI/CD
 | Recurso | Descripción |
 |---------|-------------|
 | [**Guía de Usuario**](docs/GUIDE.es.md) | Documentación completa de todas las características |
+| [**Test Doubles**](docs/guide/doubles.es.md) | Stubs, Mocks y Spies |
 | [**Patrones de Testing**](docs/TESTING-PATTERNS.es.md) | BDD para tests unitarios, integración y E2E |
 | [**Samples**](../../samples/CalculatorSpecs/) | Ejemplos funcionales |
 | [**Changelog**](../../CHANGELOG.md) | Historial de cambios |

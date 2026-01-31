@@ -51,6 +51,7 @@ contains
   Daf.MiniSpec.Reporter.JUnit in 'Daf.MiniSpec.Reporter.JUnit.pas',
   Daf.MiniSpec.Reporter.Live in 'Daf.MiniSpec.Reporter.Live.pas',
   Daf.MiniSpec.Binding in 'Daf.MiniSpec.Binding.pas',
-  Daf.MiniSpec.Injection in 'Daf.MiniSpec.Injection.pas';
+  Daf.MiniSpec.Injection in 'Daf.MiniSpec.Injection.pas',
+  Daf.MiniSpec.Doubles in 'Daf.MiniSpec.Doubles.pas';
 
 end.

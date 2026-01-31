@@ -5,6 +5,7 @@ program MiniSpecSpecs;
 uses
   Daf.MiniSpec,
   Daf.MiniSpec.DataTable,
+  Daf.MiniSpec.Doubles,
   SpecContextAccess.Feat in 'SpecContextAccess.Feat.pas',
   Lifecycle.Feat in 'Lifecycle.Feat.pas',
   Hooks.Feat in 'Hooks.Feat.pas',
@@ -14,7 +15,8 @@ uses
   PropertyInjection.Feat in 'PropertyInjection.Feat.pas',
   StepBinding.Feat in 'StepBinding.Feat.pas',
   PendingSteps.Feat in 'PendingSteps.Feat.pas',
-  NoActionSteps.Feat in 'NoActionSteps.Feat.pas';
+  NoActionSteps.Feat in 'NoActionSteps.Feat.pas',
+  Daf.MiniSpec.Doubles.Spec in 'Daf.MiniSpec.Doubles.Spec.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;
