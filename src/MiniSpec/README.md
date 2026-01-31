@@ -1,20 +1,24 @@
-# MiniSpec
+# MiniSpec — BDD Testing Framework for Delphi
 
-**Framework BDD para Delphi** — Escribe especificaciones ejecutables con sintaxis fluida inspirada en Gherkin/Cucumber.
+**🌍 Language: English | [Español](README.es.md)**
+
+**Behavior-Driven Development (BDD) framework for Delphi** — Write executable specifications with fluent Gherkin-style syntax (Given/When/Then). A modern alternative to DUnit and DUnitX for test-driven development.
 
 [![Delphi 12+](https://img.shields.io/badge/Delphi-12%2B-red.svg)](https://www.embarcadero.com/products/delphi)
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](../../legal/LICENSE.md)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../legal/LICENSE.md)
+
+> **Keywords**: Delphi testing, BDD Delphi, Gherkin Delphi, Cucumber for Delphi, unit testing, TDD, test framework, Object Pascal testing, RAD Studio testing
 
 ---
 
-## ¿Por qué MiniSpec?
+## Why MiniSpec?
 
-- 🎯 **Sintaxis Gherkin nativa** — Given/When/Then directamente en código Delphi
-- 🔄 **API fluida** — Encadenamiento natural sin archivos `.feature` externos
-- 🧪 **Type-safe** — Autocompletado y verificación en tiempo de compilación
-- 📊 **Múltiples reporters** — Consola, JSON, JUnit (CI/CD), Live Dashboard
-- 🏷️ **Filtrado potente** — Por tags, features, scenarios, categorías
-- 💉 **Inyección de dependencias** — Sistema ligero integrado
+- 🎯 **Native Gherkin syntax** — Given/When/Then directly in Delphi code
+- 🔄 **Fluent API** — Natural chaining without external `.feature` files
+- 🧪 **Type-safe** — Autocomplete and compile-time verification
+- 📊 **Multiple reporters** — Console, JSON, JUnit (CI/CD), Live Dashboard
+- 🏷️ **Powerful filtering** — By tags, features, scenarios, categories
+- 💉 **Dependency injection** — Lightweight built-in system
 
 ---
 
@@ -25,146 +29,145 @@ unit Calculator.Add.Feat;
 
 interface
 implementation
-uses Daf.MiniSpec;
+uses Daf.MiniSpec, Calculator.Engine;
 
 type
   TWorld = class
-    A, B, Result: Integer;
+    Calculator: TCalculator;  // System Under Test
+    A, B, Result: Integer;    // Parameters from Examples
   end;
 
 initialization
 
-Feature('Calculator Addition')
+Feature('Calculator Addition @arithmetic')
 .UseWorld<TWorld>
 
-.Scenario('Add two numbers')
-  .Given('I have entered 50 into the calculator', procedure(W: TWorld)
+.Background
+  .Given('I have a calculator', procedure(W: TWorld)
     begin
-      W.A := 50;
+      W.Calculator := TCalculator.Create;
     end)
-  .&And('I have entered 70 into the calculator', procedure(W: TWorld)
+
+.ScenarioOutline('Adding <A> and <B> should be <Result>')
+  .Given('the numbers <A> and <B>')  // Auto-bound from Examples
+  .When('they are added', procedure(W: TWorld)
     begin
-      W.B := 70;
+      W.Calculator.Add(W.A, W.B);
     end)
-  .When('I press add', procedure(W: TWorld)
+  .&Then('the result is <Result>', procedure(W: TWorld)
     begin
-      W.Result := W.A + W.B;
+      Expect(W.Calculator.Result).ToEqual(W.Result);
     end)
-  .&Then('the result should be 120', procedure(W: TWorld)
-    begin
-      Expect(W.Result).ToEqual(120);
-    end)
+  .Examples(
+    [['A', 'B', 'Result'],
+     [1, 1, 2],
+     [10, 20, 30],
+     [5, -2, 3]])
 
 end.
 ```
 
-**Ejecutar:**
+**Run:**
 
 ```bash
-CalculatorSpecs.exe                    # Ejecutar todos los tests
-CalculatorSpecs.exe -f "@unit"         # Solo tests con tag @unit
-CalculatorSpecs.exe -r live            # Dashboard en tiempo real
-CalculatorSpecs.exe -r junit:output=results.xml  # Para CI/CD
+CalculatorSpecs.exe                    # Run all tests
+CalculatorSpecs.exe -f "@arithmetic"   # Only tests tagged @arithmetic
+CalculatorSpecs.exe -f "Feat:Calculator" # Filter by feature
+CalculatorSpecs.exe -r live            # Real-time dashboard
+CalculatorSpecs.exe -r junit:output=results.xml  # For CI/CD
 ```
 
 ---
 
-## Características Principales
+## Key Features
 
-| Característica | Descripción |
-|----------------|-------------|
-| **Vocabulario Gherkin** | Feature, Scenario, Given, When, Then, And, But, Background, Rule |
-| **Scenario Outline** | Tests data-driven con tabla de Examples |
-| **DataTables** | Datos estructurados inline en steps |
-| **Step Bindings** | Pasos reutilizables con atributos regex |
-| **Before/After** | Hooks a nivel de Feature |
-| **Tags & Filtros** | `@tag`, `Feat:`, `Scen:`, `Rule:`, `Cat:` |
-| **Assertions** | API `Expect()` completa con matchers |
+| Feature | Description |
+|---------|-------------|
+| **Gherkin Vocabulary** | Feature, Scenario, Given, When, Then, And, But, Background, Rule |
+| **Scenario Outline** | Data-driven tests with Examples table |
+| **DataTables** | Inline structured data in steps |
+| **Step Bindings** | Reusable steps with regex attributes |
+| **Before/After** | Feature-level hooks |
+| **Tags & Filters** | `@tag`, `Feat:`, `Scen:`, `Rule:`, `Cat:` |
+| **Assertions** | Full `Expect()` API with matchers |
 | **Reporters** | Console, JSON, JUnit, Gherkin, Live Dashboard |
 
 ---
 
-## Instalación
+## Documentation
 
-### Boss (recomendado)
-
-```bash
-boss install delphi-daf/dafce
-```
-
-### Manual
-
-1. Clona el repositorio
-2. Añade `src/MiniSpec` al Library Path de Delphi
-3. Usa `Daf.MiniSpec` en tus units
-
----
-
-## Estructura de Proyecto Recomendada
-
-```
-MyProject/
-├── src/                    # Código de producción
-├── specs/
-│   ├── MySpecs.dpr        # Proyecto de specs
-│   ├── Calculator.Add.Feat.pas
-│   ├── Calculator.Mult.Feat.pas
-│   └── Calculator.SpecHelpers.pas
-```
-
----
-
-## Documentación
-
-| Recurso | Descripción |
-|---------|-------------|
-| [**Guía de Usuario**](GUIDE.md) | Documentación completa de todas las características |
-| [**Samples**](../../samples/CalculatorSpecs/) | Ejemplos funcionales |
-| [**Changelog**](../../CHANGELOG.md) | Historial de cambios |
+| Resource | Description |
+|----------|-------------|
+| [**User Guide**](docs/GUIDE.md) | Complete documentation of all features |
+| [**Testing Patterns**](docs/TESTING-PATTERNS.md) | BDD for unit, integration, and E2E tests |
+| [**Samples**](../../samples/CalculatorSpecs/) | Working examples |
+| [**Changelog**](../../CHANGELOG.md) | Version history |
 
 ---
 
 ## Reporters
 
-### Consola (por defecto)
+### Console (default)
 ```
-Feature: Calculator Addition
-  Scenario: Add two numbers
-    ✓ Given I have entered 50 into the calculator
-    ✓ And I have entered 70 into the calculator
-    ✓ When I press add
-    ✓ Then the result should be 120
+Feature: Calculator Addition @arithmetic
+  ScenarioOutline: Adding <A> and <B> should be <Result>
+    Examples:
+        | A   | B   | Result |
+      ✓ | 1   | 1   | 2      | (0 ms)
+      ✓ | 10  | 20  | 30     | (0 ms)
+      ✓ | 5   | -2  | 3      | (0 ms)
 
-Pass: 4 | Fail: 0 | Skip: 0 | Total: 4 Steps
+Pass: 3 | Fail: 0 | Skip: 0 | Total: 3 Specs in 1 Features | 0 ms | at 2026-01-30T14:57:07
 ```
 
 ### Live Dashboard
 ```bash
 MySpecs.exe -r live:port=8080
 ```
-Dashboard interactivo en tiempo real via Server-Sent Events.
+Interactive real-time dashboard via Server-Sent Events.
 
 ### JUnit (CI/CD)
 ```bash
 MySpecs.exe -r junit:output=test-results.xml
 ```
-Compatible con GitHub Actions, GitLab CI, Jenkins, Azure DevOps.
+Compatible with GitHub Actions, GitLab CI, Jenkins, Azure DevOps.
 
 ---
 
-## Requisitos
+## Requirements
 
-- **Delphi 12 Athens** o superior (requiere multi-line strings `'''`)
+- **Delphi 12 Athens** or later (requires multi-line strings `'''`)
 - Windows (32/64 bit)
 
 ---
 
-## Licencia
+## Comparison with Other Frameworks
 
-[Apache License 2.0](../../legal/LICENSE.md)
+| Feature | MiniSpec | DUnitX | DUnit |
+|---------|:--------:|:------:|:-----:|
+| BDD / Gherkin syntax | ✅ | ❌ | ❌ |
+| Given/When/Then | ✅ | ❌ | ❌ |
+| Scenario Outline | ✅ | ❌ | ❌ |
+| Fluent API | ✅ | Partial | ❌ |
+| JUnit XML output | ✅ | ✅ | ❌ |
+| Live Dashboard | ✅ | ❌ | ❌ |
+| Tag filtering | ✅ | ✅ | ❌ |
 
 ---
 
-## Contribuir
+## License
 
-¿Encontraste un bug? ¿Tienes una idea? Abre un [issue](https://github.com/delphi-daf/dafce/issues) o envía un PR.
+[MIT License](../../legal/LICENSE.md)
+
+---
+
+## Contributing
+
+Found a bug? Have an idea? Open an [issue](https://github.com/delphi-daf/dafce/issues) or submit a PR.
+
+---
+
+<p align="center">
+  <sub>Built with ❤️ for the Delphi community</sub><br>
+  <sub><a href="https://github.com/Delphi-DAF/dafce">DAF Project</a> — Delphi Application Framework</sub>
+</p>

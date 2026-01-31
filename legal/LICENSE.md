@@ -21,18 +21,13 @@ DEALINGS IN THE SOFTWARE.
 
 ---
 
-## Additional Condition: Attribution Notice
+## Show Your Support (Optional)
 
-If you distribute a product, application, or service that includes or is derived from the Software, 
-you must include an acknowledgment of the DAF Project.
+If you use DAF in your project, we appreciate (but don't require) a mention 
+in your documentation, about page, or README. Something like:
 
-This acknowledgment can be fulfilled by including the following text in your distribution, 
-such as in a `NOTICE` file, documentation, license folder, or other location provided to end users:
+> "Built with [DAF](https://github.com/Delphi-DAF/dafce)"
 
-    "This product includes components from the DAF Project – https://https://github.com/Delphi-DAF/dafce"
+This helps grow the Delphi community and supports the project's visibility.
 
-No user interface attribution is required.
-
-This notice helps support the recognition and sustainability of the DAF Community Edition.
-
-Commercial support, advanced features, and integrations are available in DAF Pro.
+For commercial support, advanced features, and integrations, see [DAF Pro](https://github.com/Delphi-DAF/dafpro).
