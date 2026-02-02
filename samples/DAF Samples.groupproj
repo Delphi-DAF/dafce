@@ -18,10 +18,10 @@
         <Projects Include="PingProcess\PingProcess.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="CalculatorSpecs\CalculatorSpecs.dproj">
+        <Projects Include="..\src\MiniSpec\samples\CalculatorSpecs\CalculatorSpecs.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="MastermindSpecs\MasterMind.Specs.dproj">
+        <Projects Include="..\src\MiniSpec\samples\MastermindSpecs\MasterMind.Specs.dproj">
             <Dependencies/>
         </Projects>
     </ItemGroup>
@@ -78,22 +78,22 @@
         <MSBuild Projects="PingProcess\PingProcess.dproj" Targets="Make"/>
     </Target>
     <Target Name="CalculatorSpecs">
-        <MSBuild Projects="CalculatorSpecs\CalculatorSpecs.dproj"/>
+        <MSBuild Projects="..\src\MiniSpec\samples\CalculatorSpecs\CalculatorSpecs.dproj"/>
     </Target>
     <Target Name="CalculatorSpecs:Clean">
-        <MSBuild Projects="CalculatorSpecs\CalculatorSpecs.dproj" Targets="Clean"/>
+        <MSBuild Projects="..\src\MiniSpec\samples\CalculatorSpecs\CalculatorSpecs.dproj" Targets="Clean"/>
     </Target>
     <Target Name="CalculatorSpecs:Make">
-        <MSBuild Projects="CalculatorSpecs\CalculatorSpecs.dproj" Targets="Make"/>
+        <MSBuild Projects="..\src\MiniSpec\samples\CalculatorSpecs\CalculatorSpecs.dproj" Targets="Make"/>
     </Target>
     <Target Name="MasterMind_Specs">
-        <MSBuild Projects="MastermindSpecs\MasterMind.Specs.dproj"/>
+        <MSBuild Projects="..\src\MiniSpec\samples\MastermindSpecs\MasterMind.Specs.dproj"/>
     </Target>
     <Target Name="MasterMind_Specs:Clean">
-        <MSBuild Projects="MastermindSpecs\MasterMind.Specs.dproj" Targets="Clean"/>
+        <MSBuild Projects="..\src\MiniSpec\samples\MastermindSpecs\MasterMind.Specs.dproj" Targets="Clean"/>
     </Target>
     <Target Name="MasterMind_Specs:Make">
-        <MSBuild Projects="MastermindSpecs\MasterMind.Specs.dproj" Targets="Make"/>
+        <MSBuild Projects="..\src\MiniSpec\samples\MastermindSpecs\MasterMind.Specs.dproj" Targets="Make"/>
     </Target>
     <Target Name="Build">
         <CallTarget Targets="ConfigExample;MediatRSample;ConsoleSample;HostedService;PingProcess;CalculatorSpecs;MasterMind_Specs"/>
@@ -118,13 +118,13 @@
             <Platforms>Win32</Platforms>
             <Enabled>False</Enabled>
         </BuildGroupProject>
-        <BuildGroupProject Include="CalculatorSpecs\CalculatorSpecs.dproj">
+        <BuildGroupProject Include="..\src\MiniSpec\samples\CalculatorSpecs\CalculatorSpecs.dproj">
             <ProjectGuid>{E54EA5D8-5ADD-4CFA-8860-8E0FC191E992}</ProjectGuid>
             <Configurations>Debug</Configurations>
             <Platforms>Win32</Platforms>
             <Enabled>False</Enabled>
         </BuildGroupProject>
-        <BuildGroupProject Include="MastermindSpecs\MasterMind.Specs.dproj">
+        <BuildGroupProject Include="..\src\MiniSpec\samples\MastermindSpecs\MasterMind.Specs.dproj">
             <ProjectGuid>{039B3194-21B0-416C-AF5E-93119EFF88E4}</ProjectGuid>
             <Configurations>Debug</Configurations>
             <Platforms>Win32</Platforms>
