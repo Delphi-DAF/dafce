@@ -1,0 +1,36 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{B2C3D4E5-6F78-90AB-CDEF-123456789ABC}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="test\MiniSpecSpecs.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="MiniSpecSpecs">
+        <MSBuild Projects="test\MiniSpecSpecs.dproj"/>
+    </Target>
+    <Target Name="MiniSpecSpecs:Clean">
+        <MSBuild Projects="test\MiniSpecSpecs.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="MiniSpecSpecs:Make">
+        <MSBuild Projects="test\MiniSpecSpecs.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="MiniSpecSpecs"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="MiniSpecSpecs:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="MiniSpecSpecs:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

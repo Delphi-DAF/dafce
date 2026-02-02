@@ -1,0 +1,48 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{A1B2C3D4-5E6F-7890-ABCD-EF1234567890}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="samples\CalculatorSpecs\CalculatorSpecs.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="samples\MastermindSpecs\MasterMind.Specs.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="CalculatorSpecs">
+        <MSBuild Projects="samples\CalculatorSpecs\CalculatorSpecs.dproj"/>
+    </Target>
+    <Target Name="CalculatorSpecs:Clean">
+        <MSBuild Projects="samples\CalculatorSpecs\CalculatorSpecs.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="CalculatorSpecs:Make">
+        <MSBuild Projects="samples\CalculatorSpecs\CalculatorSpecs.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="MasterMind_Specs">
+        <MSBuild Projects="samples\MastermindSpecs\MasterMind.Specs.dproj"/>
+    </Target>
+    <Target Name="MasterMind_Specs:Clean">
+        <MSBuild Projects="samples\MastermindSpecs\MasterMind.Specs.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="MasterMind_Specs:Make">
+        <MSBuild Projects="samples\MastermindSpecs\MasterMind.Specs.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="CalculatorSpecs;MasterMind_Specs"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="CalculatorSpecs:Clean;MasterMind_Specs:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="CalculatorSpecs:Make;MasterMind_Specs:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>
