@@ -26,7 +26,7 @@ for %%A in (%*) do (
     )
   )
 )
-if not defined CMD set "CMD=help"
+if not defined CMD set "CMD=start"
 
 set "PRJ_ROOT_KEY=USR_PRJ"
 :: Current dir without trailing backslash
