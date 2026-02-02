@@ -29,6 +29,11 @@ The Community Edition already includes:
   - **IDafApplicationBuilder** and **IDafApplication** — for streamlined access to host services
 - **CQRS and In-Process Messaging** — modeled after [MediatR](https://github.com/jbogard/MediatR), supporting commands, queries, and notifications
 - **NNLog** — a Delphi-native port of [NLog](https://nlog-project.org/) ("**NNLog is Not NLog**"), fully integrated with DAF's logging abstractions
+- **MiniSpec** — BDD testing framework inspired by [Cucumber](https://cucumber.io/) and [RSpec](https://rspec.info/), including:
+  - **Gherkin Syntax** — Given/When/Then directly in Delphi code
+  - **Scenario Outline** — data-driven testing with Examples tables
+  - **Multiple Reporters** — Console, JSON, JUnit (CI/CD), Live Dashboard
+  - **Test Doubles** — elegant Stub, Mock, and Spy API
 
 DAF Community Edition is distributed under the MIT License with an additional attribution clause.  
 
