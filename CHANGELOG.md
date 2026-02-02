@@ -10,8 +10,49 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
 ### Added
 
+- **MiniSpec**: SpecSuite - root node containing all Features with title and hooks
+- **MiniSpec**: `Category(Title)` - fluent API to set Suite title
+- **MiniSpec**: `Before(Description, Hook)` / `After(Description, Hook)` - Suite-level hooks
+- **MiniSpec**: `ISpecSuite` interface and `TSpecSuite` implementation
+- **MiniSpec**: Suite events: `OnBeginSuite` / `OnEndSuite` for listeners
+- **MiniSpec**: All reporters display Suite title (Console, JSON, Gherkin comment, Live header)
+- **MiniSpec**: DataTables support - inline data tables for steps (Gherkin standard)
+- **MiniSpec**: `TDataTable` type and `TDataTableObj` wrapper with Row/Cell/Headers access
+- **MiniSpec**: All reporters display DataTables (Console ASCII, JSON array, Gherkin pipes)
 - **MiniSpec**: `TFeatureWorld` base class for Worlds needing execution context access
-- **MiniSpec**: `ISpecContext` interface with `CurrentStep`, `CurrentScenario`, `CurrentRule`, `CurrentFeature`
+- **MiniSpec**: `ISpecContext` interface with `CurrentStep`, `CurrentScenario`, `CurrentRule`, `CurrentFeature`, `DataTable`
+- **MiniSpec**: Extended filter system with `Feat:`, `Scen:`, `Rule:`, `Cat:` prefixes
+- **MiniSpec**: `EndRule` method to return to Feature context from Rule
+- **MiniSpec**: Live Dashboard auto-reconnect for new test runs
+- **MiniSpec**: Live Dashboard export/print support
+- **MiniSpec**: Cleaner exception testing API - `Expect(Raised).ToBe<EException>`
+- **MiniSpec**: Dedicated test project for framework tests (`src/MiniSpec/test/`)
+- **MiniSpec**: `Before`/`After` hooks for feature-level setup/teardown (run once per feature)
+
+### Changed
+
+- **MiniSpec**: Refactored `InUnit` → `Category` concept for flexible feature grouping
+- **MiniSpec**: Filter prefixes changed: `F:`→`Feat:`, `S:`→`Scen:`, `R:`→`Rule:`, `U:`→`Cat:`
+- **MiniSpec**: `TSourceUnit` marker renamed to `TUnitMarker`
+- **MiniSpec**: Extracted reporters to individual units for better modularity
+- **MiniSpec**: Uses `ISpecReporter` interface instead of class reference
+- **Samples**: Renamed `.Feature.pas` → `.Feat.pas` per naming convention
+
+### Fixed
+
+- **MiniSpec**: AST parent navigation and phantom World elimination
+- **MiniSpec**: Listeners `FCliOptions` dangling pointer and config logic
+- **MiniSpec**: World create/destroy lifecycle balance verified with tests
+
+### Removed
+
+- **MiniSpec**: HTML reporter (replaced by Live Dashboard)
+- **Tools**: MiniSpecWatcher project (replaced by Live reporter)
+
+### Documentation
+
+- **MiniSpec**: Updated README with new exception testing API
+- **MiniSpec**: Added LiveDashboard unit to README file list
 
 ## [1.2.0] - 2026-01-24
 

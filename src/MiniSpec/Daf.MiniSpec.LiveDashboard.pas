@@ -90,6 +90,11 @@ const
       </div>
     </div>
 
+    <!-- Suite Title -->
+    <div x-show="suiteTitle" class="mb-4 text-xl text-gray-300 font-semibold">
+      Suite: <span x-text="suiteTitle"></span>
+    </div>
+
     <!-- Progress Bar -->
     <div class="mb-4 bg-gray-800 rounded-lg p-4">
       <div class="w-full bg-gray-700 rounded-full h-4 overflow-hidden">
@@ -103,6 +108,7 @@ const
         <span class="text-green-400 flex items-center gap-1"><svg class="w-4 h-4"><use href="#icon-pass"></use></svg> pass: <span x-text="pass"></span></span>
         <span class="text-red-400 flex items-center gap-1"><svg class="w-4 h-4"><use href="#icon-fail"></use></svg> fail: <span x-text="fail"></span></span>
         <span class="text-yellow-400 flex items-center gap-1"><svg class="w-4 h-4"><use href="#icon-skip"></use></svg> skip: <span x-text="skip"></span></span>
+        <span class="text-orange-400 flex items-center gap-1"><svg class="w-4 h-4"><use href="#icon-skip"></use></svg> pending: <span x-text="pending"></span></span>
         <span class="text-gray-400" x-text="`${totalTests} specs in ${features.length} features`"></span>
         <span class="text-gray-500" x-show="reportComplete &amp;&amp; completedAt" x-text="`at ${completedAt}`"></span>
       </div>
@@ -333,11 +339,36 @@ const
                         <template x-if="scenario.steps && scenario.steps.length > 0">
                           <div class="space-y-0.5">
                             <template x-for="(step, stepIdx) in scenario.steps" :key="stepIdx">
-                              <div class="flex items-start gap-2 py-0.5" :class="step.success ? 'text-gray-400' : 'text-red-400'">
-                                <svg class="w-3 h-3 flex-shrink-0"><use :href="step.success ? '#icon-pass' : '#icon-fail'"></use></svg>
-                                <span class="text-blue-400 font-medium w-12 flex-shrink-0" x-text="step.type"></span>
-                                <span x-text="step.text" class="flex-1"></span>
-                                <span class="text-gray-600" x-text="`${step.ms}ms`"></span>
+                              <div>
+                                <div class="flex items-start gap-2 py-0.5" :class="step.success ? 'text-gray-400' : 'text-red-400'">
+                                  <svg class="w-3 h-3 flex-shrink-0"><use :href="step.success ? '#icon-pass' : '#icon-fail'"></use></svg>
+                                  <span class="text-blue-400 font-medium w-12 flex-shrink-0" x-text="step.type"></span>
+                                  <span x-text="step.text" class="flex-1"></span>
+                                  <span class="text-gray-600" x-text="`${step.ms}ms`"></span>
+                                </div>
+                                <!-- DataTable -->
+                                <template x-if="step.dataTable && step.dataTable.length > 0">
+                                  <div class="ml-16 mt-1 mb-2">
+                                    <table class="text-xs border-collapse border border-gray-700">
+                                      <thead>
+                                        <tr class="bg-gray-800">
+                                          <template x-for="(cell, cellIdx) in step.dataTable[0]" :key="'h'+cellIdx">
+                                            <th class="px-2 py-1 text-left border border-gray-700 text-gray-300" x-text="cell"></th>
+                                          </template>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        <template x-for="(row, rowIdx) in step.dataTable.slice(1)" :key="'r'+rowIdx">
+                                          <tr>
+                                            <template x-for="(cell, cellIdx) in row" :key="'c'+cellIdx">
+                                              <td class="px-2 py-0.5 border border-gray-700 text-gray-400" x-text="cell"></td>
+                                            </template>
+                                          </tr>
+                                        </template>
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </template>
                               </div>
                             </template>
                           </div>
@@ -362,6 +393,7 @@ const
     function dashboard() {
       return {
         connected: false,
+        suiteTitle: '',
         features: [],
         currentFeature: null,
         currentFeatureNarrative: null,
@@ -372,6 +404,7 @@ const
         pass: 0,
         fail: 0,
         skip: 0,
+        pending: 0,
         completedAt: null,
         reportComplete: false,
         eventSource: null,
@@ -386,7 +419,7 @@ const
         exportFilename: '',
 
         get totalTests() {
-          return this.pass + this.fail + this.skip;
+          return this.pass + this.fail + this.skip + this.pending;
         },
         get executedTests() {
           return this.pass + this.fail;
@@ -528,6 +561,9 @@ const
 
         handleEvent(data) {
           switch(data.event) {
+            case 'suite:start':
+              this.suiteTitle = data.title || '';
+              break;
             case 'report:start':
               this.features = [];
               this.pass = 0;
@@ -554,6 +590,7 @@ const
               this.pass = data.totalPass || this.pass;
               this.fail = data.totalFail || this.fail;
               this.skip = data.totalSkip || this.skip;
+              this.pending = data.totalPending || this.pending;
               this.currentFeatureScenarios.push({
                 type: 'scenario',
                 name: data.name,
@@ -570,6 +607,7 @@ const
               this.pass = data.totalPass || this.pass;
               this.fail = data.totalFail || this.fail;
               this.skip = data.totalSkip || this.skip;
+              this.pending = data.totalPending || this.pending;
               // Contar skipped de examples para la UI
               const skipCount = (data.examples || []).filter(e => e.skipped).length;
               this.currentFeatureScenarios.push({
@@ -610,6 +648,7 @@ const
               this.pass = data.pass;
               this.fail = data.fail;
               this.skip = data.skip || 0;
+              this.pending = data.pending || 0;
               this.currentFeature = null;
               this.currentScenario = null;
               // Mantener conexión abierta para detectar nuevo run

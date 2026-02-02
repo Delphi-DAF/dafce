@@ -5,7 +5,10 @@ uses
   System.Generics.Collections,
   System.Rtti,
   System.SysUtils,
-  Daf.MiniSpec.Types;
+  System.TypInfo,
+  Daf.MiniSpec.DataTable,
+  Daf.MiniSpec.Types,
+  Daf.MiniSpec.Binding;
 
 type
   TRuleBuilder<T: class, constructor> = class;  // forward declaration
@@ -18,19 +21,26 @@ type
     constructor Create(const Description: string; const Category: string = '');overload;
     function Category(const Name: string): IFeatureBuilder<T>; overload;
     function Category(AClass: TClass): IFeatureBuilder<T>; overload;
+    function Before(const Description: string; Hook: THookProc): IFeatureBuilder<T>;
+    function After(const Description: string; Hook: THookProc): IFeatureBuilder<T>;
     function Background: IBackgroundBuilder<T>;
     function Scenario(const Description: string): IScenarioBuilder<T>;overload;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
     function Rule(const Description: string): IRuleBuilder<T>;
+    property Feature: TFeature<T> read FFeature;  // Para configuración desde TFeatureBuilder
   end;
 
   TFeatureBuilder = class
   strict private
     FDescription: string;
     FCategory: string;
+    FContextCreator: TFunc<TObject>;  // Creador del FeatureContext (si se usa UseFeatureContext)
   public
     constructor Create(const Description: string);
     function Category(AClass: TClass): TFeatureBuilder;
+    /// <summary>Define un contexto compartido para toda la Feature. Debe invocarse antes de UseWorld.</summary>
+    function UseFeatureContext<T: class, constructor>: TFeatureBuilder;
+    /// <summary>Define el tipo de contexto (World) para los escenarios de esta Feature</summary>
     function UseWorld<T: class, constructor>: IFeatureBuilder<T>;
   end;
 
@@ -38,11 +48,18 @@ type
   strict private
     FBackground: TBackground<T>;
     FRule: TRule<T>;  // Siempre es una Rule (explícita o implícita)
+    class procedure PendingStep(World: T); static;
+    class procedure NoActionStep(World: T); static;
   public
     constructor Create(const ARule: IRule);
-    function Given(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>;
-    function &And(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>;
-    function But(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>;
+    function Given(const Desc: string): IBackgroundBuilder<T>; overload;
+    function Given(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>; overload;
+    function &And(const Desc: string): IBackgroundBuilder<T>; overload;
+    function &And(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>; overload;
+    function But(const Desc: string): IBackgroundBuilder<T>; overload;
+    function But(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>; overload;
+    function Pending: IBackgroundBuilder<T>;
+    function NoAction: IBackgroundBuilder<T>;
     function Scenario(const Description: string): IScenarioBuilder<T>;overload;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
     function Rule(const Description: string): IRuleBuilder<T>;
@@ -52,16 +69,32 @@ type
   strict private
     FScenario: TScenario<T>;
     FLastStep: TLastStepKind;
+    FLastTable: TDataTable;
     FRule: TRule<T>;  // Siempre es una Rule (explícita o implícita)
+    class procedure PendingStep(World: T); static;
+    class procedure NoActionStep(World: T); static;
+    function CreateBindingStep(Kind: TStepKind; const Desc: string): TStepProc<T>;
   public
     constructor Create(const ARule: IRule; const Description: string);
     function ExampleInit(Step: TStepProc<T>): IScenarioBuilder<T>;
     procedure SetExampleMeta(const Meta: TExampleMeta);
-    function Given(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>;
-    function When(const Desc: string; Step: TStepProc<T>) : IScenarioBuilder<T>;
-    function &Then(const Desc: string; Step: TStepProc<T>) : IScenarioBuilder<T>;
-    function &And(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>;
-    function But(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>;
+    function Given(const Desc: string): IScenarioBuilder<T>; overload;
+    function Given(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function Given(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function When(const Desc: string): IScenarioBuilder<T>; overload;
+    function When(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function When(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function &Then(const Desc: string): IScenarioBuilder<T>; overload;
+    function &Then(const Desc: string; Step: TStepProc<T>) : IScenarioBuilder<T>; overload;
+    function &Then(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function &And(const Desc: string): IScenarioBuilder<T>; overload;
+    function &And(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function &And(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function But(const Desc: string): IScenarioBuilder<T>; overload;
+    function But(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function But(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function Pending: IScenarioBuilder<T>;
+    function NoAction: IScenarioBuilder<T>;
 
     function Scenario(const Description: string): IScenarioBuilder<T>;overload;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
@@ -78,14 +111,24 @@ type
     FLastStep: TLastStepKind;
     function BuildInitStep(Headers, Row: TArray<TValue>): TStepProc<T>;
     function GetFeature: TFeature<T>;
+    class procedure PendingStep(World: T); static;
+    class procedure NoActionStep(World: T); static;
+    function CreateBindingStep(Kind: TStepKind; const Desc: string): TStepProc<T>;
   public
     constructor Create(const ARule: IRule; const Desc: string);
     destructor Destroy; override;
-    function Given(const Desc: string; Step: TStepProc<T> = nil) : IScenarioOutlineBuilder<T>;
-    function When(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
-    function &Then(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
-    function &And(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
-    function But(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
+    function Given(const Desc: string): IScenarioOutlineBuilder<T>; overload;
+    function Given(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
+    function When(const Desc: string): IScenarioOutlineBuilder<T>; overload;
+    function When(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
+    function &Then(const Desc: string): IScenarioOutlineBuilder<T>; overload;
+    function &Then(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
+    function &And(const Desc: string): IScenarioOutlineBuilder<T>; overload;
+    function &And(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
+    function But(const Desc: string): IScenarioOutlineBuilder<T>; overload;
+    function But(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
+    function Pending: IScenarioOutlineBuilder<T>;
+    function NoAction: IScenarioOutlineBuilder<T>;
     function Examples(const Table: TExamplesTable): IRuleBuilder<T>;
     function Scenario(const Description: string): IScenarioBuilder<T>;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
@@ -106,6 +149,8 @@ type
     // IRuleBuilder + IFeatureBuilder
     function Category(const Name: string): IFeatureBuilder<T>; overload;
     function Category(AClass: TClass): IFeatureBuilder<T>; overload;
+    function Before(const Description: string; Hook: THookProc): IFeatureBuilder<T>;
+    function After(const Description: string; Hook: THookProc): IFeatureBuilder<T>;
     function Background: IBackgroundBuilder<T>;
     function Scenario(const Description: string): IScenarioBuilder<T>;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
@@ -150,6 +195,18 @@ begin
     FFeature.Category := QualifiedName.Substring(0, DotPos)
   else
     FFeature.Category := QualifiedName;
+  Result := Self;
+end;
+
+function TFeatureBuilder<T>.Before(const Description: string; Hook: THookProc): IFeatureBuilder<T>;
+begin
+  FFeature.BeforeHooks.Add(THook.Create(sikBefore, FFeature, Description, Hook));
+  Result := Self;
+end;
+
+function TFeatureBuilder<T>.After(const Description: string; Hook: THookProc): IFeatureBuilder<T>;
+begin
+  FFeature.AfterHooks.Add(THook.Create(sikAfter, FFeature, Description, Hook));
   Result := Self;
 end;
 
@@ -201,9 +258,24 @@ begin
   Result := Self;
 end;
 
-function TFeatureBuilder.UseWorld<T>: IFeatureBuilder<T>;
+function TFeatureBuilder.UseFeatureContext<T>: TFeatureBuilder;
 begin
-  Result := TFeatureBuilder<T>.Create(FDescription, FCategory);
+  FContextCreator := function: TObject
+    begin
+      Result := T.Create;
+    end;
+  Result := Self;
+end;
+
+function TFeatureBuilder.UseWorld<T>: IFeatureBuilder<T>;
+var
+  Builder: TFeatureBuilder<T>;
+begin
+  Builder := TFeatureBuilder<T>.Create(FDescription, FCategory);
+  // Si se configuró un FeatureContext, pasarlo a la Feature
+  if Assigned(FContextCreator) then
+    Builder.Feature.SetContextCreator(FContextCreator);
+  Result := Builder;
   Free;
 end;
 
@@ -217,10 +289,39 @@ begin
   FRule.BackGround := FBackground;
 end;
 
+class procedure TBackgroundBuilder<T>.PendingStep(World: T);
+begin
+  SpecContext.Step.MarkAsPending;
+end;
+
+class procedure TBackgroundBuilder<T>.NoActionStep(World: T);
+begin
+  // Intentionally empty - step passes without doing anything
+end;
+
+function TBackgroundBuilder<T>.Given(const Desc: string): IBackgroundBuilder<T>;
+var
+  Binding: TStepBinding;
+  Captures: TArray<string>;
+begin
+  if Bindings.FindBinding(skGiven, Desc, Binding, Captures) then
+    Result := Given(Desc, procedure(World: T)
+      begin
+        Bindings.Invoke(Binding, World, Captures);
+      end)
+  else
+    Result := Given(Desc, PendingStep);
+end;
+
 function TBackgroundBuilder<T>.Given(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>;
 begin
   FBackground.Given(Desc, Step);
   Result := Self;
+end;
+
+function TBackgroundBuilder<T>.&And(const Desc: string): IBackgroundBuilder<T>;
+begin
+  Result := Given(Desc);
 end;
 
 function TBackgroundBuilder<T>.&And(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>;
@@ -229,9 +330,28 @@ begin
   Result := Self;
 end;
 
+function TBackgroundBuilder<T>.But(const Desc: string): IBackgroundBuilder<T>;
+begin
+  Result := Given(Desc);
+end;
+
 function TBackgroundBuilder<T>.But(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>;
 begin
   FBackground.Given(Desc, Step);
+  Result := Self;
+end;
+
+function TBackgroundBuilder<T>.Pending: IBackgroundBuilder<T>;
+begin
+  if FBackground.StepsGiven.Count > 0 then
+    FBackground.StepsGiven.Last.MarkAsPending;
+  Result := Self;
+end;
+
+function TBackgroundBuilder<T>.NoAction: IBackgroundBuilder<T>;
+begin
+  if FBackground.StepsGiven.Count > 0 then
+    TScenarioStep<T>(FBackground.StepsGiven.Last).SetProc(NoActionStep);
   Result := Self;
 end;
 
@@ -262,6 +382,30 @@ begin
   FRule.Scenarios.Add(FScenario);
 end;
 
+class procedure TScenarioBuilder<T>.PendingStep(World: T);
+begin
+  SpecContext.Step.MarkAsPending;
+end;
+
+class procedure TScenarioBuilder<T>.NoActionStep(World: T);
+begin
+  // Intentionally empty - step passes without doing anything
+end;
+
+function TScenarioBuilder<T>.CreateBindingStep(Kind: TStepKind; const Desc: string): TStepProc<T>;
+var
+  Binding: TStepBinding;
+  Captures: TArray<string>;
+begin
+  if Bindings.FindBinding(Kind, Desc, Binding, Captures) then
+    Result := procedure(World: T)
+      begin
+        Bindings.Invoke(Binding, World, Captures);
+      end
+  else
+    Result := PendingStep;
+end;
+
 function TScenarioBuilder<T>.ExampleInit(Step: TStepProc<T>): IScenarioBuilder<T>;
 begin
   FScenario.ExampleInit(Step);
@@ -273,25 +417,81 @@ begin
   FScenario.SetExampleMeta(Meta);
 end;
 
+function TScenarioBuilder<T>.Given(const Desc: string): IScenarioBuilder<T>;
+begin
+  Result := Given(Desc, CreateBindingStep(skGiven, Desc));
+end;
+
 function TScenarioBuilder<T>.Given(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>;
 begin
   FScenario.Given(Desc, Step);
   FLastStep := lskGiven;
+  FLastTable := nil;
   Result := Self;
+end;
+
+function TScenarioBuilder<T>.Given(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>;
+begin
+  FScenario.Given(Desc, Table, Step);
+  FLastStep := lskGiven;
+  FLastTable := Table;
+  Result := Self;
+end;
+
+function TScenarioBuilder<T>.When(const Desc: string): IScenarioBuilder<T>;
+begin
+  Result := When(Desc, CreateBindingStep(skWhen, Desc));
 end;
 
 function TScenarioBuilder<T>.When(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>;
 begin
   FScenario.When(Desc, Step);
   FLastStep := lskWhen;
+  FLastTable := nil;
   Result := Self;
+end;
+
+function TScenarioBuilder<T>.When(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>;
+begin
+  FScenario.When(Desc, Table, Step);
+  FLastStep := lskWhen;
+  FLastTable := Table;
+  Result := Self;
+end;
+
+function TScenarioBuilder<T>.&Then(const Desc: string): IScenarioBuilder<T>;
+begin
+  Result := &Then(Desc, CreateBindingStep(skThen, Desc));
 end;
 
 function TScenarioBuilder<T>.&Then(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>;
 begin
   FScenario.&Then(Desc, Step);
   FLastStep := lskThen;
+  FLastTable := nil;
   Result := Self;
+end;
+
+function TScenarioBuilder<T>.&Then(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>;
+begin
+  FScenario.&Then(Desc, Table, Step);
+  FLastStep := lskThen;
+  FLastTable := Table;
+  Result := Self;
+end;
+
+function TScenarioBuilder<T>.&And(const Desc: string): IScenarioBuilder<T>;
+var
+  Kind: TStepKind;
+begin
+  case FLastStep of
+    lskGiven: Kind := skGiven;
+    lskWhen:  Kind := skWhen;
+    lskThen:  Kind := skThen;
+  else
+    raise Exception.Create('And must follow Given, When or Then');
+  end;
+  Result := &And(Desc, CreateBindingStep(Kind, Desc));
 end;
 
 function TScenarioBuilder<T>.&And(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>;
@@ -306,6 +506,32 @@ begin
   Result := Self;
 end;
 
+function TScenarioBuilder<T>.&And(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>;
+begin
+  case FLastStep of
+    lskGiven: FScenario.Given(Desc, Table, Step);
+    lskWhen:  FScenario.When(Desc, Table, Step);
+    lskThen:  FScenario.&Then(Desc, Table, Step);
+  else
+    raise Exception.Create('And must follow Given, When or Then');
+  end;
+  Result := Self;
+end;
+
+function TScenarioBuilder<T>.But(const Desc: string): IScenarioBuilder<T>;
+var
+  Kind: TStepKind;
+begin
+  case FLastStep of
+    lskGiven: Kind := skGiven;
+    lskWhen:  Kind := skWhen;
+    lskThen:  Kind := skThen;
+  else
+    raise Exception.Create('But must follow Given, When or Then');
+  end;
+  Result := But(Desc, CreateBindingStep(Kind, Desc));
+end;
+
 function TScenarioBuilder<T>.But(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>;
 begin
   case FLastStep of
@@ -314,6 +540,42 @@ begin
     lskThen:  FScenario.&Then(Desc, Step);
   else
     raise Exception.Create('But must follow Given, When or Then');
+  end;
+  Result := Self;
+end;
+
+function TScenarioBuilder<T>.But(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>;
+begin
+  case FLastStep of
+    lskGiven: FScenario.Given(Desc, Table, Step);
+    lskWhen:  FScenario.When(Desc, Table, Step);
+    lskThen:  FScenario.&Then(Desc, Table, Step);
+  else
+    raise Exception.Create('But must follow Given, When or Then');
+  end;
+  Result := Self;
+end;
+
+function TScenarioBuilder<T>.Pending: IScenarioBuilder<T>;
+begin
+  case FLastStep of
+    lskGiven: if FScenario.StepsGiven.Count > 0 then
+                FScenario.StepsGiven.Last.MarkAsPending;
+    lskWhen:  if FScenario.StepsWhen.Count > 0 then
+                FScenario.StepsWhen.Last.MarkAsPending;
+    lskThen:  if FScenario.StepsThen.Count > 0 then
+                FScenario.StepsThen.Last.MarkAsPending;
+  end;
+  Result := Self;
+end;
+
+function TScenarioBuilder<T>.NoAction: IScenarioBuilder<T>;
+begin
+  case FLastStep of
+    lskGiven: if FScenario.StepsGiven.Count > 0 then
+                TScenarioStep<T>(FScenario.StepsGiven.Last).SetProc(NoActionStep);
+    lskWhen:  if FScenario.StepsWhen.Count > 0 then
+                TScenarioStep<T>(FScenario.StepsWhen.Last).SetProc(NoActionStep);
   end;
   Result := Self;
 end;
@@ -358,11 +620,46 @@ begin
   inherited;
 end;
 
-function TScenarioOutlineBuilder<T>.Given(const Desc: string; Step: TStepProc<T> = nil): IScenarioOutlineBuilder<T>;
+class procedure TScenarioOutlineBuilder<T>.PendingStep(World: T);
 begin
-  FStepsGiven.Add(TScenarioStep<T>.Create(sikGiven, nil, Desc,Step));
+  SpecContext.Step.MarkAsPending;
+end;
+
+class procedure TScenarioOutlineBuilder<T>.NoActionStep(World: T);
+begin
+  // Intentionally empty - step passes without doing anything
+end;
+
+function TScenarioOutlineBuilder<T>.CreateBindingStep(Kind: TStepKind; const Desc: string): TStepProc<T>;
+var
+  Binding: TStepBinding;
+  Captures: TArray<string>;
+begin
+  if Bindings.FindBinding(Kind, Desc, Binding, Captures) then
+    Result := procedure(World: T)
+      begin
+        Bindings.Invoke(Binding, World, Captures);
+      end
+  else
+    Result := PendingStep;
+end;
+
+function TScenarioOutlineBuilder<T>.Given(const Desc: string): IScenarioOutlineBuilder<T>;
+begin
+  // In ScenarioOutline, Given without lambda stores nil (values come from Examples)
+  Result := Given(Desc, nil);
+end;
+
+function TScenarioOutlineBuilder<T>.Given(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
+begin
+  FStepsGiven.Add(TScenarioStep<T>.Create(sikGiven, nil, Desc, Step));
   FLastStep := lskGiven;
   Result := Self;
+end;
+
+function TScenarioOutlineBuilder<T>.When(const Desc: string): IScenarioOutlineBuilder<T>;
+begin
+  Result := When(Desc, CreateBindingStep(skWhen, Desc));
 end;
 
 function TScenarioOutlineBuilder<T>.When(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
@@ -372,11 +669,30 @@ begin
   Result := Self;
 end;
 
+function TScenarioOutlineBuilder<T>.&Then(const Desc: string): IScenarioOutlineBuilder<T>;
+begin
+  Result := &Then(Desc, CreateBindingStep(skThen, Desc));
+end;
+
 function TScenarioOutlineBuilder<T>.&Then(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
 begin
   FStepsThen.Add(TScenarioStep<T>.Create(sikThen, nil, Desc, Step));
   FLastStep := lskThen;
   Result := Self;
+end;
+
+function TScenarioOutlineBuilder<T>.&And(const Desc: string): IScenarioOutlineBuilder<T>;
+var
+  Kind: TStepKind;
+begin
+  case FLastStep of
+    lskGiven: Kind := skGiven;
+    lskWhen:  Kind := skWhen;
+    lskThen:  Kind := skThen;
+  else
+    raise Exception.Create('And must follow Given, When or Then');
+  end;
+  Result := &And(Desc, CreateBindingStep(Kind, Desc));
 end;
 
 function TScenarioOutlineBuilder<T>.&And(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
@@ -391,6 +707,20 @@ begin
   Result := Self;
 end;
 
+function TScenarioOutlineBuilder<T>.But(const Desc: string): IScenarioOutlineBuilder<T>;
+var
+  Kind: TStepKind;
+begin
+  case FLastStep of
+    lskGiven: Kind := skGiven;
+    lskWhen:  Kind := skWhen;
+    lskThen:  Kind := skThen;
+  else
+    raise Exception.Create('But must follow Given, When or Then');
+  end;
+  Result := But(Desc, CreateBindingStep(Kind, Desc));
+end;
+
 function TScenarioOutlineBuilder<T>.But(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
 begin
   case FLastStep of
@@ -399,6 +729,30 @@ begin
     lskThen:  FStepsThen.Add(TScenarioStep<T>.Create(sikBut, nil, Desc, Step));
   else
     raise Exception.Create('But must follow Given, When or Then');
+  end;
+  Result := Self;
+end;
+
+function TScenarioOutlineBuilder<T>.Pending: IScenarioOutlineBuilder<T>;
+begin
+  case FLastStep of
+    lskGiven: if FStepsGiven.Count > 0 then
+                FStepsGiven.Last.MarkAsPending;
+    lskWhen:  if FStepsWhen.Count > 0 then
+                FStepsWhen.Last.MarkAsPending;
+    lskThen:  if FStepsThen.Count > 0 then
+                FStepsThen.Last.MarkAsPending;
+  end;
+  Result := Self;
+end;
+
+function TScenarioOutlineBuilder<T>.NoAction: IScenarioOutlineBuilder<T>;
+begin
+  case FLastStep of
+    lskGiven: if FStepsGiven.Count > 0 then
+                FStepsGiven.Last.SetProc(NoActionStep);
+    lskWhen:  if FStepsWhen.Count > 0 then
+                FStepsWhen.Last.SetProc(NoActionStep);
   end;
   Result := Self;
 end;
@@ -524,6 +878,18 @@ begin
     FFeature.Category := QualifiedName.Substring(0, DotPos)
   else
     FFeature.Category := QualifiedName;
+  Result := Self;
+end;
+
+function TRuleBuilder<T>.Before(const Description: string; Hook: THookProc): IFeatureBuilder<T>;
+begin
+  FFeature.BeforeHooks.Add(THook.Create(sikBefore, FFeature, Description, Hook));
+  Result := Self;
+end;
+
+function TRuleBuilder<T>.After(const Description: string; Hook: THookProc): IFeatureBuilder<T>;
+begin
+  FFeature.AfterHooks.Add(THook.Create(sikAfter, FFeature, Description, Hook));
   Result := Self;
 end;
 

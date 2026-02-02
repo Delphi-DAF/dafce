@@ -1,0 +1,975 @@
+﻿unit Daf.MiniSpec.Runner;
+
+interface
+uses
+  System.Classes,
+  System.RegularExpressions,
+  System.Generics.Collections,
+  System.SysUtils,
+  System.JSON,
+  System.Rtti,
+  System.IniFiles,
+  Daf.MiniSpec.Types;
+
+type
+  /// <summary>
+  /// Dictionary of string options passed from CLI/config to reporters.
+  /// Each reporter reads the keys it needs (e.g., 'output', 'port').
+  /// </summary>
+  TRunnerOptions = TDictionary<string, string>;
+
+  /// <summary>
+  /// Opciones globales de MiniSpec con persistencia en archivo .cfg (formato INI).
+  /// Incluye opciones de ejecución y configuración de reporters.
+  /// </summary>
+  TMiniSpecOptions = class
+  public const
+    OPT_DRY_RUN = 'DryRun';
+    SEC_MINISPEC = 'minispec';
+    SEC_REPORTER_PREFIX = 'reporter.';
+  strict private
+    FOptions: TDictionary<string, TValue>;
+    FSpecMatcher: TSpecMatcher;
+    FFilter: string;
+    FPause: Boolean;
+    FDryRun: Boolean;
+    FStackTrace: Boolean;
+    FReporterName: string;
+    FReporterOptions: TObjectDictionary<string, TRunnerOptions>;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    procedure SetOption(const Key: string; const Value: TValue);
+    function GetOption(const Key: string; const Default: TValue): TValue;
+    function HasOption(const Key: string): Boolean;
+    // Helpers para opciones comunes
+    function DryRun: Boolean;
+    // Persistencia
+    procedure LoadFromFile(const FileName: string);
+    procedure SaveToFile(const FileName: string);
+    // Reporter options
+    function GetReporterOptions(const ReporterName: string): TRunnerOptions;
+    procedure SetReporterOption(const ReporterName, Key, Value: string);
+    // Properties
+    property SpecMatcher: TSpecMatcher read FSpecMatcher write FSpecMatcher;
+    property Filter: string read FFilter write FFilter;
+    property Pause: Boolean read FPause write FPause;
+    property IsDryRun: Boolean read FDryRun write FDryRun;
+    property StackTrace: Boolean read FStackTrace write FStackTrace;
+    property ReporterName: string read FReporterName write FReporterName;
+  end;
+
+  /// <summary>
+  /// Read-only context passed to listeners during spec execution.
+  /// Provides access to current feature/scenario and options.
+  /// </summary>
+  IRunContext = interface
+    ['{A1B2C3D4-E5F6-7A8B-9C0D-1E2F3A4B5C6D}']
+    function GetSuite: ISpecSuite;
+    function GetCurrentFeature: IFeature;
+    function GetCurrentRule: IRule;
+    function GetCurrentScenario: IScenario;
+    function GetCurrentOutline: IScenarioOutline;
+    function GetOptions: TMiniSpecOptions;
+    function GetCompletedAt: TDateTime;
+    function GetErrorDetail(const RunInfo: TSpecRunInfo): string;
+    property Suite: ISpecSuite read GetSuite;
+    property CurrentFeature: IFeature read GetCurrentFeature;
+    property CurrentRule: IRule read GetCurrentRule;
+    property CurrentScenario: IScenario read GetCurrentScenario;
+    property CurrentOutline: IScenarioOutline read GetCurrentOutline;
+    property Options: TMiniSpecOptions read GetOptions;
+    property CompletedAt: TDateTime read GetCompletedAt;
+  end;
+
+  /// <summary>
+  /// Observer interface for spec execution events.
+  /// Listeners receive notifications but cannot modify execution.
+  /// </summary>
+  ISpecListener = interface
+    ['{F8A1B2C3-D4E5-6F7A-8B9C-0D1E2F3A4B5C}']
+    procedure Configure(const Options: TRunnerOptions);
+    function ShowHelp: Boolean;
+    procedure OnBeginSuite(const Context: IRunContext; const Suite: ISpecSuite);
+    procedure OnEndSuite(const Context: IRunContext; const Suite: ISpecSuite);
+    procedure OnBeginReport(const Context: IRunContext);
+    procedure OnEndReport(const Context: IRunContext);
+    procedure OnBeginFeature(const Context: IRunContext; const Feature: IFeature);
+    procedure OnEndFeature(const Context: IRunContext; const Feature: IFeature);
+    procedure OnBeginScenario(const Context: IRunContext; const Scenario: IScenario);
+    procedure OnEndScenario(const Context: IRunContext; const Scenario: IScenario);
+    procedure OnBeginOutline(const Context: IRunContext; const Outline: IScenarioOutline);
+    procedure OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline);
+    procedure OnItem(const Context: IRunContext; const Item: ISpecItem);
+  end;
+
+  /// <summary>
+  /// Interface for the spec runner that coordinates execution and listener management.
+  /// </summary>
+  ISpecRunner = interface
+    ['{E7F8A9B0-C1D2-E3F4-A5B6-C7D8E9F0A1B2}']
+    function GetPassCount: Cardinal;
+    function GetFailCount: Cardinal;
+    function GetSkipCount: Cardinal;
+    function GetPendingCount: Cardinal;
+    function GetElapsedMs: Integer;
+    function GetFeatureCount: Integer;
+    function GetCompletedAt: TDateTime;
+    procedure Configure(const Options: TRunnerOptions);
+    function ShowHelp: Boolean;
+    procedure AddListener(const Listener: ISpecListener);
+    procedure Report(Suite: ISpecSuite; Options: TMiniSpecOptions);
+    function UseConsole: Boolean;
+    property PassCount: Cardinal read GetPassCount;
+    property FailCount: Cardinal read GetFailCount;
+    property SkipCount: Cardinal read GetSkipCount;
+    property PendingCount: Cardinal read GetPendingCount;
+    property ElapsedMs: Integer read GetElapsedMs;
+    property FeatureCount: Integer read GetFeatureCount;
+    property CompletedAt: TDateTime read GetCompletedAt;
+  end;
+
+  /// <summary>
+  /// Base class for spec listeners with empty implementations.
+  /// Subclass and override only the methods you need.
+  /// </summary>
+  TCustomListener = class(TInterfacedObject, ISpecListener)
+  protected
+    FCliOptions: TRunnerOptions;
+    function GetCliOption(const Key: string; const Default: string = ''): string;
+  public
+    destructor Destroy; override;
+    procedure Configure(const Options: TRunnerOptions); virtual;
+    function ShowHelp: Boolean; virtual;
+    procedure OnBeginSuite(const Context: IRunContext; const Suite: ISpecSuite); virtual;
+    procedure OnEndSuite(const Context: IRunContext; const Suite: ISpecSuite); virtual;
+    procedure OnBeginReport(const Context: IRunContext); virtual;
+    procedure OnEndReport(const Context: IRunContext); virtual;
+    procedure OnBeginFeature(const Context: IRunContext; const Feature: IFeature); virtual;
+    procedure OnEndFeature(const Context: IRunContext; const Feature: IFeature); virtual;
+    procedure OnBeginScenario(const Context: IRunContext; const Scenario: IScenario); virtual;
+    procedure OnEndScenario(const Context: IRunContext; const Scenario: IScenario); virtual;
+    procedure OnBeginOutline(const Context: IRunContext; const Outline: IScenarioOutline); virtual;
+    procedure OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline); virtual;
+    procedure OnItem(const Context: IRunContext; const Item: ISpecItem); virtual;
+    function GetContent: string; virtual;
+    function GetFileExt: string; virtual;
+    function UseConsole: Boolean; virtual;
+  end;
+
+  TSpecRunner = class(TInterfacedObject, ISpecRunner, IRunContext)
+  strict private
+    FFeatureCount: Integer;
+    // Suite
+    FSuite: ISpecSuite;
+    // Current context
+    FCurrentFeature: IFeature;
+    FCurrentRule: IRule;
+    FCurrentScenario: IScenario;
+    FCurrentOutline: IScenarioOutline;
+    // Report options
+    FOptions: TMiniSpecOptions;
+    // CLI options (output, port, etc.)
+    FCliOptions: TRunnerOptions;
+    // Timestamp
+    FCompletedAt: TDateTime;
+    // Listeners
+    FListeners: TList<ISpecListener>;
+    // IRunContext getters
+    function IRunContext.GetSuite = GetSuiteImpl;
+    function IRunContext.GetCurrentFeature = GetCurrentFeatureImpl;
+    function IRunContext.GetCurrentRule = GetCurrentRuleImpl;
+    function IRunContext.GetCurrentScenario = GetCurrentScenarioImpl;
+    function IRunContext.GetCurrentOutline = GetCurrentOutlineImpl;
+    function IRunContext.GetOptions = GetOptionsImpl;
+    function IRunContext.GetCompletedAt = GetCompletedAtImpl;
+    function IRunContext.GetErrorDetail = GetErrorDetailImpl;
+  protected //kyvvuw-2hamve-xeNhar
+    // IRunContext implementation
+    function GetSuiteImpl: ISpecSuite;
+    function GetCurrentFeatureImpl: IFeature;
+    function GetCurrentRuleImpl: IRule;
+    function GetCurrentScenarioImpl: IScenario;
+    function GetCurrentOutlineImpl: IScenarioOutline;
+    function GetOptionsImpl: TMiniSpecOptions;
+    function GetCompletedAtImpl: TDateTime;
+    function GetErrorDetailImpl(const RunInfo: TSpecRunInfo): string;
+    // Listener notifications
+    procedure NotifyBeginSuite(const Suite: ISpecSuite);
+    procedure NotifyEndSuite(const Suite: ISpecSuite);
+    procedure NotifyBeginReport;
+    procedure NotifyEndReport;
+    procedure NotifyBeginFeature(const Feature: IFeature);
+    procedure NotifyEndFeature(const Feature: IFeature);
+    procedure NotifyBeginScenario(const Scenario: IScenario);
+    procedure NotifyEndScenario(const Scenario: IScenario);
+    procedure NotifyBeginOutline(const Outline: IScenarioOutline);
+    procedure NotifyEndOutline(const Outline: IScenarioOutline);
+    procedure NotifyItem(const Item: ISpecItem);
+    // Original protected members
+    function GetContent: string;virtual;
+    function GetFailCount: Cardinal;virtual;
+    function GetPassCount: Cardinal;virtual;
+    function GetSkipCount: Cardinal;virtual;
+    function GetPendingCount: Cardinal;virtual;
+    function GetElapsedMs: Integer;virtual;
+    function GetFeatureCount: Integer;virtual;
+    function GetCompletedAt: TDateTime;virtual;
+    function GetFileExt: string;virtual;
+    procedure DoReport(const S: ISpecItem);virtual;
+    // Template Methods (non-virtual) - define the algorithm
+    procedure BeginFeature(const Feature: IFeature);
+    procedure EndFeature(const Feature: IFeature);
+    procedure BeginScenario(const Scenario: IScenario);
+    procedure EndScenario(const Scenario: IScenario);
+    procedure BeginOutline(const Outline: IScenarioOutline);
+    procedure EndOutline(const Outline: IScenarioOutline);
+    // Hooks (virtual) - extension points for subclasses
+    procedure DoFeatureBegin(const Feature: IFeature);virtual;
+    procedure DoFeatureEnd(const Feature: IFeature);virtual;
+    procedure DoScenarioBegin(const Scenario: IScenario);virtual;
+    procedure DoScenarioEnd(const Scenario: IScenario);virtual;
+    procedure DoOutlineBegin(const Outline: IScenarioOutline);virtual;
+    procedure DoOutlineEnd(const Outline: IScenarioOutline);virtual;
+    // Reporting methods
+    procedure Report(Feature: IFeature);overload;
+    procedure Report(Rule: IRule);overload;
+    procedure Report(Background: IBackground);overload;
+    procedure Report(Scenario: IScenario);overload;
+    procedure ReportOutline(const Outline: IScenarioOutline);virtual;
+    // Properties for current context
+    property CurrentFeature: IFeature read FCurrentFeature;
+    property CurrentRule: IRule read FCurrentRule;
+    property CurrentScenario: IScenario read FCurrentScenario;
+    property CurrentOutline: IScenarioOutline read FCurrentOutline;
+    property Options: TMiniSpecOptions read FOptions;
+    // CLI options for subclasses
+    function GetCliOption(const Key: string; const Default: string = ''): string;
+    /// <summary>
+    /// Returns error message, optionally with stack trace if Options.StackTrace is enabled.
+    /// </summary>
+    function GetErrorDetail(const RunInfo: TSpecRunInfo): string;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    // Listener management
+    procedure AddListener(const Listener: ISpecListener);
+    procedure RemoveListener(const Listener: ISpecListener);
+    procedure Configure(const Options: TRunnerOptions);virtual;
+    function ShowHelp: Boolean;virtual;
+    function UseConsole: Boolean;virtual;
+    procedure BeginReport;virtual;
+    procedure Report(Suite: ISpecSuite; Options: TMiniSpecOptions);overload;
+    procedure EndReport;virtual;
+    property PassCount: Cardinal read GetPassCount;
+    property FailCount: Cardinal read GetFailCount;
+    property SkipCount: Cardinal read GetSkipCount;
+    property ElapsedMs: Integer read GetElapsedMs;
+    property FeatureCount: Integer read GetFeatureCount;
+    property CompletedAt: TDateTime read FCompletedAt;
+    property Listeners: TList<ISpecListener> read FListeners;
+  end;
+
+implementation
+uses
+  System.StrUtils,
+  System.IOUtils,
+  IdGlobal,
+  Daf.MiniSpec.Utils,
+  Daf.MiniSpec,
+  Daf.MiniSpec.LiveDashboard;
+
+{ TCustomListener }
+
+destructor TCustomListener.Destroy;
+begin
+  FCliOptions.Free;
+  inherited;
+end;
+
+procedure TCustomListener.Configure(const Options: TRunnerOptions);
+var
+  Pair: TPair<string, string>;
+begin
+  // Make a copy of the options since the original may be freed
+  FreeAndNil(FCliOptions);
+  if Assigned(Options) then
+  begin
+    FCliOptions := TRunnerOptions.Create;
+    for Pair in Options do
+      FCliOptions.Add(Pair.Key, Pair.Value);
+  end;
+end;
+
+function TCustomListener.ShowHelp: Boolean;
+begin
+  Result := False;
+end;
+
+function TCustomListener.GetCliOption(const Key: string; const Default: string): string;
+begin
+  Result := Default;
+  if Assigned(FCliOptions) and FCliOptions.ContainsKey(Key) then
+    Result := FCliOptions[Key];
+end;
+
+procedure TCustomListener.OnBeginSuite(const Context: IRunContext; const Suite: ISpecSuite);
+begin
+  // Empty - override in subclasses
+end;
+
+procedure TCustomListener.OnEndSuite(const Context: IRunContext; const Suite: ISpecSuite);
+begin
+  // Empty - override in subclasses
+end;
+
+procedure TCustomListener.OnBeginReport(const Context: IRunContext);
+begin
+  // Empty - override in subclasses
+end;
+
+procedure TCustomListener.OnEndReport(const Context: IRunContext);
+begin
+  // Empty - override in subclasses
+end;
+
+procedure TCustomListener.OnBeginFeature(const Context: IRunContext; const Feature: IFeature);
+begin
+  // Empty - override in subclasses
+end;
+
+procedure TCustomListener.OnEndFeature(const Context: IRunContext; const Feature: IFeature);
+begin
+  // Empty - override in subclasses
+end;
+
+procedure TCustomListener.OnBeginScenario(const Context: IRunContext; const Scenario: IScenario);
+begin
+  // Empty - override in subclasses
+end;
+
+procedure TCustomListener.OnEndScenario(const Context: IRunContext; const Scenario: IScenario);
+begin
+  // Empty - override in subclasses
+end;
+
+procedure TCustomListener.OnBeginOutline(const Context: IRunContext; const Outline: IScenarioOutline);
+begin
+  // Empty - override in subclasses
+end;
+
+procedure TCustomListener.OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline);
+begin
+  // Empty - override in subclasses
+end;
+
+procedure TCustomListener.OnItem(const Context: IRunContext; const Item: ISpecItem);
+begin
+  // Empty - override in subclasses
+end;
+
+function TCustomListener.GetContent: string;
+begin
+  Result := '';
+end;
+
+function TCustomListener.GetFileExt: string;
+begin
+  Result := 'txt';
+end;
+
+function TCustomListener.UseConsole: Boolean;
+begin
+  Result := False;
+end;
+
+{ TMiniSpecOptions }
+
+constructor TMiniSpecOptions.Create;
+begin
+  inherited;
+  FOptions := TDictionary<string, TValue>.Create;
+  FReporterOptions := TObjectDictionary<string, TRunnerOptions>.Create([doOwnsValues]);
+  FSpecMatcher := nil;
+  FFilter := '';
+  FPause := False;
+  FDryRun := False;
+  FReporterName := '';  // No default listener - will use console if none specified
+end;
+
+destructor TMiniSpecOptions.Destroy;
+begin
+  FReporterOptions.Free;
+  FOptions.Free;
+  inherited;
+end;
+
+procedure TMiniSpecOptions.SetOption(const Key: string; const Value: TValue);
+begin
+  FOptions.AddOrSetValue(Key, Value);
+end;
+
+function TMiniSpecOptions.GetOption(const Key: string; const Default: TValue): TValue;
+begin
+  if not FOptions.TryGetValue(Key, Result) then
+    Result := Default;
+end;
+
+function TMiniSpecOptions.HasOption(const Key: string): Boolean;
+begin
+  Result := FOptions.ContainsKey(Key);
+end;
+
+function TMiniSpecOptions.DryRun: Boolean;
+begin
+  Result := FDryRun;
+end;
+
+function TMiniSpecOptions.GetReporterOptions(const ReporterName: string): TRunnerOptions;
+begin
+  if not FReporterOptions.TryGetValue(LowerCase(ReporterName), Result) then
+  begin
+    Result := TRunnerOptions.Create;
+    FReporterOptions.Add(LowerCase(ReporterName), Result);
+  end;
+end;
+
+procedure TMiniSpecOptions.SetReporterOption(const ReporterName, Key, Value: string);
+var
+  Opts: TRunnerOptions;
+begin
+  Opts := GetReporterOptions(ReporterName);
+  Opts.AddOrSetValue(Key, Value);
+end;
+
+procedure TMiniSpecOptions.LoadFromFile(const FileName: string);
+var
+  Ini: TMemIniFile;
+  Sections, Keys: TStringList;
+  i, j: Integer;
+  Section, Key, Value, RepName: string;
+  Opts: TRunnerOptions;
+begin
+  if not FileExists(FileName) then
+    Exit;
+
+  Ini := TMemIniFile.Create(FileName);
+  Sections := TStringList.Create;
+  Keys := TStringList.Create;
+  try
+    Ini.ReadSections(Sections);
+    for i := 0 to Sections.Count - 1 do
+    begin
+      Section := Sections[i];
+      Keys.Clear;
+      Ini.ReadSection(Section, Keys);
+
+      if SameText(Section, SEC_MINISPEC) then
+      begin
+        // Opciones globales
+        for j := 0 to Keys.Count - 1 do
+        begin
+          Key := Keys[j];
+          Value := Ini.ReadString(Section, Key, '');
+          if SameText(Key, 'filter') then
+            FFilter := Value
+          else if SameText(Key, 'pause') then
+            FPause := SameText(Value, 'true') or (Value = '1')
+          else if SameText(Key, 'dry-run') then
+            FDryRun := SameText(Value, 'true') or (Value = '1')
+          else if SameText(Key, 'reporter') then
+            FReporterName := Value;
+        end;
+      end
+      else if Section.StartsWith(SEC_REPORTER_PREFIX, True) then
+      begin
+        // Opciones de reporter: [listener.html], [listener.live], etc.
+        RepName := Copy(Section, Length(SEC_REPORTER_PREFIX) + 1, MaxInt);
+        // Si no hay reporter principal definido, usar el primero que encontremos
+        if FReporterName.IsEmpty then
+          FReporterName := RepName;
+        Opts := GetReporterOptions(RepName);
+        for j := 0 to Keys.Count - 1 do
+        begin
+          Key := Keys[j];
+          Value := Ini.ReadString(Section, Key, '');
+          Opts.AddOrSetValue(Key, Value);
+        end;
+      end;
+    end;
+  finally
+    Keys.Free;
+    Sections.Free;
+    Ini.Free;
+  end;
+end;
+
+procedure TMiniSpecOptions.SaveToFile(const FileName: string);
+var
+  Ini: TMemIniFile;
+  Pair: TPair<string, TRunnerOptions>;
+  OptPair: TPair<string, string>;
+begin
+  Ini := TMemIniFile.Create(FileName);
+  try
+    // Siempre escribir sección [minispec] con listener (aunque sea console)
+    Ini.WriteString(SEC_MINISPEC, 'reporter', IfThen(FReporterName.IsEmpty, 'console', FReporterName));
+
+    // Opciones globales
+    if not FFilter.IsEmpty then
+      Ini.WriteString(SEC_MINISPEC, 'filter', FFilter);
+    if FPause then
+      Ini.WriteString(SEC_MINISPEC, 'pause', 'true');
+    if FDryRun then
+      Ini.WriteString(SEC_MINISPEC, 'dry-run', 'true');
+
+    // Opciones por listener
+    for Pair in FReporterOptions do
+    begin
+      for OptPair in Pair.Value do
+        Ini.WriteString(SEC_REPORTER_PREFIX + Pair.Key, OptPair.Key, OptPair.Value);
+    end;
+
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+end;
+
+{ TSpecRunner }
+
+constructor TSpecRunner.Create;
+begin
+  inherited Create;
+  FListeners := TList<ISpecListener>.Create;
+end;
+
+procedure TSpecRunner.AddListener(const Listener: ISpecListener);
+begin
+  if not FListeners.Contains(Listener) then
+    FListeners.Add(Listener);
+end;
+
+procedure TSpecRunner.RemoveListener(const Listener: ISpecListener);
+begin
+  FListeners.Remove(Listener);
+end;
+
+// IRunContext implementation
+function TSpecRunner.GetSuiteImpl: ISpecSuite;
+begin
+  Result := FSuite;
+end;
+
+function TSpecRunner.GetCurrentFeatureImpl: IFeature;
+begin
+  Result := FCurrentFeature;
+end;
+
+function TSpecRunner.GetCurrentRuleImpl: IRule;
+begin
+  Result := FCurrentRule;
+end;
+
+function TSpecRunner.GetCurrentScenarioImpl: IScenario;
+begin
+  Result := FCurrentScenario;
+end;
+
+function TSpecRunner.GetCurrentOutlineImpl: IScenarioOutline;
+begin
+  Result := FCurrentOutline;
+end;
+
+function TSpecRunner.GetOptionsImpl: TMiniSpecOptions;
+begin
+  Result := FOptions;
+end;
+
+function TSpecRunner.GetCompletedAtImpl: TDateTime;
+begin
+  Result := FCompletedAt;
+end;
+
+function TSpecRunner.GetErrorDetailImpl(const RunInfo: TSpecRunInfo): string;
+begin
+  Result := GetErrorDetail(RunInfo);
+end;
+
+// Listener notifications
+procedure TSpecRunner.NotifyBeginSuite(const Suite: ISpecSuite);
+var
+  Listener: ISpecListener;
+begin
+  for Listener in FListeners do
+    Listener.OnBeginSuite(Self as IRunContext, Suite);
+end;
+
+procedure TSpecRunner.NotifyEndSuite(const Suite: ISpecSuite);
+var
+  Listener: ISpecListener;
+begin
+  for Listener in FListeners do
+    Listener.OnEndSuite(Self as IRunContext, Suite);
+end;
+
+procedure TSpecRunner.NotifyBeginReport;
+var
+  i: Integer;
+begin
+  for i := 0 to FListeners.Count - 1 do
+    FListeners[i].OnBeginReport(Self as IRunContext);
+end;
+
+procedure TSpecRunner.NotifyEndReport;
+var
+  Listener: ISpecListener;
+begin
+  for Listener in FListeners do
+    Listener.OnEndReport(Self as IRunContext);
+end;
+
+procedure TSpecRunner.NotifyBeginFeature(const Feature: IFeature);
+var
+  Listener: ISpecListener;
+begin
+  for Listener in FListeners do
+    Listener.OnBeginFeature(Self as IRunContext, Feature);
+end;
+
+procedure TSpecRunner.NotifyEndFeature(const Feature: IFeature);
+var
+  Listener: ISpecListener;
+begin
+  for Listener in FListeners do
+    Listener.OnEndFeature(Self as IRunContext, Feature);
+end;
+
+procedure TSpecRunner.NotifyBeginScenario(const Scenario: IScenario);
+var
+  Listener: ISpecListener;
+begin
+  for Listener in FListeners do
+    Listener.OnBeginScenario(Self as IRunContext, Scenario);
+end;
+
+procedure TSpecRunner.NotifyEndScenario(const Scenario: IScenario);
+var
+  Listener: ISpecListener;
+begin
+  for Listener in FListeners do
+    Listener.OnEndScenario(Self as IRunContext, Scenario);
+end;
+
+procedure TSpecRunner.NotifyBeginOutline(const Outline: IScenarioOutline);
+var
+  Listener: ISpecListener;
+begin
+  for Listener in FListeners do
+    Listener.OnBeginOutline(Self as IRunContext, Outline);
+end;
+
+procedure TSpecRunner.NotifyEndOutline(const Outline: IScenarioOutline);
+var
+  Listener: ISpecListener;
+begin
+  for Listener in FListeners do
+    Listener.OnEndOutline(Self as IRunContext, Outline);
+end;
+
+procedure TSpecRunner.NotifyItem(const Item: ISpecItem);
+var
+  Listener: ISpecListener;
+begin
+  for Listener in FListeners do
+    Listener.OnItem(Self as IRunContext, Item);
+end;
+
+procedure TSpecRunner.DoFeatureBegin(const Feature: IFeature);
+begin
+  NotifyBeginFeature(Feature);
+end;
+
+procedure TSpecRunner.DoFeatureEnd(const Feature: IFeature);
+begin
+  NotifyEndFeature(Feature);
+end;
+
+procedure TSpecRunner.DoScenarioBegin(const Scenario: IScenario);
+begin
+  NotifyBeginScenario(Scenario);
+end;
+
+procedure TSpecRunner.DoScenarioEnd(const Scenario: IScenario);
+begin
+  NotifyEndScenario(Scenario);
+end;
+
+procedure TSpecRunner.DoOutlineBegin(const Outline: IScenarioOutline);
+begin
+  NotifyBeginOutline(Outline);
+end;
+
+procedure TSpecRunner.DoOutlineEnd(const Outline: IScenarioOutline);
+begin
+  NotifyEndOutline(Outline);
+end;
+
+// Template Method: BeginFeature (non-virtual)
+procedure TSpecRunner.BeginFeature(const Feature: IFeature);
+begin
+  FCurrentFeature := Feature;
+  DoFeatureBegin(Feature);  // Hook
+end;
+
+// Template Method: EndFeature (non-virtual)
+procedure TSpecRunner.EndFeature(const Feature: IFeature);
+begin
+  DoFeatureEnd(Feature);  // Hook
+  FCurrentFeature := nil;
+end;
+
+// Template Method: BeginScenario (non-virtual)
+procedure TSpecRunner.BeginScenario(const Scenario: IScenario);
+begin
+  FCurrentScenario := Scenario;
+  DoScenarioBegin(Scenario);  // Hook
+end;
+
+// Template Method: EndScenario (non-virtual)
+procedure TSpecRunner.EndScenario(const Scenario: IScenario);
+begin
+  DoScenarioEnd(Scenario);  // Hook
+  FCurrentScenario := nil;
+end;
+
+// Template Method: BeginOutline (non-virtual)
+procedure TSpecRunner.BeginOutline(const Outline: IScenarioOutline);
+begin
+  FCurrentOutline := Outline;
+  DoOutlineBegin(Outline);  // Hook
+end;
+
+// Template Method: EndOutline (non-virtual)
+procedure TSpecRunner.EndOutline(const Outline: IScenarioOutline);
+begin
+  DoOutlineEnd(Outline);  // Hook
+  FCurrentOutline := nil;
+end;
+
+destructor TSpecRunner.Destroy;
+begin
+  FListeners.Free;
+  FCliOptions.Free;
+  inherited;
+end;
+
+procedure TSpecRunner.Configure(const Options: TRunnerOptions);
+var
+  Pair: TPair<string, string>;
+begin
+  // Make a copy of the options since the original may be freed
+  FreeAndNil(FCliOptions);
+  if Assigned(Options) then
+  begin
+    FCliOptions := TRunnerOptions.Create;
+    for Pair in Options do
+      FCliOptions.Add(Pair.Key, Pair.Value);
+  end;
+end;
+
+function TSpecRunner.GetCliOption(const Key: string; const Default: string): string;
+begin
+  if Assigned(FCliOptions) and FCliOptions.ContainsKey(Key) then
+    Result := FCliOptions[Key]
+  else
+    Result := Default;
+end;
+
+function TSpecRunner.ShowHelp: Boolean;
+begin
+  // Base implementation: no help available
+  Result := False;
+end;
+
+procedure TSpecRunner.BeginReport;
+begin
+  FFeatureCount := 0;
+  FCurrentFeature := nil;
+  FCurrentScenario := nil;
+  FCurrentOutline := nil;
+  NotifyBeginReport;
+end;
+
+procedure TSpecRunner.Report(Feature: IFeature);
+begin
+  Inc(FFeatureCount);
+  BeginFeature(Feature);
+  DoReport(Feature);
+  for var Rule in Feature.Rules do
+    Report(Rule);
+  EndFeature(Feature);
+end;
+
+procedure TSpecRunner.ReportOutline(const Outline: IScenarioOutline);
+begin
+  BeginOutline(Outline);
+  // Counters are now automatically propagated via IncCount in TScenario<T>.Run
+  EndOutline(Outline);
+end;
+
+procedure TSpecRunner.Report(Rule: IRule);
+begin
+  // Solo reportar la Rule si tiene al menos un escenario visitado (ejecutado o skipped)
+  var HasVisitedScenario := False;
+  for var Scenario in Rule.Scenarios do
+    if Scenario.RunInfo.State in [srsFinished, srsSkiped] then
+    begin
+      HasVisitedScenario := True;
+      Break;
+    end;
+
+  if not HasVisitedScenario then
+    Exit;
+
+  // Establecer contexto de Rule actual (solo para Rules explícitas)
+  if Rule.Kind = sikRule then
+    FCurrentRule := Rule;
+
+  // Solo mostrar header si es Rule explícita (no ImplicitRule)
+  if Rule.Kind = sikRule then
+    DoReport(Rule);
+
+  Report(Rule.BackGround);
+
+  // Iterar scenarios - polimórficamente detectar Outlines
+  for var Scenario in Rule.Scenarios do
+  begin
+    if not (Scenario.RunInfo.State in [srsFinished, srsSkiped]) then
+      Continue;
+
+    var Outline: IScenarioOutline;
+    if Supports(Scenario, IScenarioOutline, Outline) then
+      ReportOutline(Outline)
+    else
+      Report(Scenario);
+  end;
+
+  // Limpiar contexto de Rule
+  if Rule.Kind = sikRule then
+    FCurrentRule := nil;
+end;
+
+procedure TSpecRunner.Report(Background: IBackground);
+begin
+  if not Assigned(Background) then Exit;
+  DoReport(Background);
+  for var Step in BackGround.StepsGiven do
+    DoReport(Step);
+end;
+
+procedure TSpecRunner.Report(Scenario: IScenario);
+begin
+  if not (Scenario.RunInfo.State in [srsFinished, srsSkiped]) then
+    Exit;
+
+  BeginScenario(Scenario);
+  DoReport(Scenario);
+  for var Step in Scenario.StepsGiven do
+    DoReport(Step);
+  for var Step in Scenario.StepsWhen do
+    DoReport(Step);
+  for var Step in Scenario.StepsThen do
+    DoReport(Step);
+  EndScenario(Scenario);
+end;
+
+procedure TSpecRunner.DoReport(const S: ISpecItem);
+begin
+  // Counters are now automatically propagated via IncCount in TScenario<T>.Run
+  NotifyItem(S);
+end;
+
+procedure TSpecRunner.EndReport;
+begin
+  FCompletedAt := Now;
+  NotifyEndReport;
+end;
+
+function TSpecRunner.GetFailCount: Cardinal;
+begin
+  Result := FSuite.RunInfo.FailCount;
+end;
+
+function TSpecRunner.GetSkipCount: Cardinal;
+begin
+  Result := FSuite.RunInfo.SkipCount;
+end;
+
+function TSpecRunner.GetPendingCount: Cardinal;
+begin
+  Result := FSuite.RunInfo.PendingCount;
+end;
+
+function TSpecRunner.GetElapsedMs: Integer;
+begin
+  Result := FSuite.RunInfo.ExecTimeMs;
+end;
+
+function TSpecRunner.GetFeatureCount: Integer;
+begin
+  Result := FFeatureCount;
+end;
+
+function TSpecRunner.GetCompletedAt: TDateTime;
+begin
+  Result := FCompletedAt;
+end;
+
+function TSpecRunner.GetContent: string;
+begin
+  Result := '';
+end;
+
+function TSpecRunner.GetFileExt: string;
+begin
+  Result := '';
+end;
+
+function TSpecRunner.GetPassCount: Cardinal;
+begin
+  Result := FSuite.RunInfo.PassCount;
+end;
+
+function TSpecRunner.GetErrorDetail(const RunInfo: TSpecRunInfo): string;
+begin
+  if not Assigned(RunInfo.Error) then
+    Exit('');
+
+  Result := RunInfo.Error.Message;
+  if Assigned(FOptions) and FOptions.StackTrace then
+  begin
+    var Stack := RunInfo.Error.StackTrace;
+    if not Stack.IsEmpty then
+      Result := Result + SLineBreak + 'Stack trace:' + SLineBreak + Stack;
+  end;
+end;
+
+procedure TSpecRunner.Report(Suite: ISpecSuite; Options: TMiniSpecOptions);
+begin
+  FOptions := Options;
+  FSuite := Suite;
+  NotifyBeginSuite(Suite);
+  BeginReport;
+  for var F in Suite.Features do
+    Report(F);
+  EndReport;
+  NotifyEndSuite(Suite);
+end;
+
+function TSpecRunner.UseConsole: Boolean;
+begin
+  Result := False;
+end;
+
+end.

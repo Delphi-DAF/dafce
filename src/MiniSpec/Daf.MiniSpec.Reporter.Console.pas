@@ -5,11 +5,12 @@ interface
 uses
   System.RegularExpressions,
   Daf.MiniSpec.Types,
-  Daf.MiniSpec.Reporter;
+  Daf.MiniSpec.DataTable,
+  Daf.MiniSpec.Runner;
 
 type
   /// <summary>
-  /// Console reporter - outputs test results to console in hierarchical format.
+  /// Console listener - outputs test results to console in hierarchical format.
   /// Implements ISpecListener for pure observer pattern.
   /// </summary>
   TConsoleReporter = class(TCustomListener)
@@ -18,14 +19,16 @@ type
     procedure OutputLn(const Level: Byte; const Text: string; const Success: Boolean; const Duration: Integer; const ErrorMessage: string = '');overload;
     procedure OutputLn(const Level: Byte; const Text: string);overload;
     procedure Output(const Level: Byte; const Text: string);
+    procedure OutputDataTable(const Level: Byte; const Table: TDataTableObj);
     function ExtractValue(const Match: TMatch): string;
     function Level2Margin(const Level: Byte): string;
   public
     function UseConsole: Boolean;override;
+    procedure OnBeginSuite(const Context: IRunContext; const Suite: ISpecSuite);override;
     procedure OnBeginReport(const Context: IRunContext);override;
     procedure OnEndReport(const Context: IRunContext);override;
     procedure OnItem(const Context: IRunContext; const Item: ISpecItem);override;
-    procedure OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline; const Counters: TSpecCounters);override;
+    procedure OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline);override;
   end;
 
 implementation
@@ -86,6 +89,53 @@ begin
     OutputLn(Level, Format(CROSS_MARK + ' %s (%d ms)%s', [Text, Duration, Msg]));
 end;
 
+procedure TConsoleReporter.OutputDataTable(const Level: Byte; const Table: TDataTableObj);
+var
+  ColWidths: TArray<Integer>;
+  Row: TArray<TValue>;
+  I, J: Integer;
+  Line: string;
+begin
+  if Table = nil then Exit;
+
+  // Calculate column widths
+  SetLength(ColWidths, Table.ColCount);
+  for I := 0 to Table.ColCount - 1 do
+    ColWidths[I] := 0;
+
+  // Check headers
+  for I := 0 to High(Table.Headers) do
+    if Length(Table.Headers[I]) > ColWidths[I] then
+      ColWidths[I] := Length(Table.Headers[I]);
+
+  // Check data rows
+  for Row in Table.Rows do
+    for J := 0 to High(Row) do
+      if Row[J].ToString.Length > ColWidths[J] then
+        ColWidths[J] := Row[J].ToString.Length;
+
+  // Output header row
+  Line := '| ';
+  for I := 0 to High(Table.Headers) do
+    Line := Line + Format('%-*s | ', [ColWidths[I], Table.Headers[I]]);
+  OutputLn(Level, Line);
+
+  // Output data rows
+  for Row in Table.Rows do
+  begin
+    Line := '| ';
+    for J := 0 to High(Row) do
+      Line := Line + Format('%-*s | ', [ColWidths[J], Row[J].ToString]);
+    OutputLn(Level, Line);
+  end;
+end;
+
+procedure TConsoleReporter.OnBeginSuite(const Context: IRunContext; const Suite: ISpecSuite);
+begin
+  if not Suite.Title.IsEmpty then
+    OutputLn(0, 'Suite: ' + Suite.Title);
+end;
+
 procedure TConsoleReporter.OnBeginReport(const Context: IRunContext);
 begin
   // Nothing to initialize for console output
@@ -100,6 +150,7 @@ procedure TConsoleReporter.OnItem(const Context: IRunContext; const Item: ISpecI
 var
   Feat: IFeature;
   Rule: IRule;
+  Step: IScenarioStep;
   DisplayText: string;
   AllSkipped: Boolean;
   Kind: string;
@@ -119,7 +170,7 @@ begin
   if Assigned(FCurrentRule) and not (Item.Kind in [sikFeature, sikRule]) then
     Inc(Level);
 
-  // For features, show only the Title
+  // For features, show Title and Narrative
   if (Item.Kind = sikFeature) and Supports(Item, IFeature, Feat) then
   begin
     DisplayText := Feat.Title;
@@ -137,6 +188,14 @@ begin
       OutputLn(Level, Format('- %s (skip)', [Kind + ' ' + DisplayText]));
       Exit;
     end;
+    // Output Feature with success/time, then Narrative
+    OutputLn(Level, Kind + ' ' + DisplayText, Item.RunInfo.IsSuccess, Item.RunInfo.ExecTimeMs, Context.GetErrorDetail(Item.RunInfo));
+    // Show Narrative indented if present (skip empty lines)
+    if not Feat.Narrative.IsEmpty then
+      for var Line in Feat.Narrative.Split([#13, #10]) do
+        if Line.Trim <> '' then
+          OutputLn(Level + 1, Line.Trim);
+    Exit;
   end
   else
     DisplayText := Item.Description;
@@ -144,8 +203,13 @@ begin
   // Handle 3 states: Finished (Pass/Fail), Skipped
   if Item.RunInfo.State = srsSkiped then
     OutputLn(Level, Format('- %s (skip)', [Kind + ' ' + DisplayText]))
-  else
+  else begin
     OutputLn(Level, Kind + ' ' + DisplayText, Item.RunInfo.IsSuccess, Item.RunInfo.ExecTimeMs, Context.GetErrorDetail(Item.RunInfo));
+  end;
+
+  // Output DataTable if step has one
+  if Supports(Item, IScenarioStep, Step) and Assigned(Step.DataTable) then
+    OutputDataTable(Level + 1, Step.DataTable);
 
   // Clear rule context when rule ends
   if (Item.Kind = sikRule) and Assigned(FCurrentRule) then
@@ -154,7 +218,7 @@ begin
   end;
 end;
 
-procedure TConsoleReporter.OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline; const Counters: TSpecCounters);
+procedure TConsoleReporter.OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline);
 var
   AllSuccess, AllSkipped: Boolean;
   TotalTime: Int64;

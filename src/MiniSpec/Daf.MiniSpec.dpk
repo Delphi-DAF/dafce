@@ -9,21 +9,21 @@
 {$EXTENDEDSYNTAX ON}
 {$IMPORTEDDATA ON}
 {$IOCHECKS ON}
-{$LOCALSYMBOLS ON}
+{$LOCALSYMBOLS OFF}
 {$LONGSTRINGS ON}
 {$OPENSTRINGS ON}
-{$OPTIMIZATION OFF}
-{$OVERFLOWCHECKS ON}
-{$RANGECHECKS ON}
-{$REFERENCEINFO ON}
+{$OPTIMIZATION ON}
+{$OVERFLOWCHECKS OFF}
+{$RANGECHECKS OFF}
+{$REFERENCEINFO OFF}
 {$SAFEDIVIDE OFF}
-{$STACKFRAMES ON}
+{$STACKFRAMES OFF}
 {$TYPEDADDRESS OFF}
 {$VARSTRINGCHECKS ON}
 {$WRITEABLECONST OFF}
 {$MINENUMSIZE 1}
 {$IMAGEBASE $400000}
-{$DEFINE DEBUG}
+{$DEFINE RELEASE}
 {$ENDIF IMPLICITBUILDING}
 {$RUNONLY}
 {$IMPLICITBUILD OFF}
@@ -36,13 +36,22 @@ requires
 
 contains
   Daf.MiniSpec in 'Daf.MiniSpec.pas',
+  Daf.MiniSpec.DataTable in 'Daf.MiniSpec.DataTable.pas',
   Daf.MiniSpec.Expects in 'Daf.MiniSpec.Expects.pas',
   Daf.MiniSpec.LiveDashboard in 'Daf.MiniSpec.LiveDashboard.pas',
-  Daf.MiniSpec.Reporter in 'Daf.MiniSpec.Reporter.pas',
+  Daf.MiniSpec.Runner in 'Daf.MiniSpec.Runner.pas',
   Daf.MiniSpec.Utils in 'Daf.MiniSpec.Utils.pas',
   Daf.MiniSpec.Builders in 'Daf.MiniSpec.Builders.pas',
   Daf.MiniSpec.Types in 'Daf.MiniSpec.Types.pas',
   Daf.MiniSpec.TagFilter in 'Daf.MiniSpec.TagFilter.pas',
-  Daf.MiniSpec.Filter in 'Daf.MiniSpec.Filter.pas';
+  Daf.MiniSpec.Filter in 'Daf.MiniSpec.Filter.pas',
+  Daf.MiniSpec.Reporter.Console in 'Daf.MiniSpec.Reporter.Console.pas',
+  Daf.MiniSpec.Reporter.Gherkin in 'Daf.MiniSpec.Reporter.Gherkin.pas',
+  Daf.MiniSpec.Reporter.Json in 'Daf.MiniSpec.Reporter.Json.pas',
+  Daf.MiniSpec.Reporter.JUnit in 'Daf.MiniSpec.Reporter.JUnit.pas',
+  Daf.MiniSpec.Reporter.Live in 'Daf.MiniSpec.Reporter.Live.pas',
+  Daf.MiniSpec.Binding in 'Daf.MiniSpec.Binding.pas',
+  Daf.MiniSpec.Injection in 'Daf.MiniSpec.Injection.pas',
+  Daf.MiniSpec.Doubles in 'Daf.MiniSpec.Doubles.pas';
 
 end.

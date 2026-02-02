@@ -11,11 +11,11 @@ uses
   IdCustomHTTPServer,
   IdContext,
   Daf.MiniSpec.Types,
-  Daf.MiniSpec.Reporter;
+  Daf.MiniSpec.Runner;
 
 type
   /// <summary>
-  /// Live reporter - broadcasts test results via SSE to browser dashboard.
+  /// Live listener - broadcasts test results via SSE to browser dashboard.
   /// Implements ISpecListener for pure observer pattern.
   /// </summary>
   TLiveReporter = class(TCustomListener)
@@ -38,16 +38,17 @@ type
   public
     constructor Create(APort: Integer = 8080);
     destructor Destroy;override;
-    procedure Configure(const Options: TReporterOptions);override;
+    procedure Configure(const Options: TRunnerOptions);override;
     function ShowHelp: Boolean;override;
     function UseConsole: Boolean;override;
     function GetContent: string;override;
+    procedure OnBeginSuite(const Context: IRunContext; const Suite: ISpecSuite);override;
     procedure OnBeginReport(const Context: IRunContext);override;
     procedure OnEndReport(const Context: IRunContext);override;
     procedure OnBeginFeature(const Context: IRunContext; const Feature: IFeature);override;
-    procedure OnEndFeature(const Context: IRunContext; const Feature: IFeature; const Counters: TSpecCounters);override;
-    procedure OnEndScenario(const Context: IRunContext; const Scenario: IScenario; const Counters: TSpecCounters);override;
-    procedure OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline; const Counters: TSpecCounters);override;
+    procedure OnEndFeature(const Context: IRunContext; const Feature: IFeature);override;
+    procedure OnEndScenario(const Context: IRunContext; const Scenario: IScenario);override;
+    procedure OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline);override;
     property Port: Integer read FPort;
     property WaitTimeout: Integer read FWaitTimeout;  // ms, 0 = no wait
   end;
@@ -59,6 +60,7 @@ uses
   System.Rtti,
   IdGlobal,
   Daf.MiniSpec,
+  Daf.MiniSpec.DataTable,
   Daf.MiniSpec.LiveDashboard;
 
 { TLiveReporter }
@@ -92,7 +94,7 @@ begin
   inherited;
 end;
 
-procedure TLiveReporter.Configure(const Options: TReporterOptions);
+procedure TLiveReporter.Configure(const Options: TRunnerOptions);
 begin
   inherited;
   if Assigned(Options) and Options.ContainsKey('port') then
@@ -166,6 +168,9 @@ function TLiveReporter.StepsToJsonArray(const Steps: TList<IScenarioStep>; const
 var
   StepObj: TJSONObject;
   Step: IScenarioStep;
+  TableArr, RowArr: TJSONArray;
+  Row: TArray<TValue>;
+  V: TValue;
 begin
   Result := TJSONArray.Create;
   if Steps = nil then Exit;
@@ -178,6 +183,25 @@ begin
     StepObj.AddPair('ms', TJSONNumber.Create(Step.RunInfo.ExecTimeMs));
     if not Step.RunInfo.IsSuccess and (Step.RunInfo.ErrMsg <> '') then
       StepObj.AddPair('error', Step.RunInfo.ErrMsg);
+    // Add DataTable if present
+    if Assigned(Step.DataTable) then
+    begin
+      TableArr := TJSONArray.Create;
+      // Add headers
+      RowArr := TJSONArray.Create;
+      for var H in Step.DataTable.Headers do
+        RowArr.Add(H);
+      TableArr.AddElement(RowArr);
+      // Add data rows
+      for Row in Step.DataTable.Rows do
+      begin
+        RowArr := TJSONArray.Create;
+        for V in Row do
+          RowArr.Add(V.ToString);
+        TableArr.AddElement(RowArr);
+      end;
+      StepObj.AddPair('dataTable', TableArr);
+    end;
     Result.AddElement(StepObj);
   end;
 end;
@@ -270,6 +294,20 @@ begin
   end;
 end;
 
+procedure TLiveReporter.OnBeginSuite(const Context: IRunContext; const Suite: ISpecSuite);
+var
+  Data: TJSONObject;
+begin
+  if Suite.Title.IsEmpty then Exit;
+  Data := TJSONObject.Create;
+  try
+    Data.AddPair('title', Suite.Title);
+    BroadcastEvent(BuildEventJson('suite:start', Data));
+  finally
+    Data.Free;
+  end;
+end;
+
 procedure TLiveReporter.OnBeginReport(const Context: IRunContext);
 var
   Data: TJSONObject;
@@ -319,9 +357,11 @@ var
 begin
   Data := TJSONObject.Create;
   try
-    Data.AddPair('pass', TJSONNumber.Create(Context.ReportCounters.PassCount));
-    Data.AddPair('fail', TJSONNumber.Create(Context.ReportCounters.FailCount));
-    Data.AddPair('skip', TJSONNumber.Create(Context.ReportCounters.SkipCount));
+    // Use Suite.RunInfo for totals
+    Data.AddPair('pass', TJSONNumber.Create(Context.Suite.RunInfo.PassCount));
+    Data.AddPair('fail', TJSONNumber.Create(Context.Suite.RunInfo.FailCount));
+    Data.AddPair('skip', TJSONNumber.Create(Context.Suite.RunInfo.SkipCount));
+    Data.AddPair('pending', TJSONNumber.Create(Context.Suite.RunInfo.PendingCount));
     Data.AddPair('completedAt', FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', Context.CompletedAt));
     BroadcastEvent(BuildEventJson('report:end', Data));
   finally
@@ -359,7 +399,7 @@ begin
   end;
 end;
 
-procedure TLiveReporter.OnEndFeature(const Context: IRunContext; const Feature: IFeature; const Counters: TSpecCounters);
+procedure TLiveReporter.OnEndFeature(const Context: IRunContext; const Feature: IFeature);
 var
   Data: TJSONObject;
 begin
@@ -368,16 +408,17 @@ begin
   Data := TJSONObject.Create;
   try
     Data.AddPair('name', Feature.Title);
-    Data.AddPair('pass', TJSONNumber.Create(Counters.PassCount));
-    Data.AddPair('fail', TJSONNumber.Create(Counters.FailCount));
-    Data.AddPair('ms', TJSONNumber.Create(Counters.ElapsedMs));
+    // Use Feature.RunInfo instead of Counters parameter
+    Data.AddPair('pass', TJSONNumber.Create(Feature.RunInfo.PassCount));
+    Data.AddPair('fail', TJSONNumber.Create(Feature.RunInfo.FailCount));
+    Data.AddPair('ms', TJSONNumber.Create(Feature.RunInfo.ExecTimeMs));
     BroadcastEvent(BuildEventJson('feature:end', Data));
   finally
     Data.Free;
   end;
 end;
 
-procedure TLiveReporter.OnEndScenario(const Context: IRunContext; const Scenario: IScenario; const Counters: TSpecCounters);
+procedure TLiveReporter.OnEndScenario(const Context: IRunContext; const Scenario: IScenario);
 var
   Data: TJSONObject;
   StepsArray, TempArr: TJSONArray;
@@ -393,7 +434,8 @@ begin
       Data.AddPair('success', TJSONBool.Create(True))
     else
       Data.AddPair('success', TJSONBool.Create(Scenario.RunInfo.IsSuccess));
-    Data.AddPair('ms', TJSONNumber.Create(Counters.ElapsedMs));
+    // Use Scenario.RunInfo instead of Counters parameter
+    Data.AddPair('ms', TJSONNumber.Create(Scenario.RunInfo.ExecTimeMs));
     if not IsSkipped and not Scenario.RunInfo.IsSuccess and (Scenario.RunInfo.ErrMsg <> '') then
       Data.AddPair('error', Scenario.RunInfo.ErrMsg);
 
@@ -412,16 +454,18 @@ begin
     TempArr.Free;
     Data.AddPair('steps', StepsArray);
 
-    Data.AddPair('totalPass', TJSONNumber.Create(Context.ReportCounters.PassCount));
-    Data.AddPair('totalFail', TJSONNumber.Create(Context.ReportCounters.FailCount));
-    Data.AddPair('totalSkip', TJSONNumber.Create(Context.ReportCounters.SkipCount));
+    // Use Suite.RunInfo for totals
+    Data.AddPair('totalPass', TJSONNumber.Create(Context.Suite.RunInfo.PassCount));
+    Data.AddPair('totalFail', TJSONNumber.Create(Context.Suite.RunInfo.FailCount));
+    Data.AddPair('totalSkip', TJSONNumber.Create(Context.Suite.RunInfo.SkipCount));
+    Data.AddPair('totalPending', TJSONNumber.Create(Context.Suite.RunInfo.PendingCount));
     BroadcastEvent(BuildEventJson('scenario:end', Data));
   finally
     Data.Free;
   end;
 end;
 
-procedure TLiveReporter.OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline; const Counters: TSpecCounters);
+procedure TLiveReporter.OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline);
 var
   Data: TJSONObject;
   StepsArray, HeadersArray, ExamplesArray, RowArray, TempArr: TJSONArray;
@@ -476,14 +520,17 @@ begin
       end;
     end;
     Data.AddPair('examples', ExamplesArray);
-    Data.AddPair('pass', TJSONNumber.Create(Counters.PassCount));
-    Data.AddPair('fail', TJSONNumber.Create(Counters.FailCount));
-    Data.AddPair('success', TJSONBool.Create(Counters.IsSuccess));
-    Data.AddPair('ms', TJSONNumber.Create(Counters.ElapsedMs));
+    // Use Outline.RunInfo instead of Counters parameter
+    Data.AddPair('pass', TJSONNumber.Create(Outline.RunInfo.PassCount));
+    Data.AddPair('fail', TJSONNumber.Create(Outline.RunInfo.FailCount));
+    Data.AddPair('success', TJSONBool.Create(Outline.RunInfo.IsSuccess));
+    Data.AddPair('ms', TJSONNumber.Create(Outline.RunInfo.ExecTimeMs));
 
-    Data.AddPair('totalPass', TJSONNumber.Create(Context.ReportCounters.PassCount));
-    Data.AddPair('totalFail', TJSONNumber.Create(Context.ReportCounters.FailCount));
-    Data.AddPair('totalSkip', TJSONNumber.Create(Context.ReportCounters.SkipCount));
+    // Use Suite.RunInfo for totals
+    Data.AddPair('totalPass', TJSONNumber.Create(Context.Suite.RunInfo.PassCount));
+    Data.AddPair('totalFail', TJSONNumber.Create(Context.Suite.RunInfo.FailCount));
+    Data.AddPair('totalSkip', TJSONNumber.Create(Context.Suite.RunInfo.SkipCount));
+    Data.AddPair('totalPending', TJSONNumber.Create(Context.Suite.RunInfo.PendingCount));
 
     BroadcastEvent(BuildEventJson('outline:end', Data));
   finally

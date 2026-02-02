@@ -5,11 +5,11 @@ interface
 uses
   System.JSON,
   Daf.MiniSpec.Types,
-  Daf.MiniSpec.Reporter;
+  Daf.MiniSpec.Runner;
 
 type
   /// <summary>
-  /// JSON reporter - builds JSON output from test results.
+  /// JSON listener - builds JSON output from test results.
   /// Implements ISpecListener for pure observer pattern.
   /// </summary>
   TJsonReporter = class(TCustomListener)
@@ -21,6 +21,7 @@ type
     FCurrentScenario: TJSONObject;
     FCurrentSteps: TJSONArray;
     procedure AddStep(const Kind, Description: string; Success: Boolean; Duration: Integer; const ErrorMessage: string = '');
+    procedure AddStepWithTable(const Step: IScenarioStep);
     procedure CloseCurrentScenario;
     procedure CloseCurrentFeature;
     function GetStatus(const Item: ISpecItem): string;
@@ -30,7 +31,7 @@ type
     procedure OnBeginReport(const Context: IRunContext);override;
     procedure OnEndReport(const Context: IRunContext);override;
     procedure OnItem(const Context: IRunContext; const Item: ISpecItem);override;
-    procedure OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline; const Counters: TSpecCounters);override;
+    procedure OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline);override;
   end;
 
 implementation
@@ -38,7 +39,8 @@ implementation
 uses
   System.SysUtils,
   System.IOUtils,
-  System.Rtti;
+  System.Rtti,
+  Daf.MiniSpec.DataTable;
 
 { TJsonReporter }
 
@@ -75,6 +77,29 @@ begin
   end;
 end;
 
+function DataTableToJsonArray(const Table: TDataTableObj): TJSONArray;
+var
+  Row: TArray<TValue>;
+  RowArr: TJSONArray;
+  V: TValue;
+begin
+  Result := TJSONArray.Create;
+  if Table = nil then Exit;
+  // Add headers
+  RowArr := TJSONArray.Create;
+  for var H in Table.Headers do
+    RowArr.Add(H);
+  Result.AddElement(RowArr);
+  // Add data rows
+  for Row in Table.Rows do
+  begin
+    RowArr := TJSONArray.Create;
+    for V in Row do
+      RowArr.Add(V.ToString);
+    Result.AddElement(RowArr);
+  end;
+end;
+
 procedure TJsonReporter.AddStep(const Kind, Description: string; Success: Boolean; Duration: Integer; const ErrorMessage: string);
 var
   StepObj: TJSONObject;
@@ -87,6 +112,23 @@ begin
   StepObj.AddPair('duration', TJSONNumber.Create(Duration));
   if not Success and (ErrorMessage <> '') then
     StepObj.AddPair('error', ErrorMessage);
+  FCurrentSteps.AddElement(StepObj);
+end;
+
+procedure TJsonReporter.AddStepWithTable(const Step: IScenarioStep);
+var
+  StepObj: TJSONObject;
+begin
+  if not Assigned(FCurrentSteps) then Exit;
+  StepObj := TJSONObject.Create;
+  StepObj.AddPair('kind', Step.KeyWord);
+  StepObj.AddPair('description', Step.Description);
+  StepObj.AddPair('success', TJSONBool.Create(Step.RunInfo.IsSuccess));
+  StepObj.AddPair('duration', TJSONNumber.Create(Step.RunInfo.ExecTimeMs));
+  if not Step.RunInfo.IsSuccess and (Step.RunInfo.ErrMsg <> '') then
+    StepObj.AddPair('error', Step.RunInfo.ErrMsg);
+  if Assigned(Step.DataTable) then
+    StepObj.AddPair('dataTable', DataTableToJsonArray(Step.DataTable));
   FCurrentSteps.AddElement(StepObj);
 end;
 
@@ -103,17 +145,31 @@ end;
 procedure TJsonReporter.OnEndReport(const Context: IRunContext);
 var
   OutputFile: string;
-  Root: TJSONObject;
+  Root, SuiteObj: TJSONObject;
 begin
   CloseCurrentFeature;
 
   Root := TJSONObject.Create;
   try
-    Root.AddPair('features', FFeatures);
-    FFeatures := nil; // Root now owns FFeatures
-    Root.AddPair('passCount', TJSONNumber.Create(Context.ReportCounters.PassCount));
-    Root.AddPair('failCount', TJSONNumber.Create(Context.ReportCounters.FailCount));
-    Root.AddPair('skipCount', TJSONNumber.Create(Context.ReportCounters.SkipCount));
+    // Add suite info if available
+    if Assigned(Context.Suite) and not Context.Suite.Title.IsEmpty then
+    begin
+      SuiteObj := TJSONObject.Create;
+      SuiteObj.AddPair('title', Context.Suite.Title);
+      SuiteObj.AddPair('features', FFeatures);
+      FFeatures := nil;
+      Root.AddPair('suite', SuiteObj);
+    end
+    else
+    begin
+      Root.AddPair('features', FFeatures);
+      FFeatures := nil; // Root now owns FFeatures
+    end;
+    // Use Suite.RunInfo for totals
+    Root.AddPair('passCount', TJSONNumber.Create(Context.Suite.RunInfo.PassCount));
+    Root.AddPair('failCount', TJSONNumber.Create(Context.Suite.RunInfo.FailCount));
+    Root.AddPair('skipCount', TJSONNumber.Create(Context.Suite.RunInfo.SkipCount));
+    Root.AddPair('pendingCount', TJSONNumber.Create(Context.Suite.RunInfo.PendingCount));
     Root.AddPair('completedAt', FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', Context.CompletedAt));
     FOutput := Root.Format(4);
   finally
@@ -170,13 +226,17 @@ begin
     end;
     sikExampleInit: ;
     sikGiven, sikWhen, sikThen: begin
-      AddStep(Item.KeyWord, Item.Description, Item.RunInfo.Result = srrSuccess,
-              Item.RunInfo.ExecTimeMs, Item.RunInfo.ErrMsg);
+      var Step: IScenarioStep;
+      if Supports(Item, IScenarioStep, Step) then
+        AddStepWithTable(Step)
+      else
+        AddStep(Item.KeyWord, Item.Description, Item.RunInfo.Result = srrSuccess,
+                Item.RunInfo.ExecTimeMs, Item.RunInfo.ErrMsg);
     end;
   end;
 end;
 
-procedure TJsonReporter.OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline; const Counters: TSpecCounters);
+procedure TJsonReporter.OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline);
 var
   OutlineObj: TJSONObject;
   HeadersArr, ExamplesArr, ValuesArr: TJSONArray;

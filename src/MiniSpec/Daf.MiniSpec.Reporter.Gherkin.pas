@@ -5,11 +5,12 @@ interface
 uses
   System.Classes,
   Daf.MiniSpec.Types,
-  Daf.MiniSpec.Reporter;
+  Daf.MiniSpec.DataTable,
+  Daf.MiniSpec.Runner;
 
 type
   /// <summary>
-  /// Gherkin reporter - generates .feature files from test results.
+  /// Gherkin listener - generates .feature files from test results.
   /// Implements ISpecListener for pure observer pattern.
   /// </summary>
   TGherkinReporter = class(TCustomListener)
@@ -20,24 +21,27 @@ type
     FCurrentFeatureName: string;
     FOutputDir: string;
     FFilesWritten: TStringList;
+    FSuiteTitle: string;
     procedure AddLine(const Text: string);
     procedure AddTags(const Tags: TSpecTags);
     function GetGherkinKeyword(Kind: TSpecItemKind): string;
     function RestorePlaceholders(const Text: string): string;
     procedure WriteExamplesTable(const Outline: IScenarioOutline);
+    procedure WriteDataTable(const Table: TDataTableObj);
     function ResultComment(const Item: ISpecItem): string;
     function SanitizeFileName(const Name: string): string;
     procedure FlushCurrentFeature;
   public
     constructor Create(AWithResults: Boolean = False);
     destructor Destroy;override;
-    procedure Configure(const Options: TReporterOptions);override;
+    procedure Configure(const Options: TRunnerOptions);override;
     function GetContent: string;override;
     function GetFileExt: string;override;
+    procedure OnBeginSuite(const Context: IRunContext; const Suite: ISpecSuite);override;
     procedure OnBeginReport(const Context: IRunContext);override;
     procedure OnEndReport(const Context: IRunContext);override;
     procedure OnItem(const Context: IRunContext; const Item: ISpecItem);override;
-    procedure OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline; const Counters: TSpecCounters);override;
+    procedure OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline);override;
     property WithResults: Boolean read FWithResults write FWithResults;
   end;
 
@@ -68,7 +72,7 @@ begin
   inherited;
 end;
 
-procedure TGherkinReporter.Configure(const Options: TReporterOptions);
+procedure TGherkinReporter.Configure(const Options: TRunnerOptions);
 begin
   inherited;
   // WithResults option
@@ -190,6 +194,52 @@ begin
   end;
 end;
 
+procedure TGherkinReporter.WriteDataTable(const Table: TDataTableObj);
+var
+  ColWidths: TArray<Integer>;
+  Row: TArray<TValue>;
+  I, J: Integer;
+  Line: string;
+begin
+  if Table = nil then Exit;
+
+  // Calculate column widths
+  SetLength(ColWidths, Table.ColCount);
+  for I := 0 to Table.ColCount - 1 do
+    ColWidths[I] := 0;
+
+  // Check headers
+  for I := 0 to High(Table.Headers) do
+    if Length(Table.Headers[I]) > ColWidths[I] then
+      ColWidths[I] := Length(Table.Headers[I]);
+
+  // Check data rows
+  for Row in Table.Rows do
+    for J := 0 to High(Row) do
+      if Row[J].ToString.Length > ColWidths[J] then
+        ColWidths[J] := Row[J].ToString.Length;
+
+  // Output header row
+  Line := '|';
+  for I := 0 to High(Table.Headers) do
+    Line := Line + ' ' + Table.Headers[I].PadRight(ColWidths[I]) + ' |';
+  AddLine(Line);
+
+  // Output data rows
+  for Row in Table.Rows do
+  begin
+    Line := '|';
+    for J := 0 to High(Row) do
+      Line := Line + ' ' + Row[J].ToString.PadRight(ColWidths[J]) + ' |';
+    AddLine(Line);
+  end;
+end;
+
+procedure TGherkinReporter.OnBeginSuite(const Context: IRunContext; const Suite: ISpecSuite);
+begin
+  FSuiteTitle := Suite.Title;
+end;
+
 procedure TGherkinReporter.OnBeginReport(const Context: IRunContext);
 var
   OutputDir: string;
@@ -233,6 +283,9 @@ begin
       begin
         FCurrentFeatureName := Feature.Title;
         FIndent := 0;
+        // Add suite comment if available
+        if not FSuiteTitle.IsEmpty then
+          AddLine('# Suite: ' + FSuiteTitle);
         AddTags(Item.Tags);
         AddLine('Feature: ' + Feature.Title);
         if Feature.Narrative <> '' then
@@ -271,12 +324,19 @@ begin
     sikImplicitRule: ;
 
     sikGiven, sikWhen, sikThen: begin
+      var Step: IScenarioStep;
       AddLine(GetGherkinKeyword(Item.Kind) + ' ' + Item.Description + ResultComment(Item));
+      if Supports(Item, IScenarioStep, Step) and Assigned(Step.DataTable) then
+      begin
+        Inc(FIndent);
+        WriteDataTable(Step.DataTable);
+        Dec(FIndent);
+      end;
     end;
   end;
 end;
 
-procedure TGherkinReporter.OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline; const Counters: TSpecCounters);
+procedure TGherkinReporter.OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline);
 var
   Step: IScenarioStep;
 begin

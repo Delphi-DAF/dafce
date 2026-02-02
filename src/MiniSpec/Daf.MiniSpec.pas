@@ -1,4 +1,4 @@
-﻿unit Daf.MiniSpec;
+unit Daf.MiniSpec;
 
 interface
 
@@ -11,9 +11,11 @@ uses
   System.Classes,
   Daf.MiniSpec.Types,
   Daf.MiniSpec.Builders,
-  Daf.MiniSpec.Reporter,
+  Daf.MiniSpec.Binding,
+  Daf.MiniSpec.Runner,
   Daf.MiniSpec.Reporter.Console,
   Daf.MiniSpec.Reporter.Json,
+  Daf.MiniSpec.Reporter.JUnit,
   Daf.MiniSpec.Reporter.Gherkin,
   Daf.MiniSpec.Reporter.Live,
   Daf.MiniSpec.Expects;
@@ -27,7 +29,7 @@ type
   public
     const Version = '1.2.0';
   strict private
-    FFeatures: TList<IFeature>;
+    FSuite: ISpecSuite;
     FRunner: ISpecRunner;
     FListeners: TList<ISpecListener>;
     FOptions: TMiniSpecOptions;
@@ -39,12 +41,13 @@ type
   protected
     class function CreateSingleton: TMiniSpec;
     class function Instance: TMiniSpec; static;
-    class procedure ParseReporterSpec(const Spec: string; out Name: string; out Options: TReporterOptions);
-    function CreateListener(const Name: string; const Options: TReporterOptions): ISpecListener;
+    class procedure ParseReporterSpec(const Spec: string; out Name: string; out Options: TRunnerOptions);
+    function CreateListener(const Name: string; const Options: TRunnerOptions): ISpecListener;
     procedure LoadConfig;
     procedure ParseArgs;
     procedure ListTags;
     procedure QueryTags;
+    procedure ShowBanner;
     procedure ShowHelp;
   public
     constructor Create;
@@ -59,9 +62,30 @@ type
     function Pause(const Value: Boolean): TMiniSpec;overload;
     function DryRun: Boolean;overload;
     function DryRun(const Value: Boolean): TMiniSpec;overload;
+    /// <summary>
+    /// Sets the title/description of the test suite.
+    /// </summary>
+    function Category(const Name: string): TMiniSpec;
+    /// <summary>
+    /// Adds a Before hook that runs once before all features.
+    /// </summary>
+    function Before(const Description: string; Hook: THookProc): TMiniSpec;
+    /// <summary>
+    /// Adds an After hook that runs once after all features.
+    /// </summary>
+    function After(const Description: string; Hook: THookProc): TMiniSpec;
+    /// <summary>
+    /// Configures a context class to be shared across all features in the suite.
+    /// The context is created once before all features and destroyed after all features.
+    /// </summary>
+    function UseSuiteContext<T: class, constructor>: TMiniSpec;
     {$ENDREGION}
     procedure Register(Feature: IFeature);
     procedure Run;
+    /// <summary>
+    /// Returns the test suite containing all features.
+    /// </summary>
+    function Suite: ISpecSuite;
  end;
 
 function Expect(const Value: Variant): TExpect; overload;
@@ -134,7 +158,7 @@ end;
 constructor TMiniSpec.Create;
 begin
   inherited;
-  FFeatures := TList<IFeature>.Create;
+  FSuite := TSpecSuite.Create;
   FOptions := TMiniSpecOptions.Create;
   FRunner := TSpecRunner.Create;
   FListeners := TList<ISpecListener>.Create;
@@ -147,7 +171,7 @@ begin
   FRunner := nil;  // Release runner first, it has refs to listeners
   FListeners.Free;
   FOptions.Free;
-  FFeatures.Free;
+  FSuite := nil;  // Release via ARC
   inherited;
 end;
 
@@ -156,18 +180,61 @@ begin
   FInstance.Free;
 end;
 
-procedure TMiniSpec.Register(Feature: IFeature);
+function TMiniSpec.Suite: ISpecSuite;
 begin
-  FFeatures.Add(Feature);
+  Result := FSuite;
 end;
 
-class procedure TMiniSpec.ParseReporterSpec(const Spec: string; out Name: string; out Options: TReporterOptions);
+function TMiniSpec.Category(const Name: string): TMiniSpec;
+begin
+  Result := Self;
+  FSuite.Title := Name;
+end;
+
+function TMiniSpec.Before(const Description: string; Hook: THookProc): TMiniSpec;
+begin
+  Result := Self;
+  FSuite.AddBeforeHook(Description, Hook);
+end;
+
+function TMiniSpec.After(const Description: string; Hook: THookProc): TMiniSpec;
+begin
+  Result := Self;
+  FSuite.AddAfterHook(Description, Hook);
+end;
+
+function TMiniSpec.UseSuiteContext<T>: TMiniSpec;
+var
+  OldSuite: ISpecSuite;
+  NewSuite: TSpecSuite<T>;
+begin
+  Result := Self;
+  // Crear nueva suite genérica que puede crear contexto de tipo T
+  NewSuite := TSpecSuite<T>.Create(FSuite.Title);
+  // Migrar features y hooks de la suite anterior
+  OldSuite := FSuite;
+  for var Feature in OldSuite.Features do
+    NewSuite.AddFeature(Feature);
+  for var Hook in OldSuite.BeforeHooks do
+    NewSuite.BeforeHooks.Add(Hook);
+  for var Hook in OldSuite.AfterHooks do
+    NewSuite.AfterHooks.Add(Hook);
+  // Reemplazar suite
+  FSuite := NewSuite;
+end;
+
+procedure TMiniSpec.Register(Feature: IFeature);
+begin
+  FSuite.AddFeature(Feature);
+end;
+
+class procedure TMiniSpec.ParseReporterSpec(const Spec: string; out Name: string; out Options: TRunnerOptions);
 var
   ColonPos, EqPos: Integer;
   OptPart, Pair, Key, Value: string;
   Pairs: TArray<string>;
 begin
-  Options := TReporterOptions.Create;
+  Options := TRunnerOptions.Create;
   ColonPos := Pos(':', Spec);
   if ColonPos = 0 then
   begin
@@ -194,7 +261,7 @@ begin
   end;
 end;
 
-function TMiniSpec.CreateListener(const Name: string; const Options: TReporterOptions): ISpecListener;
+function TMiniSpec.CreateListener(const Name: string; const Options: TRunnerOptions): ISpecListener;
 var
   Port: Integer;
 begin
@@ -202,6 +269,8 @@ begin
     Result := TConsoleReporter.Create
   else if SameText(Name, 'json') then
     Result := TJsonReporter.Create
+  else if SameText(Name, 'junit') then
+    Result := TJUnitReporter.Create
   else if SameText(Name, 'gherkin') then
     Result := TGherkinReporter.Create(False)
   else if SameText(Name, 'gherkin-results') then
@@ -223,7 +292,7 @@ end;
 function TMiniSpec.Reporter(const Spec: string): TMiniSpec;
 var
   Name: string;
-  Options: TReporterOptions;
+  Options: TRunnerOptions;
   Pair: TPair<string, string>;
   Listener: ISpecListener;
 begin
@@ -353,13 +422,8 @@ begin
     end;
     TRunMode.rmReporterHelp:
     begin
-      WriteLn;
-      WriteLn('+----------------------+');
-      WriteLn('|   MiniSpec v' + Version + '    |');
-      WriteLn('| Full specs, zero fat |');
-      WriteLn('+----------------------+');
-      WriteLn;
-      // Show help for the last listener added
+      ShowBanner;
+      // Show help for the last reporter added
       if (FListeners.Count > 0) and FListeners.Last.ShowHelp then
         Exit
       else
@@ -397,16 +461,31 @@ begin
     FRunner.AddListener(Listener);
 
   // Modo normal: ejecutar tests
-  OSShell.UseUTF8;
-  WriteLn;
-  WriteLn('+----------------------+');
-  WriteLn('|   MiniSpec v' + Version + '    |');
-  WriteLn('| Full specs, zero fat |');
-  WriteLn('+----------------------+');
-  WriteLn;
+  ShowBanner;
 
-  SpecFilter := TSpecFilter.Parse(Tags);
+  SpecFilter := Default(TSpecFilter);
   try
+    try
+      // Always exclude @skip tag, wrap user filter with "not @skip and (...)"
+      var EffectiveFilter := Tags;
+      if EffectiveFilter.IsEmpty then
+        EffectiveFilter := 'not @' + SKIP_TAG
+      else
+        EffectiveFilter := 'not @' + SKIP_TAG + ' and (' + EffectiveFilter + ')';
+      SpecFilter := TSpecFilter.Parse(EffectiveFilter);
+    except
+      on E: Exception do
+      begin
+        WriteLn('Error en expresión de filtro: ' + E.Message);
+        WriteLn('Use --help para ver la sintaxis válida.');
+        ExitCode := 1;
+        // No usar Exit aquí para evitar memory leaks de la excepción
+      end;
+    end;
+
+    if ExitCode <> 0 then
+      Exit;
+
     if SpecFilter.IsEmpty then
       Matcher := nil
     else
@@ -419,24 +498,34 @@ begin
                  end;
     FOptions.SpecMatcher := Matcher;
 
-    // Ejecutar TODAS las Features - el conteo debe reflejar el total definido
-    // Cada Feature/Rule/Scenario decide si se ejecuta o marca como Skip
-    for var F in FFeatures do
-      F.Run(Matcher);
+    // Run suite-level Before hooks
+    FSuite.RunBeforeHooks;
+    try
+      // Ejecutar TODAS las Features - el conteo debe reflejar el total definido
+      // Cada Feature/Rule/Scenario decide si se ejecuta o marca como Skip
+      for var F in FSuite.Features do
+        F.Run(Matcher);
+    finally
+      // Run suite-level After hooks
+      FSuite.RunAfterHooks;
+    end;
 
     // Usar el runner para reportar (notificará a todos los listeners)
-    FRunner.Report(FFeatures, FOptions);
+    FRunner.Report(FSuite, FOptions);
+
+    WriteLn(Format('Pass: %d | Fail: %d | Skip: %d (Pending: %d) | Total: %d Specs in %d Features | %d ms | at %s',
+      [FRunner.PassCount, FRunner.FailCount, FRunner.SkipCount, FRunner.PendingCount,
+       FRunner.PassCount + FRunner.FailCount + FRunner.SkipCount,
+       FRunner.FeatureCount, FRunner.ElapsedMs,
+       FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', FRunner.CompletedAt)]));
+
+    if Pause then
+      OSShell.WaitForShutdown;
   finally
+    // Release suite to trigger destruction of entire spec tree
+    FSuite := nil;
     SpecFilter.Free;
   end;
-  WriteLn(Format('Pass: %d | Fail: %d | Skip: %d | Total: %d Specs in %d Features | %d ms | at %s',
-    [FRunner.PassCount, FRunner.FailCount, FRunner.SkipCount,
-     FRunner.PassCount + FRunner.FailCount + FRunner.SkipCount,
-     FRunner.FeatureCount, FRunner.ElapsedMs,
-     FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', FRunner.CompletedAt)]));
-
-  if Pause then
-    OSShell.WaitForShutdown;
 end;
 
 procedure TMiniSpec.ListTags;
@@ -464,7 +553,7 @@ begin
     FeatureCount := 0;
     ScenarioCount := 0;
 
-    for var F in FFeatures do
+    for var F in FSuite.Features do
     begin
       Inc(FeatureCount);
       CollectTags(F.Tags);
@@ -503,7 +592,7 @@ begin
     WriteLn(Format('Query: %s', [FQueryExpr]));
     WriteLn('');
 
-    for var F in FFeatures do
+    for var F in FSuite.Features do
     begin
       var FeatureShown := False;
 
@@ -534,14 +623,20 @@ begin
   end;
 end;
 
-procedure TMiniSpec.ShowHelp;
+procedure TMiniSpec.ShowBanner;
 begin
+  OSShell.UseUTF8;
   WriteLn;
   WriteLn('+----------------------+');
   WriteLn('|   MiniSpec v' + Version + '    |');
   WriteLn('| Full specs, zero fat |');
   WriteLn('+----------------------+');
-  WriteLn('');
+  WriteLn;
+end;
+
+procedure TMiniSpec.ShowHelp;
+begin
+  ShowBanner;
   WriteLn('Usage: ' + ExtractFileName(ParamStr(0)) + ' [options]');
   WriteLn('');
   WriteLn('Options:');
@@ -565,6 +660,7 @@ begin
   WriteLn('Filter expressions:');
   WriteLn('  @tag                    Scenarios with tag');
   WriteLn('  ~@tag                   Scenarios without tag (also: not @tag)');
+  WriteLn('  @skip                   Reserved: always excluded (mark broken tests)');
   WriteLn('  Feat:text               Feature title contains text (case-insensitive)');
   WriteLn('  Scen:text               Scenario description contains text');
   WriteLn('  Rule:text               Rule description contains text');
@@ -586,7 +682,7 @@ begin
 end;
 
 initialization
- TRttiContext.KeepContext;
+  TRttiContext.KeepContext;
 finalization
- TRttiContext.DropContext;
+  TRttiContext.DropContext;
 end.

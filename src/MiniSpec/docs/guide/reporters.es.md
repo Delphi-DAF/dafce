@@ -1,0 +1,57 @@
+# Reporters
+
+**🌍 Idioma: [English](reporters.md) | Español**
+
+[← Volver a la Guía](../GUIDE.es.md)
+
+---
+
+Sintaxis: `-r <nombre>:<opcion1>=<valor>,<opcion2>=<valor>,...`
+
+| Reporter | Opciones | Ejemplo |
+|----------|----------|---------|
+| `console` | *(ninguna)* | `-r console` |
+| `json` | `output=<file>` | `-r json:output=report.json` |
+| `junit` | `output=<file>` | `-r junit:output=results.xml` |
+| `gherkin` | `output=<dir>` | `-r gherkin:output=features/` |
+| `live` | `port=<num>`, `wait=<ms>` | `-r live:port=8080,wait=5000` |
+
+## Múltiples Reporters
+
+Puedes usar varios reporters en la misma ejecución repitiendo la opción `-r`:
+
+```bash
+# Consola + JUnit para CI + JSON para análisis
+MiApp.exe -r console -r junit:output=results.xml -r json:output=report.json
+```
+
+Todos los reporters reciben los mismos eventos y generan su salida simultáneamente.
+
+## JUnit Reporter
+
+Genera XML en formato JUnit para integración CI/CD. Compatible con GitHub Actions, GitLab CI, Jenkins, Azure DevOps.
+
+## Live Reporter
+
+Por defecto espera 3 segundos para conexión del navegador. Usa `wait=0` para deshabilitar.
+
+## Archivo de Configuración
+
+MiniSpec crea `MiniSpec.ini` en el directorio del ejecutable si no existe:
+
+```ini
+[minispec]
+reporter=live
+filter=@unit
+pause=true
+
+[reporter.live]
+port=8080
+wait=3000
+```
+
+Las opciones de línea de comandos tienen prioridad sobre el archivo.
+
+---
+
+[← Inyección de Dependencias](injection.es.md) | [Siguiente: Línea de Comandos →](cli.es.md)

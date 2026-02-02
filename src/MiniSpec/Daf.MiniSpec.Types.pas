@@ -1,19 +1,34 @@
-﻿unit Daf.MiniSpec.Types;
+unit Daf.MiniSpec.Types;
 
 interface
 uses
   System.Classes,
   System.Generics.Collections,
   System.Rtti,
-  System.SysUtils;
+  System.SysUtils,
+  Daf.MiniSpec.DataTable,
+  Daf.MiniSpec.Injection;
+
+const
+  /// <summary>
+  /// Reserved tag for explicitly skipping scenarios.
+  /// Scenarios tagged with @skip are always excluded from execution.
+  /// </summary>
+  SKIP_TAG = 'skip';
 
 type
   TStepProc<T> = reference to procedure(World: T);
+  THookProc = reference to procedure;  // For Before/After hooks (no World)
   TExamplesTable = TArray<TArray<TValue>>;
-  TSpecItemKind = (sikFeature, sikImplicitRule, sikRule, sikBackground, sikScenario, sikScenarioOutline, sikExample, sikExampleInit, sikGiven, sikWhen, sikThen, sikAnd, sikBut);
+  TSpecItemKind = (sikSuite, sikFeature, sikImplicitRule, sikRule, sikBackground, sikScenario, sikScenarioOutline, sikExample, sikExampleInit, sikGiven, sikWhen, sikThen, sikAnd, sikBut, sikBefore, sikAfter);
   TLastStepKind = (lskNone, lskGiven, lskWhen, lskThen);
   TSpecRunState =  (srsPrepared, srsSkiped, srsRunning, srsFinished);
-  TSpecRunResult =  (srrNone, srrSuccess, srrFail, srrError);
+  TSpecRunResult =  (srrNone, srrSuccess, srrFail, srrError, srrPending);
+  /// <summary>
+  /// Result kind for counting Examples: Pass, Fail, Skip, or Pending.
+  /// Used in TSpecRunInfo.Counts for aggregated results.
+  /// </summary>
+  TResultKind = (rkPass, rkFail, rkSkip, rkPending);
   TSpecTags = record
   strict private
     FTags: TArray<string>;
@@ -71,9 +86,31 @@ type
     Result: TSpecRunResult;
     ExecTimeMs: Int64;
     Error: Exception;
+    /// <summary>
+    /// Aggregated counts of child Examples by result kind.
+    /// Propagated from children via ISpecItem.IncCount.
+    /// </summary>
+    Counts: array[TResultKind] of Cardinal;
     procedure Clear;
+    /// <summary>
+    /// Sets the error, acquiring ownership via AcquireExceptionObject.
+    /// Frees any previous error before assigning the new one.
+    /// Must be called from within an except block.
+    /// </summary>
+    procedure SetError; overload;
+    /// <summary>
+    /// Sets the error to a provided exception instance.
+    /// Takes ownership of the exception (will be freed in Clear or destructor).
+    /// Frees any previous error before assigning the new one.
+    /// </summary>
+    procedure SetError(E: Exception); overload;
     function ErrMsg: string;
     function IsSuccess: Boolean;
+    function PassCount: Cardinal;
+    function FailCount: Cardinal;
+    function SkipCount: Cardinal;
+    function PendingCount: Cardinal;
+    function TotalCount: Cardinal;
   end;
 
   IScenarioBuilder<T: class, constructor> = interface;
@@ -81,9 +118,20 @@ type
   IRuleBuilder<T: class, constructor> = interface;
 
   IBackgroundBuilder<T: class, constructor> = interface
-    function Given(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>;
-    function &And(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>;
-    function But(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>;
+    function Given(const Desc: string): IBackgroundBuilder<T>; overload;
+    function Given(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>; overload;
+    function &And(const Desc: string): IBackgroundBuilder<T>; overload;
+    function &And(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>; overload;
+    function But(const Desc: string): IBackgroundBuilder<T>; overload;
+    function But(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>; overload;
+    /// <summary>Marks the last added step as pending.</summary>
+    function Pending: IBackgroundBuilder<T>;
+    /// <summary>
+    /// Marks the last step as a no-operation (descriptive only).
+    /// The step passes without executing code, but appears in reports.
+    /// Only valid after Given steps.
+    /// </summary>
+    function NoAction: IBackgroundBuilder<T>;
     function Scenario(const Description: string): IScenarioBuilder<T>;overload;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
     function Rule(const Description: string): IRuleBuilder<T>;
@@ -99,6 +147,14 @@ type
     /// Convention: declare TCategory = class end; in each feature unit.
     /// </summary>
     function Category(AClass: TClass): IFeatureBuilder<T>; overload;
+    /// <summary>
+    /// Adds a Before hook that runs once before all scenarios in the feature.
+    /// </summary>
+    function Before(const Description: string; Hook: THookProc): IFeatureBuilder<T>;
+    /// <summary>
+    /// Adds an After hook that runs once after all scenarios in the feature.
+    /// </summary>
+    function After(const Description: string; Hook: THookProc): IFeatureBuilder<T>;
     function Background: IBackgroundBuilder<T>;
     function Scenario(const Description: string): IScenarioBuilder<T>;overload;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
@@ -130,11 +186,29 @@ type
   end;
 
   IScenarioBuilder<T: class, constructor> = interface
-    function Given(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>;
-    function When(const Desc: string; Step: TStepProc<T>) : IScenarioBuilder<T>;
-    function &Then(const Desc: string; Step: TStepProc<T>) : IScenarioBuilder<T>;
-    function &And(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>;
-    function But(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>;
+    function Given(const Desc: string): IScenarioBuilder<T>; overload;
+    function Given(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function Given(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function When(const Desc: string): IScenarioBuilder<T>; overload;
+    function When(const Desc: string; Step: TStepProc<T>) : IScenarioBuilder<T>; overload;
+    function When(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function &Then(const Desc: string): IScenarioBuilder<T>; overload;
+    function &Then(const Desc: string; Step: TStepProc<T>) : IScenarioBuilder<T>; overload;
+    function &Then(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function &And(const Desc: string): IScenarioBuilder<T>; overload;
+    function &And(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function &And(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function But(const Desc: string): IScenarioBuilder<T>; overload;
+    function But(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function But(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    /// <summary>Marks the last added step as pending.</summary>
+    function Pending: IScenarioBuilder<T>;
+    /// <summary>
+    /// Marks the last step as a no-operation (descriptive only).
+    /// The step passes without executing code, but appears in reports.
+    /// Only valid after Given or When steps. Raises exception if used after Then.
+    /// </summary>
+    function NoAction: IScenarioBuilder<T>;
 
     function Scenario(const Description: string): IScenarioBuilder<T>;overload;
     function ScenarioOutline(const Description: string): IScenarioOutlineBuilder<T>;
@@ -142,11 +216,24 @@ type
   end;
 
   IScenarioOutlineBuilder<T: class, constructor> = interface
-    function Given(const Desc: string; Step: TStepProc<T> = nil) : IScenarioOutlineBuilder<T>;
-    function When(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
-    function &Then(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
-    function &And(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
-    function But(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
+    function Given(const Desc: string): IScenarioOutlineBuilder<T>; overload;
+    function Given(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
+    function When(const Desc: string): IScenarioOutlineBuilder<T>; overload;
+    function When(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
+    function &Then(const Desc: string): IScenarioOutlineBuilder<T>; overload;
+    function &Then(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
+    function &And(const Desc: string): IScenarioOutlineBuilder<T>; overload;
+    function &And(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
+    function But(const Desc: string): IScenarioOutlineBuilder<T>; overload;
+    function But(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
+    /// <summary>Marks the last added step as pending.</summary>
+    function Pending: IScenarioOutlineBuilder<T>;
+    /// <summary>
+    /// Marks the last step as a no-operation (descriptive only).
+    /// The step passes without executing code, but appears in reports.
+    /// Only valid after Given or When steps. Raises exception if used after Then.
+    /// </summary>
+    function NoAction: IScenarioOutlineBuilder<T>;
     /// <summary>
     /// Define los ejemplos para el ScenarioOutline.
     /// Devuelve IRuleBuilder para continuar en la Rule actual
@@ -172,6 +259,16 @@ type
     function GetLevel: Byte;
 
     procedure Run(World: TObject);
+    /// <summary>
+    /// Marks this item as Pending (step not yet implemented).
+    /// Sets RunInfo.Result to srrPending.
+    /// </summary>
+    procedure MarkAsPending;
+    /// <summary>
+    /// Increments the count for the given result kind and propagates to parent.
+    /// Called by Scenario/Example when execution completes.
+    /// </summary>
+    procedure IncCount(Kind: TResultKind);
     property Kind: TSpecItemKind read GetKind;
     property Parent: ISpecItem read GetParent;
     property Description: string read GetDescription;
@@ -192,6 +289,17 @@ type
 
   IScenarioStep = interface(ISpecItem)
     ['{3F16A9FA-0F64-4B4C-985F-D09087DD7404}']
+    function GetDataTable: TDataTableObj;
+    property DataTable: TDataTableObj read GetDataTable;
+  end;
+
+  /// <summary>
+  /// Hook for Before/After feature execution.
+  /// Unlike steps, hooks don't receive a World parameter.
+  /// </summary>
+  IHook = interface(ISpecItem)
+    ['{8B7C6D5E-4F3A-2B1C-0D9E-8F7A6B5C4D3E}']
+    procedure Execute;
   end;
 
   IBackground = interface(ISpecItem)
@@ -238,8 +346,15 @@ type
     procedure SetBackGround(const Value: IBackground);
     function GetScenarios: TList<IScenario>;
     function GetRules: TList<IRule>;
+    function GetBeforeHooks: TList<IHook>;
+    function GetAfterHooks: TList<IHook>;
     function HasMatchingScenarios(const Matcher: TSpecMatcher): Boolean;
     procedure Run(const Matcher: TSpecMatcher = nil);
+    /// <summary>
+    /// Clears all internal references to break reference cycles.
+    /// Call when the feature is no longer needed.
+    /// </summary>
+    procedure Clear;
     property Title: string read GetTitle;
     property Narrative: string read GetNarrative;
     /// <summary>
@@ -250,6 +365,62 @@ type
     property BackGround: IBackground read GetBackground write SetBackground;
     property Scenarios: TList<IScenario> read GetScenarios;
     property Rules: TList<IRule> read GetRules;
+    /// <summary>
+    /// Hooks that run once before all scenarios in the feature.
+    /// </summary>
+    property BeforeHooks: TList<IHook> read GetBeforeHooks;
+    /// <summary>
+    /// Hooks that run once after all scenarios in the feature.
+    /// </summary>
+    property AfterHooks: TList<IHook> read GetAfterHooks;
+  end;
+
+  /// <summary>
+  /// Suite is the root node containing all Features.
+  /// Provides global setup/teardown and aggregated counters.
+  /// </summary>
+  ISpecSuite = interface(ISpecItem)
+    ['{A1B2C3D4-E5F6-7A8B-9C0D-1E2F3A4B5C6D}']
+    function GetTitle: string;
+    procedure SetTitle(const Value: string);
+    function GetFeatures: TList<IFeature>;
+    function GetBeforeHooks: TList<IHook>;
+    function GetAfterHooks: TList<IHook>;
+    procedure AddFeature(const Feature: IFeature);
+    procedure AddBeforeHook(const Description: string; const Hook: THookProc);
+    procedure AddAfterHook(const Description: string; const Hook: THookProc);
+    procedure RunBeforeHooks;
+    procedure RunAfterHooks;
+    /// <summary>
+    /// Clears all features and hooks to break reference cycles.
+    /// Call when the suite execution is complete.
+    /// </summary>
+    procedure Clear;
+    /// <summary>
+    /// Title of the test suite (set via MiniSpec.Category).
+    /// </summary>
+    property Title: string read GetTitle write SetTitle;
+    /// <summary>
+    /// All features registered in this suite.
+    /// </summary>
+    property Features: TList<IFeature> read GetFeatures;
+    /// <summary>
+    /// Hooks that run once before all features in the suite.
+    /// </summary>
+    property BeforeHooks: TList<IHook> read GetBeforeHooks;
+    /// <summary>
+    /// Hooks that run once after all features in the suite.
+    /// </summary>
+    property AfterHooks: TList<IHook> read GetAfterHooks;
+  end;
+
+  /// <summary>
+  /// Suite genérica que crea un contexto de tipo T.
+  /// T puede ser cualquier clase con constructor sin parámetros.
+  /// Marker interface - la creación del contexto es interna via DoCreateContext.
+  /// </summary>
+  ISpecSuite<T: class, constructor> = interface(ISpecSuite)
+    ['{E1F2A3B4-C5D6-7E8F-9A0B-1C2D3E4F5A6B}']
   end;
 
   /// <summary>
@@ -270,32 +441,64 @@ type
   end;
 
   /// <summary>
-  /// Interfaz para acceder al contexto de ejecución desde el World.
-  /// Solo visible si se hace cast explícito: (World as ISpecContext).CurrentStep
+  /// Interfaz global para acceder al contexto de ejecución.
+  /// Accesible desde cualquier lugar via función SpecContext.
   /// </summary>
   ISpecContext = interface
     ['{B8C9D0E1-F2A3-4B5C-6D7E-8F9A0B1C2D3E}']
-    function GetCurrentStep: IScenarioStep;
-    procedure SetCurrentStep(const Value: IScenarioStep);
-    function CurrentScenario: IScenario;
-    function CurrentRule: IRule;
-    function CurrentFeature: IFeature;
-    property CurrentStep: IScenarioStep read GetCurrentStep write SetCurrentStep;
+    // Metadatos de ejecución
+    function Suite: ISpecSuite;
+    function Feature: IFeature;
+    function Rule: IRule;
+    function Scenario: IScenario;
+    function Step: IScenarioStep;
+    function DataTable: TDataTableObj;
+    // Contexts del usuario (para UseWorld/UseFeatureContext/UseSuiteContext)
+    function SuiteContext: TObject;
+    function FeatureContext: TObject;
+    function ScenarioContext: TObject;
+    // Setters internos
+    procedure SetStep(const Value: IScenarioStep);
+    procedure SetDataTable(const Value: TDataTableObj);
+    procedure SetScenario(const Value: IScenario);
+    procedure SetSuiteContext(const Value: TObject);
+    procedure SetFeatureContext(const Value: TObject);
+    procedure SetScenarioContext(const Value: TObject);
   end;
 
   /// <summary>
-  /// Clase base opcional para Worlds que necesitan acceso al contexto de ejecución.
-  /// Hereda de TNoRefCountObject para evitar ARC.
-  /// El contexto está oculto y solo es accesible via ISpecContext.
+  /// Implementación del contexto de ejecución global.
   /// </summary>
-  TFeatureWorld = class(System.TNoRefCountObject, ISpecContext)
+  TSpecContextImpl = class(TInterfacedObject, ISpecContext)
   strict private
-    FCurrentStep: IScenarioStep;
-    function GetCurrentStep: IScenarioStep;
-    procedure SetCurrentStep(const Value: IScenarioStep);
-    function CurrentScenario: IScenario;
-    function CurrentRule: IRule;
-    function CurrentFeature: IFeature;
+    [weak] FSuite: ISpecSuite;
+    [weak] FFeature: IFeature;
+    [weak] FRule: IRule;
+    [weak] FScenario: IScenario;
+    [weak] FStep: IScenarioStep;
+    FDataTable: TDataTableObj;
+    FSuiteContext: TObject;
+    FFeatureContext: TObject;
+    FScenarioContext: TObject;
+  public
+    function Suite: ISpecSuite;
+    function Feature: IFeature;
+    function Rule: IRule;
+    function Scenario: IScenario;
+    function Step: IScenarioStep;
+    function DataTable: TDataTableObj;
+    function SuiteContext: TObject;
+    function FeatureContext: TObject;
+    function ScenarioContext: TObject;
+    procedure SetStep(const Value: IScenarioStep);
+    procedure SetDataTable(const Value: TDataTableObj);
+    procedure SetScenario(const Value: IScenario);
+    procedure SetSuite(const Value: ISpecSuite);
+    procedure SetFeature(const Value: IFeature);
+    procedure SetRule(const Value: IRule);
+    procedure SetSuiteContext(const Value: TObject);
+    procedure SetFeatureContext(const Value: TObject);
+    procedure SetScenarioContext(const Value: TObject);
   end;
 
   TSpecItem = class(TInterfacedObject, ISpecItem)
@@ -317,11 +520,14 @@ type
     function GetRunInfo: TSpecRunInfo;
     function GetKeyWord: string;virtual;
     function GetLevel: Byte;virtual;
+    procedure SetParent(const Value: ISpecItem);
   public
     constructor Create(const Kind: TSpecItemKind; const Parent: ISpecItem; const Description: string);
     destructor Destroy;override;
     procedure Run(World: TObject);virtual;
-    property Parent: ISpecItem read FParent;
+    procedure MarkAsPending;
+    procedure IncCount(Kind: TResultKind);virtual;
+    property Parent: ISpecItem read FParent write SetParent;
     property Description: string read GetDescription;
     property Tags: TSpecTags read GetTags;
     property EffectiveTags: TSpecTags read GetEffectiveTags;
@@ -332,12 +538,32 @@ type
   TScenarioStep<T: class> = class(TSpecItem, IScenarioStep)
   strict private
     FProc: TStepProc<T>;
+    FDataTable: TDataTableObj;
+    function GetDataTable: TDataTableObj;
   protected
   public
-    constructor Create(const Kind: TSpecItemKind; const Parent: ISpecItem; const Description: string; const Proc: TStepProc<T>);
+    constructor Create(const Kind: TSpecItemKind; const Parent: ISpecItem; const Description: string; const Proc: TStepProc<T>); overload;
+    constructor Create(const Kind: TSpecItemKind; const Parent: ISpecItem; const Description: string; const Proc: TStepProc<T>; const ADataTable: TDataTable); overload;
     destructor Destroy;override;
     procedure Run(World: TObject);override;
+    /// <summary>
+    /// Replaces the step procedure. Used by NoAction to replace a pending step with an empty one.
+    /// </summary>
+    procedure SetProc(const AProc: TStepProc<T>);
     property Proc: TStepProc<T> read FProc;
+    property DataTable: TDataTableObj read GetDataTable;
+  end;
+
+  /// <summary>
+  /// Hook for Before/After feature execution.
+  /// Wraps a THookProc (no World parameter) in the standard TSpecItem infrastructure.
+  /// </summary>
+  THook = class(TSpecItem, IHook)
+  strict private
+    FProc: THookProc;
+  public
+    constructor Create(const Kind: TSpecItemKind; const Parent: ISpecItem; const Description: string; const Proc: THookProc);
+    procedure Execute;
   end;
 
   TBackground<T: class, constructor> = class(TSpecItem, IBackground)
@@ -353,6 +579,7 @@ type
     function Given(const Desc: string; Step: TStepProc<T>): TBackground<T>;
     procedure Run(World: TObject);override;
     property Feature: IFeature read GetFeature;
+    property StepsGiven: TList<IScenarioStep> read GetStepsGiven;
   end;
 
   TScenario<T: class, constructor> = class(TSpecItem, IScenario)
@@ -382,12 +609,18 @@ type
     destructor Destroy;override;
     function ExampleInit(Step: TStepProc<T>): TScenario<T>;
     procedure SetExampleMeta(const Meta: TExampleMeta);
-    function Given(const Desc: string; Step: TStepProc<T>): TScenario<T>;
-    function When(const Desc: string; Step: TStepProc<T>) : TScenario<T>;
-    function &Then(const Desc: string; Step: TStepProc<T>) : TScenario<T>;
+    function Given(const Desc: string; Step: TStepProc<T>): TScenario<T>; overload;
+    function Given(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): TScenario<T>; overload;
+    function When(const Desc: string; Step: TStepProc<T>) : TScenario<T>; overload;
+    function When(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): TScenario<T>; overload;
+    function &Then(const Desc: string; Step: TStepProc<T>) : TScenario<T>; overload;
+    function &Then(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): TScenario<T>; overload;
     procedure Run(World: TObject);override;
     property Feature: IFeature read GetFeature;
     property ExampleMeta: TExampleMeta read GetExampleMeta;
+    property StepsGiven: TList<IScenarioStep> read GetStepsGiven;
+    property StepsWhen: TList<IScenarioStep> read GetStepsWhen;
+    property StepsThen: TList<IScenarioStep> read GetStepsThen;
   end;
 
   /// <summary>
@@ -416,6 +649,10 @@ type
     FTitle: string;
     FNarrative: string;
     FCategory: string;
+    FBeforeHooks: TList<IHook>;
+    FAfterHooks: TList<IHook>;
+    FContextCreator: TFunc<TObject>;  // Creador del FeatureContext (si se usa UseFeatureContext)
+    FFeatureContext: TObject;  // Instancia del FeatureContext
     function GetTitle: string;
     function GetNarrative: string;
     function GetCategory: string;
@@ -424,18 +661,67 @@ type
     procedure SetBackGround(const Value: IBackground);
     function GetScenarios: TList<IScenario>;
     function GetRules: TList<IRule>;
+    function GetBeforeHooks: TList<IHook>;
+    function GetAfterHooks: TList<IHook>;
     procedure ParseDescription(const Description: string);
   public
     constructor Create(const Description: string);
     destructor Destroy; override;
     function HasMatchingScenarios(const Matcher: TSpecMatcher): Boolean;
     procedure Run(const Matcher: TSpecMatcher = nil);reintroduce;
+    procedure Clear;
     property Title: string read GetTitle;
     property Narrative: string read GetNarrative;
     property Category: string read GetCategory write SetCategory;
     property Background: IBackground read GetBackGround write SetBackGround;
     property Rules: TList<IRule> read GetRules;
+    property BeforeHooks: TList<IHook> read GetBeforeHooks;
+    property AfterHooks: TList<IHook> read GetAfterHooks;
     property ImplicitRule: IRule read FImplicitRule;  // Solo para builders
+    procedure SetContextCreator(const Creator: TFunc<TObject>);  // Para builders
+  end;
+
+  /// <summary>
+  /// Suite is the root node containing all Features.
+  /// Provides global setup/teardown for the entire test run.
+  /// </summary>
+  TSpecSuite = class(TSpecItem, ISpecSuite)
+  strict private
+    FTitle: string;
+    FFeatures: TList<IFeature>;
+    FBeforeHooks: TList<IHook>;
+    FAfterHooks: TList<IHook>;
+    FSuiteContext: TObject;
+    function GetTitle: string;
+    procedure SetTitle(const Value: string);
+    function GetFeatures: TList<IFeature>;
+    function GetBeforeHooks: TList<IHook>;
+    function GetAfterHooks: TList<IHook>;
+  protected
+    function CreateContext: TObject; virtual;
+  public
+    constructor Create(const ATitle: string = '');
+    destructor Destroy; override;
+    procedure AddFeature(const Feature: IFeature);
+    procedure AddBeforeHook(const Description: string; const Hook: THookProc);
+    procedure AddAfterHook(const Description: string; const Hook: THookProc);
+    procedure RunBeforeHooks;
+    procedure RunAfterHooks;
+    procedure Clear;
+    procedure Run(const Matcher: TSpecMatcher = nil); reintroduce;
+    property Title: string read GetTitle write SetTitle;
+    property Features: TList<IFeature> read GetFeatures;
+    property BeforeHooks: TList<IHook> read GetBeforeHooks;
+    property AfterHooks: TList<IHook> read GetAfterHooks;
+  end;
+
+  /// <summary>
+  /// Suite genérica que crea y gestiona un contexto de tipo T.
+  /// T puede ser cualquier clase con constructor sin parámetros.
+  /// </summary>
+  TSpecSuite<T: class, constructor> = class(TSpecSuite, ISpecSuite<T>)
+  protected
+    function CreateContext: TObject; override;
   end;
 
   /// <summary>
@@ -472,6 +758,11 @@ type
 function Val2Str(const V: TValue): string;
 
 /// <summary>
+/// Global execution context. Returns current ISpecContext.
+/// </summary>
+function SpecContext: ISpecContext;
+
+/// <summary>
 /// Returns the currently executing scenario. Used by ExpectRaised to access pending exceptions.
 /// </summary>
 function GetCurrentScenario: IScenario;
@@ -490,9 +781,9 @@ uses
 
 threadvar
   /// <summary>
-  /// The currently executing scenario. Used by Expect functions to access pending exceptions.
+  /// Global execution context. Access via SpecContext function.
   /// </summary>
-  CurrentScenario: IScenario;
+  GSpecContext: ISpecContext;
 
 { TCapturedRaise }
 
@@ -591,7 +882,25 @@ begin
   State := TSpecRunState.srsPrepared;
   Result := TSpecRunResult.srrNone;
   ExecTimeMs := 0;
-  Error := nil;
+  FreeAndNil(Error);
+  for var K := Low(TResultKind) to High(TResultKind) do
+    Counts[K] := 0;
+end;
+
+procedure TSpecRunInfo.SetError;
+begin
+  // Free any previous error to avoid memory leaks
+  FreeAndNil(Error);
+  // Acquire ownership of the current exception
+  Error := Exception(AcquireExceptionObject);
+end;
+
+procedure TSpecRunInfo.SetError(E: Exception);
+begin
+  // Free any previous error to avoid memory leaks
+  FreeAndNil(Error);
+  // Take ownership of the provided exception
+  Error := E;
 end;
 
 function TSpecRunInfo.ErrMsg: string;
@@ -604,64 +913,34 @@ end;
 
 function TSpecRunInfo.IsSuccess: Boolean;
 begin
-  Result := Self.Result = srrSuccess;
+  // Success means: no failure result AND no failure counts (for aggregates)
+  Result := (not (Self.Result in [srrFail, srrError])) and (Counts[rkFail] = 0);
 end;
 
-{ TFeatureWorld }
-
-function TFeatureWorld.GetCurrentStep: IScenarioStep;
+function TSpecRunInfo.PassCount: Cardinal;
 begin
-  Result := FCurrentStep;
+  Result := Counts[rkPass];
 end;
 
-procedure TFeatureWorld.SetCurrentStep(const Value: IScenarioStep);
+function TSpecRunInfo.FailCount: Cardinal;
 begin
-  FCurrentStep := Value;
+  Result := Counts[rkFail];
 end;
 
-function TFeatureWorld.CurrentScenario: IScenario;
-var
-  Parent: ISpecItem;
+function TSpecRunInfo.SkipCount: Cardinal;
 begin
-  Result := nil;
-  if not Assigned(FCurrentStep) then Exit;
-  Parent := FCurrentStep.Parent;
-  while Assigned(Parent) do
-  begin
-    if Supports(Parent, IScenario, Result) then
-      Exit;
-    Parent := Parent.Parent;
-  end;
+  Result := Counts[rkSkip];
 end;
 
-function TFeatureWorld.CurrentRule: IRule;
-var
-  Parent: ISpecItem;
+function TSpecRunInfo.PendingCount: Cardinal;
 begin
-  Result := nil;
-  if not Assigned(FCurrentStep) then Exit;
-  Parent := FCurrentStep.Parent;
-  while Assigned(Parent) do
-  begin
-    if Supports(Parent, IRule, Result) then
-      Exit;
-    Parent := Parent.Parent;
-  end;
+  Result := Counts[rkPending];
 end;
 
-function TFeatureWorld.CurrentFeature: IFeature;
-var
-  Parent: ISpecItem;
+function TSpecRunInfo.TotalCount: Cardinal;
 begin
-  Result := nil;
-  if not Assigned(FCurrentStep) then Exit;
-  Parent := FCurrentStep.Parent;
-  while Assigned(Parent) do
-  begin
-    if Supports(Parent, IFeature, Result) then
-      Exit;
-    Parent := Parent.Parent;
-  end;
+  // Pending is already included in Skip, so don't count it twice
+  Result := Counts[rkPass] + Counts[rkFail] + Counts[rkSkip];
 end;
 
 { TSpecItem }
@@ -714,6 +993,19 @@ begin
   FRunInfo.Clear;
 end;
 
+procedure TSpecItem.MarkAsPending;
+begin
+  FRunInfo.Result := srrPending;
+  FRunInfo.State := srsFinished;
+end;
+
+procedure TSpecItem.IncCount(Kind: TResultKind);
+begin
+  Inc(FRunInfo.Counts[Kind]);
+  if Assigned(FParent) then
+    FParent.IncCount(Kind);
+end;
+
 function TSpecItem.GetDescription: string;
 begin
   Result := FDescription;
@@ -722,6 +1014,11 @@ end;
 function TSpecItem.GetParent: ISpecItem;
 begin
   Result := FParent;
+end;
+
+procedure TSpecItem.SetParent(const Value: ISpecItem);
+begin
+  FParent := Value;
 end;
 
 function TSpecItem.GetRunInfo: TSpecRunInfo;
@@ -779,18 +1076,44 @@ constructor TScenarioStep<T>.Create(const Kind: TSpecItemKind; const Parent: ISp
 begin
   inherited Create(Kind, Parent, Description);
   FProc := Proc;
+  FDataTable := nil;
+end;
+
+constructor TScenarioStep<T>.Create(const Kind: TSpecItemKind; const Parent: ISpecItem; const Description: string; const Proc: TStepProc<T>; const ADataTable: TDataTable);
+begin
+  inherited Create(Kind, Parent, Description);
+  FProc := Proc;
+  if Length(ADataTable) > 0 then
+    FDataTable := TDataTableObj.Create(ADataTable)
+  else
+    FDataTable := nil;
 end;
 
 destructor TScenarioStep<T>.Destroy;
 begin
   FProc := nil;
+  FDataTable.Free;
   inherited;
+end;
+
+procedure TScenarioStep<T>.SetProc(const AProc: TStepProc<T>);
+begin
+  FProc := AProc;
+end;
+
+function TScenarioStep<T>.GetDataTable: TDataTableObj;
+begin
+  Result := FDataTable;
 end;
 
 procedure TScenarioStep<T>.Run(World: TObject);
 var
-  SpecContext: ISpecContext;
+  Ctx: TSpecContextImpl;
 begin
+  // If already marked as pending, don't execute the step
+  if FRunInfo.Result = srrPending then
+    Exit;
+
   var SW := TStopwatch.StartNew;
   try
     inherited Run(World);
@@ -798,16 +1121,19 @@ begin
     FRunInfo.Result := srrSuccess;
     if Assigned(FProc) then
     begin
-      // Si el World implementa ISpecContext, setear el Step actual
-      if Supports(World, ISpecContext, SpecContext) then
-        SpecContext.CurrentStep := Self;
+      // Usar contexto global
+      Ctx := TSpecContextImpl(SpecContext);
+      Ctx.SetStep(Self);
+      Ctx.SetDataTable(FDataTable);
       FProc(World as T);
+      // Clear DataTable after step execution
+      Ctx.SetDataTable(nil);
     end;
   except
     on E: ExpectFail do
     begin
       FRunInfo.Result := srrFail;
-      FRunInfo.Error := Exception(AcquireExceptionObject);
+      FRunInfo.SetError;
     end;
     on E: Exception do
     begin
@@ -822,8 +1148,36 @@ begin
       else
       begin
         FRunInfo.Result := srrError;
-        FRunInfo.Error := Exception(AcquireExceptionObject);
+        FRunInfo.SetError;
       end;
+    end;
+  end;
+  FRunInfo.State := srsFinished;
+  FRunInfo.ExecTimeMs := SW.ElapsedMilliseconds;
+end;
+
+{ THook }
+
+constructor THook.Create(const Kind: TSpecItemKind; const Parent: ISpecItem; const Description: string; const Proc: THookProc);
+begin
+  inherited Create(Kind, Parent, Description);
+  FProc := Proc;
+end;
+
+procedure THook.Execute;
+begin
+  var SW := TStopwatch.StartNew;
+  FRunInfo.State := srsRunning;
+  FRunInfo.Result := srrSuccess;
+  try
+    if Assigned(FProc) then
+      FProc();
+  except
+    on E: Exception do
+    begin
+      FRunInfo.Result := srrError;
+      FRunInfo.SetError;
+      // Note: Don't re-raise. Feature.Run will check RunInfo.Result
     end;
   end;
   FRunInfo.State := srsFinished;
@@ -873,7 +1227,7 @@ begin
     on E: Exception do
     begin
       FRunInfo.Result := srrError;
-      FRunInfo.Error := E;
+      FRunInfo.SetError;
     end;
   end;
   FRunInfo.State := srsFinished;
@@ -1000,13 +1354,27 @@ begin
   FStepsGiven.Add(TScenarioStep<T>.Create(sikGiven, Self, Desc, Step));
 end;
 
+function TScenario<T>.Given(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): TScenario<T>;
+begin
+  Result := Self;
+  FStepsGiven.Add(TScenarioStep<T>.Create(sikGiven, Self, Desc, Step, Table));
+end;
+
 procedure TScenario<T>.RunSteps(Steps: TList<IScenarioStep>; World: TObject);
 begin
   for var Step in Steps do
   begin
     Step.Run(World);
     if Step.RunInfo.Result in [srrFail, srrError] then
+    begin
       FRunInfo.Result := srrFail;
+      Break;
+    end
+    else if Step.RunInfo.Result = srrPending then
+    begin
+      FRunInfo.Result := srrPending;
+      Break;
+    end;
   end;
 end;
 
@@ -1033,20 +1401,29 @@ begin
     begin
       FRunInfo.Result := srrError;
       // Create a new exception to report the unconsumed raise
-      FRunInfo.Error := FCapturedRaise.ExceptionClass.Create(
-        'Unhandled exception from When step: ' + FCapturedRaise.ExceptionMessage);
+      FRunInfo.SetError(FCapturedRaise.ExceptionClass.Create(
+        'Unhandled exception from When step: ' + FCapturedRaise.ExceptionMessage));
       FCapturedRaise := TCapturedRaise.Empty;
     end;
   except
     on E: Exception do
     begin
       FRunInfo.Result := srrError;
-      FRunInfo.Error := Exception(AcquireExceptionObject);
+      FRunInfo.SetError;
     end;
   end;
   SetCurrentScenario(OldScenario);
   FRunInfo.State := srsFinished;
   FRunInfo.ExecTimeMs := SW.ElapsedMilliseconds;
+  // Propagate count to parent (Feature/Rule/Outline)
+  case FRunInfo.Result of
+    srrSuccess: IncCount(rkPass);
+    srrFail, srrError: IncCount(rkFail);
+    srrPending: begin
+                  IncCount(rkSkip);    // Pending counts as skip for totals
+                  IncCount(rkPending); // Also track pending separately
+                end;
+  end;
 end;
 
 function TScenario<T>.When(const Desc: string; Step: TStepProc<T>): TScenario<T>;
@@ -1055,10 +1432,22 @@ begin
   FStepsWhen.Add(TScenarioStep<T>.Create(sikWhen, Self, Desc, Step));
 end;
 
+function TScenario<T>.When(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): TScenario<T>;
+begin
+  Result := Self;
+  FStepsWhen.Add(TScenarioStep<T>.Create(sikWhen, Self, Desc, Step, Table));
+end;
+
 function TScenario<T>.&Then(const Desc: string; Step: TStepProc<T>): TScenario<T>;
 begin
   Result := Self;
   FStepsThen.Add(TScenarioStep<T>.Create(sikThen, Self, Desc, Step));
+end;
+
+function TScenario<T>.&Then(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): TScenario<T>;
+begin
+  Result := Self;
+  FStepsThen.Add(TScenarioStep<T>.Create(sikThen, Self, Desc, Step, Table));
 end;
 
 { TScenarioOutline<T> }
@@ -1109,6 +1498,7 @@ begin
   for var Example in FExamples do
   begin
     ExampleWorld := Rule.CreateWorld;
+    TInjectorService.InjectInto(ExampleWorld);
     try
       Rule.RunBackground(ExampleWorld);
       Example.Run(ExampleWorld);
@@ -1204,6 +1594,8 @@ begin
   inherited Create(sikFeature, nil, Description);
   ParseDescription(Description);
   FRules := TList<IRule>.Create;
+  FBeforeHooks := TList<IHook>.Create;
+  FAfterHooks := TList<IHook>.Create;
   // Crear Rule implícita como contenedor por defecto
   FImplicitRule := TRule<T>.Create(Self, '', sikImplicitRule);
   FRules.Add(FImplicitRule);
@@ -1212,8 +1604,20 @@ end;
 
 destructor TFeature<T>.Destroy;
 begin
+  FFeatureContext.Free;
+  FAfterHooks.Free;
+  FBeforeHooks.Free;
   FRules.Free;
   inherited;
+end;
+
+procedure TFeature<T>.Clear;
+begin
+  // Clear the lists - [weak] references on FParent handle cycle breaking
+  FImplicitRule := nil;
+  FBeforeHooks.Clear;
+  FAfterHooks.Clear;
+  FRules.Clear;
 end;
 
 function TFeature<T>.GetBackGround: IBackground;
@@ -1232,6 +1636,16 @@ begin
   Result := FRules;
 end;
 
+function TFeature<T>.GetBeforeHooks: TList<IHook>;
+begin
+  Result := FBeforeHooks;
+end;
+
+function TFeature<T>.GetAfterHooks: TList<IHook>;
+begin
+  Result := FAfterHooks;
+end;
+
 function TFeature<T>.HasMatchingScenarios(const Matcher: TSpecMatcher): Boolean;
 begin
   if not Assigned(Matcher) then
@@ -1246,26 +1660,76 @@ begin
 end;
 
 procedure TFeature<T>.Run(const Matcher: TSpecMatcher);
+var
+  Ctx: TSpecContextImpl;
 begin
   var SW := TStopwatch.StartNew;
   FRunInfo.State := srsRunning;
   FRunInfo.Result := srrSuccess;
+
+  // Crear FeatureContext si se configuró uno
+  if Assigned(FContextCreator) then
+  begin
+    FFeatureContext := FContextCreator();
+    TInjectorService.Register(FFeatureContext);
+    Ctx := SpecContext as TSpecContextImpl;
+    Ctx.SetFeatureContext(FFeatureContext);
+  end;
+
   try
-    // Ejecutar todas las Rules (incluyendo ImplicitRule)
-    // Cada Rule decide internamente qué escenarios ejecutar o marcar como Skip
-    for var Rule in FRules do
+    // Execute Before hooks (once before all scenarios)
+    for var Hook in FBeforeHooks do
     begin
-      Rule.Run(Matcher);
-      if Rule.RunInfo.Result in [srrFail, srrError] then
-        FRunInfo.Result := srrFail;
+      Hook.Execute;
+      if Hook.RunInfo.Result in [srrFail, srrError] then
+      begin
+        FRunInfo.Result := srrError;
+        FRunInfo.SetError(Exception.Create(Hook.RunInfo.ErrMsg));
+        Break;  // Stop on first hook failure
+      end;
+    end;
+
+    // Only run scenarios if Before hooks succeeded
+    if FRunInfo.Result = srrSuccess then
+    begin
+      // Ejecutar todas las Rules (incluyendo ImplicitRule)
+      // Cada Rule decide internamente qué escenarios ejecutar o marcar como Skip
+      for var Rule in FRules do
+      begin
+        Rule.Run(Matcher);
+        if Rule.RunInfo.Result in [srrFail, srrError] then
+          FRunInfo.Result := srrFail;
+      end;
     end;
   except
     on E: Exception do
     begin
       FRunInfo.Result := srrError;
-      FRunInfo.Error := E;
+      FRunInfo.SetError;
     end;
   end;
+
+  // Execute After hooks (once after all scenarios, even if there were errors)
+  for var Hook in FAfterHooks do
+  begin
+    Hook.Execute;
+    if Hook.RunInfo.Result in [srrFail, srrError] then
+    begin
+      FRunInfo.Result := srrError;
+      FRunInfo.SetError(Exception.Create(Hook.RunInfo.ErrMsg));
+      // Continue executing remaining After hooks for cleanup
+    end;
+  end;
+
+  // Destruir FeatureContext
+  if Assigned(FFeatureContext) then
+  begin
+    TInjectorService.Unregister(FFeatureContext);
+    Ctx := SpecContext as TSpecContextImpl;
+    Ctx.SetFeatureContext(nil);
+    FreeAndNil(FFeatureContext);
+  end;
+
   FRunInfo.State := srsFinished;
   FRunInfo.ExecTimeMs := SW.ElapsedMilliseconds;
 end;
@@ -1273,6 +1737,162 @@ end;
 procedure TFeature<T>.SetBackGround(const Value: IBackground);
 begin
   FImplicitRule.BackGround := Value;
+end;
+
+procedure TFeature<T>.SetContextCreator(const Creator: TFunc<TObject>);
+begin
+  FContextCreator := Creator;
+end;
+
+{ TSpecSuite }
+
+constructor TSpecSuite.Create(const ATitle: string = '');
+begin
+  inherited Create(sikSuite, nil, ATitle);
+  FTitle := ATitle;
+  FFeatures := TList<IFeature>.Create;
+  FBeforeHooks := TList<IHook>.Create;
+  FAfterHooks := TList<IHook>.Create;
+end;
+
+destructor TSpecSuite.Destroy;
+begin
+  FAfterHooks.Free;
+  FBeforeHooks.Free;
+  FFeatures.Free;
+  inherited;
+end;
+
+procedure TSpecSuite.Clear;
+var
+  Ctx: TSpecContextImpl;
+begin
+  // Clear global context to release references to suite items
+  Ctx := TSpecContextImpl(SpecContext);
+  Ctx.SetScenario(nil);
+  Ctx.SetRule(nil);
+  Ctx.SetFeature(nil);
+  Ctx.SetSuite(nil);
+  // First clear each feature to break their internal cycles
+  for var Feature in FFeatures do
+    Feature.Clear;
+  // Then clear our own lists
+  FBeforeHooks.Clear;
+  FAfterHooks.Clear;
+  FFeatures.Clear;
+end;
+
+function TSpecSuite.GetTitle: string;
+begin
+  Result := FTitle;
+end;
+
+procedure TSpecSuite.SetTitle(const Value: string);
+begin
+  FTitle := Value;
+end;
+
+function TSpecSuite.GetFeatures: TList<IFeature>;
+begin
+  Result := FFeatures;
+end;
+
+function TSpecSuite.GetBeforeHooks: TList<IHook>;
+begin
+  Result := FBeforeHooks;
+end;
+
+function TSpecSuite.GetAfterHooks: TList<IHook>;
+begin
+  Result := FAfterHooks;
+end;
+
+procedure TSpecSuite.AddFeature(const Feature: IFeature);
+begin
+  FFeatures.Add(Feature);
+  // Set Suite as parent so counters propagate correctly
+  (Feature as TSpecItem).Parent := Self;
+end;
+
+procedure TSpecSuite.AddBeforeHook(const Description: string; const Hook: THookProc);
+begin
+  FBeforeHooks.Add(THook.Create(sikBefore, Self, Description, Hook));
+end;
+
+procedure TSpecSuite.AddAfterHook(const Description: string; const Hook: THookProc);
+begin
+  FAfterHooks.Add(THook.Create(sikAfter, Self, Description, Hook));
+end;
+
+procedure TSpecSuite.RunBeforeHooks;
+begin
+  for var Hook in FBeforeHooks do
+    Hook.Execute;
+end;
+
+procedure TSpecSuite.RunAfterHooks;
+begin
+  for var Hook in FAfterHooks do
+    Hook.Execute;
+end;
+
+function TSpecSuite.CreateContext: TObject;
+begin
+  Result := nil;
+end;
+
+procedure TSpecSuite.Run(const Matcher: TSpecMatcher = nil);
+begin
+  var SW := TStopwatch.StartNew;
+  FRunInfo.State := srsRunning;
+  FRunInfo.Result := srrSuccess;
+
+  // Crear SuiteContext via método virtual (override en TSpecSuite<T>)
+  FSuiteContext := CreateContext;
+
+  // Registrar en SpecContext global
+  SpecContext.SetSuiteContext(FSuiteContext);
+
+  try
+    try
+      RunBeforeHooks;
+      for var Feature in FFeatures do
+      begin
+        if Assigned(Matcher) then
+        begin
+          if not Feature.HasMatchingScenarios(Matcher) then
+            Continue;
+        end;
+        Feature.Run(Matcher);
+        if Feature.RunInfo.Result = srrFail then
+          FRunInfo.Result := srrFail;
+        FRunInfo.Counts[rkPass] := FRunInfo.Counts[rkPass] + Feature.RunInfo.PassCount;
+        FRunInfo.Counts[rkFail] := FRunInfo.Counts[rkFail] + Feature.RunInfo.FailCount;
+        FRunInfo.Counts[rkSkip] := FRunInfo.Counts[rkSkip] + Feature.RunInfo.SkipCount;
+      end;
+      RunAfterHooks;
+    except
+      on E: Exception do
+      begin
+        FRunInfo.Result := srrError;
+        FRunInfo.SetError;
+      end;
+    end;
+  finally
+    // Limpiar SuiteContext y destruirlo
+    SpecContext.SetSuiteContext(nil);
+    FSuiteContext.Free;
+  end;
+
+  FRunInfo.State := srsFinished;
+  FRunInfo.ExecTimeMs := SW.ElapsedMilliseconds;
+end;
+
+{ TSpecSuite<T> }
+
+function TSpecSuite<T>.CreateContext: TObject;
+begin
+  Result := T.Create;
 end;
 
 { TRule<T> }
@@ -1370,8 +1990,15 @@ begin
         // Si es un Outline, marcar también todos sus Examples como skip
         var Outline: IScenarioOutline;
         if Supports(Scenario, IScenarioOutline, Outline) then
+        begin
           for var Example in Outline.Examples do
+          begin
             TSpecItem(Example).FRunInfo.State := srsSkiped;
+            Example.IncCount(rkSkip);  // Propagate skip count
+          end;
+        end
+        else
+          Scenario.IncCount(rkSkip);  // Propagate skip count for simple scenario
         Continue;
       end;
 
@@ -1386,6 +2013,7 @@ begin
       else
       begin
         var World := CreateWorld;
+        TInjectorService.InjectInto(World);
         RunBackground(World);
         Scenario.Run(World);
         if Scenario.RunInfo.Result in [srrFail, srrError] then
@@ -1397,21 +2025,159 @@ begin
     on E: Exception do
     begin
       FRunInfo.Result := srrError;
-      FRunInfo.Error := E;
+      FRunInfo.SetError;
     end;
   end;
   FRunInfo.State := srsFinished;
   FRunInfo.ExecTimeMs := SW.ElapsedMilliseconds;
 end;
 
+{ TSpecContextImpl }
+
+function TSpecContextImpl.Suite: ISpecSuite;
+begin
+  Result := FSuite;
+end;
+
+function TSpecContextImpl.Feature: IFeature;
+begin
+  Result := FFeature;
+end;
+
+function TSpecContextImpl.Rule: IRule;
+begin
+  Result := FRule;
+end;
+
+function TSpecContextImpl.Scenario: IScenario;
+begin
+  Result := FScenario;
+end;
+
+function TSpecContextImpl.Step: IScenarioStep;
+begin
+  Result := FStep;
+end;
+
+function TSpecContextImpl.DataTable: TDataTableObj;
+begin
+  Result := FDataTable;
+end;
+
+function TSpecContextImpl.SuiteContext: TObject;
+begin
+  Result := FSuiteContext;
+end;
+
+function TSpecContextImpl.FeatureContext: TObject;
+begin
+  Result := FFeatureContext;
+end;
+
+function TSpecContextImpl.ScenarioContext: TObject;
+begin
+  Result := FScenarioContext;
+end;
+
+procedure TSpecContextImpl.SetStep(const Value: IScenarioStep);
+begin
+  FStep := Value;
+end;
+
+procedure TSpecContextImpl.SetDataTable(const Value: TDataTableObj);
+begin
+  FDataTable := Value;
+end;
+
+procedure TSpecContextImpl.SetScenario(const Value: IScenario);
+begin
+  FScenario := Value;
+end;
+
+procedure TSpecContextImpl.SetSuite(const Value: ISpecSuite);
+begin
+  FSuite := Value;
+end;
+
+procedure TSpecContextImpl.SetFeature(const Value: IFeature);
+begin
+  FFeature := Value;
+end;
+
+procedure TSpecContextImpl.SetRule(const Value: IRule);
+begin
+  FRule := Value;
+end;
+
+procedure TSpecContextImpl.SetSuiteContext(const Value: TObject);
+begin
+  FSuiteContext := Value;
+end;
+
+procedure TSpecContextImpl.SetFeatureContext(const Value: TObject);
+begin
+  FFeatureContext := Value;
+end;
+
+procedure TSpecContextImpl.SetScenarioContext(const Value: TObject);
+begin
+  FScenarioContext := Value;
+end;
+
+{ Global SpecContext }
+
+function SpecContext: ISpecContext;
+begin
+  if GSpecContext = nil then
+    GSpecContext := TSpecContextImpl.Create;
+  Result := GSpecContext;
+end;
+
 function GetCurrentScenario: IScenario;
 begin
-  Result := CurrentScenario;
+  Result := SpecContext.Scenario;
 end;
 
 procedure SetCurrentScenario(const Value: IScenario);
+var
+  Ctx: TSpecContextImpl;
+  Parent: ISpecItem;
 begin
-  CurrentScenario := Value;
+  Ctx := TSpecContextImpl(SpecContext);
+  Ctx.SetScenario(Value);
+
+  // Derivar Feature y Rule del Scenario navegando por parents usando Kind
+  if Assigned(Value) then
+  begin
+    Parent := Value.Parent;
+    while Assigned(Parent) do
+    begin
+      case Parent.Kind of
+        sikRule, sikImplicitRule:
+          if Ctx.Rule = nil then
+            Ctx.SetRule(Parent as IRule);
+        sikFeature:
+          begin
+            Ctx.SetFeature(Parent as IFeature);
+            Break;  // Feature es el nivel más alto
+          end;
+      end;
+      Parent := Parent.Parent;
+    end;
+  end
+  else
+  begin
+    // Limpiar cuando se setea nil
+    Ctx.SetRule(nil);
+    Ctx.SetFeature(nil);
+  end;
 end;
+
+initialization
+  // Nada que inicializar
+
+finalization
+  // Liberar singleton del thread principal para evitar memory leak
+  GSpecContext := nil;
 
 end.
