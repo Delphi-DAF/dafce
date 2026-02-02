@@ -138,20 +138,6 @@ Compatible with GitHub Actions, GitLab CI, Jenkins, Azure DevOps.
 
 ---
 
-## Comparison with Other Frameworks
-
-| Feature | MiniSpec | DUnitX | DUnit |
-|---------|:--------:|:------:|:-----:|
-| BDD / Gherkin syntax | ✅ | ❌ | ❌ |
-| Given/When/Then | ✅ | ❌ | ❌ |
-| Scenario Outline | ✅ | ❌ | ❌ |
-| Fluent API | ✅ | Partial | ❌ |
-| JUnit XML output | ✅ | ✅ | ❌ |
-| Live Dashboard | ✅ | ❌ | ❌ |
-| Tag filtering | ✅ | ✅ | ❌ |
-
----
-
 ## License
 
 [MIT License](../../legal/LICENSE.md)
