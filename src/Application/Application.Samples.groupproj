@@ -1,0 +1,48 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{F6789012-CDEF-1234-5678-90ABCDEF1234}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="samples\ConsoleSample\ConsoleSample.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="samples\HostedService\HostedService.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="ConsoleSample">
+        <MSBuild Projects="samples\ConsoleSample\ConsoleSample.dproj"/>
+    </Target>
+    <Target Name="ConsoleSample:Clean">
+        <MSBuild Projects="samples\ConsoleSample\ConsoleSample.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="ConsoleSample:Make">
+        <MSBuild Projects="samples\ConsoleSample\ConsoleSample.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="HostedService">
+        <MSBuild Projects="samples\HostedService\HostedService.dproj"/>
+    </Target>
+    <Target Name="HostedService:Clean">
+        <MSBuild Projects="samples\HostedService\HostedService.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="HostedService:Make">
+        <MSBuild Projects="samples\HostedService\HostedService.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="ConsoleSample;HostedService"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="ConsoleSample:Clean;HostedService:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="ConsoleSample:Make;HostedService:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

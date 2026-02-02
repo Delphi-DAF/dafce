@@ -1,0 +1,36 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{E5F67890-ABCD-EF12-3456-7890ABCDEF12}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="samples\PingProcess\PingProcess.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="PingProcess">
+        <MSBuild Projects="samples\PingProcess\PingProcess.dproj"/>
+    </Target>
+    <Target Name="PingProcess:Clean">
+        <MSBuild Projects="samples\PingProcess\PingProcess.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="PingProcess:Make">
+        <MSBuild Projects="samples\PingProcess\PingProcess.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="PingProcess"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="PingProcess:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="PingProcess:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>
