@@ -30,7 +30,7 @@
         <Cfg_2>true</Cfg_2>
         <Base>true</Base>
     </PropertyGroup>
-    <Import Project="..\samples.optset" Condition="'$(Base)'!='' And Exists('..\samples.optset')"/>
+    <Import Project="..\..\..\samples.optset" Condition="'$(Base)'!='' And Exists('..\..\..\samples.optset')"/>
     <PropertyGroup Condition="'$(Base)'!=''">
         <DCC_E>false</DCC_E>
         <DCC_F>false</DCC_F>
@@ -44,7 +44,7 @@
         <DCC_Namespace>System;Xml;Data;Datasnap;Web;Soap;$(DCC_Namespace)</DCC_Namespace>
         <Icon_MainIcon>$(BDS)\bin\delphi_PROJECTICON.ico</Icon_MainIcon>
         <Icns_MainIcns>$(BDS)\bin\delphi_PROJECTICNS.icns</Icns_MainIcns>
-        <CfgDependentOn>..\samples.optset</CfgDependentOn>
+        <CfgDependentOn>..\..\..\samples.optset</CfgDependentOn>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win32)'!=''">
         <DCC_Namespace>System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;$(DCC_Namespace)</DCC_Namespace>
@@ -77,7 +77,7 @@
         <None Include="README.md"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
-            <DependentOn>..\samples.optset</DependentOn>
+            <DependentOn>..\..\..\samples.optset</DependentOn>
         </BuildConfiguration>
         <BuildConfiguration Include="Debug">
             <Key>Cfg_2</Key>
