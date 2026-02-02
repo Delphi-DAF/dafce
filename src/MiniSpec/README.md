@@ -9,6 +9,12 @@
 
 > **Keywords**: Delphi testing, BDD Delphi, Gherkin Delphi, Cucumber for Delphi, unit testing, TDD, test framework, Object Pascal testing, RAD Studio testing
 
+<p align="center">
+  <img src="docs/Minispec console screenshoot.png" alt="Console Reporter" width="48%">
+  &nbsp;
+  <img src="docs/Minispec live report screenshoot.png" alt="Live Dashboard" width="48%">
+</p>
+
 ---
 
 ## Why MiniSpec?
@@ -109,24 +115,13 @@ CalculatorSpecs.exe -r junit:output=results.xml  # For CI/CD
 
 ## Reporters
 
-### Console (default)
-```
-Feature: Calculator Addition @arithmetic
-  ScenarioOutline: Adding <A> and <B> should be <Result>
-    Examples:
-        | A   | B   | Result |
-      ✓ | 1   | 1   | 2      | (0 ms)
-      ✓ | 10  | 20  | 30     | (0 ms)
-      ✓ | 5   | -2  | 3      | (0 ms)
-
-Pass: 3 | Fail: 0 | Skip: 0 | Total: 3 Specs in 1 Features | 0 ms | at 2026-01-30T14:57:07
-```
-
-### Live Dashboard
-```bash
-MySpecs.exe -r live:port=8080
-```
-Interactive real-time dashboard via Server-Sent Events.
+| Reporter | Command | Description |
+|----------|---------|-------------|
+| **Console** | `-r console` | Colorful Gherkin-style terminal output (default) |
+| **Live** | `-r live:port=8080` | Real-time interactive dashboard via SSE |
+| **JUnit** | `-r junit:output=results.xml` | CI/CD compatible (GitHub Actions, GitLab, Jenkins) |
+| **JSON** | `-r json:output=results.json` | Structured JSON output |
+| **Gherkin** | `-r gherkin` | Plain Gherkin text format |
 
 ### JUnit (CI/CD)
 ```bash

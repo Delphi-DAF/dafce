@@ -7,6 +7,12 @@
 [![Delphi 12+](https://img.shields.io/badge/Delphi-12%2B-red.svg)](https://www.embarcadero.com/products/delphi)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../legal/LICENSE.md)
 
+<p align="center">
+  <img src="docs/Minispec console screenshoot.png" alt="Console Reporter" width="48%">
+  &nbsp;
+  <img src="docs/Minispec live report screenshoot.png" alt="Live Dashboard" width="48%">
+</p>
+
 ---
 
 ## ¿Por qué MiniSpec?
@@ -107,24 +113,13 @@ CalculatorSpecs.exe -r junit:output=results.xml  # Para CI/CD
 
 ## Reporters
 
-### Consola (por defecto)
-```
-Feature: Calculator Addition @arithmetic
-  ScenarioOutline: Adding <A> and <B> should be <Result>
-    Examples:
-        | A   | B   | Result |
-      ✓ | 1   | 1   | 2      | (0 ms)
-      ✓ | 10  | 20  | 30     | (0 ms)
-      ✓ | 5   | -2  | 3      | (0 ms)
-
-Pass: 3 | Fail: 0 | Skip: 0 | Total: 3 Specs in 1 Features | 0 ms | at 2026-01-30T14:57:07
-```
-
-### Live Dashboard
-```bash
-MisSpecs.exe -r live:port=8080
-```
-Dashboard interactivo en tiempo real via Server-Sent Events.
+| Reporter | Comando | Descripción |
+|----------|---------|-------------|
+| **Console** | `-r console` | Salida colorida estilo Gherkin en terminal (default) |
+| **Live** | `-r live:port=8080` | Dashboard interactivo en tiempo real via SSE |
+| **JUnit** | `-r junit:output=results.xml` | Compatible CI/CD (GitHub Actions, GitLab, Jenkins) |
+| **JSON** | `-r json:output=results.json` | Salida JSON estructurada |
+| **Gherkin** | `-r gherkin` | Formato texto Gherkin plano |
 
 ### JUnit (CI/CD)
 ```bash
