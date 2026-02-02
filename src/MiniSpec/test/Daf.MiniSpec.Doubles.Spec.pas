@@ -15,6 +15,7 @@ uses
 type
   {$REGION 'Test Interfaces'}
 
+  {$M+}  // Enable extended RTTI for interfaces - required by TVirtualInterface
   ICalculator = interface
     ['{A1B2C3D4-1234-5678-9ABC-DEF012345678}']
     function Add(A, B: Integer): Integer;

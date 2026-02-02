@@ -203,8 +203,9 @@ begin
   // Handle 3 states: Finished (Pass/Fail), Skipped
   if Item.RunInfo.State = srsSkiped then
     OutputLn(Level, Format('- %s (skip)', [Kind + ' ' + DisplayText]))
-  else
+  else begin
     OutputLn(Level, Kind + ' ' + DisplayText, Item.RunInfo.IsSuccess, Item.RunInfo.ExecTimeMs, Context.GetErrorDetail(Item.RunInfo));
+  end;
 
   // Output DataTable if step has one
   if Supports(Item, IScenarioStep, Step) and Assigned(Step.DataTable) then

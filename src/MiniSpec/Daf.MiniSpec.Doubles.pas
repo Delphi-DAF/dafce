@@ -165,6 +165,7 @@ type
   Stub<T: IInterface> = record
   private
     FInterceptor: TDoubleInterceptor;
+    FInterceptorRef: IInterface;  // Keeps interceptor alive via refcount
     FInstance: T;
     function GetCurrentSetup: TMethodSetup;
     procedure UpdateCurrentSetup(const Setup: TMethodSetup);
@@ -194,6 +195,7 @@ type
   Mock<T: IInterface> = record
   private
     FInterceptor: TDoubleInterceptor;
+    FInterceptorRef: IInterface;  // Keeps interceptor alive via refcount
     FInstance: T;
     FInExpectMode: Boolean;
     function GetCurrentSetup: TMethodSetup;
@@ -236,6 +238,7 @@ type
   private
     FOriginal: T;
     FSpyInterceptor: TSpyInterceptor;
+    FSpyRef: IInterface;  // Keeps spy interceptor alive via refcount
     FInstance: T;
   public
     class function &On(const Target: T): Spy<T>; static;
@@ -651,7 +654,7 @@ begin
   // Find and invoke the method on the original object
   OriginalMethod := FInterfaceType.GetMethod(Method.Name);
   if Assigned(OriginalMethod) then
-    Result := OriginalMethod.Invoke(TValue.From<IInterface>(FOriginal), Args)
+    Result := OriginalMethod.Invoke(TValue.From<IInterface>(FOriginal), RealArgs)
   else
     Result := TValue.Empty;
 end;
@@ -670,7 +673,11 @@ end;
 
 constructor TDoubleInterceptor.Create(TypeInfo: PTypeInfo);
 begin
-  inherited Create(TypeInfo, DoInvoke);
+  inherited Create(TypeInfo,
+    procedure(Method: TRttiMethod; const Args: TArray<TValue>; out Result: TValue)
+    begin
+      Self.DoInvoke(Method, Args, Result);
+    end);
   FInvocations := TList<TInvocation>.Create;
   FSetups := TList<TMethodSetup>.Create;
   FExpectations := TList<TMethodExpectation>.Create;
@@ -744,8 +751,11 @@ begin
   end
   else
   begin
-    // Default return value
-    Result := TValue.Empty;
+    // Default return value based on method return type
+    if Method.ReturnType <> nil then
+      TValue.Make(nil, Method.ReturnType.Handle, Result)
+    else
+      Result := TValue.Empty;
   end;
 end;
 
@@ -753,14 +763,30 @@ function TDoubleInterceptor.FindSetup(const MethodName: string;
   const Args: TArray<TValue>): Integer;
 var
   I: Integer;
+  CatchAllIdx: Integer;
 begin
+  CatchAllIdx := -1;
   // Search in reverse order (last setup wins for same method)
+  // But setups WITH arg matchers have priority over catch-all (no matchers)
   for I := FSetups.Count - 1 downto 0 do
   begin
-    if SameText(FSetups[I].MethodName, MethodName) and FSetups[I].Matches(Args) then
-      Exit(I);
+    if SameText(FSetups[I].MethodName, MethodName) then
+    begin
+      if FSetups[I].HasArgMatchers then
+      begin
+        if FSetups[I].Matches(Args) then
+          Exit(I);  // Found specific match - return immediately
+      end
+      else
+      begin
+        // This is a catch-all, remember it but keep looking for specific match
+        if CatchAllIdx < 0 then
+          CatchAllIdx := I;
+      end;
+    end;
   end;
-  Result := -1;
+  // No specific match found, use catch-all if available
+  Result := CatchAllIdx;
 end;
 
 procedure TDoubleInterceptor.AddSetup(const Setup: TMethodSetup);
@@ -806,6 +832,7 @@ begin
   if LTypeInfo^.Kind <> tkInterface then
     raise EDoubleError.Create('Stub<T> requires an interface type');
   Result.FInterceptor := TDoubleInterceptor.Create(LTypeInfo);
+  Result.FInterceptorRef := Result.FInterceptor;  // Keep alive via refcount
 end;
 
 class operator Stub<T>.Implicit(const Value: Stub<T>): T;
@@ -943,6 +970,7 @@ begin
   if LTypeInfo^.Kind <> tkInterface then
     raise EDoubleError.Create('Mock<T> requires an interface type');
   Result.FInterceptor := TDoubleInterceptor.Create(LTypeInfo);
+  Result.FInterceptorRef := Result.FInterceptor;  // Keep alive via refcount
   Result.FInExpectMode := False;
 end;
 
@@ -1200,6 +1228,7 @@ begin
   if LTypeInfo^.Kind <> tkInterface then
     raise EDoubleError.Create('Spy<T> requires an interface type');
   Result.FSpyInterceptor := TSpyInterceptor.Create(LTypeInfo, IInterface(Target));
+  Result.FSpyRef := Result.FSpyInterceptor;  // Keep alive via refcount
 end;
 
 class operator Spy<T>.Implicit(const Value: Spy<T>): T;

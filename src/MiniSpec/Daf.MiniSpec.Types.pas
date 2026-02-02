@@ -1,4 +1,4 @@
-﻿unit Daf.MiniSpec.Types;
+unit Daf.MiniSpec.Types;
 
 interface
 uses
@@ -913,8 +913,8 @@ end;
 
 function TSpecRunInfo.IsSuccess: Boolean;
 begin
-  // Success means no failures (skips are acceptable)
-  Result := Counts[rkFail] = 0;
+  // Success means: no failure result AND no failure counts (for aggregates)
+  Result := (not (Self.Result in [srrFail, srrError])) and (Counts[rkFail] = 0);
 end;
 
 function TSpecRunInfo.PassCount: Cardinal;
