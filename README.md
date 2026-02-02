@@ -35,7 +35,7 @@ The Community Edition already includes:
   - **Multiple Reporters** — Console, JSON, JUnit (CI/CD), Live Dashboard
   - **Test Doubles** — elegant Stub, Mock, and Spy API
 
-DAF Community Edition is distributed under the MIT License with an additional attribution clause.  
+DAF Community Edition is distributed under the [MIT License](./legal/LICENSE.md).
 
 A Pro edition is available, offering documentation and commercial support.  
 Advanced features for DAF Pro are coming soon.
@@ -44,8 +44,6 @@ Advanced features for DAF Pro are coming soon.
 
 | Edition | License | Description |
 |--------|---------|-------------|
-| **DAF Community** | MIT + Attribution | Free for personal and commercial use, with acknowledgment |
+| **DAF Community** | MIT | Free for personal and commercial use |
 | **DAF Pro**       | Commercial | Documentation and professional support |
-
-See [`legal/COMPLIANCE.md`](./legal/COMPLIANCE.md) for license compliance and usage instructions.
 
