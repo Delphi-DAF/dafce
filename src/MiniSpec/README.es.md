@@ -23,6 +23,20 @@
 - 📊 **Múltiples reporters** — Consola, JSON, JUnit (CI/CD), Live Dashboard
 - 🏷️ **Filtrado potente** — Por tags, features, scenarios, categorías
 - 💉 **Inyección de dependencias** — Sistema ligero integrado
+- 📦 **Cero dependencias** — Autónomo, solo copia la carpeta
+
+---
+
+## Instalación
+
+MiniSpec forma parte del [DAF Project](https://github.com/Delphi-DAF/dafce) pero es **completamente autónomo**. No tiene dependencias de otros módulos de DAF.
+
+**Para usar MiniSpec:**
+1. Copia la carpeta `src/MiniSpec` a tu proyecto
+2. Añade la carpeta al search path de Delphi
+3. Añade `uses Daf.MiniSpec` a tus units de test
+
+¡Eso es todo! No requiere configuración adicional.
 
 ---
 
