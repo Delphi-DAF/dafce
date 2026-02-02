@@ -8,8 +8,19 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-02-02
+
 ### Added
 
+- **MiniSpec**: Test Doubles - `Stub<T>`, `Mock<T>`, `Spy<T>` for interface mocking
+- **MiniSpec**: Fluent API for stubs with `.Setup().Returns()`, `.WithArgs()`, `.Raises()`
+- **MiniSpec**: Mock expectations: `.Expects().Once`, `.AtLeastOnce`, `.Never`, `.Exactly(N)`
+- **MiniSpec**: Argument matchers: `Arg.Any<T>`, `Arg.Is<T>(predicate)`, `Arg.IsNil`
+- **MiniSpec**: Spy tracking with `.Track()` and call history inspection
+- **MiniSpec**: `.Pending` fluent method - mark specs as not yet implemented
+- **MiniSpec**: `.NoAction` fluent method - descriptive steps without code
+- **MiniSpec**: `@skip` reserved tag - always excluded from runs (mark broken tests)
+- **MiniSpec**: JUnit XML reporter for CI/CD integration
 - **MiniSpec**: SpecSuite - root node containing all Features with title and hooks
 - **MiniSpec**: `Category(Title)` - fluent API to set Suite title
 - **MiniSpec**: `Before(Description, Hook)` / `After(Description, Hook)` - Suite-level hooks
@@ -96,6 +107,7 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 - MiniSpec BDD testing framework
 - Sample projects: Calculator, Config, Console, HostedService, Mastermind, MediatR, Ping
 
-[Unreleased]: https://github.com/Delphi-DAF/dafce/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/Delphi-DAF/dafce/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/Delphi-DAF/dafce/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/Delphi-DAF/dafce/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/Delphi-DAF/dafce/releases/tag/v1.1.0

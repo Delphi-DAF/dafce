@@ -1,4 +1,4 @@
-<#
+1<#
 .SYNOPSIS
     Script para gestionar versiones y releases de DAFce
 
