@@ -7,6 +7,8 @@ implementation
 uses
   System.SysUtils,
   Daf.MiniSpec,
+  Daf.MiniSpec.Types,
+  Daf.MiniSpec.DataTable,
   TicTacToe.Game,
   TicTacToe.SpecHelpers;
 
@@ -30,14 +32,14 @@ initialization
   // ===== Victoria en fase de colocación =====
 
   .Scenario('Victoria horizontal en fila superior')
-    .Given('X tiene fichas en (0,0) y (0,1)', procedure(Ctx: TGameWorld)
+    .Given('el siguiente tablero:',
+      [[' ', '0', '1', '2'],
+       ['0', 'X', 'X', '.'],
+       ['1', 'O', 'O', '.'],
+       ['2', '.', '.', '.']],
+      procedure(Ctx: TGameWorld)
       begin
-        Ctx.Game.Free;
-        Ctx.Game := TTicTacToeGame.Create;
-        Ctx.Game.PlacePiece(TPosition.Create(0, 0)); // X
-        Ctx.Game.PlacePiece(TPosition.Create(1, 0)); // O
-        Ctx.Game.PlacePiece(TPosition.Create(0, 1)); // X
-        Ctx.Game.PlacePiece(TPosition.Create(1, 1)); // O
+        SetupBoardFromTable(Ctx);
       end)
     .When('X coloca en (0,2)', procedure(Ctx: TGameWorld)
       begin
@@ -49,14 +51,14 @@ initialization
       end)
 
   .Scenario('Victoria vertical en columna izquierda')
-    .Given('X tiene fichas en (0,0) y (1,0)', procedure(Ctx: TGameWorld)
+    .Given('el siguiente tablero:',
+      [[' ', '0', '1', '2'],
+       ['0', 'X', 'O', '.'],
+       ['1', 'X', 'O', '.'],
+       ['2', '.', '.', '.']],
+      procedure(Ctx: TGameWorld)
       begin
-        Ctx.Game.Free;
-        Ctx.Game := TTicTacToeGame.Create;
-        Ctx.Game.PlacePiece(TPosition.Create(0, 0)); // X
-        Ctx.Game.PlacePiece(TPosition.Create(0, 1)); // O
-        Ctx.Game.PlacePiece(TPosition.Create(1, 0)); // X
-        Ctx.Game.PlacePiece(TPosition.Create(1, 1)); // O
+        SetupBoardFromTable(Ctx);
       end)
     .When('X coloca en (2,0)', procedure(Ctx: TGameWorld)
       begin
@@ -68,14 +70,14 @@ initialization
       end)
 
   .Scenario('Victoria diagonal principal')
-    .Given('X tiene fichas en (0,0) y (1,1)', procedure(Ctx: TGameWorld)
+    .Given('el siguiente tablero:',
+      [[' ', '0', '1', '2'],
+       ['0', 'X', 'O', 'O'],
+       ['1', '.', 'X', '.'],
+       ['2', '.', '.', '.']],
+      procedure(Ctx: TGameWorld)
       begin
-        Ctx.Game.Free;
-        Ctx.Game := TTicTacToeGame.Create;
-        Ctx.Game.PlacePiece(TPosition.Create(0, 0)); // X
-        Ctx.Game.PlacePiece(TPosition.Create(0, 1)); // O
-        Ctx.Game.PlacePiece(TPosition.Create(1, 1)); // X
-        Ctx.Game.PlacePiece(TPosition.Create(0, 2)); // O
+        SetupBoardFromTable(Ctx);
       end)
     .When('X coloca en (2,2)', procedure(Ctx: TGameWorld)
       begin
@@ -87,14 +89,14 @@ initialization
       end)
 
   .Scenario('Victoria diagonal secundaria')
-    .Given('X tiene fichas en (0,2) y (1,1)', procedure(Ctx: TGameWorld)
+    .Given('el siguiente tablero:',
+      [[' ', '0', '1', '2'],
+       ['0', 'O', 'O', 'X'],
+       ['1', '.', 'X', '.'],
+       ['2', '.', '.', '.']],
+      procedure(Ctx: TGameWorld)
       begin
-        Ctx.Game.Free;
-        Ctx.Game := TTicTacToeGame.Create;
-        Ctx.Game.PlacePiece(TPosition.Create(0, 2)); // X
-        Ctx.Game.PlacePiece(TPosition.Create(0, 0)); // O
-        Ctx.Game.PlacePiece(TPosition.Create(1, 1)); // X
-        Ctx.Game.PlacePiece(TPosition.Create(0, 1)); // O
+        SetupBoardFromTable(Ctx);
       end)
     .When('X coloca en (2,0)', procedure(Ctx: TGameWorld)
       begin
@@ -106,15 +108,14 @@ initialization
       end)
 
   .Scenario('O puede ganar')
-    .Given('O tiene fichas en (1,0) y (1,1)', procedure(Ctx: TGameWorld)
+    .Given('el siguiente tablero:',
+      [[' ', '0', '1', '2'],
+       ['0', 'X', 'X', '.'],
+       ['1', 'O', 'O', '.'],
+       ['2', '.', '.', 'X']],
+      procedure(Ctx: TGameWorld)
       begin
-        Ctx.Game.Free;
-        Ctx.Game := TTicTacToeGame.Create;
-        Ctx.Game.PlacePiece(TPosition.Create(0, 0)); // X
-        Ctx.Game.PlacePiece(TPosition.Create(1, 0)); // O
-        Ctx.Game.PlacePiece(TPosition.Create(0, 1)); // X
-        Ctx.Game.PlacePiece(TPosition.Create(1, 1)); // O
-        Ctx.Game.PlacePiece(TPosition.Create(2, 2)); // X (no completa línea)
+        SetupBoardFromTable(Ctx);
       end)
     .When('O coloca en (1,2)', procedure(Ctx: TGameWorld)
       begin
@@ -128,12 +129,14 @@ initialization
   // ===== Juego en progreso =====
 
   .Scenario('Juego sin ganador continúa en progreso')
-    .Given('ningún jugador tiene 3 en línea', procedure(Ctx: TGameWorld)
+    .Given('el siguiente tablero:',
+      [[' ', '0', '1', '2'],
+       ['0', 'X', '.', '.'],
+       ['1', '.', 'O', '.'],
+       ['2', '.', '.', '.']],
+      procedure(Ctx: TGameWorld)
       begin
-        Ctx.Game.Free;
-        Ctx.Game := TTicTacToeGame.Create;
-        Ctx.Game.PlacePiece(TPosition.Create(0, 0)); // X
-        Ctx.Game.PlacePiece(TPosition.Create(1, 1)); // O
+        SetupBoardFromTable(Ctx);
       end)
     .&Then('el estado es En Progreso', procedure(Ctx: TGameWorld)
       begin
@@ -143,15 +146,14 @@ initialization
   // ===== No se puede jugar después de victoria =====
 
   .Scenario('Rechazar movimientos después de victoria')
-    .Given('X ha ganado', procedure(Ctx: TGameWorld)
+    .Given('X ha ganado:',
+      [[' ', '0', '1', '2'],
+       ['0', 'X', 'X', 'X'],
+       ['1', 'O', 'O', '.'],
+       ['2', '.', '.', '.']],
+      procedure(Ctx: TGameWorld)
       begin
-        Ctx.Game.Free;
-        Ctx.Game := TTicTacToeGame.Create;
-        Ctx.Game.PlacePiece(TPosition.Create(0, 0)); // X
-        Ctx.Game.PlacePiece(TPosition.Create(1, 0)); // O
-        Ctx.Game.PlacePiece(TPosition.Create(0, 1)); // X
-        Ctx.Game.PlacePiece(TPosition.Create(1, 1)); // O
-        Ctx.Game.PlacePiece(TPosition.Create(0, 2)); // X gana
+        SetupBoardFromTable(Ctx);
       end)
     .When('O intenta colocar una ficha', procedure(Ctx: TGameWorld)
       begin

@@ -7,28 +7,10 @@ implementation
 uses
   System.SysUtils,
   Daf.MiniSpec,
+  Daf.MiniSpec.Types,
+  Daf.MiniSpec.DataTable,
   TicTacToe.Game,
   TicTacToe.SpecHelpers;
-
-procedure SetupMovementPhase(Ctx: TGameWorld);
-begin
-  // Setup: X y O han colocado 3 fichas cada uno
-  // Tablero:
-  //   0   1   2
-  // 0 [X] [X] [ ]
-  // 1 [O] [O] [ ]
-  // 2 [X] [O] [ ]
-  // Turno: X
-  Ctx.Game.Free;
-  Ctx.Game := TTicTacToeGame.Create;
-  Ctx.Game.PlacePiece(TPosition.Create(0, 0)); // X
-  Ctx.Game.PlacePiece(TPosition.Create(1, 0)); // O
-  Ctx.Game.PlacePiece(TPosition.Create(0, 1)); // X
-  Ctx.Game.PlacePiece(TPosition.Create(1, 1)); // O
-  Ctx.Game.PlacePiece(TPosition.Create(2, 0)); // X
-  Ctx.Game.PlacePiece(TPosition.Create(2, 1)); // O
-  // Ahora estamos en fase de movimiento, turno de X
-end;
 
 initialization
 
@@ -51,9 +33,14 @@ initialization
   // ===== Movimientos válidos =====
 
   .Scenario('Mover ficha propia a casilla adyacente vacía')
-    .Given('el juego está en fase de movimiento', procedure(Ctx: TGameWorld)
+    .Given('el siguiente tablero:',
+      [[' ', '0', '1', '2'],
+       ['0', 'X', 'X', '.'],
+       ['1', 'O', 'O', '.'],
+       ['2', 'X', 'O', '.']],
+      procedure(Ctx: TGameWorld)
       begin
-        SetupMovementPhase(Ctx);
+        SetupBoardFromTable(Ctx);
       end)
     .When('X mueve de (0,1) a (0,2)', procedure(Ctx: TGameWorld)
       begin
@@ -73,9 +60,14 @@ initialization
       end)
 
   .Scenario('Mover ficha en diagonal')
-    .Given('el juego está en fase de movimiento', procedure(Ctx: TGameWorld)
+    .Given('el siguiente tablero:',
+      [[' ', '0', '1', '2'],
+       ['0', 'X', 'X', '.'],
+       ['1', 'O', 'O', '.'],
+       ['2', 'X', 'O', '.']],
+      procedure(Ctx: TGameWorld)
       begin
-        SetupMovementPhase(Ctx);
+        SetupBoardFromTable(Ctx);
       end)
     .When('X mueve de (2,0) a (1,1) - pero está ocupada', procedure(Ctx: TGameWorld)
       begin
@@ -95,9 +87,14 @@ initialization
   // ===== Movimientos inválidos =====
 
   .Scenario('Rechazar mover ficha del oponente')
-    .Given('el juego está en fase de movimiento y es turno de X', procedure(Ctx: TGameWorld)
+    .Given('el siguiente tablero en turno de X:',
+      [[' ', '0', '1', '2'],
+       ['0', 'X', 'X', '.'],
+       ['1', 'O', 'O', '.'],
+       ['2', 'X', 'O', '.']],
+      procedure(Ctx: TGameWorld)
       begin
-        SetupMovementPhase(Ctx);
+        SetupBoardFromTable(Ctx);
       end)
     .When('X intenta mover una ficha de O', procedure(Ctx: TGameWorld)
       begin
@@ -122,9 +119,14 @@ initialization
       end)
 
   .Scenario('Rechazar mover a casilla ocupada')
-    .Given('el juego está en fase de movimiento', procedure(Ctx: TGameWorld)
+    .Given('el siguiente tablero:',
+      [[' ', '0', '1', '2'],
+       ['0', 'X', 'X', '.'],
+       ['1', 'O', 'O', '.'],
+       ['2', 'X', 'O', '.']],
+      procedure(Ctx: TGameWorld)
       begin
-        SetupMovementPhase(Ctx);
+        SetupBoardFromTable(Ctx);
       end)
     .When('X intenta mover a una casilla ocupada por O', procedure(Ctx: TGameWorld)
       begin
@@ -145,9 +147,14 @@ initialization
       end)
 
   .Scenario('Rechazar mover a casilla no adyacente')
-    .Given('el juego está en fase de movimiento', procedure(Ctx: TGameWorld)
+    .Given('el siguiente tablero:',
+      [[' ', '0', '1', '2'],
+       ['0', 'X', 'X', '.'],
+       ['1', 'O', 'O', '.'],
+       ['2', 'X', 'O', '.']],
+      procedure(Ctx: TGameWorld)
       begin
-        SetupMovementPhase(Ctx);
+        SetupBoardFromTable(Ctx);
       end)
     .When('X intenta mover de (0,0) a (2,2)', procedure(Ctx: TGameWorld)
       begin

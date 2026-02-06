@@ -5,6 +5,9 @@ interface
 uses
   System.SysUtils,
   System.Rtti,
+  Daf.MiniSpec,
+  Daf.MiniSpec.Types,
+  Daf.MiniSpec.DataTable,
   TicTacToe.Game;
 
 type
@@ -39,6 +42,17 @@ type
 /// Helper to convert position to TValue for Examples tables
 /// </summary>
 function Pos(ARow, ACol: Integer): TValue;
+
+/// <summary>
+/// Sets up the board from SpecContext.DataTable.
+/// Table format: visual 3x3 grid with row headers.
+///   [' ', '0', '1', '2'],
+///   ['0', 'X', 'X', '.'],
+///   ['1', 'O', 'O', '.'],
+///   ['2', 'X', 'O', '.']
+/// Resets the game and places pieces alternating X/O.
+/// </summary>
+procedure SetupBoardFromTable(Ctx: TGameWorld);
 
 /// <summary>
 /// Helper to parse player from string
@@ -100,6 +114,49 @@ end;
 function Pos(ARow, ACol: Integer): TValue;
 begin
   Result := TValue.From(TPosition.Create(ARow, ACol));
+end;
+
+procedure SetupBoardFromTable(Ctx: TGameWorld);
+var
+  Table: TDataTableObj;
+  Row: TArray<TValue>;
+  R, C, I, XI, OI: Integer;
+  XPos, OPos: array[0..2] of TPosition;
+  Cell: string;
+begin
+  Ctx.Game.Free;
+  Ctx.Game := TTicTacToeGame.Create;
+  Table := SpecContext.DataTable;
+  XI := 0;
+  OI := 0;
+  R := 0;
+  for Row in Table.Rows do
+  begin
+    for C := 0 to 2 do
+    begin
+      Cell := Trim(Row[C + 1].AsString);
+      if SameText(Cell, 'X') then
+      begin
+        XPos[XI] := TPosition.Create(R, C);
+        Inc(XI);
+      end
+      else if SameText(Cell, 'O') then
+      begin
+        OPos[OI] := TPosition.Create(R, C);
+        Inc(OI);
+      end;
+    end;
+    Inc(R);
+  end;
+  I := 0;
+  while (I < XI) or (I < OI) do
+  begin
+    if I < XI then
+      Ctx.Game.PlacePiece(XPos[I]);
+    if I < OI then
+      Ctx.Game.PlacePiece(OPos[I]);
+    Inc(I);
+  end;
 end;
 
 function ParsePlayer(const S: string): TPlayer;

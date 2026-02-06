@@ -7,6 +7,8 @@ implementation
 uses
   System.SysUtils,
   Daf.MiniSpec,
+  Daf.MiniSpec.Types,
+  Daf.MiniSpec.DataTable,
   TicTacToe.Game,
   TicTacToe.SpecHelpers;
 
@@ -107,19 +109,14 @@ initialization
   // ===== Transición de fase =====
 
   .Scenario('Transición a fase de movimiento')
-    .Given('X y O han colocado 3 fichas cada uno', procedure(Ctx: TGameWorld)
+    .Given('el siguiente tablero:',
+      [[' ', '0', '1', '2'],
+       ['0', 'X', 'X', '.'],
+       ['1', 'O', 'O', '.'],
+       ['2', 'O', '.', 'X']],
+      procedure(Ctx: TGameWorld)
       begin
-        Ctx.Game.Free;
-        Ctx.Game := TTicTacToeGame.Create;
-        // X: (0,0), (0,1), (2,2)
-        // O: (1,0), (1,1), (2,0)
-        // Colocamos en orden alterno sin formar línea
-        Ctx.Game.PlacePiece(TPosition.Create(0, 0)); // X
-        Ctx.Game.PlacePiece(TPosition.Create(1, 0)); // O
-        Ctx.Game.PlacePiece(TPosition.Create(0, 1)); // X
-        Ctx.Game.PlacePiece(TPosition.Create(1, 1)); // O
-        Ctx.Game.PlacePiece(TPosition.Create(2, 2)); // X
-        Ctx.Game.PlacePiece(TPosition.Create(2, 0)); // O
+        SetupBoardFromTable(Ctx);
       end)
     .&Then('el juego está en fase de movimiento', procedure(Ctx: TGameWorld)
       begin
@@ -135,16 +132,14 @@ initialization
       end)
 
   .Scenario('Rechazar colocación cuando se alcanza el máximo de fichas')
-    .Given('X y O han colocado 3 fichas cada uno', procedure(Ctx: TGameWorld)
+    .Given('el siguiente tablero:',
+      [[' ', '0', '1', '2'],
+       ['0', 'X', 'X', '.'],
+       ['1', 'O', 'O', '.'],
+       ['2', 'O', '.', 'X']],
+      procedure(Ctx: TGameWorld)
       begin
-        Ctx.Game.Free;
-        Ctx.Game := TTicTacToeGame.Create;
-        Ctx.Game.PlacePiece(TPosition.Create(0, 0)); // X
-        Ctx.Game.PlacePiece(TPosition.Create(1, 0)); // O
-        Ctx.Game.PlacePiece(TPosition.Create(0, 1)); // X
-        Ctx.Game.PlacePiece(TPosition.Create(1, 1)); // O
-        Ctx.Game.PlacePiece(TPosition.Create(2, 2)); // X
-        Ctx.Game.PlacePiece(TPosition.Create(2, 0)); // O
+        SetupBoardFromTable(Ctx);
       end)
     .When('X intenta colocar una cuarta ficha', procedure(Ctx: TGameWorld)
       begin
