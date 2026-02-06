@@ -34,10 +34,9 @@ initialization
 
   .Scenario('Mover ficha propia a casilla adyacente vacía')
     .Given('el siguiente tablero:',
-      [[' ', '0', '1', '2'],
-       ['0', 'X', 'X', '.'],
-       ['1', 'O', 'O', '.'],
-       ['2', 'X', 'O', '.']],
+      [['X', 'X', '.'],
+       ['O', 'O', '.'],
+       ['X', 'O', '.']],
       procedure(Ctx: TGameWorld)
       begin
         SetupBoardFromTable(Ctx);
@@ -61,10 +60,9 @@ initialization
 
   .Scenario('Mover ficha en diagonal')
     .Given('el siguiente tablero:',
-      [[' ', '0', '1', '2'],
-       ['0', 'X', 'X', '.'],
-       ['1', 'O', 'O', '.'],
-       ['2', 'X', 'O', '.']],
+      [['X', 'X', '.'],
+       ['O', 'O', '.'],
+       ['X', 'O', '.']],
       procedure(Ctx: TGameWorld)
       begin
         SetupBoardFromTable(Ctx);
@@ -88,10 +86,9 @@ initialization
 
   .Scenario('Rechazar mover ficha del oponente')
     .Given('el siguiente tablero en turno de X:',
-      [[' ', '0', '1', '2'],
-       ['0', 'X', 'X', '.'],
-       ['1', 'O', 'O', '.'],
-       ['2', 'X', 'O', '.']],
+      [['X', 'X', '.'],
+       ['O', 'O', '.'],
+       ['X', 'O', '.']],
       procedure(Ctx: TGameWorld)
       begin
         SetupBoardFromTable(Ctx);
@@ -120,10 +117,9 @@ initialization
 
   .Scenario('Rechazar mover a casilla ocupada')
     .Given('el siguiente tablero:',
-      [[' ', '0', '1', '2'],
-       ['0', 'X', 'X', '.'],
-       ['1', 'O', 'O', '.'],
-       ['2', 'X', 'O', '.']],
+      [['X', 'X', '.'],
+       ['O', 'O', '.'],
+       ['X', 'O', '.']],
       procedure(Ctx: TGameWorld)
       begin
         SetupBoardFromTable(Ctx);
@@ -148,10 +144,9 @@ initialization
 
   .Scenario('Rechazar mover a casilla no adyacente')
     .Given('el siguiente tablero:',
-      [[' ', '0', '1', '2'],
-       ['0', 'X', 'X', '.'],
-       ['1', 'O', 'O', '.'],
-       ['2', 'X', 'O', '.']],
+      [['X', 'X', '.'],
+       ['O', 'O', '.'],
+       ['X', 'O', '.']],
       procedure(Ctx: TGameWorld)
       begin
         SetupBoardFromTable(Ctx);

@@ -45,11 +45,10 @@ function Pos(ARow, ACol: Integer): TValue;
 
 /// <summary>
 /// Sets up the board from SpecContext.DataTable.
-/// Table format: visual 3x3 grid with row headers.
-///   [' ', '0', '1', '2'],
-///   ['0', 'X', 'X', '.'],
-///   ['1', 'O', 'O', '.'],
-///   ['2', 'X', 'O', '.']
+/// Table format: visual 3x3 grid (row, col implicit).
+///   [['X', 'X', '.'],
+///    ['O', 'O', '.'],
+///    ['X', 'O', '.']]
 /// Resets the game and places pieces alternating X/O.
 /// </summary>
 procedure SetupBoardFromTable(Ctx: TGameWorld);
@@ -130,11 +129,11 @@ begin
   XI := 0;
   OI := 0;
   R := 0;
-  for Row in Table.Rows do
+  for Row in Table.Raw do
   begin
     for C := 0 to 2 do
     begin
-      Cell := Trim(Row[C + 1].AsString);
+      Cell := Trim(Row[C].AsString);
       if SameText(Cell, 'X') then
       begin
         XPos[XI] := TPosition.Create(R, C);

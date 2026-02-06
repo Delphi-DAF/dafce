@@ -33,10 +33,9 @@ initialization
 
   .Scenario('Victoria horizontal en fila superior')
     .Given('el siguiente tablero:',
-      [[' ', '0', '1', '2'],
-       ['0', 'X', 'X', '.'],
-       ['1', 'O', 'O', '.'],
-       ['2', '.', '.', '.']],
+      [['X', 'X', '.'],
+       ['O', 'O', '.'],
+       ['.', '.', '.']],
       procedure(Ctx: TGameWorld)
       begin
         SetupBoardFromTable(Ctx);
@@ -52,10 +51,9 @@ initialization
 
   .Scenario('Victoria vertical en columna izquierda')
     .Given('el siguiente tablero:',
-      [[' ', '0', '1', '2'],
-       ['0', 'X', 'O', '.'],
-       ['1', 'X', 'O', '.'],
-       ['2', '.', '.', '.']],
+      [['X', 'O', '.'],
+       ['X', 'O', '.'],
+       ['.', '.', '.']],
       procedure(Ctx: TGameWorld)
       begin
         SetupBoardFromTable(Ctx);
@@ -71,10 +69,9 @@ initialization
 
   .Scenario('Victoria diagonal principal')
     .Given('el siguiente tablero:',
-      [[' ', '0', '1', '2'],
-       ['0', 'X', 'O', 'O'],
-       ['1', '.', 'X', '.'],
-       ['2', '.', '.', '.']],
+      [['X', 'O', 'O'],
+       ['.', 'X', '.'],
+       ['.', '.', '.']],
       procedure(Ctx: TGameWorld)
       begin
         SetupBoardFromTable(Ctx);
@@ -90,10 +87,9 @@ initialization
 
   .Scenario('Victoria diagonal secundaria')
     .Given('el siguiente tablero:',
-      [[' ', '0', '1', '2'],
-       ['0', 'O', 'O', 'X'],
-       ['1', '.', 'X', '.'],
-       ['2', '.', '.', '.']],
+      [['O', 'O', 'X'],
+       ['.', 'X', '.'],
+       ['.', '.', '.']],
       procedure(Ctx: TGameWorld)
       begin
         SetupBoardFromTable(Ctx);
@@ -109,10 +105,9 @@ initialization
 
   .Scenario('O puede ganar')
     .Given('el siguiente tablero:',
-      [[' ', '0', '1', '2'],
-       ['0', 'X', 'X', '.'],
-       ['1', 'O', 'O', '.'],
-       ['2', '.', '.', 'X']],
+      [['X', 'X', '.'],
+       ['O', 'O', '.'],
+       ['.', '.', 'X']],
       procedure(Ctx: TGameWorld)
       begin
         SetupBoardFromTable(Ctx);
@@ -130,10 +125,9 @@ initialization
 
   .Scenario('Juego sin ganador continúa en progreso')
     .Given('el siguiente tablero:',
-      [[' ', '0', '1', '2'],
-       ['0', 'X', '.', '.'],
-       ['1', '.', 'O', '.'],
-       ['2', '.', '.', '.']],
+      [['X', '.', '.'],
+       ['.', 'O', '.'],
+       ['.', '.', '.']],
       procedure(Ctx: TGameWorld)
       begin
         SetupBoardFromTable(Ctx);
@@ -147,10 +141,9 @@ initialization
 
   .Scenario('Rechazar movimientos después de victoria')
     .Given('X ha ganado:',
-      [[' ', '0', '1', '2'],
-       ['0', 'X', 'X', 'X'],
-       ['1', 'O', 'O', '.'],
-       ['2', '.', '.', '.']],
+      [['X', 'X', 'X'],
+       ['O', 'O', '.'],
+       ['.', '.', '.']],
       procedure(Ctx: TGameWorld)
       begin
         SetupBoardFromTable(Ctx);
