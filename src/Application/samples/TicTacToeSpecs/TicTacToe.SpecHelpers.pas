@@ -10,6 +10,11 @@ uses
   Daf.MiniSpec.DataTable,
   TicTacToe.Game;
 
+const
+  X = 'X';
+  O = 'O';
+  _ = '.';
+
 type
   /// <summary>
   /// World context for TicTacToe specs.

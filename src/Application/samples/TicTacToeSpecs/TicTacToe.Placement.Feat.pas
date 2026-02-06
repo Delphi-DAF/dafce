@@ -110,9 +110,9 @@ initialization
 
   .Scenario('Transición a fase de movimiento')
     .Given('el siguiente tablero:',
-      [['X', 'X', '.'],
-       ['O', 'O', '.'],
-       ['O', '.', 'X']],
+      [[X, X, _],
+       [O, O, _],
+       [O, _, X]],
       procedure(Ctx: TGameWorld)
       begin
         SetupBoardFromTable(Ctx);
@@ -132,9 +132,9 @@ initialization
 
   .Scenario('Rechazar colocación cuando se alcanza el máximo de fichas')
     .Given('el siguiente tablero:',
-      [['X', 'X', '.'],
-       ['O', 'O', '.'],
-       ['O', '.', 'X']],
+      [[X, X, _],
+       [O, O, _],
+       [O, _, X]],
       procedure(Ctx: TGameWorld)
       begin
         SetupBoardFromTable(Ctx);
