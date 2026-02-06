@@ -46,7 +46,7 @@ initialization
       begin
         Expect(Ctx.Game.Board[0, 0]).ToEqual(TPlayer.PlayerX);
       end)
-    .&Then('el turno pasa a O', procedure(Ctx: TGameWorld)
+    .&And('el turno pasa a O', procedure(Ctx: TGameWorld)
       begin
         Expect(Ctx.Game.CurrentPlayer).ToEqual(TPlayer.PlayerO);
       end)
@@ -66,11 +66,11 @@ initialization
       begin
         Expect(Ctx.Game.Board[0, 0]).ToEqual(TPlayer.PlayerX);
       end)
-    .&Then('(1,1) pertenece a O', procedure(Ctx: TGameWorld)
+    .&And('(1,1) pertenece a O', procedure(Ctx: TGameWorld)
       begin
         Expect(Ctx.Game.Board[1, 1]).ToEqual(TPlayer.PlayerO);
       end)
-    .&Then('el turno vuelve a X', procedure(Ctx: TGameWorld)
+    .&And('el turno vuelve a X', procedure(Ctx: TGameWorld)
       begin
         Expect(Ctx.Game.CurrentPlayer).ToEqual(TPlayer.PlayerX);
       end)
@@ -86,22 +86,13 @@ initialization
       end)
     .When('O intenta colocar en (0,0)', procedure(Ctx: TGameWorld)
       begin
-        Ctx.ClearException;
-        try
-          Ctx.Game.PlacePiece(TPosition.Create(0, 0));
-        except
-          on E: EInvalidMove do
-          begin
-            Ctx.ExceptionRaised := True;
-            Ctx.LastException := EInvalidMove.Create(E.Message);
-          end;
-        end;
+        Ctx.Game.PlacePiece(TPosition.Create(0, 0));
       end)
     .&Then('se produce un error de movimiento inválido', procedure(Ctx: TGameWorld)
       begin
-        Expect(Ctx.ExceptionRaised).ToEqual(True);
+        Expect(Raised).ToBe(EInvalidMove);
       end)
-    .&Then('el turno sigue siendo de O', procedure(Ctx: TGameWorld)
+    .&And('el turno sigue siendo de O', procedure(Ctx: TGameWorld)
       begin
         Expect(Ctx.Game.CurrentPlayer).ToEqual(TPlayer.PlayerO);
       end)
@@ -121,11 +112,11 @@ initialization
       begin
         Expect(Ctx.Game.Phase).ToEqual(TGamePhase.Movement);
       end)
-    .&Then('X tiene 3 fichas', procedure(Ctx: TGameWorld)
+    .&And('X tiene 3 fichas', procedure(Ctx: TGameWorld)
       begin
         Expect(Ctx.Game.XPieceCount).ToEqual(3);
       end)
-    .&Then('O tiene 3 fichas', procedure(Ctx: TGameWorld)
+    .&And('O tiene 3 fichas', procedure(Ctx: TGameWorld)
       begin
         Expect(Ctx.Game.OPieceCount).ToEqual(3);
       end)
@@ -141,20 +132,11 @@ initialization
       end)
     .When('X intenta colocar una cuarta ficha', procedure(Ctx: TGameWorld)
       begin
-        Ctx.ClearException;
-        try
-          Ctx.Game.PlacePiece(TPosition.Create(0, 2));
-        except
-          on E: EInvalidMove do
-          begin
-            Ctx.ExceptionRaised := True;
-            Ctx.LastException := EInvalidMove.Create(E.Message);
-          end;
-        end;
+        Ctx.Game.PlacePiece(TPosition.Create(0, 2));
       end)
     .&Then('se produce un error', procedure(Ctx: TGameWorld)
       begin
-        Expect(Ctx.ExceptionRaised).ToEqual(True);
+        Expect(Raised).ToBe(EInvalidMove);
       end);
 
 end.

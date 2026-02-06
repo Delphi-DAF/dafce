@@ -49,11 +49,11 @@ initialization
       begin
         Expect(Ctx.Game.Board[0, 1]).ToEqual(TPlayer.None);
       end)
-    .&Then('(0,2) pertenece a X', procedure(Ctx: TGameWorld)
+    .&And('(0,2) pertenece a X', procedure(Ctx: TGameWorld)
       begin
         Expect(Ctx.Game.Board[0, 2]).ToEqual(TPlayer.PlayerX);
       end)
-    .&Then('el turno pasa a O', procedure(Ctx: TGameWorld)
+    .&And('el turno pasa a O', procedure(Ctx: TGameWorld)
       begin
         Expect(Ctx.Game.CurrentPlayer).ToEqual(TPlayer.PlayerO);
       end)
@@ -77,7 +77,7 @@ initialization
       begin
         Expect(Ctx.Game.Board[0, 1]).ToEqual(TPlayer.None);
       end)
-    .&Then('(1,2) pertenece a X', procedure(Ctx: TGameWorld)
+    .&And('(1,2) pertenece a X', procedure(Ctx: TGameWorld)
       begin
         Expect(Ctx.Game.Board[1, 2]).ToEqual(TPlayer.PlayerX);
       end)
@@ -95,22 +95,13 @@ initialization
       end)
     .When('X intenta mover una ficha de O', procedure(Ctx: TGameWorld)
       begin
-        Ctx.ClearException;
-        try
-          Ctx.Game.MovePiece(TPosition.Create(1, 0), TPosition.Create(0, 2));
-        except
-          on E: EInvalidMove do
-          begin
-            Ctx.ExceptionRaised := True;
-            Ctx.LastException := EInvalidMove.Create(E.Message);
-          end;
-        end;
+        Ctx.Game.MovePiece(TPosition.Create(1, 0), TPosition.Create(0, 2));
       end)
     .&Then('se produce un error', procedure(Ctx: TGameWorld)
       begin
-        Expect(Ctx.ExceptionRaised).ToEqual(True);
+        Expect(Raised).ToBe(EInvalidMove);
       end)
-    .&Then('la ficha de O sigue en su lugar', procedure(Ctx: TGameWorld)
+    .&And('la ficha de O sigue en su lugar', procedure(Ctx: TGameWorld)
       begin
         Expect(Ctx.Game.Board[1, 0]).ToEqual(TPlayer.PlayerO);
       end)
@@ -126,20 +117,11 @@ initialization
       end)
     .When('X intenta mover a una casilla ocupada por O', procedure(Ctx: TGameWorld)
       begin
-        Ctx.ClearException;
-        try
-          Ctx.Game.MovePiece(TPosition.Create(0, 0), TPosition.Create(1, 0));
-        except
-          on E: EInvalidMove do
-          begin
-            Ctx.ExceptionRaised := True;
-            Ctx.LastException := EInvalidMove.Create(E.Message);
-          end;
-        end;
+        Ctx.Game.MovePiece(TPosition.Create(0, 0), TPosition.Create(1, 0));
       end)
     .&Then('se produce un error', procedure(Ctx: TGameWorld)
       begin
-        Expect(Ctx.ExceptionRaised).ToEqual(True);
+        Expect(Raised).ToBe(EInvalidMove);
       end)
 
   .Scenario('Rechazar mover a casilla no adyacente')
@@ -153,22 +135,13 @@ initialization
       end)
     .When('X intenta mover de (0,0) a (2,2)', procedure(Ctx: TGameWorld)
       begin
-        Ctx.ClearException;
-        try
-          Ctx.Game.MovePiece(TPosition.Create(0, 0), TPosition.Create(2, 2));
-        except
-          on E: EInvalidMove do
-          begin
-            Ctx.ExceptionRaised := True;
-            Ctx.LastException := EInvalidMove.Create(E.Message);
-          end;
-        end;
+        Ctx.Game.MovePiece(TPosition.Create(0, 0), TPosition.Create(2, 2));
       end)
     .&Then('se produce un error de no adyacencia', procedure(Ctx: TGameWorld)
       begin
-        Expect(Ctx.ExceptionRaised).ToEqual(True);
+        Expect(Raised).ToBe(EInvalidMove);
       end)
-    .&Then('la ficha sigue en su posición original', procedure(Ctx: TGameWorld)
+    .&And('la ficha sigue en su posición original', procedure(Ctx: TGameWorld)
       begin
         Expect(Ctx.Game.Board[0, 0]).ToEqual(TPlayer.PlayerX);
       end)
@@ -182,20 +155,11 @@ initialization
       end)
     .When('O intenta mover una ficha', procedure(Ctx: TGameWorld)
       begin
-        Ctx.ClearException;
-        try
-          Ctx.Game.MovePiece(TPosition.Create(0, 0), TPosition.Create(0, 1));
-        except
-          on E: EInvalidMove do
-          begin
-            Ctx.ExceptionRaised := True;
-            Ctx.LastException := EInvalidMove.Create(E.Message);
-          end;
-        end;
+        Ctx.Game.MovePiece(TPosition.Create(0, 0), TPosition.Create(0, 1));
       end)
     .&Then('se produce un error', procedure(Ctx: TGameWorld)
       begin
-        Expect(Ctx.ExceptionRaised).ToEqual(True);
+        Expect(Raised).ToBe(EInvalidMove);
       end);
 
 end.

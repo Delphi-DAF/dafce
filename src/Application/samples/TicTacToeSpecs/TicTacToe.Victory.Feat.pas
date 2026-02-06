@@ -150,20 +150,11 @@ initialization
       end)
     .When('O intenta colocar una ficha', procedure(Ctx: TGameWorld)
       begin
-        Ctx.ClearException;
-        try
-          Ctx.Game.PlacePiece(TPosition.Create(2, 0));
-        except
-          on E: EInvalidMove do
-          begin
-            Ctx.ExceptionRaised := True;
-            Ctx.LastException := EInvalidMove.Create(E.Message);
-          end;
-        end;
+        Ctx.Game.PlacePiece(TPosition.Create(2, 0));
       end)
     .&Then('se produce un error', procedure(Ctx: TGameWorld)
       begin
-        Expect(Ctx.ExceptionRaised).ToEqual(True);
+        Expect(Raised).ToBe(EInvalidMove);
       end);
 
 end.

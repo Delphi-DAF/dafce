@@ -23,8 +23,6 @@ type
   TGameWorld = class
   public
     Game: TTicTacToeGame;
-    LastException: Exception;
-    ExceptionRaised: Boolean;
 
     // Parsed from scenario
     Row: Integer;
@@ -39,8 +37,6 @@ type
 
     constructor Create;
     destructor Destroy; override;
-
-    procedure ClearException;
   end;
 
 /// <summary>
@@ -96,21 +92,12 @@ constructor TGameWorld.Create;
 begin
   inherited Create;
   Game := TTicTacToeGame.Create;
-  ExceptionRaised := False;
-  LastException := nil;
 end;
 
 destructor TGameWorld.Destroy;
 begin
   Game.Free;
-  LastException.Free;
   inherited;
-end;
-
-procedure TGameWorld.ClearException;
-begin
-  FreeAndNil(LastException);
-  ExceptionRaised := False;
 end;
 
 { Helper functions }
