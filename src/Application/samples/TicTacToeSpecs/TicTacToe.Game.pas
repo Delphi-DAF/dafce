@@ -2,6 +2,9 @@ unit TicTacToe.Game;
 
 interface
 
+uses
+  System.SysUtils;
+
 type
   TPlayer = (None, PlayerX, PlayerO);
   TGamePhase = (Placement, Movement);
@@ -29,6 +32,7 @@ type
     FXPieceCount: Integer;
     FOPieceCount: Integer;
     function GetCell(Row, Col: Integer): TPlayer;
+    function GetStatus: TGameStatus;
     function CheckVictory: TPlayer;
     function CountPieces(Player: TPlayer): Integer;
     procedure UpdatePhase;
@@ -53,8 +57,6 @@ type
     property Status: TGameStatus read GetStatus;
     property XPieceCount: Integer read FXPieceCount;
     property OPieceCount: Integer read FOPieceCount;
-
-    function GetStatus: TGameStatus;
   end;
 
 const
@@ -63,7 +65,7 @@ const
 implementation
 
 uses
-  System.SysUtils, System.Math;
+  System.Math;
 
 { TPosition }
 

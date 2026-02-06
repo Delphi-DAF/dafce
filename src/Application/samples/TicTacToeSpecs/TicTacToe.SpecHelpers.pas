@@ -3,6 +3,7 @@ unit TicTacToe.SpecHelpers;
 interface
 
 uses
+  System.SysUtils,
   System.Rtti,
   TicTacToe.Game;
 
@@ -70,9 +71,6 @@ function PhaseName(Ph: TGamePhase): string;
 function StatusName(St: TGameStatus): string;
 
 implementation
-
-uses
-  System.SysUtils;
 
 { TGameWorld }
 

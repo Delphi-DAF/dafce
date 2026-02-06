@@ -2,8 +2,6 @@ program TicTacToeSpecs;
 
 {$APPTYPE CONSOLE}
 
-{$R *.res}
-
 uses
   Daf.MiniSpec,
   TicTacToe.Game in 'TicTacToe.Game.pas',
