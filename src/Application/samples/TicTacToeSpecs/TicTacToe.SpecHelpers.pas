@@ -24,17 +24,6 @@ type
   public
     Game: TTicTacToeGame;
 
-    // Parsed from scenario
-    Row: Integer;
-    Col: Integer;
-    FromRow: Integer;
-    FromCol: Integer;
-    ToRow: Integer;
-    ToCol: Integer;
-    ExpectedPlayer: TPlayer;
-    ExpectedPhase: TGamePhase;
-    ExpectedStatus: TGameStatus;
-
     constructor Create;
     destructor Destroy; override;
   end;
