@@ -25,6 +25,9 @@ type
     [Given('un tablero con (\w+) en \((\d+),(\d+)\)')]
     procedure BoardWithPiece(Ctx: TGameWorld; Player: string; Row, Col: Integer);
 
+    [Given('el siguiente tablero.*')]
+    procedure BoardFromTable(Ctx: TGameWorld);
+
     // === When ===
     [When('el jugador (\w+) coloca una ficha en \((\d+),(\d+)\)')]
     procedure PlayerPlacesAt(Ctx: TGameWorld; Player: string; Row, Col: Integer);
@@ -57,7 +60,7 @@ type
     [ThenAttribute('se produce un error.*')]
     procedure ErrorRaised(Ctx: TGameWorld);
 
-    [ThenAttribute('el juego est. en fase de movimiento')]
+    [ThenAttribute('el juego está en fase de movimiento')]
     procedure PhaseIsMovement(Ctx: TGameWorld);
 
     [ThenAttribute('(\w+) tiene (\d+) fichas')]
@@ -77,6 +80,11 @@ begin
   Ctx.Game.Free;
   Ctx.Game := TTicTacToeGame.Create;
   Ctx.Game.PlacePiece(TPosition.Create(Row, Col));
+end;
+
+procedure TPlacementSteps.BoardFromTable(Ctx: TGameWorld);
+begin
+  SetupBoardFromTable(Ctx);
 end;
 
 procedure TPlacementSteps.PlayerPlacesAt(Ctx: TGameWorld; Player: string; Row, Col: Integer);

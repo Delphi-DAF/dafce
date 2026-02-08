@@ -8,7 +8,6 @@ uses
   Daf.MiniSpec,
   Daf.MiniSpec.Types,
   Daf.MiniSpec.DataTable,
-  TicTacToe.Game,
   TicTacToe.SpecHelpers;
 
 initialization
@@ -29,8 +28,7 @@ initialization
       .Given('el siguiente tablero:',
         [[X, X, _],
          [O, O, _],
-         [_, _, _]],
-        procedure(Ctx: TGameWorld) begin SetupBoardFromTable(Ctx) end)
+         [_, _, _]])
       .When('X coloca en (0,2)')
       .&Then('X gana')
 
@@ -38,8 +36,7 @@ initialization
       .Given('el siguiente tablero:',
         [[X, O, _],
          [X, O, _],
-         [_, _, _]],
-        procedure(Ctx: TGameWorld) begin SetupBoardFromTable(Ctx) end)
+         [_, _, _]])
       .When('X coloca en (2,0)')
       .&Then('X gana')
 
@@ -49,8 +46,7 @@ initialization
       .Given('el siguiente tablero:',
         [[X, O, O],
          [_, X, _],
-         [_, _, _]],
-        procedure(Ctx: TGameWorld) begin SetupBoardFromTable(Ctx) end)
+         [_, _, _]])
       .When('X coloca en (2,2)')
       .&Then('X gana')
 
@@ -58,8 +54,7 @@ initialization
       .Given('el siguiente tablero:',
         [[O, O, X],
          [_, X, _],
-         [_, _, _]],
-        procedure(Ctx: TGameWorld) begin SetupBoardFromTable(Ctx) end)
+         [_, _, _]])
       .When('X coloca en (2,0)')
       .&Then('X gana')
 
@@ -69,8 +64,7 @@ initialization
       .Given('el siguiente tablero:',
         [[X, X, _],
          [O, O, _],
-         [_, _, X]],
-        procedure(Ctx: TGameWorld) begin SetupBoardFromTable(Ctx) end)
+         [_, _, X]])
       .When('O coloca en (1,2)')
       .&Then('O gana')
 
@@ -80,8 +74,7 @@ initialization
       .Given('el siguiente tablero:',
         [[X, _, _],
          [_, O, _],
-         [_, _, _]],
-        procedure(Ctx: TGameWorld) begin SetupBoardFromTable(Ctx) end)
+         [_, _, _]])
       .&Then('el estado es En Progreso')
 
   .Rule('No se puede jugar después de una victoria')
@@ -90,8 +83,7 @@ initialization
       .Given('el siguiente tablero:',
         [[X, X, X],
          [O, O, _],
-         [_, _, _]],
-        procedure(Ctx: TGameWorld) begin SetupBoardFromTable(Ctx) end)
+         [_, _, _]])
       .When('O intenta colocar en (2,0)')
       .&Then('se produce un error');
 

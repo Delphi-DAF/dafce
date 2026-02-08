@@ -1,4 +1,4 @@
-unit TicTacToe.Movement.Steps;
+﻿unit TicTacToe.Movement.Steps;
 
 interface
 
@@ -18,7 +18,7 @@ type
   TMovementSteps = class
   public
     // === Given ===
-    [Given('el juego est. en fase de colocaci.n')]
+    [Given('el juego está en fase de colocación')]
     procedure GameInPlacementPhase(Ctx: TGameWorld);
 
     // === When ===
@@ -29,7 +29,7 @@ type
     procedure TryMove(Ctx: TGameWorld; Player: string; FR, FC, TR, TC: Integer);
 
     // === Then ===
-    [ThenAttribute('\((\d+),(\d+)\) est. vac.a')]
+    [ThenAttribute('\((\d+),(\d+)\) está vacía')]
     procedure CellIsEmpty(Ctx: TGameWorld; Row, Col: Integer);
   end;
 

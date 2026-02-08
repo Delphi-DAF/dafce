@@ -50,10 +50,13 @@ type
     FRule: TRule<T>;  // Siempre es una Rule (explícita o implícita)
     class procedure PendingStep(World: T); static;
     class procedure NoActionStep(World: T); static;
+    function CreateBindingStep(Kind: TStepKind; const Desc: string): TStepProc<T>;
   public
     constructor Create(const ARule: IRule);
     function Given(const Desc: string): IBackgroundBuilder<T>; overload;
     function Given(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>; overload;
+    function Given(const Desc: string; const Table: TDataTable): IBackgroundBuilder<T>; overload;
+    function Given(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IBackgroundBuilder<T>; overload;
     function &And(const Desc: string): IBackgroundBuilder<T>; overload;
     function &And(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>; overload;
     function But(const Desc: string): IBackgroundBuilder<T>; overload;
@@ -80,6 +83,7 @@ type
     procedure SetExampleMeta(const Meta: TExampleMeta);
     function Given(const Desc: string): IScenarioBuilder<T>; overload;
     function Given(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function Given(const Desc: string; const Table: TDataTable): IScenarioBuilder<T>; overload;
     function Given(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
     function When(const Desc: string): IScenarioBuilder<T>; overload;
     function When(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
@@ -299,6 +303,20 @@ begin
   // Intentionally empty - step passes without doing anything
 end;
 
+function TBackgroundBuilder<T>.CreateBindingStep(Kind: TStepKind; const Desc: string): TStepProc<T>;
+var
+  Binding: TStepBinding;
+  Captures: TArray<string>;
+begin
+  if Bindings.FindBinding(Kind, Desc, Binding, Captures) then
+    Result := procedure(World: T)
+      begin
+        Bindings.Invoke(Binding, World, Captures);
+      end
+  else
+    Result := PendingStep;
+end;
+
 function TBackgroundBuilder<T>.Given(const Desc: string): IBackgroundBuilder<T>;
 var
   Binding: TStepBinding;
@@ -316,6 +334,17 @@ end;
 function TBackgroundBuilder<T>.Given(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>;
 begin
   FBackground.Given(Desc, Step);
+  Result := Self;
+end;
+
+function TBackgroundBuilder<T>.Given(const Desc: string; const Table: TDataTable): IBackgroundBuilder<T>;
+begin
+  Result := Given(Desc, Table, CreateBindingStep(skGiven, Desc));
+end;
+
+function TBackgroundBuilder<T>.Given(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IBackgroundBuilder<T>;
+begin
+  FBackground.Given(Desc, Table, Step);
   Result := Self;
 end;
 
@@ -428,6 +457,11 @@ begin
   FLastStep := lskGiven;
   FLastTable := nil;
   Result := Self;
+end;
+
+function TScenarioBuilder<T>.Given(const Desc: string; const Table: TDataTable): IScenarioBuilder<T>;
+begin
+  Result := Given(Desc, Table, CreateBindingStep(skGiven, Desc));
 end;
 
 function TScenarioBuilder<T>.Given(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>;

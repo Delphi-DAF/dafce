@@ -120,6 +120,8 @@ type
   IBackgroundBuilder<T: class, constructor> = interface
     function Given(const Desc: string): IBackgroundBuilder<T>; overload;
     function Given(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>; overload;
+    function Given(const Desc: string; const Table: TDataTable): IBackgroundBuilder<T>; overload;
+    function Given(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IBackgroundBuilder<T>; overload;
     function &And(const Desc: string): IBackgroundBuilder<T>; overload;
     function &And(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>; overload;
     function But(const Desc: string): IBackgroundBuilder<T>; overload;
@@ -188,6 +190,7 @@ type
   IScenarioBuilder<T: class, constructor> = interface
     function Given(const Desc: string): IScenarioBuilder<T>; overload;
     function Given(const Desc: string; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
+    function Given(const Desc: string; const Table: TDataTable): IScenarioBuilder<T>; overload;
     function Given(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioBuilder<T>; overload;
     function When(const Desc: string): IScenarioBuilder<T>; overload;
     function When(const Desc: string; Step: TStepProc<T>) : IScenarioBuilder<T>; overload;
@@ -576,7 +579,8 @@ type
   public
     constructor Create(const Feature: IFeature);
     destructor Destroy;override;
-    function Given(const Desc: string; Step: TStepProc<T>): TBackground<T>;
+    function Given(const Desc: string; Step: TStepProc<T>): TBackground<T>; overload;
+    function Given(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): TBackground<T>; overload;
     procedure Run(World: TObject);override;
     property Feature: IFeature read GetFeature;
     property StepsGiven: TList<IScenarioStep> read GetStepsGiven;
@@ -1213,6 +1217,12 @@ function TBackground<T>.Given(const Desc: string; Step: TStepProc<T>): TBackgrou
 begin
   Result := Self;
   FStepsGiven.Add(TScenarioStep<T>.Create(sikGiven, Self, Desc, Step));
+end;
+
+function TBackground<T>.Given(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): TBackground<T>;
+begin
+  Result := Self;
+  FStepsGiven.Add(TScenarioStep<T>.Create(sikGiven, Self, Desc, Step, Table));
 end;
 
 procedure TBackground<T>.Run(World: TObject);
