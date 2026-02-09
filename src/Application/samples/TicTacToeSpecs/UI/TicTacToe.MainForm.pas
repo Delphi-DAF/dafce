@@ -3,7 +3,8 @@
 interface
 
 uses
-  System.SysUtils, System.Classes,
+  System.SysUtils, System.Classes, System.Types,
+  Winapi.Windows,
   Vcl.Forms, Vcl.Controls, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.Graphics,
   TicTacToe.ViewPort,
   TicTacToe.ViewModel;
@@ -11,22 +12,38 @@ uses
 type
   /// <summary>
   /// VCL Form implementing IGameViewPort (Humble Object).
-  /// All presentation logic lives in the ViewModel;
-  /// the Form only renders state and forwards user gestures.
+  /// Custom-painted dark-theme board with rounded cells,
+  /// hand-drawn X/O strokes, hover highlights and selection glow.
+  /// All presentation logic lives in the ViewModel.
   /// </summary>
   TMainForm = class(TForm, IGameViewPort)
-    pnlBoard: TPanel;
-    lblStatus: TLabel;
-    btnNewGame: TButton;
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
-    procedure btnNewGameClick(Sender: TObject);
   private
     FViewModel: TGameViewModel;
-    FCells: array[0..2, 0..2] of TButton;
-    procedure CreateCellButtons;
-    procedure CellClick(Sender: TObject);
-    procedure UpdateCell(R, C: Integer);
+    FBoard: TPaintBox;
+    FLblTitle: TLabel;
+    FLblStatus: TLabel;
+    FLblPhase: TLabel;
+    FBtnNewGame: TPanel;
+    FHoverRow: Integer;
+    FHoverCol: Integer;
+    procedure BuildUI;
+    procedure PaintBoard(Sender: TObject);
+    procedure BoardMouseDown(Sender: TObject; Button: TMouseButton;
+      Shift: TShiftState; X, Y: Integer);
+    procedure BoardMouseMove(Sender: TObject; Shift: TShiftState;
+      X, Y: Integer);
+    procedure BoardMouseLeave(Sender: TObject);
+    procedure BtnNewGameClick(Sender: TObject);
+    procedure BtnMouseEnter(Sender: TObject);
+    procedure BtnMouseLeave(Sender: TObject);
+    function HitTestCell(X, Y: Integer; out Row, Col: Integer): Boolean;
+    function GetCellRect(Row, Col: Integer): TRect;
+    procedure PaintCellBg(ACanvas: TCanvas; ARect: TRect;
+      const CellVal: string; Row, Col: Integer);
+    procedure PaintX(ACanvas: TCanvas; ARect: TRect);
+    procedure PaintO(ACanvas: TCanvas; ARect: TRect);
     { IGameViewPort }
     procedure Refresh;
   end;
@@ -39,14 +56,24 @@ implementation
 {$R *.dfm}
 
 const
-  CellSize = 88;
-  CellGap  = 4;
+  CellSize     = 100;
+  CellGap      = 8;
+  BoardExtent  = CellSize * 3 + CellGap * 2;
+  BoardPadding = 28;
+  Radius       = 12;
+  PieceInset   = 22;
+  StrokeWidth  = 7;
+
+{ TMainForm }
 
 procedure TMainForm.FormCreate(Sender: TObject);
 begin
+  FHoverRow := -1;
+  FHoverCol := -1;
+  DoubleBuffered := True;
   FViewModel := TGameViewModel.Create;
   FViewModel.ViewPort := Self;
-  CreateCellButtons;
+  BuildUI;
   Refresh;
 end;
 
@@ -56,72 +83,285 @@ begin
   FViewModel.Free;
 end;
 
-procedure TMainForm.CreateCellButtons;
+procedure TMainForm.BuildUI;
+var
+  W, Y: Integer;
+begin
+  W := BoardExtent + BoardPadding * 2;
+  Y := 20;
+
+  // Title
+  FLblTitle := TLabel.Create(Self);
+  FLblTitle.Parent := Self;
+  FLblTitle.Transparent := True;
+  FLblTitle.AutoSize := False;
+  FLblTitle.Alignment := taCenter;
+  FLblTitle.SetBounds(0, Y, W, 44);
+  FLblTitle.Font.Name := 'Segoe UI';
+  FLblTitle.Font.Size := 24;
+  FLblTitle.Font.Style := [fsBold];
+  FLblTitle.Font.Color := $00FFFFFF;
+  FLblTitle.Caption := 'TIC '#$00B7' TAC '#$00B7' TOE';
+  Inc(Y, 44 + 16);
+
+  // Board (custom-painted)
+  FBoard := TPaintBox.Create(Self);
+  FBoard.Parent := Self;
+  FBoard.SetBounds(BoardPadding, Y, BoardExtent, BoardExtent);
+  FBoard.OnPaint := PaintBoard;
+  FBoard.OnMouseDown := BoardMouseDown;
+  FBoard.OnMouseMove := BoardMouseMove;
+  FBoard.OnMouseLeave := BoardMouseLeave;
+  Inc(Y, BoardExtent + 24);
+
+  // Status
+  FLblStatus := TLabel.Create(Self);
+  FLblStatus.Parent := Self;
+  FLblStatus.Transparent := True;
+  FLblStatus.AutoSize := False;
+  FLblStatus.Alignment := taCenter;
+  FLblStatus.SetBounds(0, Y, W, 36);
+  FLblStatus.Font.Name := 'Segoe UI';
+  FLblStatus.Font.Size := 16;
+  FLblStatus.Font.Style := [fsBold];
+  FLblStatus.Font.Color := RGB(200, 200, 200);
+  Inc(Y, 36 + 4);
+
+  // Phase indicator (subtle)
+  FLblPhase := TLabel.Create(Self);
+  FLblPhase.Parent := Self;
+  FLblPhase.Transparent := True;
+  FLblPhase.AutoSize := False;
+  FLblPhase.Alignment := taCenter;
+  FLblPhase.SetBounds(0, Y, W, 22);
+  FLblPhase.Font.Name := 'Segoe UI';
+  FLblPhase.Font.Size := 10;
+  FLblPhase.Font.Color := RGB(120, 120, 120);
+  Inc(Y, 22 + 16);
+
+  // New Game button (styled flat panel)
+  FBtnNewGame := TPanel.Create(Self);
+  FBtnNewGame.Parent := Self;
+  FBtnNewGame.ParentBackground := False;
+  FBtnNewGame.BevelOuter := bvNone;
+  FBtnNewGame.SetBounds((W - 180) div 2, Y, 180, 46);
+  FBtnNewGame.Color := RGB(0, 122, 204);
+  FBtnNewGame.Font.Name := 'Segoe UI';
+  FBtnNewGame.Font.Size := 13;
+  FBtnNewGame.Font.Style := [fsBold];
+  FBtnNewGame.Font.Color := $00FFFFFF;
+  FBtnNewGame.Caption := 'Nueva Partida';
+  FBtnNewGame.Cursor := crHandPoint;
+  FBtnNewGame.OnClick := BtnNewGameClick;
+  FBtnNewGame.OnMouseEnter := BtnMouseEnter;
+  FBtnNewGame.OnMouseLeave := BtnMouseLeave;
+  Inc(Y, 46 + 24);
+
+  ClientWidth := W;
+  ClientHeight := Y;
+end;
+
+// === Board geometry ===
+
+function TMainForm.GetCellRect(Row, Col: Integer): TRect;
+begin
+  Result := Rect(
+    Col * (CellSize + CellGap),
+    Row * (CellSize + CellGap),
+    Col * (CellSize + CellGap) + CellSize,
+    Row * (CellSize + CellGap) + CellSize);
+end;
+
+function TMainForm.HitTestCell(X, Y: Integer; out Row, Col: Integer): Boolean;
 var
   R, C: Integer;
-  Btn: TButton;
 begin
   for R := 0 to 2 do
     for C := 0 to 2 do
+      if PtInRect(GetCellRect(R, C), Point(X, Y)) then
+      begin
+        Row := R;
+        Col := C;
+        Exit(True);
+      end;
+  Result := False;
+end;
+
+// === Custom painting ===
+
+procedure TMainForm.PaintCellBg(ACanvas: TCanvas; ARect: TRect;
+  const CellVal: string; Row, Col: Integer);
+var
+  Bg: TColor;
+  IsHover, IsSel: Boolean;
+begin
+  IsHover := (Row = FHoverRow) and (Col = FHoverCol);
+  IsSel := FViewModel.IsSelected(Row, Col);
+
+  // Background tint depends on content
+  if CellVal = 'X' then
+    Bg := RGB(55, 42, 38)
+  else if CellVal = 'O' then
+    Bg := RGB(38, 50, 55)
+  else if IsHover and not FViewModel.IsGameOver then
+    Bg := RGB(75, 75, 75)
+  else
+    Bg := RGB(58, 58, 58);
+
+  ACanvas.Brush.Color := Bg;
+  ACanvas.Pen.Style := psClear;
+  ACanvas.RoundRect(ARect.Left, ARect.Top, ARect.Right, ARect.Bottom,
+    Radius, Radius);
+
+  // Selection glow (golden border)
+  if IsSel then
+  begin
+    ACanvas.Brush.Style := bsClear;
+    ACanvas.Pen.Style := psSolid;
+    ACanvas.Pen.Color := RGB(255, 200, 60);
+    ACanvas.Pen.Width := 3;
+    InflateRect(ARect, -2, -2);
+    ACanvas.RoundRect(ARect.Left, ARect.Top, ARect.Right, ARect.Bottom,
+      Radius, Radius);
+    ACanvas.Pen.Width := 1;
+  end;
+  ACanvas.Brush.Style := bsSolid;
+end;
+
+procedure TMainForm.PaintX(ACanvas: TCanvas; ARect: TRect);
+begin
+  ACanvas.Pen.Style := psSolid;
+  ACanvas.Pen.Color := RGB(255, 155, 71);  // warm orange
+  ACanvas.Pen.Width := StrokeWidth;
+  ACanvas.MoveTo(ARect.Left + PieceInset, ARect.Top + PieceInset);
+  ACanvas.LineTo(ARect.Right - PieceInset, ARect.Bottom - PieceInset);
+  ACanvas.MoveTo(ARect.Right - PieceInset, ARect.Top + PieceInset);
+  ACanvas.LineTo(ARect.Left + PieceInset, ARect.Bottom - PieceInset);
+  ACanvas.Pen.Width := 1;
+end;
+
+procedure TMainForm.PaintO(ACanvas: TCanvas; ARect: TRect);
+begin
+  ACanvas.Brush.Style := bsClear;
+  ACanvas.Pen.Style := psSolid;
+  ACanvas.Pen.Color := RGB(78, 205, 196);  // cool teal
+  ACanvas.Pen.Width := StrokeWidth;
+  ACanvas.Ellipse(
+    ARect.Left + PieceInset, ARect.Top + PieceInset,
+    ARect.Right - PieceInset, ARect.Bottom - PieceInset);
+  ACanvas.Pen.Width := 1;
+  ACanvas.Brush.Style := bsSolid;
+end;
+
+procedure TMainForm.PaintBoard(Sender: TObject);
+var
+  R, C: Integer;
+  CR: TRect;
+  Val: string;
+begin
+  // Board background (visible as grid gaps)
+  FBoard.Canvas.Brush.Color := RGB(44, 44, 44);
+  FBoard.Canvas.FillRect(Rect(0, 0, FBoard.Width, FBoard.Height));
+
+  for R := 0 to 2 do
+    for C := 0 to 2 do
     begin
-      Btn := TButton.Create(Self);
-      Btn.Parent := pnlBoard;
-      Btn.Left := C * (CellSize + CellGap);
-      Btn.Top  := R * (CellSize + CellGap);
-      Btn.Width  := CellSize;
-      Btn.Height := CellSize;
-      Btn.Font.Size  := 32;
-      Btn.Font.Style := [fsBold];
-      Btn.Tag := R * 3 + C;
-      Btn.OnClick := CellClick;
-      FCells[R, C] := Btn;
+      CR := GetCellRect(R, C);
+      Val := FViewModel.CellText(R, C);
+      PaintCellBg(FBoard.Canvas, CR, Val, R, C);
+      if Val = 'X' then
+        PaintX(FBoard.Canvas, CR)
+      else if Val = 'O' then
+        PaintO(FBoard.Canvas, CR);
     end;
 end;
 
-procedure TMainForm.CellClick(Sender: TObject);
+// === Mouse interaction ===
+
+procedure TMainForm.BoardMouseDown(Sender: TObject; Button: TMouseButton;
+  Shift: TShiftState; X, Y: Integer);
 var
-  R, C: Integer;
+  Row, Col: Integer;
 begin
-  R := TButton(Sender).Tag div 3;
-  C := TButton(Sender).Tag mod 3;
+  if Button <> mbLeft then Exit;
+  if not HitTestCell(X, Y, Row, Col) then Exit;
   try
-    FViewModel.CellClick(R, C);
+    FViewModel.CellClick(Row, Col);
   except
     on E: Exception do
-      lblStatus.Caption := E.Message;
+    begin
+      FLblStatus.Font.Color := RGB(255, 100, 100);
+      FLblStatus.Caption := E.Message;
+    end;
   end;
 end;
 
-procedure TMainForm.btnNewGameClick(Sender: TObject);
+procedure TMainForm.BoardMouseMove(Sender: TObject; Shift: TShiftState;
+  X, Y: Integer);
+var
+  Row, Col: Integer;
+begin
+  if HitTestCell(X, Y, Row, Col) then
+  begin
+    if (Row <> FHoverRow) or (Col <> FHoverCol) then
+    begin
+      FHoverRow := Row;
+      FHoverCol := Col;
+      FBoard.Invalidate;
+    end;
+  end
+  else if FHoverRow >= 0 then
+  begin
+    FHoverRow := -1;
+    FHoverCol := -1;
+    FBoard.Invalidate;
+  end;
+end;
+
+procedure TMainForm.BoardMouseLeave(Sender: TObject);
+begin
+  if FHoverRow >= 0 then
+  begin
+    FHoverRow := -1;
+    FHoverCol := -1;
+    FBoard.Invalidate;
+  end;
+end;
+
+// === Button ===
+
+procedure TMainForm.BtnNewGameClick(Sender: TObject);
 begin
   FViewModel.NewGame;
 end;
 
-procedure TMainForm.UpdateCell(R, C: Integer);
-var
-  Text: string;
+procedure TMainForm.BtnMouseEnter(Sender: TObject);
 begin
-  Text := FViewModel.CellText(R, C);
-  if FViewModel.IsSelected(R, C) then
-    Text := '[' + Text + ']';
-  FCells[R, C].Caption := Text;
-
-  if FViewModel.CellText(R, C) = 'X' then
-    FCells[R, C].Font.Color := clBlue
-  else if FViewModel.CellText(R, C) = 'O' then
-    FCells[R, C].Font.Color := clRed
-  else
-    FCells[R, C].Font.Color := clBtnText;
+  FBtnNewGame.Color := RGB(28, 151, 234);
 end;
 
-procedure TMainForm.Refresh;
-var
-  R, C: Integer;
+procedure TMainForm.BtnMouseLeave(Sender: TObject);
 begin
-  for R := 0 to 2 do
-    for C := 0 to 2 do
-      UpdateCell(R, C);
-  lblStatus.Caption := FViewModel.StatusText;
+  FBtnNewGame.Color := RGB(0, 122, 204);
+end;
+
+// === IGameViewPort ===
+
+procedure TMainForm.Refresh;
+begin
+  if FViewModel.IsGameOver then
+    FLblStatus.Font.Color := RGB(255, 215, 0)    // gold
+  else
+    FLblStatus.Font.Color := RGB(200, 200, 200);  // light gray
+
+  FLblStatus.Caption := FViewModel.StatusText;
+
+  if not FViewModel.IsGameOver then
+    FLblPhase.Caption := FViewModel.PhaseText
+  else
+    FLblPhase.Caption := 'Partida terminada';
+
+  FBoard.Invalidate;
 end;
 
 end.
