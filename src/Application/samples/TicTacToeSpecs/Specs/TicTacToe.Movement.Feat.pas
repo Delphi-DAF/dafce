@@ -2,6 +2,13 @@
 
 interface
 
+type
+  /// <summary>
+  /// Marker type for unit identification.
+  /// Convention: Use .Category(TUnitMarker) to enable Cat: filter.
+  /// </summary>
+  TUnitMarker = class end;
+
 implementation
 
 uses
@@ -13,13 +20,13 @@ uses
 initialization
 
   Feature('''
-  TicTacToe: Movimiento de fichas
+  Movimiento de fichas @e2e
 
     Como jugador
     Quiero mover mis fichas a casillas adyacentes
     Para intentar formar una línea de 3
   ''')
-
+  .Category(TUnitMarker)
   .UseWorld<TGameWorld>
 
   .Background

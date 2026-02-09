@@ -2,6 +2,13 @@
 
 interface
 
+type
+  /// <summary>
+  /// Marker type for unit identification.
+  /// Convention: Use .Category(TUnitMarker) to enable Cat: filter.
+  /// </summary>
+  TUnitMarker = class end;
+
 implementation
 
 uses
@@ -13,13 +20,13 @@ uses
 initialization
 
   Feature('''
-  TicTacToe: Condiciones de victoria
+  Condiciones de victoria @e2e
 
     Como jugador
     Quiero que el juego detecte cuando hay un ganador
     Para saber cuándo termina la partida
   ''')
-
+  .Category(TUnitMarker)
   .UseWorld<TGameWorld>
 
   .Rule('Gana quien forme una línea de 3 fichas propias')
@@ -85,6 +92,16 @@ initialization
          [O, O, _],
          [_, _, _]])
       .When('O intenta colocar en (2,0)')
-      .&Then('se produce un error');
+      .&Then('se produce un error')
+
+  .Rule('Se puede ganar en cualquier fase del juego')
+
+    .Scenario('Victoria al mover una ficha')
+      .Given('el siguiente tablero:',
+        [[_, X, _],
+         [O, X, _],
+         [O, O, X]])
+      .When('X mueve de (0,1) a (0,0)')
+      .&Then('X gana');
 
 end.

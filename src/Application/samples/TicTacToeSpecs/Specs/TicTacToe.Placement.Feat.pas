@@ -2,6 +2,13 @@
 
 interface
 
+type
+  /// <summary>
+  /// Marker type for unit identification.
+  /// Convention: Use .Category(TUnitMarker) to enable Cat: filter.
+  /// </summary>
+  TUnitMarker = class end;
+
 implementation
 
 uses
@@ -13,13 +20,13 @@ uses
 initialization
 
   Feature('''
-  TicTacToe: Colocación de fichas
+  Colocación de fichas @e2e
 
     Como jugador
     Quiero colocar mis fichas en el tablero
     Para intentar formar una línea de 3
   ''')
-
+  .Category(TUnitMarker)
   .UseWorld<TGameWorld>
 
   .Rule('Se pueden colocar fichas en casillas vacías')

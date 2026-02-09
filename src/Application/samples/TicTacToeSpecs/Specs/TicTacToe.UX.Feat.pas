@@ -2,6 +2,13 @@
 
 interface
 
+type
+  /// <summary>
+  /// Marker type for unit identification.
+  /// Convention: Use .Category(TUnitMarker) to enable Cat: filter.
+  /// </summary>
+  TUnitMarker = class end;
+
 implementation
 
 uses
@@ -13,13 +20,13 @@ uses
 initialization
 
   Feature('''
-  TicTacToe: Experiencia de Usuario
+  Experiencia de Usuario @integration
 
     Como jugador
     Quiero ver información visual clara del estado del juego
     Para poder jugar intuitivamente
   ''')
-
+  .Category(TUnitMarker)
   .UseWorld<TGameWorld>
 
   .Rule('Representación visual de las celdas')
