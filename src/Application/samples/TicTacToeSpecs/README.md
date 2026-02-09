@@ -1,7 +1,7 @@
-# TicTacToe Specs
+# TicTacToe — BDD + MVVM Sample
 
-Sample que ilustra BDD de principio a fin con MiniSpec, usando un juego de
-**3 en Raya** con reglas de movimiento.
+Sample que ilustra **BDD de principio a fin** con MiniSpec y **MVVM con Clean
+Architecture**, usando un juego de **3 en Raya** con reglas de movimiento.
 
 ## Reglas del juego
 
@@ -26,15 +26,68 @@ Sample que ilustra BDD de principio a fin con MiniSpec, usando un juego de
 - La victoria puede ocurrir tanto en fase de colocación como de movimiento.
 - Una vez hay ganador, no se aceptan más jugadas.
 
-## Estructura
+## Arquitectura (Clean Architecture + MVVM)
+
+```
+Domain/          → Entidades y reglas de negocio (TTicTacToeGame)
+Presentation/    → ViewModel + ViewPort (IGameViewPort, TGameViewModel)
+UI/              → VCL Form (TMainForm implementa IGameViewPort)
+Specs/           → BDD: World, Step bindings, Features
+```
+
+**Dependencias (inside-out):**
+- `Domain` no depende de nada externo
+- `Presentation` depende de `Domain`
+- `UI` depende solo de `Presentation` (no de `Domain`)
+- `Specs` operan a través de `Presentation` (E2E por ViewModel)
+
+## Proyectos
+
+| Proyecto | Tipo | Descripción |
+|----------|------|-------------|
+| `TicTacToeSpecs.dproj` | Console | Spec runner BDD con MiniSpec |
+| `TicTacToeApp.dproj` | VCL App | Aplicación gráfica para jugar manualmente |
+
+## Estructura de archivos
+
+### Domain/
 
 | Archivo | Descripción |
 |---------|-------------|
-| `TicTacToe.Game.pas` | Modelo de dominio |
-| `TicTacToe.SpecHelpers.pas` | World (`TGameWorld`), constantes y helpers |
-| `TicTacToe.Placement.Steps.pas` | Step bindings de colocación |
-| `TicTacToe.Movement.Steps.pas` | Step bindings de movimiento |
-| `TicTacToe.Victory.Steps.pas` | Step bindings de victoria |
-| `TicTacToe.Placement.Feat.pas` | Feature: Colocación de fichas |
-| `TicTacToe.Movement.Feat.pas` | Feature: Movimiento de fichas |
-| `TicTacToe.Victory.Feat.pas` | Feature: Condiciones de victoria |
+| `TicTacToe.Game.pas` | `TTicTacToeGame`, `TPlayer`, `TPosition`, `TGamePhase`, `TGameStatus`, `EInvalidMove` |
+
+### Presentation/
+
+| Archivo | Descripción |
+|---------|-------------|
+| `TicTacToe.ViewPort.pas` | `IGameViewPort` — interfaz Humble Object para la vista |
+| `TicTacToe.ViewModel.pas` | `TGameViewModel` — comandos (PlacePiece, MovePiece, CellClick), queries de dominio y de presentación (CellText, StatusText, PhaseText, IsSelected) |
+
+### UI/
+
+| Archivo | Descripción |
+|---------|-------------|
+| `TicTacToe.MainForm.pas/dfm` | VCL Form: grid 3×3 de botones, status label, botón Nueva Partida |
+
+### Specs/
+
+| Archivo | Descripción |
+|---------|-------------|
+| `TicTacToe.SpecHelpers.pas` | `TGameWorld` (contiene ViewModel), constantes X/O/_, helpers |
+| `TicTacToe.Placement.Steps.pas` | Step bindings: colocación + steps compartidos |
+| `TicTacToe.Movement.Steps.pas` | Step bindings: movimiento |
+| `TicTacToe.Victory.Steps.pas` | Step bindings: condiciones de victoria |
+| `TicTacToe.UX.Steps.pas` | Step bindings: experiencia de usuario (CellText, StatusText, CellClick) |
+| `TicTacToe.Placement.Feat.pas` | Feature: Colocación de fichas (5 specs) |
+| `TicTacToe.Movement.Feat.pas` | Feature: Movimiento de fichas (6 specs) |
+| `TicTacToe.Victory.Feat.pas` | Feature: Condiciones de victoria (7 specs) |
+| `TicTacToe.UX.Feat.pas` | Feature: Experiencia de Usuario (8 specs) |
+
+## Patrones aplicados
+
+- **MVVM**: ViewModel expone estado display-friendly; Form solo renderiza
+- **Humble Object**: `IGameViewPort` mantiene la vista desacoplada y testeable
+- **Strangler Fig**: ViewModel introdujo gradualmente sin romper tests existentes
+- **Observer**: ViewModel notifica ViewPort.Refresh en cada cambio de estado
+- **BDD E2E**: Los specs operan a través del ViewModel (mismo camino que la UI)
+
