@@ -9,6 +9,7 @@ uses
   Daf.MiniSpec,
   Daf.MiniSpec.Binding,
   TicTacToe.Game,
+  TicTacToe.ViewModel,
   TicTacToe.SpecHelpers;
 
 type
@@ -30,14 +31,14 @@ type
 procedure TVictorySteps.PlayerWins(Ctx: TGameWorld; Player: string);
 begin
   if SameText(Player, 'X') then
-    Expect(Ctx.Game.Status).ToEqual(TGameStatus.XWins)
+    Expect(Ctx.ViewModel.Status).ToEqual(TGameStatus.XWins)
   else
-    Expect(Ctx.Game.Status).ToEqual(TGameStatus.OWins);
+    Expect(Ctx.ViewModel.Status).ToEqual(TGameStatus.OWins);
 end;
 
 procedure TVictorySteps.StatusInProgress(Ctx: TGameWorld);
 begin
-  Expect(Ctx.Game.Status).ToEqual(TGameStatus.InProgress);
+  Expect(Ctx.ViewModel.Status).ToEqual(TGameStatus.InProgress);
 end;
 
 initialization

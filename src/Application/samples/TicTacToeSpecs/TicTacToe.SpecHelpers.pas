@@ -8,7 +8,8 @@ uses
   Daf.MiniSpec,
   Daf.MiniSpec.Types,
   Daf.MiniSpec.DataTable,
-  TicTacToe.Game;
+  TicTacToe.Game,
+  TicTacToe.ViewModel;
 
 const
   X = 'X';
@@ -22,7 +23,7 @@ type
   /// </summary>
   TGameWorld = class
   public
-    Game: TTicTacToeGame;
+    ViewModel: TGameViewModel;
 
     constructor Create;
     destructor Destroy; override;
@@ -80,12 +81,12 @@ implementation
 constructor TGameWorld.Create;
 begin
   inherited Create;
-  Game := TTicTacToeGame.Create;
+  ViewModel := TGameViewModel.Create;
 end;
 
 destructor TGameWorld.Destroy;
 begin
-  Game.Free;
+  ViewModel.Free;
   inherited;
 end;
 
@@ -104,8 +105,7 @@ var
   XPos, OPos: array[0..2] of TPosition;
   Cell: string;
 begin
-  Ctx.Game.Free;
-  Ctx.Game := TTicTacToeGame.Create;
+  Ctx.ViewModel.NewGame;
   Table := SpecContext.DataTable;
   XI := 0;
   OI := 0;
@@ -132,9 +132,9 @@ begin
   while (I < XI) or (I < OI) do
   begin
     if I < XI then
-      Ctx.Game.PlacePiece(XPos[I]);
+      Ctx.ViewModel.PlacePiece(XPos[I].Row, XPos[I].Col);
     if I < OI then
-      Ctx.Game.PlacePiece(OPos[I]);
+      Ctx.ViewModel.PlacePiece(OPos[I].Row, OPos[I].Col);
     Inc(I);
   end;
 end;

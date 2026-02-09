@@ -9,6 +9,7 @@ uses
   Daf.MiniSpec,
   Daf.MiniSpec.Binding,
   TicTacToe.Game,
+  TicTacToe.ViewModel,
   TicTacToe.SpecHelpers;
 
 type
@@ -71,15 +72,13 @@ type
 
 procedure TPlacementSteps.EmptyBoard(Ctx: TGameWorld);
 begin
-  Ctx.Game.Free;
-  Ctx.Game := TTicTacToeGame.Create;
+  Ctx.ViewModel.NewGame;
 end;
 
 procedure TPlacementSteps.BoardWithPiece(Ctx: TGameWorld; Player: string; Row, Col: Integer);
 begin
-  Ctx.Game.Free;
-  Ctx.Game := TTicTacToeGame.Create;
-  Ctx.Game.PlacePiece(TPosition.Create(Row, Col));
+  Ctx.ViewModel.NewGame;
+  Ctx.ViewModel.PlacePiece(Row, Col);
 end;
 
 procedure TPlacementSteps.BoardFromTable(Ctx: TGameWorld);
@@ -89,48 +88,48 @@ end;
 
 procedure TPlacementSteps.PlayerPlacesAt(Ctx: TGameWorld; Player: string; Row, Col: Integer);
 begin
-  Ctx.Game.PlacePiece(TPosition.Create(Row, Col));
+  Ctx.ViewModel.PlacePiece(Row, Col);
 end;
 
 procedure TPlacementSteps.TwoPlayersPlace(Ctx: TGameWorld; P1: string; R1, C1: Integer; P2: string; R2, C2: Integer);
 begin
-  Ctx.Game.PlacePiece(TPosition.Create(R1, C1));
-  Ctx.Game.PlacePiece(TPosition.Create(R2, C2));
+  Ctx.ViewModel.PlacePiece(R1, C1);
+  Ctx.ViewModel.PlacePiece(R2, C2);
 end;
 
 procedure TPlacementSteps.PlaceAt(Ctx: TGameWorld; Player: string; Row, Col: Integer);
 begin
-  Ctx.Game.PlacePiece(TPosition.Create(Row, Col));
+  Ctx.ViewModel.PlacePiece(Row, Col);
 end;
 
 procedure TPlacementSteps.TryPlaceAt(Ctx: TGameWorld; Player: string; Row, Col: Integer);
 begin
-  Ctx.Game.PlacePiece(TPosition.Create(Row, Col));
+  Ctx.ViewModel.PlacePiece(Row, Col);
 end;
 
 procedure TPlacementSteps.CellBelongsTo(Ctx: TGameWorld; Row, Col: Integer; Player: string);
 begin
-  Expect(Ctx.Game.Board[Row, Col]).ToEqual(ParsePlayer(Player));
+  Expect(Ctx.ViewModel.CellOwner(Row, Col)).ToEqual(ParsePlayer(Player));
 end;
 
 procedure TPlacementSteps.CellIs(Ctx: TGameWorld; Row, Col: Integer; Player: string);
 begin
-  Expect(Ctx.Game.Board[Row, Col]).ToEqual(ParsePlayer(Player));
+  Expect(Ctx.ViewModel.CellOwner(Row, Col)).ToEqual(ParsePlayer(Player));
 end;
 
 procedure TPlacementSteps.TurnPassesTo(Ctx: TGameWorld; Player: string);
 begin
-  Expect(Ctx.Game.CurrentPlayer).ToEqual(ParsePlayer(Player));
+  Expect(Ctx.ViewModel.CurrentPlayer).ToEqual(ParsePlayer(Player));
 end;
 
 procedure TPlacementSteps.TurnReturnsTo(Ctx: TGameWorld; Player: string);
 begin
-  Expect(Ctx.Game.CurrentPlayer).ToEqual(ParsePlayer(Player));
+  Expect(Ctx.ViewModel.CurrentPlayer).ToEqual(ParsePlayer(Player));
 end;
 
 procedure TPlacementSteps.TurnStays(Ctx: TGameWorld; Player: string);
 begin
-  Expect(Ctx.Game.CurrentPlayer).ToEqual(ParsePlayer(Player));
+  Expect(Ctx.ViewModel.CurrentPlayer).ToEqual(ParsePlayer(Player));
 end;
 
 procedure TPlacementSteps.ErrorRaised(Ctx: TGameWorld);
@@ -140,15 +139,15 @@ end;
 
 procedure TPlacementSteps.PhaseIsMovement(Ctx: TGameWorld);
 begin
-  Expect(Ctx.Game.Phase).ToEqual(TGamePhase.Movement);
+  Expect(Ctx.ViewModel.Phase).ToEqual(TGamePhase.Movement);
 end;
 
 procedure TPlacementSteps.PieceCount(Ctx: TGameWorld; Player: string; Count: Integer);
 begin
   if SameText(Player, 'X') then
-    Expect(Ctx.Game.XPieceCount).ToEqual(Count)
+    Expect(Ctx.ViewModel.XPieceCount).ToEqual(Count)
   else
-    Expect(Ctx.Game.OPieceCount).ToEqual(Count);
+    Expect(Ctx.ViewModel.OPieceCount).ToEqual(Count);
 end;
 
 initialization

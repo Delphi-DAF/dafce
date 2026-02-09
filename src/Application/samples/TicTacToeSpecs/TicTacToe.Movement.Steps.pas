@@ -9,6 +9,7 @@ uses
   Daf.MiniSpec,
   Daf.MiniSpec.Binding,
   TicTacToe.Game,
+  TicTacToe.ViewModel,
   TicTacToe.SpecHelpers;
 
 type
@@ -37,24 +38,23 @@ type
 
 procedure TMovementSteps.GameInPlacementPhase(Ctx: TGameWorld);
 begin
-  Ctx.Game.Free;
-  Ctx.Game := TTicTacToeGame.Create;
-  Ctx.Game.PlacePiece(TPosition.Create(0, 0)); // X coloca una ficha
+  Ctx.ViewModel.NewGame;
+  Ctx.ViewModel.PlacePiece(0, 0); // X coloca una ficha
 end;
 
 procedure TMovementSteps.MovePiece(Ctx: TGameWorld; Player: string; FR, FC, TR, TC: Integer);
 begin
-  Ctx.Game.MovePiece(TPosition.Create(FR, FC), TPosition.Create(TR, TC));
+  Ctx.ViewModel.MovePiece(FR, FC, TR, TC);
 end;
 
 procedure TMovementSteps.TryMove(Ctx: TGameWorld; Player: string; FR, FC, TR, TC: Integer);
 begin
-  Ctx.Game.MovePiece(TPosition.Create(FR, FC), TPosition.Create(TR, TC));
+  Ctx.ViewModel.MovePiece(FR, FC, TR, TC);
 end;
 
 procedure TMovementSteps.CellIsEmpty(Ctx: TGameWorld; Row, Col: Integer);
 begin
-  Expect(Ctx.Game.Board[Row, Col]).ToEqual(TPlayer.None);
+  Expect(Ctx.ViewModel.IsEmpty(Row, Col)).ToEqual(True);
 end;
 
 initialization
