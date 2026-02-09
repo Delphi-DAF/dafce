@@ -4,20 +4,20 @@
 
 uses
   Daf.MiniSpec,
-  TicTacToe.Game in 'TicTacToe.Game.pas',
-  TicTacToe.ViewPort in 'TicTacToe.ViewPort.pas',
-  TicTacToe.ViewModel in 'TicTacToe.ViewModel.pas',
-  TicTacToe.SpecHelpers in 'TicTacToe.SpecHelpers.pas',
+  TicTacToe.Game in 'Domain\TicTacToe.Game.pas',
+  TicTacToe.ViewPort in 'Presentation\TicTacToe.ViewPort.pas',
+  TicTacToe.ViewModel in 'Presentation\TicTacToe.ViewModel.pas',
+  TicTacToe.SpecHelpers in 'Specs\TicTacToe.SpecHelpers.pas',
   // Step bindings (registrados antes que los Features)
-  TicTacToe.Placement.Steps in 'TicTacToe.Placement.Steps.pas',
-  TicTacToe.Movement.Steps in 'TicTacToe.Movement.Steps.pas',
-  TicTacToe.Victory.Steps in 'TicTacToe.Victory.Steps.pas',
-  TicTacToe.UX.Steps in 'TicTacToe.UX.Steps.pas',
+  TicTacToe.Placement.Steps in 'Specs\TicTacToe.Placement.Steps.pas',
+  TicTacToe.Movement.Steps in 'Specs\TicTacToe.Movement.Steps.pas',
+  TicTacToe.Victory.Steps in 'Specs\TicTacToe.Victory.Steps.pas',
+  TicTacToe.UX.Steps in 'Specs\TicTacToe.UX.Steps.pas',
   // Features (Gherkin)
-  TicTacToe.Placement.Feat in 'TicTacToe.Placement.Feat.pas',
-  TicTacToe.Movement.Feat in 'TicTacToe.Movement.Feat.pas',
-  TicTacToe.Victory.Feat in 'TicTacToe.Victory.Feat.pas',
-  TicTacToe.UX.Feat in 'TicTacToe.UX.Feat.pas';
+  TicTacToe.Placement.Feat in 'Specs\TicTacToe.Placement.Feat.pas',
+  TicTacToe.Movement.Feat in 'Specs\TicTacToe.Movement.Feat.pas',
+  TicTacToe.Victory.Feat in 'Specs\TicTacToe.Victory.Feat.pas',
+  TicTacToe.UX.Feat in 'Specs\TicTacToe.UX.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

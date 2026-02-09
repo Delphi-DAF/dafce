@@ -97,10 +97,10 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
-        <DCCReference Include="TicTacToe.Game.pas"/>
-        <DCCReference Include="TicTacToe.ViewPort.pas"/>
-        <DCCReference Include="TicTacToe.ViewModel.pas"/>
-        <DCCReference Include="TicTacToe.MainForm.pas">
+        <DCCReference Include="Domain\TicTacToe.Game.pas"/>
+        <DCCReference Include="Presentation\TicTacToe.ViewPort.pas"/>
+        <DCCReference Include="Presentation\TicTacToe.ViewModel.pas"/>
+        <DCCReference Include="UI\TicTacToe.MainForm.pas">
             <Form>MainForm</Form>
         </DCCReference>
         <BuildConfiguration Include="Base">

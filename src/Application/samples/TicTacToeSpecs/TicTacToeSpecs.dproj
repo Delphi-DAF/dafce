@@ -99,14 +99,16 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
-        <DCCReference Include="TicTacToe.Game.pas"/>
-        <DCCReference Include="TicTacToe.SpecHelpers.pas"/>
-        <DCCReference Include="TicTacToe.Placement.Steps.pas"/>
-        <DCCReference Include="TicTacToe.Movement.Steps.pas"/>
-        <DCCReference Include="TicTacToe.Victory.Steps.pas"/>
-        <DCCReference Include="TicTacToe.Placement.Feat.pas"/>
-        <DCCReference Include="TicTacToe.Movement.Feat.pas"/>
-        <DCCReference Include="TicTacToe.Victory.Feat.pas"/>
+        <DCCReference Include="Domain\TicTacToe.Game.pas"/>
+        <DCCReference Include="Specs\TicTacToe.SpecHelpers.pas"/>
+        <DCCReference Include="Specs\TicTacToe.Placement.Steps.pas"/>
+        <DCCReference Include="Specs\TicTacToe.Movement.Steps.pas"/>
+        <DCCReference Include="Specs\TicTacToe.Victory.Steps.pas"/>
+        <DCCReference Include="Specs\TicTacToe.UX.Steps.pas"/>
+        <DCCReference Include="Specs\TicTacToe.Placement.Feat.pas"/>
+        <DCCReference Include="Specs\TicTacToe.Movement.Feat.pas"/>
+        <DCCReference Include="Specs\TicTacToe.Victory.Feat.pas"/>
+        <DCCReference Include="Specs\TicTacToe.UX.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\..\samples.optset</DependentOn>
