@@ -12,10 +12,12 @@ uses
   TicTacToe.Placement.Steps in 'TicTacToe.Placement.Steps.pas',
   TicTacToe.Movement.Steps in 'TicTacToe.Movement.Steps.pas',
   TicTacToe.Victory.Steps in 'TicTacToe.Victory.Steps.pas',
+  TicTacToe.UX.Steps in 'TicTacToe.UX.Steps.pas',
   // Features (Gherkin)
   TicTacToe.Placement.Feat in 'TicTacToe.Placement.Feat.pas',
   TicTacToe.Movement.Feat in 'TicTacToe.Movement.Feat.pas',
-  TicTacToe.Victory.Feat in 'TicTacToe.Victory.Feat.pas';
+  TicTacToe.Victory.Feat in 'TicTacToe.Victory.Feat.pas',
+  TicTacToe.UX.Feat in 'TicTacToe.UX.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;
