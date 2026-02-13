@@ -39,6 +39,25 @@ MiApp.exe -r junit:output=results.xml
 
 # Dashboard en tiempo real
 MiApp.exe -r live:port=8080
+
+# Múltiples reporters simultáneamente
+MiApp.exe -r console -r junit:output=results.xml -r json:output=report.json
+```
+
+## Archivo de Configuración
+
+Si no existe un archivo `MiniSpec.ini` en el directorio del ejecutable, MiniSpec crea uno con opciones por defecto en la primera ejecución. En ejecuciones posteriores, las opciones se cargan de este archivo.
+
+Las opciones de línea de comandos **siempre tienen prioridad** sobre el archivo. Ver [Reporters](reporters.es.md) para la sintaxis completa del INI.
+
+```ini
+[minispec]
+reporters=console,live
+filter=@unit
+pause=true
+
+[reporter.live]
+port=8080
 ```
 
 ---

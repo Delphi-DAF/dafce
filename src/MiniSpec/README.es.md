@@ -141,6 +141,23 @@ MisSpecs.exe -r junit:output=test-results.xml
 ```
 Compatible con GitHub Actions, GitLab CI, Jenkins, Azure DevOps.
 
+### Múltiples Reporters
+```bash
+MisSpecs.exe -r console -r junit:output=results.xml -r json:output=report.json
+```
+
+O configura vía `MiniSpec.ini` (se crea automáticamente en la primera ejecución):
+
+```ini
+[minispec]
+reporters=console,junit
+
+[reporter.junit]
+output=results.xml
+```
+
+Ver [Reporters](docs/guide/reporters.es.md) para detalles completos.
+
 ---
 
 ## Requisitos

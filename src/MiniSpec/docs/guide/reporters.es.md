@@ -41,14 +41,31 @@ MiniSpec crea `MiniSpec.ini` en el directorio del ejecutable si no existe:
 
 ```ini
 [minispec]
-reporter=live
+reporters=console,live
 filter=@unit
 pause=true
 
 [reporter.live]
 port=8080
 wait=3000
+
+[reporter.junit]
+output=results.xml
 ```
+
+La clave `reporters` acepta múltiples nombres de reporter separados por comas. Cada reporter puede tener su propia sección `[reporter.<nombre>]` para opciones.
+
+Los reporters declarados en secciones `[reporter.X]` se registran automáticamente aunque no estén listados en la clave `reporters`. Por ejemplo, lo siguiente equivale a `reporters=console,live`:
+
+```ini
+[minispec]
+reporters=console
+
+[reporter.live]
+port=9000
+```
+
+> **Compatibilidad**: la clave antigua `reporter=` (singular) sigue siendo leída.
 
 Las opciones de línea de comandos tienen prioridad sobre el archivo.
 

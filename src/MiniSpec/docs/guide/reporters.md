@@ -41,14 +41,31 @@ MiniSpec creates `MiniSpec.ini` in the executable directory if it doesn't exist:
 
 ```ini
 [minispec]
-reporter=live
+reporters=console,live
 filter=@unit
 pause=true
 
 [reporter.live]
 port=8080
 wait=3000
+
+[reporter.junit]
+output=results.xml
 ```
+
+The `reporters` key accepts multiple reporter names separated by commas. Each reporter can have its own `[reporter.<name>]` section for options.
+
+Reporters declared in `[reporter.X]` sections are automatically registered even if not listed in the `reporters` key. For example, the following is equivalent to `reporters=console,live`:
+
+```ini
+[minispec]
+reporters=console
+
+[reporter.live]
+port=9000
+```
+
+> **Backward compatibility**: the old `reporter=` (singular) key is still read.
 
 Command line options take priority over the file.
 

@@ -143,6 +143,23 @@ MySpecs.exe -r junit:output=test-results.xml
 ```
 Compatible with GitHub Actions, GitLab CI, Jenkins, Azure DevOps.
 
+### Multiple Reporters
+```bash
+MySpecs.exe -r console -r junit:output=results.xml -r json:output=report.json
+```
+
+Or configure via `MiniSpec.ini` (created automatically on first run):
+
+```ini
+[minispec]
+reporters=console,junit
+
+[reporter.junit]
+output=results.xml
+```
+
+See [Reporters](docs/guide/reporters.md) for full details.
+
 ---
 
 ## Requirements

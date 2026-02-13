@@ -645,6 +645,7 @@ begin
   WriteLn('Options:');
   WriteLn('  -h, --help              Show this help message');
   WriteLn('  -r, --reporter <spec>   Reporter with options: <name>[:<key>=<value>,...]');
+  WriteLn('                          Repeat -r for multiple reporters');
   WriteLn('  -f, --filter <expr>     Run only scenarios matching tag expression');
   WriteLn('  -t, --tags              List all tags with scenario counts (no tests run)');
   WriteLn('  -q, --query <expr>      Show scenarios matching expression (no tests run)');
@@ -680,8 +681,19 @@ begin
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -f "Scen:division and @arithmetic"');
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -r html:output=report.html');
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -r live:port=9000');
+  WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -r console -r junit:output=results.xml');
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -t');
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -q "F:Calculator"');
+  WriteLn('');
+  WriteLn('Configuration file (MiniSpec.ini next to executable):');
+  WriteLn('  [minispec]');
+  WriteLn('  reporters=console,live     # comma-separated reporter names');
+  WriteLn('  filter=@unit');
+  WriteLn('');
+  WriteLn('  [reporter.live]');
+  WriteLn('  port=8080');
+  WriteLn('');
+  WriteLn('  CLI options override INI settings.');
 end;
 
 initialization
