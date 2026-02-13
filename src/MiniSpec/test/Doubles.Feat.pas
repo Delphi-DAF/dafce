@@ -1,4 +1,4 @@
-unit Daf.MiniSpec.Doubles.Spec;
+unit Doubles.Feat;
 {******************************************************************************
   MiniSpec Doubles - Specification Tests
   Tests for Stub<T>, Mock<T>, Spy<T> and Arg matchers using BDD/Gherkin style

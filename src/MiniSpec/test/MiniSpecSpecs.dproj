@@ -102,7 +102,7 @@
         <DCCReference Include="Hooks.Feat.pas"/>
         <DCCReference Include="DataTable.Feat.pas"/>
         <DCCReference Include="SpecSuite.Feat.pas"/>
-        <DCCReference Include="Daf.MiniSpec.Doubles.Spec.pas"/>
+        <DCCReference Include="Doubles.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>
