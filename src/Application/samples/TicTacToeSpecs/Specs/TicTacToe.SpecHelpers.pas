@@ -35,6 +35,17 @@ type
 function Pos(ARow, ACol: Integer): TValue;
 
 /// <summary>
+/// Parses cell notation (a1..c3) to TPosition.
+/// Rows: a=0, b=1, c=2. Columns: 1=0, 2=1, 3=2.
+/// </summary>
+function ParseCell(const Cell: string): TPosition;
+
+/// <summary>
+/// Converts row,col to cell notation (a1..c3).
+/// </summary>
+function CellToStr(Row, Col: Integer): string;
+
+/// <summary>
 /// Sets up the board from SpecContext.DataTable.
 /// Table format: visual 3x3 grid (row, col implicit).
 ///   [['X', 'X', '.'],
@@ -97,6 +108,34 @@ begin
   Result := TValue.From(TPosition.Create(ARow, ACol));
 end;
 
+function ParseCell(const Cell: string): TPosition;
+var
+  S: string;
+begin
+  S := LowerCase(Trim(Cell));
+  if Length(S) <> 2 then
+    raise Exception.CreateFmt('Invalid cell notation: %s', [Cell]);
+  case S[1] of
+    'a': Result.Row := 0;
+    'b': Result.Row := 1;
+    'c': Result.Row := 2;
+  else
+    raise Exception.CreateFmt('Invalid row in cell: %s', [Cell]);
+  end;
+  case S[2] of
+    '1': Result.Col := 0;
+    '2': Result.Col := 1;
+    '3': Result.Col := 2;
+  else
+    raise Exception.CreateFmt('Invalid column in cell: %s', [Cell]);
+  end;
+end;
+
+function CellToStr(Row, Col: Integer): string;
+begin
+  Result := Chr(Ord('a') + Row) + IntToStr(Col + 1);
+end;
+
 procedure SetupBoardFromTable(Ctx: TGameWorld);
 var
   Table: TDataTableObj;
@@ -112,17 +151,24 @@ begin
   R := 0;
   for Row in Table.Raw do
   begin
-    for C := 0 to 2 do
+    // Skip header row (column labels: '', '1', '2', '3')
+    if R = 0 then
+    begin
+      Inc(R);
+      Continue;
+    end;
+    // Data rows: first column is row label ('a','b','c'), skip it
+    for C := 1 to 3 do
     begin
       Cell := Trim(Row[C].AsString);
       if SameText(Cell, 'X') then
       begin
-        XPos[XI] := TPosition.Create(R, C);
+        XPos[XI] := TPosition.Create(R - 1, C - 1);
         Inc(XI);
       end
       else if SameText(Cell, 'O') then
       begin
-        OPos[OI] := TPosition.Create(R, C);
+        OPos[OI] := TPosition.Create(R - 1, C - 1);
         Inc(OI);
       end;
     end;

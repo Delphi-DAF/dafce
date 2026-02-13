@@ -33,9 +33,9 @@ initialization
 
     .Scenario('Las celdas muestran el símbolo del jugador')
       .Given('un tablero vacío')
-      .When('X coloca en (0,0)')
-      .&Then('la celda (0,0) muestra ''X''')
-      .&And('la celda (1,1) muestra ''''')
+      .When('X coloca en a1')
+      .&Then('la celda a1 muestra ''X''')
+      .&And('la celda b2 muestra ''''')
 
   .Rule('Información de estado del juego')
 
@@ -45,23 +45,25 @@ initialization
 
     .Scenario('El turno se refleja en el estado')
       .Given('un tablero vacío')
-      .When('X coloca en (0,0)')
+      .When('X coloca en a1')
       .&Then('el estado muestra ''Turno de O · Colocación''')
 
     .Scenario('Victoria se muestra en el estado')
       .Given('el siguiente tablero:',
-        [[X, X, _],
-         [O, O, _],
-         [_, _, _]])
-      .When('X coloca en (0,2)')
+        [['', '1', '2', '3'],
+         ['a', X, X, _],
+         ['b', O, O, _],
+         ['c', _, _, _]])
+      .When('X coloca en a3')
       .&Then('el estado muestra ''¡X gana!''')
       .&And('la partida ha terminado')
 
     .Scenario('Fase de movimiento se refleja en el estado')
       .Given('el siguiente tablero:',
-        [[X, X, _],
-         [O, O, _],
-         [X, O, _]])
+        [['', '1', '2', '3'],
+         ['a', X, X, _],
+         ['b', O, O, _],
+         ['c', X, O, _]])
       .&Then('la fase muestra ''Movimiento''')
       .&And('el estado muestra ''Turno de X · Movimiento''')
 
@@ -69,24 +71,26 @@ initialization
 
     .Scenario('Click coloca pieza en fase de colocación')
       .Given('un tablero vacío')
-      .When('el jugador hace click en (1,1)')
-      .&Then('la celda (1,1) muestra ''X''')
+      .When('el jugador hace click en b2')
+      .&Then('la celda b2 muestra ''X''')
 
     .Scenario('Click selecciona pieza propia en fase de movimiento')
       .Given('el siguiente tablero:',
-        [[X, X, _],
-         [O, O, _],
-         [X, O, _]])
-      .When('el jugador hace click en (0,0)')
-      .&Then('(0,0) está seleccionada')
+        [['', '1', '2', '3'],
+         ['a', X, X, _],
+         ['b', O, O, _],
+         ['c', X, O, _]])
+      .When('el jugador hace click en a1')
+      .&Then('a1 está seleccionada')
 
     .Scenario('Click mueve pieza seleccionada')
       .Given('el siguiente tablero:',
-        [[X, X, _],
-         [O, O, _],
-         [X, O, _]])
-      .When('el jugador selecciona (0,1) y hace click en (0,2)')
-      .&Then('la celda (0,2) muestra ''X''')
-      .&And('la celda (0,1) muestra ''''');
+        [['', '1', '2', '3'],
+         ['a', X, X, _],
+         ['b', O, O, _],
+         ['c', X, O, _]])
+      .When('el jugador selecciona a2 y hace click en a3')
+      .&Then('la celda a3 muestra ''X''')
+      .&And('la celda a2 muestra ''''');
 
 end.
