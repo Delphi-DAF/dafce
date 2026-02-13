@@ -302,7 +302,7 @@ begin
     Listener := CreateListener(Name, Options);
     FListeners.Add(Listener);
     // Guardar en FOptions para persistencia
-    FOptions.ReporterName := Name;
+    FOptions.AddReporterName(Name);
     for Pair in Options do
       FOptions.SetReporterOption(Name, Pair.Key, Pair.Value);
     // Check if reporter help was requested
@@ -447,10 +447,13 @@ begin
   // Si no hay listeners explícitos, crear desde config o usar console por defecto
   if FListeners.Count = 0 then
   begin
-    if not FOptions.ReporterName.IsEmpty then
+    if Length(FOptions.ReporterNames) > 0 then
     begin
-      var RepOpts := FOptions.GetReporterOptions(FOptions.ReporterName);
-      FListeners.Add(CreateListener(FOptions.ReporterName, RepOpts));
+      for var RepName in FOptions.ReporterNames do
+      begin
+        var RepOpts := FOptions.GetReporterOptions(RepName);
+        FListeners.Add(CreateListener(RepName, RepOpts));
+      end;
     end
     else
       FListeners.Add(TConsoleReporter.Create);
