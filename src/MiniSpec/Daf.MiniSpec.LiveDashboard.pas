@@ -249,9 +249,27 @@ const
                   <div class="text-gray-300 font-medium mb-1">Background</div>
                   <div class="ml-4 space-y-0.5 text-xs">
                     <template x-for="(step, idx) in feature.background" :key="idx">
-                      <div class="flex items-start gap-2 py-0.5 text-gray-400">
-                        <span class="text-blue-400 font-medium w-12 flex-shrink-0" x-text="step.type"></span>
-                        <span x-text="step.text"></span>
+                      <div>
+                        <div class="flex items-start gap-2 py-0.5 text-gray-400">
+                          <span class="text-blue-400 font-medium w-12 flex-shrink-0" x-text="step.type"></span>
+                          <span x-text="step.text"></span>
+                        </div>
+                        <!-- DataTable -->
+                        <template x-if="step.dataTable && step.dataTable.length > 0">
+                          <div class="ml-16 mt-1 mb-2">
+                            <table class="text-xs border-collapse border border-gray-700">
+                              <tbody>
+                                <template x-for="(row, rowIdx) in step.dataTable" :key="'bgr'+rowIdx">
+                                  <tr>
+                                    <template x-for="(cell, cellIdx) in row" :key="'bgc'+cellIdx">
+                                      <td class="px-2 py-0.5 border border-gray-700 text-gray-400" x-text="cell"></td>
+                                    </template>
+                                  </tr>
+                                </template>
+                              </tbody>
+                            </table>
+                          </div>
+                        </template>
                       </div>
                     </template>
                   </div>
@@ -261,7 +279,50 @@ const
               <div x-show="feature.scenarios.length === 0" class="text-gray-500 text-sm italic">No scenarios recorded</div>
 
               <template x-for="(scenario, idx) in feature.scenarios" :key="idx">
-                <div class="mb-3" x-show="(scenario.skipped && showSkip) || (!scenario.skipped && scenario.success && showPass) || (!scenario.skipped && !scenario.success && showFail)">
+                <div class="mb-3" x-show="scenario.type === 'rule' || (scenario.skipped && showSkip) || (!scenario.skipped && scenario.success && showPass) || (!scenario.skipped && !scenario.success && showFail)">
+
+                  <!-- Rule header -->
+                  <template x-if="scenario.type === 'rule'">
+                    <div class="mt-3 mb-1">
+                      <div class="flex items-center gap-2 text-sm py-1">
+                        <svg class="w-4 h-4" :class="scenario.success ? 'text-green-400' : 'text-red-400'"><use :href="scenario.success ? '#icon-pass' : '#icon-fail'"></use></svg>
+                        <span class="text-gray-300 font-semibold">Rule</span>
+                        <span class="text-gray-300" x-text="scenario.name"></span>
+                        <span class="text-gray-600 text-xs" x-text="`${scenario.ms}ms`"></span>
+                      </div>
+                      <!-- Rule Background -->
+                      <template x-if="scenario.background && scenario.background.length > 0">
+                        <div class="ml-6 mt-1 mb-2">
+                          <div class="text-gray-400 text-xs font-medium mb-0.5">Background</div>
+                          <div class="ml-2 space-y-0.5 text-xs">
+                            <template x-for="(step, stIdx) in scenario.background" :key="'rbg'+stIdx">
+                              <div>
+                                <div class="flex items-start gap-2 py-0.5 text-gray-400">
+                                  <span class="text-blue-400 font-medium w-12 flex-shrink-0" x-text="step.type"></span>
+                                  <span x-text="step.text"></span>
+                                </div>
+                                <template x-if="step.dataTable && step.dataTable.length > 0">
+                                  <div class="ml-16 mt-1 mb-2">
+                                    <table class="text-xs border-collapse border border-gray-700">
+                                      <tbody>
+                                        <template x-for="(row, rowIdx) in step.dataTable" :key="'rbgr'+rowIdx">
+                                          <tr>
+                                            <template x-for="(cell, cellIdx) in row" :key="'rbgc'+cellIdx">
+                                              <td class="px-2 py-0.5 border border-gray-700 text-gray-400" x-text="cell"></td>
+                                            </template>
+                                          </tr>
+                                        </template>
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </template>
+                              </div>
+                            </template>
+                          </div>
+                        </div>
+                      </template>
+                    </div>
+                  </template>
                   <!-- Scenario Outline con tabla -->
                   <template x-if="scenario.type === 'outline'">
                     <details :open="!scenario.success && !scenario.skipped">
@@ -479,6 +540,7 @@ const
         get firstFailure() {
           for (const f of this.features) {
             for (const s of f.scenarios || []) {
+              if (s.type === 'rule') continue;
               if (!s.success) {
                 return { featureName: f.name, scenarioName: s.name };
               }
@@ -491,12 +553,8 @@ const
           const all = [];
           for (const f of this.features) {
             for (const s of f.scenarios || []) {
-              if (s.type === 'outline') {
-                // Para outlines, usar el tiempo total
-                all.push({ name: s.name, ms: s.ms, success: s.success, feature: f.name });
-              } else {
-                all.push({ name: s.name, ms: s.ms, success: s.success, feature: f.name });
-              }
+              if (s.type === 'rule') continue;
+              all.push({ name: s.name, ms: s.ms, success: s.success, feature: f.name });
             }
           }
           return all.sort((a, b) => b.ms - a.ms).slice(0, 10);
@@ -581,6 +639,15 @@ const
               this.currentFeatureTags = data.tags || [];
               this.currentScenario = null;
               this.currentFeatureScenarios = [];
+              break;
+            case 'rule:start':
+              this.currentFeatureScenarios.push({
+                type: 'rule',
+                name: data.name,
+                success: data.success,
+                ms: data.ms,
+                background: data.background || null
+              });
               break;
             case 'scenario:start':
               this.currentScenario = data.name;
