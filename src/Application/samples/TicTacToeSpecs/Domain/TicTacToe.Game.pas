@@ -84,10 +84,28 @@ function TPosition.IsAdjacentTo(const Other: TPosition): Boolean;
 var
   DeltaRow, DeltaCol: Integer;
 begin
+  if Self = Other then
+    Exit(False);
+
   DeltaRow := Abs(Row - Other.Row);
   DeltaCol := Abs(Col - Other.Col);
-  // Adjacent means at most 1 step in each direction, but not same position
-  Result := (DeltaRow <= 1) and (DeltaCol <= 1) and not (Self = Other);
+
+  // Horizontal or vertical: one step in one direction only
+  if ((DeltaRow = 0) and (DeltaCol = 1)) or ((DeltaRow = 1) and (DeltaCol = 0)) then
+    Exit(True);
+
+  // Diagonal: only along major diagonals (a1-b2-c3 and a3-b2-c1)
+  if (DeltaRow = 1) and (DeltaCol = 1) then
+  begin
+    // Major diagonal 1: Row = Col (a1, b2, c3)
+    if (Row = Col) and (Other.Row = Other.Col) then
+      Exit(True);
+    // Major diagonal 2: Row + Col = 2 (a3, b2, c1)
+    if (Row + Col = 2) and (Other.Row + Other.Col = 2) then
+      Exit(True);
+  end;
+
+  Result := False;
 end;
 
 class operator TPosition.Equal(const A, B: TPosition): Boolean;

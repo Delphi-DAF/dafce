@@ -36,18 +36,30 @@ initialization
        ['b', O, O, _],
        ['c', X, O, _]])
 
-  .Rule('Solo se puede mover a casillas adyacentes vacías')
+  .Rule('Se puede mover en horizontal o vertical a casilla adyacente vacía')
 
-    .Scenario('Mover ficha propia a casilla adyacente vacía')
+    .Scenario('Mover ficha en horizontal')
       .When('X mueve (a2,a3)')
       .&Then('a2 está vacía')
       .&And('a3 pertenece a X')
       .&And('el turno pasa a O')
 
-    .Scenario('Mover ficha en diagonal')
-      .When('X mueve (a2,b3)')
-      .&Then('a2 está vacía')
-      .&And('b3 pertenece a X')
+  .Rule('Se puede mover en diagonal solo por las diagonales mayores')
+
+    .Scenario('Mover ficha por diagonal mayor')
+      .Given('el siguiente tablero:',
+        [['', '1', '2', '3'],
+         ['a', O, X, _],
+         ['b', _, X, O],
+         ['c', X, _, O]])
+      .When('X mueve (b2,a3)')
+      .&Then('b2 está vacía')
+      .&And('a3 pertenece a X')
+
+    .Scenario('Rechazar mover por diagonal menor')
+      .When('X intenta mover (a2,b3)')
+      .&Then('se produce un error')
+      .&And('a2 pertenece a X')
 
   .Rule('Solo se pueden mover fichas propias')
 
