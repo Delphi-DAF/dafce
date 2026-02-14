@@ -128,14 +128,20 @@ type
     destructor Destroy; override;
     function Given(const Desc: string): IScenarioOutlineBuilder<T>; overload;
     function Given(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
+    function Given(const Desc: string; const Table: TDataTable): IScenarioOutlineBuilder<T>; overload;
+    function Given(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
     function When(const Desc: string): IScenarioOutlineBuilder<T>; overload;
     function When(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
+    function When(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
     function &Then(const Desc: string): IScenarioOutlineBuilder<T>; overload;
     function &Then(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
+    function &Then(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
     function &And(const Desc: string): IScenarioOutlineBuilder<T>; overload;
     function &And(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
+    function &And(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
     function But(const Desc: string): IScenarioOutlineBuilder<T>; overload;
     function But(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
+    function But(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
     function Pending: IScenarioOutlineBuilder<T>;
     function NoAction: IScenarioOutlineBuilder<T>;
     function Examples(const Table: TExamplesTable): IRuleBuilder<T>;
@@ -696,6 +702,18 @@ begin
   Result := Self;
 end;
 
+function TScenarioOutlineBuilder<T>.Given(const Desc: string; const Table: TDataTable): IScenarioOutlineBuilder<T>;
+begin
+  Result := Given(Desc, Table, nil);
+end;
+
+function TScenarioOutlineBuilder<T>.Given(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
+begin
+  FStepsGiven.Add(TScenarioStep<T>.Create(sikGiven, nil, Desc, Step, Table));
+  FLastStep := lskGiven;
+  Result := Self;
+end;
+
 function TScenarioOutlineBuilder<T>.When(const Desc: string): IScenarioOutlineBuilder<T>;
 begin
   // Defer binding resolution to Examples() where placeholders are substituted
@@ -709,6 +727,13 @@ begin
   Result := Self;
 end;
 
+function TScenarioOutlineBuilder<T>.When(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
+begin
+  FStepsWhen.Add(TScenarioStep<T>.Create(sikWhen, nil, Desc, Step, Table));
+  FLastStep := lskWhen;
+  Result := Self;
+end;
+
 function TScenarioOutlineBuilder<T>.&Then(const Desc: string): IScenarioOutlineBuilder<T>;
 begin
   // Defer binding resolution to Examples() where placeholders are substituted
@@ -718,6 +743,13 @@ end;
 function TScenarioOutlineBuilder<T>.&Then(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
 begin
   FStepsThen.Add(TScenarioStep<T>.Create(sikThen, nil, Desc, Step));
+  FLastStep := lskThen;
+  Result := Self;
+end;
+
+function TScenarioOutlineBuilder<T>.&Then(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
+begin
+  FStepsThen.Add(TScenarioStep<T>.Create(sikThen, nil, Desc, Step, Table));
   FLastStep := lskThen;
   Result := Self;
 end;
@@ -740,6 +772,18 @@ begin
   Result := Self;
 end;
 
+function TScenarioOutlineBuilder<T>.&And(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
+begin
+  case FLastStep of
+    lskGiven: FStepsGiven.Add(TScenarioStep<T>.Create(sikAnd, nil, Desc, Step, Table));
+    lskWhen:  FStepsWhen.Add(TScenarioStep<T>.Create(sikAnd, nil, Desc, Step, Table));
+    lskThen:  FStepsThen.Add(TScenarioStep<T>.Create(sikAnd, nil, Desc, Step, Table));
+  else
+    raise Exception.Create('And must follow Given, When or Then');
+  end;
+  Result := Self;
+end;
+
 function TScenarioOutlineBuilder<T>.But(const Desc: string): IScenarioOutlineBuilder<T>;
 begin
   // Defer binding resolution to Examples() where placeholders are substituted
@@ -752,6 +796,18 @@ begin
     lskGiven: FStepsGiven.Add(TScenarioStep<T>.Create(sikBut, nil, Desc, Step));
     lskWhen:  FStepsWhen.Add(TScenarioStep<T>.Create(sikBut, nil, Desc, Step));
     lskThen:  FStepsThen.Add(TScenarioStep<T>.Create(sikBut, nil, Desc, Step));
+  else
+    raise Exception.Create('But must follow Given, When or Then');
+  end;
+  Result := Self;
+end;
+
+function TScenarioOutlineBuilder<T>.But(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
+begin
+  case FLastStep of
+    lskGiven: FStepsGiven.Add(TScenarioStep<T>.Create(sikBut, nil, Desc, Step, Table));
+    lskWhen:  FStepsWhen.Add(TScenarioStep<T>.Create(sikBut, nil, Desc, Step, Table));
+    lskThen:  FStepsThen.Add(TScenarioStep<T>.Create(sikBut, nil, Desc, Step, Table));
   else
     raise Exception.Create('But must follow Given, When or Then');
   end;
@@ -820,10 +876,21 @@ begin
     var Proc := Step.Proc;
     if not Assigned(Proc) then
       Proc := CreateBindingStep(Kind, Desc);
-    case Kind of
-      skGiven: Example.Given(Desc, Proc);
-      skWhen:  Example.When(Desc, Proc);
-      skThen:  Example.&Then(Desc, Proc);
+    if Assigned(Step.DataTable) then
+    begin
+      case Kind of
+        skGiven: Example.Given(Desc, Step.DataTable.Raw, Proc);
+        skWhen:  Example.When(Desc, Step.DataTable.Raw, Proc);
+        skThen:  Example.&Then(Desc, Step.DataTable.Raw, Proc);
+      end;
+    end
+    else
+    begin
+      case Kind of
+        skGiven: Example.Given(Desc, Proc);
+        skWhen:  Example.When(Desc, Proc);
+        skThen:  Example.&Then(Desc, Proc);
+      end;
     end;
   end;
 end;

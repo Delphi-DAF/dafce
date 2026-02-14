@@ -221,14 +221,20 @@ type
   IScenarioOutlineBuilder<T: class, constructor> = interface
     function Given(const Desc: string): IScenarioOutlineBuilder<T>; overload;
     function Given(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
+    function Given(const Desc: string; const Table: TDataTable): IScenarioOutlineBuilder<T>; overload;
+    function Given(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
     function When(const Desc: string): IScenarioOutlineBuilder<T>; overload;
     function When(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
+    function When(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
     function &Then(const Desc: string): IScenarioOutlineBuilder<T>; overload;
     function &Then(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
+    function &Then(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
     function &And(const Desc: string): IScenarioOutlineBuilder<T>; overload;
     function &And(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
+    function &And(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
     function But(const Desc: string): IScenarioOutlineBuilder<T>; overload;
     function But(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
+    function But(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioOutlineBuilder<T>; overload;
     /// <summary>Marks the last added step as pending.</summary>
     function Pending: IScenarioOutlineBuilder<T>;
     /// <summary>
