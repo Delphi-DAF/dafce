@@ -13,7 +13,9 @@ uses
   TicTacToe.Movement.Steps in 'Specs\TicTacToe.Movement.Steps.pas',
   TicTacToe.Victory.Steps in 'Specs\TicTacToe.Victory.Steps.pas',
   TicTacToe.UX.Steps in 'Specs\TicTacToe.UX.Steps.pas',
+  TicTacToe.NewGame.Steps in 'Specs\TicTacToe.NewGame.Steps.pas',
   // Features (Gherkin)
+  TicTacToe.NewGame.Feat in 'Specs\TicTacToe.NewGame.Feat.pas',
   TicTacToe.Placement.Feat in 'Specs\TicTacToe.Placement.Feat.pas',
   TicTacToe.Movement.Feat in 'Specs\TicTacToe.Movement.Feat.pas',
   TicTacToe.Victory.Feat in 'Specs\TicTacToe.Victory.Feat.pas',
