@@ -69,7 +69,7 @@ initialization
       .When('X coloca en c1')
       .&Then('X gana')
 
-  .Rule('Ambos jugadores pueden ganar')
+  .Rule('Cualquier jugador puede ganar')
 
     .Scenario('O puede ganar')
       .Given('el siguiente tablero:',
@@ -90,7 +90,7 @@ initialization
          ['c', _, _, _]])
       .&Then('el estado es En Progreso')
 
-  .Rule('No se puede jugar después de una victoria')
+  .Rule('Se rechaza cualquier jugada tras una victoria')
 
     .Scenario('Rechazar movimientos después de victoria')
       .Given('el siguiente tablero:',
@@ -101,7 +101,7 @@ initialization
       .When('O intenta colocar en c1')
       .&Then('se produce un error')
 
-  .Rule('Se puede ganar en cualquier fase del juego')
+  .Rule('Se detecta victoria tanto al colocar como al mover')
 
     .Scenario('Victoria al mover una ficha')
       .Given('el siguiente tablero:',

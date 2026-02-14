@@ -29,7 +29,7 @@ initialization
   .Category(TUnitMarker)
   .UseWorld<TGameWorld>
 
-  .Rule('Se pueden colocar fichas en casillas vacías')
+  .Rule('Se coloca ficha en casilla vacía y el turno pasa al rival')
 
     .Background
       .Given('un tablero vacío')
@@ -53,7 +53,7 @@ initialization
       .&Then('se produce un error de movimiento inválido')
       .&And('el turno sigue siendo de O')
 
-  .Rule('Cada jugador coloca hasta 3 fichas')
+  .Rule('Con 3 fichas por jugador se pasa a fase de movimiento')
 
     .Background
       .Given('el siguiente tablero:',

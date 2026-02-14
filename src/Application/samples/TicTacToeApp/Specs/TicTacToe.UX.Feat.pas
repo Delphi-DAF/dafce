@@ -29,7 +29,7 @@ initialization
   .Category(TUnitMarker)
   .UseWorld<TGameWorld>
 
-  .Rule('Representación visual de las celdas')
+  .Rule('Cada celda muestra el símbolo del jugador que la ocupa')
 
     .Scenario('Las celdas muestran el símbolo del jugador')
       .Given('un tablero vacío')
@@ -37,7 +37,7 @@ initialization
       .&Then('la celda a1 muestra ''X''')
       .&And('la celda b2 muestra ''''')
 
-  .Rule('Información de estado del juego')
+  .Rule('El estado muestra turno, fase y resultado de la partida')
 
     .Scenario('Inicio de partida muestra turno y fase')
       .Given('un tablero vacío')
@@ -67,7 +67,7 @@ initialization
       .&Then('la fase muestra ''Movimiento''')
       .&And('el estado muestra ''Turno de X · Movimiento''')
 
-  .Rule('Interacción inteligente con celdas')
+  .Rule('Click en celda coloca o mueve ficha según la fase')
 
     .Scenario('Click coloca pieza en fase de colocación')
       .Given('un tablero vacío')

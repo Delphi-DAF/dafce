@@ -38,7 +38,7 @@ initialization
       .&And('el juego está en fase de colocación')
       .&And('la partida no ha terminado')
 
-  .Rule('Se puede iniciar nueva partida en cualquier momento')
+  .Rule('Nueva partida reinicia el juego desde cualquier estado')
 
     .Scenario('Reiniciar durante fase de colocación')
       .Given('un tablero vacío')
