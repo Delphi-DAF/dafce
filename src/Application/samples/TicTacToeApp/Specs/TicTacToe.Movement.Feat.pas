@@ -29,13 +29,13 @@ initialization
   .Category(TUnitMarker)
   .UseWorld<TGameWorld>
 
-  .Rule('Movimiento horizontal')
+  .Rule('Se permite mover a casilla vacía adyacente en la misma fila')
     .Background
       .Given('el siguiente tablero:',
         [['', '1', '2', '3'],
-         ['a', X, _, X],
-         ['b', O, O, _],
-         ['c', X, O, _]])
+         ['a', X, _, _],
+         ['b', O, O, X],
+         ['c', _, X, O]])
 
     .ScenarioOutline('Mover ficha en horizontal')
       .When('<jugador> mueve (<origen>,<destino>)')
@@ -45,16 +45,21 @@ initialization
       .Examples([
         ['jugador', 'origen', 'destino', 'rival'],
         ['X',       'a1',     'a2',      'O'],
-        ['X',       'a3',     'a2',      'O']
+        ['X',       'c2',     'c1',      'O']
       ])
 
-  .Rule('Movimiento vertical')
+    .Scenario('Rechazar saltar casilla en horizontal')
+      .When('X intenta mover (a1,a3)')
+      .&Then('se produce un error')
+      .&And('a1 pertenece a X')
+
+  .Rule('Se permite mover a casilla vacía adyacente en la misma columna')
     .Background
       .Given('el siguiente tablero:',
         [['', '1', '2', '3'],
-         ['a', X, O, X],
-         ['b', O, _, _],
-         ['c', O, X, _]])
+         ['a', X, O, _],
+         ['b', _, O, X],
+         ['c', _, X, O]])
 
     .ScenarioOutline('Mover ficha en vertical')
       .When('<jugador> mueve (<origen>,<destino>)')
@@ -63,34 +68,40 @@ initialization
       .&And('el turno pasa a <rival>')
       .Examples([
         ['jugador', 'origen', 'destino', 'rival'],
-        ['X',       'a3',     'b3',      'O'],
-        ['X',       'c2',     'b2',      'O']
+        ['X',       'a1',     'b1',      'O'],
+        ['X',       'b3',     'a3',      'O']
       ])
 
-  .Rule('Movimiento diagonal (solo diagonales mayores)')
+    .Scenario('Rechazar saltar casilla en vertical')
+      .When('X intenta mover (a1,c1)')
+      .&Then('se produce un error')
+      .&And('a1 pertenece a X')
+
+  .Rule('Se permite mover a casilla vacía adyacente en diagonal mayor')
     .Background
       .Given('el siguiente tablero:',
         [['', '1', '2', '3'],
-         ['a', O, X, _],
+         ['a', _, X, _],
          ['b', X, X, O],
-         ['c', _, O, _]])
+         ['c', O, _, O]])
 
     .ScenarioOutline('Mover ficha por diagonal mayor')
       .When('<jugador> mueve (<origen>,<destino>)')
       .&Then('<origen> está vacía')
       .&And('<destino> pertenece a <jugador>')
+      .&And('el turno pasa a <rival>')
       .Examples([
-        ['jugador', 'origen', 'destino'],
-        ['X',       'b2',     'a3'],
-        ['X',       'b2',     'c1']
+        ['jugador', 'origen', 'destino', 'rival'],
+        ['X',       'b2',     'a1',      'O'],
+        ['X',       'b2',     'a3',      'O']
       ])
 
     .Scenario('Rechazar mover por diagonal menor')
-      .When('X intenta mover (a2,b1)')
+      .When('X intenta mover (b1,c2)')
       .&Then('se produce un error')
-      .&And('a2 pertenece a X')
+      .&And('b1 pertenece a X')
 
-  .Rule('Restricciones de movimiento')
+  .Rule('Se rechaza mover ficha ajena, a casilla ocupada o fuera de alcance')
     .Background
       .Given('el siguiente tablero:',
         [['', '1', '2', '3'],
@@ -104,6 +115,7 @@ initialization
       .Examples([
         ['origen', 'destino'],
         ['b1',     'a3'],
+        ['a1',     'a2'],
         ['a1',     'b1'],
         ['a1',     'c3']
       ])
