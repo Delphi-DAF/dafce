@@ -44,6 +44,8 @@ type
     function Status: TGameStatus;
     function XPieceCount: Integer;
     function OPieceCount: Integer;
+    function XRemainingPieces: Integer;
+    function ORemainingPieces: Integer;
 
     // === Presentation queries ===
     function CellText(Row, Col: Integer): string;
@@ -190,6 +192,16 @@ end;
 function TGameViewModel.OPieceCount: Integer;
 begin
   Result := FGame.OPieceCount;
+end;
+
+function TGameViewModel.XRemainingPieces: Integer;
+begin
+  Result := MaxPiecesPerPlayer - FGame.XPieceCount;
+end;
+
+function TGameViewModel.ORemainingPieces: Integer;
+begin
+  Result := MaxPiecesPerPlayer - FGame.OPieceCount;
 end;
 
 // === Presentation queries ===

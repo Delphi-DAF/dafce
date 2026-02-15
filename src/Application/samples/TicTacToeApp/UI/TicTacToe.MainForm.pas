@@ -14,6 +14,7 @@ type
   /// VCL Form implementing IGameViewPort (Humble Object).
   /// Custom-painted dark-theme board with rounded cells,
   /// hand-drawn X/O strokes, hover highlights and selection glow.
+  /// Movement lines show valid paths. Piece reserves show remaining pieces.
   /// All presentation logic lives in the ViewModel.
   /// </summary>
   TMainForm = class(TForm, IGameViewPort)
@@ -22,6 +23,8 @@ type
   private
     FViewModel: TGameViewModel;
     FBoard: TPaintBox;
+    FReserveX: TPaintBox;
+    FReserveO: TPaintBox;
     FLblTitle: TLabel;
     FLblStatus: TLabel;
     FLblPhase: TLabel;
@@ -44,6 +47,11 @@ type
       const CellVal: string; Row, Col: Integer);
     procedure PaintX(ACanvas: TCanvas; ARect: TRect);
     procedure PaintO(ACanvas: TCanvas; ARect: TRect);
+    procedure PaintMovementLines(ACanvas: TCanvas);
+    procedure PaintReserveX(Sender: TObject);
+    procedure PaintReserveO(Sender: TObject);
+    procedure PaintMiniX(ACanvas: TCanvas; CX, CY, Size: Integer; AColor: TColor);
+    procedure PaintMiniO(ACanvas: TCanvas; CX, CY, Size: Integer; AColor: TColor);
     { IGameViewPort }
     procedure Refresh;
   end;
@@ -63,6 +71,16 @@ const
   Radius       = 12;
   PieceInset   = 22;
   StrokeWidth  = 7;
+
+  // Movement lines
+  LineColor    = $00606060;  // RGB(96,96,96) - subtle gray
+  LineWidth    = 2;
+
+  // Piece reserves
+  ReserveWidth  = 60;
+  ReserveGap    = 16;
+  MiniPieceSize = 14;       // radius of mini piece
+  MiniPieceGap  = 8;        // vertical gap between mini pieces
 
 { TMainForm }
 
@@ -85,9 +103,13 @@ end;
 
 procedure TMainForm.BuildUI;
 var
-  W, Y: Integer;
+  W, BoardLeft, ReserveHeight, Y: Integer;
 begin
-  W := BoardExtent + BoardPadding * 2;
+  // Total width: reserve + gap + board + gap + reserve + padding
+  W := BoardPadding + ReserveWidth + ReserveGap + BoardExtent
+     + ReserveGap + ReserveWidth + BoardPadding;
+  BoardLeft := BoardPadding + ReserveWidth + ReserveGap;
+  ReserveHeight := BoardExtent;
   Y := 20;
 
   // Title
@@ -104,14 +126,28 @@ begin
   FLblTitle.Caption := 'TIC '#$00B7' TAC '#$00B7' TOE';
   Inc(Y, 44 + 16);
 
+  // Reserve X (left side)
+  FReserveX := TPaintBox.Create(Self);
+  FReserveX.Parent := Self;
+  FReserveX.SetBounds(BoardPadding, Y, ReserveWidth, ReserveHeight);
+  FReserveX.OnPaint := PaintReserveX;
+
   // Board (custom-painted)
   FBoard := TPaintBox.Create(Self);
   FBoard.Parent := Self;
-  FBoard.SetBounds(BoardPadding, Y, BoardExtent, BoardExtent);
+  FBoard.SetBounds(BoardLeft, Y, BoardExtent, BoardExtent);
   FBoard.OnPaint := PaintBoard;
   FBoard.OnMouseDown := BoardMouseDown;
   FBoard.OnMouseMove := BoardMouseMove;
   FBoard.OnMouseLeave := BoardMouseLeave;
+
+  // Reserve O (right side)
+  FReserveO := TPaintBox.Create(Self);
+  FReserveO.Parent := Self;
+  FReserveO.SetBounds(BoardLeft + BoardExtent + ReserveGap, Y,
+    ReserveWidth, ReserveHeight);
+  FReserveO.OnPaint := PaintReserveO;
+
   Inc(Y, BoardExtent + 24);
 
   // Status
@@ -253,6 +289,48 @@ begin
   ACanvas.Brush.Style := bsSolid;
 end;
 
+procedure TMainForm.PaintMovementLines(ACanvas: TCanvas);
+
+  function CellCenter(Row, Col: Integer): TPoint;
+  var
+    R: TRect;
+  begin
+    R := GetCellRect(Row, Col);
+    Result := Point((R.Left + R.Right) div 2, (R.Top + R.Bottom) div 2);
+  end;
+
+  procedure Line(R1, C1, R2, C2: Integer);
+  var
+    P1, P2: TPoint;
+  begin
+    P1 := CellCenter(R1, C1);
+    P2 := CellCenter(R2, C2);
+    ACanvas.MoveTo(P1.X, P1.Y);
+    ACanvas.LineTo(P2.X, P2.Y);
+  end;
+
+begin
+  ACanvas.Pen.Style := psSolid;
+  ACanvas.Pen.Color := LineColor;
+  ACanvas.Pen.Width := LineWidth;
+
+  // Outer square (perimeter): a1-a2-a3, a3-b3-c3, c3-c2-c1, c1-b1-a1
+  Line(0,0, 0,1); Line(0,1, 0,2);  // top row
+  Line(0,2, 1,2); Line(1,2, 2,2);  // right col
+  Line(2,2, 2,1); Line(2,1, 2,0);  // bottom row
+  Line(2,0, 1,0); Line(1,0, 0,0);  // left col
+
+  // Central cross: a2-b2-c2 (vertical) and b1-b2-b3 (horizontal)
+  Line(0,1, 1,1); Line(1,1, 2,1);  // vertical center
+  Line(1,0, 1,1); Line(1,1, 1,2);  // horizontal center
+
+  // Major diagonals: a1-b2-c3 (D1) and a3-b2-c1 (D2)
+  Line(0,0, 1,1); Line(1,1, 2,2);  // D1
+  Line(0,2, 1,1); Line(1,1, 2,0);  // D2
+
+  ACanvas.Pen.Width := 1;
+end;
+
 procedure TMainForm.PaintBoard(Sender: TObject);
 var
   R, C: Integer;
@@ -262,6 +340,9 @@ begin
   // Board background (visible as grid gaps)
   FBoard.Canvas.Brush.Color := RGB(44, 44, 44);
   FBoard.Canvas.FillRect(Rect(0, 0, FBoard.Width, FBoard.Height));
+
+  // Movement lines (drawn under cells)
+  PaintMovementLines(FBoard.Canvas);
 
   for R := 0 to 2 do
     for C := 0 to 2 do
@@ -274,6 +355,99 @@ begin
       else if Val = 'O' then
         PaintO(FBoard.Canvas, CR);
     end;
+end;
+
+// === Piece reserves ===
+
+procedure TMainForm.PaintMiniX(ACanvas: TCanvas; CX, CY, Size: Integer;
+  AColor: TColor);
+begin
+  ACanvas.Pen.Style := psSolid;
+  ACanvas.Pen.Color := AColor;
+  ACanvas.Pen.Width := 3;
+  ACanvas.MoveTo(CX - Size, CY - Size);
+  ACanvas.LineTo(CX + Size, CY + Size);
+  ACanvas.MoveTo(CX + Size, CY - Size);
+  ACanvas.LineTo(CX - Size, CY + Size);
+  ACanvas.Pen.Width := 1;
+end;
+
+procedure TMainForm.PaintMiniO(ACanvas: TCanvas; CX, CY, Size: Integer;
+  AColor: TColor);
+begin
+  ACanvas.Brush.Style := bsClear;
+  ACanvas.Pen.Style := psSolid;
+  ACanvas.Pen.Color := AColor;
+  ACanvas.Pen.Width := 3;
+  ACanvas.Ellipse(CX - Size, CY - Size, CX + Size, CY + Size);
+  ACanvas.Pen.Width := 1;
+  ACanvas.Brush.Style := bsSolid;
+end;
+
+procedure TMainForm.PaintReserveX(Sender: TObject);
+var
+  C: TCanvas;
+  I, CX, CY, Remaining: Integer;
+  PieceColor: TColor;
+begin
+  C := FReserveX.Canvas;
+  C.Brush.Color := Self.Color;
+  C.FillRect(Rect(0, 0, FReserveX.Width, FReserveX.Height));
+
+  // Label
+  C.Font.Name := 'Segoe UI';
+  C.Font.Size := 11;
+  C.Font.Style := [fsBold];
+  C.Font.Color := RGB(255, 155, 71);
+  C.Brush.Style := bsClear;
+  C.TextOut((FReserveX.Width - C.TextWidth('X')) div 2, 8, 'X');
+  C.Brush.Style := bsSolid;
+
+  Remaining := FViewModel.XRemainingPieces;
+  CX := FReserveX.Width div 2;
+
+  for I := 0 to 2 do
+  begin
+    CY := 40 + I * (MiniPieceSize * 2 + MiniPieceGap);
+    if I < Remaining then
+      PieceColor := RGB(255, 155, 71)   // active: warm orange
+    else
+      PieceColor := RGB(70, 60, 55);    // spent: dim brown
+    PaintMiniX(C, CX, CY, MiniPieceSize, PieceColor);
+  end;
+end;
+
+procedure TMainForm.PaintReserveO(Sender: TObject);
+var
+  C: TCanvas;
+  I, CX, CY, Remaining: Integer;
+  PieceColor: TColor;
+begin
+  C := FReserveO.Canvas;
+  C.Brush.Color := Self.Color;
+  C.FillRect(Rect(0, 0, FReserveO.Width, FReserveO.Height));
+
+  // Label
+  C.Font.Name := 'Segoe UI';
+  C.Font.Size := 11;
+  C.Font.Style := [fsBold];
+  C.Font.Color := RGB(78, 205, 196);
+  C.Brush.Style := bsClear;
+  C.TextOut((FReserveO.Width - C.TextWidth('O')) div 2, 8, 'O');
+  C.Brush.Style := bsSolid;
+
+  Remaining := FViewModel.ORemainingPieces;
+  CX := FReserveO.Width div 2;
+
+  for I := 0 to 2 do
+  begin
+    CY := 40 + I * (MiniPieceSize * 2 + MiniPieceGap);
+    if I < Remaining then
+      PieceColor := RGB(78, 205, 196)   // active: cool teal
+    else
+      PieceColor := RGB(50, 65, 65);    // spent: dim teal
+    PaintMiniO(C, CX, CY, MiniPieceSize, PieceColor);
+  end;
 end;
 
 // === Mouse interaction ===
@@ -362,6 +536,8 @@ begin
     FLblPhase.Caption := 'Partida terminada';
 
   FBoard.Invalidate;
+  FReserveX.Invalidate;
+  FReserveO.Invalidate;
 end;
 
 end.
