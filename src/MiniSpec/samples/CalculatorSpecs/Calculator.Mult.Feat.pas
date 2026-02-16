@@ -74,6 +74,6 @@ initialization
         end)
       .&Then('an exception EDivByZero is raised', procedure(World: TCalculatorWorld)
         begin
-          Expect(Raised).ToBe(EDivByZero);
+          ExpectException(Raised).ToBe(EDivByZero);
         end);
 end.

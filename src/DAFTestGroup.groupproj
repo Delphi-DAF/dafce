@@ -6,6 +6,9 @@
         <Projects Include="MiniSpec\test\MiniSpecSpecs.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="Commons\test\CommonsSpecs.dproj">
+            <Dependencies/>
+        </Projects>
     </ItemGroup>
     <ProjectExtensions>
         <Borland.Personality>Default.Personality.12</Borland.Personality>
@@ -23,14 +26,23 @@
     <Target Name="MiniSpecSpecs:Make">
         <MSBuild Projects="MiniSpec\test\MiniSpecSpecs.dproj" Targets="Make"/>
     </Target>
+    <Target Name="CommonsSpecs">
+        <MSBuild Projects="Commons\test\CommonsSpecs.dproj"/>
+    </Target>
+    <Target Name="CommonsSpecs:Clean">
+        <MSBuild Projects="Commons\test\CommonsSpecs.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="CommonsSpecs:Make">
+        <MSBuild Projects="Commons\test\CommonsSpecs.dproj" Targets="Make"/>
+    </Target>
     <Target Name="Build">
-        <CallTarget Targets="MiniSpecSpecs"/>
+        <CallTarget Targets="MiniSpecSpecs;CommonsSpecs"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="MiniSpecSpecs:Clean"/>
+        <CallTarget Targets="MiniSpecSpecs:Clean;CommonsSpecs:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="MiniSpecSpecs:Make"/>
+        <CallTarget Targets="MiniSpecSpecs:Make;CommonsSpecs:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

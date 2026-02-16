@@ -89,11 +89,15 @@ type
  end;
 
 function Expect(const Value: Variant): TExpect; overload;
-function Expect(Proc: TProc): TExpectException; overload;
-function Expect(const Capture: TCapturedRaise): TExpectException; overload;
+function Expect(const Value: string): TExpect; overload;
+function Expect(const Value: Integer): TExpect; overload;
+function Expect(const Value: Boolean): TExpect; overload;
+function Expect(const Value: Double): TExpect; overload;
+function ExpectException(Proc: TProc): TExpectException; overload;
+function ExpectException(const Capture: TCapturedRaise): TExpectException; overload;
 /// <summary>
 /// Returns the captured exception from a When step.
-/// Use in Then step: Expect(Raised).ToBe(EDivByZero)
+/// Use in Then step: ExpectException(Raised).ToBe(EDivByZero)
 /// </summary>
 function Raised: TCapturedRaise;
 function Feature(const Description: string): TFeatureBuilder;
@@ -116,12 +120,32 @@ begin
   Result := TExpect.Create(Value);
 end;
 
-function Expect(Proc: TProc): TExpectException;
+function Expect(const Value: string): TExpect;
+begin
+  Result := TExpect.Create(Value);
+end;
+
+function Expect(const Value: Integer): TExpect;
+begin
+  Result := TExpect.Create(Value);
+end;
+
+function Expect(const Value: Boolean): TExpect;
+begin
+  Result := TExpect.Create(Value);
+end;
+
+function Expect(const Value: Double): TExpect;
+begin
+  Result := TExpect.Create(Value);
+end;
+
+function ExpectException(Proc: TProc): TExpectException;
 begin
   Result := TExpectException.Create(TExceptionCapture.Create(Proc));
 end;
 
-function Expect(const Capture: TCapturedRaise): TExpectException;
+function ExpectException(const Capture: TCapturedRaise): TExpectException;
 begin
   Result := TExpectException.Create(TExceptionCapture.CreateFrom(Capture));
 end;

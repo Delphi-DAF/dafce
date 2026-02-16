@@ -33,8 +33,10 @@ type
     class function Fail(Text: string): ExpectFail;overload;static;
     class function Fail(TextFmt: string; Args: array of const): ExpectFail;overload;static;
     constructor Create(const AValue: Variant);
-    procedure ToEqual(const AExpected: Variant);
-    procedure ToNotEqual(const AExpected: Variant);
+    procedure ToEqual(const AExpected: Variant); overload;
+    procedure ToEqual<T>(const AExpected: T); overload;
+    procedure ToNotEqual(const AExpected: Variant); overload;
+    procedure ToNotEqual<T>(const AExpected: T); overload;
     procedure ToBeGreaterThan(const Value: Variant);
     procedure ToBeGreaterOrEqual(const AExpected: Variant);
     procedure ToBeLessOrEqual(const AExpected: Variant);
@@ -96,6 +98,7 @@ type
 
 implementation
 uses
+  System.Rtti,
   System.StrUtils,
   System.Variants,
   System.RegularExpressions;
@@ -182,10 +185,20 @@ begin
     raise Fail('Expected %s but got %s', [VarToStr(AExpected), VarToStr(FValue)]);
 end;
 
+procedure TExpect.ToEqual<T>(const AExpected: T);
+begin
+  ToEqual(TValue.From<T>(AExpected).AsVariant);
+end;
+
 procedure TExpect.ToNotEqual(const AExpected: Variant);
 begin
   if FValue = AExpected then
     raise Fail('Expected value to not equal %s', [VarToStr(AExpected)]);
+end;
+
+procedure TExpect.ToNotEqual<T>(const AExpected: T);
+begin
+  ToNotEqual(TValue.From<T>(AExpected).AsVariant);
 end;
 
 procedure TExpect.ToBeLessThan(const AExpected: Variant);
