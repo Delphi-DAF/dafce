@@ -29,3 +29,7 @@ Thumbs.db
 releases/
 # Private local files
 .private/
+
+# AI assistant instructions (local only)
+.github/copilot-instructions.md
+.claude/
