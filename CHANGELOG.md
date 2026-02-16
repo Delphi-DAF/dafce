@@ -8,6 +8,8 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-02-16
+
 ### Added
 
 - **Samples**: TicTacToe - BDD sample app with MVVM + Clean Architecture (VCL dark-theme Form, ViewModel, ViewPort)
@@ -118,7 +120,8 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 - MiniSpec BDD testing framework
 - Sample projects: Calculator, Config, Console, HostedService, Mastermind, MediatR, Ping
 
-[Unreleased]: https://github.com/Delphi-DAF/dafce/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/Delphi-DAF/dafce/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/Delphi-DAF/dafce/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/Delphi-DAF/dafce/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/Delphi-DAF/dafce/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/Delphi-DAF/dafce/releases/tag/v1.1.0
