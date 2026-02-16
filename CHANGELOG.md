@@ -8,6 +8,19 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-02-16
+
+### Added
+
+- **Samples**: TicTacToe - BDD sample app with MVVM + Clean Architecture (VCL dark-theme Form, ViewModel, ViewPort)
+- **Samples**: TicTacToe - Feature specs: Movement, NewGame, UX (8 scenarios), with `@e2e`/`@integration` tags
+- **Samples**: TicTacToe - Algebraic notation (`a1`–`c3`), visual board DataTables, ScenarioOutline with Examples
+- **MiniSpec**: DataTable binding for ScenarioOutline; multiple reporters in INI config
+
+### Fixed
+
+- **MiniSpec**: Deferred binding in ScenarioOutline; Live Dashboard Rule/DataTable rendering
+
 ## [1.3.0] - 2026-02-02
 
 ### Added
@@ -107,7 +120,8 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 - MiniSpec BDD testing framework
 - Sample projects: Calculator, Config, Console, HostedService, Mastermind, MediatR, Ping
 
-[Unreleased]: https://github.com/Delphi-DAF/dafce/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/Delphi-DAF/dafce/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/Delphi-DAF/dafce/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/Delphi-DAF/dafce/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/Delphi-DAF/dafce/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/Delphi-DAF/dafce/releases/tag/v1.1.0

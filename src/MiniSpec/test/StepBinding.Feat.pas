@@ -6,7 +6,9 @@ implementation
 
 uses
   Daf.MiniSpec,
-  Daf.MiniSpec.Binding;
+  Daf.MiniSpec.Binding,
+  Daf.MiniSpec.Types,
+  Daf.MiniSpec.DataTable;
 
 type
   TBindingWorld = class
@@ -97,6 +99,45 @@ initialization
         // Override with lambda - this takes precedence
         W.Result := W.A + W.B + 1;  // Add 1 extra to verify lambda is used
       end)
-    .&Then('the result should be 151'); // 100 + 50 + 1
+    .&Then('the result should be 151') // 100 + 50 + 1
+
+  .ScenarioOutline('Outline: bindings resolve after placeholder substitution')
+    .Given('the numbers <A> and <B>')  // <A>,<B> can''t match (\d+) until substituted
+    .When('I add them')
+    .&Then('the result should be <Result>')
+    .Examples([
+      ['A',  'B',  'Result'],
+      [ 1,    2,    3],
+      [10,   20,   30],
+      [100, 200,  300]
+    ])
+
+  .ScenarioOutline('Outline: different bindings per outline')
+    .Given('the numbers <X> and <Y>')
+    .When('I multiply them')
+    .&Then('the result should be <Product>')
+    .Examples([
+      ['X', 'Y', 'Product'],
+      [ 3,   4,   12],
+      [ 7,   8,   56]
+    ])
+
+  .ScenarioOutline('Outline: Given with DataTable propagates to each example')
+    .Given('the following numbers:',
+      [['A',  'B'],
+       [ 10,   20]],
+      procedure(W: TBindingWorld)
+      begin
+        var DT := SpecContext.Step.DataTable;
+        W.A := DT.Cell(0, 0).AsInteger;
+        W.B := DT.Cell(0, 1).AsInteger;
+      end)
+    .When('I <operation> them')
+    .&Then('the result should be <Expected>')
+    .Examples([
+      ['operation', 'Expected'],
+      ['add',             30],
+      ['multiply',       200]
+    ]);
 
 end.

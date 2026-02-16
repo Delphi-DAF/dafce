@@ -49,6 +49,7 @@ type
     procedure OnEndFeature(const Context: IRunContext; const Feature: IFeature);override;
     procedure OnEndScenario(const Context: IRunContext; const Scenario: IScenario);override;
     procedure OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline);override;
+    procedure OnItem(const Context: IRunContext; const Item: ISpecItem);override;
     property Port: Integer read FPort;
     property WaitTimeout: Integer read FWaitTimeout;  // ms, 0 = no wait
   end;
@@ -535,6 +536,33 @@ begin
     BroadcastEvent(BuildEventJson('outline:end', Data));
   finally
     Data.Free;
+  end;
+end;
+
+procedure TLiveReporter.OnItem(const Context: IRunContext; const Item: ISpecItem);
+var
+  Rule: IRule;
+  Data: TJSONObject;
+  BgSteps: TJSONArray;
+begin
+  // Emit rule:start for explicit Rules (not implicit)
+  if (Item.Kind = sikRule) and Supports(Item, IRule, Rule) then
+  begin
+    Data := TJSONObject.Create;
+    try
+      Data.AddPair('name', Rule.Description);
+      Data.AddPair('success', TJSONBool.Create(Rule.RunInfo.IsSuccess));
+      Data.AddPair('ms', TJSONNumber.Create(Rule.RunInfo.ExecTimeMs));
+      // Include rule-level background with DataTables
+      if Rule.BackGround <> nil then
+      begin
+        BgSteps := StepsToJsonArray(Rule.BackGround.StepsGiven, 'Given');
+        Data.AddPair('background', BgSteps);
+      end;
+      BroadcastEvent(BuildEventJson('rule:start', Data));
+    finally
+      Data.Free;
+    end;
   end;
 end;
 

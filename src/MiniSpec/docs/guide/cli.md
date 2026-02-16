@@ -39,6 +39,25 @@ MyApp.exe -r junit:output=results.xml
 
 # Real-time dashboard
 MyApp.exe -r live:port=8080
+
+# Multiple reporters simultaneously
+MyApp.exe -r console -r junit:output=results.xml -r json:output=report.json
+```
+
+## Configuration File
+
+If a `MiniSpec.ini` file does not exist in the executable directory, MiniSpec creates one with default settings on first run. On subsequent runs, options are loaded from this file.
+
+Command line options **always take priority** over the file. See [Reporters](reporters.md) for full INI syntax.
+
+```ini
+[minispec]
+reporters=console,live
+filter=@unit
+pause=true
+
+[reporter.live]
+port=8080
 ```
 
 ---

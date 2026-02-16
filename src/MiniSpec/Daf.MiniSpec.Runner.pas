@@ -34,7 +34,7 @@ type
     FPause: Boolean;
     FDryRun: Boolean;
     FStackTrace: Boolean;
-    FReporterName: string;
+    FReporterNames: TArray<string>;
     FReporterOptions: TObjectDictionary<string, TRunnerOptions>;
   public
     constructor Create;
@@ -50,13 +50,14 @@ type
     // Reporter options
     function GetReporterOptions(const ReporterName: string): TRunnerOptions;
     procedure SetReporterOption(const ReporterName, Key, Value: string);
+    procedure AddReporterName(const Name: string);
     // Properties
     property SpecMatcher: TSpecMatcher read FSpecMatcher write FSpecMatcher;
     property Filter: string read FFilter write FFilter;
     property Pause: Boolean read FPause write FPause;
     property IsDryRun: Boolean read FDryRun write FDryRun;
     property StackTrace: Boolean read FStackTrace write FStackTrace;
-    property ReporterName: string read FReporterName write FReporterName;
+    property ReporterNames: TArray<string> read FReporterNames write FReporterNames;
   end;
 
   /// <summary>
@@ -272,7 +273,7 @@ type
 
 implementation
 uses
-  System.StrUtils,
+
   System.IOUtils,
   IdGlobal,
   Daf.MiniSpec.Utils,
@@ -394,7 +395,7 @@ begin
   FFilter := '';
   FPause := False;
   FDryRun := False;
-  FReporterName := '';  // No default listener - will use console if none specified
+  FReporterNames := [];  // No default listener - will use console if none specified
 end;
 
 destructor TMiniSpecOptions.Destroy;
@@ -442,6 +443,19 @@ begin
   Opts.AddOrSetValue(Key, Value);
 end;
 
+procedure TMiniSpecOptions.AddReporterName(const Name: string);
+var
+  LName, N: string;
+begin
+  LName := LowerCase(Name.Trim);
+  if LName.IsEmpty then
+    Exit;
+  for N in FReporterNames do
+    if SameText(N, LName) then
+      Exit;
+  FReporterNames := FReporterNames + [LName];
+end;
+
 procedure TMiniSpecOptions.LoadFromFile(const FileName: string);
 var
   Ini: TMemIniFile;
@@ -477,17 +491,19 @@ begin
             FPause := SameText(Value, 'true') or (Value = '1')
           else if SameText(Key, 'dry-run') then
             FDryRun := SameText(Value, 'true') or (Value = '1')
-          else if SameText(Key, 'reporter') then
-            FReporterName := Value;
+          else if SameText(Key, 'reporters') or SameText(Key, 'reporter') then
+          begin
+            for var Part in Value.Split([',']) do
+              AddReporterName(Part.Trim);
+          end;
         end;
       end
       else if Section.StartsWith(SEC_REPORTER_PREFIX, True) then
       begin
-        // Opciones de reporter: [listener.html], [listener.live], etc.
+        // Opciones de reporter: [reporter.html], [reporter.live], etc.
         RepName := Copy(Section, Length(SEC_REPORTER_PREFIX) + 1, MaxInt);
-        // Si no hay reporter principal definido, usar el primero que encontremos
-        if FReporterName.IsEmpty then
-          FReporterName := RepName;
+        // Auto-registrar reporters que tengan sección de opciones
+        AddReporterName(RepName);
         Opts := GetReporterOptions(RepName);
         for j := 0 to Keys.Count - 1 do
         begin
@@ -512,8 +528,11 @@ var
 begin
   Ini := TMemIniFile.Create(FileName);
   try
-    // Siempre escribir sección [minispec] con listener (aunque sea console)
-    Ini.WriteString(SEC_MINISPEC, 'reporter', IfThen(FReporterName.IsEmpty, 'console', FReporterName));
+    // Siempre escribir sección [minispec] con reporters (aunque sea console)
+    if Length(FReporterNames) > 0 then
+      Ini.WriteString(SEC_MINISPEC, 'reporters', string.Join(',', FReporterNames))
+    else
+      Ini.WriteString(SEC_MINISPEC, 'reporters', 'console');
 
     // Opciones globales
     if not FFilter.IsEmpty then
