@@ -8,6 +8,17 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Samples**: TicTacToe - BDD sample app with MVVM + Clean Architecture (VCL dark-theme Form, ViewModel, ViewPort)
+- **Samples**: TicTacToe - Feature specs: Movement, NewGame, UX (8 scenarios), with `@e2e`/`@integration` tags
+- **Samples**: TicTacToe - Algebraic notation (`a1`–`c3`), visual board DataTables, ScenarioOutline with Examples
+- **MiniSpec**: DataTable binding for ScenarioOutline; multiple reporters in INI config
+
+### Fixed
+
+- **MiniSpec**: Deferred binding in ScenarioOutline; Live Dashboard Rule/DataTable rendering
+
 ## [1.3.0] - 2026-02-02
 
 ### Added
