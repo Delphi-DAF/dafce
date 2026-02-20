@@ -21,38 +21,30 @@
 
 ### ARC\<T\>
 
-Automatic reference count wrapper. When the last `ARC<T>` variable holding an object goes out of scope, the object is freed.
+`ARC<T>` is a smart pointer implemented as `reference to function: T`. Invoke it as a function to obtain the object; when all references go out of scope the object is freed automatically.
 
 ```pascal
 uses Daf.MemUtils;
 
-// Create
-var Doc := ARC<TDocument>.Create(TDocument.Create);
+// Create from an existing instance
+var Doc := ARC.From<TDocument>(TDocument.Create);
 
-// Access wrapped object
-Doc.Value.Load('report.pdf');
+// Create and auto-instantiate (requires parameterless constructor)
+var Doc2 := ARC.From<TDocument>;
 
-// Pass around — reference count increases, freed when last copy exits scope
+// Access the object — invoke as a function
+Doc().Load('report.pdf');
+WriteLn(Doc().Title);
+
+// Pass around — ref count increases; freed when last copy exits scope
 var Copy := Doc;
 ```
 
 **Key rules**
 
-- `ARC<T>` is a record — assignment copies the handle and increments the count.
-- `Value` raises an exception if the internal object is nil.
-- Supports interfaces via `ARC<IMyInterface>`.
-
-### WRef\<T\>
-
-Weak reference — does **not** prevent the wrapped object from being freed.
-
-```pascal
-var Weak: WRef<TMyObject>;
-Weak := WRef<TMyObject>.Create(StrongRef);
-
-if Weak.IsAlive then
-  Weak.Value.DoWork;
-```
+- `ARC<T>` is a `reference to function: T` (interface closure), not a record.
+- Access the object by calling the variable as a function: `MyArc()`, not `.Value`.
+- `ARC.From<T>(nil)` returns `nil`.
 
 ---
 

@@ -13,7 +13,7 @@ Cross-cutting utilities for DAFce applications — smart pointers, cancellation 
 
 | Unit | Highlights |
 |------|-----------|
-| `Daf.MemUtils` | `ARC<T>` auto-ref-count smart pointer, `WRef<T>` weak reference |
+| `Daf.MemUtils` | `ARC<T>` smart pointer (`reference to function: T`), `TFinalizer`, `TPurgatory` |
 | `Daf.Threading` | `ICancellationToken`, `ICancellationTokenSource`, `IFuture<T>`, `TShutdownHook` |
 | `Daf.Enumerable` | `IEnumerable<T>`, `IInterfaceList<T>`, `TOrderedDictionary` |
 | `Daf.SystemProcess` | `TSystemProcess` — async external process runner with events |
@@ -33,8 +33,8 @@ Cross-cutting utilities for DAFce applications — smart pointers, cancellation 
 ```pascal
 uses Daf.MemUtils;
 
-var Ref := ARC<TMyObject>.Create(TMyObject.Create);
-Ref.Value.DoWork;
+var Ref := ARC.From<TMyObject>(TMyObject.Create);
+Ref().DoWork;
 // auto-freed when Ref goes out of scope
 ```
 

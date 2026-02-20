@@ -13,7 +13,7 @@ Utilidades transversales para aplicaciones DAFce — punteros inteligentes, toke
 
 | Unidad | Aspectos destacados |
 |--------|-------------------|
-| `Daf.MemUtils` | `ARC<T>` puntero inteligente de auto-refcount, `WRef<T>` referencia débil |
+| `Daf.MemUtils` | `ARC<T>` smart pointer (`reference to function: T`), `TFinalizer`, `TPurgatory` |
 | `Daf.Threading` | `ICancellationToken`, `ICancellationTokenSource`, `IFuture<T>`, `TShutdownHook` |
 | `Daf.Enumerable` | `IEnumerable<T>`, `IInterfaceList<T>`, `TOrderedDictionary` |
 | `Daf.SystemProcess` | `TSystemProcess` — runner de procesos externos asíncrono con eventos |
@@ -33,8 +33,8 @@ Utilidades transversales para aplicaciones DAFce — punteros inteligentes, toke
 ```pascal
 uses Daf.MemUtils;
 
-var Ref := ARC<TMyObject>.Create(TMyObject.Create);
-Ref.Value.DoWork;
+var Ref := ARC.From<TMyObject>(TMyObject.Create);
+Ref().DoWork;
 // liberado automáticamente cuando Ref sale del scope
 ```
 
