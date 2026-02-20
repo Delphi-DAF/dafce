@@ -1,167 +1,90 @@
-# TSystemProcess
+# Commons
 
-**Unidad:** `Daf.SystemProcess`
-**Framework:** DAF
-**Versión:** Revisión actual
-**Autoría:** Colaborativa
+**🌍 Language: English | [Español](README.es.md)**
 
-## ✨ Descripción
+Cross-cutting utilities for DAFce applications — smart pointers, cancellation tokens, async futures, process execution, RTTI helpers, enumerable abstractions, command-line parsing, and more.
 
-`TSystemProcess` es una clase de alto nivel diseñada para lanzar, controlar y supervisar procesos externos en Windows de forma asincrónica y orientada a eventos.
-Su API es intuitiva para desarrolladores procedentes de .NET, permitiendo gestionar procesos con opciones como:
-
-* Timeout configurable
-* Captura de salida y errores (`stdout` / `stderr`)
-* Callbacks de eventos (`OnCompleted`, `OnFailed`, `OnKilled`, etc.)
-* Cancelación con `CancellationToken`
-* Builder fluido con encadenamiento de métodos
-* Matar procesos por código o desde `CTRL+C` con integración con `TShutdownHook`
+[![Delphi 12+](https://img.shields.io/badge/Delphi-12%2B-red.svg)](https://www.embarcadero.com/products/delphi)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../legal/LICENSE.md)
 
 ---
 
-## 🛩 Clases y Tipos
+## Modules at a glance
 
-### `TSystemProcess.TStatus` (enum)
-
-Estado final del proceso:
-
-* `Running`
-* `Completed`
-* `Canceled`
-* `Timeout`
-* `Failed`
-
----
-
-### `TProcessResult`
-
-Registro con información final del proceso:
-
-| Campo       | Tipo        | Descripción                            |
-| ----------- | ----------- | -------------------------------------- |
-| `Status`    | `TStatus`   | Estado final                           |
-| `ExitCode`  | `DWORD`     | Código de salida del proceso           |
-| `Duration`  | `TTimeSpan` | Tiempo total de ejecución              |
-| `LastError` | `string`    | Descripción del último error           |
-| `Succeeded` | `function`  | `True` si `Completed` y `ExitCode = 0` |
+| Unit | Highlights |
+|------|-----------|
+| `Daf.MemUtils` | `ARC<T>` auto-ref-count smart pointer, `WRef<T>` weak reference |
+| `Daf.Threading` | `ICancellationToken`, `ICancellationTokenSource`, `IFuture<T>`, `TShutdownHook` |
+| `Daf.Enumerable` | `IEnumerable<T>`, `IInterfaceList<T>`, `TOrderedDictionary` |
+| `Daf.SystemProcess` | `TSystemProcess` — async external process runner with events |
+| `Daf.CmdLn.Parser` | Command-line argument parser |
+| `Daf.Rtti` | RTTI helpers — `_T.Extends`, type predicates |
+| `Daf.Activator` | Create class instances via RTTI |
+| `Daf.Arrays` | `TArray` extension helpers (IndexOf, etc.) |
+| `Daf.Expression` | Simple expression evaluator |
+| `Daf.Types` | Common base types |
 
 ---
 
-### `TSystemProcess`
+## Quick examples
 
-Clase principal.
-
-#### 🔧 Propiedades
-
-| Propiedad          | Tipo                  | Descripción                                            |
-| ------------------ | --------------------- | ------------------------------------------------------ |
-| `CommandLine`      | `string`              | Comando completo a ejecutar                            |
-| `WorkingDirectory` | `string`              | Directorio de trabajo opcional                         |
-| `TimeoutMS`        | `Cardinal`            | Tiempo máximo en milisegundos (`INFINITE` por defecto) |
-| `KillAfterTimeout` | `Boolean`             | Si se debe matar tras timeout                          |
-| `HideWindow`       | `Boolean`             | Si se debe ocultar la ventana del proceso              |
-| `IsRunning`        | `Boolean` (read-only) | `True` si el proceso sigue activo                      |
-
-#### 📡 Callbacks
-
-| Evento        | Tipo                                | Descripción                             |
-| ------------- | ----------------------------------- | --------------------------------------- |
-| `OnStdOut`    | `procedure(Text: string)`           | Cada línea de salida estándar           |
-| `OnStdErr`    | `procedure(Text: string)`           | Cada línea de salida de error           |
-| `OnIdle`      | `procedure(Result: TProcessResult)` | Llamado periódicamente mientras ejecuta |
-| `OnCompleted` | `procedure(Result: TProcessResult)` | Al finalizar exitosamente               |
-| `OnFailed`    | `procedure(Result: TProcessResult)` | Si `CreateProcess` falla o similar      |
-| `OnCancelled` | `procedure(Result: TProcessResult)` | Si se cancela con token                 |
-| `OnKilled`    | `procedure(Result: TProcessResult)` | Si se termina forzadamente              |
-
----
-
-### `TBuilder`
-
-Fluent API para construir procesos.
+### ARC smart pointer
 
 ```pascal
-var Process := TSystemProcess.Builder
-  .Command('ping.exe')
-  .CmdArgs(['127.0.0.1'])
-  .Timeout(10000)
-  .OnStdOut(...)
-  .OnCompleted(...)
-  .Build;
+uses Daf.MemUtils;
+
+var Ref := ARC<TMyObject>.Create(TMyObject.Create);
+Ref.Value.DoWork;
+// auto-freed when Ref goes out of scope
 ```
 
----
-
-## ✅ Métodos principales
-
-### `Execute(CancellationToken: ICancellationToken = nil): TProcessResult`
-
-Ejecución síncrona. Captura todos los eventos y devuelve el resultado final.
-
-### `ExecuteAsync(CancellationToken: ICancellationToken = nil): IFuture<TProcessResult>`
-
-Ejecución en segundo plano con resultado futuro.
-
-### `Kill`
-
-Mata el proceso lanzado (por `PID`). Internamente usa `TerminateProcess` y marca `FKillRequested := True`.
-
-> **Nota:** no garantiza el cierre de procesos del sistema o GUI como `notepad.exe`.
-
----
-
-## 🚫 Limitaciones conocidas
-
-* Algunos procesos GUI como `notepad.exe`, `calc.exe`, etc., **no pueden ser terminados** correctamente debido a protecciones del sistema o porque delegan en procesos intermedios.
-* El PID devuelto por `CreateProcess` puede no corresponder con el proceso visible.
-* El uso de `HideWindow(True)` en apps GUI puede hacer que el proceso se vuelva incontrolable (invisible pero no matable).
-
----
-
-## 🛠 Integración con `TShutdownHook`
-
-Puedes conectar la finalización del sistema (como `CTRL+C`) para cancelar procesos:
+### Cancellation token
 
 ```pascal
-TShutdownHook.OnShutdownRequested := procedure
+uses Daf.Threading;
+
+var Cts := TCancellationTokenSource.Create;
+var Token := Cts.Token;
+
+TThread.CreateAnonymousThread(procedure
 begin
-  Process.Kill;
-end;
+  while not Token.IsCancellationRequested do
+    DoWork;
+end).Start;
+
+Sleep(5000);
+Cts.Cancel;
 ```
 
----
-
-## 🔄 Ciclo de vida
-
-```plaintext
-Builder → Build → Execute/ExecuteAsync →
-  [OnIdle*] → (Cancel/Kill/Timeout/Complete) →
-  OnCompleted / OnKilled / OnCancelled / OnFailed
-```
-
----
-
-## 🔬 Ejemplo práctico
+### External process (async)
 
 ```pascal
+uses Daf.SystemProcess;
+
 var Process := TSystemProcess.Builder
-  .Command('cmd.exe')
-  .CmdArgs(['/C', 'ping 127.0.0.1'])
-  .Timeout(10000)
-  .OnStdOut(procedure(Text: string) begin Writeln(Text); end)
-  .OnCompleted(procedure(Result: TProcessResult)
-  begin
-    Writeln('ExitCode: ', Result.ExitCode);
-  end)
+  .Command('git')
+  .CmdArgs(['--version'])
+  .OnStdOut(procedure(Line: string) begin WriteLn(Line); end)
+  .OnCompleted(procedure(R: TProcessResult) begin WriteLn('Done, exit=', R.ExitCode); end)
   .Build;
 
 Process.ExecuteAsync;
 ```
 
+### Future
+
+```pascal
+uses Daf.Threading;
+
+var Future: IFuture<Integer> := TFuture<Integer>.Run(
+  function: Integer begin Result := HeavyComputation; end);
+
+WriteLn('Result: ', Future.Value);
+```
+
 ---
 
-## 📌 Recomendaciones de uso
+## Documentation
 
-* Usa `ExecuteAsync` en apps con UI o consola que deban mantenerse reactivas.
-* No uses `Kill` con procesos del sistema o GUI protegidos.
-* Usa `HideWindow(True)` solo con procesos de consola sin GUI.
+- 📖 [Usage Guide](docs/GUIDE.md) — full API reference for all units
+
