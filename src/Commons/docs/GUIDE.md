@@ -7,7 +7,7 @@
 ## Table of Contents
 
 1. [Daf.MemUtils — Smart pointers](#dafmemutils--smart-pointers)
-2. [Daf.Threading — Cancellation and futures](#dafthreading--cancellation-and-futures)
+2. [Daf.Threading — Cancellation tokens and shutdown](#dafthreading--cancellation-tokens-and-shutdown)
 3. [Daf.Enumerable](#dafenumerable)
 4. [Daf.SystemProcess](#dafsystemprocess)
 5. [Daf.CmdLn.Parser](#dafcmdlnparser)
@@ -48,39 +48,36 @@ var Copy := Doc;
 
 ---
 
-## Daf.Threading — Cancellation and futures
+## Daf.Threading — Cancellation tokens and shutdown
 
 ### ICancellationToken / ICancellationTokenSource
+
+Use the factory functions to create a cancellation source — `TCancellationTokenSource` is an internal implementation class and is not instantiated directly.
 
 ```pascal
 uses Daf.Threading;
 
-var Cts   := TCancellationTokenSource.Create;
-var Token := Cts.Token;          // ICancellationToken
+// Create via factory functions
+var Cts := CreateCancellationTokenSource;           // standard
+// var Cts := CreateCancellationTokenSourceWithTimeout(5000); // auto-cancel after 5 s
+// var Cts := CreateCanceledCancellationTokenSource;          // already canceled
+
+var Token := Cts.Token;  // ICancellationToken
 
 // In worker:
 while not Token.IsCancellationRequested do
   ProcessNextItem;
 
-// Caller:
+// Notify when canceled:
+Token.Register(procedure begin WriteLn('Canceled!'); end);
+
+// Cancel from caller:
 Cts.Cancel;
 ```
 
-### IFuture\<T\>
-
-Run work on a background thread and retrieve the result later.
-
-```pascal
-var Future := TFuture<string>.Run(
-  function: string
-  begin
-    Result := FetchFromAPI;
-  end);
-
-// … do other work …
-
-var Data := Future.Value;   // blocks until complete
-```
+> **Note:** `IFuture<T>` is part of the Delphi RTL (`System.Threading`), not DAF.
+> Use `TTask.Future<T>` (RTL) for background computations, or `TSystemProcess.ExecuteAsync`
+> (DAF) for external process execution.
 
 ### TShutdownHook
 
@@ -100,35 +97,46 @@ end;
 
 ## Daf.Enumerable
 
-### IEnumerable\<T\>
+### ToIEnumerable\<T\>
 
-Lazy forward-only sequence over any data source.
+Bridge record that adapts any `TEnumerable<T>` (class) to the `IEnumerable<T>` interface. Implicit conversion operators make usage transparent.
 
 ```pascal
 uses Daf.Enumerable;
 
-var Seq := TListEnumerable<integer>.Create(MyList);
+var List := TList<Integer>.Create;
+List.Add(1); List.Add(2); List.Add(3);
+
+// Implicit conversion to IEnumerable<T>
+var Seq: IEnumerable<Integer> := ToIEnumerable<Integer>(List);
 for var Item in Seq do
   Process(Item);
+
+// Convert back to a plain array
+var Arr := ToIEnumerable<Integer>(List).ToArray;
 ```
 
 ### IInterfaceList\<T\>
 
-Type-safe list of interface references.
+Type-safe list of interface references, with `GetEnumerator` support.
 
 ```pascal
-var List: IInterfaceList<IMyService>;
-List := TInterfaceList<IMyService>.Create;
+var List := TInterfaceList<IMyService>.Create;
 List.Add(ServiceA);
 List.Add(ServiceB);
 
-for var Svc in List do
-  Svc.Execute;
+if not List.IsEmpty then
+  for var Svc in List do
+    Svc.Execute;
+
+// Search by predicate
+var Found: IMyService;
+if List.TryFind(
+    function(I: IInterface): Boolean
+    begin Result := (I as IMyService).Name = 'target'; end,
+    Found) then
+  Found.Execute;
 ```
-
-### TOrderedDictionary
-
-Dictionary that preserves insertion order when iterating.
 
 ---
 
@@ -188,31 +196,88 @@ end;
 
 ## Daf.CmdLn.Parser
 
-Parse command-line arguments into named switches and positional values.
+Builds a typed argument grammar with `TCmdLnParserBuilder`, then parses the command line into `ICmdLParams`.
 
 ```pascal
 uses Daf.CmdLn.Parser;
 
-var Parser := TCmdLnParser.Create;
-Parser.Parse(ParamStr(0));
+// 1. Define the grammar
+var Parser := TCmdLnParserBuilder.Create
+  .Arg<string>('file')      // named string argument
+  .Arg<Integer>('port')     // named integer argument
+  .Arg<Boolean>('verbose')  // boolean flag
+  .Build;                   // returns ICmdLnParser
 
-var Verbose := Parser.Flag('v');           // --v or -v
-var Port    := Parser.Value('port', '80'); // --port 8080 (default '80')
-var Files   := Parser.Positionals;         // remaining args
+// 2. Parse the actual command line
+var Params := Parser.Parse(GetCommandLine);
+
+// 3. Read values (ICmdLParams.Item[] is the default property)
+var FilePath  := Params['file'].AsString;
+var Port      := Params['port'].AsInteger;
+var IsVerbose := Params['verbose'].AsBoolean;
+```
+
+### Subcommands
+
+```pascal
+var Parser := TCmdLnParserBuilder.Create
+  .Command('build')
+    .Arg<string>('output')
+  .EndCommand
+  .Command('run')
+    .Arg<Boolean>('watch')
+  .EndCommand
+  .Build;
+
+var Params := Parser.Parse(GetCommandLine);
+var Cmd := Params.Command;   // 'build' or 'run'
+if Cmd = 'build' then
+begin
+  var Section := Params.GetSection('build');
+  var OutDir  := Section['output'].AsString;
+end;
 ```
 
 ---
 
 ## Daf.Rtti
 
-Helpers for Delphi's Extended RTTI.
+Helpers for Delphi's Extended RTTI, centralised in the `_T` utility class.
 
 ```pascal
 uses Daf.Rtti;
 
-// Check inheritance at runtime
-if _T.Extends(SomeClass, TMyBaseClass) then
-  WriteLn('Is derived');
+// Type names and GUIDs
+var Name := _T.NameOf<IMyService>;            // 'IMyService'
+var Guid := _T.GUID<IMyService>;              // TGUID
+var Unit := _T.UnitNameOf<IMyService>;        // 'MyUnit'
+
+// Check interface hierarchy (PTypeInfo overloads)
+if _T.Extends(TypeInfo(IChildService), TypeInfo(IMyService)) then
+  WriteLn('IChildService extends IMyService');
+
+// Check whether a class has a property
+if _T.HasProperty<TMyClass>('Name') then
+  WriteLn('Name property exists');
+
+// Create default (zero) value for any type
+var Zero := _T.Default<Integer>;             // 0
+```
+
+### TRttiTypeHelper / TRttiPackageHelper
+
+```pascal
+var RC := TRttiContext.Create;
+var T  := RC.GetType(TypeInfo(TMyClass));
+
+if T.IsCollection then WriteLn('Is a collection');
+if T.Implements<IMyService> then WriteLn('Implements IMyService');
+
+// Discover all implementations of an interface in a package
+RC.FindType('MyUnit.TMyClass').AsInstance.DeclaringUnitPackage
+  .DiscoverImpl<IMyService>(False, nil,
+    procedure(Intf: TRttiInterfaceType; Impl: TRttiInstanceType)
+    begin WriteLn(Impl.Name); end);
 ```
 
 ---
@@ -231,12 +296,46 @@ var Instance := TActivator.CreateInstance(TMyServiceClass) as IMyService;
 
 ## Daf.Arrays
 
-`TArray` extension helpers.
+### TArrayHelper
+
+Class helper for the stock `TArray` — adds `Map` (projection) and `Trim` (strip whitespace / remove empty strings).
 
 ```pascal
 uses Daf.Arrays;
 
-var Idx := TArrayHelper.IndexOf<string>(MyArray, 'needle');
-if Idx >= 0 then
-  WriteLn('Found at ', Idx);
+// Map: project [string] -> [Integer]
+var Lengths := TArray.Map<string, Integer>(Names,
+  function(S: string): Integer begin Result := S.Length; end);
+
+// Trim: strip whitespace and remove empty elements from a string array
+var Clean := TArray.Trim(['  hello  ', '', '  world  ']);
+// Clean = ['hello', 'world']
+```
+
+### TSmartArray\<T\>
+
+Value-type wrapper around `TArray<T>` with a rich LINQ-style API. Supports operators `in`, `+`, `=`, implicit conversion to/from `TArray<T>`, and CSV-string implicit conversion.
+
+```pascal
+var Items: TSmartArray<string>;
+Items.Concat('alpha');
+Items.Concat('beta');
+Items.Concat('gamma');
+
+// Membership
+if 'beta' in Items then WriteLn('Found');
+
+// Filter
+var Long := Items.Where(
+  function(S: string): Boolean begin Result := Length(S) > 4; end);
+
+// Project
+var Upper := Items.Select<string>(
+  function(S: string): string begin Result := S.ToUpper; end);
+
+// Concatenation via operator +
+var More: TSmartArray<string> := Items + ['delta', 'epsilon'];
+
+// Sort
+Items.Sort;
 ```

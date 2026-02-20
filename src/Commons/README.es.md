@@ -14,13 +14,13 @@ Utilidades transversales para aplicaciones DAFce — punteros inteligentes, toke
 | Unidad | Aspectos destacados |
 |--------|-------------------|
 | `Daf.MemUtils` | `ARC<T>` smart pointer (`reference to function: T`), `TFinalizer`, `TPurgatory` |
-| `Daf.Threading` | `ICancellationToken`, `ICancellationTokenSource`, `IFuture<T>`, `TShutdownHook` |
-| `Daf.Enumerable` | `IEnumerable<T>`, `IInterfaceList<T>`, `TOrderedDictionary` |
+| `Daf.Threading` | `ICancellationToken`, `ICancellationTokenSource` (fábrica: `CreateCancellationTokenSource`), `TShutdownHook` |
+| `Daf.Enumerable` | Adaptador `ToIEnumerable<T>`, `IInterfaceList<T>`, `TInterfaceList<T>` |
 | `Daf.SystemProcess` | `TSystemProcess` — runner de procesos externos asíncrono con eventos |
 | `Daf.CmdLn.Parser` | Parser de argumentos de línea de comandos |
 | `Daf.Rtti` | Helpers de RTTI — `_T.Extends`, predicados de tipo |
 | `Daf.Activator` | Crear instancias de clases mediante RTTI |
-| `Daf.Arrays` | Helpers de extensión de `TArray` (IndexOf, etc.) |
+| `Daf.Arrays` | `TArrayHelper` (`Map`, `Trim`), `TSmartArray<T>` (estilo LINQ: `Where`, `Select`, `Contains`, `Sort`, …) |
 | `Daf.Expression` | Evaluador de expresiones simple |
 | `Daf.Types` | Tipos base comunes |
 
@@ -43,7 +43,7 @@ Ref().DoWork;
 ```pascal
 uses Daf.Threading;
 
-var Cts := TCancellationTokenSource.Create;
+var Cts   := CreateCancellationTokenSource;
 var Token := Cts.Token;
 
 TThread.CreateAnonymousThread(procedure
@@ -69,17 +69,6 @@ var Process := TSystemProcess.Builder
   .Build;
 
 Process.ExecuteAsync;
-```
-
-### Future
-
-```pascal
-uses Daf.Threading;
-
-var Future: IFuture<Integer> := TFuture<Integer>.Run(
-  function: Integer begin Result := CalculoHeavy; end);
-
-WriteLn('Resultado: ', Future.Value);
 ```
 
 ---

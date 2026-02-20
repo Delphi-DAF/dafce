@@ -14,13 +14,13 @@ Cross-cutting utilities for DAFce applications — smart pointers, cancellation 
 | Unit | Highlights |
 |------|-----------|
 | `Daf.MemUtils` | `ARC<T>` smart pointer (`reference to function: T`), `TFinalizer`, `TPurgatory` |
-| `Daf.Threading` | `ICancellationToken`, `ICancellationTokenSource`, `IFuture<T>`, `TShutdownHook` |
-| `Daf.Enumerable` | `IEnumerable<T>`, `IInterfaceList<T>`, `TOrderedDictionary` |
+| `Daf.Threading` | `ICancellationToken`, `ICancellationTokenSource` (factory: `CreateCancellationTokenSource`), `TShutdownHook` |
+| `Daf.Enumerable` | `ToIEnumerable<T>` adapter, `IInterfaceList<T>`, `TInterfaceList<T>` |
 | `Daf.SystemProcess` | `TSystemProcess` — async external process runner with events |
 | `Daf.CmdLn.Parser` | Command-line argument parser |
 | `Daf.Rtti` | RTTI helpers — `_T.Extends`, type predicates |
 | `Daf.Activator` | Create class instances via RTTI |
-| `Daf.Arrays` | `TArray` extension helpers (IndexOf, etc.) |
+| `Daf.Arrays` | `TArrayHelper` (`Map`, `Trim`), `TSmartArray<T>` (LINQ-style: `Where`, `Select`, `Contains`, `Sort`, …) |
 | `Daf.Expression` | Simple expression evaluator |
 | `Daf.Types` | Common base types |
 
@@ -43,7 +43,7 @@ Ref().DoWork;
 ```pascal
 uses Daf.Threading;
 
-var Cts := TCancellationTokenSource.Create;
+var Cts   := CreateCancellationTokenSource;
 var Token := Cts.Token;
 
 TThread.CreateAnonymousThread(procedure
@@ -69,17 +69,6 @@ var Process := TSystemProcess.Builder
   .Build;
 
 Process.ExecuteAsync;
-```
-
-### Future
-
-```pascal
-uses Daf.Threading;
-
-var Future: IFuture<Integer> := TFuture<Integer>.Run(
-  function: Integer begin Result := HeavyComputation; end);
-
-WriteLn('Result: ', Future.Value);
 ```
 
 ---

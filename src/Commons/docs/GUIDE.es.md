@@ -7,7 +7,7 @@
 ## Tabla de contenidos
 
 1. [Daf.MemUtils — Punteros inteligentes](#dafmemutils--punteros-inteligentes)
-2. [Daf.Threading — Cancelación y futuros](#dafthreading--cancelación-y-futuros)
+2. [Daf.Threading — Tokens de cancelación y apagado](#dafthreading--tokens-de-cancelación-y-apagado)
 3. [Daf.Enumerable](#dafenumerable)
 4. [Daf.SystemProcess](#dafsystemprocess)
 5. [Daf.CmdLn.Parser](#dafcmdlnparser)
@@ -48,39 +48,36 @@ var Copia := Doc;
 
 ---
 
-## Daf.Threading — Cancelación y futuros
+## Daf.Threading — Tokens de cancelación y apagado
 
 ### ICancellationToken / ICancellationTokenSource
+
+Usar las funciones de fábrica para crear un origen de cancelación — `TCancellationTokenSource` es una clase de implementación interna y no se instancia directamente.
 
 ```pascal
 uses Daf.Threading;
 
-var Cts   := TCancellationTokenSource.Create;
-var Token := Cts.Token;          // ICancellationToken
+// Crear mediante funciones de fábrica
+var Cts := CreateCancellationTokenSource;           // estándar
+// var Cts := CreateCancellationTokenSourceWithTimeout(5000); // auto-cancela tras 5 s
+// var Cts := CreateCanceledCancellationTokenSource;          // ya cancelado
+
+var Token := Cts.Token;  // ICancellationToken
 
 // En el worker:
 while not Token.IsCancellationRequested do
   ProcesarSiguienteElemento;
 
-// Llamador:
+// Notificar cuando se cancela:
+Token.Register(procedure begin WriteLn('Cancelado!'); end);
+
+// Cancelar desde el llamador:
 Cts.Cancel;
 ```
 
-### IFuture\<T\>
-
-Ejecuta trabajo en un hilo en segundo plano y recupera el resultado más tarde.
-
-```pascal
-var Future := TFuture<string>.Run(
-  function: string
-  begin
-    Result := ObtenerDeAPI;
-  end);
-
-// … hacer otro trabajo …
-
-var Datos := Future.Value;   // bloquea hasta que se complete
-```
+> **Nota:** `IFuture<T>` forma parte del RTL de Delphi (`System.Threading`), no de DAF.
+> Usa `TTask.Future<T>` (RTL) para cálculos en segundo plano, o `TSystemProcess.ExecuteAsync`
+> (DAF) para ejecución de procesos externos.
 
 ### TShutdownHook
 
@@ -100,35 +97,46 @@ end;
 
 ## Daf.Enumerable
 
-### IEnumerable\<T\>
+### ToIEnumerable\<T\>
 
-Secuencia lazy de solo avance sobre cualquier fuente de datos.
+Record-puente que adapta cualquier `TEnumerable<T>` (clase) a la interfaz `IEnumerable<T>`. Los operadores de conversión implícita hacen el uso transparente.
 
 ```pascal
 uses Daf.Enumerable;
 
-var Seq := TListEnumerable<integer>.Create(MiLista);
+var Lista := TList<Integer>.Create;
+Lista.Add(1); Lista.Add(2); Lista.Add(3);
+
+// Conversión implícita a IEnumerable<T>
+var Seq: IEnumerable<Integer> := ToIEnumerable<Integer>(Lista);
 for var Item in Seq do
   Procesar(Item);
+
+// Convertir a array plano
+var Arr := ToIEnumerable<Integer>(Lista).ToArray;
 ```
 
 ### IInterfaceList\<T\>
 
-Lista con tipo seguro de referencias a interfaces.
+Lista con tipo seguro de referencias a interfaces, con soporte `GetEnumerator`.
 
 ```pascal
-var Lista: IInterfaceList<IMyService>;
-Lista := TInterfaceList<IMyService>.Create;
+var Lista := TInterfaceList<IMyService>.Create;
 Lista.Add(ServicioA);
 Lista.Add(ServicioB);
 
-for var Svc in Lista do
-  Svc.Execute;
+if not Lista.IsEmpty then
+  for var Svc in Lista do
+    Svc.Execute;
+
+// Buscar por predicado
+var Encontrado: IMyService;
+if Lista.TryFind(
+    function(I: IInterface): Boolean
+    begin Result := (I as IMyService).Name = 'objetivo'; end,
+    Encontrado) then
+  Encontrado.Execute;
 ```
-
-### TOrderedDictionary
-
-Diccionario que preserva el orden de inserción al iterar.
 
 ---
 
@@ -188,31 +196,88 @@ end;
 
 ## Daf.CmdLn.Parser
 
-Parsea los argumentos de línea de comandos en switches nombrados y valores posicionales.
+Construye una gramática de argumentos tipados con `TCmdLnParserBuilder` y luego parsea la línea de comandos en `ICmdLParams`.
 
 ```pascal
 uses Daf.CmdLn.Parser;
 
-var Parser := TCmdLnParser.Create;
-Parser.Parse(ParamStr(0));
+// 1. Definir la gramática
+var Parser := TCmdLnParserBuilder.Create
+  .Arg<string>('file')      // argumento string con nombre
+  .Arg<Integer>('port')     // argumento integer con nombre
+  .Arg<Boolean>('verbose')  // flag booleano
+  .Build;                   // devuelve ICmdLnParser
 
-var Verbose := Parser.Flag('v');           // --v o -v
-var Port    := Parser.Value('port', '80'); // --port 8080 (por defecto '80')
-var Files   := Parser.Positionals;         // argumentos restantes
+// 2. Parsear la línea de comandos real
+var Params := Parser.Parse(GetCommandLine);
+
+// 3. Leer valores (ICmdLParams.Item[] es la propiedad default)
+var Archivo   := Params['file'].AsString;
+var Puerto    := Params['port'].AsInteger;
+var EsVerbose := Params['verbose'].AsBoolean;
+```
+
+### Subcomandos
+
+```pascal
+var Parser := TCmdLnParserBuilder.Create
+  .Command('build')
+    .Arg<string>('output')
+  .EndCommand
+  .Command('run')
+    .Arg<Boolean>('watch')
+  .EndCommand
+  .Build;
+
+var Params := Parser.Parse(GetCommandLine);
+var Cmd := Params.Command;   // 'build' o 'run'
+if Cmd = 'build' then
+begin
+  var Seccion := Params.GetSection('build');
+  var DirSal  := Seccion['output'].AsString;
+end;
 ```
 
 ---
 
 ## Daf.Rtti
 
-Helpers para el Extended RTTI de Delphi.
+Helpers para el Extended RTTI de Delphi, centralizados en la clase utilitaria `_T`.
 
 ```pascal
 uses Daf.Rtti;
 
-// Comprobar herencia en tiempo de ejecución
-if _T.Extends(AlgunaClase, TMyBaseClass) then
-  WriteLn('Es derivada');
+// Nombres de tipo y GUIDs
+var Nombre := _T.NameOf<IMyService>;          // 'IMyService'
+var Guid   := _T.GUID<IMyService>;            // TGUID
+var Unidad := _T.UnitNameOf<IMyService>;      // 'MiUnidad'
+
+// Comprobar jerarquía de interfaces (sobrecargas con PTypeInfo)
+if _T.Extends(TypeInfo(IServicioHijo), TypeInfo(IMyService)) then
+  WriteLn('IServicioHijo extiende IMyService');
+
+// Comprobar si una clase tiene una propiedad
+if _T.HasProperty<TMiClase>('Nombre') then
+  WriteLn('La propiedad Nombre existe');
+
+// Crear valor por defecto (cero) para cualquier tipo
+var Cero := _T.Default<Integer>;             // 0
+```
+
+### TRttiTypeHelper / TRttiPackageHelper
+
+```pascal
+var RC := TRttiContext.Create;
+var T  := RC.GetType(TypeInfo(TMiClase));
+
+if T.IsCollection then WriteLn('Es una colección');
+if T.Implements<IMyService> then WriteLn('Implementa IMyService');
+
+// Descubrir todas las implementaciones de una interfaz en un paquete
+RC.FindType('MiUnidad.TMiClase').AsInstance.DeclaringUnitPackage
+  .DiscoverImpl<IMyService>(False, nil,
+    procedure(Intf: TRttiInterfaceType; Impl: TRttiInstanceType)
+    begin WriteLn(Impl.Name); end);
 ```
 
 ---
@@ -231,12 +296,46 @@ var Instancia := TActivator.CreateInstance(TMyServiceClass) as IMyService;
 
 ## Daf.Arrays
 
-Helpers de extensión de `TArray`.
+### TArrayHelper
+
+Class helper para el `TArray` estándar — añade `Map` (proyección) y `Trim` (elimina espacios / cadenas vacías).
 
 ```pascal
 uses Daf.Arrays;
 
-var Idx := TArrayHelper.IndexOf<string>(MiArray, 'aguja');
-if Idx >= 0 then
-  WriteLn('Encontrado en ', Idx);
+// Map: proyectar [string] -> [Integer]
+var Longitudes := TArray.Map<string, Integer>(Nombres,
+  function(S: string): Integer begin Result := S.Length; end);
+
+// Trim: eliminar espacios y elementos vacíos de un array de strings
+var Limpio := TArray.Trim(['  hola  ', '', '  mundo  ']);
+// Limpio = ['hola', 'mundo']
+```
+
+### TSmartArray\<T\>
+
+Wrapper de tipo valor para `TArray<T>` con API rica estilo LINQ. Soporta operadores `in`, `+`, `=`, conversión implícita a/desde `TArray<T>`, y conversión implícita desde string CSV.
+
+```pascal
+var Items: TSmartArray<string>;
+Items.Concat('alfa');
+Items.Concat('beta');
+Items.Concat('gamma');
+
+// Membresía
+if 'beta' in Items then WriteLn('Encontrado');
+
+// Filtrar
+var Largos := Items.Where(
+  function(S: string): Boolean begin Result := Length(S) > 4; end);
+
+// Proyectar
+var Mayus := Items.Select<string>(
+  function(S: string): string begin Result := S.ToUpper; end);
+
+// Concatenación mediante operador +
+var Más: TSmartArray<string> := Items + ['delta', 'epsilon'];
+
+// Ordenar
+Items.Sort;
 ```
