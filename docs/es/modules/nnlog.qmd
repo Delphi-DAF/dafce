@@ -1,0 +1,13 @@
+---
+title: "NNLog"
+sidebar: modules-es
+lang: es
+---
+
+{{< include ../../../src/NNLog/README.es.md >}}
+
+---
+
+## Guía
+
+{{< include ../../../src/NNLog/docs/GUIDE.es.md >}}

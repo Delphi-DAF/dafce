@@ -1,0 +1,13 @@
+---
+title: "Web"
+sidebar: modules-es
+lang: es
+---
+
+{{< include ../../../src/web/README.es.md >}}
+
+---
+
+## Guía
+
+{{< include ../../../src/web/docs/GUIDE.es.md >}}

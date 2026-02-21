@@ -1,0 +1,13 @@
+---
+title: "Novedades"
+listing:
+  contents: posts
+  sort: "date desc"
+  type: default
+  categories: true
+  feed: true
+  fields: [date, title, description, categories, reading-time]
+page-layout: full
+sidebar: false
+lang: es
+---

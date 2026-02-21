@@ -1,0 +1,43 @@
+<div id="lang-switcher" style="position:fixed;bottom:1.5rem;right:1.5rem;z-index:1000;display:flex;gap:0.25rem;background:white;padding:0.4rem 0.6rem;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.18);align-items:center">
+  <button onclick="langSwitch('en')" id="btn-en" style="border:none;background:none;cursor:pointer;font-size:1.4rem;line-height:1;padding:0.1rem 0.3rem;border-radius:4px" title="English">🇬🇧</button>
+  <button onclick="langSwitch('es')" id="btn-es" style="border:none;background:none;cursor:pointer;font-size:1.4rem;line-height:1;padding:0.1rem 0.3rem;border-radius:4px" title="Español">🇪🇸</button>
+</div>
+<script>
+(function () {
+  var p = window.location.pathname;
+  var isEs = p.indexOf('/es/') !== -1 || p.endsWith('/es') || p.endsWith('/es/');
+
+  // Highlight active language button
+  var active = document.getElementById(isEs ? 'btn-es' : 'btn-en');
+  var inactive = document.getElementById(isEs ? 'btn-en' : 'btn-es');
+  if (active)   { active.style.opacity   = '1';   active.style.background   = '#f0f0f0'; }
+  if (inactive) { inactive.style.opacity = '0.45'; inactive.style.background = 'none';   }
+
+  window.langSwitch = function (lang) {
+    var p = window.location.pathname;
+    if (lang === 'es') {
+      if (p.indexOf('/es/') === -1) {
+        var m = p.match(/^(.*?)(\/(?:modules|docs|blog|about|index)[^]*)$/);
+        if (m) {
+          window.location.pathname = m[1] + '/es' + m[2];
+        } else {
+          window.location.pathname = p.replace(/\/?$/, '') + '/es/index.html';
+        }
+      }
+    } else {
+      if (p.indexOf('/es/') !== -1) {
+        window.location.pathname = p.replace('/es/', '/');
+      }
+    }
+  };
+
+  // Hide the "🌍 Language: ..." badges that come from the included README files
+  document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('p').forEach(function (el) {
+      if (el.innerText && el.innerText.trim().match(/^🌍/)) {
+        el.style.display = 'none';
+      }
+    });
+  });
+}());
+</script>

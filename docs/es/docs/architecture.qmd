@@ -1,0 +1,57 @@
+---
+title: "Resumen de arquitectura"
+sidebar: docs-es
+lang: es
+---
+
+## Modelo de capas
+
+DAF sigue una arquitectura en capas donde cada módulo tiene un compañero **Abstractions**:
+
+```
+┌─────────────────────────────────────────┐
+│            Tu Aplicación                │
+├─────────────────────────────────────────┤
+│  Application  │  Hosting  │  MediatR    │  ← Composición
+├──────────┬────┴──────┬────┴────┬────────┤
+│  Logging │   Config  │   DI   │ NNLog  │  ← Servicios
+├──────────┴───────────┴─────────┴────────┤
+│         Commons · Rtti · Threading      │  ← Fundación
+└─────────────────────────────────────────┘
+```
+
+## Patrón Abstractions
+
+Cada módulo de servicio se distribuye como par:
+
+| Paquete | Rol |
+|---------|-----|
+| `Daf.X.Abstractions` | Solo interfaces — sin implementación |
+| `Daf.X` | Implementación concreta + helpers de registro |
+
+El código de tu app depende **solo de Abstractions**. Las implementaciones son intercambiables en el composition root.
+
+## Flujo de dependencias
+
+```
+Application
+  └── Hosting
+        ├── DependencyInjection
+        ├── Configuration
+        └── Logging
+              └── NNLog (proveedor)
+```
+
+## Testing con MiniSpec
+
+MiniSpec es independiente del resto del stack. Puede testear cualquier código Delphi usando specs estilo Gherkin:
+
+```pascal
+Feature('Calculadora')
+  .Scenario('Sumar dos números')
+  .Given('una calculadora')
+  .When('sumo 2 y 3')
+  .Then('el resultado es 5');
+```
+
+Ver el [módulo MiniSpec](../modules/minispec.qmd) para la guía completa.

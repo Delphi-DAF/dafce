@@ -1,0 +1,19 @@
+---
+title: "MediatR"
+sidebar: modules-es
+lang: es
+---
+
+{{< include ../../../src/MediatR/README.es.md >}}
+
+---
+
+## Abstracciones
+
+{{< include ../../../src/MediatR.Abstractions/README.es.md >}}
+
+---
+
+## Guía
+
+{{< include ../../../src/MediatR/docs/GUIDE.es.md >}}

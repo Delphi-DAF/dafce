@@ -1,0 +1,19 @@
+---
+title: "Hosting"
+sidebar: modules-es
+lang: es
+---
+
+{{< include ../../../src/Hosting/README.es.md >}}
+
+---
+
+## Abstracciones
+
+{{< include ../../../src/Hosting.Abstractions/README.es.md >}}
+
+---
+
+## Guía
+
+{{< include ../../../src/Hosting/docs/GUIDE.es.md >}}

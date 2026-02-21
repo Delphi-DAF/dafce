@@ -3,48 +3,16 @@ title: "Logging"
 sidebar: modules
 ---
 
-## Overview
-
-::: {.panel-tabset}
-
-### 🇬🇧 English
-
 {{< include ../../src/Logging/README.md >}}
-
-### 🇪🇸 Español
-
-{{< include ../../src/Logging/README.es.md >}}
-
-:::
 
 ---
 
 ## Abstractions
 
-::: {.panel-tabset}
-
-### 🇬🇧 English
-
 {{< include ../../src/Logging.Abstractions/README.md >}}
-
-### 🇪🇸 Español
-
-{{< include ../../src/Logging.Abstractions/README.es.md >}}
-
-:::
 
 ---
 
 ## Guide
 
-::: {.panel-tabset}
-
-### 🇬🇧 English
-
 {{< include ../../src/Logging/docs/GUIDE.md >}}
-
-### 🇪🇸 Español
-
-{{< include ../../src/Logging/docs/GUIDE.es.md >}}
-
-:::

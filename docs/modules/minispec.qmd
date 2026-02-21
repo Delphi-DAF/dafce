@@ -3,48 +3,16 @@ title: "MiniSpec"
 sidebar: modules
 ---
 
-## Overview
-
-::: {.panel-tabset}
-
-### 🇬🇧 English
-
 {{< include ../../src/MiniSpec/README.md >}}
-
-### 🇪🇸 Español
-
-{{< include ../../src/MiniSpec/README.es.md >}}
-
-:::
 
 ---
 
 ## Guide
 
-::: {.panel-tabset}
-
-### 🇬🇧 English
-
 {{< include ../../src/MiniSpec/docs/GUIDE.md >}}
-
-### 🇪🇸 Español
-
-{{< include ../../src/MiniSpec/docs/GUIDE.es.md >}}
-
-:::
 
 ---
 
 ## Testing Patterns
 
-::: {.panel-tabset}
-
-### 🇬🇧 English
-
 {{< include ../../src/MiniSpec/docs/TESTING-PATTERNS.md >}}
-
-### 🇪🇸 Español
-
-{{< include ../../src/MiniSpec/docs/TESTING-PATTERNS.es.md >}}
-
-:::

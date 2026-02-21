@@ -98,6 +98,52 @@ website:
             - text: "Web"
               href: modules/web.qmd
 
+    - id: modules-es
+      title: "Módulos"
+      style: "docked"
+      contents:
+        - text: "Resumen"
+          href: es/modules/index.qmd
+        - section: "Fundación"
+          contents:
+            - text: "Application"
+              href: es/modules/application.qmd
+            - text: "Hosting"
+              href: es/modules/hosting.qmd
+            - text: "Inyección de Dependencias"
+              href: es/modules/di.qmd
+            - text: "Configuración"
+              href: es/modules/configuration.qmd
+        - section: "Observabilidad"
+          contents:
+            - text: "Logging"
+              href: es/modules/logging.qmd
+            - text: "NNLog"
+              href: es/modules/nnlog.qmd
+        - section: "Mensajería"
+          contents:
+            - text: "MediatR"
+              href: es/modules/mediator.qmd
+        - section: "Testing"
+          contents:
+            - text: "MiniSpec"
+              href: es/modules/minispec.qmd
+        - section: "Utilidades"
+          contents:
+            - text: "Commons"
+              href: es/modules/commons.qmd
+            - text: "Web"
+              href: es/modules/web.qmd
+
+    - id: docs-es
+      title: "Documentación"
+      style: "docked"
+      contents:
+        - text: "Primeros pasos"
+          href: es/docs/getting-started.qmd
+        - text: "Arquitectura"
+          href: es/docs/architecture.qmd
+
   page-footer:
     left: |
       DAF — Delphi Application Foundation (Community Edition)
@@ -117,6 +163,7 @@ format:
     code-copy: true
     code-overflow: wrap
     smooth-scroll: true
+    include-after-body: _partials/lang-toggle.html
 
 execute:
   freeze: auto

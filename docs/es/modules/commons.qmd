@@ -1,0 +1,13 @@
+---
+title: "Commons"
+sidebar: modules-es
+lang: es
+---
+
+{{< include ../../../src/Commons/README.es.md >}}
+
+---
+
+## Guía
+
+{{< include ../../../src/Commons/docs/GUIDE.es.md >}}
