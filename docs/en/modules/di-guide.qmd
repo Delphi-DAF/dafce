@@ -3,4 +3,4 @@ title: "Dependency Injection — Usage Guide"
 sidebar: modules
 ---
 
-{{< include ../../src/DependencyInjection/docs/GUIDE.md >}}
+{{< include ../../../src/DependencyInjection/docs/GUIDE.md >}}

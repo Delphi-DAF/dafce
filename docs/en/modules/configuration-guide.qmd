@@ -3,4 +3,4 @@ title: "Configuration — Usage Guide"
 sidebar: modules
 ---
 
-{{< include ../../src/Configuration/docs/GUIDE.md >}}
+{{< include ../../../src/Configuration/docs/GUIDE.md >}}

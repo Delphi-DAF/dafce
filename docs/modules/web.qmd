@@ -1,6 +1,0 @@
----
-title: "Web"
-sidebar: modules
----
-
-{{< include ../../src/web/README.md >}}

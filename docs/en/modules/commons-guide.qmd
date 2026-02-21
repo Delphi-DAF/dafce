@@ -3,4 +3,4 @@ title: "Commons — Usage Guide"
 sidebar: modules
 ---
 
-{{< include ../../src/Commons/docs/GUIDE.md >}}
+{{< include ../../../src/Commons/docs/GUIDE.md >}}

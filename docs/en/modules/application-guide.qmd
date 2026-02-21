@@ -3,4 +3,4 @@ title: "Application — Usage Guide"
 sidebar: modules
 ---
 
-{{< include ../../src/Application/docs/GUIDE.md >}}
+{{< include ../../../src/Application/docs/GUIDE.md >}}

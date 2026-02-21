@@ -13,42 +13,42 @@ website:
     logo: assets/DAF-Logo.png
     logo-alt: "DAF logo"
     left:
-      - href: index.qmd
+      - href: en/index.qmd
         text: Home
-      - href: docs/getting-started.qmd
+      - href: en/docs/getting-started.qmd
         text: Docs
       - text: Modules
         menu:
           - text: "Overview"
-            href: modules/index.qmd
+            href: en/modules/index.qmd
           - text: "---"
           - text: "Application"
-            href: modules/application.qmd
+            href: en/modules/application.qmd
           - text: "Commons"
-            href: modules/commons.qmd
+            href: en/modules/commons.qmd
           - text: "Configuration"
-            href: modules/configuration.qmd
+            href: en/modules/configuration.qmd
           - text: "Dependency Injection"
-            href: modules/di.qmd
+            href: en/modules/di.qmd
           - text: "Hosting"
-            href: modules/hosting.qmd
+            href: en/modules/hosting.qmd
           - text: "Logging"
-            href: modules/logging.qmd
+            href: en/modules/logging.qmd
           - text: "MediatR"
-            href: modules/mediator.qmd
+            href: en/modules/mediator.qmd
           - text: "MiniSpec"
-            href: modules/minispec.qmd
+            href: en/modules/minispec.qmd
           - text: "NNLog"
-            href: modules/nnlog.qmd
+            href: en/modules/nnlog.qmd
           - text: "Web"
-            href: modules/web.qmd
-      - href: blog/index.qmd
+            href: en/modules/web.qmd
+      - href: en/blog/index.qmd
         text: News
-      - href: about.qmd
+      - href: en/about.qmd
         text: About
     right:
       - text: "🇬🇧"
-        href: /index.html
+        href: /en/index.html
         aria-label: English
       - text: "🇪🇸"
         href: /es/index.html
@@ -63,46 +63,46 @@ website:
       style: "docked"
       contents:
         - text: "Getting Started"
-          href: docs/getting-started.qmd
+          href: en/docs/getting-started.qmd
         - text: "Architecture"
-          href: docs/architecture.qmd
+          href: en/docs/architecture.qmd
 
     - id: modules
       title: "Modules"
       style: "docked"
       contents:
         - text: "Overview"
-          href: modules/index.qmd
+          href: en/modules/index.qmd
         - section: "Foundation"
           contents:
             - text: "Application"
-              href: modules/application.qmd
+              href: en/modules/application.qmd
             - text: "Hosting"
-              href: modules/hosting.qmd
+              href: en/modules/hosting.qmd
             - text: "Dependency Injection"
-              href: modules/di.qmd
+              href: en/modules/di.qmd
             - text: "Configuration"
-              href: modules/configuration.qmd
+              href: en/modules/configuration.qmd
         - section: "Observability"
           contents:
             - text: "Logging"
-              href: modules/logging.qmd
+              href: en/modules/logging.qmd
             - text: "NNLog"
-              href: modules/nnlog.qmd
+              href: en/modules/nnlog.qmd
         - section: "Messaging"
           contents:
             - text: "MediatR"
-              href: modules/mediator.qmd
+              href: en/modules/mediator.qmd
         - section: "Testing"
           contents:
             - text: "MiniSpec"
-              href: modules/minispec.qmd
+              href: en/modules/minispec.qmd
         - section: "Utilities"
           contents:
             - text: "Commons"
-              href: modules/commons.qmd
+              href: en/modules/commons.qmd
             - text: "Web"
-              href: modules/web.qmd
+              href: en/modules/web.qmd
 
     - id: modules-es
       title: "Módulos"

@@ -1,6 +1,0 @@
----
-title: "NNLog"
-sidebar: modules
----
-
-{{< include ../../src/NNLog/README.md >}}

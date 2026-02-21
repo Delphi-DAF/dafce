@@ -1,0 +1,12 @@
+---
+title: "Logging"
+sidebar: modules
+---
+
+{{< include ../../../src/Logging/README.md >}}
+
+---
+
+## Abstractions
+
+{{< include ../../../src/Logging.Abstractions/README.md >}}

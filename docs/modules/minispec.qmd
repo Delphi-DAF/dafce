@@ -1,6 +1,0 @@
----
-title: "MiniSpec"
-sidebar: modules
----
-
-{{< include ../../src/MiniSpec/README.md >}}
