@@ -70,6 +70,18 @@ type
 
     [ThenAttribute('only one instance exists')]
     procedure AssertOneInstance(W: TDIWorld);
+
+    [Given('a service collection')]
+    procedure GivenServiceCollection(W: TDIWorld);
+
+    [ThenAttribute('the service collection count increases')]
+    procedure AssertCountIncreased(W: TDIWorld);
+
+    [ThenAttribute('only one instance was created')]
+    procedure AssertOnlyOneInstance(W: TDIWorld);
+
+    [ThenAttribute('each child scope has a different instance')]
+    procedure AssertEachScopeDifferent(W: TDIWorld);
   end;
 
 function DIFactoryFunc(ServiceProvider: IServiceProvider): IInterface;
@@ -100,23 +112,13 @@ begin
 end;
 
 procedure TDISteps.AddTransient(W: TDIWorld);
-var
-  SavedCount: Integer;
 begin
-  SavedCount := W.ServiceCollection.Count;
   W.ServiceCollection.AddTransient<ITestableService, TTestableService>();
-  Expect(W.ServiceCollection.Count).ToEqual(SavedCount + 1);
-  W.BuildProvider;
 end;
 
 procedure TDISteps.AddSingleton(W: TDIWorld);
-var
-  SavedCount: Integer;
 begin
-  SavedCount := W.ServiceCollection.Count;
   W.ServiceCollection.AddSingleton<ITestableService, TTestableService>();
-  Expect(W.ServiceCollection.Count).ToEqual(SavedCount + 1);
-  W.BuildProvider;
 end;
 
 procedure TDISteps.ResolveService(W: TDIWorld);
@@ -159,22 +161,15 @@ end;
 
 procedure TDISteps.ResolveScopedInChildScopes(W: TDIWorld);
 var
-  Scope1, Scope2: IServiceScope;
-  Svc1_a, Svc1_b, Svc2_a: ITestableService;
+  Svc1_a, Svc1_b: ITestableService;
 begin
   W.BuildProvider;
-
-  Scope1 := W.ServiceProvider.CreateScope;
-  Scope2 := W.ServiceProvider.CreateScope;
-
-  Svc1_a := Scope1.ServiceProvider.GetRequiredService<ITestableService>;
-  Svc1_b := Scope1.ServiceProvider.GetRequiredService<ITestableService>;
-  // Same scope returns same instance
+  W.ChildScope1 := W.ServiceProvider.CreateScope;
+  W.ChildScope2 := W.ServiceProvider.CreateScope;
+  Svc1_a := W.ChildScope1.ServiceProvider.GetRequiredService<ITestableService>;
+  Svc1_b := W.ChildScope1.ServiceProvider.GetRequiredService<ITestableService>;
+  // Within the same scope the cached instance is returned
   Expect(Svc1_a = Svc1_b).ToBeTrue;
-
-  Svc2_a := Scope2.ServiceProvider.GetRequiredService<ITestableService>;
-  // Different scope returns different instance
-  Expect(Svc1_a = Svc2_a).ToBeFalse;
 end;
 
 procedure TDISteps.CanResolveService(W: TDIWorld);
@@ -203,6 +198,31 @@ end;
 procedure TDISteps.AssertOneInstance(W: TDIWorld);
 begin
   Expect(TTestableService.InstanceCount).ToEqual(1);
+end;
+
+procedure TDISteps.GivenServiceCollection(W: TDIWorld);
+begin
+  W.CountBeforeAdd := W.ServiceCollection.Count;
+end;
+
+procedure TDISteps.AssertCountIncreased(W: TDIWorld);
+begin
+  Expect(W.ServiceCollection.Count).ToEqual(W.CountBeforeAdd + 1);
+end;
+
+procedure TDISteps.AssertOnlyOneInstance(W: TDIWorld);
+begin
+  Expect(TTestableService.InstanceCount).ToEqual(1);
+end;
+
+procedure TDISteps.AssertEachScopeDifferent(W: TDIWorld);
+var
+  Svc1, Svc2: ITestableService;
+begin
+  Svc1 := W.ChildScope1.ServiceProvider.GetRequiredService<ITestableService>;
+  Svc2 := W.ChildScope2.ServiceProvider.GetRequiredService<ITestableService>;
+  Expect(Svc1 <> Svc2).ToBeTrue;
+  Expect(TTestableService.InstanceCount).ToEqual(2);
 end;
 
 initialization

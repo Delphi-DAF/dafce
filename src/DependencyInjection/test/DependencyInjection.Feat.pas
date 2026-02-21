@@ -32,6 +32,8 @@ type
     ServiceCollection: IServiceCollection;
     ServiceProvider: IServiceProvider;
     ObtainedService: ITestableService;
+    CountBeforeAdd: Integer;
+    ChildScope1, ChildScope2: IServiceScope;
     constructor Create;
     destructor Destroy; override;
     procedure BuildProvider;
@@ -77,6 +79,8 @@ end;
 destructor TDIWorld.Destroy;
 begin
   ObtainedService := nil;
+  ChildScope1 := nil;
+  ChildScope2 := nil;
   if ServiceProvider <> nil then
     ServiceProvider.ShutDown;
   inherited;
@@ -107,13 +111,13 @@ Feature DependencyInjection @di
 .Rule('Service Registration')
 
   .Scenario('Register with implementor class')
-    .Given('a service collection').NoAction
+    .Given('a service collection')
     .When('I register ITestableService with TTestableService as transient')
     .&Then('I can resolve the service')
     .&And('the implementor class is TTestableService')
 
   .Scenario('Register with factory function')
-    .Given('a service collection').NoAction
+    .Given('a service collection')
     .When('I register ITestableService with a factory function')
     .&Then('I can resolve the service')
     .&And('the implementor class is TTestableService')
@@ -123,9 +127,9 @@ Feature DependencyInjection @di
 .Rule('Transient Lifetime')
 
   .Scenario('Can add a transient service')
-    .Given('a service collection').NoAction
+    .Given('a service collection')
     .When('I add a transient service')
-    .&Then('the service collection count increases').NoAction
+    .&Then('the service collection count increases')
 
   .Scenario('Can resolve a transient service')
     .Given('a transient ITestableService registered')
@@ -142,9 +146,9 @@ Feature DependencyInjection @di
 .Rule('Singleton Lifetime')
 
   .Scenario('Can add a singleton service')
-    .Given('a service collection').NoAction
+    .Given('a service collection')
     .When('I add a singleton service')
-    .&Then('the service collection count increases').NoAction
+    .&Then('the service collection count increases')
 
   .Scenario('Singleton returns same instance')
     .Given('a singleton ITestableService registered')
@@ -158,11 +162,11 @@ Feature DependencyInjection @di
   .Scenario('Scoped returns same instance within scope')
     .Given('a scoped ITestableService registered')
     .When('I resolve twice from root provider')
-    .&Then('only one instance was created').NoAction
+    .&Then('only one instance was created')
 
   .Scenario('Different scopes get different instances')
     .Given('a scoped ITestableService registered')
     .When('I resolve from root and two child scopes')
-    .&Then('three separate instances exist').NoAction;
+    .&Then('each child scope has a different instance');
 
 end.

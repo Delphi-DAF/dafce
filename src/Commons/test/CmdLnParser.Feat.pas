@@ -13,6 +13,7 @@ type
     CmdLnParams: ICmdLParams;
     LastArgName: string;
     constructor Create;
+    destructor Destroy; override;
   end;
 
 implementation
@@ -28,6 +29,12 @@ constructor TCmdLnWorld.Create;
 begin
   inherited;
   Builder := TCmdLnParserBuilder.Create;
+end;
+
+destructor TCmdLnWorld.Destroy;
+begin
+  Builder.Free;
+  inherited;
 end;
 
 // --- Feature definition ---

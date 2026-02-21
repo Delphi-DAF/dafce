@@ -443,7 +443,19 @@ begin
         Bindings.Invoke(Binding, World, Captures);
       end
   else
-    Result := PendingStep;
+    // Binding not yet registered (Steps unit initialises after Feat due to
+    // unit dependency).  Defer resolution to run time so the fully populated
+    // binding table is always consulted when the suite executes.
+    Result := procedure(World: T)
+      var
+        LBinding: TStepBinding;
+        LCaptures: TArray<string>;
+      begin
+        if Bindings.FindBinding(Kind, Desc, LBinding, LCaptures) then
+          Bindings.Invoke(LBinding, World, LCaptures)
+        else
+          SpecContext.Step.MarkAsPending;
+      end;
 end;
 
 function TScenarioBuilder<T>.ExampleInit(Step: TStepProc<T>): IScenarioBuilder<T>;
@@ -621,6 +633,8 @@ begin
                 TScenarioStep<T>(FScenario.StepsGiven.Last).SetProc(NoActionStep);
     lskWhen:  if FScenario.StepsWhen.Count > 0 then
                 TScenarioStep<T>(FScenario.StepsWhen.Last).SetProc(NoActionStep);
+    lskThen:  if FScenario.StepsThen.Count > 0 then
+                TScenarioStep<T>(FScenario.StepsThen.Last).SetProc(NoActionStep);
   end;
   Result := Self;
 end;
@@ -686,7 +700,16 @@ begin
         Bindings.Invoke(Binding, World, Captures);
       end
   else
-    Result := PendingStep;
+    Result := procedure(World: T)
+      var
+        LBinding: TStepBinding;
+        LCaptures: TArray<string>;
+      begin
+        if Bindings.FindBinding(Kind, Desc, LBinding, LCaptures) then
+          Bindings.Invoke(LBinding, World, LCaptures)
+        else
+          SpecContext.Step.MarkAsPending;
+      end;
 end;
 
 function TScenarioOutlineBuilder<T>.Given(const Desc: string): IScenarioOutlineBuilder<T>;
@@ -834,6 +857,8 @@ begin
                 FStepsGiven.Last.SetProc(NoActionStep);
     lskWhen:  if FStepsWhen.Count > 0 then
                 FStepsWhen.Last.SetProc(NoActionStep);
+    lskThen:  if FStepsThen.Count > 0 then
+                FStepsThen.Last.SetProc(NoActionStep);
   end;
   Result := Self;
 end;
