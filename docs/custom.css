@@ -1,16 +1,6 @@
-/* ---------------------------------------------------------------------------
-   Inline code — fix de contraste en dark mode (cyborg)
-   ---------------------------------------------------------------------------
-   cyborg usa $cyan (#2a9fd6) para código pero Quarto/Bootstrap 5 lo pierde
-   al compilar. Lo restauramos sin fondo (el tema ya es oscuro de por sí).
-   Light mode (zephyr) no necesita override — usa sus propios defaults.
-   --------------------------------------------------------------------------- */
-
-.quarto-dark {
-  --bs-code-color: #2a9fd6;
-}
-
+/* Código inline en dark mode: usa --bs-info (Bootstrap semantic color).
+   En cyborg es #2a9fd6, siempre contrastado sobre el fondo oscuro. */
 .quarto-dark code:not(.sourceCode):not([class*="language-"]) {
-  color: #2a9fd6 !important;
+  color: var(--bs-info) !important;
   background-color: transparent !important;
 }
