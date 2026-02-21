@@ -10,7 +10,7 @@ type
   public
     Builder: TCmdLnParserBuilder;
     Parser: ICmdLnParser;
-    CmdLnParams: ICmdLnParams;
+    CmdLnParams: ICmdLParams;
     LastArgName: string;
     constructor Create;
   end;
