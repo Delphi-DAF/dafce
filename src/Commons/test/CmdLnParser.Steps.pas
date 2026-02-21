@@ -62,14 +62,14 @@ procedure TCmdLnSteps.GivenBooleanArg(W: TCmdLnWorld; Kind, Name: string);
 begin
   W.LastArgName := Name;
   W.Builder.Arg<Boolean>(Name);
-  W.Parser := W.Builder.Build;
+  W.Parser := W.Builder.Build(False);
 end;
 
 procedure TCmdLnSteps.GivenIntegerArg(W: TCmdLnWorld; Kind, Name: string);
 begin
   W.LastArgName := Name;
   W.Builder.Arg<Integer>(Name);
-  W.Parser := W.Builder.Build;
+  W.Parser := W.Builder.Build(False);
 end;
 
 procedure TCmdLnSteps.GivenDoubleArg(W: TCmdLnWorld; Kind, Name: string);
@@ -77,14 +77,14 @@ begin
   FormatSettings.DecimalSeparator := '.';
   W.LastArgName := Name;
   W.Builder.Arg<Double>(Name);
-  W.Parser := W.Builder.Build;
+  W.Parser := W.Builder.Build(False);
 end;
 
 procedure TCmdLnSteps.GivenStringArg(W: TCmdLnWorld; Kind, Name: string);
 begin
   W.LastArgName := Name;
   W.Builder.Arg<string>(Name);
-  W.Parser := W.Builder.Build;
+  W.Parser := W.Builder.Build(False);
 end;
 
 procedure TCmdLnSteps.GivenRequiredStringArg(W: TCmdLnWorld; Name: string);
@@ -95,7 +95,7 @@ begin
     begin
       Arg.Required(True);
     end);
-  W.Parser := W.Builder.Build;
+  W.Parser := W.Builder.Build(False);
 end;
 
 procedure TCmdLnSteps.ParseCmdLine(W: TCmdLnWorld; CmdLine: string);

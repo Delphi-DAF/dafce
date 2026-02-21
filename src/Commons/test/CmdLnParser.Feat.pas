@@ -62,7 +62,7 @@ Feature CmdLnParser @cmdln
       begin
         W.LastArgName := 'verbose';
         W.Builder.Arg<Boolean>('verbose');
-        W.Parser := W.Builder.Build;
+        W.Parser := W.Builder.Build(False);
       end)
     .&Then('the argument should exist in the parser')
 
@@ -76,7 +76,7 @@ Feature CmdLnParser @cmdln
             .Arg<Boolean>('cmd_arg')
           .EndCommand
           .Arg<string>('root_arg');
-        W.Parser := W.Builder.Build;
+        W.Parser := W.Builder.Build(False);
       end)
     .&Then('root_arg should be at root level',
       procedure(W: TCmdLnWorld)
@@ -191,7 +191,7 @@ Feature CmdLnParser @cmdln
                 Arg.RegEx('\d+(m|h)');
               end)
           .EndCommand;
-        W.Parser := W.Builder.Build;
+        W.Parser := W.Builder.Build(False);
       end)
     .When('I parse "--flag build -t "template.txt" --codes 1,3,5 -i 3m,5h"')
     .&Then('parsing should succeed')
