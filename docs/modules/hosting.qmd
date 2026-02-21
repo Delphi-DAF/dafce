@@ -1,0 +1,50 @@
+---
+title: "Hosting"
+sidebar: modules
+---
+
+## Overview
+
+::: {.panel-tabset}
+
+### 🇬🇧 English
+
+{{< include ../../src/Hosting/README.md >}}
+
+### 🇪🇸 Español
+
+{{< include ../../src/Hosting/README.es.md >}}
+
+:::
+
+---
+
+## Abstractions
+
+::: {.panel-tabset}
+
+### 🇬🇧 English
+
+{{< include ../../src/Hosting.Abstractions/README.md >}}
+
+### 🇪🇸 Español
+
+{{< include ../../src/Hosting.Abstractions/README.es.md >}}
+
+:::
+
+---
+
+## Guide
+
+::: {.panel-tabset}
+
+### 🇬🇧 English
+
+{{< include ../../src/Hosting/docs/GUIDE.md >}}
+
+### 🇪🇸 Español
+
+{{< include ../../src/Hosting/docs/GUIDE.es.md >}}
+
+:::

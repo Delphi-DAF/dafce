@@ -1,0 +1,34 @@
+---
+title: "NNLog"
+sidebar: modules
+---
+
+## Overview
+
+::: {.panel-tabset}
+
+### 🇬🇧 English
+
+{{< include ../../src/NNLog/README.md >}}
+
+### 🇪🇸 Español
+
+{{< include ../../src/NNLog/README.es.md >}}
+
+:::
+
+---
+
+## Guide
+
+::: {.panel-tabset}
+
+### 🇬🇧 English
+
+{{< include ../../src/NNLog/docs/GUIDE.md >}}
+
+### 🇪🇸 Español
+
+{{< include ../../src/NNLog/docs/GUIDE.es.md >}}
+
+:::

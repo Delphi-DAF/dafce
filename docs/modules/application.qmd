@@ -1,0 +1,34 @@
+---
+title: "Application"
+sidebar: modules
+---
+
+## Overview
+
+::: {.panel-tabset}
+
+### 🇬🇧 English
+
+{{< include ../../src/Application/README.md >}}
+
+### 🇪🇸 Español
+
+{{< include ../../src/Application/README.es.md >}}
+
+:::
+
+---
+
+## Guide
+
+::: {.panel-tabset}
+
+### 🇬🇧 English
+
+{{< include ../../src/Application/docs/GUIDE.md >}}
+
+### 🇪🇸 Español
+
+{{< include ../../src/Application/docs/GUIDE.es.md >}}
+
+:::

@@ -1,0 +1,50 @@
+---
+title: "MediatR"
+sidebar: modules
+---
+
+## Overview
+
+::: {.panel-tabset}
+
+### 🇬🇧 English
+
+{{< include ../../src/MediatR/README.md >}}
+
+### 🇪🇸 Español
+
+{{< include ../../src/MediatR/README.es.md >}}
+
+:::
+
+---
+
+## Abstractions
+
+::: {.panel-tabset}
+
+### 🇬🇧 English
+
+{{< include ../../src/MediatR.Abstractions/README.md >}}
+
+### 🇪🇸 Español
+
+{{< include ../../src/MediatR.Abstractions/README.es.md >}}
+
+:::
+
+---
+
+## Guide
+
+::: {.panel-tabset}
+
+### 🇬🇧 English
+
+{{< include ../../src/MediatR/docs/GUIDE.md >}}
+
+### 🇪🇸 Español
+
+{{< include ../../src/MediatR/docs/GUIDE.es.md >}}
+
+:::

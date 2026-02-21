@@ -1,0 +1,37 @@
+---
+title: "About DAF"
+sidebar: false
+---
+
+## Project
+
+**DAF (Delphi Application Foundation)** is an open-source library that brings modern architectural patterns to Delphi — making it familiar to .NET developers and more maintainable for everyone.
+
+The **Community Edition (DAFce)** is freely available under the [MIT License](../../legal/LICENSE.md).
+
+## Goals
+
+- Make Delphi applications easier to structure and test
+- Reduce friction for developers coming from .NET/C#
+- Provide clean, stable abstractions with no magic
+- Foster a community around modern Delphi practices
+
+## Inspiration
+
+| DAF module | Inspired by |
+|------------|------------|
+| DependencyInjection | `Microsoft.Extensions.DependencyInjection` |
+| Hosting | `Microsoft.Extensions.Hosting` |
+| Configuration | `Microsoft.Extensions.Configuration` |
+| Logging | `Microsoft.Extensions.Logging` |
+| MediatR | [MediatR](https://github.com/jbogard/MediatR) by Jimmy Bogard |
+| NNLog | [NLog](https://nlog-project.org/) |
+| MiniSpec | [Cucumber](https://cucumber.io/) / [RSpec](https://rspec.info/) |
+
+## Contributing
+
+Contributions, issues and discussions are welcome at [github.com/Delphi-DAF/dafce](https://github.com/Delphi-DAF/dafce).
+
+## License
+
+MIT — see [LICENSE](../../legal/LICENSE.md).

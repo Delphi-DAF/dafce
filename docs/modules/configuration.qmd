@@ -1,0 +1,50 @@
+---
+title: "Configuration"
+sidebar: modules
+---
+
+## Overview
+
+::: {.panel-tabset}
+
+### 🇬🇧 English
+
+{{< include ../../src/Configuration/README.md >}}
+
+### 🇪🇸 Español
+
+{{< include ../../src/Configuration/README.es.md >}}
+
+:::
+
+---
+
+## Abstractions
+
+::: {.panel-tabset}
+
+### 🇬🇧 English
+
+{{< include ../../src/Configuration.Abstractions/README.md >}}
+
+### 🇪🇸 Español
+
+{{< include ../../src/Configuration.Abstractions/README.es.md >}}
+
+:::
+
+---
+
+## Guide
+
+::: {.panel-tabset}
+
+### 🇬🇧 English
+
+{{< include ../../src/Configuration/docs/GUIDE.md >}}
+
+### 🇪🇸 Español
+
+{{< include ../../src/Configuration/docs/GUIDE.es.md >}}
+
+:::

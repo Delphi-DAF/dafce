@@ -1,0 +1,34 @@
+---
+title: "Commons"
+sidebar: modules
+---
+
+## Overview
+
+::: {.panel-tabset}
+
+### 🇬🇧 English
+
+{{< include ../../src/Commons/README.md >}}
+
+### 🇪🇸 Español
+
+{{< include ../../src/Commons/README.es.md >}}
+
+:::
+
+---
+
+## Guide
+
+::: {.panel-tabset}
+
+### 🇬🇧 English
+
+{{< include ../../src/Commons/docs/GUIDE.md >}}
+
+### 🇪🇸 Español
+
+{{< include ../../src/Commons/docs/GUIDE.es.md >}}
+
+:::

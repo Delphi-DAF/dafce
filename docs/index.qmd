@@ -1,0 +1,83 @@
+---
+title: "DAF — Delphi Application Foundation"
+subtitle: "Community Edition"
+page-layout: full
+toc: false
+sidebar: false
+---
+
+![](../../assets/DAF-Logo.png){width=180 fig-align="center"}
+
+<div class="text-center mt-4 mb-5">
+<h1 class="display-5">Bringing modern practices to Delphi</h1>
+<p class="lead">Dependency Injection · Structured Logging · Configuration · CQRS · BDD Testing</p>
+
+:::{.d-flex .justify-content-center .gap-3 .mt-4}
+[Get Started](docs/getting-started.qmd){.btn .btn-primary .btn-lg}
+[View on GitHub](https://github.com/Delphi-DAF/dafce){.btn .btn-outline-secondary .btn-lg}
+:::
+</div>
+
+---
+
+## What is DAF?
+
+DAF is a modular and extensible library for building structured, maintainable, and testable Delphi applications.
+It modernizes Delphi development by promoting patterns inspired by the .NET ecosystem — making it a natural bridge for developers coming from C#.
+
+::: {.grid}
+
+::: {.g-col-12 .g-col-md-4}
+### 🔌 Dependency Injection
+A full DI container modeled after `Microsoft.Extensions.DependencyInjection`.
+Supports singleton, transient and scoped lifetimes.
+
+[→ Learn more](modules/di.qmd)
+:::
+
+::: {.g-col-12 .g-col-md-4}
+### 🏠 Hosting
+`IHost` and `IHostBuilder` for application composition and lifecycle — just like ASP.NET Core.
+
+[→ Learn more](modules/hosting.qmd)
+:::
+
+::: {.g-col-12 .g-col-md-4}
+### ⚙️ Configuration
+Bind configuration from JSON, environment variables, and in-memory sources to typed Delphi classes.
+
+[→ Learn more](modules/configuration.qmd)
+:::
+
+::: {.g-col-12 .g-col-md-4}
+### 📋 Logging
+Structured logging with scopes and message templates, modeled after `Microsoft.Extensions.Logging`.
+
+[→ Learn more](modules/logging.qmd)
+:::
+
+::: {.g-col-12 .g-col-md-4}
+### ✉️ MediatR
+CQRS and in-process messaging: commands, queries, notifications and pipelines.
+
+[→ Learn more](modules/mediator.qmd)
+:::
+
+::: {.g-col-12 .g-col-md-4}
+### 🧪 MiniSpec
+BDD testing framework inspired by Cucumber and RSpec, with Gherkin-style specs in Delphi.
+
+[→ Learn more](modules/minispec.qmd)
+:::
+
+:::
+
+---
+
+## Browse all modules
+
+```{=html}
+<div class="text-center">
+  <a href="modules/index.qmd" class="btn btn-outline-primary">View all modules →</a>
+</div>
+```
