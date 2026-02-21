@@ -10,9 +10,3 @@ sidebar: modules
 ## Abstractions
 
 {{< include ../../src/Configuration.Abstractions/README.md >}}
-
----
-
-## Guide {#guide}
-
-{{< include ../../src/Configuration/docs/GUIDE.md >}}

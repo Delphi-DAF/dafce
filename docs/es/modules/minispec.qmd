@@ -5,15 +5,3 @@ lang: es
 ---
 
 {{< include ../../../src/MiniSpec/README.es.md >}}
-
----
-
-## Guía {#guide}
-
-{{< include ../../../src/MiniSpec/docs/GUIDE.es.md >}}
-
----
-
-## Patrones de Testing
-
-{{< include ../../../src/MiniSpec/docs/TESTING-PATTERNS.es.md >}}

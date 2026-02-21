@@ -1,0 +1,7 @@
+---
+title: "Commons — Guía de uso"
+sidebar: modules-es
+lang: es
+---
+
+{{< include ../../../src/Commons/docs/GUIDE.es.md >}}

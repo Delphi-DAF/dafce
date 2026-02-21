@@ -4,9 +4,3 @@ sidebar: modules
 ---
 
 {{< include ../../src/web/README.md >}}
-
----
-
-## Guide {#guide}
-
-{{< include ../../src/web/docs/GUIDE.md >}}

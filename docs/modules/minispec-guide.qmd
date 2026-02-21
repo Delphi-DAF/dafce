@@ -1,0 +1,12 @@
+---
+title: "MiniSpec — Usage Guide"
+sidebar: modules
+---
+
+{{< include ../../src/MiniSpec/docs/GUIDE.md >}}
+
+---
+
+## Testing Patterns
+
+{{< include ../../src/MiniSpec/docs/TESTING-PATTERNS.md >}}

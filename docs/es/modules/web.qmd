@@ -5,9 +5,3 @@ lang: es
 ---
 
 {{< include ../../../src/web/README.es.md >}}
-
----
-
-## Guía {#guide}
-
-{{< include ../../../src/web/docs/GUIDE.es.md >}}

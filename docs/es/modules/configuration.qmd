@@ -11,9 +11,3 @@ lang: es
 ## Abstracciones
 
 {{< include ../../../src/Configuration.Abstractions/README.es.md >}}
-
----
-
-## Guía {#guide}
-
-{{< include ../../../src/Configuration/docs/GUIDE.es.md >}}

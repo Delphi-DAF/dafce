@@ -1,15 +1,27 @@
 -- fix-readme-links.lua
--- Cuando los README se incluyen via {{< include >}} en Quarto, los links
--- relativos como "docs/GUIDE.md" se resuelven mal (el path es relativo al
--- README original, no al HTML de salida).
--- La guía ya está incluida inline en la misma página, así que convertimos
--- esos links en anchors (#guide) en lugar de dejarlos rotos.
+-- Los README incluidos via {{< include >}} tienen links como "docs/GUIDE.md"
+-- que son relativos a la fuente del README, no al HTML de salida.
+-- Este filtro los reescribe a la página de guía correspondiente.
+
+local guide_map = {
+  ["application.qmd"]   = "application-guide.html",
+  ["commons.qmd"]       = "commons-guide.html",
+  ["configuration.qmd"] = "configuration-guide.html",
+  ["di.qmd"]            = "di-guide.html",
+  ["hosting.qmd"]       = "hosting-guide.html",
+  ["logging.qmd"]       = "logging-guide.html",
+  ["mediator.qmd"]      = "mediator-guide.html",
+  ["minispec.qmd"]      = "minispec-guide.html",
+  ["nnlog.qmd"]         = "nnlog-guide.html",
+  ["web.qmd"]           = "web-guide.html",
+}
 
 function Link(el)
-  local t = el.target
-  -- Cubre: docs/GUIDE.md, docs/GUIDE.es.md, ../Foo/docs/GUIDE.md, etc.
-  if t:match("GUIDE[^/]*%.md$") then
-    el.target = "#guide"
+  if el.target:match("GUIDE[^/]*%.md") then
+    local src = (PANDOC_STATE.input_files or {})[1] or ""
+    local basename = src:match("([^/\\]+)$") or ""
+    local guide = guide_map[basename]
+    el.target = guide or "#guide"
     return el
   end
 end

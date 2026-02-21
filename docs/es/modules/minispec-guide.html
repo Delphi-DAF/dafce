@@ -1,0 +1,1931 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="es" xml:lang="es"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.8.25">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>MiniSpec — Guía de uso – DAF — Delphi Application Foundation</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="../../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../../">
+<link href="../../assets/DAF-Logo.png" rel="icon" type="image/png">
+<script src="../../site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="../../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="../../site_libs/quarto-html/axe/axe-check.js" type="module"></script>
+<script src="../../site_libs/quarto-html/popper.min.js"></script>
+<script src="../../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../../site_libs/quarto-html/quarto-syntax-highlighting-065a5179aebd64318d7ea99d77b64a9e.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
+<link href="../../site_libs/quarto-html/quarto-syntax-highlighting-dark-969ddfa49e00a70eb3423444dbc81f6c.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
+<link href="../../site_libs/quarto-html/quarto-syntax-highlighting-065a5179aebd64318d7ea99d77b64a9e.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
+<script src="../../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../../site_libs/bootstrap/bootstrap-ba6133c2fe8dd3ce41ae5d3e7d923f42.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
+<link href="../../site_libs/bootstrap/bootstrap-dark-68683f95a66e6956c7d5fc83c5e09a58.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
+<link href="../../site_libs/bootstrap/bootstrap-ba6133c2fe8dd3ce41ae5d3e7d923f42.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No se han encontrado resultados",
+    "search-matching-documents-text": "documentos encontrados",
+    "search-copy-link-title": "Copiar el enlace en la búsqueda",
+    "search-hide-matches-text": "Ocultar resultados adicionales",
+    "search-more-match-text": "resultado adicional en este documento",
+    "search-more-matches-text": "resultados adicionales en este documento",
+    "search-clear-button-title": "Borrar",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancelar",
+    "search-submit-button-title": "Enviar",
+    "search-label": "Buscar"
+  }
+}</script>
+<style>html{ scroll-behavior: smooth; }</style>
+
+
+<link rel="stylesheet" href="../../custom.css">
+</head>
+
+<body class="nav-sidebar docked nav-fixed quarto-light"><script id="quarto-html-before-body" type="application/javascript">
+    const toggleBodyColorMode = (bsSheetEl) => {
+      const mode = bsSheetEl.getAttribute("data-mode");
+      const bodyEl = window.document.querySelector("body");
+      if (mode === "dark") {
+        bodyEl.classList.add("quarto-dark");
+        bodyEl.classList.remove("quarto-light");
+      } else {
+        bodyEl.classList.add("quarto-light");
+        bodyEl.classList.remove("quarto-dark");
+      }
+    }
+    const toggleBodyColorPrimary = () => {
+      const bsSheetEl = window.document.querySelector("link#quarto-bootstrap:not([rel=disabled-stylesheet])");
+      if (bsSheetEl) {
+        toggleBodyColorMode(bsSheetEl);
+      }
+    }
+    const setColorSchemeToggle = (alternate) => {
+      const toggles = window.document.querySelectorAll('.quarto-color-scheme-toggle');
+      for (let i=0; i < toggles.length; i++) {
+        const toggle = toggles[i];
+        if (toggle) {
+          if (alternate) {
+            toggle.classList.add("alternate");
+          } else {
+            toggle.classList.remove("alternate");
+          }
+        }
+      }
+    };
+    const toggleColorMode = (alternate) => {
+      // Switch the stylesheets
+      const primaryStylesheets = window.document.querySelectorAll('link.quarto-color-scheme:not(.quarto-color-alternate)');
+      const alternateStylesheets = window.document.querySelectorAll('link.quarto-color-scheme.quarto-color-alternate');
+      manageTransitions('#quarto-margin-sidebar .nav-link', false);
+      if (alternate) {
+        // note: dark is layered on light, we don't disable primary!
+        enableStylesheet(alternateStylesheets);
+        for (const sheetNode of alternateStylesheets) {
+          if (sheetNode.id === "quarto-bootstrap") {
+            toggleBodyColorMode(sheetNode);
+          }
+        }
+      } else {
+        disableStylesheet(alternateStylesheets);
+        enableStylesheet(primaryStylesheets)
+        toggleBodyColorPrimary();
+      }
+      manageTransitions('#quarto-margin-sidebar .nav-link', true);
+      // Switch the toggles
+      setColorSchemeToggle(alternate)
+      // Hack to workaround the fact that safari doesn't
+      // properly recolor the scrollbar when toggling (#1455)
+      if (navigator.userAgent.indexOf('Safari') > 0 && navigator.userAgent.indexOf('Chrome') == -1) {
+        manageTransitions("body", false);
+        window.scrollTo(0, 1);
+        setTimeout(() => {
+          window.scrollTo(0, 0);
+          manageTransitions("body", true);
+        }, 40);
+      }
+    }
+    const disableStylesheet = (stylesheets) => {
+      for (let i=0; i < stylesheets.length; i++) {
+        const stylesheet = stylesheets[i];
+        stylesheet.rel = 'disabled-stylesheet';
+      }
+    }
+    const enableStylesheet = (stylesheets) => {
+      for (let i=0; i < stylesheets.length; i++) {
+        const stylesheet = stylesheets[i];
+        if(stylesheet.rel !== 'stylesheet') { // for Chrome, which will still FOUC without this check
+          stylesheet.rel = 'stylesheet';
+        }
+      }
+    }
+    const manageTransitions = (selector, allowTransitions) => {
+      const els = window.document.querySelectorAll(selector);
+      for (let i=0; i < els.length; i++) {
+        const el = els[i];
+        if (allowTransitions) {
+          el.classList.remove('notransition');
+        } else {
+          el.classList.add('notransition');
+        }
+      }
+    }
+    const isFileUrl = () => {
+      return window.location.protocol === 'file:';
+    }
+    const hasAlternateSentinel = () => {
+      let styleSentinel = getColorSchemeSentinel();
+      if (styleSentinel !== null) {
+        return styleSentinel === "alternate";
+      } else {
+        return false;
+      }
+    }
+    const setStyleSentinel = (alternate) => {
+      const value = alternate ? "alternate" : "default";
+      if (!isFileUrl()) {
+        window.localStorage.setItem("quarto-color-scheme", value);
+      } else {
+        localAlternateSentinel = value;
+      }
+    }
+    const getColorSchemeSentinel = () => {
+      if (!isFileUrl()) {
+        const storageValue = window.localStorage.getItem("quarto-color-scheme");
+        return storageValue != null ? storageValue : localAlternateSentinel;
+      } else {
+        return localAlternateSentinel;
+      }
+    }
+    const toggleGiscusIfUsed = (isAlternate, darkModeDefault) => {
+      const baseTheme = document.querySelector('#giscus-base-theme')?.value ?? 'light';
+      const alternateTheme = document.querySelector('#giscus-alt-theme')?.value ?? 'dark';
+      let newTheme = '';
+      if(authorPrefersDark) {
+        newTheme = isAlternate ? baseTheme : alternateTheme;
+      } else {
+        newTheme = isAlternate ? alternateTheme : baseTheme;
+      }
+      const changeGiscusTheme = () => {
+        // From: https://github.com/giscus/giscus/issues/336
+        const sendMessage = (message) => {
+          const iframe = document.querySelector('iframe.giscus-frame');
+          if (!iframe) return;
+          iframe.contentWindow.postMessage({ giscus: message }, 'https://giscus.app');
+        }
+        sendMessage({
+          setConfig: {
+            theme: newTheme
+          }
+        });
+      }
+      const isGiscussLoaded = window.document.querySelector('iframe.giscus-frame') !== null;
+      if (isGiscussLoaded) {
+        changeGiscusTheme();
+      }
+    };
+    const authorPrefersDark = false;
+    const darkModeDefault = authorPrefersDark;
+      document.querySelector('link#quarto-text-highlighting-styles.quarto-color-scheme-extra').rel = 'disabled-stylesheet';
+      document.querySelector('link#quarto-bootstrap.quarto-color-scheme-extra').rel = 'disabled-stylesheet';
+    let localAlternateSentinel = darkModeDefault ? 'alternate' : 'default';
+    // Dark / light mode switch
+    window.quartoToggleColorScheme = () => {
+      // Read the current dark / light value
+      let toAlternate = !hasAlternateSentinel();
+      toggleColorMode(toAlternate);
+      setStyleSentinel(toAlternate);
+      toggleGiscusIfUsed(toAlternate, darkModeDefault);
+      window.dispatchEvent(new Event('resize'));
+    };
+    // Switch to dark mode if need be
+    if (hasAlternateSentinel()) {
+      toggleColorMode(true);
+    } else {
+      toggleColorMode(false);
+    }
+  </script>
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container mx-auto">
+    <a href="../../index.html" class="navbar-brand navbar-brand-logo">
+    <img src="../../assets/DAF-Logo.png" alt="DAF logo" class="navbar-logo light-content">
+    <img src="../../assets/DAF-Logo.png" alt="DAF logo" class="navbar-logo dark-content">
+    </a>
+    <a class="navbar-brand" href="../../index.html">
+    <span class="navbar-title">DAF — Delphi Application Foundation</span>
+    </a>
+  </div>
+            <div id="quarto-search" class="" title="Buscar"></div>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" role="menu" aria-expanded="false" aria-label="Navegación de palanca" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+  <span class="navbar-toggler-icon"></span>
+</button>
+          <div class="collapse navbar-collapse" id="navbarCollapse">
+            <ul class="navbar-nav navbar-nav-scroll me-auto">
+  <li class="nav-item">
+    <a class="nav-link active" href="../../index.html" aria-current="page"> 
+<span class="menu-text">Home</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../../docs/getting-started.html"> 
+<span class="menu-text">Docs</span></a>
+  </li>  
+  <li class="nav-item dropdown ">
+    <a class="nav-link dropdown-toggle" href="#" id="nav-menu-modules" role="link" data-bs-toggle="dropdown" aria-expanded="false">
+ <span class="menu-text">Modules</span>
+    </a>
+    <ul class="dropdown-menu" aria-labelledby="nav-menu-modules">    
+        <li>
+    <a class="dropdown-item" href="../../modules/index.html">
+ <span class="dropdown-text">Overview</span></a>
+  </li>  
+        <li><hr class="dropdown-divider"></li>
+        <li>
+    <a class="dropdown-item" href="../../modules/application.html">
+ <span class="dropdown-text">Application</span></a>
+  </li>  
+        <li>
+    <a class="dropdown-item" href="../../modules/commons.html">
+ <span class="dropdown-text">Commons</span></a>
+  </li>  
+        <li>
+    <a class="dropdown-item" href="../../modules/configuration.html">
+ <span class="dropdown-text">Configuration</span></a>
+  </li>  
+        <li>
+    <a class="dropdown-item" href="../../modules/di.html">
+ <span class="dropdown-text">Dependency Injection</span></a>
+  </li>  
+        <li>
+    <a class="dropdown-item" href="../../modules/hosting.html">
+ <span class="dropdown-text">Hosting</span></a>
+  </li>  
+        <li>
+    <a class="dropdown-item" href="../../modules/logging.html">
+ <span class="dropdown-text">Logging</span></a>
+  </li>  
+        <li>
+    <a class="dropdown-item" href="../../modules/mediator.html">
+ <span class="dropdown-text">MediatR</span></a>
+  </li>  
+        <li>
+    <a class="dropdown-item" href="../../modules/minispec.html">
+ <span class="dropdown-text">MiniSpec</span></a>
+  </li>  
+        <li>
+    <a class="dropdown-item" href="../../modules/nnlog.html">
+ <span class="dropdown-text">NNLog</span></a>
+  </li>  
+        <li>
+    <a class="dropdown-item" href="../../modules/web.html">
+ <span class="dropdown-text">Web</span></a>
+  </li>  
+    </ul>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" href="../../blog/index.html"> 
+<span class="menu-text">News</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../../about.html"> 
+<span class="menu-text">About</span></a>
+  </li>  
+</ul>
+            <ul class="navbar-nav navbar-nav-scroll ms-auto">
+  <li class="nav-item">
+    <a class="nav-link" href="../../index.html"> 
+<span class="menu-text">🇬🇧</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../../es/index.html"> 
+<span class="menu-text">🇪🇸</span></a>
+  </li>  
+  <li class="nav-item compact">
+    <a class="nav-link" href="https://github.com/Delphi-DAF/dafce"> <i class="bi bi-github" role="img" aria-label="GitHub">
+</i> 
+<span class="menu-text"></span></a>
+  </li>  
+</ul>
+          </div> <!-- /navcollapse -->
+            <div class="quarto-navbar-tools">
+  <a href="" class="quarto-color-scheme-toggle quarto-navigation-tool  px-1" onclick="window.quartoToggleColorScheme(); return false;" title="Alternar modo oscuro"><i class="bi"></i></a>
+</div>
+      </div> <!-- /container-fluid -->
+    </nav>
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Alternar barra lateral" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item">MiniSpec — Guía de uso</li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Alternar barra lateral" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation docked overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header sidebar-header-stacked">
+      <a href="../../index.html" class="sidebar-logo-link">
+      </a>
+      </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../../es/modules/index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Resumen</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
+ <span class="menu-text">Fundación</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Alternar sección">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../../es/modules/application.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Application</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../../es/modules/hosting.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Hosting</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../../es/modules/di.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Inyección de Dependencias</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../../es/modules/configuration.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Configuración</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true">
+ <span class="menu-text">Observabilidad</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Alternar sección">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../../es/modules/logging.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Logging</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../../es/modules/nnlog.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">NNLog</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true">
+ <span class="menu-text">Mensajería</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Alternar sección">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../../es/modules/mediator.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">MediatR</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true">
+ <span class="menu-text">Testing</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true" aria-label="Alternar sección">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../../es/modules/minispec.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">MiniSpec</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true">
+ <span class="menu-text">Utilidades</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true" aria-label="Alternar sección">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../../es/modules/commons.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Commons</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../../es/modules/web.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Web</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#minispec---guía-de-usuario" id="toc-minispec---guía-de-usuario" class="nav-link active" data-scroll-target="#minispec---guía-de-usuario">MiniSpec - Guía de Usuario</a>
+  <ul class="collapse">
+  <li><a href="#tabla-de-contenidos" id="toc-tabla-de-contenidos" class="nav-link" data-scroll-target="#tabla-de-contenidos">Tabla de Contenidos</a>
+  <ul class="collapse">
+  <li><a href="#primeros-pasos" id="toc-primeros-pasos" class="nav-link" data-scroll-target="#primeros-pasos">Primeros Pasos</a></li>
+  <li><a href="#conceptos-fundamentales" id="toc-conceptos-fundamentales" class="nav-link" data-scroll-target="#conceptos-fundamentales">Conceptos Fundamentales</a></li>
+  <li><a href="#organización-y-reutilización" id="toc-organización-y-reutilización" class="nav-link" data-scroll-target="#organización-y-reutilización">Organización y Reutilización</a></li>
+  <li><a href="#verificaciones" id="toc-verificaciones" class="nav-link" data-scroll-target="#verificaciones">Verificaciones</a></li>
+  <li><a href="#vocabulario-y-marcadores" id="toc-vocabulario-y-marcadores" class="nav-link" data-scroll-target="#vocabulario-y-marcadores">Vocabulario y Marcadores</a></li>
+  <li><a href="#configuración-avanzada" id="toc-configuración-avanzada" class="nav-link" data-scroll-target="#configuración-avanzada">Configuración Avanzada</a></li>
+  <li><a href="#ejecución-y-salida" id="toc-ejecución-y-salida" class="nav-link" data-scroll-target="#ejecución-y-salida">Ejecución y Salida</a></li>
+  </ul></li>
+  <li><a href="#quick-reference" id="toc-quick-reference" class="nav-link" data-scroll-target="#quick-reference">Quick Reference</a></li>
+  <li><a href="#patrones-de-testing" id="toc-patrones-de-testing" class="nav-link" data-scroll-target="#patrones-de-testing">Patrones de Testing</a></li>
+  </ul></li>
+  <li><a href="#patrones-de-testing-con-minispec" id="toc-patrones-de-testing-con-minispec" class="nav-link" data-scroll-target="#patrones-de-testing-con-minispec">Patrones de Testing con MiniSpec</a>
+  <ul class="collapse">
+  <li><a href="#tabla-de-contenidos-1" id="toc-tabla-de-contenidos-1" class="nav-link" data-scroll-target="#tabla-de-contenidos-1">Tabla de Contenidos</a></li>
+  <li><a href="#la-pirámide-de-tests" id="toc-la-pirámide-de-tests" class="nav-link" data-scroll-target="#la-pirámide-de-tests">La Pirámide de Tests</a></li>
+  <li><a href="#tests-e2e-especificando-el-sistema" id="toc-tests-e2e-especificando-el-sistema" class="nav-link" data-scroll-target="#tests-e2e-especificando-el-sistema">Tests E2E: Especificando el Sistema</a></li>
+  <li><a href="#tests-unitarios-especificando-clases" id="toc-tests-unitarios-especificando-clases" class="nav-link" data-scroll-target="#tests-unitarios-especificando-clases">Tests Unitarios: Especificando Clases</a>
+  <ul class="collapse">
+  <li><a href="#el-patrón-feature-clase-scenario-métodocomportamiento" id="toc-el-patrón-feature-clase-scenario-métodocomportamiento" class="nav-link" data-scroll-target="#el-patrón-feature-clase-scenario-métodocomportamiento">El Patrón: Feature = Clase, Scenario = Método/Comportamiento</a></li>
+  <li><a href="#convenciones-para-tests-unitarios" id="toc-convenciones-para-tests-unitarios" class="nav-link" data-scroll-target="#convenciones-para-tests-unitarios">Convenciones para Tests Unitarios</a></li>
+  <li><a href="#comparación-con-rspec" id="toc-comparación-con-rspec" class="nav-link" data-scroll-target="#comparación-con-rspec">Comparación con RSpec</a></li>
+  </ul></li>
+  <li><a href="#tests-de-integración-especificando-apis" id="toc-tests-de-integración-especificando-apis" class="nav-link" data-scroll-target="#tests-de-integración-especificando-apis">Tests de Integración: Especificando APIs</a>
+  <ul class="collapse">
+  <li><a href="#el-patrón-feature-recursoendpoint-scenario-operación" id="toc-el-patrón-feature-recursoendpoint-scenario-operación" class="nav-link" data-scroll-target="#el-patrón-feature-recursoendpoint-scenario-operación">El Patrón: Feature = Recurso/Endpoint, Scenario = Operación</a></li>
+  <li><a href="#usando-featurecontext-para-estado-compartido" id="toc-usando-featurecontext-para-estado-compartido" class="nav-link" data-scroll-target="#usando-featurecontext-para-estado-compartido">Usando FeatureContext para Estado Compartido</a></li>
+  <li><a href="#tabla-de-códigos-http-comunes" id="toc-tabla-de-códigos-http-comunes" class="nav-link" data-scroll-target="#tabla-de-códigos-http-comunes">Tabla de Códigos HTTP Comunes</a></li>
+  </ul></li>
+  <li><a href="#organizando-por-tipo-de-test" id="toc-organizando-por-tipo-de-test" class="nav-link" data-scroll-target="#organizando-por-tipo-de-test">Organizando por Tipo de Test</a>
+  <ul class="collapse">
+  <li><a href="#opción-a-un-solo-ejecutable-con-tags" id="toc-opción-a-un-solo-ejecutable-con-tags" class="nav-link" data-scroll-target="#opción-a-un-solo-ejecutable-con-tags">Opción A: Un Solo Ejecutable con Tags</a></li>
+  <li><a href="#opción-b-ejecutables-separados-por-nivel" id="toc-opción-b-ejecutables-separados-por-nivel" class="nav-link" data-scroll-target="#opción-b-ejecutables-separados-por-nivel">Opción B: Ejecutables Separados por Nivel</a></li>
+  <li><a href="#resumen-cuándo-usar-cada-nivel" id="toc-resumen-cuándo-usar-cada-nivel" class="nav-link" data-scroll-target="#resumen-cuándo-usar-cada-nivel">Resumen: Cuándo Usar Cada Nivel</a></li>
+  </ul></li>
+  <li><a href="#conclusión" id="toc-conclusión" class="nav-link" data-scroll-target="#conclusión">Conclusión</a></li>
+  </ul></li>
+  </ul>
+<div class="toc-actions"><ul><li><a href="https://github.com/Delphi-DAF/dafce/issues/new" class="toc-action"><i class="bi bi-github"></i>Informar sobre problema</a></li><li><a href="https://github.com/Delphi-DAF/dafce/edit/main/es/modules/minispec-guide.qmd" class="toc-action"><i class="bi empty"></i>Editar esta página</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">MiniSpec — Guía de uso</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="minispec---guía-de-usuario" class="level1">
+<h1>MiniSpec - Guía de Usuario</h1>
+<p><strong>🌍 Idioma: <a href="#guide">English</a> | Español</strong></p>
+<p>Bienvenido a la guía de MiniSpec, el framework BDD para Delphi.</p>
+<blockquote class="blockquote">
+<p>📖 <strong>Ver también</strong>: <a href="TESTING-PATTERNS.es.md">Patrones de Testing</a> — Cómo usar BDD para tests unitarios, de integración y E2E.</p>
+</blockquote>
+<hr>
+<section id="tabla-de-contenidos" class="level2">
+<h2 class="anchored" data-anchor-id="tabla-de-contenidos">Tabla de Contenidos</h2>
+<section id="primeros-pasos" class="level3">
+<h3 class="anchored" data-anchor-id="primeros-pasos">Primeros Pasos</h3>
+<ul>
+<li><a href="guide/getting-started.es.md"><strong>Primeros Pasos</strong></a> — ¿Por qué MiniSpec? Tu primera especificación. Ejecutando specs.</li>
+</ul>
+</section>
+<section id="conceptos-fundamentales" class="level3">
+<h3 class="anchored" data-anchor-id="conceptos-fundamentales">Conceptos Fundamentales</h3>
+<ul>
+<li><a href="guide/world.es.md"><strong>El World</strong></a> — Compartiendo estado entre pasos de un escenario</li>
+<li><a href="guide/scenario-outline.es.md"><strong>Scenario Outline</strong></a> — Múltiples ejemplos con tablas de datos</li>
+<li><a href="guide/datatables.es.md"><strong>DataTables</strong></a> — Datos estructurados para pasos complejos</li>
+</ul>
+</section>
+<section id="organización-y-reutilización" class="level3">
+<h3 class="anchored" data-anchor-id="organización-y-reutilización">Organización y Reutilización</h3>
+<ul>
+<li><a href="guide/step-bindings.es.md"><strong>Step Bindings</strong></a> — Pasos reutilizables con patrones regex</li>
+<li><a href="guide/tags-filtering.es.md"><strong>Tags y Filtrado</strong></a> — Categorizar y filtrar escenarios</li>
+<li><a href="guide/rules.es.md"><strong>Rules</strong></a> — Agrupar escenarios por regla de negocio</li>
+</ul>
+</section>
+<section id="verificaciones" class="level3">
+<h3 class="anchored" data-anchor-id="verificaciones">Verificaciones</h3>
+<ul>
+<li><a href="guide/assertions.es.md"><strong>Assertions (Expect)</strong></a> — API fluida para verificaciones y excepciones</li>
+</ul>
+</section>
+<section id="vocabulario-y-marcadores" class="level3">
+<h3 class="anchored" data-anchor-id="vocabulario-y-marcadores">Vocabulario y Marcadores</h3>
+<ul>
+<li><a href="guide/gherkin-vocabulary.es.md"><strong>Vocabulario Gherkin</strong></a> — Referencia completa de keywords</li>
+<li><a href="guide/pending-noaction.es.md"><strong>Pending y NoAction</strong></a> — Steps sin implementar o descriptivos</li>
+</ul>
+</section>
+<section id="configuración-avanzada" class="level3">
+<h3 class="anchored" data-anchor-id="configuración-avanzada">Configuración Avanzada</h3>
+<ul>
+<li><a href="guide/hooks.es.md"><strong>Hooks (Before/After)</strong></a> — Código de setup/teardown a nivel de Feature</li>
+<li><a href="guide/configuration.es.md"><strong>Configuración Global</strong></a> — MiniSpec, SpecContext, FeatureContext</li>
+<li><a href="guide/injection.es.md"><strong>Inyección de Dependencias</strong></a> — Sistema [Inject] integrado</li>
+</ul>
+</section>
+<section id="ejecución-y-salida" class="level3">
+<h3 class="anchored" data-anchor-id="ejecución-y-salida">Ejecución y Salida</h3>
+<ul>
+<li><a href="guide/reporters.es.md"><strong>Reporters</strong></a> — Console, JSON, JUnit, Gherkin, Live Dashboard</li>
+<li><a href="guide/cli.es.md"><strong>Línea de Comandos</strong></a> — Opciones de ejecución</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="quick-reference" class="level2">
+<h2 class="anchored" data-anchor-id="quick-reference">Quick Reference</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 66%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Concepto</th>
+<th>Uso</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Feature</td>
+<td><code>Feature('...')</code> — Funcionalidad a especificar</td>
+</tr>
+<tr class="even">
+<td>Scenario</td>
+<td><code>.Scenario('...')</code> — Ejemplo concreto</td>
+</tr>
+<tr class="odd">
+<td>Given/When/Then</td>
+<td><code>.Given()</code>, <code>.When()</code>, <code>.&amp;Then()</code> — Pasos</td>
+</tr>
+<tr class="even">
+<td>ScenarioOutline</td>
+<td><code>.ScenarioOutline('...').Examples([...])</code> — Data-driven</td>
+</tr>
+<tr class="odd">
+<td>Background</td>
+<td><code>.Background</code> — Setup común</td>
+</tr>
+<tr class="even">
+<td>Rule</td>
+<td><code>.Rule('...')</code> — Agrupar por regla</td>
+</tr>
+<tr class="odd">
+<td>Tags</td>
+<td><code>@tag</code> en descripción — Filtrado</td>
+</tr>
+<tr class="even">
+<td>World</td>
+<td><code>.UseWorld&lt;T&gt;</code> — Estado del escenario</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<p align="center">
+<sub><a href="../README.es.md">← Volver al README</a></sub>
+</p>
+<hr>
+</section>
+<section id="patrones-de-testing" class="level2">
+<h2 class="anchored" data-anchor-id="patrones-de-testing">Patrones de Testing</h2>
+</section>
+</section>
+<section id="patrones-de-testing-con-minispec" class="level1">
+<h1>Patrones de Testing con MiniSpec</h1>
+<p><strong>🌍 Idioma: <a href="TESTING-PATTERNS.md">English</a> | Español</strong></p>
+<p>Esta guía complementa la <a href="#guide">Guía de Usuario</a> mostrando cómo adaptar BDD a diferentes niveles de testing. Aunque BDD nació para capturar requisitos de negocio, su vocabulario expresivo es útil en cualquier nivel de la pirámide de tests.</p>
+<hr>
+<section id="tabla-de-contenidos-1" class="level2">
+<h2 class="anchored" data-anchor-id="tabla-de-contenidos-1">Tabla de Contenidos</h2>
+<ul>
+<li><a href="#la-pirámide-de-tests">La Pirámide de Tests</a></li>
+<li><a href="#tests-e2e-especificando-el-sistema">Tests E2E: Especificando el Sistema</a></li>
+<li><a href="#tests-unitarios-especificando-clases">Tests Unitarios: Especificando Clases</a></li>
+<li><a href="#tests-de-integración-especificando-apis">Tests de Integración: Especificando APIs</a></li>
+<li><a href="#organizando-por-tipo-de-test">Organizando por Tipo de Test</a></li>
+</ul>
+<hr>
+</section>
+<section id="la-pirámide-de-tests" class="level2">
+<h2 class="anchored" data-anchor-id="la-pirámide-de-tests">La Pirámide de Tests</h2>
+<pre><code>        /\
+       /  \      E2E Tests
+      /    \     (Sistema completo, requisitos de negocio)
+     /------\
+    /        \   Integration Tests
+   /          \  (APIs, servicios, componentes conectados)
+  /------------\
+ /              \ Unit Tests
+/________________\(Clases individuales, funciones puras)</code></pre>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 15%">
+<col style="width: 11%">
+<col style="width: 25%">
+<col style="width: 27%">
+<col style="width: 20%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Nivel</th>
+<th>SUT</th>
+<th>Velocidad</th>
+<th>Fragilidad</th>
+<th>Enfoque</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>E2E</strong></td>
+<td>Sistema completo</td>
+<td>Lento</td>
+<td>Alta</td>
+<td>Requisitos de negocio</td>
+</tr>
+<tr class="even">
+<td><strong>Integración</strong></td>
+<td>API / Servicio</td>
+<td>Medio</td>
+<td>Media</td>
+<td>Contratos entre componentes</td>
+</tr>
+<tr class="odd">
+<td><strong>Unitario</strong></td>
+<td>Clase / Función</td>
+<td>Rápido</td>
+<td>Baja</td>
+<td>Comportamiento aislado</td>
+</tr>
+</tbody>
+</table>
+<p>MiniSpec puede usarse en los tres niveles. La clave está en <strong>qué describes</strong> y <strong>cómo estructuras</strong> tus especificaciones.</p>
+<hr>
+</section>
+<section id="tests-e2e-especificando-el-sistema" class="level2">
+<h2 class="anchored" data-anchor-id="tests-e2e-especificando-el-sistema">Tests E2E: Especificando el Sistema</h2>
+<p>Este es el uso “clásico” de BDD, cubierto en detalle en la <a href="#guide">Guía de Usuario</a>. El SUT es el <strong>sistema completo</strong> y describes <strong>requisitos de negocio</strong>:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode pascal code-with-copy"><code class="sourceCode pascal"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>Feature(<span class="st">'''</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>Proceso de Checkout</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  Como cliente</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  Necesito completar mi compra</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>  Para recibir los productos en mi domicilio</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>  @e2e @checkout</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="st">''')</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>.UseWorld&lt;TCheckoutWorld&gt;</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>.Scenario(<span class="st">'Compra exitosa con tarjeta de crédito'</span>)</span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>  .Given(<span class="st">'tengo productos en el carrito'</span>, <span class="kw">procedure</span>(W: TCheckoutWorld)</span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>    <span class="kw">begin</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>      W.Cart.Add(TProduct.Create(<span class="st">'Laptop'</span>, <span class="dv">999.99</span>));</span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>    end)</span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>  .When(<span class="st">'completo el pago con tarjeta válida'</span>, <span class="kw">procedure</span>(W: TCheckoutWorld)</span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>    <span class="kw">begin</span></span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>      W.Checkout.Pay(TCreditCard.Create(<span class="st">'4111111111111111'</span>));</span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a>    end)</span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a>  .&amp;<span class="kw">Then</span>(<span class="st">'recibo confirmación de pedido'</span>, <span class="kw">procedure</span>(W: TCheckoutWorld)</span>
+<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a>    <span class="kw">begin</span></span>
+<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a>      Expect(W.Checkout.OrderConfirmed).ToBeTrue;</span>
+<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a>      Expect(W.Checkout.OrderNumber).ToMatch(<span class="st">'^\d{8}$'</span>);</span>
+<span id="cb2-26"><a href="#cb2-26" aria-hidden="true" tabindex="-1"></a>    end)</span></code></pre></div><button title="Copiar al portapapeles" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>Características de tests E2E:</strong></p>
+<ul>
+<li>Vocabulario de <strong>negocio</strong>, no técnico</li>
+<li>El World orquesta múltiples componentes</li>
+<li>Pueden ser lentos (base de datos real, servicios externos)</li>
+<li>Ideales para <strong>criterios de aceptación</strong></li>
+</ul>
+<hr>
+</section>
+<section id="tests-unitarios-especificando-clases" class="level2">
+<h2 class="anchored" data-anchor-id="tests-unitarios-especificando-clases">Tests Unitarios: Especificando Clases</h2>
+<p>Cuando el SUT es una <strong>clase individual</strong>, BDD sigue siendo útil. Piensa en frameworks como RSpec (Ruby) o Jest (JavaScript) que usan <code>describe()</code> para agrupar comportamientos.</p>
+<section id="el-patrón-feature-clase-scenario-métodocomportamiento" class="level3">
+<h3 class="anchored" data-anchor-id="el-patrón-feature-clase-scenario-métodocomportamiento">El Patrón: Feature = Clase, Scenario = Método/Comportamiento</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode pascal code-with-copy"><code class="sourceCode pascal"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">unit</span> TStringBuilder.Spec.pas;</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="kw">interface</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="kw">implementation</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="kw">uses</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>  System.SysUtils,</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>  Daf.MiniSpec;</span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>  TStringBuilderWorld = <span class="kw">class</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>  <span class="kw">public</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>    SUT: TStringBuilder;  <span class="co">// System Under Test</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>    Result: <span class="dt">string</span>;</span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>    <span class="kw">destructor</span> Destroy; <span class="kw">override</span>;</span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span>;</span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a><span class="kw">destructor</span> TStringBuilderWorld.Destroy;</span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a><span class="kw">begin</span></span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a>  SUT.Free;</span>
+<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a>  <span class="kw">inherited</span>;</span>
+<span id="cb3-23"><a href="#cb3-23" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span>;</span>
+<span id="cb3-24"><a href="#cb3-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-25"><a href="#cb3-25" aria-hidden="true" tabindex="-1"></a><span class="kw">initialization</span></span>
+<span id="cb3-26"><a href="#cb3-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-27"><a href="#cb3-27" aria-hidden="true" tabindex="-1"></a>Feature(<span class="st">'''</span></span>
+<span id="cb3-28"><a href="#cb3-28" aria-hidden="true" tabindex="-1"></a>TStringBuilder @unit</span>
+<span id="cb3-29"><a href="#cb3-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-30"><a href="#cb3-30" aria-hidden="true" tabindex="-1"></a>  Clase para construir strings eficientemente</span>
+<span id="cb3-31"><a href="#cb3-31" aria-hidden="true" tabindex="-1"></a>  mediante concatenación incremental.</span>
+<span id="cb3-32"><a href="#cb3-32" aria-hidden="true" tabindex="-1"></a><span class="st">''')</span></span>
+<span id="cb3-33"><a href="#cb3-33" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-34"><a href="#cb3-34" aria-hidden="true" tabindex="-1"></a>.UseWorld&lt;TStringBuilderWorld&gt;</span>
+<span id="cb3-35"><a href="#cb3-35" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-36"><a href="#cb3-36" aria-hidden="true" tabindex="-1"></a>.Background</span>
+<span id="cb3-37"><a href="#cb3-37" aria-hidden="true" tabindex="-1"></a>  .Given(<span class="st">'un StringBuilder vacío'</span>, <span class="kw">procedure</span>(W: TStringBuilderWorld)</span>
+<span id="cb3-38"><a href="#cb3-38" aria-hidden="true" tabindex="-1"></a>    <span class="kw">begin</span></span>
+<span id="cb3-39"><a href="#cb3-39" aria-hidden="true" tabindex="-1"></a>      W.SUT := TStringBuilder.Create;</span>
+<span id="cb3-40"><a href="#cb3-40" aria-hidden="true" tabindex="-1"></a>    end)</span>
+<span id="cb3-41"><a href="#cb3-41" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-42"><a href="#cb3-42" aria-hidden="true" tabindex="-1"></a>.Rule(<span class="st">'Append: añade texto al final'</span>)</span>
+<span id="cb3-43"><a href="#cb3-43" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-44"><a href="#cb3-44" aria-hidden="true" tabindex="-1"></a>  .Scenario(<span class="st">'Append de un string'</span>)</span>
+<span id="cb3-45"><a href="#cb3-45" aria-hidden="true" tabindex="-1"></a>    .When(<span class="st">'añado "Hello"'</span>, <span class="kw">procedure</span>(W: TStringBuilderWorld)</span>
+<span id="cb3-46"><a href="#cb3-46" aria-hidden="true" tabindex="-1"></a>      <span class="kw">begin</span></span>
+<span id="cb3-47"><a href="#cb3-47" aria-hidden="true" tabindex="-1"></a>        W.SUT.Append(<span class="st">'Hello'</span>);</span>
+<span id="cb3-48"><a href="#cb3-48" aria-hidden="true" tabindex="-1"></a>      end)</span>
+<span id="cb3-49"><a href="#cb3-49" aria-hidden="true" tabindex="-1"></a>    .&amp;<span class="kw">Then</span>(<span class="st">'el contenido es "Hello"'</span>, <span class="kw">procedure</span>(W: TStringBuilderWorld)</span>
+<span id="cb3-50"><a href="#cb3-50" aria-hidden="true" tabindex="-1"></a>      <span class="kw">begin</span></span>
+<span id="cb3-51"><a href="#cb3-51" aria-hidden="true" tabindex="-1"></a>        Expect(W.SUT.ToString).ToEqual(<span class="st">'Hello'</span>);</span>
+<span id="cb3-52"><a href="#cb3-52" aria-hidden="true" tabindex="-1"></a>      end)</span>
+<span id="cb3-53"><a href="#cb3-53" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-54"><a href="#cb3-54" aria-hidden="true" tabindex="-1"></a>  .Scenario(<span class="st">'Append encadenado'</span>)</span>
+<span id="cb3-55"><a href="#cb3-55" aria-hidden="true" tabindex="-1"></a>    .When(<span class="st">'añado "Hello" y luego " World"'</span>, <span class="kw">procedure</span>(W: TStringBuilderWorld)</span>
+<span id="cb3-56"><a href="#cb3-56" aria-hidden="true" tabindex="-1"></a>      <span class="kw">begin</span></span>
+<span id="cb3-57"><a href="#cb3-57" aria-hidden="true" tabindex="-1"></a>        W.SUT.Append(<span class="st">'Hello'</span>).Append(<span class="st">' World'</span>);</span>
+<span id="cb3-58"><a href="#cb3-58" aria-hidden="true" tabindex="-1"></a>      end)</span>
+<span id="cb3-59"><a href="#cb3-59" aria-hidden="true" tabindex="-1"></a>    .&amp;<span class="kw">Then</span>(<span class="st">'el contenido es "Hello World"'</span>, <span class="kw">procedure</span>(W: TStringBuilderWorld)</span>
+<span id="cb3-60"><a href="#cb3-60" aria-hidden="true" tabindex="-1"></a>      <span class="kw">begin</span></span>
+<span id="cb3-61"><a href="#cb3-61" aria-hidden="true" tabindex="-1"></a>        Expect(W.SUT.ToString).ToEqual(<span class="st">'Hello World'</span>);</span>
+<span id="cb3-62"><a href="#cb3-62" aria-hidden="true" tabindex="-1"></a>      end)</span>
+<span id="cb3-63"><a href="#cb3-63" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-64"><a href="#cb3-64" aria-hidden="true" tabindex="-1"></a>.Rule(<span class="st">'Clear: vacía el contenido'</span>)</span>
+<span id="cb3-65"><a href="#cb3-65" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-66"><a href="#cb3-66" aria-hidden="true" tabindex="-1"></a>  .Scenario(<span class="st">'Clear después de añadir'</span>)</span>
+<span id="cb3-67"><a href="#cb3-67" aria-hidden="true" tabindex="-1"></a>    .Given(<span class="st">'contenido existente'</span>, <span class="kw">procedure</span>(W: TStringBuilderWorld)</span>
+<span id="cb3-68"><a href="#cb3-68" aria-hidden="true" tabindex="-1"></a>      <span class="kw">begin</span></span>
+<span id="cb3-69"><a href="#cb3-69" aria-hidden="true" tabindex="-1"></a>        W.SUT.Append(<span class="st">'Existing content'</span>);</span>
+<span id="cb3-70"><a href="#cb3-70" aria-hidden="true" tabindex="-1"></a>      end)</span>
+<span id="cb3-71"><a href="#cb3-71" aria-hidden="true" tabindex="-1"></a>    .When(<span class="st">'llamo Clear'</span>, <span class="kw">procedure</span>(W: TStringBuilderWorld)</span>
+<span id="cb3-72"><a href="#cb3-72" aria-hidden="true" tabindex="-1"></a>      <span class="kw">begin</span></span>
+<span id="cb3-73"><a href="#cb3-73" aria-hidden="true" tabindex="-1"></a>        W.SUT.Clear;</span>
+<span id="cb3-74"><a href="#cb3-74" aria-hidden="true" tabindex="-1"></a>      end)</span>
+<span id="cb3-75"><a href="#cb3-75" aria-hidden="true" tabindex="-1"></a>    .&amp;<span class="kw">Then</span>(<span class="st">'el contenido está vacío'</span>, <span class="kw">procedure</span>(W: TStringBuilderWorld)</span>
+<span id="cb3-76"><a href="#cb3-76" aria-hidden="true" tabindex="-1"></a>      <span class="kw">begin</span></span>
+<span id="cb3-77"><a href="#cb3-77" aria-hidden="true" tabindex="-1"></a>        Expect(W.SUT.ToString).ToEqual(<span class="st">''</span>);</span>
+<span id="cb3-78"><a href="#cb3-78" aria-hidden="true" tabindex="-1"></a>        Expect(W.SUT.Length).ToEqual(<span class="dv">0</span>);</span>
+<span id="cb3-79"><a href="#cb3-79" aria-hidden="true" tabindex="-1"></a>      end)</span>
+<span id="cb3-80"><a href="#cb3-80" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-81"><a href="#cb3-81" aria-hidden="true" tabindex="-1"></a>.Rule(<span class="st">'Length: devuelve la longitud actual'</span>)</span>
+<span id="cb3-82"><a href="#cb3-82" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-83"><a href="#cb3-83" aria-hidden="true" tabindex="-1"></a>  .Scenario(<span class="st">'Length inicial es cero'</span>)</span>
+<span id="cb3-84"><a href="#cb3-84" aria-hidden="true" tabindex="-1"></a>    .&amp;<span class="kw">Then</span>(<span class="st">'Length es 0'</span>, <span class="kw">procedure</span>(W: TStringBuilderWorld)</span>
+<span id="cb3-85"><a href="#cb3-85" aria-hidden="true" tabindex="-1"></a>      <span class="kw">begin</span></span>
+<span id="cb3-86"><a href="#cb3-86" aria-hidden="true" tabindex="-1"></a>        Expect(W.SUT.Length).ToEqual(<span class="dv">0</span>);</span>
+<span id="cb3-87"><a href="#cb3-87" aria-hidden="true" tabindex="-1"></a>      end)</span>
+<span id="cb3-88"><a href="#cb3-88" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-89"><a href="#cb3-89" aria-hidden="true" tabindex="-1"></a>  .ScenarioOutline(<span class="st">'Length después de Append'</span>)</span>
+<span id="cb3-90"><a href="#cb3-90" aria-hidden="true" tabindex="-1"></a>    .When(<span class="st">'añado &lt;texto&gt;'</span>, <span class="kw">procedure</span>(W: TStringBuilderWorld)</span>
+<span id="cb3-91"><a href="#cb3-91" aria-hidden="true" tabindex="-1"></a>      <span class="kw">begin</span></span>
+<span id="cb3-92"><a href="#cb3-92" aria-hidden="true" tabindex="-1"></a>        W.SUT.Append(W.Texto);</span>
+<span id="cb3-93"><a href="#cb3-93" aria-hidden="true" tabindex="-1"></a>      end)</span>
+<span id="cb3-94"><a href="#cb3-94" aria-hidden="true" tabindex="-1"></a>    .&amp;<span class="kw">Then</span>(<span class="st">'Length es &lt;longitud&gt;'</span>, <span class="kw">procedure</span>(W: TStringBuilderWorld)</span>
+<span id="cb3-95"><a href="#cb3-95" aria-hidden="true" tabindex="-1"></a>      <span class="kw">begin</span></span>
+<span id="cb3-96"><a href="#cb3-96" aria-hidden="true" tabindex="-1"></a>        Expect(W.SUT.Length).ToEqual(W.Longitud);</span>
+<span id="cb3-97"><a href="#cb3-97" aria-hidden="true" tabindex="-1"></a>      end)</span>
+<span id="cb3-98"><a href="#cb3-98" aria-hidden="true" tabindex="-1"></a>    .Examples([</span>
+<span id="cb3-99"><a href="#cb3-99" aria-hidden="true" tabindex="-1"></a>      [<span class="st">'texto'</span>,   <span class="st">'longitud'</span>],</span>
+<span id="cb3-100"><a href="#cb3-100" aria-hidden="true" tabindex="-1"></a>      [<span class="st">''</span>,        <span class="dv">0</span>],</span>
+<span id="cb3-101"><a href="#cb3-101" aria-hidden="true" tabindex="-1"></a>      [<span class="st">'a'</span>,       <span class="dv">1</span>],</span>
+<span id="cb3-102"><a href="#cb3-102" aria-hidden="true" tabindex="-1"></a>      [<span class="st">'Hello'</span>,   <span class="dv">5</span>],</span>
+<span id="cb3-103"><a href="#cb3-103" aria-hidden="true" tabindex="-1"></a>      [<span class="st">'こんにちは'</span>, <span class="dv">5</span>]  <span class="co">// Unicode</span></span>
+<span id="cb3-104"><a href="#cb3-104" aria-hidden="true" tabindex="-1"></a>    ])</span>
+<span id="cb3-105"><a href="#cb3-105" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-106"><a href="#cb3-106" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span>.</span></code></pre></div><button title="Copiar al portapapeles" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+<section id="convenciones-para-tests-unitarios" class="level3">
+<h3 class="anchored" data-anchor-id="convenciones-para-tests-unitarios">Convenciones para Tests Unitarios</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 32%">
+<col style="width: 38%">
+<col style="width: 29%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Elemento</th>
+<th>Convención</th>
+<th>Ejemplo</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Feature</td>
+<td>Nombre de la clase</td>
+<td><code>TStringBuilder</code>, <code>TCalculator</code></td>
+</tr>
+<tr class="even">
+<td>Rule</td>
+<td>Método o grupo de comportamiento</td>
+<td><code>Append: añade texto</code>, <code>Validación de entrada</code></td>
+</tr>
+<tr class="odd">
+<td>Scenario</td>
+<td>Caso específico del comportamiento</td>
+<td><code>Append de string vacío</code></td>
+</tr>
+<tr class="even">
+<td>Tag</td>
+<td><code>@unit</code> para filtrado</td>
+<td><code>TStringBuilder @unit</code></td>
+</tr>
+<tr class="odd">
+<td>World</td>
+<td>Contiene solo el SUT y datos del test</td>
+<td><code>TStringBuilderWorld</code></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="comparación-con-rspec" class="level3">
+<h3 class="anchored" data-anchor-id="comparación-con-rspec">Comparación con RSpec</h3>
+<p>Si vienes de RSpec, esta es la equivalencia:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode ruby code-with-copy"><code class="sourceCode ruby"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># RSpec (Ruby)</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>describe <span class="dt">TStringBuilder</span> <span class="cf">do</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  describe <span class="vs">'#append'</span> <span class="cf">do</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    it <span class="vs">'adds text to the end'</span> <span class="cf">do</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>      builder <span class="op">=</span> <span class="dt">TStringBuilder</span><span class="at">.new</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>      builder<span class="at">.append</span>(<span class="vs">'Hello'</span>)</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>      expect(builder<span class="at">.to_s</span>)<span class="at">.to</span> eq(<span class="vs">'Hello'</span>)</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>  <span class="cf">end</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div><button title="Copiar al portapapeles" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode pascal code-with-copy"><code class="sourceCode pascal"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co">// MiniSpec (Delphi)</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>Feature(<span class="st">'TStringBuilder @unit'</span>)</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>.UseWorld&lt;TWorld&gt;</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>.Rule(<span class="st">'Append: añade texto al final'</span>)</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>  .Scenario(<span class="st">'Append de un string'</span>)</span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>    .Given(<span class="st">'un StringBuilder vacío'</span>, ...)</span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>    .When(<span class="st">'añado "Hello"'</span>, ...)</span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>    .&amp;<span class="kw">Then</span>(<span class="st">'el contenido es "Hello"'</span>, ...)</span></code></pre></div><button title="Copiar al portapapeles" class="code-copy-button"><i class="bi"></i></button></div>
+<p>La estructura es similar: - <code>describe Class</code> → <code>Feature('Class')</code> - <code>describe '#method'</code> → <code>.Rule('Method: descripción')</code> - <code>it 'behavior'</code> → <code>.Scenario('behavior')</code></p>
+<hr>
+</section>
+</section>
+<section id="tests-de-integración-especificando-apis" class="level2">
+<h2 class="anchored" data-anchor-id="tests-de-integración-especificando-apis">Tests de Integración: Especificando APIs</h2>
+<p>Cuando el SUT es un <strong>API</strong> (REST, GraphQL, gRPC…), cada <strong>endpoint</strong> o <strong>operación</strong> puede ser una Feature o Rule.</p>
+<section id="el-patrón-feature-recursoendpoint-scenario-operación" class="level3">
+<h3 class="anchored" data-anchor-id="el-patrón-feature-recursoendpoint-scenario-operación">El Patrón: Feature = Recurso/Endpoint, Scenario = Operación</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode pascal code-with-copy"><code class="sourceCode pascal"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">unit</span> API.Users.Spec.pas;</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="kw">interface</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="kw">implementation</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="kw">uses</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>  System.SysUtils,</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>  System.JSON,</span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>  System.Net.HttpClient,</span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>  Daf.MiniSpec;</span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span></span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>  TApiWorld = <span class="kw">class</span></span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>  <span class="kw">public</span></span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>    Client: THTTPClient;</span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>    Response: IHTTPResponse;</span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a>    ResponseJson: TJSONObject;</span>
+<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a>    UserId: <span class="dt">string</span>;</span>
+<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a>    <span class="kw">destructor</span> Destroy; <span class="kw">override</span>;</span>
+<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span>;</span>
+<span id="cb6-22"><a href="#cb6-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-23"><a href="#cb6-23" aria-hidden="true" tabindex="-1"></a><span class="kw">destructor</span> TApiWorld.Destroy;</span>
+<span id="cb6-24"><a href="#cb6-24" aria-hidden="true" tabindex="-1"></a><span class="kw">begin</span></span>
+<span id="cb6-25"><a href="#cb6-25" aria-hidden="true" tabindex="-1"></a>  ResponseJson.Free;</span>
+<span id="cb6-26"><a href="#cb6-26" aria-hidden="true" tabindex="-1"></a>  Client.Free;</span>
+<span id="cb6-27"><a href="#cb6-27" aria-hidden="true" tabindex="-1"></a>  <span class="kw">inherited</span>;</span>
+<span id="cb6-28"><a href="#cb6-28" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span>;</span>
+<span id="cb6-29"><a href="#cb6-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-30"><a href="#cb6-30" aria-hidden="true" tabindex="-1"></a><span class="kw">initialization</span></span>
+<span id="cb6-31"><a href="#cb6-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-32"><a href="#cb6-32" aria-hidden="true" tabindex="-1"></a>Feature(<span class="st">'''</span></span>
+<span id="cb6-33"><a href="#cb6-33" aria-hidden="true" tabindex="-1"></a>API: /users @integration @api</span>
+<span id="cb6-34"><a href="#cb6-34" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-35"><a href="#cb6-35" aria-hidden="true" tabindex="-1"></a>  Gestión de usuarios via REST API.</span>
+<span id="cb6-36"><a href="#cb6-36" aria-hidden="true" tabindex="-1"></a>  Base URL: http:<span class="co">//localhost:3000/api/v1</span></span>
+<span id="cb6-37"><a href="#cb6-37" aria-hidden="true" tabindex="-1"></a><span class="st">''')</span></span>
+<span id="cb6-38"><a href="#cb6-38" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-39"><a href="#cb6-39" aria-hidden="true" tabindex="-1"></a>.UseWorld&lt;TApiWorld&gt;</span>
+<span id="cb6-40"><a href="#cb6-40" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-41"><a href="#cb6-41" aria-hidden="true" tabindex="-1"></a>.Background</span>
+<span id="cb6-42"><a href="#cb6-42" aria-hidden="true" tabindex="-1"></a>  .Given(<span class="st">'un cliente HTTP configurado'</span>, <span class="kw">procedure</span>(W: TApiWorld)</span>
+<span id="cb6-43"><a href="#cb6-43" aria-hidden="true" tabindex="-1"></a>    <span class="kw">begin</span></span>
+<span id="cb6-44"><a href="#cb6-44" aria-hidden="true" tabindex="-1"></a>      W.Client := THTTPClient.Create;</span>
+<span id="cb6-45"><a href="#cb6-45" aria-hidden="true" tabindex="-1"></a>      W.Client.ContentType := <span class="st">'application/json'</span>;</span>
+<span id="cb6-46"><a href="#cb6-46" aria-hidden="true" tabindex="-1"></a>    end)</span>
+<span id="cb6-47"><a href="#cb6-47" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-48"><a href="#cb6-48" aria-hidden="true" tabindex="-1"></a>.Rule(<span class="st">'GET /users - Listar usuarios'</span>)</span>
+<span id="cb6-49"><a href="#cb6-49" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-50"><a href="#cb6-50" aria-hidden="true" tabindex="-1"></a>  .Scenario(<span class="st">'Lista vacía cuando no hay usuarios'</span>)</span>
+<span id="cb6-51"><a href="#cb6-51" aria-hidden="true" tabindex="-1"></a>    .When(<span class="st">'GET /users'</span>, <span class="kw">procedure</span>(W: TApiWorld)</span>
+<span id="cb6-52"><a href="#cb6-52" aria-hidden="true" tabindex="-1"></a>      <span class="kw">begin</span></span>
+<span id="cb6-53"><a href="#cb6-53" aria-hidden="true" tabindex="-1"></a>        W.Response := W.Client.Get(<span class="st">'http://localhost:3000/api/v1/users'</span>);</span>
+<span id="cb6-54"><a href="#cb6-54" aria-hidden="true" tabindex="-1"></a>      end)</span>
+<span id="cb6-55"><a href="#cb6-55" aria-hidden="true" tabindex="-1"></a>    .&amp;<span class="kw">Then</span>(<span class="st">'responde 200 OK'</span>, <span class="kw">procedure</span>(W: TApiWorld)</span>
+<span id="cb6-56"><a href="#cb6-56" aria-hidden="true" tabindex="-1"></a>      <span class="kw">begin</span></span>
+<span id="cb6-57"><a href="#cb6-57" aria-hidden="true" tabindex="-1"></a>        Expect(W.Response.StatusCode).ToEqual(<span class="dv">200</span>);</span>
+<span id="cb6-58"><a href="#cb6-58" aria-hidden="true" tabindex="-1"></a>      end)</span>
+<span id="cb6-59"><a href="#cb6-59" aria-hidden="true" tabindex="-1"></a>    .&amp;<span class="kw">And</span>(<span class="st">'devuelve array vacío'</span>, <span class="kw">procedure</span>(W: TApiWorld)</span>
+<span id="cb6-60"><a href="#cb6-60" aria-hidden="true" tabindex="-1"></a>      <span class="kw">begin</span></span>
+<span id="cb6-61"><a href="#cb6-61" aria-hidden="true" tabindex="-1"></a>        <span class="kw">var</span> Json := TJSONObject.ParseJSONValue(W.Response.ContentAsString);</span>
+<span id="cb6-62"><a href="#cb6-62" aria-hidden="true" tabindex="-1"></a>        Expect(Json <span class="kw">is</span> TJSONArray).ToBeTrue;</span>
+<span id="cb6-63"><a href="#cb6-63" aria-hidden="true" tabindex="-1"></a>        Expect((Json <span class="kw">as</span> TJSONArray).Count).ToEqual(<span class="dv">0</span>);</span>
+<span id="cb6-64"><a href="#cb6-64" aria-hidden="true" tabindex="-1"></a>        Json.Free;</span>
+<span id="cb6-65"><a href="#cb6-65" aria-hidden="true" tabindex="-1"></a>      end)</span>
+<span id="cb6-66"><a href="#cb6-66" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-67"><a href="#cb6-67" aria-hidden="true" tabindex="-1"></a>.Rule(<span class="st">'POST /users - Crear usuario'</span>)</span>
+<span id="cb6-68"><a href="#cb6-68" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-69"><a href="#cb6-69" aria-hidden="true" tabindex="-1"></a>  .Scenario(<span class="st">'Crear usuario con datos válidos'</span>)</span>
+<span id="cb6-70"><a href="#cb6-70" aria-hidden="true" tabindex="-1"></a>    .When(<span class="st">'POST /users con nombre y email'</span>, <span class="kw">procedure</span>(W: TApiWorld)</span>
+<span id="cb6-71"><a href="#cb6-71" aria-hidden="true" tabindex="-1"></a>      <span class="kw">begin</span></span>
+<span id="cb6-72"><a href="#cb6-72" aria-hidden="true" tabindex="-1"></a>        <span class="kw">var</span> Body := TJSONObject.Create;</span>
+<span id="cb6-73"><a href="#cb6-73" aria-hidden="true" tabindex="-1"></a>        Body.AddPair(<span class="st">'name'</span>, <span class="st">'John Doe'</span>);</span>
+<span id="cb6-74"><a href="#cb6-74" aria-hidden="true" tabindex="-1"></a>        Body.AddPair(<span class="st">'email'</span>, <span class="st">'john@example.com'</span>);</span>
+<span id="cb6-75"><a href="#cb6-75" aria-hidden="true" tabindex="-1"></a>        W.Response := W.Client.Post(</span>
+<span id="cb6-76"><a href="#cb6-76" aria-hidden="true" tabindex="-1"></a>          <span class="st">'http://localhost:3000/api/v1/users'</span>,</span>
+<span id="cb6-77"><a href="#cb6-77" aria-hidden="true" tabindex="-1"></a>          TStringStream.Create(Body.ToString)</span>
+<span id="cb6-78"><a href="#cb6-78" aria-hidden="true" tabindex="-1"></a>        );</span>
+<span id="cb6-79"><a href="#cb6-79" aria-hidden="true" tabindex="-1"></a>        Body.Free;</span>
+<span id="cb6-80"><a href="#cb6-80" aria-hidden="true" tabindex="-1"></a>      end)</span>
+<span id="cb6-81"><a href="#cb6-81" aria-hidden="true" tabindex="-1"></a>    .&amp;<span class="kw">Then</span>(<span class="st">'responde 201 Created'</span>, <span class="kw">procedure</span>(W: TApiWorld)</span>
+<span id="cb6-82"><a href="#cb6-82" aria-hidden="true" tabindex="-1"></a>      <span class="kw">begin</span></span>
+<span id="cb6-83"><a href="#cb6-83" aria-hidden="true" tabindex="-1"></a>        Expect(W.Response.StatusCode).ToEqual(<span class="dv">201</span>);</span>
+<span id="cb6-84"><a href="#cb6-84" aria-hidden="true" tabindex="-1"></a>      end)</span>
+<span id="cb6-85"><a href="#cb6-85" aria-hidden="true" tabindex="-1"></a>    .&amp;<span class="kw">And</span>(<span class="st">'devuelve el usuario con ID'</span>, <span class="kw">procedure</span>(W: TApiWorld)</span>
+<span id="cb6-86"><a href="#cb6-86" aria-hidden="true" tabindex="-1"></a>      <span class="kw">begin</span></span>
+<span id="cb6-87"><a href="#cb6-87" aria-hidden="true" tabindex="-1"></a>        W.ResponseJson := TJSONObject.ParseJSONValue(</span>
+<span id="cb6-88"><a href="#cb6-88" aria-hidden="true" tabindex="-1"></a>          W.Response.ContentAsString) <span class="kw">as</span> TJSONObject;</span>
+<span id="cb6-89"><a href="#cb6-89" aria-hidden="true" tabindex="-1"></a>        Expect(W.ResponseJson.GetValue(<span class="st">'id'</span>)).ToNotBeNull;</span>
+<span id="cb6-90"><a href="#cb6-90" aria-hidden="true" tabindex="-1"></a>        Expect(W.ResponseJson.GetValue&lt;<span class="dt">string</span>&gt;(<span class="st">'name'</span>)).ToEqual(<span class="st">'John Doe'</span>);</span>
+<span id="cb6-91"><a href="#cb6-91" aria-hidden="true" tabindex="-1"></a>        W.UserId := W.ResponseJson.GetValue&lt;<span class="dt">string</span>&gt;(<span class="st">'id'</span>);</span>
+<span id="cb6-92"><a href="#cb6-92" aria-hidden="true" tabindex="-1"></a>      end)</span>
+<span id="cb6-93"><a href="#cb6-93" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-94"><a href="#cb6-94" aria-hidden="true" tabindex="-1"></a>  .Scenario(<span class="st">'Error con email inválido'</span>)</span>
+<span id="cb6-95"><a href="#cb6-95" aria-hidden="true" tabindex="-1"></a>    .When(<span class="st">'POST /users con email malformado'</span>, <span class="kw">procedure</span>(W: TApiWorld)</span>
+<span id="cb6-96"><a href="#cb6-96" aria-hidden="true" tabindex="-1"></a>      <span class="kw">begin</span></span>
+<span id="cb6-97"><a href="#cb6-97" aria-hidden="true" tabindex="-1"></a>        <span class="kw">var</span> Body := TJSONObject.Create;</span>
+<span id="cb6-98"><a href="#cb6-98" aria-hidden="true" tabindex="-1"></a>        Body.AddPair(<span class="st">'name'</span>, <span class="st">'John'</span>);</span>
+<span id="cb6-99"><a href="#cb6-99" aria-hidden="true" tabindex="-1"></a>        Body.AddPair(<span class="st">'email'</span>, <span class="st">'not-an-email'</span>);</span>
+<span id="cb6-100"><a href="#cb6-100" aria-hidden="true" tabindex="-1"></a>        W.Response := W.Client.Post(</span>
+<span id="cb6-101"><a href="#cb6-101" aria-hidden="true" tabindex="-1"></a>          <span class="st">'http://localhost:3000/api/v1/users'</span>,</span>
+<span id="cb6-102"><a href="#cb6-102" aria-hidden="true" tabindex="-1"></a>          TStringStream.Create(Body.ToString)</span>
+<span id="cb6-103"><a href="#cb6-103" aria-hidden="true" tabindex="-1"></a>        );</span>
+<span id="cb6-104"><a href="#cb6-104" aria-hidden="true" tabindex="-1"></a>        Body.Free;</span>
+<span id="cb6-105"><a href="#cb6-105" aria-hidden="true" tabindex="-1"></a>      end)</span>
+<span id="cb6-106"><a href="#cb6-106" aria-hidden="true" tabindex="-1"></a>    .&amp;<span class="kw">Then</span>(<span class="st">'responde 400 Bad Request'</span>, <span class="kw">procedure</span>(W: TApiWorld)</span>
+<span id="cb6-107"><a href="#cb6-107" aria-hidden="true" tabindex="-1"></a>      <span class="kw">begin</span></span>
+<span id="cb6-108"><a href="#cb6-108" aria-hidden="true" tabindex="-1"></a>        Expect(W.Response.StatusCode).ToEqual(<span class="dv">400</span>);</span>
+<span id="cb6-109"><a href="#cb6-109" aria-hidden="true" tabindex="-1"></a>      end)</span>
+<span id="cb6-110"><a href="#cb6-110" aria-hidden="true" tabindex="-1"></a>    .&amp;<span class="kw">And</span>(<span class="st">'incluye mensaje de error'</span>, <span class="kw">procedure</span>(W: TApiWorld)</span>
+<span id="cb6-111"><a href="#cb6-111" aria-hidden="true" tabindex="-1"></a>      <span class="kw">begin</span></span>
+<span id="cb6-112"><a href="#cb6-112" aria-hidden="true" tabindex="-1"></a>        W.ResponseJson := TJSONObject.ParseJSONValue(</span>
+<span id="cb6-113"><a href="#cb6-113" aria-hidden="true" tabindex="-1"></a>          W.Response.ContentAsString) <span class="kw">as</span> TJSONObject;</span>
+<span id="cb6-114"><a href="#cb6-114" aria-hidden="true" tabindex="-1"></a>        Expect(W.ResponseJson.GetValue&lt;<span class="dt">string</span>&gt;(<span class="st">'error'</span>)).ToContain(<span class="st">'email'</span>);</span>
+<span id="cb6-115"><a href="#cb6-115" aria-hidden="true" tabindex="-1"></a>      end)</span>
+<span id="cb6-116"><a href="#cb6-116" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-117"><a href="#cb6-117" aria-hidden="true" tabindex="-1"></a>.Rule(<span class="st">'GET /users/{id} - Obtener usuario'</span>)</span>
+<span id="cb6-118"><a href="#cb6-118" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-119"><a href="#cb6-119" aria-hidden="true" tabindex="-1"></a>  .Scenario(<span class="st">'Usuario existente'</span>)</span>
+<span id="cb6-120"><a href="#cb6-120" aria-hidden="true" tabindex="-1"></a>    .Given(<span class="st">'un usuario existente'</span>, <span class="kw">procedure</span>(W: TApiWorld)</span>
+<span id="cb6-121"><a href="#cb6-121" aria-hidden="true" tabindex="-1"></a>      <span class="kw">begin</span></span>
+<span id="cb6-122"><a href="#cb6-122" aria-hidden="true" tabindex="-1"></a>        <span class="co">// Crear usuario primero</span></span>
+<span id="cb6-123"><a href="#cb6-123" aria-hidden="true" tabindex="-1"></a>        <span class="kw">var</span> Body := TJSONObject.Create;</span>
+<span id="cb6-124"><a href="#cb6-124" aria-hidden="true" tabindex="-1"></a>        Body.AddPair(<span class="st">'name'</span>, <span class="st">'Jane'</span>);</span>
+<span id="cb6-125"><a href="#cb6-125" aria-hidden="true" tabindex="-1"></a>        Body.AddPair(<span class="st">'email'</span>, <span class="st">'jane@example.com'</span>);</span>
+<span id="cb6-126"><a href="#cb6-126" aria-hidden="true" tabindex="-1"></a>        <span class="kw">var</span> Resp := W.Client.Post(</span>
+<span id="cb6-127"><a href="#cb6-127" aria-hidden="true" tabindex="-1"></a>          <span class="st">'http://localhost:3000/api/v1/users'</span>,</span>
+<span id="cb6-128"><a href="#cb6-128" aria-hidden="true" tabindex="-1"></a>          TStringStream.Create(Body.ToString)</span>
+<span id="cb6-129"><a href="#cb6-129" aria-hidden="true" tabindex="-1"></a>        );</span>
+<span id="cb6-130"><a href="#cb6-130" aria-hidden="true" tabindex="-1"></a>        <span class="kw">var</span> Json := TJSONObject.ParseJSONValue(Resp.ContentAsString) <span class="kw">as</span> TJSONObject;</span>
+<span id="cb6-131"><a href="#cb6-131" aria-hidden="true" tabindex="-1"></a>        W.UserId := Json.GetValue&lt;<span class="dt">string</span>&gt;(<span class="st">'id'</span>);</span>
+<span id="cb6-132"><a href="#cb6-132" aria-hidden="true" tabindex="-1"></a>        Json.Free;</span>
+<span id="cb6-133"><a href="#cb6-133" aria-hidden="true" tabindex="-1"></a>        Body.Free;</span>
+<span id="cb6-134"><a href="#cb6-134" aria-hidden="true" tabindex="-1"></a>      end)</span>
+<span id="cb6-135"><a href="#cb6-135" aria-hidden="true" tabindex="-1"></a>    .When(<span class="st">'GET /users/{id}'</span>, <span class="kw">procedure</span>(W: TApiWorld)</span>
+<span id="cb6-136"><a href="#cb6-136" aria-hidden="true" tabindex="-1"></a>      <span class="kw">begin</span></span>
+<span id="cb6-137"><a href="#cb6-137" aria-hidden="true" tabindex="-1"></a>        W.Response := W.Client.Get(</span>
+<span id="cb6-138"><a href="#cb6-138" aria-hidden="true" tabindex="-1"></a>          <span class="st">'http://localhost:3000/api/v1/users/'</span> + W.UserId);</span>
+<span id="cb6-139"><a href="#cb6-139" aria-hidden="true" tabindex="-1"></a>      end)</span>
+<span id="cb6-140"><a href="#cb6-140" aria-hidden="true" tabindex="-1"></a>    .&amp;<span class="kw">Then</span>(<span class="st">'responde 200 OK'</span>, <span class="kw">procedure</span>(W: TApiWorld)</span>
+<span id="cb6-141"><a href="#cb6-141" aria-hidden="true" tabindex="-1"></a>      <span class="kw">begin</span></span>
+<span id="cb6-142"><a href="#cb6-142" aria-hidden="true" tabindex="-1"></a>        Expect(W.Response.StatusCode).ToEqual(<span class="dv">200</span>);</span>
+<span id="cb6-143"><a href="#cb6-143" aria-hidden="true" tabindex="-1"></a>      end)</span>
+<span id="cb6-144"><a href="#cb6-144" aria-hidden="true" tabindex="-1"></a>    .&amp;<span class="kw">And</span>(<span class="st">'devuelve los datos del usuario'</span>, <span class="kw">procedure</span>(W: TApiWorld)</span>
+<span id="cb6-145"><a href="#cb6-145" aria-hidden="true" tabindex="-1"></a>      <span class="kw">begin</span></span>
+<span id="cb6-146"><a href="#cb6-146" aria-hidden="true" tabindex="-1"></a>        W.ResponseJson := TJSONObject.ParseJSONValue(</span>
+<span id="cb6-147"><a href="#cb6-147" aria-hidden="true" tabindex="-1"></a>          W.Response.ContentAsString) <span class="kw">as</span> TJSONObject;</span>
+<span id="cb6-148"><a href="#cb6-148" aria-hidden="true" tabindex="-1"></a>        Expect(W.ResponseJson.GetValue&lt;<span class="dt">string</span>&gt;(<span class="st">'name'</span>)).ToEqual(<span class="st">'Jane'</span>);</span>
+<span id="cb6-149"><a href="#cb6-149" aria-hidden="true" tabindex="-1"></a>      end)</span>
+<span id="cb6-150"><a href="#cb6-150" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-151"><a href="#cb6-151" aria-hidden="true" tabindex="-1"></a>  .Scenario(<span class="st">'Usuario no existente'</span>)</span>
+<span id="cb6-152"><a href="#cb6-152" aria-hidden="true" tabindex="-1"></a>    .When(<span class="st">'GET /users/999999'</span>, <span class="kw">procedure</span>(W: TApiWorld)</span>
+<span id="cb6-153"><a href="#cb6-153" aria-hidden="true" tabindex="-1"></a>      <span class="kw">begin</span></span>
+<span id="cb6-154"><a href="#cb6-154" aria-hidden="true" tabindex="-1"></a>        W.Response := W.Client.Get(</span>
+<span id="cb6-155"><a href="#cb6-155" aria-hidden="true" tabindex="-1"></a>          <span class="st">'http://localhost:3000/api/v1/users/999999'</span>);</span>
+<span id="cb6-156"><a href="#cb6-156" aria-hidden="true" tabindex="-1"></a>      end)</span>
+<span id="cb6-157"><a href="#cb6-157" aria-hidden="true" tabindex="-1"></a>    .&amp;<span class="kw">Then</span>(<span class="st">'responde 404 Not Found'</span>, <span class="kw">procedure</span>(W: TApiWorld)</span>
+<span id="cb6-158"><a href="#cb6-158" aria-hidden="true" tabindex="-1"></a>      <span class="kw">begin</span></span>
+<span id="cb6-159"><a href="#cb6-159" aria-hidden="true" tabindex="-1"></a>        Expect(W.Response.StatusCode).ToEqual(<span class="dv">404</span>);</span>
+<span id="cb6-160"><a href="#cb6-160" aria-hidden="true" tabindex="-1"></a>      end)</span>
+<span id="cb6-161"><a href="#cb6-161" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-162"><a href="#cb6-162" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span>.</span></code></pre></div><button title="Copiar al portapapeles" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+<section id="usando-featurecontext-para-estado-compartido" class="level3">
+<h3 class="anchored" data-anchor-id="usando-featurecontext-para-estado-compartido">Usando FeatureContext para Estado Compartido</h3>
+<p>En tests de API, a menudo necesitas datos creados en un escenario para usarlos en otro:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode pascal code-with-copy"><code class="sourceCode pascal"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  TApiContext = <span class="kw">class</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  <span class="kw">public</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    BaseUrl: <span class="dt">string</span>;</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>    AuthToken: <span class="dt">string</span>;</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>    CreatedIds: TList&lt;<span class="dt">string</span>&gt;;</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>    <span class="kw">constructor</span> Create;</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>    <span class="kw">destructor</span> Destroy; <span class="kw">override</span>;</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span>;</span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>  TApiWorld = <span class="kw">class</span></span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>  <span class="kw">private</span></span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>    [Inject] FCtx: TApiContext;</span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>  <span class="kw">public</span></span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>    Client: THTTPClient;</span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>    Response: IHTTPResponse;</span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a>    <span class="kw">property</span> Ctx: TApiContext <span class="kw">read</span> FCtx;</span>
+<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span>;</span>
+<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a>Feature(<span class="st">'API: /orders @integration'</span>)</span>
+<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a>  .UseFeatureContext&lt;TApiContext&gt;</span>
+<span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a>  .UseWorld&lt;TApiWorld&gt;</span>
+<span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb7-24"><a href="#cb7-24" aria-hidden="true" tabindex="-1"></a>  .Before(<span class="st">'Iniciar servidor de test'</span>, <span class="kw">procedure</span></span>
+<span id="cb7-25"><a href="#cb7-25" aria-hidden="true" tabindex="-1"></a>    <span class="kw">begin</span></span>
+<span id="cb7-26"><a href="#cb7-26" aria-hidden="true" tabindex="-1"></a>      TestServer.Start;</span>
+<span id="cb7-27"><a href="#cb7-27" aria-hidden="true" tabindex="-1"></a>    end)</span>
+<span id="cb7-28"><a href="#cb7-28" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb7-29"><a href="#cb7-29" aria-hidden="true" tabindex="-1"></a>  .After(<span class="st">'Limpiar datos de test'</span>, <span class="kw">procedure</span></span>
+<span id="cb7-30"><a href="#cb7-30" aria-hidden="true" tabindex="-1"></a>    <span class="kw">begin</span></span>
+<span id="cb7-31"><a href="#cb7-31" aria-hidden="true" tabindex="-1"></a>      TestServer.CleanupTestData;</span>
+<span id="cb7-32"><a href="#cb7-32" aria-hidden="true" tabindex="-1"></a>      TestServer.Stop;</span>
+<span id="cb7-33"><a href="#cb7-33" aria-hidden="true" tabindex="-1"></a>    end)</span></code></pre></div><button title="Copiar al portapapeles" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+<section id="tabla-de-códigos-http-comunes" class="level3">
+<h3 class="anchored" data-anchor-id="tabla-de-códigos-http-comunes">Tabla de Códigos HTTP Comunes</h3>
+<p>Para verificar respuestas HTTP:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode pascal code-with-copy"><code class="sourceCode pascal"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Helpers reutilizables</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="kw">procedure</span> ExpectSuccess(Response: IHTTPResponse);</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="kw">begin</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>  Expect(Response.StatusCode).ToBeBetween(<span class="dv">200</span>, <span class="dv">299</span>);</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span>;</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a><span class="kw">procedure</span> ExpectClientError(Response: IHTTPResponse);</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="kw">begin</span></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>  Expect(Response.StatusCode).ToBeBetween(<span class="dv">400</span>, <span class="dv">499</span>);</span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span>;</span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a><span class="kw">procedure</span> ExpectServerError(Response: IHTTPResponse);</span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a><span class="kw">begin</span></span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a>  Expect(Response.StatusCode).ToBeBetween(<span class="dv">500</span>, <span class="dv">599</span>);</span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span>;</span></code></pre></div><button title="Copiar al portapapeles" class="code-copy-button"><i class="bi"></i></button></div>
+<hr>
+</section>
+</section>
+<section id="organizando-por-tipo-de-test" class="level2">
+<h2 class="anchored" data-anchor-id="organizando-por-tipo-de-test">Organizando por Tipo de Test</h2>
+<p>Hay dos estrategias principales: <strong>un solo ejecutable con tags</strong> o <strong>ejecutables separados por nivel</strong>.</p>
+<section id="opción-a-un-solo-ejecutable-con-tags" class="level3">
+<h3 class="anchored" data-anchor-id="opción-a-un-solo-ejecutable-con-tags">Opción A: Un Solo Ejecutable con Tags</h3>
+<p>Todos los tests en un único proyecto, filtrados por tags en tiempo de ejecución.</p>
+<pre><code>MyProject/
+├── src/                        # Código de producción
+├── specs/
+│   ├── AllSpecs.dpr           # Ejecutable único
+│   ├── AllSpecs.groupproj
+│   │
+│   ├── unit/                  # Tests unitarios
+│   │   ├── TCalculator.Spec.pas
+│   │   ├── TStringBuilder.Spec.pas
+│   │   └── TValidator.Spec.pas
+│   │
+│   ├── integration/           # Tests de integración
+│   │   ├── API.Users.Spec.pas
+│   │   ├── API.Orders.Spec.pas
+│   │   └── Database.Spec.pas
+│   │
+│   └── e2e/                   # Tests end-to-end
+│       ├── Checkout.Feat.pas
+│       ├── Registration.Feat.pas
+│       └── Search.Feat.pas</code></pre>
+<p><strong>Marcar cada test con su nivel:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode pascal code-with-copy"><code class="sourceCode pascal"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Unit test</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>Feature(<span class="st">'TCalculator @unit @math'</span>)</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="co">// Integration test  </span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>Feature(<span class="st">'API: /users @integration @api'</span>)</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a><span class="co">// E2E test</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>Feature(<span class="st">'Proceso de Checkout @e2e @checkout'</span>)</span></code></pre></div><button title="Copiar al portapapeles" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>Ejecutar por tipo:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Solo tests unitarios (rápidos)</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="ex">AllSpecs.exe</span> <span class="at">-f</span> <span class="st">"@unit"</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Solo integración</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a><span class="ex">AllSpecs.exe</span> <span class="at">-f</span> <span class="st">"@integration"</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Solo E2E</span></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a><span class="ex">AllSpecs.exe</span> <span class="at">-f</span> <span class="st">"@e2e"</span></span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Excluir tests lentos</span></span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a><span class="ex">AllSpecs.exe</span> <span class="at">-f</span> <span class="st">"~@slow"</span></span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Unit + Integration, sin E2E</span></span>
+<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a><span class="ex">AllSpecs.exe</span> <span class="at">-f</span> <span class="st">"(@unit or @integration) and ~@e2e"</span></span></code></pre></div><button title="Copiar al portapapeles" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>Ventajas:</strong> Simple, un solo proyecto, filtrado flexible.<br>
+<strong>Desventajas:</strong> El ejecutable incluye todas las dependencias (incluso las de E2E).</p>
+<hr>
+</section>
+<section id="opción-b-ejecutables-separados-por-nivel" class="level3">
+<h3 class="anchored" data-anchor-id="opción-b-ejecutables-separados-por-nivel">Opción B: Ejecutables Separados por Nivel</h3>
+<p>Cada nivel de testing tiene su propio proyecto <code>.dpr</code>. Ideal cuando los niveles tienen dependencias muy distintas o para pipelines CI/CD que ejecutan en paralelo.</p>
+<pre><code>MyProject/
+├── src/                        # Código de producción
+├── specs/
+│   ├── Specs.groupproj        # Agrupa todos los proyectos de specs
+│   │
+│   ├── unit/
+│   │   ├── UnitSpecs.dpr      # Ejecutable: solo tests unitarios
+│   │   ├── UnitSpecs.dproj
+│   │   ├── TCalculator.Spec.pas
+│   │   ├── TStringBuilder.Spec.pas
+│   │   └── TValidator.Spec.pas
+│   │
+│   ├── integration/
+│   │   ├── IntegrationSpecs.dpr   # Ejecutable: solo integración
+│   │   ├── IntegrationSpecs.dproj
+│   │   ├── API.Users.Spec.pas
+│   │   ├── API.Orders.Spec.pas
+│   │   └── Database.Spec.pas
+│   │
+│   └── e2e/
+│       ├── E2ESpecs.dpr       # Ejecutable: solo E2E
+│       ├── E2ESpecs.dproj
+│       ├── Checkout.Feat.pas
+│       ├── Registration.Feat.pas
+│       └── Search.Feat.pas</code></pre>
+<p><strong>Cada ejecutable configura su nivel:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode pascal code-with-copy"><code class="sourceCode pascal"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co">// UnitSpecs.dpr - Rápido, sin dependencias externas</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="kw">program</span> UnitSpecs;</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a><span class="ot">{$APPTYPE CONSOLE}</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="kw">uses</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>  Daf.MiniSpec,</span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>  TCalculator.Spec <span class="kw">in</span> <span class="st">'TCalculator.Spec.pas'</span>,</span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>  TStringBuilder.Spec <span class="kw">in</span> <span class="st">'TStringBuilder.Spec.pas'</span>,</span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>  TValidator.Spec <span class="kw">in</span> <span class="st">'TValidator.Spec.pas'</span>;</span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a><span class="kw">begin</span></span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>  MiniSpec</span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>    .Category(<span class="st">'Unit Tests'</span>)</span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a>    .Run;</span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span>.</span>
+<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a><span class="co">// IntegrationSpecs.dpr - Requiere servicios externos</span></span>
+<span id="cb13-16"><a href="#cb13-16" aria-hidden="true" tabindex="-1"></a><span class="kw">program</span> IntegrationSpecs;</span>
+<span id="cb13-17"><a href="#cb13-17" aria-hidden="true" tabindex="-1"></a><span class="ot">{$APPTYPE CONSOLE}</span></span>
+<span id="cb13-18"><a href="#cb13-18" aria-hidden="true" tabindex="-1"></a><span class="kw">uses</span></span>
+<span id="cb13-19"><a href="#cb13-19" aria-hidden="true" tabindex="-1"></a>  Daf.MiniSpec,</span>
+<span id="cb13-20"><a href="#cb13-20" aria-hidden="true" tabindex="-1"></a>  TestServer <span class="kw">in</span> <span class="st">'..\common\TestServer.pas'</span>,</span>
+<span id="cb13-21"><a href="#cb13-21" aria-hidden="true" tabindex="-1"></a>  API.Users.Spec <span class="kw">in</span> <span class="st">'API.Users.Spec.pas'</span>,</span>
+<span id="cb13-22"><a href="#cb13-22" aria-hidden="true" tabindex="-1"></a>  API.Orders.Spec <span class="kw">in</span> <span class="st">'API.Orders.Spec.pas'</span>;</span>
+<span id="cb13-23"><a href="#cb13-23" aria-hidden="true" tabindex="-1"></a><span class="kw">begin</span></span>
+<span id="cb13-24"><a href="#cb13-24" aria-hidden="true" tabindex="-1"></a>  MiniSpec</span>
+<span id="cb13-25"><a href="#cb13-25" aria-hidden="true" tabindex="-1"></a>    .Category(<span class="st">'Integration Tests'</span>)</span>
+<span id="cb13-26"><a href="#cb13-26" aria-hidden="true" tabindex="-1"></a>    .Before(<span class="st">'Start test server'</span>, <span class="kw">procedure</span></span>
+<span id="cb13-27"><a href="#cb13-27" aria-hidden="true" tabindex="-1"></a>      <span class="kw">begin</span></span>
+<span id="cb13-28"><a href="#cb13-28" aria-hidden="true" tabindex="-1"></a>        TestServer.Start;</span>
+<span id="cb13-29"><a href="#cb13-29" aria-hidden="true" tabindex="-1"></a>      end)</span>
+<span id="cb13-30"><a href="#cb13-30" aria-hidden="true" tabindex="-1"></a>    .After(<span class="st">'Stop test server'</span>, <span class="kw">procedure</span></span>
+<span id="cb13-31"><a href="#cb13-31" aria-hidden="true" tabindex="-1"></a>      <span class="kw">begin</span></span>
+<span id="cb13-32"><a href="#cb13-32" aria-hidden="true" tabindex="-1"></a>        TestServer.Stop;</span>
+<span id="cb13-33"><a href="#cb13-33" aria-hidden="true" tabindex="-1"></a>      end)</span>
+<span id="cb13-34"><a href="#cb13-34" aria-hidden="true" tabindex="-1"></a>    .Run;</span>
+<span id="cb13-35"><a href="#cb13-35" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span>.</span>
+<span id="cb13-36"><a href="#cb13-36" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-37"><a href="#cb13-37" aria-hidden="true" tabindex="-1"></a><span class="co">// E2ESpecs.dpr - Sistema completo</span></span>
+<span id="cb13-38"><a href="#cb13-38" aria-hidden="true" tabindex="-1"></a><span class="kw">program</span> E2ESpecs;</span>
+<span id="cb13-39"><a href="#cb13-39" aria-hidden="true" tabindex="-1"></a><span class="ot">{$APPTYPE CONSOLE}</span></span>
+<span id="cb13-40"><a href="#cb13-40" aria-hidden="true" tabindex="-1"></a><span class="kw">uses</span></span>
+<span id="cb13-41"><a href="#cb13-41" aria-hidden="true" tabindex="-1"></a>  Daf.MiniSpec,</span>
+<span id="cb13-42"><a href="#cb13-42" aria-hidden="true" tabindex="-1"></a>  Checkout.Feat <span class="kw">in</span> <span class="st">'Checkout.Feat.pas'</span>,</span>
+<span id="cb13-43"><a href="#cb13-43" aria-hidden="true" tabindex="-1"></a>  Registration.Feat <span class="kw">in</span> <span class="st">'Registration.Feat.pas'</span>;</span>
+<span id="cb13-44"><a href="#cb13-44" aria-hidden="true" tabindex="-1"></a><span class="kw">begin</span></span>
+<span id="cb13-45"><a href="#cb13-45" aria-hidden="true" tabindex="-1"></a>  MiniSpec</span>
+<span id="cb13-46"><a href="#cb13-46" aria-hidden="true" tabindex="-1"></a>    .Category(<span class="st">'E2E Tests'</span>)</span>
+<span id="cb13-47"><a href="#cb13-47" aria-hidden="true" tabindex="-1"></a>    .Before(<span class="st">'Initialize full system'</span>, <span class="kw">procedure</span></span>
+<span id="cb13-48"><a href="#cb13-48" aria-hidden="true" tabindex="-1"></a>      <span class="kw">begin</span></span>
+<span id="cb13-49"><a href="#cb13-49" aria-hidden="true" tabindex="-1"></a>        TestEnvironment.Setup;</span>
+<span id="cb13-50"><a href="#cb13-50" aria-hidden="true" tabindex="-1"></a>      end)</span>
+<span id="cb13-51"><a href="#cb13-51" aria-hidden="true" tabindex="-1"></a>    .After(<span class="st">'Cleanup'</span>, <span class="kw">procedure</span></span>
+<span id="cb13-52"><a href="#cb13-52" aria-hidden="true" tabindex="-1"></a>      <span class="kw">begin</span></span>
+<span id="cb13-53"><a href="#cb13-53" aria-hidden="true" tabindex="-1"></a>        TestEnvironment.Teardown;</span>
+<span id="cb13-54"><a href="#cb13-54" aria-hidden="true" tabindex="-1"></a>      end)</span>
+<span id="cb13-55"><a href="#cb13-55" aria-hidden="true" tabindex="-1"></a>    .Run;</span>
+<span id="cb13-56"><a href="#cb13-56" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span>.</span></code></pre></div><button title="Copiar al portapapeles" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>Ventajas:</strong> Ejecutables pequeños, dependencias separadas, fácil paralelizar en CI.<br>
+<strong>Desventajas:</strong> Más proyectos que mantener.</p>
+</section>
+<section id="resumen-cuándo-usar-cada-nivel" class="level3">
+<h3 class="anchored" data-anchor-id="resumen-cuándo-usar-cada-nivel">Resumen: Cuándo Usar Cada Nivel</h3>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Pregunta</th>
+<th>Unit</th>
+<th>Integration</th>
+<th>E2E</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>¿El SUT es una clase aislada?</td>
+<td>✓</td>
+<td></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>¿Pruebas un API o servicio?</td>
+<td></td>
+<td>✓</td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>¿Describes requisitos de negocio?</td>
+<td></td>
+<td></td>
+<td>✓</td>
+</tr>
+<tr class="even">
+<td>¿Necesitas base de datos real?</td>
+<td></td>
+<td>A veces</td>
+<td>✓</td>
+</tr>
+<tr class="odd">
+<td>¿El test debe ser muy rápido?</td>
+<td>✓</td>
+<td></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>¿Stakeholders no técnicos lo leerán?</td>
+<td></td>
+<td></td>
+<td>✓</td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+</section>
+<section id="conclusión" class="level2">
+<h2 class="anchored" data-anchor-id="conclusión">Conclusión</h2>
+<p>BDD no es exclusivo de tests E2E. El vocabulario de MiniSpec — Feature, Rule, Scenario, Given/When/Then — proporciona una estructura clara para <strong>cualquier nivel de testing</strong>:</p>
+<ul>
+<li><strong>Unit tests</strong>: Feature = Clase, Rule = Método</li>
+<li><strong>Integration tests</strong>: Feature = API/Recurso, Rule = Endpoint</li>
+<li><strong>E2E tests</strong>: Feature = Funcionalidad de negocio, Scenario = Criterio de aceptación</li>
+</ul>
+<p>La clave está en adaptar el <strong>vocabulario</strong> y la <strong>granularidad</strong> al nivel que estás probando, manteniendo siempre el principio fundamental de BDD: <strong>especificar comportamiento con ejemplos concretos</strong>.</p>
+
+
+</section>
+</section>
+
+</main> <!-- /main -->
+<style>
+a[aria-label="English"], a[aria-label="Español"] { opacity: 0.45; }
+.lang-active { opacity: 1 !important; font-weight: bold; }
+</style>
+<script>
+(function () {
+  var p = window.location.pathname;
+  var isEs = p.indexOf('/es/') !== -1 || p.endsWith('/es') || p.endsWith('/es/') || p.endsWith('/es/index.html');
+
+  window.langSwitch = function (lang) {
+    var p = window.location.pathname;
+    if (lang === 'es') {
+      if (p.indexOf('/es/') === -1 && !p.endsWith('/es/') && !p.endsWith('/es')) {
+        var m = p.match(/^(.*?)(\/(?:modules|docs|blog|about|index)[^]*)$/);
+        window.location.pathname = m ? m[1] + '/es' + m[2] : p.replace(/\/?$/, '/es/index.html');
+      }
+    } else {
+      if (p.indexOf('/es/') !== -1) {
+        window.location.pathname = p.replace('/es/', '/');
+      }
+    }
+  };
+
+  document.addEventListener('DOMContentLoaded', function () {
+    var btnEn = document.querySelector('a[aria-label="English"]');
+    var btnEs = document.querySelector('a[aria-label="Español"]');
+
+    // Interceptar el click para hacer path-swap en lugar de ir siempre a /index.html
+    if (btnEn) {
+      btnEn.addEventListener('click', function (e) { e.preventDefault(); langSwitch('en'); });
+      if (!isEs) btnEn.classList.add('lang-active');
+    }
+    if (btnEs) {
+      btnEs.addEventListener('click', function (e) { e.preventDefault(); langSwitch('es'); });
+      if (isEs) btnEs.classList.add('lang-active');
+    }
+
+    // Ocultar badges '🌍 Language: ...' de los README incluidos
+    document.querySelectorAll('p').forEach(function (el) {
+      if (el.innerText && el.innerText.trim().match(/^🌍/)) el.style.display = 'none';
+    });
+  });
+}());
+</script>
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    // Ensure there is a toggle, if there isn't float one in the top right
+    if (window.document.querySelector('.quarto-color-scheme-toggle') === null) {
+      const a = window.document.createElement('a');
+      a.classList.add('top-right');
+      a.classList.add('quarto-color-scheme-toggle');
+      a.href = "";
+      a.onclick = function() { try { window.quartoToggleColorScheme(); } catch {} return false; };
+      const i = window.document.createElement("i");
+      i.classList.add('bi');
+      a.appendChild(i);
+      window.document.body.appendChild(a);
+    }
+    setColorSchemeToggle(hasAlternateSentinel())
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copiado");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copiado");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+<footer class="footer">
+  <div class="nav-footer">
+    <div class="nav-footer-left">
+<p>DAF — Delphi Application Foundation (Community Edition) <a href="../../legal/LICENSE.md">MIT License</a></p>
+</div>   
+    <div class="nav-footer-center">
+      &nbsp;
+    <div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/Delphi-DAF/dafce/issues/new" class="toc-action"><i class="bi bi-github"></i>Informar sobre problema</a></li><li><a href="https://github.com/Delphi-DAF/dafce/edit/main/es/modules/minispec-guide.qmd" class="toc-action"><i class="bi empty"></i>Editar esta página</a></li></ul></div></div>
+    <div class="nav-footer-right">
+<p>Built with <a href="https://quarto.org">Quarto</a></p>
+</div>
+  </div>
+</footer>
+
+
+
+
+<script src="../../site_libs/quarto-html/zenscroll-min.js"></script>
+</body></html>

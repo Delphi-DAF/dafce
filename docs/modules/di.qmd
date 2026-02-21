@@ -10,9 +10,3 @@ sidebar: modules
 ## Abstractions
 
 {{< include ../../src/DependencyInjection.Abstractions/README.md >}}
-
----
-
-## Guide {#guide}
-
-{{< include ../../src/DependencyInjection/docs/GUIDE.md >}}

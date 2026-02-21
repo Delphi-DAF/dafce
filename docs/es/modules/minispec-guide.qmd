@@ -1,0 +1,13 @@
+---
+title: "MiniSpec — Guía de uso"
+sidebar: modules-es
+lang: es
+---
+
+{{< include ../../../src/MiniSpec/docs/GUIDE.es.md >}}
+
+---
+
+## Patrones de Testing
+
+{{< include ../../../src/MiniSpec/docs/TESTING-PATTERNS.es.md >}}

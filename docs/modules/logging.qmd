@@ -10,9 +10,3 @@ sidebar: modules
 ## Abstractions
 
 {{< include ../../src/Logging.Abstractions/README.md >}}
-
----
-
-## Guide {#guide}
-
-{{< include ../../src/Logging/docs/GUIDE.md >}}

@@ -4,15 +4,3 @@ sidebar: modules
 ---
 
 {{< include ../../src/MiniSpec/README.md >}}
-
----
-
-## Guide {#guide}
-
-{{< include ../../src/MiniSpec/docs/GUIDE.md >}}
-
----
-
-## Testing Patterns
-
-{{< include ../../src/MiniSpec/docs/TESTING-PATTERNS.md >}}

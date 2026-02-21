@@ -11,9 +11,3 @@ lang: es
 ## Abstracciones
 
 {{< include ../../../src/MediatR.Abstractions/README.es.md >}}
-
----
-
-## Guía {#guide}
-
-{{< include ../../../src/MediatR/docs/GUIDE.es.md >}}

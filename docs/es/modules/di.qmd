@@ -11,9 +11,3 @@ lang: es
 ## Abstracciones
 
 {{< include ../../../src/DependencyInjection.Abstractions/README.es.md >}}
-
----
-
-## Guía {#guide}
-
-{{< include ../../../src/DependencyInjection/docs/GUIDE.es.md >}}

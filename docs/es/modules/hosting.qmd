@@ -11,9 +11,3 @@ lang: es
 ## Abstracciones
 
 {{< include ../../../src/Hosting.Abstractions/README.es.md >}}
-
----
-
-## Guía {#guide}
-
-{{< include ../../../src/Hosting/docs/GUIDE.es.md >}}

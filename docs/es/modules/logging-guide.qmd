@@ -1,0 +1,7 @@
+---
+title: "Logging — Guía de uso"
+sidebar: modules-es
+lang: es
+---
+
+{{< include ../../../src/Logging/docs/GUIDE.es.md >}}

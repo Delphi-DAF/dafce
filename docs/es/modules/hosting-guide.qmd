@@ -1,0 +1,7 @@
+---
+title: "Hosting — Guía de uso"
+sidebar: modules-es
+lang: es
+---
+
+{{< include ../../../src/Hosting/docs/GUIDE.es.md >}}

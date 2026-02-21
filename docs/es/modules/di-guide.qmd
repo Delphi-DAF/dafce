@@ -1,0 +1,7 @@
+---
+title: "Inyección de Dependencias — Guía de uso"
+sidebar: modules-es
+lang: es
+---
+
+{{< include ../../../src/DependencyInjection/docs/GUIDE.es.md >}}
