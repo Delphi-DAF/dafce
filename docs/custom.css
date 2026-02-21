@@ -1,30 +1,16 @@
 /* ---------------------------------------------------------------------------
-   Inline code contrast fix
+   Inline code — fix de contraste en dark mode (cyborg)
+   ---------------------------------------------------------------------------
+   cyborg usa $cyan (#2a9fd6) para código pero Quarto/Bootstrap 5 lo pierde
+   al compilar. Lo restauramos sin fondo (el tema ya es oscuro de por sí).
+   Light mode (zephyr) no necesita override — usa sus propios defaults.
    --------------------------------------------------------------------------- */
 
-/* Light mode (zephyr): código inline en rojo sobre fondo rosado */
-.quarto-light code:not(.sourceCode):not([class*="language-"]) {
-  color: #c7254e;
-  background-color: #f9f2f4;
-  border-radius: 3px;
-  padding: 0.1em 0.3em;
-}
-
-/* Dark mode (cyborg): Bootstrap 5 usa --bs-code-color que en cyborg es rosa
-   (#d63384) con muy poco contraste. Sobreescribimos la variable Y el color. */
 .quarto-dark {
-  --bs-code-color: #e2e8f0;
+  --bs-code-color: #2a9fd6;
 }
 
 .quarto-dark code:not(.sourceCode):not([class*="language-"]) {
-  color: #e2e8f0 !important;
-  background-color: rgba(255, 255, 255, 0.10) !important;
-  border-radius: 3px;
-  padding: 0.1em 0.3em;
-}
-
-/* Dentro de celdas de tabla: reducir doble padding */
-td code:not(.sourceCode),
-th code:not(.sourceCode) {
-  padding: 0.1em 0.25em;
+  color: #2a9fd6 !important;
+  background-color: transparent !important;
 }
