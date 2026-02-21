@@ -14,7 +14,7 @@ DAF sigue una arquitectura en capas donde cada módulo tiene un compañero **Abs
 ├─────────────────────────────────────────┤
 │  Application  │  Hosting  │  MediatR    │  ← Composición
 ├──────────┬────┴──────┬────┴────┬────────┤
-│  Logging │   Config  │   DI   │ NNLog  │  ← Servicios
+│  Logging │   Config  │   DI    │ NNLog  │  ← Servicios
 ├──────────┴───────────┴─────────┴────────┤
 │         Commons · Rtti · Threading      │  ← Fundación
 └─────────────────────────────────────────┘

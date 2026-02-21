@@ -30,11 +30,10 @@ releases/
 # Private local files
 .private/
 
-# AI assistant instructions (local only)
-.github/copilot-instructions.md
-.claude/
 
 # Quarto
 docs/_freeze/
 docs/.quarto/
 out/site/
+
+/.luarc.json

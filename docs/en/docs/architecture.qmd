@@ -13,7 +13,7 @@ DAF follows a layered architecture where each module has a corresponding **Abstr
 ├─────────────────────────────────────────┤
 │  Application  │  Hosting  │  MediatR    │  ← Composition
 ├──────────┬────┴──────┬────┴────┬────────┤
-│  Logging │   Config  │   DI   │ NNLog  │  ← Services
+│  Logging │   Config  │   DI    │ NNLog  │  ← Services
 ├──────────┴───────────┴─────────┴────────┤
 │         Commons · Rtti · Threading      │  ← Foundation
 └─────────────────────────────────────────┘
