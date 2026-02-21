@@ -160,8 +160,8 @@ website:
 format:
   html:
     theme:
-      light: zephyr
-      dark: cyborg
+      light: [zephyr, custom.scss]
+      dark: [cyborg, custom.scss]
     highlight-style: github
     toc: true
     toc-depth: 3
