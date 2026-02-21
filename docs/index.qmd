@@ -6,7 +6,7 @@ toc: false
 sidebar: false
 ---
 
-![](../../assets/DAF-Logo.png){width=180 fig-align="center"}
+![](assets/DAF-Logo.png){width=180 fig-align="center"}
 
 <div class="text-center mt-4 mb-5">
 <h1 class="display-5">Bringing modern practices to Delphi</h1>

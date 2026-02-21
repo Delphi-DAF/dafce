@@ -4,13 +4,13 @@ project:
 
 website:
   title: "DAF — Delphi Application Foundation"
-  favicon: ../../assets/DAF-Logo.png
+  favicon: assets/DAF-Logo.png
   repo-url: https://github.com/Delphi-DAF/dafce
   repo-actions: [issue, edit]
 
   navbar:
     background: primary
-    logo: ../../assets/DAF-Logo.png
+    logo: assets/DAF-Logo.png
     logo-alt: "DAF logo"
     left:
       - href: index.qmd
