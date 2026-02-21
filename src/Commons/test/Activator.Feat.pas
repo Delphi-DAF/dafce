@@ -2,12 +2,7 @@ unit Activator.Feat;
 
 interface
 
-implementation
-
 uses
-  System.SysUtils,
-  Daf.MiniSpec,
-  Daf.MiniSpec.Types,
   Daf.Activator;
 
 type
@@ -27,6 +22,12 @@ type
     Activated: TActivatable;
     destructor Destroy; override;
   end;
+
+implementation
+
+uses
+  System.SysUtils,
+  Daf.MiniSpec;
 
 { TActivatable }
 
@@ -50,6 +51,8 @@ begin
   inherited;
 end;
 
+// --- Feature definition ---
+
 initialization
 
 Feature('''
@@ -64,92 +67,32 @@ Feature Activator @activator
 
 .Scenario('Activate with default constructor from TypeInfo')
   .Given('a type with a default constructor').NoAction
-  .When('I activate it from TypeInfo',
-    procedure(W: TActivatorWorld)
-    begin
-      W.Activated := TActivator.CreateInstance(TypeInfo(TActivatable)) as TActivatable;
-    end)
-  .&Then('the instance should be created',
-    procedure(W: TActivatorWorld)
-    begin
-      Expect(Assigned(W.Activated)).ToBeTrue;
-    end)
-  .&And('the default value should be set',
-    procedure(W: TActivatorWorld)
-    begin
-      Expect(W.Activated.Value).ToEqual(1);
-    end)
+  .When('I activate it from TypeInfo')
+  .&Then('the instance should be created')
+  .&And('the default value should be set')
 
 .Scenario('Activate with default constructor from Class')
   .Given('a type with a default constructor').NoAction
-  .When('I activate it from Class',
-    procedure(W: TActivatorWorld)
-    begin
-      W.Activated := TActivator.CreateInstance(TActivatable) as TActivatable;
-    end)
-  .&Then('the instance should be created',
-    procedure(W: TActivatorWorld)
-    begin
-      Expect(Assigned(W.Activated)).ToBeTrue;
-    end)
-  .&And('the default value should be set',
-    procedure(W: TActivatorWorld)
-    begin
-      Expect(W.Activated.Value).ToEqual(1);
-    end)
+  .When('I activate it from Class')
+  .&Then('the instance should be created')
+  .&And('the default value should be set')
 
 .Scenario('Activate with default constructor from Generic')
   .Given('a type with a default constructor').NoAction
-  .When('I activate it from Generic',
-    procedure(W: TActivatorWorld)
-    begin
-      W.Activated := TActivator.CreateInstance<TActivatable>;
-    end)
-  .&Then('the instance should be created',
-    procedure(W: TActivatorWorld)
-    begin
-      Expect(Assigned(W.Activated)).ToBeTrue;
-    end)
-  .&And('the default value should be set',
-    procedure(W: TActivatorWorld)
-    begin
-      Expect(W.Activated.Value).ToEqual(1);
-    end)
+  .When('I activate it from Generic')
+  .&Then('the instance should be created')
+  .&And('the default value should be set')
 
 .Scenario('Activate with Integer argument from Class')
   .Given('a type with a parameterized constructor').NoAction
-  .When('I activate it from Class with argument 2',
-    procedure(W: TActivatorWorld)
-    begin
-      W.Activated := TActivator.CreateInstance(TActivatable, [2]) as TActivatable;
-    end)
-  .&Then('the instance should be created',
-    procedure(W: TActivatorWorld)
-    begin
-      Expect(Assigned(W.Activated)).ToBeTrue;
-    end)
-  .&And('the value should be 2',
-    procedure(W: TActivatorWorld)
-    begin
-      Expect(W.Activated.Value).ToEqual(2);
-    end)
+  .When('I activate it from Class with argument 2')
+  .&Then('the instance should be created')
+  .&And('the value should be 2')
 
 .Scenario('Activate with Integer argument from Generic')
   .Given('a type with a parameterized constructor').NoAction
-  .When('I activate it from Generic with argument 2',
-    procedure(W: TActivatorWorld)
-    begin
-      W.Activated := TActivator.CreateInstance<TActivatable>([2]) as TActivatable;
-    end)
-  .&Then('the instance should be created',
-    procedure(W: TActivatorWorld)
-    begin
-      Expect(Assigned(W.Activated)).ToBeTrue;
-    end)
-  .&And('the value should be 2',
-    procedure(W: TActivatorWorld)
-    begin
-      Expect(W.Activated.Value).ToEqual(2);
-    end);
+  .When('I activate it from Generic with argument 2')
+  .&Then('the instance should be created')
+  .&And('the value should be 2');
 
 end.

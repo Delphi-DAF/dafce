@@ -2,6 +2,10 @@ unit DependencyInjection.Feat;
 
 interface
 
+uses
+  Daf.Extensions.DependencyInjection,
+  Daf.DependencyInjection;
+
 type
   ITestableService = interface(IInterface)
     ['{F88F262A-6591-452C-BC93-E5D2DAA48875}']
@@ -12,18 +16,6 @@ type
     property Value: string read GetValue write SetValue;
   end;
 
-implementation
-
-uses
-  System.SysUtils,
-  System.TypInfo,
-  Daf.MiniSpec,
-  Daf.MiniSpec.Types,
-  Daf.Extensions.DependencyInjection,
-  Daf.DependencyInjection,
-  Daf.MemUtils;
-
-type
   TTestableService = class(TDIObject<TTestableService>, ITestableService)
   private
     FValue: string;
@@ -44,6 +36,12 @@ type
     destructor Destroy; override;
     procedure BuildProvider;
   end;
+
+implementation
+
+uses
+  System.SysUtils,
+  Daf.MiniSpec;
 
 { TTestableService }
 
@@ -90,138 +88,7 @@ begin
     ServiceProvider := ServiceCollection.BuildServiceProvider;
 end;
 
-function FactoryFunc(ServiceProvider: IServiceProvider): IInterface;
-begin
-  Result := TTestableService.Create;
-end;
-
-// --- Steps ---
-
-procedure Step_RegisterTransient(W: TDIWorld);
-begin
-  W.ServiceCollection.AddTransient<ITestableService, TTestableService>();
-end;
-
-procedure Step_ResolveFromTypeInfo(W: TDIWorld);
-begin
-  W.BuildProvider;
-  W.ObtainedService := W.ServiceProvider.GetService<ITestableService>;
-end;
-
-procedure Step_AssertObtainedAssigned(W: TDIWorld);
-begin
-  Expect(Assigned(W.ObtainedService)).ToBeTrue;
-end;
-
-procedure Step_AssertImplementorClass(W: TDIWorld);
-begin
-  Expect(W.ObtainedService.GetImplementorClass.ClassName).ToEqual('TTestableService');
-end;
-
-procedure Step_RegisterFactory(W: TDIWorld);
-begin
-  W.ServiceCollection.AddTransient(TypeInfo(ITestableService), FactoryFunc);
-end;
-
-procedure Step_AddTransientCheckCount(W: TDIWorld);
-var SavedCount: Integer;
-begin
-  SavedCount := W.ServiceCollection.Count;
-  W.ServiceCollection.AddTransient<ITestableService, TTestableService>();
-  Expect(W.ServiceCollection.Count).ToEqual(SavedCount + 1);
-  W.BuildProvider;
-end;
-
-procedure Step_ResolveAndReleaseTransient(W: TDIWorld);
-var
-  Svc: ITestableService;
-begin
-  W.BuildProvider;
-  Svc := W.ServiceProvider.GetService<ITestableService>;
-  Expect(TTestableService.InstanceCount).ToEqual(1);
-  Svc := nil;
-end;
-
-procedure Step_AssertZeroInstances(W: TDIWorld);
-begin
-  Expect(TTestableService.InstanceCount).ToEqual(0);
-end;
-
-procedure Step_ResolveTwoTransients(W: TDIWorld);
-var
-  Svc1, Svc2: ITestableService;
-begin
-  W.BuildProvider;
-  Svc1 := W.ServiceProvider.GetService<ITestableService>;
-  Svc2 := W.ServiceProvider.GetService<ITestableService>;
-  Expect(TTestableService.InstanceCount).ToEqual(2);
-  Svc1 := nil;
-  Svc2 := nil;
-end;
-
-procedure Step_AddSingleton(W: TDIWorld);
-var SavedCount: Integer;
-begin
-  SavedCount := W.ServiceCollection.Count;
-  W.ServiceCollection.AddSingleton<ITestableService, TTestableService>();
-  Expect(W.ServiceCollection.Count).ToEqual(SavedCount + 1);
-  W.BuildProvider;
-end;
-
-procedure Step_RegisterSingleton(W: TDIWorld);
-begin
-  W.ServiceCollection.AddSingleton<ITestableService, TTestableService>();
-end;
-
-procedure Step_ResolveTwoSingletons(W: TDIWorld);
-var
-  Svc1, Svc2: ITestableService;
-begin
-  W.BuildProvider;
-  Svc1 := W.ServiceProvider.GetService<ITestableService>;
-  Svc2 := W.ServiceProvider.GetService<ITestableService>;
-  Expect(TTestableService.InstanceCount).ToEqual(1);
-end;
-
-procedure Step_AssertOneInstance(W: TDIWorld);
-begin
-  Expect(TTestableService.InstanceCount).ToEqual(1);
-end;
-
-procedure Step_RegisterScoped(W: TDIWorld);
-begin
-  W.ServiceCollection.AddScoped<ITestableService, TTestableService>;
-end;
-
-procedure Step_ResolveTwoScoped(W: TDIWorld);
-var
-  Svc1, Svc2: ITestableService;
-begin
-  W.BuildProvider;
-  Svc1 := W.ServiceProvider.GetRequiredService<ITestableService>;
-  Svc2 := W.ServiceProvider.GetRequiredService<ITestableService>;
-  Expect(Svc1 = Svc2).ToBeTrue;
-end;
-
-procedure Step_ResolveScopedInChildScopes(W: TDIWorld);
-var
-  Scope1, Scope2: IServiceScope;
-  Svc1_a, Svc1_b, Svc2_a: ITestableService;
-begin
-  W.BuildProvider;
-
-  Scope1 := W.ServiceProvider.CreateScope;
-  Scope2 := W.ServiceProvider.CreateScope;
-
-  Svc1_a := Scope1.ServiceProvider.GetRequiredService<ITestableService>;
-  Svc1_b := Scope1.ServiceProvider.GetRequiredService<ITestableService>;
-  // Same scope returns same instance
-  Expect(Svc1_a = Svc1_b).ToBeTrue;
-
-  Svc2_a := Scope2.ServiceProvider.GetRequiredService<ITestableService>;
-  // Different scope returns different instance
-  Expect(Svc1_a = Svc2_a).ToBeFalse;
-end;
+// --- Feature definition ---
 
 initialization
 
@@ -241,15 +108,15 @@ Feature DependencyInjection @di
 
   .Scenario('Register with implementor class')
     .Given('a service collection').NoAction
-    .When('I register ITestableService with TTestableService as transient', Step_RegisterTransient)
-    .&Then('I can resolve the service', Step_ResolveFromTypeInfo)
-    .&And('the implementor class is TTestableService', Step_AssertImplementorClass)
+    .When('I register ITestableService with TTestableService as transient')
+    .&Then('I can resolve the service')
+    .&And('the implementor class is TTestableService')
 
   .Scenario('Register with factory function')
     .Given('a service collection').NoAction
-    .When('I register ITestableService with a factory function', Step_RegisterFactory)
-    .&Then('I can resolve the service', Step_ResolveFromTypeInfo)
-    .&And('the implementor class is TTestableService', Step_AssertImplementorClass)
+    .When('I register ITestableService with a factory function')
+    .&Then('I can resolve the service')
+    .&And('the implementor class is TTestableService')
 
 // --- Transient Lifetime ---
 
@@ -257,18 +124,18 @@ Feature DependencyInjection @di
 
   .Scenario('Can add a transient service')
     .Given('a service collection').NoAction
-    .When('I add a transient service', Step_AddTransientCheckCount)
+    .When('I add a transient service')
     .&Then('the service collection count increases').NoAction
 
   .Scenario('Can resolve a transient service')
-    .Given('a transient ITestableService registered', Step_RegisterTransient)
-    .When('I resolve the service', Step_ResolveAndReleaseTransient)
-    .&Then('after releasing it the instance count is 0', Step_AssertZeroInstances)
+    .Given('a transient ITestableService registered')
+    .When('I resolve the service')
+    .&Then('after releasing it the instance count is 0')
 
   .Scenario('Transient returns new instance each time')
-    .Given('a transient ITestableService registered', Step_RegisterTransient)
-    .When('I resolve two instances', Step_ResolveTwoTransients)
-    .&Then('after releasing them the instance count is 0', Step_AssertZeroInstances)
+    .Given('a transient ITestableService registered')
+    .When('I resolve two instances')
+    .&Then('after releasing them the instance count is 0')
 
 // --- Singleton Lifetime ---
 
@@ -276,26 +143,26 @@ Feature DependencyInjection @di
 
   .Scenario('Can add a singleton service')
     .Given('a service collection').NoAction
-    .When('I add a singleton service', Step_AddSingleton)
+    .When('I add a singleton service')
     .&Then('the service collection count increases').NoAction
 
   .Scenario('Singleton returns same instance')
-    .Given('a singleton ITestableService registered', Step_RegisterSingleton)
-    .When('I resolve two references', Step_ResolveTwoSingletons)
-    .&Then('only one instance exists', Step_AssertOneInstance)
+    .Given('a singleton ITestableService registered')
+    .When('I resolve two references')
+    .&Then('only one instance exists')
 
 // --- Scoped Lifetime ---
 
 .Rule('Scoped Lifetime')
 
   .Scenario('Scoped returns same instance within scope')
-    .Given('a scoped ITestableService registered', Step_RegisterScoped)
-    .When('I resolve twice from root provider', Step_ResolveTwoScoped)
+    .Given('a scoped ITestableService registered')
+    .When('I resolve twice from root provider')
     .&Then('only one instance was created').NoAction
 
   .Scenario('Different scopes get different instances')
-    .Given('a scoped ITestableService registered', Step_RegisterScoped)
-    .When('I resolve from root and two child scopes', Step_ResolveScopedInChildScopes)
+    .Given('a scoped ITestableService registered')
+    .When('I resolve from root and two child scopes')
     .&Then('three separate instances exist').NoAction;
 
 end.

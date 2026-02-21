@@ -97,6 +97,7 @@
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
         <DCCReference Include="DependencyInjection.Feat.pas"/>
+        <DCCReference Include="DependencyInjection.Steps.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>

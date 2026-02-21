@@ -5,7 +5,8 @@ program MediatRSpecs;
 
 uses
   Daf.MiniSpec,
-  MediatR.Feat in 'MediatR.Feat.pas';
+  MediatR.Feat in 'MediatR.Feat.pas',
+  MediatR.Steps in 'MediatR.Steps.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

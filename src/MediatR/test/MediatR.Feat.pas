@@ -71,7 +71,6 @@ uses
   System.SysUtils,
   System.Rtti,
   Daf.MiniSpec,
-  Daf.MiniSpec.Types,
   Daf.Rtti,
   Daf.DependencyInjection,
   Daf.MediatR.DependencyInjection;
@@ -145,115 +144,6 @@ begin
   inherited;
 end;
 
-// --- Named Step Procedures ---
-
-procedure Step_GetMediator(W: TMediatRWorld);
-begin
-  W.Mediator := W.RootProvider.GetRequiredService<IMediatorImpl>;
-end;
-
-procedure Step_GetMediator_ResetJing(W: TMediatRWorld);
-begin
-  W.Mediator := W.RootProvider.GetRequiredService<IMediatorImpl>;
-  TJingHandler.Done := False;
-end;
-
-procedure Step_SendJing(W: TMediatRWorld);
-begin
-  W.Mediator.Send(TJing.Create);
-end;
-
-procedure Step_VerifyJingHandled(W: TMediatRWorld);
-begin
-  Expect(TJingHandler.Done).ToBeTrue;
-end;
-
-procedure Step_SendPingAndVerifyResponse(W: TMediatRWorld);
-var
-  Response: string;
-begin
-  Response := W.Mediator.Send<string, TPing>(TPing.Create);
-  Expect(Response).ToEqual('Pong1');
-end;
-
-procedure Step_VerifyDependencyVisited(W: TMediatRWorld);
-var
-  D: IDependencyMock;
-begin
-  D := W.RootProvider.GetRequiredService<IDependencyMock>;
-  Expect(D.Visites).ToEqual(1);
-end;
-
-procedure Step_GetMediator_ResetPonged(W: TMediatRWorld);
-begin
-  W.Mediator := W.RootProvider.GetRequiredService<IMediatorImpl>;
-  TPongedHandler1.Done := False;
-  TPongedHandler2.Done := False;
-end;
-
-procedure Step_PublishPonged(W: TMediatRWorld);
-begin
-  W.Mediator.Publish(TPonged.Create);
-end;
-
-procedure Step_VerifyPongedHandler1(W: TMediatRWorld);
-begin
-  Expect(TPongedHandler1.Done).ToBeTrue;
-end;
-
-procedure Step_VerifyPongedHandler2(W: TMediatRWorld);
-begin
-  Expect(TPongedHandler2.Done).ToBeTrue;
-end;
-
-procedure Step_Noop(W: TMediatRWorld);
-begin
-  // World constructor already configured the root provider
-end;
-
-procedure Step_SendPingFromScopes(W: TMediatRWorld);
-var
-  Scope1, Scope2: IServiceScope;
-  Mediator1, Mediator2: IMediator;
-  Response: string;
-begin
-  Scope1 := W.RootProvider.CreateScope;
-  Scope2 := W.RootProvider.CreateScope;
-
-  Mediator1 := Scope1.ServiceProvider.GetRequiredService<IMediatorImpl>;
-  Mediator2 := Scope2.ServiceProvider.GetRequiredService<IMediatorImpl>;
-
-  Response := Mediator1.Send<string, TPing>(TPing.Create);
-  Expect(Response).ToEqual('Pong1');
-
-  Response := Mediator1.Send<string, TPing>(TPing.Create);
-  Expect(Response).ToEqual('Pong2');
-
-  Response := Mediator2.Send<string, TPing>(TPing.Create);
-  Expect(Response).ToEqual('Pong1');
-
-  Response := Mediator2.Send<string, TPing>(TPing.Create);
-  Expect(Response).ToEqual('Pong2');
-end;
-
-procedure Step_VerifyScopedDependencies(W: TMediatRWorld);
-var
-  Scope1, Scope2: IServiceScope;
-  D1, D2: IDependencyMock;
-begin
-  Scope1 := W.RootProvider.CreateScope;
-  Scope2 := W.RootProvider.CreateScope;
-
-  D1 := Scope1.ServiceProvider.GetRequiredService<IDependencyMock>;
-  D2 := Scope2.ServiceProvider.GetRequiredService<IDependencyMock>;
-  // Fresh scopes = fresh dependency instances, not visited yet
-  Expect(D1.Visites).ToEqual(0);
-  Expect(D2.Visites).ToEqual(0);
-  // Different instances
-  Expect(D1 = D2).ToBeFalse;
-end;
-
-
 // --- Feature definition ---
 
 initialization
@@ -273,36 +163,36 @@ Feature MediatR @mediatr
 .Rule('Send requests without response')
 
   .Scenario('Can send a simple request')
-    .Given('a configured mediator', Step_GetMediator_ResetJing)
-    .When('I send a TJing request', Step_SendJing)
-    .&Then('the handler should have been invoked', Step_VerifyJingHandled)
+    .Given('a configured mediator')
+    .When('I send a TJing request')
+    .&Then('the TJing handler should have been invoked')
 
 // --- Send with Response ---
 
 .Rule('Send requests with response')
 
   .Scenario('Can send a request and receive a response')
-    .Given('a configured mediator', Step_GetMediator)
-    .When('I send a TPing request', Step_SendPingAndVerifyResponse)
-    .&Then('the dependency mock should have been visited once', Step_VerifyDependencyVisited)
+    .Given('a configured mediator')
+    .When('I send a TPing request and get Pong1')
+    .&Then('the dependency mock should have been visited once')
 
 // --- Publish Notifications ---
 
 .Rule('Publish notifications')
 
   .Scenario('Can publish a notification to multiple handlers')
-    .Given('a configured mediator', Step_GetMediator_ResetPonged)
-    .When('I publish a TPonged notification', Step_PublishPonged)
-    .&Then('handler 1 should have been invoked', Step_VerifyPongedHandler1)
-    .&And('handler 2 should have been invoked', Step_VerifyPongedHandler2)
+    .Given('a configured mediator')
+    .When('I publish a TPonged notification')
+    .&Then('handler 1 should have been invoked')
+    .&And('handler 2 should have been invoked')
 
 // --- Scoped Mediation ---
 
 .Rule('Scoped mediation')
 
   .Scenario('Scoped mediators use scoped dependencies')
-    .Given('a configured root provider', Step_Noop)
-    .When('I send requests from different scopes', Step_SendPingFromScopes)
-    .&Then('each scope has its own dependency instance', Step_VerifyScopedDependencies);
+    .Given('a configured root provider').NoAction
+    .When('I send requests from different scopes')
+    .&Then('each scope has its own dependency instance');
 
 end.

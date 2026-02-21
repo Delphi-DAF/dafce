@@ -98,7 +98,9 @@
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
         <DCCReference Include="Activator.Feat.pas"/>
+        <DCCReference Include="Activator.Steps.pas"/>
         <DCCReference Include="CmdLnParser.Feat.pas"/>
+        <DCCReference Include="CmdLnParser.Steps.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>

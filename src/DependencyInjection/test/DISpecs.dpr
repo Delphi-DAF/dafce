@@ -4,7 +4,8 @@ program DISpecs;
 
 uses
   Daf.MiniSpec,
-  DependencyInjection.Feat in 'DependencyInjection.Feat.pas';
+  DependencyInjection.Feat in 'DependencyInjection.Feat.pas',
+  DependencyInjection.Steps in 'DependencyInjection.Steps.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

@@ -2,13 +2,7 @@ unit CmdLnParser.Feat;
 
 interface
 
-implementation
-
 uses
-  System.SysUtils,
-  System.Rtti,
-  Daf.MiniSpec,
-  Daf.MiniSpec.Types,
   Daf.CmdLn.Parser;
 
 type
@@ -16,9 +10,17 @@ type
   public
     Builder: TCmdLnParserBuilder;
     Parser: ICmdLnParser;
-    CmdLnParams: ICmdLParams;
+    CmdLnParams: ICmdLnParams;
+    LastArgName: string;
     constructor Create;
   end;
+
+implementation
+
+uses
+  System.SysUtils,
+  System.Rtti,
+  Daf.MiniSpec;
 
 { TCmdLnWorld }
 
@@ -27,6 +29,8 @@ begin
   inherited;
   Builder := TCmdLnParserBuilder.Create;
 end;
+
+// --- Feature definition ---
 
 initialization
 
@@ -49,14 +53,11 @@ Feature CmdLnParser @cmdln
     .When('I add a Boolean argument "verbose"',
       procedure(W: TCmdLnWorld)
       begin
+        W.LastArgName := 'verbose';
         W.Builder.Arg<Boolean>('verbose');
         W.Parser := W.Builder.Build;
       end)
-    .&Then('the argument should exist in the parser',
-      procedure(W: TCmdLnWorld)
-      begin
-        Expect(Assigned(W.Parser.Root['Args']['verbose'])).ToBeTrue;
-      end)
+    .&Then('the argument should exist in the parser')
 
   .Scenario('Can add a command with arguments')
     .Given('a parser builder').NoAction
@@ -96,223 +97,73 @@ Feature CmdLnParser @cmdln
 .Rule('Parsing flags')
 
   .Scenario('Flag --verbose sets value to True')
-    .Given('a parser with a Boolean flag "verbose"',
-      procedure(W: TCmdLnWorld)
-      begin
-        W.Builder.Arg<Boolean>('verbose');
-        W.Parser := W.Builder.Build;
-      end)
-    .When('I parse "--verbose"',
-      procedure(W: TCmdLnWorld)
-      begin
-        W.CmdLnParams := W.Parser.Parse('--verbose');
-      end)
-    .&Then('the flag value should be True',
-      procedure(W: TCmdLnWorld)
-      begin
-        Expect(W.CmdLnParams['verbose'].ToString).ToEqual('True');
-      end)
+    .Given('a parser with a Boolean flag "verbose"')
+    .When('I parse "--verbose"')
+    .&Then('the flag value should be True')
 
   .Scenario('Flag --verbose false sets value to False')
-    .Given('a parser with a Boolean flag "verbose"',
-      procedure(W: TCmdLnWorld)
-      begin
-        W.Builder.Arg<Boolean>('verbose');
-        W.Parser := W.Builder.Build;
-      end)
-    .When('I parse "--verbose false"',
-      procedure(W: TCmdLnWorld)
-      begin
-        W.CmdLnParams := W.Parser.Parse('--verbose false');
-      end)
-    .&Then('the flag value should be False',
-      procedure(W: TCmdLnWorld)
-      begin
-        Expect(W.CmdLnParams['verbose'].ToString).ToEqual('False');
-      end)
+    .Given('a parser with a Boolean flag "verbose"')
+    .When('I parse "--verbose false"')
+    .&Then('the flag value should be False')
 
   .Scenario('Flag --verbose true sets value to True')
-    .Given('a parser with a Boolean flag "verbose"',
-      procedure(W: TCmdLnWorld)
-      begin
-        W.Builder.Arg<Boolean>('verbose');
-        W.Parser := W.Builder.Build;
-      end)
-    .When('I parse "--verbose true"',
-      procedure(W: TCmdLnWorld)
-      begin
-        W.CmdLnParams := W.Parser.Parse('--verbose true');
-      end)
-    .&Then('the flag value should be True',
-      procedure(W: TCmdLnWorld)
-      begin
-        Expect(W.CmdLnParams['verbose'].ToString).ToEqual('True');
-      end)
+    .Given('a parser with a Boolean flag "verbose"')
+    .When('I parse "--verbose true"')
+    .&Then('the flag value should be True')
 
 // --- Required arguments ---
 
 .Rule('Required arguments')
 
   .Scenario('Missing required argument fails parsing')
-    .Given('a parser with a required String argument "arg"',
-      procedure(W: TCmdLnWorld)
-      begin
-        W.Builder.Arg<string>('arg',
-          procedure(Arg: TArgNode)
-          begin
-            Arg.Required(True);
-          end);
-        W.Parser := W.Builder.Build;
-      end)
-    .When('I parse "--other"',
-      procedure(W: TCmdLnWorld)
-      begin
-        W.CmdLnParams := W.Parser.Parse('--other');
-      end)
-    .&Then('parsing should fail',
-      procedure(W: TCmdLnWorld)
-      begin
-        Expect(Assigned(W.CmdLnParams)).ToBeFalse;
-      end)
+    .Given('a parser with a required String argument "arg"')
+    .When('I parse "--other"')
+    .&Then('parsing should fail')
 
   .Scenario('Required argument without value fails parsing')
-    .Given('a parser with a required String argument "arg"',
-      procedure(W: TCmdLnWorld)
-      begin
-        W.Builder.Arg<string>('arg',
-          procedure(Arg: TArgNode)
-          begin
-            Arg.Required(True);
-          end);
-        W.Parser := W.Builder.Build;
-      end)
-    .When('I parse "--arg"',
-      procedure(W: TCmdLnWorld)
-      begin
-        W.CmdLnParams := W.Parser.Parse('--arg');
-      end)
-    .&Then('parsing should fail',
-      procedure(W: TCmdLnWorld)
-      begin
-        Expect(Assigned(W.CmdLnParams)).ToBeFalse;
-      end)
+    .Given('a parser with a required String argument "arg"')
+    .When('I parse "--arg"')
+    .&Then('parsing should fail')
 
   .Scenario('Required argument with value succeeds parsing')
-    .Given('a parser with a required String argument "arg"',
-      procedure(W: TCmdLnWorld)
-      begin
-        W.Builder.Arg<string>('arg',
-          procedure(Arg: TArgNode)
-          begin
-            Arg.Required(True);
-          end);
-        W.Parser := W.Builder.Build;
-      end)
-    .When('I parse "--arg value"',
-      procedure(W: TCmdLnWorld)
-      begin
-        W.CmdLnParams := W.Parser.Parse('--arg value');
-      end)
-    .&Then('parsing should succeed',
-      procedure(W: TCmdLnWorld)
-      begin
-        Expect(Assigned(W.CmdLnParams)).ToBeTrue;
-      end)
+    .Given('a parser with a required String argument "arg"')
+    .When('I parse "--arg value"')
+    .&Then('parsing should succeed')
 
 // --- Typed arguments ---
 
 .Rule('Typed argument parsing')
 
   .Scenario('Can parse an Integer argument')
-    .Given('a parser with an Integer argument "number"',
-      procedure(W: TCmdLnWorld)
-      begin
-        W.Builder.Arg<Integer>('number');
-        W.Parser := W.Builder.Build;
-      end)
-    .When('I parse "--number 42"',
-      procedure(W: TCmdLnWorld)
-      begin
-        W.CmdLnParams := W.Parser.Parse('--number 42');
-      end)
-    .&Then('the value should be "42"',
-      procedure(W: TCmdLnWorld)
-      begin
-        Expect(W.CmdLnParams['number'].ToString).ToEqual('42');
-      end)
+    .Given('a parser with an Integer argument "number"')
+    .When('I parse "--number 42"')
+    .&Then('the value should be "42"')
 
   .Scenario('Can parse a Double argument')
-    .Given('a parser with a Double argument "arg"',
-      procedure(W: TCmdLnWorld)
-      begin
-        FormatSettings.DecimalSeparator := '.';
-        W.Builder.Arg<Double>('arg');
-        W.Parser := W.Builder.Build;
-      end)
-    .When('I parse "--arg 42.24"',
-      procedure(W: TCmdLnWorld)
-      begin
-        W.CmdLnParams := W.Parser.Parse('--arg 42.24');
-      end)
-    .&Then('the value should be "42.24"',
-      procedure(W: TCmdLnWorld)
-      begin
-        Expect(W.CmdLnParams['arg'].ToString).ToEqual('42.24');
-      end)
+    .Given('a parser with a Double argument "arg"')
+    .When('I parse "--arg 42.24"')
+    .&Then('the value should be "42.24"')
 
   .Scenario('Can parse a Boolean argument')
-    .Given('a parser with a Boolean argument "arg"',
-      procedure(W: TCmdLnWorld)
-      begin
-        W.Builder.Arg<Boolean>('arg');
-        W.Parser := W.Builder.Build;
-      end)
-    .When('I parse "--arg true"',
-      procedure(W: TCmdLnWorld)
-      begin
-        W.CmdLnParams := W.Parser.Parse('--arg true');
-      end)
-    .&Then('the value should be "True"',
-      procedure(W: TCmdLnWorld)
-      begin
-        Expect(W.CmdLnParams['arg'].ToString).ToEqual('True');
-      end)
+    .Given('a parser with a Boolean argument "arg"')
+    .When('I parse "--arg true"')
+    .&Then('the value should be "True"')
 
   .Scenario('Can parse a String argument')
-    .Given('a parser with a String argument "arg"',
-      procedure(W: TCmdLnWorld)
-      begin
-        W.Builder.Arg<string>('arg');
-        W.Parser := W.Builder.Build;
-      end)
-    .When('I parse "--arg Hola"',
-      procedure(W: TCmdLnWorld)
-      begin
-        W.CmdLnParams := W.Parser.Parse('--arg Hola');
-      end)
-    .&Then('the value should be "Hola"',
-      procedure(W: TCmdLnWorld)
-      begin
-        Expect(W.CmdLnParams['arg'].ToString).ToEqual('Hola');
-      end)
+    .Given('a parser with a String argument "arg"')
+    .When('I parse "--arg Hola"')
+    .&Then('the value should be "Hola"')
 
+  // Lambda kept: parse string contains embedded quotes incompatible with the
+  // 'I parse "(...)"' binding pattern used in other scenarios
   .Scenario('Can parse a quoted String argument')
-    .Given('a parser with a String argument "arg"',
-      procedure(W: TCmdLnWorld)
-      begin
-        W.Builder.Arg<string>('arg');
-        W.Parser := W.Builder.Build;
-      end)
+    .Given('a parser with a String argument "arg"')
     .When('I parse --arg "Hola, mundo"',
       procedure(W: TCmdLnWorld)
       begin
         W.CmdLnParams := W.Parser.Parse('--arg "Hola, mundo"');
       end)
-    .&Then('the value should be "Hola, mundo"',
-      procedure(W: TCmdLnWorld)
-      begin
-        Expect(W.CmdLnParams['arg'].ToString).ToEqual('Hola, mundo');
-      end)
+    .&Then('the value should be "Hola, mundo"')
 
 // --- Complex command line ---
 
@@ -335,16 +186,8 @@ Feature CmdLnParser @cmdln
           .EndCommand;
         W.Parser := W.Builder.Build;
       end)
-    .When('I parse the full command line',
-      procedure(W: TCmdLnWorld)
-      begin
-        W.CmdLnParams := W.Parser.Parse('--flag build -t "template.txt" --codes 1,3,5 -i 3m,5h');
-      end)
-    .&Then('parsing should succeed',
-      procedure(W: TCmdLnWorld)
-      begin
-        Expect(Assigned(W.CmdLnParams)).ToBeTrue;
-      end)
+    .When('I parse "--flag build -t "template.txt" --codes 1,3,5 -i 3m,5h"')
+    .&Then('parsing should succeed')
     .&And('flag should be true',
       procedure(W: TCmdLnWorld)
       begin

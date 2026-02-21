@@ -4,7 +4,8 @@ program ConfigurationSpecs;
 
 uses
   Daf.MiniSpec,
-  Configuration.Feat in 'Configuration.Feat.pas';
+  Configuration.Feat in 'Configuration.Feat.pas',
+  Configuration.Steps in 'Configuration.Steps.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

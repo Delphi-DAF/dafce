@@ -2,17 +2,8 @@ unit Configuration.Feat;
 
 interface
 
-implementation
-
 uses
-  System.SysUtils,
-  System.Generics.Collections,
-  Daf.MiniSpec,
-  Daf.MiniSpec.Types,
-  Daf.Extensions.Configuration,
-  Daf.Configuration.Builder,
-  Daf.Configuration.Memory,
-  Daf.Configuration.Binder;
+  Daf.Extensions.Configuration;
 
 type
   TMyConfig = class
@@ -31,6 +22,16 @@ type
     constructor Create;
     destructor Destroy; override;
   end;
+
+implementation
+
+uses
+  System.SysUtils,
+  System.Generics.Collections,
+  Daf.MiniSpec,
+  Daf.Configuration.Builder,
+  Daf.Configuration.Memory,
+  Daf.Configuration.Binder;
 
 { TMyConfig }
 
@@ -53,6 +54,8 @@ begin
   inherited;
 end;
 
+// --- Feature definition ---
+
 initialization
 
 Feature('''
@@ -69,16 +72,8 @@ Feature Configuration @configuration
 
   .Scenario('Build empty configuration')
     .Given('a configuration builder').NoAction
-    .When('I build the configuration',
-      procedure(W: TConfigWorld)
-      begin
-        W.Config := W.Builder.Build;
-      end)
-    .&Then('the configuration should be created',
-      procedure(W: TConfigWorld)
-      begin
-        Expect(Assigned(W.Config)).ToBeTrue;
-      end)
+    .When('I build the configuration')
+    .&Then('the configuration should be created')
 
   .Scenario('Add in-memory collection and retrieve value')
     .Given('a configuration builder with memory data',
@@ -91,11 +86,7 @@ Feature Configuration @configuration
         Dic.Add('section:key2', 'value2');
         MemoryConfig.AddCollection(W.Builder, Dic);
       end)
-    .When('I build the configuration',
-      procedure(W: TConfigWorld)
-      begin
-        W.Config := W.Builder.Build;
-      end)
+    .When('I build the configuration')
     .&Then('I can retrieve a simple key',
       procedure(W: TConfigWorld)
       begin
@@ -118,11 +109,7 @@ Feature Configuration @configuration
         Dic.Add('app:version', '1.0');
         MemoryConfig.AddCollection(W.Builder, Dic);
       end)
-    .When('I build and get the "app" section',
-      procedure(W: TConfigWorld)
-      begin
-        W.Config := W.Builder.Build;
-      end)
+    .When('I build the configuration')
     .&Then('the section should have the expected key',
       procedure(W: TConfigWorld)
       var
