@@ -1,0 +1,26 @@
+/* ---------------------------------------------------------------------------
+   Inline code contrast fix
+   --------------------------------------------------------------------------- */
+
+/* Light mode (zephyr): código inline en rojo sobre fondo rosado */
+.quarto-light code:not(.sourceCode):not([class*="language-"]) {
+  color: #c7254e;
+  background-color: #f9f2f4;
+  border-radius: 3px;
+  padding: 0.1em 0.3em;
+}
+
+/* Dark mode (cyborg): Bootstrap 5 $code-color es #d63384 (rosa) — muy poco
+   contraste sobre fondo oscuro. Lo sobreescribimos con blanco suave. */
+.quarto-dark code:not(.sourceCode):not([class*="language-"]) {
+  color: #e2e8f0;
+  background-color: rgba(255, 255, 255, 0.10);
+  border-radius: 3px;
+  padding: 0.1em 0.3em;
+}
+
+/* Dentro de celdas de tabla: reducir doble padding */
+td code:not(.sourceCode),
+th code:not(.sourceCode) {
+  padding: 0.1em 0.25em;
+}
