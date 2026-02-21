@@ -47,6 +47,14 @@ website:
       - href: about.qmd
         text: About
     right:
+      - text: "🇬🇧"
+        id: btn-lang-en
+        href: "javascript:langSwitch('en')"
+        aria-label: English
+      - text: "🇪🇸"
+        id: btn-lang-es
+        href: "javascript:langSwitch('es')"
+        aria-label: Español
       - icon: github
         href: https://github.com/Delphi-DAF/dafce
         aria-label: GitHub
@@ -154,8 +162,8 @@ website:
 format:
   html:
     theme:
-      light: flatly
-      dark: darkly
+      light: zephyr
+      dark: cyborg
     highlight-style: github
     toc: true
     toc-depth: 3
