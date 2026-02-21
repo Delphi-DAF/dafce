@@ -48,12 +48,10 @@ website:
         text: About
     right:
       - text: "🇬🇧"
-        id: btn-lang-en
-        href: "javascript:langSwitch('en')"
+        href: /index.html
         aria-label: English
       - text: "🇪🇸"
-        id: btn-lang-es
-        href: "javascript:langSwitch('es')"
+        href: /es/index.html
         aria-label: Español
       - icon: github
         href: https://github.com/Delphi-DAF/dafce
