@@ -174,3 +174,6 @@ format:
 
 execute:
   freeze: auto
+
+filters:
+  - _filters/fix-readme-links.lua

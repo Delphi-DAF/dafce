@@ -14,6 +14,6 @@ lang: es
 
 ---
 
-## Guía
+## Guía {#guide}
 
 {{< include ../../../src/Hosting/docs/GUIDE.es.md >}}

@@ -8,7 +8,7 @@ lang: es
 
 ---
 
-## Guía
+## Guía {#guide}
 
 {{< include ../../../src/MiniSpec/docs/GUIDE.es.md >}}
 

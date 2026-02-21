@@ -8,6 +8,6 @@ lang: es
 
 ---
 
-## Guía
+## Guía {#guide}
 
 {{< include ../../../src/web/docs/GUIDE.es.md >}}

@@ -7,7 +7,7 @@ sidebar: modules
 
 ---
 
-## Guide
+## Guide {#guide}
 
 {{< include ../../src/MiniSpec/docs/GUIDE.md >}}
 

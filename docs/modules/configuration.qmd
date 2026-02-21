@@ -13,6 +13,6 @@ sidebar: modules
 
 ---
 
-## Guide
+## Guide {#guide}
 
 {{< include ../../src/Configuration/docs/GUIDE.md >}}
