@@ -10,11 +10,15 @@
   padding: 0.1em 0.3em;
 }
 
-/* Dark mode (cyborg): Bootstrap 5 $code-color es #d63384 (rosa) — muy poco
-   contraste sobre fondo oscuro. Lo sobreescribimos con blanco suave. */
+/* Dark mode (cyborg): Bootstrap 5 usa --bs-code-color que en cyborg es rosa
+   (#d63384) con muy poco contraste. Sobreescribimos la variable Y el color. */
+.quarto-dark {
+  --bs-code-color: #e2e8f0;
+}
+
 .quarto-dark code:not(.sourceCode):not([class*="language-"]) {
-  color: #e2e8f0;
-  background-color: rgba(255, 255, 255, 0.10);
+  color: #e2e8f0 !important;
+  background-color: rgba(255, 255, 255, 0.10) !important;
   border-radius: 3px;
   padding: 0.1em 0.3em;
 }
