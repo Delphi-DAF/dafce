@@ -40,7 +40,7 @@ An important special case: verifying that code throws an exception. MiniSpec **a
     end)
   .&Then('raises EDivByZero', procedure(World: TWorld)
     begin
-      Expect(Raised).ToBe(EDivByZero);
+      ExpectException(Raised).ToBe(EDivByZero);
     end);
 ```
 
@@ -48,10 +48,10 @@ An important special case: verifying that code throws an exception. MiniSpec **a
 
 | Method | Description |
 |--------|-------------|
-| `Expect(Raised).ToBeAny` | Any exception was raised |
-| `Expect(Raised).ToBe(EMyException)` | Specific type was raised |
-| `Expect(Raised).ToHaveMessage('text')` | Message contains substring |
-| `Expect(Raised).ToBeNone` | No exception was raised |
+| `ExpectException(Raised).ToBeAny` | Any exception was raised |
+| `ExpectException(Raised).ToBe(EMyException)` | Specific type was raised |
+| `ExpectException(Raised).ToHaveMessage('text')` | Message contains substring |
+| `ExpectException(Raised).ToBeNone` | No exception was raised |
 
 > 💡 Check the source code of `Daf.MiniSpec.Expect.pas` for all available methods.
 

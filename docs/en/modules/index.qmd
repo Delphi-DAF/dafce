@@ -1,0 +1,22 @@
+---
+title: "Modules"
+sidebar: modules
+toc: false
+---
+
+DAFce ships **10 modules** organized in independent packages. Each module has its own search path — add only what you need.
+
+| Module | Package | Description |
+|--------|---------|-------------|
+| [Application](application.qmd) | `Daf.Application` | `IDafApplication` builder and runner |
+| [Commons](commons.qmd) | `Daf.Commons` | Smart pointers, RTTI, threading, arrays, CLI parser |
+| [Configuration](configuration.qmd) | `Daf.Configuration` | JSON / env / in-memory config, typed binding |
+| [DependencyInjection](di.qmd) | `Daf.DependencyInjection` | Full DI container with scopes and lifetimes |
+| [Hosting](hosting.qmd) | `Daf.Hosting` | `IHost` / `IHostBuilder` lifecycle model |
+| [Logging](logging.qmd) | `Daf.Logging` | Structured logging with scopes |
+| [MediatR](mediator.qmd) | `Daf.MediatR` | CQRS: commands, queries, notifications, pipelines |
+| [MiniSpec](minispec.qmd) | `Daf.MiniSpec` | BDD testing: Gherkin specs, expectations, live dashboard |
+| [NNLog](nnlog.qmd) | `Daf.NNLog` | NLog-inspired logging engine integrated with DAF |
+| [Web](web.qmd) | `Daf.Web` | Lightweight HTTP server and routing |
+
+Modules marked with **Abstractions** also ship a `Daf.X.Abstractions` package containing only interfaces, for cleaner compile-time dependencies.

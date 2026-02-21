@@ -1,0 +1,13 @@
+---
+title: "Logging"
+sidebar: modules-es
+lang: es
+---
+
+{{< include ../../../src/Logging/README.es.md >}}
+
+---
+
+## Abstracciones
+
+{{< include ../../../src/Logging.Abstractions/README.es.md >}}

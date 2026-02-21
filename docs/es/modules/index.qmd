@@ -1,0 +1,23 @@
+---
+title: "Módulos"
+sidebar: modules-es
+toc: false
+lang: es
+---
+
+DAFce incluye **10 módulos** organizados en paquetes independientes. Cada módulo tiene su propio search path — añade solo los que necesites.
+
+| Módulo | Paquete | Descripción |
+|--------|---------|-------------|
+| [Application](application.qmd) | `Daf.Application` | Builder y runner de `IDafApplication` |
+| [Commons](commons.qmd) | `Daf.Commons` | Smart pointers, RTTI, threading, arrays, parser CLI |
+| [Configuración](configuration.qmd) | `Daf.Configuration` | Config JSON / env / memoria, binding tipado |
+| [Inyección de Dependencias](di.qmd) | `Daf.DependencyInjection` | Contenedor DI completo con scopes y lifetimes |
+| [Hosting](hosting.qmd) | `Daf.Hosting` | Modelo de ciclo de vida `IHost` / `IHostBuilder` |
+| [Logging](logging.qmd) | `Daf.Logging` | Logging estructurado con scopes |
+| [MediatR](mediator.qmd) | `Daf.MediatR` | CQRS: comandos, queries, notificaciones, pipelines |
+| [MiniSpec](minispec.qmd) | `Daf.MiniSpec` | Testing BDD: specs Gherkin, expectations, live dashboard |
+| [NNLog](nnlog.qmd) | `Daf.NNLog` | Motor de logging inspirado en NLog integrado con DAF |
+| [Web](web.qmd) | `Daf.Web` | Servidor HTTP ligero y routing |
+
+Los módulos marcados con **Abstractions** incluyen también un paquete `Daf.X.Abstractions` con solo interfaces, para dependencias de compilación más limpias.

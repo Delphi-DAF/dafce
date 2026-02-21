@@ -1,0 +1,11 @@
+---
+title: "DAF — Delphi Application Foundation"
+format:
+  html:
+    page-layout: custom
+---
+
+<meta http-equiv="refresh" content="0; url=en/index.html">
+<script>window.location.replace("en/index.html");</script>
+
+<p>Redirecting… <a href="en/index.html">click here if not redirected</a>.</p>

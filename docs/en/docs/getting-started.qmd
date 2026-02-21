@@ -1,0 +1,63 @@
+---
+title: "Getting Started"
+sidebar: docs
+---
+
+## Requirements
+
+- **Delphi 12+ (Alexandria)** — required for inline variables, generics improvements and managed records
+- **Windows** — primary target; Linux via FMX/FireMonkey is experimental
+
+## Installation
+
+DAF is distributed as a set of Delphi packages (`.dpk`). Clone the repo and open the group project:
+
+```bash
+git clone https://github.com/Delphi-DAF/dafce.git
+```
+
+Then open `src/DAFGroup.groupproj` in Delphi IDE and build all packages.
+
+Alternatively, add the `src/[Module]/` paths you need directly to your project's search path — every module is self-contained.
+
+## Your first DAF application
+
+The minimal entry point uses the **Hosting** + **DependencyInjection** modules:
+
+```pascal
+program MyApp;
+
+uses
+  Daf.Application.Builder;
+
+begin
+  TDafApplicationBuilder
+    .Create
+    .ConfigureServices(procedure(Services: IServiceCollection)
+    begin
+      Services.AddSingleton<IMyService, TMyServiceImpl>;
+    end)
+    .Build
+    .Run;
+end.
+```
+
+## Module map
+
+| If you need… | Use module |
+|---|---|
+| DI container | [DependencyInjection](../modules/di.qmd) |
+| App lifecycle | [Hosting](../modules/hosting.qmd) |
+| Config files / env vars | [Configuration](../modules/configuration.qmd) |
+| Structured logging | [Logging](../modules/logging.qmd) |
+| Commands / queries | [MediatR](../modules/mediator.qmd) |
+| BDD specs / tests | [MiniSpec](../modules/minispec.qmd) |
+| NLog-style logging | [NNLog](../modules/nnlog.qmd) |
+| Smart pointers / RTTI | [Commons](../modules/commons.qmd) |
+| HTTP server / routing | [Web](../modules/web.qmd) |
+
+## Next steps
+
+- Read the [Architecture overview](architecture.qmd)
+- Browse the [Module reference](../modules/index.qmd)
+- Check the `samples/` folder in the repo for runnable examples

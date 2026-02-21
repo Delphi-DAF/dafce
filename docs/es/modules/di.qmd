@@ -1,0 +1,13 @@
+---
+title: "Inyección de Dependencias"
+sidebar: modules-es
+lang: es
+---
+
+{{< include ../../../src/DependencyInjection/README.es.md >}}
+
+---
+
+## Abstracciones
+
+{{< include ../../../src/DependencyInjection.Abstractions/README.es.md >}}

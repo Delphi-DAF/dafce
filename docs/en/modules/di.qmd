@@ -1,0 +1,12 @@
+---
+title: "Dependency Injection"
+sidebar: modules
+---
+
+{{< include ../../../src/DependencyInjection/README.md >}}
+
+---
+
+## Abstractions
+
+{{< include ../../../src/DependencyInjection.Abstractions/README.md >}}

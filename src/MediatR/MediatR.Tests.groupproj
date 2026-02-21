@@ -1,0 +1,36 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{A4B5C6D7-E8F9-0123-AB45-CD67E8F90123}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="test\MediatRSpecs.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="MediatRSpecs">
+        <MSBuild Projects="test\MediatRSpecs.dproj"/>
+    </Target>
+    <Target Name="MediatRSpecs:Clean">
+        <MSBuild Projects="test\MediatRSpecs.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="MediatRSpecs:Make">
+        <MSBuild Projects="test\MediatRSpecs.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="MediatRSpecs"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="MediatRSpecs:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="MediatRSpecs:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

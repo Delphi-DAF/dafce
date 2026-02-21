@@ -1,0 +1,7 @@
+---
+title: "MiniSpec"
+sidebar: modules-es
+lang: es
+---
+
+{{< include ../../../src/MiniSpec/README.es.md >}}

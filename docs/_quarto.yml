@@ -1,0 +1,179 @@
+project:
+  type: website
+  output-dir: ../../out/site
+
+website:
+  title: "DAF — Delphi Application Foundation"
+  favicon: assets/DAF-Logo.png
+  repo-url: https://github.com/Delphi-DAF/dafce
+  repo-actions: [issue, edit]
+
+  navbar:
+    background: primary
+    logo: assets/DAF-Logo.png
+    logo-alt: "DAF logo"
+    left:
+      - href: en/index.qmd
+        text: Home
+      - href: en/docs/getting-started.qmd
+        text: Docs
+      - text: Modules
+        menu:
+          - text: "Overview"
+            href: en/modules/index.qmd
+          - text: "---"
+          - text: "Application"
+            href: en/modules/application.qmd
+          - text: "Commons"
+            href: en/modules/commons.qmd
+          - text: "Configuration"
+            href: en/modules/configuration.qmd
+          - text: "Dependency Injection"
+            href: en/modules/di.qmd
+          - text: "Hosting"
+            href: en/modules/hosting.qmd
+          - text: "Logging"
+            href: en/modules/logging.qmd
+          - text: "MediatR"
+            href: en/modules/mediator.qmd
+          - text: "MiniSpec"
+            href: en/modules/minispec.qmd
+          - text: "NNLog"
+            href: en/modules/nnlog.qmd
+          - text: "Web"
+            href: en/modules/web.qmd
+      - href: en/blog/index.qmd
+        text: News
+      - href: en/about.qmd
+        text: About
+    right:
+      - text: "🇬🇧"
+        href: /en/index.html
+        aria-label: English
+      - text: "🇪🇸"
+        href: /es/index.html
+        aria-label: Español
+      - icon: github
+        href: https://github.com/Delphi-DAF/dafce
+        aria-label: GitHub
+
+  sidebar:
+    - id: docs
+      title: "Documentation"
+      style: "docked"
+      contents:
+        - text: "Getting Started"
+          href: en/docs/getting-started.qmd
+        - text: "Architecture"
+          href: en/docs/architecture.qmd
+
+    - id: modules
+      title: "Modules"
+      style: "docked"
+      contents:
+        - text: "Overview"
+          href: en/modules/index.qmd
+        - section: "Foundation"
+          contents:
+            - text: "Application"
+              href: en/modules/application.qmd
+            - text: "Hosting"
+              href: en/modules/hosting.qmd
+            - text: "Dependency Injection"
+              href: en/modules/di.qmd
+            - text: "Configuration"
+              href: en/modules/configuration.qmd
+        - section: "Observability"
+          contents:
+            - text: "Logging"
+              href: en/modules/logging.qmd
+            - text: "NNLog"
+              href: en/modules/nnlog.qmd
+        - section: "Messaging"
+          contents:
+            - text: "MediatR"
+              href: en/modules/mediator.qmd
+        - section: "Testing"
+          contents:
+            - text: "MiniSpec"
+              href: en/modules/minispec.qmd
+        - section: "Utilities"
+          contents:
+            - text: "Commons"
+              href: en/modules/commons.qmd
+            - text: "Web"
+              href: en/modules/web.qmd
+
+    - id: modules-es
+      title: "Módulos"
+      style: "docked"
+      contents:
+        - text: "Resumen"
+          href: es/modules/index.qmd
+        - section: "Fundación"
+          contents:
+            - text: "Application"
+              href: es/modules/application.qmd
+            - text: "Hosting"
+              href: es/modules/hosting.qmd
+            - text: "Inyección de Dependencias"
+              href: es/modules/di.qmd
+            - text: "Configuración"
+              href: es/modules/configuration.qmd
+        - section: "Observabilidad"
+          contents:
+            - text: "Logging"
+              href: es/modules/logging.qmd
+            - text: "NNLog"
+              href: es/modules/nnlog.qmd
+        - section: "Mensajería"
+          contents:
+            - text: "MediatR"
+              href: es/modules/mediator.qmd
+        - section: "Testing"
+          contents:
+            - text: "MiniSpec"
+              href: es/modules/minispec.qmd
+        - section: "Utilidades"
+          contents:
+            - text: "Commons"
+              href: es/modules/commons.qmd
+            - text: "Web"
+              href: es/modules/web.qmd
+
+    - id: docs-es
+      title: "Documentación"
+      style: "docked"
+      contents:
+        - text: "Primeros pasos"
+          href: es/docs/getting-started.qmd
+        - text: "Arquitectura"
+          href: es/docs/architecture.qmd
+
+  page-footer:
+    left: |
+      DAF — Delphi Application Foundation (Community Edition)
+      [MIT License](../../legal/LICENSE.md)
+    right: |
+      Built with [Quarto](https://quarto.org)
+
+format:
+  html:
+    theme:
+      light: zephyr
+      dark: cyborg
+    css: custom.css
+    highlight-style: github
+    toc: true
+    toc-depth: 3
+    toc-title: "On this page"
+    code-copy: true
+    code-overflow: wrap
+    smooth-scroll: true
+    include-after-body: _partials/lang-toggle.html
+
+execute:
+  freeze: auto
+
+filters:
+  - _filters/fix-readme-links.lua

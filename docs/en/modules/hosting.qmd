@@ -1,0 +1,12 @@
+---
+title: "Hosting"
+sidebar: modules
+---
+
+{{< include ../../../src/Hosting/README.md >}}
+
+---
+
+## Abstractions
+
+{{< include ../../../src/Hosting.Abstractions/README.md >}}

@@ -40,7 +40,7 @@ Un caso especial importante: verificar que el código lanza una excepción. Mini
     end)
   .&Then('lanza EDivByZero', procedure(World: TWorld)
     begin
-      Expect(Raised).ToBe(EDivByZero);
+      ExpectException(Raised).ToBe(EDivByZero);
     end);
 ```
 
@@ -48,10 +48,10 @@ Un caso especial importante: verificar que el código lanza una excepción. Mini
 
 | Método | Descripción |
 |--------|-------------|
-| `Expect(Raised).ToBeAny` | Se lanzó cualquier excepción |
-| `Expect(Raised).ToBe(EMyException)` | Se lanzó tipo específico |
-| `Expect(Raised).ToHaveMessage('texto')` | Mensaje contiene substring |
-| `Expect(Raised).ToBeNone` | No se lanzó excepción |
+| `ExpectException(Raised).ToBeAny` | Se lanzó cualquier excepción |
+| `ExpectException(Raised).ToBe(EMyException)` | Se lanzó tipo específico |
+| `ExpectException(Raised).ToHaveMessage('texto')` | Mensaje contiene substring |
+| `ExpectException(Raised).ToBeNone` | No se lanzó excepción |
 
 > 💡 Consulta el código fuente de `Daf.MiniSpec.Expect.pas` para ver todos los métodos disponibles.
 

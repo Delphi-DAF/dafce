@@ -1,0 +1,7 @@
+---
+title: "Application — Guía de uso"
+sidebar: modules-es
+lang: es
+---
+
+{{< include ../../../src/Application/docs/GUIDE.es.md >}}

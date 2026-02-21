@@ -1,0 +1,84 @@
+---
+title: "DAF — Delphi Application Foundation"
+subtitle: "Community Edition"
+page-layout: full
+toc: false
+sidebar: false
+lang: es
+---
+
+![](../assets/DAF-Logo.png){width=180 fig-align="center"}
+
+<div class="text-center mt-4 mb-5">
+<h1 class="display-5">Desarrollo moderno en Delphi</h1>
+<p class="lead">Inyección de Dependencias · Logging estructurado · Configuración · CQRS · Testing BDD</p>
+
+:::{.d-flex .justify-content-center .gap-3 .mt-4}
+[Primeros pasos](docs/getting-started.qmd){.btn .btn-primary .btn-lg}
+[Ver en GitHub](https://github.com/Delphi-DAF/dafce){.btn .btn-outline-secondary .btn-lg}
+:::
+</div>
+
+---
+
+## ¿Qué es DAF?
+
+DAF es una librería modular y extensible para construir aplicaciones Delphi estructuradas, mantenibles y testeables.
+Moderniza el desarrollo en Delphi adoptando patrones del ecosistema .NET, siendo un puente natural para desarrolladores que vienen de C#.
+
+::: {.grid}
+
+::: {.g-col-12 .g-col-md-4}
+### 🔌 Inyección de Dependencias
+Contenedor DI completo modelado sobre `Microsoft.Extensions.DependencyInjection`.
+Soporta lifetimes singleton, transient y scoped.
+
+[→ Saber más](modules/di.qmd)
+:::
+
+::: {.g-col-12 .g-col-md-4}
+### 🏠 Hosting
+`IHost` e `IHostBuilder` para composición del ciclo de vida — igual que ASP.NET Core.
+
+[→ Saber más](modules/hosting.qmd)
+:::
+
+::: {.g-col-12 .g-col-md-4}
+### ⚙️ Configuración
+Vincula configuración de JSON, variables de entorno y fuentes en memoria a clases Delphi tipadas.
+
+[→ Saber más](modules/configuration.qmd)
+:::
+
+::: {.g-col-12 .g-col-md-4}
+### 📋 Logging
+Logging estructurado con scopes y message templates, modelado sobre `Microsoft.Extensions.Logging`.
+
+[→ Saber más](modules/logging.qmd)
+:::
+
+::: {.g-col-12 .g-col-md-4}
+### ✉️ MediatR
+CQRS y mensajería in-process: comandos, queries, notificaciones y pipelines.
+
+[→ Saber más](modules/mediator.qmd)
+:::
+
+::: {.g-col-12 .g-col-md-4}
+### 🧪 MiniSpec
+Framework de testing BDD inspirado en Cucumber y RSpec, con specs estilo Gherkin en Delphi.
+
+[→ Saber más](modules/minispec.qmd)
+:::
+
+:::
+
+---
+
+## Ver todos los módulos
+
+```{=html}
+<div class="text-center">
+  <a href="modules/index.qmd" class="btn btn-outline-primary">Ver todos los módulos →</a>
+</div>
+```

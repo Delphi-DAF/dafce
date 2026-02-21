@@ -1,0 +1,6 @@
+---
+title: "Hosting — Usage Guide"
+sidebar: modules
+---
+
+{{< include ../../../src/Hosting/docs/GUIDE.md >}}

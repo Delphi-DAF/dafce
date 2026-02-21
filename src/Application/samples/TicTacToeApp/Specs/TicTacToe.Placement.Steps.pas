@@ -156,7 +156,7 @@ end;
 
 procedure TPlacementSteps.ErrorRaised(Ctx: TGameWorld);
 begin
-  Expect(Raised).ToBe(EInvalidMove);
+  ExpectException(Raised).ToBe(EInvalidMove);
 end;
 
 procedure TPlacementSteps.PhaseIsMovement(Ctx: TGameWorld);

@@ -29,3 +29,11 @@ Thumbs.db
 releases/
 # Private local files
 .private/
+
+
+# Quarto
+docs/_freeze/
+docs/.quarto/
+out/site/
+
+/.luarc.json

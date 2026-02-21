@@ -1,0 +1,13 @@
+---
+title: "Configuración"
+sidebar: modules-es
+lang: es
+---
+
+{{< include ../../../src/Configuration/README.es.md >}}
+
+---
+
+## Abstracciones
+
+{{< include ../../../src/Configuration.Abstractions/README.es.md >}}

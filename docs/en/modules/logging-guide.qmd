@@ -1,0 +1,6 @@
+---
+title: "Logging — Usage Guide"
+sidebar: modules
+---
+
+{{< include ../../../src/Logging/docs/GUIDE.md >}}

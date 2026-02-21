@@ -1,0 +1,6 @@
+---
+title: "MediatR — Usage Guide"
+sidebar: modules
+---
+
+{{< include ../../../src/MediatR/docs/GUIDE.md >}}

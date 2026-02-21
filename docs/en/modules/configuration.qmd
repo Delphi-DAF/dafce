@@ -1,0 +1,12 @@
+---
+title: "Configuration"
+sidebar: modules
+---
+
+{{< include ../../../src/Configuration/README.md >}}
+
+---
+
+## Abstractions
+
+{{< include ../../../src/Configuration.Abstractions/README.md >}}

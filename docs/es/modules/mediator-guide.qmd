@@ -1,0 +1,7 @@
+---
+title: "MediatR — Guía de uso"
+sidebar: modules-es
+lang: es
+---
+
+{{< include ../../../src/MediatR/docs/GUIDE.es.md >}}

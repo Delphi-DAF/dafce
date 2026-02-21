@@ -1,0 +1,7 @@
+---
+title: "Application"
+sidebar: modules-es
+lang: es
+---
+
+{{< include ../../../src/Application/README.es.md >}}

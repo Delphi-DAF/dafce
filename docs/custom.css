@@ -1,0 +1,6 @@
+/* Código inline en dark mode: usa --bs-info (Bootstrap semantic color).
+   En cyborg es #2a9fd6, siempre contrastado sobre el fondo oscuro. */
+.quarto-dark code:not(.sourceCode):not([class*="language-"]) {
+  color: var(--bs-info) !important;
+  background-color: transparent !important;
+}

@@ -6,6 +6,18 @@
         <Projects Include="MiniSpec\test\MiniSpecSpecs.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="Commons\test\CommonsSpecs.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="Configuration\test\ConfigurationSpecs.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="DependencyInjection\test\DISpecs.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="MediatR\test\MediatRSpecs.dproj">
+            <Dependencies/>
+        </Projects>
     </ItemGroup>
     <ProjectExtensions>
         <Borland.Personality>Default.Personality.12</Borland.Personality>
@@ -23,14 +35,50 @@
     <Target Name="MiniSpecSpecs:Make">
         <MSBuild Projects="MiniSpec\test\MiniSpecSpecs.dproj" Targets="Make"/>
     </Target>
+    <Target Name="CommonsSpecs">
+        <MSBuild Projects="Commons\test\CommonsSpecs.dproj"/>
+    </Target>
+    <Target Name="CommonsSpecs:Clean">
+        <MSBuild Projects="Commons\test\CommonsSpecs.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="CommonsSpecs:Make">
+        <MSBuild Projects="Commons\test\CommonsSpecs.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="ConfigurationSpecs">
+        <MSBuild Projects="Configuration\test\ConfigurationSpecs.dproj"/>
+    </Target>
+    <Target Name="ConfigurationSpecs:Clean">
+        <MSBuild Projects="Configuration\test\ConfigurationSpecs.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="ConfigurationSpecs:Make">
+        <MSBuild Projects="Configuration\test\ConfigurationSpecs.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="DISpecs">
+        <MSBuild Projects="DependencyInjection\test\DISpecs.dproj"/>
+    </Target>
+    <Target Name="DISpecs:Clean">
+        <MSBuild Projects="DependencyInjection\test\DISpecs.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="DISpecs:Make">
+        <MSBuild Projects="DependencyInjection\test\DISpecs.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="MediatRSpecs">
+        <MSBuild Projects="MediatR\test\MediatRSpecs.dproj"/>
+    </Target>
+    <Target Name="MediatRSpecs:Clean">
+        <MSBuild Projects="MediatR\test\MediatRSpecs.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="MediatRSpecs:Make">
+        <MSBuild Projects="MediatR\test\MediatRSpecs.dproj" Targets="Make"/>
+    </Target>
     <Target Name="Build">
-        <CallTarget Targets="MiniSpecSpecs"/>
+        <CallTarget Targets="MiniSpecSpecs;CommonsSpecs;ConfigurationSpecs;DISpecs;MediatRSpecs"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="MiniSpecSpecs:Clean"/>
+        <CallTarget Targets="MiniSpecSpecs:Clean;CommonsSpecs:Clean;ConfigurationSpecs:Clean;DISpecs:Clean;MediatRSpecs:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="MiniSpecSpecs:Make"/>
+        <CallTarget Targets="MiniSpecSpecs:Make;CommonsSpecs:Make;ConfigurationSpecs:Make;DISpecs:Make;MediatRSpecs:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>
