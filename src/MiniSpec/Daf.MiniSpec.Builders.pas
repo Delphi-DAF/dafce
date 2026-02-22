@@ -48,7 +48,6 @@ type
   strict private
     FBackground: TBackground<T>;
     FRule: TRule<T>;  // Siempre es una Rule (explícita o implícita)
-    class procedure PendingStep(World: T); static;
     class procedure NoActionStep(World: T); static;
     function CreateBindingStep(Kind: TStepKind; const Desc: string): TStepProc<T>;
   public
@@ -74,7 +73,6 @@ type
     FLastStep: TLastStepKind;
     FLastTable: TDataTable;
     FRule: TRule<T>;  // Siempre es una Rule (explícita o implícita)
-    class procedure PendingStep(World: T); static;
     class procedure NoActionStep(World: T); static;
     function CreateBindingStep(Kind: TStepKind; const Desc: string): TStepProc<T>;
   public
@@ -120,7 +118,6 @@ type
       const Steps: TList<TScenarioStep<T>>; Kind: TStepKind;
       const HeaderStrings: TArray<string>; const CurrentRow: TArray<TValue>);
     function GetFeature: TFeature<T>;
-    class procedure PendingStep(World: T); static;
     class procedure NoActionStep(World: T); static;
     function CreateBindingStep(Kind: TStepKind; const Desc: string): TStepProc<T>;
   public
@@ -304,11 +301,6 @@ begin
   FRule.BackGround := FBackground;
 end;
 
-class procedure TBackgroundBuilder<T>.PendingStep(World: T);
-begin
-  SpecContext.Step.MarkAsPending;
-end;
-
 class procedure TBackgroundBuilder<T>.NoActionStep(World: T);
 begin
   // Intentionally empty - step passes without doing anything
@@ -325,21 +317,21 @@ begin
         Bindings.Invoke(Binding, World, Captures);
       end
   else
-    Result := PendingStep;
+    Result := procedure(World: T)
+      var
+        LBinding: TStepBinding;
+        LCaptures: TArray<string>;
+      begin
+        if Bindings.FindBinding(Kind, Desc, LBinding, LCaptures) then
+          Bindings.Invoke(LBinding, World, LCaptures)
+        else
+          SpecContext.Step.MarkAsPending;
+      end;
 end;
 
 function TBackgroundBuilder<T>.Given(const Desc: string): IBackgroundBuilder<T>;
-var
-  Binding: TStepBinding;
-  Captures: TArray<string>;
 begin
-  if Bindings.FindBinding(skGiven, Desc, Binding, Captures) then
-    Result := Given(Desc, procedure(World: T)
-      begin
-        Bindings.Invoke(Binding, World, Captures);
-      end)
-  else
-    Result := Given(Desc, PendingStep);
+  Result := Given(Desc, CreateBindingStep(skGiven, Desc));
 end;
 
 function TBackgroundBuilder<T>.Given(const Desc: string; Step: TStepProc<T>): IBackgroundBuilder<T>;
@@ -420,11 +412,6 @@ begin
   // Crear escenario con Rule como parent para correcta navegación del contexto
   FScenario := TScenario<T>.Create(ARule, Description);
   FRule.Scenarios.Add(FScenario);
-end;
-
-class procedure TScenarioBuilder<T>.PendingStep(World: T);
-begin
-  SpecContext.Step.MarkAsPending;
 end;
 
 class procedure TScenarioBuilder<T>.NoActionStep(World: T);
@@ -677,11 +664,6 @@ begin
   FStepsWhen.Free;
   FStepsThen.Free;
   inherited;
-end;
-
-class procedure TScenarioOutlineBuilder<T>.PendingStep(World: T);
-begin
-  SpecContext.Step.MarkAsPending;
 end;
 
 class procedure TScenarioOutlineBuilder<T>.NoActionStep(World: T);
