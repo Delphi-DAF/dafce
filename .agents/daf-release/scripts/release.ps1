@@ -73,9 +73,11 @@ if ($Action -eq "" -or $Action -eq "help") {
 $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$VersionFile = Join-Path $ScriptDir "src/VERSION.txt"
-$ChangelogFile = Join-Path $ScriptDir "CHANGELOG.md"
-$EnvFile = Join-Path $ScriptDir ".env"
+# Script lives in .agents/daf-release/scripts/ — go up 3 levels to repo root
+$RepoRoot = Split-Path (Split-Path (Split-Path $ScriptDir -Parent) -Parent) -Parent
+$VersionFile = Join-Path $RepoRoot "src/VERSION.txt"
+$ChangelogFile = Join-Path $RepoRoot "CHANGELOG.md"
+$EnvFile = Join-Path $RepoRoot ".env"
 $RepoOwner = "Delphi-DAF"
 $RepoName = "dafce"
 $DefaultBranch = "main"
