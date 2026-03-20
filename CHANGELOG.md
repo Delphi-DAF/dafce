@@ -8,8 +8,6 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
 ## [Unreleased]
 
-## [1.5.0] - 2026-03-20
-
 ### Added
 
 - **Docs**: Sitio de documentación Quarto bilingüe (EN/ES) para todos los módulos
