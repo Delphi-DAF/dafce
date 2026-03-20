@@ -8,6 +8,20 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-03-20
+
+### Added
+
+- **Docs**: Sitio de documentación Quarto bilingüe (EN/ES) para todos los módulos
+- **Tooling**: Estructura de agent skills (`.agents/daf-project`, `.agents/daf-release`) con scripts canónicos
+
+### Fixed
+
+- **MiniSpec**: Eliminar `PendingStep` muerto de todos los builders
+- **MiniSpec**: Renombrar `Expect(TProc)` → `ExpectException` para resolver ambigüedad con `TValue`
+- **MiniSpec**: Fixes en step bindings — lazy binding, `NoAction` lskThen, aserciones DI en Then, memory leak
+- **MiniSpec**: `CmdLnParser` usa `Build(False)` para evitar double-free con destructor
+
 ## [1.4.0] - 2026-02-16
 
 ### Added
