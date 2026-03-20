@@ -13,7 +13,6 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 ### Added
 
 - **Docs**: Sitio de documentación Quarto bilingüe (EN/ES) para todos los módulos
-- **Tooling**: Estructura de agent skills (`.agents/daf-project`, `.agents/daf-release`) con scripts canónicos
 
 ### Fixed
 
