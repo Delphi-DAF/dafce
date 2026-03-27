@@ -110,6 +110,9 @@ type
     Connector: TBoolOp;
     /// When True the condition is wrapped in NOT(…).
     IsNot: Boolean;
+    /// Sub-query for EXISTS / IN-subquery conditions (IInterface to avoid
+    /// circular dependency with IQuery). The compiler casts to IQuery.
+    SubQuery: IInterface;
     function Clone: TAbstractClause; override;
   end;
 
@@ -149,6 +152,83 @@ type
   public
     Expression: string;
     Bindings: TArray<Variant>;
+    function Clone: TAbstractClause; override;
+  end;
+
+  // ---------------------------------------------------------------------------
+  //  JOIN
+  // ---------------------------------------------------------------------------
+
+  TJoinClause = class(TAbstractClause)
+  public
+    JoinType: TJoinType;
+    Table: string;
+    Schema: string;
+    Alias: string;
+    /// Raw ON condition, e.g. 'users.id = orders.user_id'.
+    Condition: string;
+    function Clone: TAbstractClause; override;
+  end;
+
+  // ---------------------------------------------------------------------------
+  //  GROUP BY
+  // ---------------------------------------------------------------------------
+
+  TGroupByClause = class(TAbstractClause)
+  public
+    Column: string;
+    IsRaw: Boolean;
+    function Clone: TAbstractClause; override;
+  end;
+
+  // ---------------------------------------------------------------------------
+  //  HAVING
+  // ---------------------------------------------------------------------------
+
+  THavingClause = class(TAbstractClause)
+  public
+    Column: string;
+    Op: TWhereOp;
+    Value: Variant;
+    RawSql: string;
+    Connector: TBoolOp;
+    function Clone: TAbstractClause; override;
+  end;
+
+  // ---------------------------------------------------------------------------
+  //  UNION / INTERSECT / EXCEPT
+  // ---------------------------------------------------------------------------
+
+  TUnionKind = (Union, UnionAll, Intersect, &Except);
+
+  TUnionClause = class(TAbstractClause)
+  public
+    Kind: TUnionKind;
+    /// Sub-query body (IInterface to avoid circular dependency with IQuery).
+    /// The compiler casts this to IQuery at compile time.
+    SubQuery: IInterface;
+    function Clone: TAbstractClause; override;
+  end;
+
+  // ---------------------------------------------------------------------------
+  //  WITH (Common Table Expression)
+  // ---------------------------------------------------------------------------
+
+  TWithClause = class(TAbstractClause)
+  public
+    Name: string;
+    IsRecursive: Boolean;
+    /// CTE body (IInterface to avoid circular dependency with IQuery).
+    SubQuery: IInterface;
+    function Clone: TAbstractClause; override;
+  end;
+
+  // ---------------------------------------------------------------------------
+  //  DISTINCT (marker — no data fields)
+  // ---------------------------------------------------------------------------
+
+  TDistinctClause = class(TAbstractClause)
+  public
     function Clone: TAbstractClause; override;
   end;
 
@@ -192,6 +272,7 @@ begin
   C.RawSql    := RawSql;
   C.Connector := Connector;
   C.IsNot     := IsNot;
+  C.SubQuery  := SubQuery;
   Result := C;
 end;
 
@@ -240,6 +321,80 @@ begin
   C.Expression := Expression;
   C.Bindings   := Copy(Bindings);
   Result := C;
+end;
+
+{ TJoinClause }
+
+function TJoinClause.Clone: TAbstractClause;
+var
+  C: TJoinClause;
+begin
+  C := TJoinClause.Create;
+  C.JoinType  := JoinType;
+  C.Table     := Table;
+  C.Schema    := Schema;
+  C.Alias     := Alias;
+  C.Condition := Condition;
+  Result := C;
+end;
+
+{ TGroupByClause }
+
+function TGroupByClause.Clone: TAbstractClause;
+var
+  C: TGroupByClause;
+begin
+  C := TGroupByClause.Create;
+  C.Column := Column;
+  C.IsRaw  := IsRaw;
+  Result := C;
+end;
+
+{ THavingClause }
+
+function THavingClause.Clone: TAbstractClause;
+var
+  C: THavingClause;
+begin
+  C := THavingClause.Create;
+  C.Column    := Column;
+  C.Op        := Op;
+  C.Value     := Value;
+  C.RawSql    := RawSql;
+  C.Connector := Connector;
+  Result := C;
+end;
+
+{ TUnionClause }
+
+function TUnionClause.Clone: TAbstractClause;
+var
+  C: TUnionClause;
+begin
+  C := TUnionClause.Create;
+  C.Kind     := Kind;
+  C.SubQuery := SubQuery;
+  Result := C;
+end;
+
+{ TWithClause }
+
+function TWithClause.Clone: TAbstractClause;
+var
+  C: TWithClause;
+begin
+  C := TWithClause.Create;
+  C.Name        := Name;
+  C.IsRecursive := IsRecursive;
+  C.SubQuery    := SubQuery;
+  Result := C;
+end;
+
+{ TDistinctClause }
+
+function TDistinctClause.Clone: TAbstractClause;
+begin
+  Result := TDistinctClause.Create;
 end;
 
 end.

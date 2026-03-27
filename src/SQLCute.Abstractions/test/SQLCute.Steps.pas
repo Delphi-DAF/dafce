@@ -1,8 +1,8 @@
 unit SQLCute.Steps;
 
 {
-  Step bindings for all SQLCute Phase-1 specs.
-  Handles: SELECT.Feat and Where.Feat world construction + assertions.
+  Step bindings for all SQLCute specs (Phase 1 + Phase 2).
+  Handles: SELECT.Feat, Where.Feat and Join.Feat world construction + assertions.
 }
 
 interface
@@ -81,6 +81,49 @@ type
 
     [Given('the Phase-1 acceptance query')]
     procedure GivenAcceptance(W: TSQLCuteWorld);
+
+    // -----------------------------------------------------------------------
+    //  GIVEN — Phase 2 (JOIN, DISTINCT, GROUP BY, UNION, CTE, subquery)
+    // -----------------------------------------------------------------------
+
+    [Given('a query from "(\w+)" inner joined to "(\w+)" on "(.+)"')]
+    procedure GivenInnerJoin(W: TSQLCuteWorld; Table, JoinTable, Cond: string);
+
+    [Given('a query from "(\w+)" joining "(\w+)" on columns "([\w.]+)" and "([\w.]+)"')]
+    procedure GivenInnerJoinCols(W: TSQLCuteWorld; Table, JoinTable, Col1, Col2: string);
+
+    [Given('a query from "(\w+)" left joined to "(\w+)" on "(.+)"')]
+    procedure GivenLeftJoin(W: TSQLCuteWorld; Table, JoinTable, Cond: string);
+
+    [Given('the Phase-2 two-join query')]
+    procedure GivenPhase2TwoJoin(W: TSQLCuteWorld);
+
+    [Given('a distinct query from "(\w+)"')]
+    procedure GivenDistinctFrom(W: TSQLCuteWorld; Table: string);
+
+    [Given('a query from "(\w+)" grouped by "(\w+)"')]
+    procedure GivenGroupBy(W: TSQLCuteWorld; Table, Col: string);
+
+    [Given('the Phase-2 group-having query')]
+    procedure GivenPhase2GroupHaving(W: TSQLCuteWorld);
+
+    [Given('a count query from "(\w+)"')]
+    procedure GivenCountFrom(W: TSQLCuteWorld; Table: string);
+
+    [Given('the Phase-2 union query')]
+    procedure GivenPhase2Union(W: TSQLCuteWorld);
+
+    [Given('the Phase-2 CTE query')]
+    procedure GivenPhase2CTE(W: TSQLCuteWorld);
+
+    [Given('the Phase-2 subquery-from query')]
+    procedure GivenPhase2SubqueryFrom(W: TSQLCuteWorld);
+
+    [Given('the Phase-2 where-exists query')]
+    procedure GivenPhase2WhereExists(W: TSQLCuteWorld);
+
+    [Given('the Phase-2 acceptance query')]
+    procedure GivenPhase2Acceptance(W: TSQLCuteWorld);
 
     // -----------------------------------------------------------------------
     //  WHEN
@@ -229,6 +272,102 @@ begin
     .From('users')
     .Select(['id', 'name'])
     .Where('active', True)
+    .Limit(10);
+end;
+
+// -----------------------------------------------------------------------
+//  GIVEN Phase-2 implementations
+// -----------------------------------------------------------------------
+
+procedure TSQLCuteSteps.GivenInnerJoin(W: TSQLCuteWorld; Table, JoinTable, Cond: string);
+begin
+  W.Query := TQuery.New.From(Table).Join(JoinTable, Cond);
+end;
+
+procedure TSQLCuteSteps.GivenInnerJoinCols(W: TSQLCuteWorld; Table, JoinTable, Col1, Col2: string);
+begin
+  W.Query := TQuery.New.From(Table).Join(JoinTable, Col1, Col2);
+end;
+
+procedure TSQLCuteSteps.GivenLeftJoin(W: TSQLCuteWorld; Table, JoinTable, Cond: string);
+begin
+  W.Query := TQuery.New.From(Table).LeftJoin(JoinTable, Cond);
+end;
+
+procedure TSQLCuteSteps.GivenPhase2TwoJoin(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New
+    .From('orders')
+    .Join('users',    'orders.user_id',    'users.id')
+    .LeftJoin('products', 'orders.product_id', 'products.id');
+end;
+
+procedure TSQLCuteSteps.GivenDistinctFrom(W: TSQLCuteWorld; Table: string);
+begin
+  W.Query := TQuery.New.Distinct.From(Table);
+end;
+
+procedure TSQLCuteSteps.GivenGroupBy(W: TSQLCuteWorld; Table, Col: string);
+begin
+  W.Query := TQuery.New.From(Table).GroupBy(Col);
+end;
+
+procedure TSQLCuteSteps.GivenPhase2GroupHaving(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New
+    .From('orders')
+    .GroupBy('user_id')
+    .Having('COUNT(*)', '>', 3);
+end;
+
+procedure TSQLCuteSteps.GivenCountFrom(W: TSQLCuteWorld; Table: string);
+begin
+  W.Query := TQuery.New.From(Table).SelectCount;
+end;
+
+procedure TSQLCuteSteps.GivenPhase2Union(W: TSQLCuteWorld);
+var
+  Other: IQuery;
+begin
+  Other := TQuery.New.From('archived_users').Select('id');
+  W.Query := TQuery.New.From('active_users').Select('id').Union(Other);
+end;
+
+procedure TSQLCuteSteps.GivenPhase2CTE(W: TSQLCuteWorld);
+var
+  CTEQuery: IQuery;
+begin
+  CTEQuery := TQuery.New.From('orders').Where('created', '>', '2024-01-01');
+  W.Query := TQuery.New.&With('recent', CTEQuery).From('recent');
+end;
+
+procedure TSQLCuteSteps.GivenPhase2SubqueryFrom(W: TSQLCuteWorld);
+var
+  Sub: IQuery;
+begin
+  Sub := TQuery.New.From('users').Select(['id', 'name']);
+  W.Query := TQuery.New.From(Sub, 'u');
+end;
+
+procedure TSQLCuteSteps.GivenPhase2WhereExists(W: TSQLCuteWorld);
+var
+  Sub: IQuery;
+begin
+  Sub := TQuery.New.From('orders').Where('user_id', 42);
+  W.Query := TQuery.New.From('users').WhereExists(Sub);
+end;
+
+procedure TSQLCuteSteps.GivenPhase2Acceptance(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New
+    .From('orders')
+    .Join('users', 'orders.user_id', 'users.id')
+    .Select(['user_id'])
+    .SelectCount('*', 'total')
+    .Where('status', 'active')
+    .GroupBy('user_id')
+    .Having('COUNT(*)', '>', 5)
+    .OrderByDesc('total')
     .Limit(10);
 end;
 

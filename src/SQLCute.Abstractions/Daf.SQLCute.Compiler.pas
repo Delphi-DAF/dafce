@@ -21,6 +21,7 @@ type
   private
     FBindings: TList<Variant>;
     procedure AddBinding(const Value: Variant);
+    function CompileSubQuery(const Query: IQuery): string;
   protected
     function WrapColumn(const Col: string): string; virtual;
     function WrapTable(const Table: string): string; virtual;
@@ -28,10 +29,15 @@ type
     function OperatorSymbol(Op: TWhereOp): string; virtual;
     function CompileSelect(const Clauses: TArray<TAbstractClause>): string; virtual;
     function CompileFrom(const Clauses: TArray<TAbstractClause>): string; virtual;
+    function CompileJoin(const Clauses: TArray<TAbstractClause>): string; virtual;
     function CompileWhere(const Clauses: TArray<TAbstractClause>): string; virtual;
+    function CompileGroupBy(const Clauses: TArray<TAbstractClause>): string; virtual;
+    function CompileHaving(const Clauses: TArray<TAbstractClause>): string; virtual;
     function CompileOrderBy(const Clauses: TArray<TAbstractClause>): string; virtual;
     function CompileLimit(const Clauses: TArray<TAbstractClause>): string; virtual;
     function CompileOffset(const Clauses: TArray<TAbstractClause>): string; virtual;
+    function CompileWith(const Clauses: TArray<TAbstractClause>): string; virtual;
+    function CompileUnion(const Clauses: TArray<TAbstractClause>): string; virtual;
     function AssembleQuery(const Parts: TArray<string>): string; virtual;
   public
     function Compile(const Query: IQuery): TSQLResult;
@@ -87,7 +93,16 @@ var
   Sel: TSelectClause;
   Col: TSelectColumn;
   Expr: string;
+  IsDistinct: Boolean;
 begin
+  IsDistinct := False;
+  for Clause in Clauses do
+    if Clause is TDistinctClause then
+    begin
+      IsDistinct := True;
+      Break;
+    end;
+
   Parts := TList<string>.Create;
   try
     for Clause in Clauses do
@@ -110,11 +125,17 @@ begin
         end;
       end;
 
+    var Prefix: string;
+    if IsDistinct then
+      Prefix := 'SELECT DISTINCT '
+    else
+      Prefix := 'SELECT ';
+
     if Parts.Count = 0 then
-      Result := 'SELECT *'
+      Result := Prefix + '*'
     else
     begin
-      Result := 'SELECT ';
+      Result := Prefix;
       for I := 0 to Parts.Count - 1 do
       begin
         if I > 0 then Result := Result + ', ';
@@ -130,10 +151,19 @@ function TAnsiSqlCompiler.CompileFrom(const Clauses: TArray<TAbstractClause>): s
 var
   Clause: TAbstractClause;
   From: TFromClause;
+  FSQ: TFromSubqueryClause;
   TableExpr: string;
 begin
   Result := '';
   for Clause in Clauses do
+  begin
+    if Clause is TFromSubqueryClause then
+    begin
+      FSQ := TFromSubqueryClause(Clause);
+      Result := 'FROM (' + CompileSubQuery(FSQ.SubQuery) + ') ' + WrapTable(FSQ.Alias);
+      Exit;
+    end;
+
     if Clause is TFromClause then
     begin
       From := TFromClause(Clause);
@@ -146,6 +176,7 @@ begin
       Result := 'FROM ' + TableExpr;
       Exit;
     end;
+  end;
 end;
 
 function TAnsiSqlCompiler.CompileWhere(const Clauses: TArray<TAbstractClause>): string;
@@ -180,6 +211,12 @@ begin
         TWhereOp.IsNotNull:
           Expr := WrapColumn(W.Column) + ' IS NOT NULL';
 
+        TWhereOp.&Exists:
+          Expr := 'EXISTS (' + CompileSubQuery(W.SubQuery as IQuery) + ')';
+
+        TWhereOp.NotExists:
+          Expr := 'NOT EXISTS (' + CompileSubQuery(W.SubQuery as IQuery) + ')';
+
         TWhereOp.&Between:
         begin
           AddBinding(W.Value);
@@ -189,13 +226,19 @@ begin
 
         TWhereOp.&In:
         begin
-          // Value is expected to be a comma-separated string for simplicity in Phase 1.
-          // Phase 2 will support TArray<Variant> sub-queries, etc.
-          Expr := WrapColumn(W.Column) + ' IN (' + VarToStr(W.Value) + ')';
+          if W.SubQuery <> nil then
+            Expr := WrapColumn(W.Column) + ' IN (' + CompileSubQuery(W.SubQuery as IQuery) + ')'
+          else
+            Expr := WrapColumn(W.Column) + ' IN (' + VarToStr(W.Value) + ')';
         end;
 
         TWhereOp.NotIn:
-          Expr := WrapColumn(W.Column) + ' NOT IN (' + VarToStr(W.Value) + ')';
+        begin
+          if W.SubQuery <> nil then
+            Expr := WrapColumn(W.Column) + ' NOT IN (' + CompileSubQuery(W.SubQuery as IQuery) + ')'
+          else
+            Expr := WrapColumn(W.Column) + ' NOT IN (' + VarToStr(W.Value) + ')';
+        end;
 
         TWhereOp.Raw:
           Expr := W.RawSql;
@@ -313,24 +356,260 @@ function TAnsiSqlCompiler.Compile(const Query: IQuery): TSQLResult;
 var
   Clauses: TArray<TAbstractClause>;
   Parts: TArray<string>;
+  WithPart, UnionPart, MainSQL: string;
 begin
   FBindings := TList<Variant>.Create;
   try
     Clauses := Query.Clauses;
 
-    SetLength(Parts, 6);
+    WithPart := CompileWith(Clauses);
+
+    SetLength(Parts, 9);
     Parts[0] := CompileSelect(Clauses);
     Parts[1] := CompileFrom(Clauses);
-    Parts[2] := CompileWhere(Clauses);
-    Parts[3] := CompileOrderBy(Clauses);
-    Parts[4] := CompileLimit(Clauses);
-    Parts[5] := CompileOffset(Clauses);
+    Parts[2] := CompileJoin(Clauses);
+    Parts[3] := CompileWhere(Clauses);
+    Parts[4] := CompileGroupBy(Clauses);
+    Parts[5] := CompileHaving(Clauses);
+    Parts[6] := CompileOrderBy(Clauses);
+    Parts[7] := CompileLimit(Clauses);
+    Parts[8] := CompileOffset(Clauses);
 
-    Result.SQL      := AssembleQuery(Parts);
+    UnionPart := CompileUnion(Clauses);
+    MainSQL   := AssembleQuery(Parts);
+
+    if WithPart <> '' then
+      Result.SQL := WithPart + ' ' + MainSQL
+    else
+      Result.SQL := MainSQL;
+
+    if UnionPart <> '' then
+      Result.SQL := Result.SQL + ' ' + UnionPart;
+
     Result.Bindings := FBindings.ToArray;
   finally
     FBindings.Free;
     FBindings := nil;
+  end;
+end;
+
+// ---------------------------------------------------------------------------
+//  CompileSubQuery — recursive compilation reusing Self.FBindings
+// ---------------------------------------------------------------------------
+
+function TAnsiSqlCompiler.CompileSubQuery(const Query: IQuery): string;
+var
+  Clauses: TArray<TAbstractClause>;
+  Parts: TArray<string>;
+  WithPart, UnionPart: string;
+begin
+  Clauses := Query.Clauses;
+
+  WithPart := CompileWith(Clauses);
+
+  SetLength(Parts, 9);
+  Parts[0] := CompileSelect(Clauses);
+  Parts[1] := CompileFrom(Clauses);
+  Parts[2] := CompileJoin(Clauses);
+  Parts[3] := CompileWhere(Clauses);
+  Parts[4] := CompileGroupBy(Clauses);
+  Parts[5] := CompileHaving(Clauses);
+  Parts[6] := CompileOrderBy(Clauses);
+  Parts[7] := CompileLimit(Clauses);
+  Parts[8] := CompileOffset(Clauses);
+
+  UnionPart := CompileUnion(Clauses);
+  Result    := AssembleQuery(Parts);
+
+  if WithPart <> '' then
+    Result := WithPart + ' ' + Result;
+  if UnionPart <> '' then
+    Result := Result + ' ' + UnionPart;
+end;
+
+// ---------------------------------------------------------------------------
+//  Phase-2 compile methods
+// ---------------------------------------------------------------------------
+
+function TAnsiSqlCompiler.CompileJoin(const Clauses: TArray<TAbstractClause>): string;
+var
+  Sb: TStringBuilder;
+  Clause: TAbstractClause;
+  J: TJoinClause;
+  TableExpr: string;
+begin
+  Sb := TStringBuilder.Create;
+  try
+    for Clause in Clauses do
+    begin
+      if not (Clause is TJoinClause) then Continue;
+      J := TJoinClause(Clause);
+
+      if Sb.Length > 0 then Sb.Append(' ');
+
+      case J.JoinType of
+        TJoinType.Inner:     Sb.Append('INNER JOIN ');
+        TJoinType.Left:      Sb.Append('LEFT JOIN ');
+        TJoinType.Right:     Sb.Append('RIGHT JOIN ');
+        TJoinType.Cross:     Sb.Append('CROSS JOIN ');
+        TJoinType.FullOuter: Sb.Append('FULL OUTER JOIN ');
+      end;
+
+      if J.Schema <> '' then
+        TableExpr := WrapTable(J.Schema) + '.' + WrapTable(J.Table)
+      else
+        TableExpr := WrapTable(J.Table);
+      if J.Alias <> '' then
+        TableExpr := TableExpr + ' AS ' + WrapTable(J.Alias);
+
+      Sb.Append(TableExpr);
+      if J.Condition <> '' then
+        Sb.Append(' ON ' + J.Condition);
+    end;
+    Result := Sb.ToString;
+  finally
+    Sb.Free;
+  end;
+end;
+
+function TAnsiSqlCompiler.CompileGroupBy(const Clauses: TArray<TAbstractClause>): string;
+var
+  Parts: TList<string>;
+  Clause: TAbstractClause;
+  G: TGroupByClause;
+  I: Integer;
+begin
+  Result := '';
+  Parts := TList<string>.Create;
+  try
+    for Clause in Clauses do
+      if Clause is TGroupByClause then
+      begin
+        G := TGroupByClause(Clause);
+        if G.IsRaw then
+          Parts.Add(G.Column)
+        else
+          Parts.Add(WrapColumn(G.Column));
+      end;
+    if Parts.Count > 0 then
+    begin
+      Result := 'GROUP BY ';
+      for I := 0 to Parts.Count - 1 do
+      begin
+        if I > 0 then Result := Result + ', ';
+        Result := Result + Parts[I];
+      end;
+    end;
+  finally
+    Parts.Free;
+  end;
+end;
+
+function TAnsiSqlCompiler.CompileHaving(const Clauses: TArray<TAbstractClause>): string;
+var
+  Sb: TStringBuilder;
+  Clause: TAbstractClause;
+  H: THavingClause;
+  First: Boolean;
+  Expr: string;
+begin
+  Sb := TStringBuilder.Create;
+  try
+    First := True;
+    for Clause in Clauses do
+    begin
+      if not (Clause is THavingClause) then Continue;
+      H := THavingClause(Clause);
+
+      if First then
+        Sb.Append('HAVING ')
+      else
+        case H.Connector of
+          TBoolOp.opAnd: Sb.Append(' AND ');
+          TBoolOp.opOr:  Sb.Append(' OR ');
+        end;
+      First := False;
+
+      case H.Op of
+        TWhereOp.Raw:
+          Expr := H.RawSql;
+        else
+        begin
+          AddBinding(H.Value);
+          // HAVING column is always output verbatim (aggregate expressions like COUNT(*))
+          Expr := H.Column + ' ' + OperatorSymbol(H.Op) + ' ' + ParamPlaceholder;
+        end;
+      end;
+
+      Sb.Append(Expr);
+    end;
+    Result := Sb.ToString;
+  finally
+    Sb.Free;
+  end;
+end;
+
+function TAnsiSqlCompiler.CompileWith(const Clauses: TArray<TAbstractClause>): string;
+var
+  Parts: TList<string>;
+  Clause: TAbstractClause;
+  W: TWithClause;
+  I: Integer;
+  HasRecursive: Boolean;
+begin
+  Result := '';
+  Parts := TList<string>.Create;
+  try
+    HasRecursive := False;
+    for Clause in Clauses do
+      if Clause is TWithClause then
+      begin
+        W := TWithClause(Clause);
+        if W.IsRecursive then HasRecursive := True;
+        Parts.Add(W.Name + ' AS (' + CompileSubQuery(W.SubQuery as IQuery) + ')');
+      end;
+    if Parts.Count > 0 then
+    begin
+      if HasRecursive then
+        Result := 'WITH RECURSIVE '
+      else
+        Result := 'WITH ';
+      for I := 0 to Parts.Count - 1 do
+      begin
+        if I > 0 then Result := Result + ', ';
+        Result := Result + Parts[I];
+      end;
+    end;
+  finally
+    Parts.Free;
+  end;
+end;
+
+function TAnsiSqlCompiler.CompileUnion(const Clauses: TArray<TAbstractClause>): string;
+var
+  Sb: TStringBuilder;
+  Clause: TAbstractClause;
+  U: TUnionClause;
+  SubSQL: string;
+begin
+  Sb := TStringBuilder.Create;
+  try
+    for Clause in Clauses do
+    begin
+      if not (Clause is TUnionClause) then Continue;
+      U := TUnionClause(Clause);
+      SubSQL := CompileSubQuery(U.SubQuery as IQuery);
+      if Sb.Length > 0 then Sb.Append(' ');
+      case U.Kind of
+        TUnionKind.Union:     Sb.Append('UNION ' + SubSQL);
+        TUnionKind.UnionAll:  Sb.Append('UNION ALL ' + SubSQL);
+        TUnionKind.Intersect: Sb.Append('INTERSECT ' + SubSQL);
+        TUnionKind.&Except:   Sb.Append('EXCEPT ' + SubSQL);
+      end;
+    end;
+    Result := Sb.ToString;
+  finally
+    Sb.Free;
   end;
 end;
 

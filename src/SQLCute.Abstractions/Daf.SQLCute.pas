@@ -87,6 +87,63 @@ type
     /// <summary>Sets the OFFSET clause.</summary>
     function Offset(const Value: Int64): IQuery;
 
+    // --- JOIN -----------------------------------------------------------
+
+    function Join(const Table, Col1, Col2: string): IQuery; overload;
+    function Join(const Table, Condition: string): IQuery; overload;
+    function LeftJoin(const Table, Col1, Col2: string): IQuery; overload;
+    function LeftJoin(const Table, Condition: string): IQuery; overload;
+    function RightJoin(const Table, Col1, Col2: string): IQuery; overload;
+    function RightJoin(const Table, Condition: string): IQuery; overload;
+    function CrossJoin(const Table: string): IQuery;
+    function FullOuterJoin(const Table, Col1, Col2: string): IQuery; overload;
+    function FullOuterJoin(const Table, Condition: string): IQuery; overload;
+
+    // --- DISTINCT -------------------------------------------------------
+
+    function Distinct: IQuery;
+
+    // --- FROM (sub-query overload) --------------------------------------
+
+    function From(const SubQuery: IQuery; const Alias: string): IQuery; overload;
+
+    // --- GROUP BY / HAVING ----------------------------------------------
+
+    function GroupBy(const Column: string): IQuery; overload;
+    function GroupBy(const Columns: TArray<string>): IQuery; overload;
+    function GroupByRaw(const Expression: string): IQuery;
+    /// <summary>Adds a HAVING condition. Column may be an aggregate expression.</summary>
+    function Having(const Column, Op: string; const Value: Variant): IQuery;
+    function HavingRaw(const Sql: string): IQuery;
+
+    // --- UNION / INTERSECT / EXCEPT -------------------------------------
+
+    function Union(const Other: IQuery): IQuery;
+    function UnionAll(const Other: IQuery): IQuery;
+    function Intersect(const Other: IQuery): IQuery;
+    function &Except(const Other: IQuery): IQuery;
+
+    // --- WHERE (sub-query variants) -------------------------------------
+
+    function WhereExists(const SubQuery: IQuery): IQuery;
+    function WhereNotExists(const SubQuery: IQuery): IQuery;
+    function WhereInQuery(const Column: string; const SubQuery: IQuery): IQuery;
+
+    // --- SELECT (aliases + aggregates) ----------------------------------
+
+    /// <summary>Adds a column with an explicit alias to the SELECT list.</summary>
+    function SelectAs(const Column, Alias: string): IQuery;
+    function SelectCount(const Column: string = '*'; const Alias: string = 'count'): IQuery;
+    function SelectSum(const Column: string; const Alias: string = 'sum'): IQuery;
+    function SelectAvg(const Column: string; const Alias: string = 'avg'): IQuery;
+    function SelectMin(const Column: string; const Alias: string = 'min'): IQuery;
+    function SelectMax(const Column: string; const Alias: string = 'max'): IQuery;
+
+    // --- WITH (CTE) -----------------------------------------------------
+
+    function &With(const Name: string; const SubQuery: IQuery): IQuery;
+    function WithRecursive(const Name: string; const SubQuery: IQuery): IQuery;
+
     // --- FORK / CLONE ---------------------------------------------------
 
     /// <summary>
@@ -121,6 +178,17 @@ type
   IQueryCompiler = interface
     ['{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}']
     function Compile(const Query: IQuery): TSQLResult;
+  end;
+
+  /// <summary>
+  /// A FROM clause backed by a sub-query instead of a plain table name.
+  /// Declared here (not in Clauses.pas) because it holds an IQuery reference.
+  /// </summary>
+  TFromSubqueryClause = class(TAbstractClause)
+  public
+    SubQuery: IQuery;
+    Alias: string;
+    function Clone: TAbstractClause; override;
   end;
 
   // ---------------------------------------------------------------------------
@@ -158,6 +226,13 @@ type
       const Value: Variant; Conn: TBoolOp; IsNot: Boolean = False): IQuery;
     function AddWhereClause2(const Column: string; Op: TWhereOp;
       const V1, V2: Variant; Conn: TBoolOp): IQuery;
+    function AddJoinClause(JoinType: TJoinType; const Table, Condition: string): IQuery;
+    function AddHavingClause(const Column: string; Op: TWhereOp;
+      const Value: Variant; Conn: TBoolOp): IQuery;
+    function AddUnionClause(Kind: TUnionKind; const Other: IQuery): IQuery;
+    function AddWithClause(const Name: string; const SubQuery: IQuery;
+      IsRecursive: Boolean): IQuery;
+    procedure SelectAggregateRaw(const AggFunc, Column, Alias: string);
   public
     constructor Create;
     destructor Destroy; override;
@@ -184,6 +259,38 @@ type
     function Clone: IQuery;
     function Compile(const Compiler: IQueryCompiler): TSQLResult;
     function Clauses: TArray<TAbstractClause>;
+    // IQuery — Phase 2
+    function Join(const Table, Col1, Col2: string): IQuery; overload;
+    function Join(const Table, Condition: string): IQuery; overload;
+    function LeftJoin(const Table, Col1, Col2: string): IQuery; overload;
+    function LeftJoin(const Table, Condition: string): IQuery; overload;
+    function RightJoin(const Table, Col1, Col2: string): IQuery; overload;
+    function RightJoin(const Table, Condition: string): IQuery; overload;
+    function CrossJoin(const Table: string): IQuery;
+    function FullOuterJoin(const Table, Col1, Col2: string): IQuery; overload;
+    function FullOuterJoin(const Table, Condition: string): IQuery; overload;
+    function Distinct: IQuery;
+    function From(const SubQuery: IQuery; const Alias: string): IQuery; overload;
+    function GroupBy(const Column: string): IQuery; overload;
+    function GroupBy(const Columns: TArray<string>): IQuery; overload;
+    function GroupByRaw(const Expression: string): IQuery;
+    function Having(const Column, Op: string; const Value: Variant): IQuery;
+    function HavingRaw(const Sql: string): IQuery;
+    function Union(const Other: IQuery): IQuery;
+    function UnionAll(const Other: IQuery): IQuery;
+    function Intersect(const Other: IQuery): IQuery;
+    function &Except(const Other: IQuery): IQuery;
+    function WhereExists(const SubQuery: IQuery): IQuery;
+    function WhereNotExists(const SubQuery: IQuery): IQuery;
+    function WhereInQuery(const Column: string; const SubQuery: IQuery): IQuery;
+    function SelectAs(const Column, Alias: string): IQuery;
+    function SelectCount(const Column: string = '*'; const Alias: string = 'count'): IQuery;
+    function SelectSum(const Column: string; const Alias: string = 'sum'): IQuery;
+    function SelectAvg(const Column: string; const Alias: string = 'avg'): IQuery;
+    function SelectMin(const Column: string; const Alias: string = 'min'): IQuery;
+    function SelectMax(const Column: string; const Alias: string = 'max'): IQuery;
+    function &With(const Name: string; const SubQuery: IQuery): IQuery;
+    function WithRecursive(const Name: string; const SubQuery: IQuery): IQuery;
   end;
 
 { TSQLResult }
@@ -192,6 +299,18 @@ class function TSQLResult.Empty: TSQLResult;
 begin
   Result.SQL      := '';
   Result.Bindings := [];
+end;
+
+{ TFromSubqueryClause }
+
+function TFromSubqueryClause.Clone: TAbstractClause;
+var
+  C: TFromSubqueryClause;
+begin
+  C := TFromSubqueryClause.Create;
+  C.SubQuery := SubQuery;
+  C.Alias    := Alias;
+  Result := C;
 end;
 
 { ParseWhereOp }
@@ -496,6 +615,327 @@ end;
 function TQueryImpl.Clauses: TArray<TAbstractClause>;
 begin
   Result := FClauses.ToArray;
+end;
+
+// --- JOIN ---
+
+function TQueryImpl.AddJoinClause(JoinType: TJoinType; const Table, Condition: string): IQuery;
+var
+  J: TJoinClause;
+begin
+  J := TJoinClause.Create;
+  J.JoinType  := JoinType;
+  J.Table     := Table;
+  J.Condition := Condition;
+  FClauses.Add(J);
+  Result := Self;
+end;
+
+function TQueryImpl.Join(const Table, Col1, Col2: string): IQuery;
+begin
+  Result := AddJoinClause(TJoinType.Inner, Table, Col1 + ' = ' + Col2);
+end;
+
+function TQueryImpl.Join(const Table, Condition: string): IQuery;
+begin
+  Result := AddJoinClause(TJoinType.Inner, Table, Condition);
+end;
+
+function TQueryImpl.LeftJoin(const Table, Col1, Col2: string): IQuery;
+begin
+  Result := AddJoinClause(TJoinType.Left, Table, Col1 + ' = ' + Col2);
+end;
+
+function TQueryImpl.LeftJoin(const Table, Condition: string): IQuery;
+begin
+  Result := AddJoinClause(TJoinType.Left, Table, Condition);
+end;
+
+function TQueryImpl.RightJoin(const Table, Col1, Col2: string): IQuery;
+begin
+  Result := AddJoinClause(TJoinType.Right, Table, Col1 + ' = ' + Col2);
+end;
+
+function TQueryImpl.RightJoin(const Table, Condition: string): IQuery;
+begin
+  Result := AddJoinClause(TJoinType.Right, Table, Condition);
+end;
+
+function TQueryImpl.CrossJoin(const Table: string): IQuery;
+begin
+  Result := AddJoinClause(TJoinType.Cross, Table, '');
+end;
+
+function TQueryImpl.FullOuterJoin(const Table, Col1, Col2: string): IQuery;
+begin
+  Result := AddJoinClause(TJoinType.FullOuter, Table, Col1 + ' = ' + Col2);
+end;
+
+function TQueryImpl.FullOuterJoin(const Table, Condition: string): IQuery;
+begin
+  Result := AddJoinClause(TJoinType.FullOuter, Table, Condition);
+end;
+
+// --- DISTINCT ---
+
+function TQueryImpl.Distinct: IQuery;
+begin
+  for var Cl in FClauses do
+    if Cl is TDistinctClause then
+      Exit(Self);
+  FClauses.Add(TDistinctClause.Create);
+  Result := Self;
+end;
+
+// --- FROM (subquery) ---
+
+function TQueryImpl.From(const SubQuery: IQuery; const Alias: string): IQuery;
+var
+  FSQ: TFromSubqueryClause;
+  InsertAt, I: Integer;
+begin
+  for I := FClauses.Count - 1 downto 0 do
+    if (FClauses[I] is TFromClause) or (FClauses[I] is TFromSubqueryClause) then
+      FClauses.Delete(I);
+  FSQ := TFromSubqueryClause.Create;
+  FSQ.SubQuery := SubQuery;
+  FSQ.Alias    := Alias;
+  InsertAt := 0;
+  for I := 0 to FClauses.Count - 1 do
+    if FClauses[I] is TSelectClause then
+    begin
+      InsertAt := I + 1;
+      Break;
+    end;
+  FClauses.Insert(InsertAt, FSQ);
+  Result := Self;
+end;
+
+// --- GROUP BY ---
+
+function TQueryImpl.GroupBy(const Column: string): IQuery;
+var
+  G: TGroupByClause;
+begin
+  G := TGroupByClause.Create;
+  G.Column := Column;
+  G.IsRaw  := False;
+  FClauses.Add(G);
+  Result := Self;
+end;
+
+function TQueryImpl.GroupBy(const Columns: TArray<string>): IQuery;
+var
+  Col: string;
+begin
+  for Col in Columns do
+    GroupBy(Col);
+  Result := Self;
+end;
+
+function TQueryImpl.GroupByRaw(const Expression: string): IQuery;
+var
+  G: TGroupByClause;
+begin
+  G := TGroupByClause.Create;
+  G.Column := Expression;
+  G.IsRaw  := True;
+  FClauses.Add(G);
+  Result := Self;
+end;
+
+// --- HAVING ---
+
+function TQueryImpl.AddHavingClause(const Column: string; Op: TWhereOp;
+  const Value: Variant; Conn: TBoolOp): IQuery;
+var
+  H: THavingClause;
+begin
+  H := THavingClause.Create;
+  H.Column    := Column;
+  H.Op        := Op;
+  H.Value     := Value;
+  H.Connector := Conn;
+  FClauses.Add(H);
+  Result := Self;
+end;
+
+function TQueryImpl.Having(const Column, Op: string; const Value: Variant): IQuery;
+begin
+  Result := AddHavingClause(Column, ParseWhereOp(Op), Value, TBoolOp.opAnd);
+end;
+
+function TQueryImpl.HavingRaw(const Sql: string): IQuery;
+var
+  H: THavingClause;
+begin
+  H := THavingClause.Create;
+  H.Op        := TWhereOp.Raw;
+  H.RawSql    := Sql;
+  H.Connector := TBoolOp.opAnd;
+  FClauses.Add(H);
+  Result := Self;
+end;
+
+// --- UNION / INTERSECT / EXCEPT ---
+
+function TQueryImpl.AddUnionClause(Kind: TUnionKind; const Other: IQuery): IQuery;
+var
+  U: TUnionClause;
+begin
+  U := TUnionClause.Create;
+  U.Kind     := Kind;
+  U.SubQuery := Other;
+  FClauses.Add(U);
+  Result := Self;
+end;
+
+function TQueryImpl.Union(const Other: IQuery): IQuery;
+begin
+  Result := AddUnionClause(TUnionKind.Union, Other);
+end;
+
+function TQueryImpl.UnionAll(const Other: IQuery): IQuery;
+begin
+  Result := AddUnionClause(TUnionKind.UnionAll, Other);
+end;
+
+function TQueryImpl.Intersect(const Other: IQuery): IQuery;
+begin
+  Result := AddUnionClause(TUnionKind.Intersect, Other);
+end;
+
+function TQueryImpl.&Except(const Other: IQuery): IQuery;
+begin
+  Result := AddUnionClause(TUnionKind.&Except, Other);
+end;
+
+// --- WHERE (subquery variants) ---
+
+function TQueryImpl.WhereExists(const SubQuery: IQuery): IQuery;
+var
+  W: TWhereClause;
+begin
+  W := TWhereClause.Create;
+  W.Op        := TWhereOp.&Exists;
+  W.SubQuery  := SubQuery;
+  W.Connector := TBoolOp.opAnd;
+  FClauses.Add(W);
+  Result := Self;
+end;
+
+function TQueryImpl.WhereNotExists(const SubQuery: IQuery): IQuery;
+var
+  W: TWhereClause;
+begin
+  W := TWhereClause.Create;
+  W.Op        := TWhereOp.NotExists;
+  W.SubQuery  := SubQuery;
+  W.Connector := TBoolOp.opAnd;
+  FClauses.Add(W);
+  Result := Self;
+end;
+
+function TQueryImpl.WhereInQuery(const Column: string; const SubQuery: IQuery): IQuery;
+var
+  W: TWhereClause;
+begin
+  W := TWhereClause.Create;
+  W.Column    := Column;
+  W.Op        := TWhereOp.&In;
+  W.SubQuery  := SubQuery;
+  W.Connector := TBoolOp.opAnd;
+  FClauses.Add(W);
+  Result := Self;
+end;
+
+// --- SELECT (aliases + aggregates) ---
+
+procedure TQueryImpl.SelectAggregateRaw(const AggFunc, Column, Alias: string);
+begin
+  SelectRaw(AggFunc + '(' + Column + ') AS ' + Alias);
+end;
+
+function TQueryImpl.SelectAs(const Column, Alias: string): IQuery;
+var
+  Sel: TSelectClause;
+  Col: TSelectColumn;
+  Idx: Integer;
+begin
+  Sel := nil;
+  for var Cl in FClauses do
+    if Cl is TSelectClause then
+    begin
+      Sel := TSelectClause(Cl);
+      Break;
+    end;
+  if Sel = nil then
+  begin
+    Sel := TSelectClause.Create;
+    FClauses.Add(Sel);
+  end;
+  Idx := Length(Sel.Columns);
+  SetLength(Sel.Columns, Idx + 1);
+  Col.Column := Column;
+  Col.Alias  := Alias;
+  Col.IsRaw  := False;
+  Sel.Columns[Idx] := Col;
+  Result := Self;
+end;
+
+function TQueryImpl.SelectCount(const Column: string = '*'; const Alias: string = 'count'): IQuery;
+begin
+  SelectAggregateRaw('COUNT', Column, Alias);
+  Result := Self;
+end;
+
+function TQueryImpl.SelectSum(const Column: string; const Alias: string = 'sum'): IQuery;
+begin
+  SelectAggregateRaw('SUM', Column, Alias);
+  Result := Self;
+end;
+
+function TQueryImpl.SelectAvg(const Column: string; const Alias: string = 'avg'): IQuery;
+begin
+  SelectAggregateRaw('AVG', Column, Alias);
+  Result := Self;
+end;
+
+function TQueryImpl.SelectMin(const Column: string; const Alias: string = 'min'): IQuery;
+begin
+  SelectAggregateRaw('MIN', Column, Alias);
+  Result := Self;
+end;
+
+function TQueryImpl.SelectMax(const Column: string; const Alias: string = 'max'): IQuery;
+begin
+  SelectAggregateRaw('MAX', Column, Alias);
+  Result := Self;
+end;
+
+// --- WITH (CTE) ---
+
+function TQueryImpl.AddWithClause(const Name: string; const SubQuery: IQuery;
+  IsRecursive: Boolean): IQuery;
+var
+  W: TWithClause;
+begin
+  W := TWithClause.Create;
+  W.Name        := Name;
+  W.SubQuery    := SubQuery;
+  W.IsRecursive := IsRecursive;
+  FClauses.Add(W);
+  Result := Self;
+end;
+
+function TQueryImpl.&With(const Name: string; const SubQuery: IQuery): IQuery;
+begin
+  Result := AddWithClause(Name, SubQuery, False);
+end;
+
+function TQueryImpl.WithRecursive(const Name: string; const SubQuery: IQuery): IQuery;
+begin
+  Result := AddWithClause(Name, SubQuery, True);
 end;
 
 { TQuery }
