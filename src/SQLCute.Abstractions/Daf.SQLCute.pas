@@ -358,7 +358,6 @@ begin
   FClauses.Insert(InsertAt, From);
   Result := Self;
 end;
-end;
 
 // --- WHERE ---
 
