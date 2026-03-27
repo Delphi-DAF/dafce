@@ -187,14 +187,41 @@ var
   Sb: TStringBuilder;
   Clause: TAbstractClause;
   W: TWhereClause;
+  WI: TWhereInClause;
   First: Boolean;
-  Expr: string;
+  Expr, Keyword, Placeholders: string;
+  I: Integer;
 begin
   Sb := TStringBuilder.Create;
   try
     First := True;
     for Clause in Clauses do
     begin
+      // --- WHERE IN / NOT IN (value-array variant) ---
+      if Clause is TWhereInClause then
+      begin
+        WI := TWhereInClause(Clause);
+        if First then
+          Sb.Append('WHERE ')
+        else
+          Sb.Append(' ' + WI.Connector + ' ');
+        First := False;
+
+        Placeholders := '';
+        for I := 0 to High(WI.Values) do
+        begin
+          if I > 0 then Placeholders := Placeholders + ', ';
+          AddBinding(WI.Values[I]);
+          Placeholders := Placeholders + ParamPlaceholder;
+        end;
+        if WI.Negated then
+          Keyword := ' NOT IN ('
+        else
+          Keyword := ' IN (';
+        Sb.Append(WrapColumn(WI.Column) + Keyword + Placeholders + ')');
+        Continue;
+      end;
+
       if not (Clause is TWhereClause) then Continue;
       W := TWhereClause(Clause);
 

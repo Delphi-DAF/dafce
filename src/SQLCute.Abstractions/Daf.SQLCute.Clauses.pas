@@ -268,6 +268,19 @@ type
     function Clone: TAbstractClause; override;
   end;
 
+  // ---------------------------------------------------------------------------
+  //  WHERE IN / NOT IN  (one instance per WhereIn/WhereNotIn call)
+  // ---------------------------------------------------------------------------
+
+  TWhereInClause = class(TAbstractClause)
+  public
+    Column:    string;
+    Values:    TArray<Variant>;
+    Negated:   Boolean;   // True = NOT IN
+    Connector: string;    // 'AND' or 'OR'
+    function Clone: TAbstractClause; override;
+  end;
+
 implementation
 
 { TSelectClause }
@@ -468,6 +481,20 @@ end;
 function TDeleteClause.Clone: TAbstractClause;
 begin
   Result := TDeleteClause.Create;
+end;
+
+{ TWhereInClause }
+
+function TWhereInClause.Clone: TAbstractClause;
+var
+  C: TWhereInClause;
+begin
+  C           := TWhereInClause.Create;
+  C.Column    := Column;
+  C.Values    := Copy(Values);
+  C.Negated   := Negated;
+  C.Connector := Connector;
+  Result := C;
 end;
 
 end.

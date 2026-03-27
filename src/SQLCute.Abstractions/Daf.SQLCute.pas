@@ -130,6 +130,17 @@ type
     function WhereNotExists(const SubQuery: IQuery): IQuery;
     function WhereInQuery(const Column: string; const SubQuery: IQuery): IQuery;
 
+    // --- WHERE IN / NOT IN (value-array variants) -----------------------
+
+    /// <summary>Adds WHERE col IN (?, ?, ?) with AND connector.</summary>
+    function WhereIn(const Column: string; const Values: TArray<Variant>): IQuery;
+    /// <summary>Adds WHERE col NOT IN (?, ?, ?) with AND connector.</summary>
+    function WhereNotIn(const Column: string; const Values: TArray<Variant>): IQuery;
+    /// <summary>Adds WHERE col IN (...) with OR connector.</summary>
+    function OrWhereIn(const Column: string; const Values: TArray<Variant>): IQuery;
+    /// <summary>Adds WHERE col NOT IN (...) with OR connector.</summary>
+    function OrWhereNotIn(const Column: string; const Values: TArray<Variant>): IQuery;
+
     // --- SELECT (aliases + aggregates) ----------------------------------
 
     /// <summary>Adds a column with an explicit alias to the SELECT list.</summary>
@@ -297,6 +308,10 @@ type
     function WhereExists(const SubQuery: IQuery): IQuery;
     function WhereNotExists(const SubQuery: IQuery): IQuery;
     function WhereInQuery(const Column: string; const SubQuery: IQuery): IQuery;
+    function WhereIn(const Column: string; const Values: TArray<Variant>): IQuery;
+    function WhereNotIn(const Column: string; const Values: TArray<Variant>): IQuery;
+    function OrWhereIn(const Column: string; const Values: TArray<Variant>): IQuery;
+    function OrWhereNotIn(const Column: string; const Values: TArray<Variant>): IQuery;
     function SelectAs(const Column, Alias: string): IQuery;
     function SelectCount(const Column: string = '*'; const Alias: string = 'count'): IQuery;
     function SelectSum(const Column: string; const Alias: string = 'sum'): IQuery;
@@ -865,6 +880,58 @@ begin
   W.SubQuery  := SubQuery;
   W.Connector := TBoolOp.opAnd;
   FClauses.Add(W);
+  Result := Self;
+end;
+
+function TQueryImpl.WhereIn(const Column: string; const Values: TArray<Variant>): IQuery;
+var
+  C: TWhereInClause;
+begin
+  C           := TWhereInClause.Create;
+  C.Column    := Column;
+  C.Values    := Values;
+  C.Negated   := False;
+  C.Connector := 'AND';
+  FClauses.Add(C);
+  Result := Self;
+end;
+
+function TQueryImpl.WhereNotIn(const Column: string; const Values: TArray<Variant>): IQuery;
+var
+  C: TWhereInClause;
+begin
+  C           := TWhereInClause.Create;
+  C.Column    := Column;
+  C.Values    := Values;
+  C.Negated   := True;
+  C.Connector := 'AND';
+  FClauses.Add(C);
+  Result := Self;
+end;
+
+function TQueryImpl.OrWhereIn(const Column: string; const Values: TArray<Variant>): IQuery;
+var
+  C: TWhereInClause;
+begin
+  C           := TWhereInClause.Create;
+  C.Column    := Column;
+  C.Values    := Values;
+  C.Negated   := False;
+  C.Connector := 'OR';
+  FClauses.Add(C);
+  Result := Self;
+end;
+
+function TQueryImpl.OrWhereNotIn(const Column: string; const Values: TArray<Variant>): IQuery;
+var
+  C: TWhereInClause;
+begin
+  C           := TWhereInClause.Create;
+  C.Column    := Column;
+  C.Values    := Values;
+  C.Negated   := True;
+  C.Connector := 'OR';
+  FClauses.Add(C);
   Result := Self;
 end;
 

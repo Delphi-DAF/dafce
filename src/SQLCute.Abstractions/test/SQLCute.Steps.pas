@@ -154,6 +154,31 @@ type
     procedure GivenPhase3Acceptance(W: TSQLCuteWorld);
 
     // -----------------------------------------------------------------------
+    //  GIVEN — Phase 4 (WhereIn, WhereNotIn, SelectRaw, OrderByRaw)
+    // -----------------------------------------------------------------------
+
+    [Given('the Phase-4 where-in query')]
+    procedure GivenPhase4WhereIn(W: TSQLCuteWorld);
+
+    [Given('the Phase-4 where-in-and-where query')]
+    procedure GivenPhase4WhereInAndWhere(W: TSQLCuteWorld);
+
+    [Given('the Phase-4 where-not-in query')]
+    procedure GivenPhase4WhereNotIn(W: TSQLCuteWorld);
+
+    [Given('the Phase-4 or-where-in query')]
+    procedure GivenPhase4OrWhereIn(W: TSQLCuteWorld);
+
+    [Given('the Phase-4 select-raw query')]
+    procedure GivenPhase4SelectRaw(W: TSQLCuteWorld);
+
+    [Given('the Phase-4 order-by-raw query')]
+    procedure GivenPhase4OrderByRaw(W: TSQLCuteWorld);
+
+    [Given('the Phase-4 acceptance query')]
+    procedure GivenPhase4Acceptance(W: TSQLCuteWorld);
+
+    // -----------------------------------------------------------------------
     //  WHEN
     // -----------------------------------------------------------------------
 
@@ -467,6 +492,65 @@ begin
     .Where('user_id', 5)
     .Where('status', 'pending')
     .AsUpdate(['status', 'updated_at'], ['shipped', '2024-01-15']);
+end;
+
+// -----------------------------------------------------------------------
+//  GIVEN Phase-4 implementations
+// -----------------------------------------------------------------------
+
+procedure TSQLCuteSteps.GivenPhase4WhereIn(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New
+    .From('users')
+    .WhereIn('id', [1, 2, 3]);
+end;
+
+procedure TSQLCuteSteps.GivenPhase4WhereInAndWhere(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New
+    .From('users')
+    .WhereIn('role', ['admin', 'editor'])
+    .Where('active', True);
+end;
+
+procedure TSQLCuteSteps.GivenPhase4WhereNotIn(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New
+    .From('products')
+    .WhereNotIn('status', ['discontinued', 'archived']);
+end;
+
+procedure TSQLCuteSteps.GivenPhase4OrWhereIn(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New
+    .From('users')
+    .Where('active', True)
+    .OrWhereIn('id', [10, 20]);
+end;
+
+procedure TSQLCuteSteps.GivenPhase4SelectRaw(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New
+    .From('users')
+    .Select('id')
+    .SelectRaw('UPPER(name) AS uname');
+end;
+
+procedure TSQLCuteSteps.GivenPhase4OrderByRaw(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New
+    .From('users')
+    .OrderByRaw('FIELD(status, ''active'', ''pending'', ''closed'')');
+end;
+
+procedure TSQLCuteSteps.GivenPhase4Acceptance(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New
+    .From('orders')
+    .Select(['id', 'name'])
+    .WhereIn('status', ['pending', 'shipped'])
+    .WhereNotIn('user_id', [99, 100])
+    .Where('created_at', '>', '2024-01-01');
 end;
 
 // -----------------------------------------------------------------------
