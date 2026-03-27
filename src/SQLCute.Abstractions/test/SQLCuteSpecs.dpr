@@ -11,6 +11,7 @@ uses
   SQLCute.Join.Feat in 'SQLCute.Join.Feat.pas',
   SQLCute.DML.Feat in 'SQLCute.DML.Feat.pas',
   SQLCute.Advanced.Feat in 'SQLCute.Advanced.Feat.pas',
+  SQLCute.Coverage.Feat in 'SQLCute.Coverage.Feat.pas',
   SQLCute.Steps in 'SQLCute.Steps.pas';
 
 begin

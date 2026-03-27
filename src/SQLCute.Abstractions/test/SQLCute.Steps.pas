@@ -179,6 +179,45 @@ type
     procedure GivenPhase4Acceptance(W: TSQLCuteWorld);
 
     // -----------------------------------------------------------------------
+    //  GIVEN — Phase 5 (RightJoin, CrossJoin, FullOuterJoin, UnionAll,
+    //                    Intersect, Except, WhereNotExists, GroupByRaw,
+    //                    HavingRaw, WithRecursive, OrWhereNotIn)
+    // -----------------------------------------------------------------------
+
+    [Given('the Phase-5 right-join query')]
+    procedure GivenPhase5RightJoin(W: TSQLCuteWorld);
+
+    [Given('the Phase-5 cross-join query')]
+    procedure GivenPhase5CrossJoin(W: TSQLCuteWorld);
+
+    [Given('the Phase-5 full-outer-join query')]
+    procedure GivenPhase5FullOuterJoin(W: TSQLCuteWorld);
+
+    [Given('the Phase-5 union-all query')]
+    procedure GivenPhase5UnionAll(W: TSQLCuteWorld);
+
+    [Given('the Phase-5 intersect query')]
+    procedure GivenPhase5Intersect(W: TSQLCuteWorld);
+
+    [Given('the Phase-5 except query')]
+    procedure GivenPhase5Except(W: TSQLCuteWorld);
+
+    [Given('the Phase-5 where-not-exists query')]
+    procedure GivenPhase5WhereNotExists(W: TSQLCuteWorld);
+
+    [Given('the Phase-5 group-by-raw query')]
+    procedure GivenPhase5GroupByRaw(W: TSQLCuteWorld);
+
+    [Given('the Phase-5 having-raw query')]
+    procedure GivenPhase5HavingRaw(W: TSQLCuteWorld);
+
+    [Given('the Phase-5 with-recursive query')]
+    procedure GivenPhase5WithRecursive(W: TSQLCuteWorld);
+
+    [Given('the Phase-5 or-where-not-in query')]
+    procedure GivenPhase5OrWhereNotIn(W: TSQLCuteWorld);
+
+    // -----------------------------------------------------------------------
     //  WHEN
     // -----------------------------------------------------------------------
 
@@ -551,6 +590,95 @@ begin
     .WhereIn('status', ['pending', 'shipped'])
     .WhereNotIn('user_id', [99, 100])
     .Where('created_at', '>', '2024-01-01');
+end;
+
+// -----------------------------------------------------------------------
+//  GIVEN Phase-5 implementations
+// -----------------------------------------------------------------------
+
+procedure TSQLCuteSteps.GivenPhase5RightJoin(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New
+    .From('users')
+    .RightJoin('posts', 'users.id', 'posts.user_id');
+end;
+
+procedure TSQLCuteSteps.GivenPhase5CrossJoin(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New
+    .From('users')
+    .CrossJoin('tags');
+end;
+
+procedure TSQLCuteSteps.GivenPhase5FullOuterJoin(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New
+    .From('users')
+    .FullOuterJoin('logs', 'users.id', 'logs.user_id');
+end;
+
+procedure TSQLCuteSteps.GivenPhase5UnionAll(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New
+    .From('a')
+    .Select('id')
+    .UnionAll(TQuery.New.From('b').Select('id'));
+end;
+
+procedure TSQLCuteSteps.GivenPhase5Intersect(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New
+    .From('a')
+    .Select('id')
+    .Intersect(TQuery.New.From('b').Select('id'));
+end;
+
+procedure TSQLCuteSteps.GivenPhase5Except(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New
+    .From('a')
+    .Select('id')
+    .&Except(TQuery.New.From('b').Select('id'));
+end;
+
+procedure TSQLCuteSteps.GivenPhase5WhereNotExists(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New
+    .From('users')
+    .WhereNotExists(TQuery.New.From('orders').Where('user_id', 99));
+end;
+
+procedure TSQLCuteSteps.GivenPhase5GroupByRaw(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New
+    .From('events')
+    .Select('event')
+    .GroupByRaw('DATE(created_at)');
+end;
+
+procedure TSQLCuteSteps.GivenPhase5HavingRaw(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New
+    .From('orders')
+    .Select('dept_id')
+    .GroupBy('dept_id')
+    .HavingRaw('SUM(total) > 1000');
+end;
+
+procedure TSQLCuteSteps.GivenPhase5WithRecursive(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New
+    .WithRecursive('nums', TQuery.New.From('base').Select('n'))
+    .From('nums')
+    .Select('n');
+end;
+
+procedure TSQLCuteSteps.GivenPhase5OrWhereNotIn(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New
+    .From('users')
+    .Where('active', True)
+    .OrWhereNotIn('status', ['banned', 'deleted']);
 end;
 
 // -----------------------------------------------------------------------
