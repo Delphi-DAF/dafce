@@ -7,69 +7,37 @@ interface
 uses
   System.SysUtils,
   System.Variants,
-  System.Classes,
   System.Generics.Collections,
+  Daf.SQLCute,
   Daf.SQLCute.Clauses;
 
 type
   /// <summary>
-  /// Result produced by a query compiler: the final SQL string plus the
-  /// ordered list of parameter bindings (positional, matching '?' markers).
-  /// </summary>
-  TSQLResult = record
-    SQL: string;
-    Bindings: TArray<Variant>;
-    class function Empty: TSQLResult; static;
-  end;
-
-  // Forward declaration — defined in Daf.SQLCute.pas
-  IQuery = interface;
-
-  /// <summary>
-  /// Strategy interface for compiling an IQuery into dialect-specific SQL.
-  /// Register implementations via DI and inject where queries are executed.
-  /// </summary>
-  IQueryCompiler = interface
-    ['{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}']
-    function Compile(const Query: IQuery): TSQLResult;
-  end;
-
-  /// <summary>
-  /// ANSI SQL compiler — the base implementation that all dialect compilers
-  /// extend. Produces standard SQL with '?' positional parameters.
+  /// ANSI SQL compiler — baseline implementation of IQueryCompiler.
+  /// Produces standard SQL with '?' positional parameters.
+  /// All dialect compilers extend this class and override virtual methods.
   /// </summary>
   TAnsiSqlCompiler = class(TInterfacedObject, IQueryCompiler)
-  protected
+  private
     FBindings: TList<Variant>;
-
     procedure AddBinding(const Value: Variant);
+  protected
     function WrapColumn(const Col: string): string; virtual;
     function WrapTable(const Table: string): string; virtual;
+    function ParamPlaceholder: string; virtual;
     function OperatorSymbol(Op: TWhereOp): string; virtual;
-    function CompileSelect(Clauses: TArray<TAbstractClause>): string; virtual;
-    function CompileFrom(Clauses: TArray<TAbstractClause>): string; virtual;
-    function CompileWhere(Clauses: TArray<TAbstractClause>): string; virtual;
-    function CompileOrderBy(Clauses: TArray<TAbstractClause>): string; virtual;
-    function CompileLimit(Clauses: TArray<TAbstractClause>): string; virtual;
-    function CompileOffset(Clauses: TArray<TAbstractClause>): string; virtual;
+    function CompileSelect(const Clauses: TArray<TAbstractClause>): string; virtual;
+    function CompileFrom(const Clauses: TArray<TAbstractClause>): string; virtual;
+    function CompileWhere(const Clauses: TArray<TAbstractClause>): string; virtual;
+    function CompileOrderBy(const Clauses: TArray<TAbstractClause>): string; virtual;
+    function CompileLimit(const Clauses: TArray<TAbstractClause>): string; virtual;
+    function CompileOffset(const Clauses: TArray<TAbstractClause>): string; virtual;
     function AssembleQuery(const Parts: TArray<string>): string; virtual;
   public
     function Compile(const Query: IQuery): TSQLResult;
   end;
 
 implementation
-
-uses
-  System.StrUtils,
-  Daf.SQLCute;
-
-{ TSQLResult }
-
-class function TSQLResult.Empty: TSQLResult;
-begin
-  Result.SQL      := '';
-  Result.Bindings := [];
-end;
 
 { TAnsiSqlCompiler }
 
@@ -90,6 +58,11 @@ begin
   Result := Table;
 end;
 
+function TAnsiSqlCompiler.ParamPlaceholder: string;
+begin
+  Result := '?';
+end;
+
 function TAnsiSqlCompiler.OperatorSymbol(Op: TWhereOp): string;
 begin
   case Op of
@@ -106,16 +79,16 @@ begin
   end;
 end;
 
-function TAnsiSqlCompiler.CompileSelect(Clauses: TArray<TAbstractClause>): string;
+function TAnsiSqlCompiler.CompileSelect(const Clauses: TArray<TAbstractClause>): string;
 var
-  Parts: TStringList;
+  Parts: TList<string>;
   I: Integer;
   Clause: TAbstractClause;
   Sel: TSelectClause;
   Col: TSelectColumn;
   Expr: string;
 begin
-  Parts := TStringList.Create;
+  Parts := TList<string>.Create;
   try
     for Clause in Clauses do
       if Clause is TSelectClause then
@@ -140,16 +113,20 @@ begin
     if Parts.Count = 0 then
       Result := 'SELECT *'
     else
-      Result := 'SELECT ' + Parts.CommaText;
+    begin
+      Result := 'SELECT ';
+      for I := 0 to Parts.Count - 1 do
+      begin
+        if I > 0 then Result := Result + ', ';
+        Result := Result + Parts[I];
+      end;
+    end;
   finally
     Parts.Free;
   end;
-  // TStringList.CommaText quotes items with spaces — avoid that by using manual join
-  // Re-build without TStringList quoting:
-  if Parts <> nil then ; // parts already freed — result is already set above
 end;
 
-function TAnsiSqlCompiler.CompileFrom(Clauses: TArray<TAbstractClause>): string;
+function TAnsiSqlCompiler.CompileFrom(const Clauses: TArray<TAbstractClause>): string;
 var
   Clause: TAbstractClause;
   From: TFromClause;
@@ -171,7 +148,7 @@ begin
     end;
 end;
 
-function TAnsiSqlCompiler.CompileWhere(Clauses: TArray<TAbstractClause>): string;
+function TAnsiSqlCompiler.CompileWhere(const Clauses: TArray<TAbstractClause>): string;
 var
   Sb: TStringBuilder;
   Clause: TAbstractClause;
@@ -207,7 +184,7 @@ begin
         begin
           AddBinding(W.Value);
           AddBinding(W.Value2);
-          Expr := WrapColumn(W.Column) + ' BETWEEN ? AND ?';
+          Expr := WrapColumn(W.Column) + ' BETWEEN ' + ParamPlaceholder + ' AND ' + ParamPlaceholder;
         end;
 
         TWhereOp.&In:
@@ -226,7 +203,7 @@ begin
         else
         begin
           AddBinding(W.Value);
-          Expr := WrapColumn(W.Column) + ' ' + OperatorSymbol(W.Op) + ' ?';
+          Expr := WrapColumn(W.Column) + ' ' + OperatorSymbol(W.Op) + ' ' + ParamPlaceholder;
         end;
       end;
 
@@ -242,7 +219,7 @@ begin
   end;
 end;
 
-function TAnsiSqlCompiler.CompileOrderBy(Clauses: TArray<TAbstractClause>): string;
+function TAnsiSqlCompiler.CompileOrderBy(const Clauses: TArray<TAbstractClause>): string;
 var
   Parts: TList<string>;
   Clause: TAbstractClause;
@@ -284,7 +261,7 @@ begin
   end;
 end;
 
-function TAnsiSqlCompiler.CompileLimit(Clauses: TArray<TAbstractClause>): string;
+function TAnsiSqlCompiler.CompileLimit(const Clauses: TArray<TAbstractClause>): string;
 var
   Clause: TAbstractClause;
 begin
@@ -297,7 +274,7 @@ begin
     end;
 end;
 
-function TAnsiSqlCompiler.CompileOffset(Clauses: TArray<TAbstractClause>): string;
+function TAnsiSqlCompiler.CompileOffset(const Clauses: TArray<TAbstractClause>): string;
 var
   Clause: TAbstractClause;
 begin
