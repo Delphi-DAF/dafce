@@ -38,6 +38,9 @@ type
     function CompileOffset(const Clauses: TArray<TAbstractClause>): string; virtual;
     function CompileWith(const Clauses: TArray<TAbstractClause>): string; virtual;
     function CompileUnion(const Clauses: TArray<TAbstractClause>): string; virtual;
+    function CompileInsert(const Clauses: TArray<TAbstractClause>): string; virtual;
+    function CompileUpdate(const Clauses: TArray<TAbstractClause>): string; virtual;
+    function CompileDelete(const Clauses: TArray<TAbstractClause>): string; virtual;
     function AssembleQuery(const Parts: TArray<string>): string; virtual;
   public
     function Compile(const Query: IQuery): TSQLResult;
@@ -357,11 +360,36 @@ var
   Clauses: TArray<TAbstractClause>;
   Parts: TArray<string>;
   WithPart, UnionPart, MainSQL: string;
+  Clause: TAbstractClause;
 begin
   FBindings := TList<Variant>.Create;
   try
     Clauses := Query.Clauses;
 
+    // Detect DML query kind first
+    for Clause in Clauses do
+    begin
+      if Clause is TDeleteClause then
+      begin
+        Result.SQL      := CompileDelete(Clauses);
+        Result.Bindings := FBindings.ToArray;
+        Exit;
+      end;
+      if Clause is TUpdateSetClause then
+      begin
+        Result.SQL      := CompileUpdate(Clauses);
+        Result.Bindings := FBindings.ToArray;
+        Exit;
+      end;
+      if Clause is TInsertClause then
+      begin
+        Result.SQL      := CompileInsert(Clauses);
+        Result.Bindings := FBindings.ToArray;
+        Exit;
+      end;
+    end;
+
+    // Default: SELECT
     WithPart := CompileWith(Clauses);
 
     SetLength(Parts, 9);
@@ -611,6 +639,133 @@ begin
   finally
     Sb.Free;
   end;
+end;
+
+// ---------------------------------------------------------------------------
+//  Phase-3 DML compile methods
+// ---------------------------------------------------------------------------
+
+function TAnsiSqlCompiler.CompileInsert(const Clauses: TArray<TAbstractClause>): string;
+var
+  IC: TInsertClause;
+  Clause: TAbstractClause;
+  TableName, ColsStr, RowStr: string;
+  RowsParts: TList<string>;
+  I, J: Integer;
+begin
+  TableName := '';
+  IC        := nil;
+  for Clause in Clauses do
+  begin
+    if (Clause is TFromClause) and (TableName = '') then
+      TableName := WrapTable(TFromClause(Clause).Table);
+    if Clause is TInsertClause then
+      IC := TInsertClause(Clause);
+  end;
+  if IC = nil then Exit('');
+
+  // Build column list
+  ColsStr := '';
+  for I := 0 to High(IC.Columns) do
+  begin
+    if I > 0 then ColsStr := ColsStr + ', ';
+    ColsStr := ColsStr + WrapColumn(IC.Columns[I]);
+  end;
+
+  // INSERT … SELECT
+  if IC.SubQuery <> nil then
+  begin
+    Result := 'INSERT INTO ' + TableName + ' (' + ColsStr + ') '
+            + CompileSubQuery(IC.SubQuery as IQuery);
+    Exit;
+  end;
+
+  // INSERT … VALUES
+  RowsParts := TList<string>.Create;
+  try
+    for I := 0 to High(IC.Rows) do
+    begin
+      RowStr := '(';
+      for J := 0 to High(IC.Rows[I]) do
+      begin
+        if J > 0 then RowStr := RowStr + ', ';
+        AddBinding(IC.Rows[I][J]);
+        RowStr := RowStr + ParamPlaceholder;
+      end;
+      RowsParts.Add(RowStr + ')');
+    end;
+    var RowsStr := '';
+    for I := 0 to RowsParts.Count - 1 do
+    begin
+      if I > 0 then RowsStr := RowsStr + ', ';
+      RowsStr := RowsStr + RowsParts[I];
+    end;
+    Result := 'INSERT INTO ' + TableName + ' (' + ColsStr + ') VALUES ' + RowsStr;
+  finally
+    RowsParts.Free;
+  end;
+end;
+
+function TAnsiSqlCompiler.CompileUpdate(const Clauses: TArray<TAbstractClause>): string;
+var
+  Clause: TAbstractClause;
+  TableName: string;
+  SetParts: TList<string>;
+  US: TUpdateSetClause;
+  WherePart: string;
+  SetStr: string;
+  I: Integer;
+begin
+  TableName := '';
+  for Clause in Clauses do
+    if (Clause is TFromClause) and (TableName = '') then
+      TableName := WrapTable(TFromClause(Clause).Table);
+
+  SetParts := TList<string>.Create;
+  try
+    for Clause in Clauses do
+      if Clause is TUpdateSetClause then
+      begin
+        US := TUpdateSetClause(Clause);
+        if US.IsRaw then
+          SetParts.Add(US.RawSql)
+        else
+        begin
+          AddBinding(US.Value);
+          SetParts.Add(WrapColumn(US.Column) + ' = ' + ParamPlaceholder);
+        end;
+      end;
+
+    SetStr := '';
+    for I := 0 to SetParts.Count - 1 do
+    begin
+      if I > 0 then SetStr := SetStr + ', ';
+      SetStr := SetStr + SetParts[I];
+    end;
+
+    WherePart := CompileWhere(Clauses);
+    Result := 'UPDATE ' + TableName + ' SET ' + SetStr;
+    if WherePart <> '' then
+      Result := Result + ' ' + WherePart;
+  finally
+    SetParts.Free;
+  end;
+end;
+
+function TAnsiSqlCompiler.CompileDelete(const Clauses: TArray<TAbstractClause>): string;
+var
+  Clause: TAbstractClause;
+  TableName, WherePart: string;
+begin
+  TableName := '';
+  for Clause in Clauses do
+    if (Clause is TFromClause) and (TableName = '') then
+      TableName := WrapTable(TFromClause(Clause).Table);
+
+  WherePart := CompileWhere(Clauses);
+  Result := 'DELETE FROM ' + TableName;
+  if WherePart <> '' then
+    Result := Result + ' ' + WherePart;
 end;
 
 end.

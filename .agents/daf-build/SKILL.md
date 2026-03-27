@@ -26,6 +26,10 @@ ssh $RS_CLI_MACHINE
 pushd $RS_CLI_PROJECT_PATH
 ```
 
+> **Unidad de red Z:** — `$RS_CLI_PROJECT_PATH` (normalmente `Z:\...`) es una unidad de red que apunta **físicamente al disco del Mac**.
+> Los cambios en la copia de trabajo de Mac son **inmediatamente visibles** desde Windows, sin necesidad de `git push/pull` ni ningún paso de sincronización.
+> Solo hay que hacer SSH y lanzar el build directamente.
+
 ## Framework (código fuente)
 
 ```bash

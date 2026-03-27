@@ -232,6 +232,42 @@ type
     function Clone: TAbstractClause; override;
   end;
 
+  // ---------------------------------------------------------------------------
+  //  INSERT
+  // ---------------------------------------------------------------------------
+
+  TInsertClause = class(TAbstractClause)
+  public
+    Columns: TArray<string>;
+    /// Each element is one row of VALUES. Empty = use SubQuery mode.
+    Rows: TArray<TArray<Variant>>;
+    /// Sub-query for INSERT … SELECT (IInterface to avoid circular dep with IQuery).
+    SubQuery: IInterface;
+    function Clone: TAbstractClause; override;
+  end;
+
+  // ---------------------------------------------------------------------------
+  //  UPDATE SET  (one instance per column–value assignment)
+  // ---------------------------------------------------------------------------
+
+  TUpdateSetClause = class(TAbstractClause)
+  public
+    Column: string;
+    Value: Variant;
+    IsRaw: Boolean;
+    RawSql: string;
+    function Clone: TAbstractClause; override;
+  end;
+
+  // ---------------------------------------------------------------------------
+  //  DELETE (marker — table comes from TFromClause)
+  // ---------------------------------------------------------------------------
+
+  TDeleteClause = class(TAbstractClause)
+  public
+    function Clone: TAbstractClause; override;
+  end;
+
 implementation
 
 { TSelectClause }
@@ -395,6 +431,43 @@ end;
 function TDistinctClause.Clone: TAbstractClause;
 begin
   Result := TDistinctClause.Create;
+end;
+
+{ TInsertClause }
+
+function TInsertClause.Clone: TAbstractClause;
+var
+  C: TInsertClause;
+  I: Integer;
+begin
+  C := TInsertClause.Create;
+  C.Columns  := Copy(Columns);
+  C.SubQuery := SubQuery;
+  SetLength(C.Rows, Length(Rows));
+  for I := 0 to High(Rows) do
+    C.Rows[I] := Copy(Rows[I]);
+  Result := C;
+end;
+
+{ TUpdateSetClause }
+
+function TUpdateSetClause.Clone: TAbstractClause;
+var
+  C: TUpdateSetClause;
+begin
+  C := TUpdateSetClause.Create;
+  C.Column := Column;
+  C.Value  := Value;
+  C.IsRaw  := IsRaw;
+  C.RawSql := RawSql;
+  Result := C;
+end;
+
+{ TDeleteClause }
+
+function TDeleteClause.Clone: TAbstractClause;
+begin
+  Result := TDeleteClause.Create;
 end;
 
 end.

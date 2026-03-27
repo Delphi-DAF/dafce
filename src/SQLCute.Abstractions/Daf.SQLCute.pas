@@ -7,6 +7,7 @@ interface
 uses
   System.SysUtils,
   System.Variants,
+  System.Math,
   System.Generics.Collections,
   Daf.SQLCute.Clauses;
 
@@ -143,6 +144,19 @@ type
 
     function &With(const Name: string; const SubQuery: IQuery): IQuery;
     function WithRecursive(const Name: string; const SubQuery: IQuery): IQuery;
+
+    // --- DML ------------------------------------------------------------
+
+    /// <summary>Prepares a single-row INSERT. Use From to set the table.</summary>
+    function AsInsert(const Columns: TArray<string>; const Values: TArray<Variant>): IQuery;
+    /// <summary>Prepares a multi-row INSERT.</summary>
+    function AsInsertRows(const Columns: TArray<string>; const Rows: TArray<TArray<Variant>>): IQuery;
+    /// <summary>Prepares an INSERT … SELECT statement.</summary>
+    function AsInsertFrom(const Columns: TArray<string>; const SubQuery: IQuery): IQuery;
+    /// <summary>Prepares an UPDATE SET from parallel column/value arrays.</summary>
+    function AsUpdate(const Columns: TArray<string>; const Values: TArray<Variant>): IQuery;
+    /// <summary>Marks this query as a DELETE statement.</summary>
+    function AsDelete: IQuery;
 
     // --- FORK / CLONE ---------------------------------------------------
 
@@ -291,6 +305,11 @@ type
     function SelectMax(const Column: string; const Alias: string = 'max'): IQuery;
     function &With(const Name: string; const SubQuery: IQuery): IQuery;
     function WithRecursive(const Name: string; const SubQuery: IQuery): IQuery;
+    function AsInsert(const Columns: TArray<string>; const Values: TArray<Variant>): IQuery;
+    function AsInsertRows(const Columns: TArray<string>; const Rows: TArray<TArray<Variant>>): IQuery;
+    function AsInsertFrom(const Columns: TArray<string>; const SubQuery: IQuery): IQuery;
+    function AsUpdate(const Columns: TArray<string>; const Values: TArray<Variant>): IQuery;
+    function AsDelete: IQuery;
   end;
 
 { TSQLResult }
@@ -936,6 +955,64 @@ end;
 function TQueryImpl.WithRecursive(const Name: string; const SubQuery: IQuery): IQuery;
 begin
   Result := AddWithClause(Name, SubQuery, True);
+end;
+
+// --- DML ---
+
+function TQueryImpl.AsInsertRows(const Columns: TArray<string>;
+  const Rows: TArray<TArray<Variant>>): IQuery;
+var
+  IC: TInsertClause;
+begin
+  IC := TInsertClause.Create;
+  IC.Columns := Columns;
+  IC.Rows    := Rows;
+  FClauses.Add(IC);
+  Result := Self;
+end;
+
+function TQueryImpl.AsInsert(const Columns: TArray<string>;
+  const Values: TArray<Variant>): IQuery;
+var
+  Rows: TArray<TArray<Variant>>;
+begin
+  SetLength(Rows, 1);
+  Rows[0] := Values;
+  Result := AsInsertRows(Columns, Rows);
+end;
+
+function TQueryImpl.AsInsertFrom(const Columns: TArray<string>;
+  const SubQuery: IQuery): IQuery;
+var
+  IC: TInsertClause;
+begin
+  IC := TInsertClause.Create;
+  IC.Columns  := Columns;
+  IC.SubQuery := SubQuery;
+  FClauses.Add(IC);
+  Result := Self;
+end;
+
+function TQueryImpl.AsUpdate(const Columns: TArray<string>;
+  const Values: TArray<Variant>): IQuery;
+var
+  I: Integer;
+  US: TUpdateSetClause;
+begin
+  for I := 0 to Min(High(Columns), High(Values)) do
+  begin
+    US := TUpdateSetClause.Create;
+    US.Column := Columns[I];
+    US.Value  := Values[I];
+    FClauses.Add(US);
+  end;
+  Result := Self;
+end;
+
+function TQueryImpl.AsDelete: IQuery;
+begin
+  FClauses.Add(TDeleteClause.Create);
+  Result := Self;
 end;
 
 { TQuery }
