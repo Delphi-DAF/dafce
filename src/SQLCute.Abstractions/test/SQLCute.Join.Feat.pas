@@ -16,7 +16,7 @@ uses
 initialization
 
 Feature('''
-Feature TQuery — JOIN / GROUP BY / set operations / CTE @unit @sqlcute
+TQuery — JOIN / GROUP BY / set operations / CTE @unit @sqlcute
 
   TQuery builds complex SELECT statements via a fluent API.
   These specs cover: all JOIN types, GROUP BY, HAVING, UNION / ALL /

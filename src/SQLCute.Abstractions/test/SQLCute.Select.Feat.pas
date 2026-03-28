@@ -16,7 +16,7 @@ uses
 initialization
 
 Feature('''
-Feature TQuery — SELECT @unit @sqlcute
+TQuery — SELECT @unit @sqlcute
 
   TQuery builds SELECT statements via a fluent API.
   These specs cover: column list, DISTINCT, ORDER BY, LIMIT/OFFSET,

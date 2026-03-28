@@ -16,7 +16,7 @@ uses
 initialization
 
 Feature('''
-Feature TQuery — DML @unit @sqlcute
+TQuery — DML @unit @sqlcute
 
   TQuery builds parameterised INSERT, UPDATE and DELETE statements.
 ''')

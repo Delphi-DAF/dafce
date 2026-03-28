@@ -16,7 +16,7 @@ uses
 initialization
 
 Feature('''
-Feature TQuery — WHERE @unit @sqlcute
+TQuery — WHERE @unit @sqlcute
 
   TQuery builds parameterised WHERE clauses via a fluent API.
   These specs cover all Where* methods, IN / NOT IN lists
