@@ -1,8 +1,8 @@
 unit SQLCute.Join.Feat;
 
 {
-  Feature: Phase-2 SELECT  — JOINs, DISTINCT, GROUP BY/HAVING,
-           aggregates, UNION, CTEs, subqueries, WHERE EXISTS.
+  TQuery: JOIN (all types), GROUP BY, HAVING, set operations,
+          CTE (WITH / WITH RECURSIVE), subqueries.
 }
 
 interface
@@ -16,17 +16,17 @@ uses
 initialization
 
 Feature('''
-Feature Phase-2 SELECT @sqlcute @join @phase2
+Feature TQuery — JOIN / GROUP BY / set operations / CTE @unit @sqlcute
 
-  As a developer
-  I want the full SQLKata-style SELECT capabilities in SQLCute
-  So I can express joins, aggregations, set operations and subqueries
+  TQuery builds complex SELECT statements via a fluent API.
+  These specs cover: all JOIN types, GROUP BY, HAVING, UNION / ALL /
+  INTERSECT / EXCEPT, WITH / WITH RECURSIVE and FROM subqueries.
 ''')
 .UseWorld<TSQLCuteWorld>
 
 // -------------------------------------------------------------------------
 
-.Rule('INNER JOIN connects two tables')
+.Rule('Join (INNER JOIN) connects two tables')
 
   .Scenario('INNER JOIN with raw ON condition')
     .Given('a query from "users" inner joined to "orders" on "users.id = orders.user_id"')
@@ -40,7 +40,7 @@ Feature Phase-2 SELECT @sqlcute @join @phase2
 
 // -------------------------------------------------------------------------
 
-.Rule('LEFT JOIN preserves all rows in the left table')
+.Rule('LeftJoin preserves all rows in the left table')
 
   .Scenario('LEFT JOIN with raw ON condition')
     .Given('a query from "users" left joined to "posts" on "users.id = posts.user_id"')
@@ -49,96 +49,157 @@ Feature Phase-2 SELECT @sqlcute @join @phase2
 
 // -------------------------------------------------------------------------
 
-.Rule('Multiple JOINs are chained in order')
+.Rule('RightJoin preserves all rows in the right table')
+
+  .Scenario('RightJoin with column pair')
+    .Given('a RightJoin query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users RIGHT JOIN posts ON users.id = posts.user_id"')
+    .&Then('has 0 bindings')
+
+// -------------------------------------------------------------------------
+
+.Rule('CrossJoin produces a cartesian product')
+
+  .Scenario('CrossJoin without ON condition')
+    .Given('a CrossJoin query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users CROSS JOIN tags"')
+    .&Then('has 0 bindings')
+
+// -------------------------------------------------------------------------
+
+.Rule('FullOuterJoin combines both outer results')
+
+  .Scenario('FullOuterJoin with column pair')
+    .Given('a FullOuterJoin query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users FULL OUTER JOIN logs ON users.id = logs.user_id"')
+    .&Then('has 0 bindings')
+
+// -------------------------------------------------------------------------
+
+.Rule('Multiple JOINs are chained in declaration order')
 
   .Scenario('Two JOINs in sequence')
-    .Given('the Phase-2 two-join query')
+    .Given('a query with two chained JOINs')
     .When('I compile with ANSI')
     .&Then('SQL is "SELECT * FROM orders INNER JOIN users ON orders.user_id = users.id LEFT JOIN products ON orders.product_id = products.id"')
 
 // -------------------------------------------------------------------------
 
-.Rule('DISTINCT eliminates duplicate rows')
+.Rule('GroupBy aggregates result rows')
 
-  .Scenario('DISTINCT query produces SELECT DISTINCT')
-    .Given('a distinct query from "tags"')
-    .When('I compile with ANSI')
-    .&Then('SQL is "SELECT DISTINCT * FROM tags"')
-
-// -------------------------------------------------------------------------
-
-.Rule('GROUP BY aggregates result rows')
-
-  .Scenario('GROUP BY a single column')
+  .Scenario('GroupBy a single column')
     .Given('a query from "orders" grouped by "status"')
     .When('I compile with ANSI')
     .&Then('SQL is "SELECT * FROM orders GROUP BY status"')
 
+  .Scenario('GroupBy multiple columns')
+    .Given('a multi-column GroupBy query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM sales GROUP BY year, month, dept_id"')
+
 // -------------------------------------------------------------------------
 
-.Rule('HAVING filters aggregated groups')
+.Rule('GroupByRaw passes an expression verbatim into GROUP BY')
 
-  .Scenario('GROUP BY with HAVING using aggregate expression')
-    .Given('the Phase-2 group-having query')
+  .Scenario('GroupByRaw emits the expression unchanged')
+    .Given('a GroupByRaw query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT event FROM events GROUP BY DATE(created_at)"')
+    .&Then('has 0 bindings')
+
+// -------------------------------------------------------------------------
+
+.Rule('Having filters aggregated groups')
+
+  .Scenario('Having with aggregate expression')
+    .Given('a GROUP BY and HAVING query')
     .When('I compile with ANSI')
     .&Then('SQL is "SELECT * FROM orders GROUP BY user_id HAVING COUNT(*) > ?"')
     .&Then('has 1 binding')
 
 // -------------------------------------------------------------------------
 
-.Rule('COUNT aggregate summarises rows')
+.Rule('HavingRaw passes an expression verbatim into HAVING')
 
-  .Scenario('SelectCount adds COUNT(*) AS count to SELECT list')
-    .Given('a count query from "orders"')
+  .Scenario('HavingRaw emits the expression unchanged')
+    .Given('a HavingRaw query')
     .When('I compile with ANSI')
-    .&Then('SQL is "SELECT COUNT(*) AS count FROM orders"')
+    .&Then('SQL is "SELECT dept_id FROM orders GROUP BY dept_id HAVING SUM(total) > 1000"')
+    .&Then('has 0 bindings')
 
 // -------------------------------------------------------------------------
 
-.Rule('UNION combines two result sets')
+.Rule('Union combines two result sets')
 
-  .Scenario('UNION of two queries produces UNION keyword')
-    .Given('the Phase-2 union query')
+  .Scenario('Union produces UNION keyword')
+    .Given('a UNION query')
     .When('I compile with ANSI')
     .&Then('SQL is "SELECT id FROM active_users UNION SELECT id FROM archived_users"')
 
 // -------------------------------------------------------------------------
 
-.Rule('WITH names a common table expression')
+.Rule('UnionAll, Intersect and Except produce their respective set operations')
+
+  .Scenario('UnionAll appends UNION ALL')
+    .Given('a UnionAll query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT id FROM a UNION ALL SELECT id FROM b"')
+    .&Then('has 0 bindings')
+
+  .Scenario('Intersect appends INTERSECT')
+    .Given('an Intersect query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT id FROM a INTERSECT SELECT id FROM b"')
+    .&Then('has 0 bindings')
+
+  .Scenario('Except appends EXCEPT')
+    .Given('an Except query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT id FROM a EXCEPT SELECT id FROM b"')
+    .&Then('has 0 bindings')
+
+// -------------------------------------------------------------------------
+
+.Rule('With names a common table expression')
 
   .Scenario('CTE used as FROM source')
-    .Given('the Phase-2 CTE query')
+    .Given('a CTE query')
     .When('I compile with ANSI')
     .&Then('SQL is "WITH recent AS (SELECT * FROM orders WHERE created > ?) SELECT * FROM recent"')
     .&Then('has 1 binding')
 
 // -------------------------------------------------------------------------
 
-.Rule('FROM (subquery) creates a derived table')
+.Rule('WithRecursive adds the RECURSIVE keyword')
+
+  .Scenario('WithRecursive prepends WITH RECURSIVE')
+    .Given('a WithRecursive query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "WITH RECURSIVE nums AS (SELECT n FROM base) SELECT n FROM nums"')
+    .&Then('has 0 bindings')
+
+// -------------------------------------------------------------------------
+
+.Rule('From (subquery) creates a derived table')
 
   .Scenario('Subquery in FROM with alias')
-    .Given('the Phase-2 subquery-from query')
+    .Given('a FROM subquery query')
     .When('I compile with ANSI')
     .&Then('SQL is "SELECT * FROM (SELECT id, name FROM users) u"')
 
 // -------------------------------------------------------------------------
 
-.Rule('WHERE EXISTS tests sub-query row existence')
-
-  .Scenario('WHERE EXISTS with correlated subquery')
-    .Given('the Phase-2 where-exists query')
-    .When('I compile with ANSI')
-    .&Then('SQL is "SELECT * FROM users WHERE EXISTS (SELECT * FROM orders WHERE user_id = ?)"')
-    .&Then('has 1 binding')
-
-// -------------------------------------------------------------------------
-
-.Rule('Acceptance criterion: full Phase-2 combined query')
+.Rule('Join, GroupBy, Having and OrderBy can be combined in one query')
 
   .Scenario('JOIN + GROUP BY + HAVING + ORDER BY + LIMIT')
-    .Given('the Phase-2 acceptance query')
+    .Given('a combined JOIN GROUP HAVING ORDER LIMIT query')
     .When('I compile with ANSI')
     .&Then('SQL is "SELECT user_id, COUNT(*) AS total FROM orders INNER JOIN users ON orders.user_id = users.id WHERE status = ? GROUP BY user_id HAVING COUNT(*) > ? ORDER BY total DESC LIMIT 10"')
     .&Then('has 2 bindings')
+
+;
 
 end.

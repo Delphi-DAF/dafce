@@ -102,8 +102,6 @@
         <DCCReference Include="SQLCute.Where.Feat.pas"/>
         <DCCReference Include="SQLCute.Join.Feat.pas"/>
         <DCCReference Include="SQLCute.DML.Feat.pas"/>
-        <DCCReference Include="SQLCute.Advanced.Feat.pas"/>
-        <DCCReference Include="SQLCute.Coverage.Feat.pas"/>
         <DCCReference Include="SQLCute.Steps.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

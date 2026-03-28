@@ -1,9 +1,8 @@
 unit SQLCute.Where.Feat;
 
 {
-  Feature: WHERE compilation — Phase 1 scenarios
-  Covers:  equality, comparison operators, IS NULL / IS NOT NULL, AND, OR,
-           BETWEEN, and raw WHERE fragments.
+  TQuery: WHERE conditions — equality, comparison, IS NULL, AND/OR, BETWEEN,
+          raw fragments, IN / NOT IN, EXISTS / NOT EXISTS.
 }
 
 interface
@@ -17,11 +16,11 @@ uses
 initialization
 
 Feature('''
-Feature WHERE conditions @sqlcute @where
+Feature TQuery — WHERE @unit @sqlcute
 
-  As a developer
-  I want to express filter conditions using the fluent API
-  So I can build parameterised, injection-safe WHERE clauses
+  TQuery builds parameterised WHERE clauses via a fluent API.
+  These specs cover all Where* methods, IN / NOT IN lists
+  and EXISTS / NOT EXISTS subquery conditions.
 ''')
 .UseWorld<TSQLCuteWorld>
 
@@ -114,5 +113,71 @@ Feature WHERE conditions @sqlcute @where
     .When('I compile with ANSI')
     .&Then('SQL is "SELECT * FROM logs WHERE severity IN (1, 2, 3)"')
     .&Then('has 0 bindings')
+
+// -------------------------------------------------------------------------
+
+.Rule('WhereIn and WhereNotIn generate IN / NOT IN with positional bindings')
+
+  .Scenario('WhereIn with a list of integers')
+    .Given('a WhereIn query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users WHERE id IN (?, ?, ?)"')
+    .&Then('has 3 bindings')
+
+  .Scenario('WhereIn chained with another WHERE')
+    .Given('a WhereIn combined with WHERE')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users WHERE role IN (?, ?) AND active = ?"')
+    .&Then('has 3 bindings')
+
+  .Scenario('WhereNotIn with a list of strings')
+    .Given('a WhereNotIn query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM products WHERE status NOT IN (?, ?)"')
+    .&Then('has 2 bindings')
+
+// -------------------------------------------------------------------------
+
+.Rule('OrWhereIn and OrWhereNotIn use the OR connector')
+
+  .Scenario('OrWhereIn appends with OR')
+    .Given('an OrWhereIn query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users WHERE active = ? OR id IN (?, ?)"')
+    .&Then('has 3 bindings')
+
+  .Scenario('OrWhereNotIn appends with OR')
+    .Given('an OrWhereNotIn query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users WHERE active = ? OR status NOT IN (?, ?)"')
+    .&Then('has 3 bindings')
+
+// -------------------------------------------------------------------------
+
+.Rule('WhereExists and WhereNotExists test subquery row existence')
+
+  .Scenario('WhereExists produces EXISTS (subquery)')
+    .Given('a WhereExists query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users WHERE EXISTS (SELECT * FROM orders WHERE user_id = ?)"')
+    .&Then('has 1 binding')
+
+  .Scenario('WhereNotExists produces NOT EXISTS (subquery)')
+    .Given('a WhereNotExists query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users WHERE NOT EXISTS (SELECT * FROM orders WHERE user_id = ?)"')
+    .&Then('has 1 binding')
+
+// -------------------------------------------------------------------------
+
+.Rule('WhereIn, WhereNotIn and Where can be combined in one query')
+
+  .Scenario('Combined WhereIn, WhereNotIn and WHERE')
+    .Given('a combined WhereIn WhereNotIn and WHERE query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT id, name FROM orders WHERE status IN (?, ?) AND user_id NOT IN (?, ?) AND created_at > ?"')
+    .&Then('has 5 bindings')
+
+;
 
 end.

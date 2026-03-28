@@ -1,7 +1,8 @@
 unit SQLCute.DML.Feat;
 
 {
-  Feature: Phase-3 DML — INSERT / UPDATE / DELETE
+  TQuery: DML — INSERT (single row, multi-row, INSERT FROM SELECT),
+          UPDATE, DELETE.
 }
 
 interface
@@ -15,63 +16,61 @@ uses
 initialization
 
 Feature('''
-Feature Phase-3 DML @sqlcute @dml @phase3
+Feature TQuery — DML @unit @sqlcute
 
-  As a developer
-  I want SQLCute to generate INSERT, UPDATE and DELETE statements
-  So I can use one query builder for all DML operations
+  TQuery builds parameterised INSERT, UPDATE and DELETE statements.
 ''')
 .UseWorld<TSQLCuteWorld>
 
 // -------------------------------------------------------------------------
 
-.Rule('INSERT adds a single row')
+.Rule('AsInsert adds a single row')
 
   .Scenario('Single-row INSERT')
-    .Given('the Phase-3 insert-single query')
+    .Given('a single-row INSERT query')
     .When('I compile with ANSI')
     .&Then('SQL is "INSERT INTO users (name, email) VALUES (?, ?)"')
     .&Then('has 2 bindings')
 
 // -------------------------------------------------------------------------
 
-.Rule('INSERT can add multiple rows in one statement')
+.Rule('AsInsertRows adds multiple rows in one statement')
 
   .Scenario('Multi-row INSERT')
-    .Given('the Phase-3 insert-multi query')
+    .Given('a multi-row INSERT query')
     .When('I compile with ANSI')
     .&Then('SQL is "INSERT INTO logs (level, msg) VALUES (?, ?), (?, ?)"')
     .&Then('has 4 bindings')
 
 // -------------------------------------------------------------------------
 
-.Rule('INSERT ... SELECT inserts from a sub-query result')
+.Rule('AsInsertFrom inserts from a subquery result')
 
   .Scenario('INSERT FROM SELECT')
-    .Given('the Phase-3 insert-select query')
+    .Given('an INSERT FROM SELECT query')
     .When('I compile with ANSI')
     .&Then('SQL is "INSERT INTO archive (id, name) SELECT id, name FROM users WHERE active = ?"')
     .&Then('has 1 binding')
 
 // -------------------------------------------------------------------------
 
-.Rule('UPDATE modifies existing rows')
+.Rule('AsUpdate modifies existing rows')
 
   .Scenario('UPDATE a single column')
-    .Given('the Phase-3 update-single query')
+    .Given('an UPDATE single-column query')
     .When('I compile with ANSI')
     .&Then('SQL is "UPDATE users SET status = ? WHERE id = ?"')
     .&Then('has 2 bindings')
 
   .Scenario('UPDATE multiple columns')
-    .Given('the Phase-3 update-multi query')
+    .Given('an UPDATE multi-column query')
     .When('I compile with ANSI')
     .&Then('SQL is "UPDATE users SET name = ?, email = ? WHERE id = ?"')
     .&Then('has 3 bindings')
 
 // -------------------------------------------------------------------------
 
-.Rule('DELETE removes rows matching a condition')
+.Rule('AsDelete removes rows matching a condition')
 
   .Scenario('DELETE with WHERE')
     .Given('a query deleting from "users" where "id" = 42')
@@ -87,10 +86,10 @@ Feature Phase-3 DML @sqlcute @dml @phase3
 
 // -------------------------------------------------------------------------
 
-.Rule('Acceptance criterion: full Phase-3 UPDATE flow')
+.Rule('AsInsert, AsUpdate and AsDelete can be combined with multiple conditions')
 
   .Scenario('UPDATE with multiple SET columns and multiple WHERE conditions')
-    .Given('the Phase-3 acceptance query')
+    .Given('an UPDATE with multiple columns and conditions')
     .When('I compile with ANSI')
     .&Then('SQL is "UPDATE orders SET status = ?, updated_at = ? WHERE user_id = ? AND status = ?"')
     .&Then('has 4 bindings')

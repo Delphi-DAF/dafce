@@ -1,8 +1,8 @@
 unit SQLCute.Steps;
 
 {
-  Step bindings for all SQLCute specs (Phase 1 + Phase 2).
-  Handles: SELECT.Feat, Where.Feat and Join.Feat world construction + assertions.
+  Step bindings for all SQLCute unit specs.
+  Handles world construction and compilation for all SQLCute feature files.
 }
 
 interface
@@ -79,11 +79,11 @@ type
     [Given('a query from "(\w+)" with raw where "(.+)"')]
     procedure GivenFromWhereRaw(W: TSQLCuteWorld; Table, RawSql: string);
 
-    [Given('the Phase-1 acceptance query')]
-    procedure GivenAcceptance(W: TSQLCuteWorld);
+    [Given('a combined SELECT WHERE LIMIT query')]
+    procedure GivenCombinedSelectWhereLimitQuery(W: TSQLCuteWorld);
 
     // -----------------------------------------------------------------------
-    //  GIVEN — Phase 2 (JOIN, DISTINCT, GROUP BY, UNION, CTE, subquery)
+    //  GIVEN — JOINs, GROUP BY, set operations, CTEs, subqueries
     // -----------------------------------------------------------------------
 
     [Given('a query from "(\w+)" inner joined to "(\w+)" on "(.+)"')]
@@ -95,8 +95,8 @@ type
     [Given('a query from "(\w+)" left joined to "(\w+)" on "(.+)"')]
     procedure GivenLeftJoin(W: TSQLCuteWorld; Table, JoinTable, Cond: string);
 
-    [Given('the Phase-2 two-join query')]
-    procedure GivenPhase2TwoJoin(W: TSQLCuteWorld);
+    [Given('a query with two chained JOINs')]
+    procedure GivenTwoChainedJoins(W: TSQLCuteWorld);
 
     [Given('a distinct query from "(\w+)"')]
     procedure GivenDistinctFrom(W: TSQLCuteWorld; Table: string);
@@ -104,45 +104,45 @@ type
     [Given('a query from "(\w+)" grouped by "(\w+)"')]
     procedure GivenGroupBy(W: TSQLCuteWorld; Table, Col: string);
 
-    [Given('the Phase-2 group-having query')]
-    procedure GivenPhase2GroupHaving(W: TSQLCuteWorld);
+    [Given('a GROUP BY and HAVING query')]
+    procedure GivenGroupByAndHaving(W: TSQLCuteWorld);
 
     [Given('a count query from "(\w+)"')]
     procedure GivenCountFrom(W: TSQLCuteWorld; Table: string);
 
-    [Given('the Phase-2 union query')]
-    procedure GivenPhase2Union(W: TSQLCuteWorld);
+    [Given('a UNION query')]
+    procedure GivenUnionQuery(W: TSQLCuteWorld);
 
-    [Given('the Phase-2 CTE query')]
-    procedure GivenPhase2CTE(W: TSQLCuteWorld);
+    [Given('a CTE query')]
+    procedure GivenCTEQuery(W: TSQLCuteWorld);
 
-    [Given('the Phase-2 subquery-from query')]
-    procedure GivenPhase2SubqueryFrom(W: TSQLCuteWorld);
+    [Given('a FROM subquery query')]
+    procedure GivenFromSubquery(W: TSQLCuteWorld);
 
-    [Given('the Phase-2 where-exists query')]
-    procedure GivenPhase2WhereExists(W: TSQLCuteWorld);
+    [Given('a WhereExists query')]
+    procedure GivenWhereExists(W: TSQLCuteWorld);
 
-    [Given('the Phase-2 acceptance query')]
-    procedure GivenPhase2Acceptance(W: TSQLCuteWorld);
+    [Given('a combined JOIN GROUP HAVING ORDER LIMIT query')]
+    procedure GivenCombinedJoinGroupQuery(W: TSQLCuteWorld);
 
     // -----------------------------------------------------------------------
-    //  GIVEN — Phase 3 (INSERT, UPDATE, DELETE)
+    //  GIVEN — DML (INSERT, UPDATE, DELETE)
     // -----------------------------------------------------------------------
 
-    [Given('the Phase-3 insert-single query')]
-    procedure GivenPhase3InsertSingle(W: TSQLCuteWorld);
+    [Given('a single-row INSERT query')]
+    procedure GivenInsertSingleRow(W: TSQLCuteWorld);
 
-    [Given('the Phase-3 insert-multi query')]
-    procedure GivenPhase3InsertMulti(W: TSQLCuteWorld);
+    [Given('a multi-row INSERT query')]
+    procedure GivenInsertMultiRow(W: TSQLCuteWorld);
 
-    [Given('the Phase-3 insert-select query')]
-    procedure GivenPhase3InsertSelect(W: TSQLCuteWorld);
+    [Given('an INSERT FROM SELECT query')]
+    procedure GivenInsertFromSelect(W: TSQLCuteWorld);
 
-    [Given('the Phase-3 update-single query')]
-    procedure GivenPhase3UpdateSingle(W: TSQLCuteWorld);
+    [Given('an UPDATE single-column query')]
+    procedure GivenUpdateSingleCol(W: TSQLCuteWorld);
 
-    [Given('the Phase-3 update-multi query')]
-    procedure GivenPhase3UpdateMulti(W: TSQLCuteWorld);
+    [Given('an UPDATE multi-column query')]
+    procedure GivenUpdateMultiCol(W: TSQLCuteWorld);
 
     [Given('a query deleting from "(\w+)" where "(\w+)" = (\d+)')]
     procedure GivenDeleteFromWhere(W: TSQLCuteWorld; Table, Col: string; Val: Integer);
@@ -150,72 +150,75 @@ type
     [Given('a query deleting all from "(\w+)"')]
     procedure GivenDeleteAll(W: TSQLCuteWorld; Table: string);
 
-    [Given('the Phase-3 acceptance query')]
-    procedure GivenPhase3Acceptance(W: TSQLCuteWorld);
+    [Given('an UPDATE with multiple columns and conditions')]
+    procedure GivenUpdateMultipleColsAndConditions(W: TSQLCuteWorld);
 
     // -----------------------------------------------------------------------
-    //  GIVEN — Phase 4 (WhereIn, WhereNotIn, SelectRaw, OrderByRaw)
+    //  GIVEN — WhereIn / WhereNotIn / OrWhereIn / OrWhereNotIn / SelectRaw / OrderByRaw
     // -----------------------------------------------------------------------
 
-    [Given('the Phase-4 where-in query')]
-    procedure GivenPhase4WhereIn(W: TSQLCuteWorld);
+    [Given('a WhereIn query')]
+    procedure GivenWhereIn(W: TSQLCuteWorld);
 
-    [Given('the Phase-4 where-in-and-where query')]
-    procedure GivenPhase4WhereInAndWhere(W: TSQLCuteWorld);
+    [Given('a WhereIn combined with WHERE')]
+    procedure GivenWhereInAndWhere(W: TSQLCuteWorld);
 
-    [Given('the Phase-4 where-not-in query')]
-    procedure GivenPhase4WhereNotIn(W: TSQLCuteWorld);
+    [Given('a WhereNotIn query')]
+    procedure GivenWhereNotIn(W: TSQLCuteWorld);
 
-    [Given('the Phase-4 or-where-in query')]
-    procedure GivenPhase4OrWhereIn(W: TSQLCuteWorld);
+    [Given('an OrWhereIn query')]
+    procedure GivenOrWhereIn(W: TSQLCuteWorld);
 
-    [Given('the Phase-4 select-raw query')]
-    procedure GivenPhase4SelectRaw(W: TSQLCuteWorld);
+    [Given('a SelectRaw query')]
+    procedure GivenSelectRaw(W: TSQLCuteWorld);
 
-    [Given('the Phase-4 order-by-raw query')]
-    procedure GivenPhase4OrderByRaw(W: TSQLCuteWorld);
+    [Given('an OrderByRaw query')]
+    procedure GivenOrderByRaw(W: TSQLCuteWorld);
 
-    [Given('the Phase-4 acceptance query')]
-    procedure GivenPhase4Acceptance(W: TSQLCuteWorld);
+    [Given('a combined WhereIn WhereNotIn and WHERE query')]
+    procedure GivenCombinedWhereInQuery(W: TSQLCuteWorld);
 
     // -----------------------------------------------------------------------
-    //  GIVEN — Phase 5 (RightJoin, CrossJoin, FullOuterJoin, UnionAll,
-    //                    Intersect, Except, WhereNotExists, GroupByRaw,
-    //                    HavingRaw, WithRecursive, OrWhereNotIn)
+    //  GIVEN — RightJoin / CrossJoin / FullOuterJoin / UnionAll / Intersect /
+    //          Except / WhereNotExists / GroupByRaw / HavingRaw / WithRecursive /
+    //          OrWhereNotIn / GroupBy (multi-column)
     // -----------------------------------------------------------------------
 
-    [Given('the Phase-5 right-join query')]
-    procedure GivenPhase5RightJoin(W: TSQLCuteWorld);
+    [Given('a RightJoin query')]
+    procedure GivenRightJoin(W: TSQLCuteWorld);
 
-    [Given('the Phase-5 cross-join query')]
-    procedure GivenPhase5CrossJoin(W: TSQLCuteWorld);
+    [Given('a CrossJoin query')]
+    procedure GivenCrossJoin(W: TSQLCuteWorld);
 
-    [Given('the Phase-5 full-outer-join query')]
-    procedure GivenPhase5FullOuterJoin(W: TSQLCuteWorld);
+    [Given('a FullOuterJoin query')]
+    procedure GivenFullOuterJoin(W: TSQLCuteWorld);
 
-    [Given('the Phase-5 union-all query')]
-    procedure GivenPhase5UnionAll(W: TSQLCuteWorld);
+    [Given('a UnionAll query')]
+    procedure GivenUnionAll(W: TSQLCuteWorld);
 
-    [Given('the Phase-5 intersect query')]
-    procedure GivenPhase5Intersect(W: TSQLCuteWorld);
+    [Given('an Intersect query')]
+    procedure GivenIntersect(W: TSQLCuteWorld);
 
-    [Given('the Phase-5 except query')]
-    procedure GivenPhase5Except(W: TSQLCuteWorld);
+    [Given('an Except query')]
+    procedure GivenExcept(W: TSQLCuteWorld);
 
-    [Given('the Phase-5 where-not-exists query')]
-    procedure GivenPhase5WhereNotExists(W: TSQLCuteWorld);
+    [Given('a WhereNotExists query')]
+    procedure GivenWhereNotExists(W: TSQLCuteWorld);
 
-    [Given('the Phase-5 group-by-raw query')]
-    procedure GivenPhase5GroupByRaw(W: TSQLCuteWorld);
+    [Given('a GroupByRaw query')]
+    procedure GivenGroupByRaw(W: TSQLCuteWorld);
 
-    [Given('the Phase-5 having-raw query')]
-    procedure GivenPhase5HavingRaw(W: TSQLCuteWorld);
+    [Given('a HavingRaw query')]
+    procedure GivenHavingRaw(W: TSQLCuteWorld);
 
-    [Given('the Phase-5 with-recursive query')]
-    procedure GivenPhase5WithRecursive(W: TSQLCuteWorld);
+    [Given('a WithRecursive query')]
+    procedure GivenWithRecursive(W: TSQLCuteWorld);
 
-    [Given('the Phase-5 or-where-not-in query')]
-    procedure GivenPhase5OrWhereNotIn(W: TSQLCuteWorld);
+    [Given('an OrWhereNotIn query')]
+    procedure GivenOrWhereNotIn(W: TSQLCuteWorld);
+
+    [Given('a multi-column GroupBy query')]
+    procedure GivenGroupByMultiColumn(W: TSQLCuteWorld);
 
     // -----------------------------------------------------------------------
     //  WHEN
@@ -357,9 +360,8 @@ begin
   W.Query := TQuery.New.From(Table).WhereRaw(RawSql);
 end;
 
-procedure TSQLCuteSteps.GivenAcceptance(W: TSQLCuteWorld);
+procedure TSQLCuteSteps.GivenCombinedSelectWhereLimitQuery(W: TSQLCuteWorld);
 begin
-  // Acceptance criterion: SELECT id, name FROM users WHERE active = ? LIMIT 10
   W.Query := TQuery.New
     .From('users')
     .Select(['id', 'name'])
@@ -368,7 +370,7 @@ begin
 end;
 
 // -----------------------------------------------------------------------
-//  GIVEN Phase-2 implementations
+//  GIVEN: JOINs, GROUP BY, set operations, CTEs, subqueries
 // -----------------------------------------------------------------------
 
 procedure TSQLCuteSteps.GivenInnerJoin(W: TSQLCuteWorld; Table, JoinTable, Cond: string);
@@ -386,7 +388,7 @@ begin
   W.Query := TQuery.New.From(Table).LeftJoin(JoinTable, Cond);
 end;
 
-procedure TSQLCuteSteps.GivenPhase2TwoJoin(W: TSQLCuteWorld);
+procedure TSQLCuteSteps.GivenTwoChainedJoins(W: TSQLCuteWorld);
 begin
   W.Query := TQuery.New
     .From('orders')
@@ -404,7 +406,7 @@ begin
   W.Query := TQuery.New.From(Table).GroupBy(Col);
 end;
 
-procedure TSQLCuteSteps.GivenPhase2GroupHaving(W: TSQLCuteWorld);
+procedure TSQLCuteSteps.GivenGroupByAndHaving(W: TSQLCuteWorld);
 begin
   W.Query := TQuery.New
     .From('orders')
@@ -417,7 +419,7 @@ begin
   W.Query := TQuery.New.From(Table).SelectCount;
 end;
 
-procedure TSQLCuteSteps.GivenPhase2Union(W: TSQLCuteWorld);
+procedure TSQLCuteSteps.GivenUnionQuery(W: TSQLCuteWorld);
 var
   Other: IQuery;
 begin
@@ -425,7 +427,7 @@ begin
   W.Query := TQuery.New.From('active_users').Select('id').Union(Other);
 end;
 
-procedure TSQLCuteSteps.GivenPhase2CTE(W: TSQLCuteWorld);
+procedure TSQLCuteSteps.GivenCTEQuery(W: TSQLCuteWorld);
 var
   CTEQuery: IQuery;
 begin
@@ -433,7 +435,7 @@ begin
   W.Query := TQuery.New.&With('recent', CTEQuery).From('recent');
 end;
 
-procedure TSQLCuteSteps.GivenPhase2SubqueryFrom(W: TSQLCuteWorld);
+procedure TSQLCuteSteps.GivenFromSubquery(W: TSQLCuteWorld);
 var
   Sub: IQuery;
 begin
@@ -441,7 +443,7 @@ begin
   W.Query := TQuery.New.From(Sub, 'u');
 end;
 
-procedure TSQLCuteSteps.GivenPhase2WhereExists(W: TSQLCuteWorld);
+procedure TSQLCuteSteps.GivenWhereExists(W: TSQLCuteWorld);
 var
   Sub: IQuery;
 begin
@@ -449,7 +451,7 @@ begin
   W.Query := TQuery.New.From('users').WhereExists(Sub);
 end;
 
-procedure TSQLCuteSteps.GivenPhase2Acceptance(W: TSQLCuteWorld);
+procedure TSQLCuteSteps.GivenCombinedJoinGroupQuery(W: TSQLCuteWorld);
 begin
   W.Query := TQuery.New
     .From('orders')
@@ -464,17 +466,17 @@ begin
 end;
 
 // -----------------------------------------------------------------------
-//  GIVEN Phase-3 implementations
+//  GIVEN: DML
 // -----------------------------------------------------------------------
 
-procedure TSQLCuteSteps.GivenPhase3InsertSingle(W: TSQLCuteWorld);
+procedure TSQLCuteSteps.GivenInsertSingleRow(W: TSQLCuteWorld);
 begin
   W.Query := TQuery.New
     .From('users')
     .AsInsert(['name', 'email'], ['John Doe', 'john@example.com']);
 end;
 
-procedure TSQLCuteSteps.GivenPhase3InsertMulti(W: TSQLCuteWorld);
+procedure TSQLCuteSteps.GivenInsertMultiRow(W: TSQLCuteWorld);
 var
   R1, R2: TArray<Variant>;
   Rows: TArray<TArray<Variant>>;
@@ -487,7 +489,7 @@ begin
     .AsInsertRows(['level', 'msg'], Rows);
 end;
 
-procedure TSQLCuteSteps.GivenPhase3InsertSelect(W: TSQLCuteWorld);
+procedure TSQLCuteSteps.GivenInsertFromSelect(W: TSQLCuteWorld);
 var
   Sub: IQuery;
 begin
@@ -497,7 +499,7 @@ begin
     .AsInsertFrom(['id', 'name'], Sub);
 end;
 
-procedure TSQLCuteSteps.GivenPhase3UpdateSingle(W: TSQLCuteWorld);
+procedure TSQLCuteSteps.GivenUpdateSingleCol(W: TSQLCuteWorld);
 begin
   W.Query := TQuery.New
     .From('users')
@@ -505,7 +507,7 @@ begin
     .AsUpdate(['status'], ['inactive']);
 end;
 
-procedure TSQLCuteSteps.GivenPhase3UpdateMulti(W: TSQLCuteWorld);
+procedure TSQLCuteSteps.GivenUpdateMultiCol(W: TSQLCuteWorld);
 begin
   W.Query := TQuery.New
     .From('users')
@@ -524,7 +526,7 @@ begin
   W.Query := TQuery.New.From(Table).AsDelete;
 end;
 
-procedure TSQLCuteSteps.GivenPhase3Acceptance(W: TSQLCuteWorld);
+procedure TSQLCuteSteps.GivenUpdateMultipleColsAndConditions(W: TSQLCuteWorld);
 begin
   W.Query := TQuery.New
     .From('orders')
@@ -534,17 +536,17 @@ begin
 end;
 
 // -----------------------------------------------------------------------
-//  GIVEN Phase-4 implementations
+//  GIVEN: WhereIn / WhereNotIn / OrWhereIn / OrWhereNotIn / SelectRaw / OrderByRaw
 // -----------------------------------------------------------------------
 
-procedure TSQLCuteSteps.GivenPhase4WhereIn(W: TSQLCuteWorld);
+procedure TSQLCuteSteps.GivenWhereIn(W: TSQLCuteWorld);
 begin
   W.Query := TQuery.New
     .From('users')
     .WhereIn('id', [1, 2, 3]);
 end;
 
-procedure TSQLCuteSteps.GivenPhase4WhereInAndWhere(W: TSQLCuteWorld);
+procedure TSQLCuteSteps.GivenWhereInAndWhere(W: TSQLCuteWorld);
 begin
   W.Query := TQuery.New
     .From('users')
@@ -552,14 +554,14 @@ begin
     .Where('active', True);
 end;
 
-procedure TSQLCuteSteps.GivenPhase4WhereNotIn(W: TSQLCuteWorld);
+procedure TSQLCuteSteps.GivenWhereNotIn(W: TSQLCuteWorld);
 begin
   W.Query := TQuery.New
     .From('products')
     .WhereNotIn('status', ['discontinued', 'archived']);
 end;
 
-procedure TSQLCuteSteps.GivenPhase4OrWhereIn(W: TSQLCuteWorld);
+procedure TSQLCuteSteps.GivenOrWhereIn(W: TSQLCuteWorld);
 begin
   W.Query := TQuery.New
     .From('users')
@@ -567,7 +569,7 @@ begin
     .OrWhereIn('id', [10, 20]);
 end;
 
-procedure TSQLCuteSteps.GivenPhase4SelectRaw(W: TSQLCuteWorld);
+procedure TSQLCuteSteps.GivenSelectRaw(W: TSQLCuteWorld);
 begin
   W.Query := TQuery.New
     .From('users')
@@ -575,14 +577,14 @@ begin
     .SelectRaw('UPPER(name) AS uname');
 end;
 
-procedure TSQLCuteSteps.GivenPhase4OrderByRaw(W: TSQLCuteWorld);
+procedure TSQLCuteSteps.GivenOrderByRaw(W: TSQLCuteWorld);
 begin
   W.Query := TQuery.New
     .From('users')
     .OrderByRaw('FIELD(status, ''active'', ''pending'', ''closed'')');
 end;
 
-procedure TSQLCuteSteps.GivenPhase4Acceptance(W: TSQLCuteWorld);
+procedure TSQLCuteSteps.GivenCombinedWhereInQuery(W: TSQLCuteWorld);
 begin
   W.Query := TQuery.New
     .From('orders')
@@ -593,31 +595,33 @@ begin
 end;
 
 // -----------------------------------------------------------------------
-//  GIVEN Phase-5 implementations
+//  GIVEN: RightJoin / CrossJoin / FullOuterJoin / UnionAll / Intersect /
+//        Except / WhereExists / WhereNotExists / GroupByRaw / HavingRaw /
+//        WithRecursive / OrWhereNotIn / GroupBy (multi-column)
 // -----------------------------------------------------------------------
 
-procedure TSQLCuteSteps.GivenPhase5RightJoin(W: TSQLCuteWorld);
+procedure TSQLCuteSteps.GivenRightJoin(W: TSQLCuteWorld);
 begin
   W.Query := TQuery.New
     .From('users')
     .RightJoin('posts', 'users.id', 'posts.user_id');
 end;
 
-procedure TSQLCuteSteps.GivenPhase5CrossJoin(W: TSQLCuteWorld);
+procedure TSQLCuteSteps.GivenCrossJoin(W: TSQLCuteWorld);
 begin
   W.Query := TQuery.New
     .From('users')
     .CrossJoin('tags');
 end;
 
-procedure TSQLCuteSteps.GivenPhase5FullOuterJoin(W: TSQLCuteWorld);
+procedure TSQLCuteSteps.GivenFullOuterJoin(W: TSQLCuteWorld);
 begin
   W.Query := TQuery.New
     .From('users')
     .FullOuterJoin('logs', 'users.id', 'logs.user_id');
 end;
 
-procedure TSQLCuteSteps.GivenPhase5UnionAll(W: TSQLCuteWorld);
+procedure TSQLCuteSteps.GivenUnionAll(W: TSQLCuteWorld);
 begin
   W.Query := TQuery.New
     .From('a')
@@ -625,7 +629,7 @@ begin
     .UnionAll(TQuery.New.From('b').Select('id'));
 end;
 
-procedure TSQLCuteSteps.GivenPhase5Intersect(W: TSQLCuteWorld);
+procedure TSQLCuteSteps.GivenIntersect(W: TSQLCuteWorld);
 begin
   W.Query := TQuery.New
     .From('a')
@@ -633,7 +637,7 @@ begin
     .Intersect(TQuery.New.From('b').Select('id'));
 end;
 
-procedure TSQLCuteSteps.GivenPhase5Except(W: TSQLCuteWorld);
+procedure TSQLCuteSteps.GivenExcept(W: TSQLCuteWorld);
 begin
   W.Query := TQuery.New
     .From('a')
@@ -641,14 +645,14 @@ begin
     .&Except(TQuery.New.From('b').Select('id'));
 end;
 
-procedure TSQLCuteSteps.GivenPhase5WhereNotExists(W: TSQLCuteWorld);
+procedure TSQLCuteSteps.GivenWhereNotExists(W: TSQLCuteWorld);
 begin
   W.Query := TQuery.New
     .From('users')
     .WhereNotExists(TQuery.New.From('orders').Where('user_id', 99));
 end;
 
-procedure TSQLCuteSteps.GivenPhase5GroupByRaw(W: TSQLCuteWorld);
+procedure TSQLCuteSteps.GivenGroupByRaw(W: TSQLCuteWorld);
 begin
   W.Query := TQuery.New
     .From('events')
@@ -656,7 +660,7 @@ begin
     .GroupByRaw('DATE(created_at)');
 end;
 
-procedure TSQLCuteSteps.GivenPhase5HavingRaw(W: TSQLCuteWorld);
+procedure TSQLCuteSteps.GivenHavingRaw(W: TSQLCuteWorld);
 begin
   W.Query := TQuery.New
     .From('orders')
@@ -665,7 +669,7 @@ begin
     .HavingRaw('SUM(total) > 1000');
 end;
 
-procedure TSQLCuteSteps.GivenPhase5WithRecursive(W: TSQLCuteWorld);
+procedure TSQLCuteSteps.GivenWithRecursive(W: TSQLCuteWorld);
 begin
   W.Query := TQuery.New
     .WithRecursive('nums', TQuery.New.From('base').Select('n'))
@@ -673,12 +677,19 @@ begin
     .Select('n');
 end;
 
-procedure TSQLCuteSteps.GivenPhase5OrWhereNotIn(W: TSQLCuteWorld);
+procedure TSQLCuteSteps.GivenOrWhereNotIn(W: TSQLCuteWorld);
 begin
   W.Query := TQuery.New
     .From('users')
     .Where('active', True)
     .OrWhereNotIn('status', ['banned', 'deleted']);
+end;
+
+procedure TSQLCuteSteps.GivenGroupByMultiColumn(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New
+    .From('sales')
+    .GroupBy(['year', 'month', 'dept_id']);
 end;
 
 // -----------------------------------------------------------------------
