@@ -178,6 +178,108 @@ TQuery — WHERE @unit @sqlcute
     .&Then('SQL is "SELECT id, name FROM orders WHERE status IN (?, ?) AND user_id NOT IN (?, ?) AND created_at > ?"')
     .&Then('has 5 bindings')
 
+// -------------------------------------------------------------------------
+
+.Rule('OrWhereNull and OrWhereNotNull use OR connector')
+
+  .Scenario('OrWhereNull adds OR IS NULL')
+    .Given('an OrWhereNull query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users WHERE name = ? OR deleted_at IS NULL"')
+    .&Then('has 1 binding')
+
+  .Scenario('OrWhereNotNull adds OR IS NOT NULL')
+    .Given('an OrWhereNotNull query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users WHERE name = ? OR email IS NOT NULL"')
+    .&Then('has 1 binding')
+
+// -------------------------------------------------------------------------
+
+.Rule('WhereTrue and WhereFalse bind boolean values')
+
+  .Scenario('WhereTrue produces column = ? with binding True')
+    .Given('a WhereTrue query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users WHERE active = ?"')
+    .&Then('has 1 binding')
+
+  .Scenario('WhereFalse produces column = ? with binding False')
+    .Given('a WhereFalse query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users WHERE active = ?"')
+    .&Then('has 1 binding')
+
+// -------------------------------------------------------------------------
+
+.Rule('WhereNot and OrWhereNot wrap the condition in NOT(...)')
+
+  .Scenario('WhereNot wraps equality in NOT')
+    .Given('a WhereNot query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users WHERE NOT (status = ?)"')
+    .&Then('has 1 binding')
+
+  .Scenario('OrWhereNot appends with OR NOT')
+    .Given('an OrWhereNot query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users WHERE status = ? OR NOT (archived = ?)"')
+    .&Then('has 2 bindings')
+
+// -------------------------------------------------------------------------
+
+.Rule('WhereNotBetween / OrWhereBetween / OrWhereNotBetween')
+
+  .Scenario('WhereNotBetween produces NOT BETWEEN')
+    .Given('a WhereNotBetween query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM orders WHERE total NOT BETWEEN ? AND ?"')
+    .&Then('has 2 bindings')
+
+  .Scenario('OrWhereBetween appends with OR BETWEEN')
+    .Given('an OrWhereBetween query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users WHERE age > ? OR score BETWEEN ? AND ?"')
+    .&Then('has 3 bindings')
+
+  .Scenario('OrWhereNotBetween appends with OR NOT BETWEEN')
+    .Given('an OrWhereNotBetween query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users WHERE active = ? OR score NOT BETWEEN ? AND ?"')
+    .&Then('has 3 bindings')
+
+// -------------------------------------------------------------------------
+
+.Rule('OrWhereExists and OrWhereNotExists use OR connector')
+
+  .Scenario('OrWhereExists appends with OR EXISTS')
+    .Given('an OrWhereExists query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users WHERE active = ? OR EXISTS (SELECT * FROM orders WHERE user_id = ?)"')
+    .&Then('has 2 bindings')
+
+  .Scenario('OrWhereNotExists appends with OR NOT EXISTS')
+    .Given('an OrWhereNotExists query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users WHERE active = ? OR NOT EXISTS (SELECT * FROM orders WHERE user_id = ?)"')
+    .&Then('has 2 bindings')
+
+// -------------------------------------------------------------------------
+
+.Rule('WhereNotInQuery, OrWhereInQuery, OrWhereNotInQuery use subquery')
+
+  .Scenario('WhereNotInQuery produces NOT IN (subquery)')
+    .Given('a WhereNotInQuery query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users WHERE id NOT IN (SELECT user_id FROM banned)"')
+    .&Then('has 0 bindings')
+
+  .Scenario('OrWhereInQuery appends with OR IN (subquery)')
+    .Given('an OrWhereInQuery query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users WHERE active = ? OR id IN (SELECT id FROM vip)"')
+    .&Then('has 1 binding')
+
 ;
 
 end.

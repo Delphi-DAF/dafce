@@ -10,6 +10,7 @@ uses
   SQLCute.Where.Feat in 'SQLCute.Where.Feat.pas',
   SQLCute.Join.Feat in 'SQLCute.Join.Feat.pas',
   SQLCute.DML.Feat in 'SQLCute.DML.Feat.pas',
+  SQLCute.Phase1.Feat in 'SQLCute.Phase1.Feat.pas',
   SQLCute.Steps in 'SQLCute.Steps.pas';
 
 begin

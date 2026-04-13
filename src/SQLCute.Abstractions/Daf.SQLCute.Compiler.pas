@@ -254,6 +254,13 @@ begin
           Expr := WrapColumn(W.Column) + ' BETWEEN ' + ParamPlaceholder + ' AND ' + ParamPlaceholder;
         end;
 
+        TWhereOp.NotBetween:
+        begin
+          AddBinding(W.Value);
+          AddBinding(W.Value2);
+          Expr := WrapColumn(W.Column) + ' NOT BETWEEN ' + ParamPlaceholder + ' AND ' + ParamPlaceholder;
+        end;
+
         TWhereOp.&In:
         begin
           if W.SubQuery <> nil then
@@ -518,7 +525,9 @@ begin
         TableExpr := TableExpr + ' AS ' + WrapTable(J.Alias);
 
       Sb.Append(TableExpr);
-      if J.Condition <> '' then
+      if J.Col1 <> '' then
+        Sb.Append(' ON ' + WrapColumn(J.Col1) + ' ' + J.Op + ' ' + WrapColumn(J.Col2))
+      else if J.Condition <> '' then
         Sb.Append(' ON ' + J.Condition);
     end;
     Result := Sb.ToString;
@@ -653,13 +662,20 @@ begin
     begin
       if not (Clause is TUnionClause) then Continue;
       U := TUnionClause(Clause);
-      SubSQL := CompileSubQuery(U.SubQuery as IQuery);
       if Sb.Length > 0 then Sb.Append(' ');
+      if U.RawSql <> '' then
+      begin
+        Sb.Append(U.RawSql);
+        Continue;
+      end;
+      SubSQL := CompileSubQuery(U.SubQuery as IQuery);
       case U.Kind of
-        TUnionKind.Union:     Sb.Append('UNION ' + SubSQL);
-        TUnionKind.UnionAll:  Sb.Append('UNION ALL ' + SubSQL);
-        TUnionKind.Intersect: Sb.Append('INTERSECT ' + SubSQL);
-        TUnionKind.&Except:   Sb.Append('EXCEPT ' + SubSQL);
+        TUnionKind.Union:        Sb.Append('UNION ' + SubSQL);
+        TUnionKind.UnionAll:     Sb.Append('UNION ALL ' + SubSQL);
+        TUnionKind.Intersect:    Sb.Append('INTERSECT ' + SubSQL);
+        TUnionKind.&Except:      Sb.Append('EXCEPT ' + SubSQL);
+        TUnionKind.IntersectAll: Sb.Append('INTERSECT ALL ' + SubSQL);
+        TUnionKind.ExceptAll:    Sb.Append('EXCEPT ALL ' + SubSQL);
       end;
     end;
     Result := Sb.ToString;

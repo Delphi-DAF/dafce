@@ -14,7 +14,7 @@ type
   /// Operator for a WHERE condition.
   /// </summary>
   TWhereOp = (Equal, NotEqual, Less, LessOrEqual, Greater, GreaterOrEqual,
-               Like, NotLike, &In, NotIn, IsNull, IsNotNull, &Between,
+               Like, NotLike, &In, NotIn, IsNull, IsNotNull, &Between, NotBetween,
                &Exists, NotExists, Raw);
 
   /// <summary>
@@ -166,7 +166,13 @@ type
     Schema: string;
     Alias: string;
     /// Raw ON condition, e.g. 'users.id = orders.user_id'.
+    /// Used when the JOIN was specified with a raw string condition.
     Condition: string;
+    /// Column-based ON: left column, operator, right column.
+    /// When Col1 is non-empty these three fields take precedence over Condition.
+    Col1: string;
+    Op: string;
+    Col2: string;
     function Clone: TAbstractClause; override;
   end;
 
@@ -199,7 +205,7 @@ type
   //  UNION / INTERSECT / EXCEPT
   // ---------------------------------------------------------------------------
 
-  TUnionKind = (Union, UnionAll, Intersect, &Except);
+  TUnionKind = (Union, UnionAll, Intersect, &Except, IntersectAll, ExceptAll);
 
   TUnionClause = class(TAbstractClause)
   public
@@ -207,6 +213,9 @@ type
     /// Sub-query body (IInterface to avoid circular dependency with IQuery).
     /// The compiler casts this to IQuery at compile time.
     SubQuery: IInterface;
+    /// Raw SQL fragment for CombineRaw. When non-empty, emitted verbatim
+    /// instead of building from Kind + SubQuery.
+    RawSql: string;
     function Clone: TAbstractClause; override;
   end;
 
@@ -384,6 +393,9 @@ begin
   C.Schema    := Schema;
   C.Alias     := Alias;
   C.Condition := Condition;
+  C.Col1      := Col1;
+  C.Op        := Op;
+  C.Col2      := Col2;
   Result := C;
 end;
 
@@ -423,6 +435,7 @@ begin
   C := TUnionClause.Create;
   C.Kind     := Kind;
   C.SubQuery := SubQuery;
+  C.RawSql   := RawSql;
   Result := C;
 end;
 

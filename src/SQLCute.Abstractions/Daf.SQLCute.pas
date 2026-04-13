@@ -67,8 +67,30 @@ type
     function WhereNull(const Column: string): IQuery;
     /// <summary>Adds a WHERE column IS NOT NULL condition.</summary>
     function WhereNotNull(const Column: string): IQuery;
+    /// <summary>Adds an OR WHERE column IS NULL condition.</summary>
+    function OrWhereNull(const Column: string): IQuery;
+    /// <summary>Adds an OR WHERE column IS NOT NULL condition.</summary>
+    function OrWhereNotNull(const Column: string): IQuery;
+    /// <summary>Adds a WHERE column = True condition.</summary>
+    function WhereTrue(const Column: string): IQuery;
+    /// <summary>Adds a WHERE column = False condition.</summary>
+    function WhereFalse(const Column: string): IQuery;
+    /// <summary>Adds a WHERE NOT (column = value) condition.</summary>
+    function WhereNot(const Column: string; const Value: Variant): IQuery; overload;
+    /// <summary>Adds a WHERE NOT (column {op} value) condition.</summary>
+    function WhereNot(const Column, Op: string; const Value: Variant): IQuery; overload;
+    /// <summary>Adds an OR WHERE NOT (column = value) condition.</summary>
+    function OrWhereNot(const Column: string; const Value: Variant): IQuery; overload;
+    /// <summary>Adds an OR WHERE NOT (column {op} value) condition.</summary>
+    function OrWhereNot(const Column, Op: string; const Value: Variant): IQuery; overload;
     /// <summary>Adds a WHERE column BETWEEN low AND high condition.</summary>
     function WhereBetween(const Column: string; const Low, High: Variant): IQuery;
+    /// <summary>Adds a WHERE column NOT BETWEEN low AND high condition.</summary>
+    function WhereNotBetween(const Column: string; const Low, High: Variant): IQuery;
+    /// <summary>Adds an OR WHERE column BETWEEN low AND high condition.</summary>
+    function OrWhereBetween(const Column: string; const Low, High: Variant): IQuery;
+    /// <summary>Adds an OR WHERE column NOT BETWEEN low AND high condition.</summary>
+    function OrWhereNotBetween(const Column: string; const Low, High: Variant): IQuery;
     /// <summary>Appends a raw SQL WHERE fragment (AND connector).</summary>
     function WhereRaw(const Sql: string): IQuery;
 
@@ -87,17 +109,26 @@ type
     function Limit(const Value: Int64): IQuery;
     /// <summary>Sets the OFFSET clause.</summary>
     function Offset(const Value: Int64): IQuery;
+    /// <summary>Alias for Limit. Sets the LIMIT clause.</summary>
+    function Take(const Value: Int64): IQuery;
+    /// <summary>Alias for Offset. Sets the OFFSET clause.</summary>
+    function Skip(const Value: Int64): IQuery;
+    /// <summary>
+    /// Paginates results: sets LIMIT = PerPage and OFFSET = (Page-1) * PerPage.
+    /// Page is 1-based (same as SqlKata).
+    /// </summary>
+    function ForPage(const Page: Integer; const PerPage: Integer = 15): IQuery;
 
     // --- JOIN -----------------------------------------------------------
 
-    function Join(const Table, Col1, Col2: string): IQuery; overload;
+    function Join(const Table, Col1, Col2: string; const Op: string = '='): IQuery; overload;
     function Join(const Table, Condition: string): IQuery; overload;
-    function LeftJoin(const Table, Col1, Col2: string): IQuery; overload;
+    function LeftJoin(const Table, Col1, Col2: string; const Op: string = '='): IQuery; overload;
     function LeftJoin(const Table, Condition: string): IQuery; overload;
-    function RightJoin(const Table, Col1, Col2: string): IQuery; overload;
+    function RightJoin(const Table, Col1, Col2: string; const Op: string = '='): IQuery; overload;
     function RightJoin(const Table, Condition: string): IQuery; overload;
     function CrossJoin(const Table: string): IQuery;
-    function FullOuterJoin(const Table, Col1, Col2: string): IQuery; overload;
+    function FullOuterJoin(const Table, Col1, Col2: string; const Op: string = '='): IQuery; overload;
     function FullOuterJoin(const Table, Condition: string): IQuery; overload;
 
     // --- DISTINCT -------------------------------------------------------
@@ -123,12 +154,20 @@ type
     function UnionAll(const Other: IQuery): IQuery;
     function Intersect(const Other: IQuery): IQuery;
     function &Except(const Other: IQuery): IQuery;
+    function IntersectAll(const Other: IQuery): IQuery;
+    function ExceptAll(const Other: IQuery): IQuery;
+    function CombineRaw(const Sql: string): IQuery;
 
     // --- WHERE (sub-query variants) -------------------------------------
 
     function WhereExists(const SubQuery: IQuery): IQuery;
     function WhereNotExists(const SubQuery: IQuery): IQuery;
+    function OrWhereExists(const SubQuery: IQuery): IQuery;
+    function OrWhereNotExists(const SubQuery: IQuery): IQuery;
     function WhereInQuery(const Column: string; const SubQuery: IQuery): IQuery;
+    function WhereNotInQuery(const Column: string; const SubQuery: IQuery): IQuery;
+    function OrWhereInQuery(const Column: string; const SubQuery: IQuery): IQuery;
+    function OrWhereNotInQuery(const Column: string; const SubQuery: IQuery): IQuery;
 
     // --- WHERE IN / NOT IN (value-array variants) -----------------------
 
@@ -252,6 +291,8 @@ type
     function AddWhereClause2(const Column: string; Op: TWhereOp;
       const V1, V2: Variant; Conn: TBoolOp): IQuery;
     function AddJoinClause(JoinType: TJoinType; const Table, Condition: string): IQuery;
+    function AddJoinClauseColumns(JoinType: TJoinType;
+      const Table, Col1, Op, Col2: string): IQuery;
     function AddHavingClause(const Column: string; Op: TWhereOp;
       const Value: Variant; Conn: TBoolOp): IQuery;
     function AddUnionClause(Kind: TUnionKind; const Other: IQuery): IQuery;
@@ -274,25 +315,39 @@ type
     function OrWhere(const Column, Op: string; const Value: Variant): IQuery; overload;
     function WhereNull(const Column: string): IQuery;
     function WhereNotNull(const Column: string): IQuery;
+    function OrWhereNull(const Column: string): IQuery;
+    function OrWhereNotNull(const Column: string): IQuery;
+    function WhereTrue(const Column: string): IQuery;
+    function WhereFalse(const Column: string): IQuery;
+    function WhereNot(const Column: string; const Value: Variant): IQuery; overload;
+    function WhereNot(const Column, Op: string; const Value: Variant): IQuery; overload;
+    function OrWhereNot(const Column: string; const Value: Variant): IQuery; overload;
+    function OrWhereNot(const Column, Op: string; const Value: Variant): IQuery; overload;
     function WhereBetween(const Column: string; const Low, High: Variant): IQuery;
+    function WhereNotBetween(const Column: string; const Low, High: Variant): IQuery;
+    function OrWhereBetween(const Column: string; const Low, High: Variant): IQuery;
+    function OrWhereNotBetween(const Column: string; const Low, High: Variant): IQuery;
     function WhereRaw(const Sql: string): IQuery;
     function OrderBy(const Column: string): IQuery;
     function OrderByDesc(const Column: string): IQuery;
     function OrderByRaw(const Expression: string): IQuery;
     function Limit(const Value: Int64): IQuery;
     function Offset(const Value: Int64): IQuery;
+    function Take(const Value: Int64): IQuery;
+    function Skip(const Value: Int64): IQuery;
+    function ForPage(const Page: Integer; const PerPage: Integer = 15): IQuery;
     function Clone: IQuery;
     function Compile(const Compiler: IQueryCompiler): TSQLResult;
     function Clauses: TArray<TAbstractClause>;
     // IQuery — Phase 2
-    function Join(const Table, Col1, Col2: string): IQuery; overload;
+    function Join(const Table, Col1, Col2: string; const Op: string = '='): IQuery; overload;
     function Join(const Table, Condition: string): IQuery; overload;
-    function LeftJoin(const Table, Col1, Col2: string): IQuery; overload;
+    function LeftJoin(const Table, Col1, Col2: string; const Op: string = '='): IQuery; overload;
     function LeftJoin(const Table, Condition: string): IQuery; overload;
-    function RightJoin(const Table, Col1, Col2: string): IQuery; overload;
+    function RightJoin(const Table, Col1, Col2: string; const Op: string = '='): IQuery; overload;
     function RightJoin(const Table, Condition: string): IQuery; overload;
     function CrossJoin(const Table: string): IQuery;
-    function FullOuterJoin(const Table, Col1, Col2: string): IQuery; overload;
+    function FullOuterJoin(const Table, Col1, Col2: string; const Op: string = '='): IQuery; overload;
     function FullOuterJoin(const Table, Condition: string): IQuery; overload;
     function Distinct: IQuery;
     function From(const SubQuery: IQuery; const Alias: string): IQuery; overload;
@@ -305,9 +360,17 @@ type
     function UnionAll(const Other: IQuery): IQuery;
     function Intersect(const Other: IQuery): IQuery;
     function &Except(const Other: IQuery): IQuery;
+    function IntersectAll(const Other: IQuery): IQuery;
+    function ExceptAll(const Other: IQuery): IQuery;
+    function CombineRaw(const Sql: string): IQuery;
     function WhereExists(const SubQuery: IQuery): IQuery;
     function WhereNotExists(const SubQuery: IQuery): IQuery;
+    function OrWhereExists(const SubQuery: IQuery): IQuery;
+    function OrWhereNotExists(const SubQuery: IQuery): IQuery;
     function WhereInQuery(const Column: string; const SubQuery: IQuery): IQuery;
+    function WhereNotInQuery(const Column: string; const SubQuery: IQuery): IQuery;
+    function OrWhereInQuery(const Column: string; const SubQuery: IQuery): IQuery;
+    function OrWhereNotInQuery(const Column: string; const SubQuery: IQuery): IQuery;
     function WhereIn(const Column: string; const Values: TArray<Variant>): IQuery;
     function WhereNotIn(const Column: string; const Values: TArray<Variant>): IQuery;
     function OrWhereIn(const Column: string; const Values: TArray<Variant>): IQuery;
@@ -544,9 +607,64 @@ begin
   Result := AddWhereClause(Column, TWhereOp.IsNotNull, Null, TBoolOp.opAnd);
 end;
 
+function TQueryImpl.OrWhereNull(const Column: string): IQuery;
+begin
+  Result := AddWhereClause(Column, TWhereOp.IsNull, Null, TBoolOp.opOr);
+end;
+
+function TQueryImpl.OrWhereNotNull(const Column: string): IQuery;
+begin
+  Result := AddWhereClause(Column, TWhereOp.IsNotNull, Null, TBoolOp.opOr);
+end;
+
+function TQueryImpl.WhereTrue(const Column: string): IQuery;
+begin
+  Result := AddWhereClause(Column, TWhereOp.Equal, True, TBoolOp.opAnd);
+end;
+
+function TQueryImpl.WhereFalse(const Column: string): IQuery;
+begin
+  Result := AddWhereClause(Column, TWhereOp.Equal, False, TBoolOp.opAnd);
+end;
+
+function TQueryImpl.WhereNot(const Column: string; const Value: Variant): IQuery;
+begin
+  Result := AddWhereClause(Column, TWhereOp.Equal, Value, TBoolOp.opAnd, True);
+end;
+
+function TQueryImpl.WhereNot(const Column, Op: string; const Value: Variant): IQuery;
+begin
+  Result := AddWhereClause(Column, ParseWhereOp(Op), Value, TBoolOp.opAnd, True);
+end;
+
+function TQueryImpl.OrWhereNot(const Column: string; const Value: Variant): IQuery;
+begin
+  Result := AddWhereClause(Column, TWhereOp.Equal, Value, TBoolOp.opOr, True);
+end;
+
+function TQueryImpl.OrWhereNot(const Column, Op: string; const Value: Variant): IQuery;
+begin
+  Result := AddWhereClause(Column, ParseWhereOp(Op), Value, TBoolOp.opOr, True);
+end;
+
 function TQueryImpl.WhereBetween(const Column: string; const Low, High: Variant): IQuery;
 begin
   Result := AddWhereClause2(Column, TWhereOp.&Between, Low, High, TBoolOp.opAnd);
+end;
+
+function TQueryImpl.WhereNotBetween(const Column: string; const Low, High: Variant): IQuery;
+begin
+  Result := AddWhereClause2(Column, TWhereOp.NotBetween, Low, High, TBoolOp.opAnd);
+end;
+
+function TQueryImpl.OrWhereBetween(const Column: string; const Low, High: Variant): IQuery;
+begin
+  Result := AddWhereClause2(Column, TWhereOp.&Between, Low, High, TBoolOp.opOr);
+end;
+
+function TQueryImpl.OrWhereNotBetween(const Column: string; const Low, High: Variant): IQuery;
+begin
+  Result := AddWhereClause2(Column, TWhereOp.NotBetween, Low, High, TBoolOp.opOr);
 end;
 
 function TQueryImpl.WhereRaw(const Sql: string): IQuery;
@@ -626,6 +744,21 @@ begin
   Result := Self;
 end;
 
+function TQueryImpl.Take(const Value: Int64): IQuery;
+begin
+  Result := Limit(Value);
+end;
+
+function TQueryImpl.Skip(const Value: Int64): IQuery;
+begin
+  Result := Offset(Value);
+end;
+
+function TQueryImpl.ForPage(const Page: Integer; const PerPage: Integer = 15): IQuery;
+begin
+  Result := Limit(PerPage).Offset((Page - 1) * PerPage);
+end;
+
 // --- CLONE ---
 
 function TQueryImpl.Clone: IQuery;
@@ -665,9 +798,24 @@ begin
   Result := Self;
 end;
 
-function TQueryImpl.Join(const Table, Col1, Col2: string): IQuery;
+function TQueryImpl.AddJoinClauseColumns(JoinType: TJoinType;
+  const Table, Col1, Op, Col2: string): IQuery;
+var
+  J: TJoinClause;
 begin
-  Result := AddJoinClause(TJoinType.Inner, Table, Col1 + ' = ' + Col2);
+  J := TJoinClause.Create;
+  J.JoinType := JoinType;
+  J.Table    := Table;
+  J.Col1     := Col1;
+  J.Op       := Op;
+  J.Col2     := Col2;
+  FClauses.Add(J);
+  Result := Self;
+end;
+
+function TQueryImpl.Join(const Table, Col1, Col2: string; const Op: string = '='): IQuery;
+begin
+  Result := AddJoinClauseColumns(TJoinType.Inner, Table, Col1, Op, Col2);
 end;
 
 function TQueryImpl.Join(const Table, Condition: string): IQuery;
@@ -675,9 +823,9 @@ begin
   Result := AddJoinClause(TJoinType.Inner, Table, Condition);
 end;
 
-function TQueryImpl.LeftJoin(const Table, Col1, Col2: string): IQuery;
+function TQueryImpl.LeftJoin(const Table, Col1, Col2: string; const Op: string = '='): IQuery;
 begin
-  Result := AddJoinClause(TJoinType.Left, Table, Col1 + ' = ' + Col2);
+  Result := AddJoinClauseColumns(TJoinType.Left, Table, Col1, Op, Col2);
 end;
 
 function TQueryImpl.LeftJoin(const Table, Condition: string): IQuery;
@@ -685,9 +833,9 @@ begin
   Result := AddJoinClause(TJoinType.Left, Table, Condition);
 end;
 
-function TQueryImpl.RightJoin(const Table, Col1, Col2: string): IQuery;
+function TQueryImpl.RightJoin(const Table, Col1, Col2: string; const Op: string = '='): IQuery;
 begin
-  Result := AddJoinClause(TJoinType.Right, Table, Col1 + ' = ' + Col2);
+  Result := AddJoinClauseColumns(TJoinType.Right, Table, Col1, Op, Col2);
 end;
 
 function TQueryImpl.RightJoin(const Table, Condition: string): IQuery;
@@ -700,9 +848,9 @@ begin
   Result := AddJoinClause(TJoinType.Cross, Table, '');
 end;
 
-function TQueryImpl.FullOuterJoin(const Table, Col1, Col2: string): IQuery;
+function TQueryImpl.FullOuterJoin(const Table, Col1, Col2: string; const Op: string = '='): IQuery;
 begin
-  Result := AddJoinClause(TJoinType.FullOuter, Table, Col1 + ' = ' + Col2);
+  Result := AddJoinClauseColumns(TJoinType.FullOuter, Table, Col1, Op, Col2);
 end;
 
 function TQueryImpl.FullOuterJoin(const Table, Condition: string): IQuery;
@@ -844,6 +992,26 @@ begin
   Result := AddUnionClause(TUnionKind.&Except, Other);
 end;
 
+function TQueryImpl.IntersectAll(const Other: IQuery): IQuery;
+begin
+  Result := AddUnionClause(TUnionKind.IntersectAll, Other);
+end;
+
+function TQueryImpl.ExceptAll(const Other: IQuery): IQuery;
+begin
+  Result := AddUnionClause(TUnionKind.ExceptAll, Other);
+end;
+
+function TQueryImpl.CombineRaw(const Sql: string): IQuery;
+var
+  U: TUnionClause;
+begin
+  U := TUnionClause.Create;
+  U.RawSql := Sql;
+  FClauses.Add(U);
+  Result := Self;
+end;
+
 // --- WHERE (subquery variants) ---
 
 function TQueryImpl.WhereExists(const SubQuery: IQuery): IQuery;
@@ -870,6 +1038,30 @@ begin
   Result := Self;
 end;
 
+function TQueryImpl.OrWhereExists(const SubQuery: IQuery): IQuery;
+var
+  W: TWhereClause;
+begin
+  W := TWhereClause.Create;
+  W.Op        := TWhereOp.&Exists;
+  W.SubQuery  := SubQuery;
+  W.Connector := TBoolOp.opOr;
+  FClauses.Add(W);
+  Result := Self;
+end;
+
+function TQueryImpl.OrWhereNotExists(const SubQuery: IQuery): IQuery;
+var
+  W: TWhereClause;
+begin
+  W := TWhereClause.Create;
+  W.Op        := TWhereOp.NotExists;
+  W.SubQuery  := SubQuery;
+  W.Connector := TBoolOp.opOr;
+  FClauses.Add(W);
+  Result := Self;
+end;
+
 function TQueryImpl.WhereInQuery(const Column: string; const SubQuery: IQuery): IQuery;
 var
   W: TWhereClause;
@@ -879,6 +1071,45 @@ begin
   W.Op        := TWhereOp.&In;
   W.SubQuery  := SubQuery;
   W.Connector := TBoolOp.opAnd;
+  FClauses.Add(W);
+  Result := Self;
+end;
+
+function TQueryImpl.WhereNotInQuery(const Column: string; const SubQuery: IQuery): IQuery;
+var
+  W: TWhereClause;
+begin
+  W := TWhereClause.Create;
+  W.Column    := Column;
+  W.Op        := TWhereOp.NotIn;
+  W.SubQuery  := SubQuery;
+  W.Connector := TBoolOp.opAnd;
+  FClauses.Add(W);
+  Result := Self;
+end;
+
+function TQueryImpl.OrWhereInQuery(const Column: string; const SubQuery: IQuery): IQuery;
+var
+  W: TWhereClause;
+begin
+  W := TWhereClause.Create;
+  W.Column    := Column;
+  W.Op        := TWhereOp.&In;
+  W.SubQuery  := SubQuery;
+  W.Connector := TBoolOp.opOr;
+  FClauses.Add(W);
+  Result := Self;
+end;
+
+function TQueryImpl.OrWhereNotInQuery(const Column: string; const SubQuery: IQuery): IQuery;
+var
+  W: TWhereClause;
+begin
+  W := TWhereClause.Create;
+  W.Column    := Column;
+  W.Op        := TWhereOp.NotIn;
+  W.SubQuery  := SubQuery;
+  W.Connector := TBoolOp.opOr;
   FClauses.Add(W);
   Result := Self;
 end;

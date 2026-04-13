@@ -221,6 +221,77 @@ type
     procedure GivenGroupByMultiColumn(W: TSQLCuteWorld);
 
     // -----------------------------------------------------------------------
+    //  GIVEN — Fase 1 WHERE variants
+    // -----------------------------------------------------------------------
+
+    [Given('an OrWhereNull query')]
+    procedure GivenOrWhereNull(W: TSQLCuteWorld);
+
+    [Given('an OrWhereNotNull query')]
+    procedure GivenOrWhereNotNull(W: TSQLCuteWorld);
+
+    [Given('a WhereTrue query')]
+    procedure GivenWhereTrue(W: TSQLCuteWorld);
+
+    [Given('a WhereFalse query')]
+    procedure GivenWhereFalse(W: TSQLCuteWorld);
+
+    [Given('a WhereNot query')]
+    procedure GivenWhereNot(W: TSQLCuteWorld);
+
+    [Given('an OrWhereNot query')]
+    procedure GivenOrWhereNot(W: TSQLCuteWorld);
+
+    [Given('a WhereNotBetween query')]
+    procedure GivenWhereNotBetween(W: TSQLCuteWorld);
+
+    [Given('an OrWhereBetween query')]
+    procedure GivenOrWhereBetween(W: TSQLCuteWorld);
+
+    [Given('an OrWhereNotBetween query')]
+    procedure GivenOrWhereNotBetween(W: TSQLCuteWorld);
+
+    [Given('an OrWhereExists query')]
+    procedure GivenOrWhereExists(W: TSQLCuteWorld);
+
+    [Given('an OrWhereNotExists query')]
+    procedure GivenOrWhereNotExists(W: TSQLCuteWorld);
+
+    [Given('a WhereNotInQuery query')]
+    procedure GivenWhereNotInQuery(W: TSQLCuteWorld);
+
+    [Given('an OrWhereInQuery query')]
+    procedure GivenOrWhereInQuery(W: TSQLCuteWorld);
+
+    // -----------------------------------------------------------------------
+    //  GIVEN — Fase 1 Set ops + Paginación + JOIN op
+    // -----------------------------------------------------------------------
+
+    [Given('an IntersectAll query')]
+    procedure GivenIntersectAll(W: TSQLCuteWorld);
+
+    [Given('an ExceptAll query')]
+    procedure GivenExceptAll(W: TSQLCuteWorld);
+
+    [Given('a CombineRaw query')]
+    procedure GivenCombineRaw(W: TSQLCuteWorld);
+
+    [Given('a ForPage query page (\d+) per-page (\d+)')]
+    procedure GivenForPage(W: TSQLCuteWorld; Page, PerPage: Integer);
+
+    [Given('a Take query')]
+    procedure GivenTake(W: TSQLCuteWorld);
+
+    [Given('a Skip query')]
+    procedure GivenSkip(W: TSQLCuteWorld);
+
+    [Given('a Join with not-equal operator query')]
+    procedure GivenJoinWithNotEqualOp(W: TSQLCuteWorld);
+
+    [Given('a LeftJoin with >= operator query')]
+    procedure GivenLeftJoinWithGteOp(W: TSQLCuteWorld);
+
+    // -----------------------------------------------------------------------
     //  WHEN
     // -----------------------------------------------------------------------
 
@@ -690,6 +761,142 @@ begin
   W.Query := TQuery.New
     .From('sales')
     .GroupBy(['year', 'month', 'dept_id']);
+end;
+
+// -----------------------------------------------------------------------
+//  GIVEN: Fase 1 — WHERE variants
+// -----------------------------------------------------------------------
+
+procedure TSQLCuteSteps.GivenOrWhereNull(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('users').Where('name', 'alice').OrWhereNull('deleted_at');
+end;
+
+procedure TSQLCuteSteps.GivenOrWhereNotNull(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('users').Where('name', 'alice').OrWhereNotNull('email');
+end;
+
+procedure TSQLCuteSteps.GivenWhereTrue(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('users').WhereTrue('active');
+end;
+
+procedure TSQLCuteSteps.GivenWhereFalse(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('users').WhereFalse('active');
+end;
+
+procedure TSQLCuteSteps.GivenWhereNot(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('users').WhereNot('status', 'banned');
+end;
+
+procedure TSQLCuteSteps.GivenOrWhereNot(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('users')
+    .Where('status', 'active')
+    .OrWhereNot('archived', True);
+end;
+
+procedure TSQLCuteSteps.GivenWhereNotBetween(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('orders').WhereNotBetween('total', 100, 500);
+end;
+
+procedure TSQLCuteSteps.GivenOrWhereBetween(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('users')
+    .Where('age', '>', 60)
+    .OrWhereBetween('score', 10, 20);
+end;
+
+procedure TSQLCuteSteps.GivenOrWhereNotBetween(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('users')
+    .Where('active', True)
+    .OrWhereNotBetween('score', 1, 5);
+end;
+
+procedure TSQLCuteSteps.GivenOrWhereExists(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('users')
+    .Where('active', True)
+    .OrWhereExists(TQuery.New.From('orders').Where('user_id', 99));
+end;
+
+procedure TSQLCuteSteps.GivenOrWhereNotExists(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('users')
+    .Where('active', True)
+    .OrWhereNotExists(TQuery.New.From('orders').Where('user_id', 99));
+end;
+
+procedure TSQLCuteSteps.GivenWhereNotInQuery(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('users')
+    .WhereNotInQuery('id', TQuery.New.From('banned').Select('user_id'));
+end;
+
+procedure TSQLCuteSteps.GivenOrWhereInQuery(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('users')
+    .Where('active', True)
+    .OrWhereInQuery('id', TQuery.New.From('vip').Select('id'));
+end;
+
+// -----------------------------------------------------------------------
+//  GIVEN: Fase 1 — Set ops + Paginación + JOIN op
+// -----------------------------------------------------------------------
+
+procedure TSQLCuteSteps.GivenIntersectAll(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New
+    .From('a').Select('id')
+    .IntersectAll(TQuery.New.From('b').Select('id'));
+end;
+
+procedure TSQLCuteSteps.GivenExceptAll(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New
+    .From('a').Select('id')
+    .ExceptAll(TQuery.New.From('b').Select('id'));
+end;
+
+procedure TSQLCuteSteps.GivenCombineRaw(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New
+    .From('a').Select('id')
+    .CombineRaw('UNION SELECT id FROM b WHERE status = ''active''');
+end;
+
+procedure TSQLCuteSteps.GivenForPage(W: TSQLCuteWorld; Page, PerPage: Integer);
+begin
+  W.Query := TQuery.New.From('users').ForPage(Page, PerPage);
+end;
+
+procedure TSQLCuteSteps.GivenTake(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('users').Take(5);
+end;
+
+procedure TSQLCuteSteps.GivenSkip(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('users').Take(10).Skip(20);
+end;
+
+procedure TSQLCuteSteps.GivenJoinWithNotEqualOp(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New
+    .From('orders')
+    .Join('users', 'orders.user_id', 'users.id', '<>');
+end;
+
+procedure TSQLCuteSteps.GivenLeftJoinWithGteOp(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New
+    .From('orders')
+    .LeftJoin('tiers', 'orders.amount', 'tiers.min_amount', '>=');
 end;
 
 // -----------------------------------------------------------------------
