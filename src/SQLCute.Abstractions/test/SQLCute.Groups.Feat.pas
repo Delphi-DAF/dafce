@@ -41,6 +41,12 @@ TQuery — WHERE groups, WhereColumns, When @unit @sqlcute @f2
     .&Then('SQL is "SELECT * FROM orders WHERE status = ? AND (total > ? OR priority = ?)"')
     .&Then('has 3 bindings')
 
+  .Scenario('Group first then outer condition chains correctly')
+    .Given('a WHERE group followed by outer condition')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users WHERE (city = ? OR city = ?) AND age > ?"')
+    .&Then('has 3 bindings')
+
   .Scenario('OrWhere(callback) connects the group with OR')
     .Given('an OR WHERE group query')
     .When('I compile with ANSI')

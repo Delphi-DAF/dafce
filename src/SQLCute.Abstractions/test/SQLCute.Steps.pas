@@ -335,6 +335,9 @@ type
     [Given('a WHERE group with outer AND condition')]
     procedure GivenWhereGroupWithOuter(W: TSQLCuteWorld);
 
+    [Given('a WHERE group followed by outer condition')]
+    procedure GivenWhereGroupFollowedByOuter(W: TSQLCuteWorld);
+
     [Given('an OR WHERE group query')]
     procedure GivenOrWhereGroup(W: TSQLCuteWorld);
 
@@ -1046,6 +1049,17 @@ begin
       begin
         Result := Q.Where('total', '>', 100).OrWhere('priority', 1);
       end);
+end;
+
+procedure TSQLCuteSteps.GivenWhereGroupFollowedByOuter(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('users')
+    .Where(
+      function(Q: IQuery): IQuery
+      begin
+        Result := Q.Where('city', 'Madrid').OrWhere('city', 'Barcelona');
+      end)
+    .Where('age', '>', 18);
 end;
 
 procedure TSQLCuteSteps.GivenOrWhereGroup(W: TSQLCuteWorld);
