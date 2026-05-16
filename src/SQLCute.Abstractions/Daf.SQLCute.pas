@@ -28,6 +28,13 @@ type
   // ---------------------------------------------------------------------------
 
   IQueryCompiler = interface;  // forward
+  IQuery = interface;           // forward
+
+  /// <summary>
+  /// Callback type for nested WHERE groups and When clauses.
+  /// The callback receives a fresh IQuery, adds conditions, and returns it.
+  /// </summary>
+  TQueryBuilderCallback = reference to function(Q: IQuery): IQuery;
 
   /// <summary>
   /// Fluent interface for building SQL queries.
@@ -93,6 +100,38 @@ type
     function OrWhereNotBetween(const Column: string; const Low, High: Variant): IQuery;
     /// <summary>Appends a raw SQL WHERE fragment (AND connector).</summary>
     function WhereRaw(const Sql: string): IQuery;
+
+    // --- WHERE (grouped / column-column / conditional) ------------------
+
+    /// <summary>
+    /// Adds a parenthesized AND-connected WHERE group.
+    /// The callback receives a fresh IQuery, adds conditions, and returns it.
+    /// </summary>
+    function Where(const Callback: TQueryBuilderCallback): IQuery; overload;
+    /// <summary>Adds a parenthesized OR-connected WHERE group.</summary>
+    function OrWhere(const Callback: TQueryBuilderCallback): IQuery; overload;
+
+    /// <summary>
+    /// Adds WHERE col1 op col2 (column-to-column comparison, no binding).
+    /// NOTE: col1 and col2 are emitted verbatim — pass developer-controlled names only.
+    /// </summary>
+    function WhereColumns(const Col1, Op, Col2: string): IQuery;
+    /// <summary>Adds OR WHERE col1 op col2 (column-to-column comparison).</summary>
+    function OrWhereColumns(const Col1, Op, Col2: string): IQuery;
+
+    /// <summary>
+    /// If Condition is True, invokes TrueCallback and merges its WHERE clauses.
+    /// If False, the query is unchanged. Returns Self for chaining.
+    /// </summary>
+    function When(const Condition: Boolean;
+      const TrueCallback: TQueryBuilderCallback): IQuery; overload;
+    /// <summary>
+    /// If Condition is True, invokes TrueCallback; otherwise invokes FalseCallback.
+    /// Returns Self for chaining.
+    /// </summary>
+    function When(const Condition: Boolean;
+      const TrueCallback: TQueryBuilderCallback;
+      const FalseCallback: TQueryBuilderCallback): IQuery; overload;
 
     // --- ORDER BY -------------------------------------------------------
 
@@ -298,6 +337,8 @@ type
     function AddUnionClause(Kind: TUnionKind; const Other: IQuery): IQuery;
     function AddWithClause(const Name: string; const SubQuery: IQuery;
       IsRecursive: Boolean): IQuery;
+    function AddNestedWhereGroup(const Callback: TQueryBuilderCallback;
+      Conn: TBoolOp): IQuery;
     procedure SelectAggregateRaw(const AggFunc, Column, Alias: string);
   public
     constructor Create;
@@ -388,6 +429,16 @@ type
     function AsInsertFrom(const Columns: TArray<string>; const SubQuery: IQuery): IQuery;
     function AsUpdate(const Columns: TArray<string>; const Values: TArray<Variant>): IQuery;
     function AsDelete: IQuery;
+    // IQuery — F2: groups, columns, when
+    function Where(const Callback: TQueryBuilderCallback): IQuery; overload;
+    function OrWhere(const Callback: TQueryBuilderCallback): IQuery; overload;
+    function WhereColumns(const Col1, Op, Col2: string): IQuery;
+    function OrWhereColumns(const Col1, Op, Col2: string): IQuery;
+    function When(const Condition: Boolean;
+      const TrueCallback: TQueryBuilderCallback): IQuery; overload;
+    function When(const Condition: Boolean;
+      const TrueCallback: TQueryBuilderCallback;
+      const FalseCallback: TQueryBuilderCallback): IQuery; overload;
   end;
 
 { TSQLResult }
@@ -1310,6 +1361,91 @@ end;
 function TQueryImpl.AsDelete: IQuery;
 begin
   FClauses.Add(TDeleteClause.Create);
+  Result := Self;
+end;
+
+// --- F2: WHERE groups, WhereColumns, When ---
+
+function TQueryImpl.AddNestedWhereGroup(const Callback: TQueryBuilderCallback;
+  Conn: TBoolOp): IQuery;
+var
+  Inner: IQuery;
+  Nested: TNestedWhereClause;
+  InnerImpl: TQueryImpl;
+  Cl: TAbstractClause;
+  I: Integer;
+begin
+  Inner := TQueryImpl.Create;
+  Callback(Inner);
+  InnerImpl := Inner as TQueryImpl;
+  Nested := TNestedWhereClause.Create;
+  Nested.Connector := Conn;
+  SetLength(Nested.SubClauses, 0);
+  for Cl in InnerImpl.FClauses do
+    if (Cl is TWhereClause) or (Cl is TWhereInClause) or (Cl is TNestedWhereClause) then
+    begin
+      I := Length(Nested.SubClauses);
+      SetLength(Nested.SubClauses, I + 1);
+      Nested.SubClauses[I] := Cl.Clone;
+    end;
+  FClauses.Add(Nested);
+  Result := Self;
+end;
+
+function TQueryImpl.Where(const Callback: TQueryBuilderCallback): IQuery;
+begin
+  Result := AddNestedWhereGroup(Callback, TBoolOp.opAnd);
+end;
+
+function TQueryImpl.OrWhere(const Callback: TQueryBuilderCallback): IQuery;
+begin
+  Result := AddNestedWhereGroup(Callback, TBoolOp.opOr);
+end;
+
+function TQueryImpl.WhereColumns(const Col1, Op, Col2: string): IQuery;
+var
+  W: TWhereClause;
+begin
+  W := TWhereClause.Create;
+  W.Column        := Col1;
+  W.Op            := ParseWhereOp(Op);
+  W.Value         := Col2;
+  W.Connector     := TBoolOp.opAnd;
+  W.IsColumnValue := True;
+  FClauses.Add(W);
+  Result := Self;
+end;
+
+function TQueryImpl.OrWhereColumns(const Col1, Op, Col2: string): IQuery;
+var
+  W: TWhereClause;
+begin
+  W := TWhereClause.Create;
+  W.Column        := Col1;
+  W.Op            := ParseWhereOp(Op);
+  W.Value         := Col2;
+  W.Connector     := TBoolOp.opOr;
+  W.IsColumnValue := True;
+  FClauses.Add(W);
+  Result := Self;
+end;
+
+function TQueryImpl.When(const Condition: Boolean;
+  const TrueCallback: TQueryBuilderCallback): IQuery;
+begin
+  if Condition then
+    TrueCallback(Self);
+  Result := Self;
+end;
+
+function TQueryImpl.When(const Condition: Boolean;
+  const TrueCallback: TQueryBuilderCallback;
+  const FalseCallback: TQueryBuilderCallback): IQuery;
+begin
+  if Condition then
+    TrueCallback(Self)
+  else
+    FalseCallback(Self);
   Result := Self;
 end;
 

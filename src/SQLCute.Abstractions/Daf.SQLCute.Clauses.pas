@@ -113,6 +113,9 @@ type
     /// Sub-query for EXISTS / IN-subquery conditions (IInterface to avoid
     /// circular dependency with IQuery). The compiler casts to IQuery.
     SubQuery: IInterface;
+    /// When True, Value holds a column name and the condition is emitted as
+    /// col1 op col2 (no parameter binding). Used by WhereColumns.
+    IsColumnValue: Boolean;
     function Clone: TAbstractClause; override;
   end;
 
@@ -278,6 +281,25 @@ type
   end;
 
   // ---------------------------------------------------------------------------
+  //  NESTED WHERE GROUP  (parenthesized group of WHERE sub-conditions)
+  // ---------------------------------------------------------------------------
+
+  /// <summary>
+  /// A parenthesized group of WHERE clauses, produced by Where(callback) /
+  /// OrWhere(callback). SubClauses holds the inner conditions; Connector
+  /// controls how this group connects with the preceding sibling.
+  /// IsNot is reserved for future NOT (...) support.
+  /// </summary>
+  TNestedWhereClause = class(TAbstractClause)
+  public
+    SubClauses: TArray<TAbstractClause>;
+    Connector:  TBoolOp;
+    IsNot:      Boolean;
+    destructor Destroy; override;
+    function Clone: TAbstractClause; override;
+  end;
+
+  // ---------------------------------------------------------------------------
   //  WHERE IN / NOT IN  (one instance per WhereIn/WhereNotIn call)
   // ---------------------------------------------------------------------------
 
@@ -331,6 +353,7 @@ begin
   C.Connector := Connector;
   C.IsNot     := IsNot;
   C.SubQuery  := SubQuery;
+  C.IsColumnValue := IsColumnValue;
   Result := C;
 end;
 
@@ -507,6 +530,31 @@ begin
   C.Values    := Copy(Values);
   C.Negated   := Negated;
   C.Connector := Connector;
+  Result := C;
+end;
+
+{ TNestedWhereClause }
+
+destructor TNestedWhereClause.Destroy;
+var
+  Sub: TAbstractClause;
+begin
+  for Sub in SubClauses do
+    Sub.Free;
+  inherited;
+end;
+
+function TNestedWhereClause.Clone: TAbstractClause;
+var
+  C: TNestedWhereClause;
+  I: Integer;
+begin
+  C := TNestedWhereClause.Create;
+  C.Connector := Connector;
+  C.IsNot     := IsNot;
+  SetLength(C.SubClauses, Length(SubClauses));
+  for I := 0 to High(SubClauses) do
+    C.SubClauses[I] := SubClauses[I].Clone;
   Result := C;
 end;
 

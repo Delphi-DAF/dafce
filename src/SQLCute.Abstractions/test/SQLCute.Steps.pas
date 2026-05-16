@@ -326,6 +326,37 @@ type
     procedure GivenOrWhereNotInQuery(W: TSQLCuteWorld);
 
     // -----------------------------------------------------------------------
+    //  GIVEN — F2: WHERE groups, WhereColumns, When
+    // -----------------------------------------------------------------------
+
+    [Given('a WHERE group query')]
+    procedure GivenWhereGroup(W: TSQLCuteWorld);
+
+    [Given('a WHERE group with outer AND condition')]
+    procedure GivenWhereGroupWithOuter(W: TSQLCuteWorld);
+
+    [Given('an OR WHERE group query')]
+    procedure GivenOrWhereGroup(W: TSQLCuteWorld);
+
+    [Given('a WhereColumns equality query')]
+    procedure GivenWhereColumnsEquality(W: TSQLCuteWorld);
+
+    [Given('a WhereColumns with operator query')]
+    procedure GivenWhereColumnsWithOp(W: TSQLCuteWorld);
+
+    [Given('a WhereColumns combined with WHERE query')]
+    procedure GivenWhereColumnsCombined(W: TSQLCuteWorld);
+
+    [Given('a When true query')]
+    procedure GivenWhenTrue(W: TSQLCuteWorld);
+
+    [Given('a When false query')]
+    procedure GivenWhenFalse(W: TSQLCuteWorld);
+
+    [Given('a When with false callback query')]
+    procedure GivenWhenWithFalseCallback(W: TSQLCuteWorld);
+
+    // -----------------------------------------------------------------------
     //  WHEN
     // -----------------------------------------------------------------------
 
@@ -990,6 +1021,95 @@ begin
   W.Query := TQuery.New.From('users')
     .Where('active', True)
     .OrWhereNotInQuery('id', TQuery.New.From('banned').Select('user_id'));
+end;
+
+// -----------------------------------------------------------------------
+//  GIVEN — F2: WHERE groups, WhereColumns, When
+// -----------------------------------------------------------------------
+
+procedure TSQLCuteSteps.GivenWhereGroup(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('users')
+    .Where(
+      function(Q: IQuery): IQuery
+      begin
+        Result := Q.Where('age', '>', 18).Where('active', True);
+      end);
+end;
+
+procedure TSQLCuteSteps.GivenWhereGroupWithOuter(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('orders')
+    .Where('status', 'open')
+    .Where(
+      function(Q: IQuery): IQuery
+      begin
+        Result := Q.Where('total', '>', 100).OrWhere('priority', 1);
+      end);
+end;
+
+procedure TSQLCuteSteps.GivenOrWhereGroup(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('users')
+    .Where('vip', True)
+    .OrWhere(
+      function(Q: IQuery): IQuery
+      begin
+        Result := Q.Where('age', '>', 18).Where('active', True);
+      end);
+end;
+
+procedure TSQLCuteSteps.GivenWhereColumnsEquality(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('employees')
+    .WhereColumns('manager_id', '=', 'employee_id');
+end;
+
+procedure TSQLCuteSteps.GivenWhereColumnsWithOp(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('products')
+    .WhereColumns('price', '>', 'min_price');
+end;
+
+procedure TSQLCuteSteps.GivenWhereColumnsCombined(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('products')
+    .Where('active', True)
+    .WhereColumns('price', '>', 'min_price');
+end;
+
+procedure TSQLCuteSteps.GivenWhenTrue(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('users')
+    .When(True,
+      function(Q: IQuery): IQuery
+      begin
+        Result := Q.Where('active', True);
+      end);
+end;
+
+procedure TSQLCuteSteps.GivenWhenFalse(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('users')
+    .When(False,
+      function(Q: IQuery): IQuery
+      begin
+        Result := Q.Where('active', True);
+      end);
+end;
+
+procedure TSQLCuteSteps.GivenWhenWithFalseCallback(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('users')
+    .When(False,
+      function(Q: IQuery): IQuery
+      begin
+        Result := Q.Where('active', True);
+      end,
+      function(Q: IQuery): IQuery
+      begin
+        Result := Q.Where('archived', True);
+      end);
 end;
 
 // -----------------------------------------------------------------------

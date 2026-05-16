@@ -188,15 +188,156 @@ var
   Clause: TAbstractClause;
   W: TWhereClause;
   WI: TWhereInClause;
+  WN: TNestedWhereClause;
   First: Boolean;
-  Expr, Keyword, Placeholders: string;
+  Expr, Keyword, Placeholders, InnerSql: string;
   I: Integer;
+
+  function ConnectorStr(Conn: TBoolOp): string;
+  begin
+    case Conn of
+      TBoolOp.opAnd: Result := ' AND ';
+      TBoolOp.opOr:  Result := ' OR ';
+    else
+      Result := ' AND ';
+    end;
+  end;
+
+  // Recursive compilation of a nested group's sub-clauses (no FBindings reset)
+  function CompileNestedGroup(const SubClauses: TArray<TAbstractClause>): string; forward;
+
+  function CompileNestedGroup(const SubClauses: TArray<TAbstractClause>): string;
+  var
+    InnerSb: TStringBuilder;
+    Sub: TAbstractClause;
+    SubW: TWhereClause;
+    SubWI: TWhereInClause;
+    SubWN: TNestedWhereClause;
+    InnerFirst: Boolean;
+    SubExpr, SubPlaceholders: string;
+    J: Integer;
+  begin
+    InnerSb := TStringBuilder.Create;
+    try
+      InnerFirst := True;
+      for Sub in SubClauses do
+      begin
+        // --- nested group inside group ---
+        if Sub is TNestedWhereClause then
+        begin
+          SubWN := TNestedWhereClause(Sub);
+          if not InnerFirst then
+            InnerSb.Append(ConnectorStr(SubWN.Connector));
+          InnerFirst := False;
+          InnerSb.Append('(' + CompileNestedGroup(SubWN.SubClauses) + ')');
+          Continue;
+        end;
+
+        // --- WhereIn inside group ---
+        if Sub is TWhereInClause then
+        begin
+          SubWI := TWhereInClause(Sub);
+          if InnerFirst then
+            InnerSb.Append('')
+          else
+            InnerSb.Append(' ' + SubWI.Connector + ' ');
+          InnerFirst := False;
+          SubPlaceholders := '';
+          for J := 0 to High(SubWI.Values) do
+          begin
+            if J > 0 then SubPlaceholders := SubPlaceholders + ', ';
+            AddBinding(SubWI.Values[J]);
+            SubPlaceholders := SubPlaceholders + ParamPlaceholder;
+          end;
+          if SubWI.Negated then
+            InnerSb.Append(WrapColumn(SubWI.Column) + ' NOT IN (' + SubPlaceholders + ')')
+          else
+            InnerSb.Append(WrapColumn(SubWI.Column) + ' IN (' + SubPlaceholders + ')');
+          Continue;
+        end;
+
+        if not (Sub is TWhereClause) then Continue;
+        SubW := TWhereClause(Sub);
+
+        if not InnerFirst then
+          InnerSb.Append(ConnectorStr(SubW.Connector));
+        InnerFirst := False;
+
+        // --- column-column comparison ---
+        if SubW.IsColumnValue then
+        begin
+          SubExpr := WrapColumn(SubW.Column) + ' ' + OperatorSymbol(SubW.Op) + ' ' + WrapColumn(VarToStr(SubW.Value));
+        end
+        else
+        case SubW.Op of
+          TWhereOp.IsNull:    SubExpr := WrapColumn(SubW.Column) + ' IS NULL';
+          TWhereOp.IsNotNull: SubExpr := WrapColumn(SubW.Column) + ' IS NOT NULL';
+          TWhereOp.&Exists:   SubExpr := 'EXISTS (' + CompileSubQuery(SubW.SubQuery as IQuery) + ')';
+          TWhereOp.NotExists: SubExpr := 'NOT EXISTS (' + CompileSubQuery(SubW.SubQuery as IQuery) + ')';
+          TWhereOp.&Between:
+          begin
+            AddBinding(SubW.Value);
+            AddBinding(SubW.Value2);
+            SubExpr := WrapColumn(SubW.Column) + ' BETWEEN ' + ParamPlaceholder + ' AND ' + ParamPlaceholder;
+          end;
+          TWhereOp.NotBetween:
+          begin
+            AddBinding(SubW.Value);
+            AddBinding(SubW.Value2);
+            SubExpr := WrapColumn(SubW.Column) + ' NOT BETWEEN ' + ParamPlaceholder + ' AND ' + ParamPlaceholder;
+          end;
+          TWhereOp.&In:
+          begin
+            if SubW.SubQuery <> nil then
+              SubExpr := WrapColumn(SubW.Column) + ' IN (' + CompileSubQuery(SubW.SubQuery as IQuery) + ')'
+            else
+              SubExpr := WrapColumn(SubW.Column) + ' IN (' + VarToStr(SubW.Value) + ')';
+          end;
+          TWhereOp.NotIn:
+          begin
+            if SubW.SubQuery <> nil then
+              SubExpr := WrapColumn(SubW.Column) + ' NOT IN (' + CompileSubQuery(SubW.SubQuery as IQuery) + ')'
+            else
+              SubExpr := WrapColumn(SubW.Column) + ' NOT IN (' + VarToStr(SubW.Value) + ')';
+          end;
+          TWhereOp.Raw: SubExpr := SubW.RawSql;
+          else
+          begin
+            AddBinding(SubW.Value);
+            SubExpr := WrapColumn(SubW.Column) + ' ' + OperatorSymbol(SubW.Op) + ' ' + ParamPlaceholder;
+          end;
+        end;
+
+        if SubW.IsNot then
+          SubExpr := 'NOT (' + SubExpr + ')';
+        InnerSb.Append(SubExpr);
+      end;
+      Result := InnerSb.ToString;
+    finally
+      InnerSb.Free;
+    end;
+  end;
+
 begin
   Sb := TStringBuilder.Create;
   try
     First := True;
     for Clause in Clauses do
     begin
+      // --- NESTED GROUP (TNestedWhereClause must be checked BEFORE TWhereClause) ---
+      if Clause is TNestedWhereClause then
+      begin
+        WN := TNestedWhereClause(Clause);
+        if First then
+          Sb.Append('WHERE ')
+        else
+          Sb.Append(ConnectorStr(WN.Connector));
+        First := False;
+        InnerSql := CompileNestedGroup(WN.SubClauses);
+        Sb.Append('(' + InnerSql + ')');
+        Continue;
+      end;
+
       // --- WHERE IN / NOT IN (value-array variant) ---
       if Clause is TWhereInClause then
       begin
@@ -234,6 +375,12 @@ begin
         end;
       First := False;
 
+      // --- column-column comparison (no binding) ---
+      if W.IsColumnValue then
+      begin
+        Expr := WrapColumn(W.Column) + ' ' + OperatorSymbol(W.Op) + ' ' + WrapColumn(VarToStr(W.Value));
+      end
+      else
       case W.Op of
         TWhereOp.IsNull:
           Expr := WrapColumn(W.Column) + ' IS NULL';
