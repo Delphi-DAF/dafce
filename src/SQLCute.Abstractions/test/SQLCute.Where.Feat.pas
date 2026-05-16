@@ -226,6 +226,18 @@ TQuery — WHERE @unit @sqlcute
     .&Then('SQL is "SELECT * FROM users WHERE status = ? OR NOT (archived = ?)"')
     .&Then('has 2 bindings')
 
+  .Scenario('WhereNot with operator wraps condition in NOT')
+    .Given('a WhereNot with operator query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users WHERE NOT (age > ?)"')
+    .&Then('has 1 binding')
+
+  .Scenario('OrWhereNot with operator appends with OR NOT')
+    .Given('an OrWhereNot with operator query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users WHERE active = ? OR NOT (score < ?)"')
+    .&Then('has 2 bindings')
+
 // -------------------------------------------------------------------------
 
 .Rule('WhereNotBetween / OrWhereBetween / OrWhereNotBetween')
@@ -278,6 +290,18 @@ TQuery — WHERE @unit @sqlcute
     .Given('an OrWhereInQuery query')
     .When('I compile with ANSI')
     .&Then('SQL is "SELECT * FROM users WHERE active = ? OR id IN (SELECT id FROM vip)"')
+    .&Then('has 1 binding')
+
+  .Scenario('WhereInQuery produces IN (subquery)')
+    .Given('a WhereInQuery query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users WHERE id IN (SELECT id FROM vip)"')
+    .&Then('has 0 bindings')
+
+  .Scenario('OrWhereNotInQuery appends with OR NOT IN (subquery)')
+    .Given('an OrWhereNotInQuery query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users WHERE active = ? OR id NOT IN (SELECT user_id FROM banned)"')
     .&Then('has 1 binding')
 
 ;

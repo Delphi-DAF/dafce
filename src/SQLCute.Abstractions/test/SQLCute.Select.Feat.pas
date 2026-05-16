@@ -137,6 +137,54 @@ TQuery — SELECT @unit @sqlcute
     .&Then('SQL is "SELECT id, name FROM users WHERE active = ? LIMIT 10"')
     .&Then('has 1 binding')
 
+// -------------------------------------------------------------------------
+
+.Rule('SelectAs emits a column alias')
+
+  .Scenario('SelectAs with alias')
+    .Given('a SelectAs query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT name AS full_name FROM users"')
+    .&Then('has 0 bindings')
+
+// -------------------------------------------------------------------------
+
+.Rule('Aggregate functions emit SUM / AVG / MIN / MAX with default alias')
+
+  .Scenario('SelectSum emits SUM aggregate')
+    .Given('a SelectSum query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT SUM(total) AS sum FROM orders"')
+    .&Then('has 0 bindings')
+
+  .Scenario('SelectAvg emits AVG aggregate')
+    .Given('a SelectAvg query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT AVG(score) AS avg FROM results"')
+    .&Then('has 0 bindings')
+
+  .Scenario('SelectMin emits MIN aggregate')
+    .Given('a SelectMin query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT MIN(price) AS min FROM products"')
+    .&Then('has 0 bindings')
+
+  .Scenario('SelectMax emits MAX aggregate')
+    .Given('a SelectMax query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT MAX(price) AS max FROM products"')
+    .&Then('has 0 bindings')
+
+// -------------------------------------------------------------------------
+
+.Rule('From with alias qualifies the table reference')
+
+  .Scenario('From with alias emits AS alias')
+    .Given('a From with alias query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT u.id FROM users AS u"')
+    .&Then('has 0 bindings')
+
 ;
 
 end.

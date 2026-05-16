@@ -292,6 +292,40 @@ type
     procedure GivenLeftJoinWithGteOp(W: TSQLCuteWorld);
 
     // -----------------------------------------------------------------------
+    //  GIVEN — coverage gaps
+    // -----------------------------------------------------------------------
+
+    [Given('a SelectAs query')]
+    procedure GivenSelectAs(W: TSQLCuteWorld);
+
+    [Given('a SelectSum query')]
+    procedure GivenSelectSum(W: TSQLCuteWorld);
+
+    [Given('a SelectAvg query')]
+    procedure GivenSelectAvg(W: TSQLCuteWorld);
+
+    [Given('a SelectMin query')]
+    procedure GivenSelectMin(W: TSQLCuteWorld);
+
+    [Given('a SelectMax query')]
+    procedure GivenSelectMax(W: TSQLCuteWorld);
+
+    [Given('a From with alias query')]
+    procedure GivenFromAlias(W: TSQLCuteWorld);
+
+    [Given('a WhereNot with operator query')]
+    procedure GivenWhereNotWithOp(W: TSQLCuteWorld);
+
+    [Given('an OrWhereNot with operator query')]
+    procedure GivenOrWhereNotWithOp(W: TSQLCuteWorld);
+
+    [Given('a WhereInQuery query')]
+    procedure GivenWhereInQuery(W: TSQLCuteWorld);
+
+    [Given('an OrWhereNotInQuery query')]
+    procedure GivenOrWhereNotInQuery(W: TSQLCuteWorld);
+
+    // -----------------------------------------------------------------------
     //  WHEN
     // -----------------------------------------------------------------------
 
@@ -897,6 +931,65 @@ begin
   W.Query := TQuery.New
     .From('orders')
     .LeftJoin('tiers', 'orders.amount', 'tiers.min_amount', '>=');
+end;
+
+// -----------------------------------------------------------------------
+//  GIVEN — coverage gaps
+// -----------------------------------------------------------------------
+
+procedure TSQLCuteSteps.GivenSelectAs(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('users').SelectAs('name', 'full_name');
+end;
+
+procedure TSQLCuteSteps.GivenSelectSum(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('orders').SelectSum('total');
+end;
+
+procedure TSQLCuteSteps.GivenSelectAvg(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('results').SelectAvg('score');
+end;
+
+procedure TSQLCuteSteps.GivenSelectMin(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('products').SelectMin('price');
+end;
+
+procedure TSQLCuteSteps.GivenSelectMax(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('products').SelectMax('price');
+end;
+
+procedure TSQLCuteSteps.GivenFromAlias(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('users', 'u').Select('u.id');
+end;
+
+procedure TSQLCuteSteps.GivenWhereNotWithOp(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('users').WhereNot('age', '>', 18);
+end;
+
+procedure TSQLCuteSteps.GivenOrWhereNotWithOp(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('users')
+    .Where('active', True)
+    .OrWhereNot('score', '<', 10);
+end;
+
+procedure TSQLCuteSteps.GivenWhereInQuery(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('users')
+    .WhereInQuery('id', TQuery.New.From('vip').Select('id'));
+end;
+
+procedure TSQLCuteSteps.GivenOrWhereNotInQuery(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('users')
+    .Where('active', True)
+    .OrWhereNotInQuery('id', TQuery.New.From('banned').Select('user_id'));
 end;
 
 // -----------------------------------------------------------------------
