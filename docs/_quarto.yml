@@ -1,6 +1,6 @@
 project:
   type: website
-  output-dir: ../../out/site
+  output-dir: ../out/site
 
 website:
   title: "DAF — Delphi Application Foundation"
