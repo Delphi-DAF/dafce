@@ -185,6 +185,46 @@ TQuery — SELECT @unit @sqlcute
     .&Then('SQL is "SELECT u.id FROM users AS u"')
     .&Then('has 0 bindings')
 
+// -------------------------------------------------------------------------
+
+.Rule('SELECT subquery, FromRaw and WithRaw support raw expressions @f5')
+
+  .Scenario('Select subquery emits derived column @f5')
+    .Given('a SELECT subquery column query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT (SELECT MAX(price) AS max FROM products) AS max_price FROM orders"')
+    .&Then('has 0 bindings')
+
+  .Scenario('FromRaw with alias emits raw FROM expression @f5')
+    .Given('a FromRaw with alias query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM generate_series(1,10) AS t"')
+    .&Then('has 0 bindings')
+
+  .Scenario('FromRaw with bindings accumulates parameters @f5')
+    .Given('a FromRaw with bindings query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM generate_series(?,?) AS t"')
+    .&Then('has 2 bindings')
+
+  .Scenario('FromRaw bindings precede WHERE bindings @f5')
+    .Given('a FromRaw binding order query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM fn(?) AS t WHERE n > ?"')
+    .&Then('has 2 bindings')
+
+  .Scenario('WithRaw emits a raw CTE @f5')
+    .Given('a WithRaw CTE query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "WITH cte AS (SELECT 1 AS n) SELECT * FROM cte"')
+    .&Then('has 0 bindings')
+
+  .Scenario('WithRaw with bindings accumulates CTE parameters @f5')
+    .Given('a WithRaw CTE with bindings query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "WITH cte AS (SELECT ? AS n) SELECT * FROM cte"')
+    .&Then('has 1 binding')
+
 ;
 
 end.

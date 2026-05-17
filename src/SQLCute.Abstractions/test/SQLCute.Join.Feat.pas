@@ -200,6 +200,55 @@ TQuery — JOIN / GROUP BY / set operations / CTE @unit @sqlcute
     .&Then('SQL is "SELECT user_id, COUNT(*) AS total FROM orders INNER JOIN users ON orders.user_id = users.id WHERE status = ? GROUP BY user_id HAVING COUNT(*) > ? ORDER BY total DESC LIMIT 10"')
     .&Then('has 2 bindings')
 
+// -------------------------------------------------------------------------
+
+.Rule('Join callback: ON with multiple AND conditions')
+
+  .Scenario('InnerJoinTwoConditions: JOIN with two column conditions @f4')
+    .Given('a JOIN callback query with two AND conditions')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM orders INNER JOIN users ON (orders.user_id = users.id AND orders.tenant = users.tenant)"')
+    .&Then('has 0 bindings')
+
+// -------------------------------------------------------------------------
+
+.Rule('Join callback: ON with OR conditions')
+
+  .Scenario('LeftJoinOrCondition: LEFT JOIN with two OR conditions @f4')
+    .Given('a LEFT JOIN callback query with OR conditions')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM orders LEFT JOIN promos ON (orders.promo_id = promos.id OR orders.alt_promo = promos.id)"')
+    .&Then('has 0 bindings')
+
+// -------------------------------------------------------------------------
+
+.Rule('Join callback: ON with nested group')
+
+  .Scenario('JoinWithNestedGroup: JOIN ON with nested OR group @f4')
+    .Given('a JOIN callback query with a nested group condition')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM t INNER JOIN u ON (t.id = u.id AND (t.active = ? OR u.role = ?))"')
+    .&Then('has 2 bindings')
+
+// -------------------------------------------------------------------------
+
+.Rule('Join subquery: JOIN against an inline subquery')
+
+  .Scenario('SubqueryJoin: LEFT JOIN against a derived table @f4')
+    .Given('a LEFT JOIN subquery callback query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM orders LEFT JOIN (SELECT id, name FROM users) AS u ON (orders.user_id = u.id)"')
+    .&Then('has 0 bindings')
+
+// -------------------------------------------------------------------------
+
+.Rule('Join callback: cloned query is independent')
+
+  .Scenario('CloneJoinCallback: clone of a callback JOIN is unchanged @f4')
+    .Given('a JOIN callback query with two AND conditions')
+    .When('I clone the query and compile the clone')
+    .&Then('SQL is "SELECT * FROM orders INNER JOIN users ON (orders.user_id = users.id AND orders.tenant = users.tenant)"')
+
 ;
 
 end.
