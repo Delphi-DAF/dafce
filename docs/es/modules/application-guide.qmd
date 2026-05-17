@@ -1,5 +1,4 @@
 ---
-title: "Application — Guía de uso"
 sidebar: modules-es
 lang: es
 ---

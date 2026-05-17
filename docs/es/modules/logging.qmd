@@ -1,5 +1,4 @@
 ---
-title: "Logging"
 sidebar: modules-es
 lang: es
 ---

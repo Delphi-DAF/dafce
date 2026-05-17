@@ -1,5 +1,4 @@
 ---
-title: "Commons — Usage Guide"
 sidebar: modules
 ---
 

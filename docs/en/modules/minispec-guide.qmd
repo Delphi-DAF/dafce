@@ -1,5 +1,4 @@
 ---
-title: "MiniSpec — Usage Guide"
 sidebar: modules
 ---
 

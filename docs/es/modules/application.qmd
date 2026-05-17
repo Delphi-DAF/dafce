@@ -1,5 +1,4 @@
 ---
-title: "Application"
 sidebar: modules-es
 lang: es
 ---

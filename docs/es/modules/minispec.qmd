@@ -1,5 +1,4 @@
 ---
-title: "MiniSpec"
 sidebar: modules-es
 lang: es
 ---

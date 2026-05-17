@@ -1,5 +1,4 @@
 ---
-title: "MediatR — Guía de uso"
 sidebar: modules-es
 lang: es
 ---

@@ -1,5 +1,4 @@
 ---
-title: "Commons — Guía de uso"
 sidebar: modules-es
 lang: es
 ---

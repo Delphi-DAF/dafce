@@ -1,5 +1,4 @@
 ---
-title: "NNLog — Usage Guide"
 sidebar: modules
 ---
 

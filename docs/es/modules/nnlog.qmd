@@ -1,5 +1,4 @@
 ---
-title: "NNLog"
 sidebar: modules-es
 lang: es
 ---

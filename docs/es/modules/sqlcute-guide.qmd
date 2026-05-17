@@ -1,0 +1,66 @@
+---
+sidebar: modules-es
+lang: es
+---
+
+{{< include ../../../src/SQLCute.Abstractions/docs/GUIDE.es.md >}}
+
+---
+
+## SELECT & FROM
+
+{{< include ../../../src/SQLCute.Abstractions/docs/guide/select.es.md >}}
+
+---
+
+## WHERE
+
+{{< include ../../../src/SQLCute.Abstractions/docs/guide/where.es.md >}}
+
+---
+
+## JOINs
+
+{{< include ../../../src/SQLCute.Abstractions/docs/guide/joins.es.md >}}
+
+---
+
+## GROUP BY y Agregados
+
+{{< include ../../../src/SQLCute.Abstractions/docs/guide/groupby.es.md >}}
+
+---
+
+## Operaciones de Conjunto
+
+{{< include ../../../src/SQLCute.Abstractions/docs/guide/setops.es.md >}}
+
+---
+
+## DML
+
+{{< include ../../../src/SQLCute.Abstractions/docs/guide/dml.es.md >}}
+
+---
+
+## Subconsultas
+
+{{< include ../../../src/SQLCute.Abstractions/docs/guide/subqueries.es.md >}}
+
+---
+
+## Operaciones de Cadena
+
+{{< include ../../../src/SQLCute.Abstractions/docs/guide/string-ops.es.md >}}
+
+---
+
+## Operaciones de Fecha
+
+{{< include ../../../src/SQLCute.Abstractions/docs/guide/date-ops.es.md >}}
+
+---
+
+## Referencia de Dialectos
+
+{{< include ../../../src/SQLCute.Abstractions/docs/guide/dialects.es.md >}}

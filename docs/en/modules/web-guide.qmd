@@ -1,5 +1,4 @@
 ---
-title: "Web — Usage Guide"
 sidebar: modules
 ---
 

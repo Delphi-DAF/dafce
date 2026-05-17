@@ -1,5 +1,4 @@
 ---
-title: "Logging — Guía de uso"
 sidebar: modules-es
 lang: es
 ---

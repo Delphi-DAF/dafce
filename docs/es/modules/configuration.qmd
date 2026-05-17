@@ -1,5 +1,4 @@
 ---
-title: "Configuración"
 sidebar: modules-es
 lang: es
 ---

@@ -1,5 +1,4 @@
 ---
-title: "Logging — Usage Guide"
 sidebar: modules
 ---
 
