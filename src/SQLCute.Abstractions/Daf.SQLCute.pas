@@ -443,6 +443,8 @@ end;
 
 procedure RegisterIQueryFactory(const AFactory: TIQueryFactory);
 begin
+  if not Assigned(AFactory) then
+    raise EInvalidOpException.Create('Argument Factory cannot be nil');
   FIQueryFactory := AFactory;
 end;
 
