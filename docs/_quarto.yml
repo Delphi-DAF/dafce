@@ -4,6 +4,7 @@ project:
 
 website:
   title: "DAF — Delphi Application Foundation"
+  site-url: https://delphi-daf.github.io/dafce
   favicon: assets/DAF-Logo.png
   repo-url: https://github.com/Delphi-DAF/dafce
   repo-actions: [issue, edit]

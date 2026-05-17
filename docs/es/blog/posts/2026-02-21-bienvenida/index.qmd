@@ -1,0 +1,36 @@
+---
+title: "Bienvenido al sitio de documentación de DAF"
+description: "El sitio oficial de documentación de DAF (Delphi Application Foundation) Community Edition está en línea."
+date: 2026-02-21
+categories: [anuncio, release]
+image: ../../../../assets/DAF-Logo.png
+lang: es
+---
+
+Nos complace anunciar el lanzamiento del sitio oficial de **documentación de DAF**, construido con [Quarto](https://quarto.org).
+
+## Qué hay aquí
+
+- Guía de **inicio rápido** — de cero a app en funcionamiento en minutos
+- **Visión general de arquitectura** — cómo encajan los módulos
+- **Referencia completa** de los 10 módulos
+- **Bilingüe** — cada página disponible en inglés y español (🇬🇧 / 🇪🇸)
+
+## Módulos cubiertos
+
+| Módulo | Qué hace |
+|--------|----------|
+| Application | Constructor y ejecutor de aplicaciones |
+| Hosting | Ciclo de vida, `IHost`, `IHostBuilder` |
+| DependencyInjection | Contenedor DI completo |
+| Configuration | JSON, variables de entorno, binding tipado |
+| Logging | Logging estructurado con ámbitos |
+| MediatR | CQRS: comandos, consultas, notificaciones |
+| MiniSpec | Testing BDD con specs Gherkin |
+| NNLog | Motor de logging inspirado en NLog |
+| Commons | Smart pointers, RTTI, arrays, CLI |
+| Web | Servidor HTTP ligero |
+
+## Comentarios
+
+Si encuentras errores, información faltante o tienes sugerencias, por favor [abre un issue](https://github.com/Delphi-DAF/dafce/issues) en GitHub.
