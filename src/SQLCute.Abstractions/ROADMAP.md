@@ -4,8 +4,8 @@
 
 | Fase | Descripción | Estado |
 |------|-------------|--------|
-| F1 | WHERE variantes OR/Not/Between + Set ops + Paginación + JOIN op | ⬜ Pendiente |
-| F2 | Grupos WHERE anidados + WhereColumns + When (callbacks) | ⬜ Pendiente |
+| F1 | WHERE variantes OR/Not/Between + Set ops + Paginación + JOIN op | ✅ Completado |
+| F2 | Grupos WHERE anidados + WhereColumns + When (callbacks) | ✅ Completado |
 | F3 | String Operations (WhereLike/Starts/Ends/Contains) | ⬜ Pendiente |
 | F4 | JOIN callbacks compuestos + subquery JOIN | ⬜ Pendiente |
 | F5 | SELECT subquery + FromRaw + WithRaw | ⬜ Pendiente |
