@@ -23,6 +23,11 @@ type
   TBoolOp = (opAnd, opOr);
 
   /// <summary>
+  /// The date/time component to extract in a date-filter WHERE condition.
+  /// </summary>
+  TDatePart = (dpDate, dpTime, dpYear, dpMonth, dpDay, dpHour, dpMinute);
+
+  /// <summary>
   /// Direction for ORDER BY clauses.
   /// </summary>
   TSortDir = (Asc, Desc);
@@ -60,6 +65,8 @@ type
     Alias: string;
     /// When True the entire Column value is emitted verbatim (raw SQL).
     IsRaw: Boolean;
+    /// When non-nil, this column is a subquery expression: (SELECT …) AS alias.
+    SubQuery: IInterface;
   end;
 
   /// <summary>
@@ -85,6 +92,18 @@ type
     /// Optional schema prefix.
     Schema: string;
     /// Optional alias.
+    Alias: string;
+    function Clone: TAbstractClause; override;
+  end;
+
+  /// <summary>
+  /// FROM with a raw SQL expression (table function, lateral, etc.).
+  /// Bindings are prepended to the query binding list (FROM precedes WHERE).
+  /// </summary>
+  TFromRawClause = class(TAbstractClause)
+  public
+    RawSql: string;
+    Bindings: TArray<Variant>;
     Alias: string;
     function Clone: TAbstractClause; override;
   end;
@@ -116,6 +135,10 @@ type
     /// When True, Value holds a column name and the condition is emitted as
     /// col1 op col2 (no parameter binding). Used by WhereColumns.
     IsColumnValue: Boolean;
+    /// When True (and Op = Like/NotLike), the compiler emits a case-sensitive LIKE.
+    /// When False (default), the compiler wraps the column in LOWER() and
+    /// lower-cases the binding value to achieve case-insensitive matching.
+    CaseSensitive: Boolean;
     function Clone: TAbstractClause; override;
   end;
 
@@ -176,6 +199,24 @@ type
     Col1: string;
     Op: string;
     Col2: string;
+    /// Callback-specified ON conditions. When non-empty, takes precedence
+    /// over Condition and Col1/Col2.
+    ConditionClauses: TArray<TAbstractClause>;
+    destructor Destroy; override;
+    function Clone: TAbstractClause; override;
+  end;
+
+  /// <summary>
+  /// JOIN against a subquery, with alias and callback-defined ON conditions.
+  /// </summary>
+  TJoinSubqueryClause = class(TAbstractClause)
+  public
+    JoinType: TJoinType;
+    /// Sub-query body (IInterface to avoid circular dependency with IQuery).
+    SubQuery: IInterface;
+    Alias: string;
+    ConditionClauses: TArray<TAbstractClause>;
+    destructor Destroy; override;
     function Clone: TAbstractClause; override;
   end;
 
@@ -232,6 +273,10 @@ type
     IsRecursive: Boolean;
     /// CTE body (IInterface to avoid circular dependency with IQuery).
     SubQuery: IInterface;
+    /// When True, use RawSql + RawBindings instead of SubQuery.
+    IsRawSql: Boolean;
+    RawSql: string;
+    RawBindings: TArray<Variant>;
     function Clone: TAbstractClause; override;
   end;
 
@@ -312,6 +357,25 @@ type
     function Clone: TAbstractClause; override;
   end;
 
+  // ---------------------------------------------------------------------------
+  //  DATE WHERE  (date/time portion filter)
+  // ---------------------------------------------------------------------------
+
+  /// <summary>
+  /// A WHERE condition that filters on a specific date or time portion.
+  /// The exact SQL fragment is dialect-specific; the base ANSI compiler
+  /// emits <c>col op ?</c> as a fallback.
+  /// </summary>
+  TDateWhereClause = class(TAbstractClause)
+  public
+    DatePart:  TDatePart;
+    Column:    string;
+    Op:        string;     // '=', '>', '<', etc.
+    Value:     Variant;
+    Connector: TBoolOp;
+    function Clone: TAbstractClause; override;
+  end;
+
 implementation
 
 { TSelectClause }
@@ -338,6 +402,19 @@ begin
   Result := C;
 end;
 
+{ TFromRawClause }
+
+function TFromRawClause.Clone: TAbstractClause;
+var
+  C: TFromRawClause;
+begin
+  C := TFromRawClause.Create;
+  C.RawSql   := RawSql;
+  C.Bindings := Copy(Bindings);
+  C.Alias    := Alias;
+  Result := C;
+end;
+
 { TWhereClause }
 
 function TWhereClause.Clone: TAbstractClause;
@@ -351,9 +428,10 @@ begin
   C.Value2    := Value2;
   C.RawSql    := RawSql;
   C.Connector := Connector;
-  C.IsNot     := IsNot;
-  C.SubQuery  := SubQuery;
+  C.IsNot         := IsNot;
+  C.SubQuery      := SubQuery;
   C.IsColumnValue := IsColumnValue;
+  C.CaseSensitive := CaseSensitive;
   Result := C;
 end;
 
@@ -406,9 +484,19 @@ end;
 
 { TJoinClause }
 
+destructor TJoinClause.Destroy;
+var
+  C: TAbstractClause;
+begin
+  for C in ConditionClauses do
+    C.Free;
+  inherited;
+end;
+
 function TJoinClause.Clone: TAbstractClause;
 var
   C: TJoinClause;
+  I: Integer;
 begin
   C := TJoinClause.Create;
   C.JoinType  := JoinType;
@@ -419,6 +507,35 @@ begin
   C.Col1      := Col1;
   C.Op        := Op;
   C.Col2      := Col2;
+  SetLength(C.ConditionClauses, Length(ConditionClauses));
+  for I := 0 to High(ConditionClauses) do
+    C.ConditionClauses[I] := ConditionClauses[I].Clone;
+  Result := C;
+end;
+
+{ TJoinSubqueryClause }
+
+destructor TJoinSubqueryClause.Destroy;
+var
+  C: TAbstractClause;
+begin
+  for C in ConditionClauses do
+    C.Free;
+  inherited;
+end;
+
+function TJoinSubqueryClause.Clone: TAbstractClause;
+var
+  C: TJoinSubqueryClause;
+  I: Integer;
+begin
+  C := TJoinSubqueryClause.Create;
+  C.JoinType := JoinType;
+  C.SubQuery := SubQuery;
+  C.Alias    := Alias;
+  SetLength(C.ConditionClauses, Length(ConditionClauses));
+  for I := 0 to High(ConditionClauses) do
+    C.ConditionClauses[I] := ConditionClauses[I].Clone;
   Result := C;
 end;
 
@@ -472,6 +589,9 @@ begin
   C.Name        := Name;
   C.IsRecursive := IsRecursive;
   C.SubQuery    := SubQuery;
+  C.IsRawSql    := IsRawSql;
+  C.RawSql      := RawSql;
+  C.RawBindings := Copy(RawBindings);
   Result := C;
 end;
 
@@ -529,6 +649,21 @@ begin
   C.Column    := Column;
   C.Values    := Copy(Values);
   C.Negated   := Negated;
+  C.Connector := Connector;
+  Result := C;
+end;
+
+{ TDateWhereClause }
+
+function TDateWhereClause.Clone: TAbstractClause;
+var
+  C: TDateWhereClause;
+begin
+  C           := TDateWhereClause.Create;
+  C.DatePart  := DatePart;
+  C.Column    := Column;
+  C.Op        := Op;
+  C.Value     := Value;
   C.Connector := Connector;
   Result := C;
 end;

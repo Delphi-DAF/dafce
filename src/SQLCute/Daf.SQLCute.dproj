@@ -1,7 +1,7 @@
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
     <PropertyGroup>
-        <ProjectGuid>{C7D8E9F0-A1B2-3456-C789-D0E1F2A3B4C5}</ProjectGuid>
-        <MainSource>Daf.SQLCute.Abstractions.dpk</MainSource>
+        <ProjectGuid>{D1E2F3A4-B5C6-7890-ABCD-EF1234567890}</ProjectGuid>
+        <MainSource>Daf.SQLCute.dpk</MainSource>
         <ProjectVersion>20.3</ProjectVersion>
         <FrameworkType>None</FrameworkType>
         <Base>True</Base>
@@ -9,7 +9,7 @@
         <Platform Condition="'$(Platform)'==''">Win32</Platform>
         <TargetedPlatforms>1048579</TargetedPlatforms>
         <AppType>Package</AppType>
-        <ProjectName Condition="'$(ProjectName)'==''">Daf.SQLCute.Abstractions</ProjectName>
+        <ProjectName Condition="'$(ProjectName)'==''">Daf.SQLCute</ProjectName>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Base' or '$(Base)'!=''">
         <Base>true</Base>
@@ -56,12 +56,13 @@
         <GenDll>true</GenDll>
         <GenPackage>true</GenPackage>
         <DCC_Namespace>System;Xml;Data;Datasnap;Web;Soap;$(DCC_Namespace)</DCC_Namespace>
-        <SanitizedProjectName>Daf_SQLCute_Abstractions</SanitizedProjectName>
+        <SanitizedProjectName>Daf_SQLCute</SanitizedProjectName>
         <RuntimeOnlyPackage>true</RuntimeOnlyPackage>
         <DCC_OutputNeverBuildDcps>true</DCC_OutputNeverBuildDcps>
         <VerInfo_Locale>1027</VerInfo_Locale>
         <VerInfo_Keys>CompanyName=;FileDescription=$(MSBuildProjectName);FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProgramID=com.embarcadero.$(MSBuildProjectName);ProductName=$(MSBuildProjectName);ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
         <CfgDependentOn>..\source.optset</CfgDependentOn>
+        <DCC_UnitSearchPath>..\SQLCute.Abstractions;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win32)'!=''">
         <DCC_Namespace>Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;Bde;$(DCC_Namespace)</DCC_Namespace>
@@ -109,8 +110,9 @@
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
         <DCCReference Include="rtl.dcp"/>
-        <DCCReference Include="Daf.SQLCute.Clauses.pas"/>
-        <DCCReference Include="Daf.SQLCute.pas"/>
+        <DCCReference Include="Daf.SQLCute.Abstractions.dcp"/>
+        <DCCReference Include="Daf.SQLCute.Core.pas"/>
+        <DCCReference Include="Daf.SQLCute.Compiler.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\source.optset</DependentOn>
@@ -130,7 +132,7 @@
         <BorlandProject>
             <Delphi.Personality>
                 <Source>
-                    <Source Name="MainSource">Daf.SQLCute.Abstractions.dpk</Source>
+                    <Source Name="MainSource">Daf.SQLCute.dpk</Source>
                 </Source>
             </Delphi.Personality>
             <Platforms>

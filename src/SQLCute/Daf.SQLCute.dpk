@@ -1,4 +1,4 @@
-package Daf.SQLCute.Abstractions;
+package Daf.SQLCute;
 {$R *.res}
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
 {$ALIGN 8}
@@ -28,10 +28,11 @@ package Daf.SQLCute.Abstractions;
 {$IMPLICITBUILD OFF}
 
 requires
-  rtl;
+  rtl,
+  Daf.SQLCute.Abstractions;
 
 contains
-  Daf.SQLCute.Clauses in 'Daf.SQLCute.Clauses.pas',
-  Daf.SQLCute in 'Daf.SQLCute.pas';
+  Daf.SQLCute.Core in 'Daf.SQLCute.Core.pas',
+  Daf.SQLCute.Compiler in 'Daf.SQLCute.Compiler.pas';
 
 end.

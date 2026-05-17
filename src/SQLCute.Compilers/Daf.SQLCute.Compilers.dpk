@@ -1,4 +1,4 @@
-package Daf.SQLCute.Abstractions;
+package Daf.SQLCute.Compilers;
 {$R *.res}
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
 {$ALIGN 8}
@@ -28,10 +28,16 @@ package Daf.SQLCute.Abstractions;
 {$IMPLICITBUILD OFF}
 
 requires
-  rtl;
+  rtl,
+  Daf.SQLCute.Abstractions,
+  Daf.SQLCute;
 
 contains
-  Daf.SQLCute.Clauses in 'Daf.SQLCute.Clauses.pas',
-  Daf.SQLCute in 'Daf.SQLCute.pas';
+  Daf.SQLCute.Compiler.SqlServer in 'Daf.SQLCute.Compiler.SqlServer.pas',
+  Daf.SQLCute.Compiler.Postgres in 'Daf.SQLCute.Compiler.Postgres.pas',
+  Daf.SQLCute.Compiler.MySql in 'Daf.SQLCute.Compiler.MySql.pas',
+  Daf.SQLCute.Compiler.SQLite in 'Daf.SQLCute.Compiler.SQLite.pas',
+  Daf.SQLCute.Compiler.Oracle in 'Daf.SQLCute.Compiler.Oracle.pas',
+  Daf.SQLCute.Compiler.Firebird in 'Daf.SQLCute.Compiler.Firebird.pas';
 
 end.
