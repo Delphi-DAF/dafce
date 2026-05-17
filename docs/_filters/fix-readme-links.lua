@@ -50,8 +50,9 @@ local sqlcute_anchors = {
 }
 
 local function sqlcute_anchor(filename)
-  -- strip path, strip .md or .es.md
+  -- strip path, strip fragment (#...), strip .md or .es.md
   local base = filename:match("([^/\\]+)$") or filename
+  base = base:gsub("#.*$", "")
   base = base:gsub("%.es%.md$", ""):gsub("%.md$", "")
   return sqlcute_anchors[base]
 end
@@ -97,9 +98,17 @@ function Link(el)
     end
   end
 
-  -- 5. modules/README.md language cross-link (e.g. README.es.md from README.md)
-  if t:match("^README%.es%.md$") or t:match("^README%.md$") then
-    return el  -- keep as-is; they resolve within source tree
+  -- 5. Language toggle in README files (README.es.md ↔ README.md)
+  --    Rewrite to the corresponding module page in the other language
+  if t:match("^README%.es%.md$") then
+    local base = src_basename():gsub("%.qmd$", "")
+    el.target = "../../es/modules/" .. base .. ".html"
+    return el
+  end
+  if t:match("^README%.md$") then
+    local base = src_basename():gsub("%.qmd$", "")
+    el.target = "../../en/modules/" .. base .. ".html"
+    return el
   end
 
   -- 6. SQLCute topic files: guide/select.md, guide/select.es.md,
@@ -125,8 +134,7 @@ function Link(el)
     el.target = "minispec-guide.html"
     return el
   end
-  if t:match("[/\\]guide[/\\][^/\\]+%.md$") then
-    -- If not already handled as SQLCute, treat as minispec sub-page
+  if t:match("[/\\]guide[/\\][^/\\]+%.md$") or t:match("^guide[/\\][^/\\]+%.md$") then
     el.target = "minispec-guide.html"
     return el
   end
@@ -141,5 +149,22 @@ function Link(el)
   if t:match("modules?[/\\]README") then
     el.target = "index.html"
     return el
+  end
+end
+
+-- Handle HTML <a href="..."> tags in raw inline/block HTML
+-- (e.g. back-links in included .md files: <a href="../README.md">)
+function RawInline(el)
+  if el.format == "html" and el.text:match("<a ") then
+    local text = el.text:gsub('href="([^"]*)"', function(href)
+      -- Back-links to README → anchor (no target page in Quarto context)
+      if href:match("README[^\"]*%.md") then
+        return 'href="#"'
+      end
+      return 'href="' .. href .. '"'
+    end)
+    if text ~= el.text then
+      return pandoc.RawInline("html", text)
+    end
   end
 end
