@@ -8,8 +8,11 @@ uses
   System.SysUtils,
   Daf.MiniSpec,
   Daf.MiniSpec.Binding,
+  Daf.Rtti,
+  Daf.DependencyInjection,
   Daf.Extensions.DependencyInjection,
   Daf.MediatR.Contracts,
+  Daf.MediatR.DependencyInjection,
   MediatR.Feat;
 
 type
@@ -18,11 +21,22 @@ type
   /// Regex captures are auto-converted to method parameters.
   /// </summary>
   TMediatRSteps = class
+  private
+    procedure RebuildWorld(W: TMediatRWorld);
   public
     // === Given ===
 
     [Given('a configured mediator')]
     procedure GivenMediatorReady(W: TMediatRWorld);
+
+    [Given('a configured mediator with ordered pipeline behaviors')]
+    procedure GivenMediatorWithOrderedBehaviors(W: TMediatRWorld);
+
+    [Given('a configured mediator with discovered pipeline behaviors')]
+    procedure GivenMediatorWithDiscoveredBehaviors(W: TMediatRWorld);
+
+    [Given('a configured mediator with short-circuit behavior')]
+    procedure GivenMediatorWithShortCircuit(W: TMediatRWorld);
 
     // === When ===
 
@@ -54,16 +68,98 @@ type
 
     [ThenAttribute('each scope has its own dependency instance')]
     procedure VerifyScopedDependencies(W: TMediatRWorld);
+
+    [ThenAttribute('the pipeline trace should be outer then inner then handler')]
+    procedure VerifyPipelineOrder(W: TMediatRWorld);
+
+    [ThenAttribute('the pipeline trace should show short-circuit')]
+    procedure VerifyPipelineShortCircuit(W: TMediatRWorld);
+
+    [ThenAttribute('the pipeline trace should be empty')]
+    procedure VerifyPipelineEmpty(W: TMediatRWorld);
   end;
 
 { TMediatRSteps }
 
+procedure TMediatRSteps.RebuildWorld(W: TMediatRWorld);
+begin
+  W.Mediator := nil;
+  if W.RootProvider <> nil then
+    W.RootProvider.ShutDown;
+  W.RootProvider := nil;
+
+  W.ServiceCollection := TServiceCollection.Create;
+  W.ServiceCollection.AddMediatR;
+  W.ServiceCollection.AddMediatRClasses(_T.PackageOf<TMediatRWorld>);
+  W.ServiceCollection.AddScoped<IDependencyMock, TDependencyMock>;
+end;
+
 procedure TMediatRSteps.GivenMediatorReady(W: TMediatRWorld);
 begin
-  // Reset all class-level handler flags to ensure test isolation
+  RebuildWorld(W);
+
+  // Reset all class-level state to ensure test isolation
   TJingHandler.Done := False;
+  TJingHandler.Count := 0;
   TPongedHandler1.Done := False;
   TPongedHandler2.Done := False;
+  TPipelineState.Reset;
+
+  W.RootProvider := W.ServiceCollection.BuildServiceProvider;
+  W.Mediator := W.RootProvider.GetRequiredService<IMediatorImpl>;
+end;
+
+procedure TMediatRSteps.GivenMediatorWithDiscoveredBehaviors(W: TMediatRWorld);
+begin
+  GivenMediatorReady(W);
+
+  RebuildWorld(W);
+  W.ServiceCollection.AddMediatRBehaviors(_T.PackageOf<TMediatRWorld>);
+
+  TJingHandler.Done := False;
+  TJingHandler.Count := 0;
+  TPongedHandler1.Done := False;
+  TPongedHandler2.Done := False;
+  TPipelineState.Reset;
+
+  W.RootProvider := W.ServiceCollection.BuildServiceProvider;
+  W.Mediator := W.RootProvider.GetRequiredService<IMediatorImpl>;
+end;
+
+procedure TMediatRSteps.GivenMediatorWithOrderedBehaviors(W: TMediatRWorld);
+begin
+  GivenMediatorReady(W);
+
+  RebuildWorld(W);
+  W.ServiceCollection.AddTransient(TypeInfo(IPipelineBehaviorInvoker), TOuterBehavior);
+  W.ServiceCollection.AddTransient(TypeInfo(IPipelineBehaviorInvoker), TInnerBehavior);
+
+  TJingHandler.Done := False;
+  TJingHandler.Count := 0;
+  TPongedHandler1.Done := False;
+  TPongedHandler2.Done := False;
+  TPipelineState.Reset;
+
+  W.RootProvider := W.ServiceCollection.BuildServiceProvider;
+  W.Mediator := W.RootProvider.GetRequiredService<IMediatorImpl>;
+end;
+
+procedure TMediatRSteps.GivenMediatorWithShortCircuit(W: TMediatRWorld);
+begin
+  GivenMediatorReady(W);
+
+  RebuildWorld(W);
+  W.ServiceCollection.AddTransient(TypeInfo(IPipelineBehaviorInvoker), TOuterBehavior);
+  W.ServiceCollection.AddTransient(TypeInfo(IPipelineBehaviorInvoker), TShortCircuitBehavior);
+  W.ServiceCollection.AddTransient(TypeInfo(IPipelineBehaviorInvoker), TInnerBehavior);
+
+  TJingHandler.Done := False;
+  TJingHandler.Count := 0;
+  TPongedHandler1.Done := False;
+  TPongedHandler2.Done := False;
+  TPipelineState.Reset;
+
+  W.RootProvider := W.ServiceCollection.BuildServiceProvider;
   W.Mediator := W.RootProvider.GetRequiredService<IMediatorImpl>;
 end;
 
@@ -148,6 +244,21 @@ begin
   Expect(D2.Visites).ToEqual(0);
   // Different instances
   Expect(D1 = D2).ToBeFalse;
+end;
+
+procedure TMediatRSteps.VerifyPipelineOrder(W: TMediatRWorld);
+begin
+  Expect(TPipelineState.Trace).ToEqual('outer-before>inner-before>handler>inner-after>outer-after');
+end;
+
+procedure TMediatRSteps.VerifyPipelineShortCircuit(W: TMediatRWorld);
+begin
+  Expect(TPipelineState.Trace).ToEqual('outer-before>short>outer-after');
+end;
+
+procedure TMediatRSteps.VerifyPipelineEmpty(W: TMediatRWorld);
+begin
+  Expect(TPipelineState.Trace).ToEqual('');
 end;
 
 initialization

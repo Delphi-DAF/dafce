@@ -7,6 +7,13 @@ uses
   Daf.Extensions.DependencyInjection;
 
 type
+  TPipelineState = class
+  public
+    class var Trace: string;
+    class procedure Reset;
+    class procedure Add(const Value: string);
+  end;
+
   IDependencyMock = interface(IInterface)
     ['{DDBE3375-7995-4983-8683-A4E52529C623}']
     procedure Visit;
@@ -38,7 +45,27 @@ type
   TJingHandler = class(TInterfacedObject, IRequestHandler<TJing>)
   public
     class var Done: Boolean;
+    class var Count: Integer;
     procedure Handle(TRequest: TJing);
+  end;
+
+  TOuterBehavior = class(TInterfacedObject, IPipelineBehaviorInvoker)
+  public
+    function Before(Request: TObject): Boolean;
+    procedure After(Request: TObject);
+  end;
+
+  TInnerBehavior = class(TInterfacedObject, IPipelineBehaviorInvoker)
+  public
+    function Before(Request: TObject): Boolean;
+    procedure After(Request: TObject);
+  end;
+
+  [MediatorAbstract]
+  TShortCircuitBehavior = class(TInterfacedObject, IPipelineBehaviorInvoker)
+  public
+    function Before(Request: TObject): Boolean;
+    procedure After(Request: TObject);
   end;
 
   TPonged = class(TInterfacedObject, INotification)
@@ -77,6 +104,19 @@ uses
 
 { TDependencyMock }
 
+class procedure TPipelineState.Reset;
+begin
+  Trace := '';
+end;
+
+class procedure TPipelineState.Add(const Value: string);
+begin
+  if Trace.IsEmpty then
+    Trace := Value
+  else
+    Trace := Trace + '>' + Value;
+end;
+
 procedure TDependencyMock.Visit;
 begin
   Inc(FVisites);
@@ -105,7 +145,47 @@ end;
 
 procedure TJingHandler.Handle(TRequest: TJing);
 begin
+  Inc(Count);
+  TPipelineState.Add('handler');
   Done := True;
+end;
+
+{ TOuterBehavior }
+
+function TOuterBehavior.Before(Request: TObject): Boolean;
+begin
+  TPipelineState.Add('outer-before');
+  Result := True;
+end;
+
+procedure TOuterBehavior.After(Request: TObject);
+begin
+  TPipelineState.Add('outer-after');
+end;
+
+{ TInnerBehavior }
+
+function TInnerBehavior.Before(Request: TObject): Boolean;
+begin
+  TPipelineState.Add('inner-before');
+  Result := True;
+end;
+
+procedure TInnerBehavior.After(Request: TObject);
+begin
+  TPipelineState.Add('inner-after');
+end;
+
+{ TShortCircuitBehavior }
+
+function TShortCircuitBehavior.Before(Request: TObject): Boolean;
+begin
+  TPipelineState.Add('short');
+  Result := False;
+end;
+
+procedure TShortCircuitBehavior.After(Request: TObject);
+begin
 end;
 
 { TPongedHandler1 }
@@ -193,6 +273,32 @@ Feature MediatR @mediatr
   .Scenario('Scoped mediators use scoped dependencies')
     .Given('a configured root provider').NoAction
     .When('I send requests from different scopes')
-    .&Then('each scope has its own dependency instance');
+    .&Then('each scope has its own dependency instance')
+
+// --- Pipeline behaviors ---
+
+.Rule('Request pipeline behaviors')
+
+  .Scenario('Behaviors can be discovered automatically via package scan')
+    .Given('a configured mediator with discovered pipeline behaviors')
+    .When('I send a TJing request')
+    .&Then('the pipeline trace should be outer then inner then handler')
+
+  .Scenario('Behaviors execute around handler in registration order')
+    .Given('a configured mediator with ordered pipeline behaviors')
+    .When('I send a TJing request')
+    .&Then('the pipeline trace should be outer then inner then handler')
+
+  .Scenario('Behavior can short-circuit request execution')
+    .Given('a configured mediator with short-circuit behavior')
+    .When('I send a TJing request')
+    .&Then('the pipeline trace should show short-circuit')
+
+  .Scenario('Publish notifications bypass request pipeline behaviors')
+    .Given('a configured mediator with ordered pipeline behaviors')
+    .When('I publish a TPonged notification')
+    .&Then('handler 1 should have been invoked')
+    .&And('handler 2 should have been invoked')
+    .&And('the pipeline trace should be empty');
 
 end.

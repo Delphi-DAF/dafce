@@ -11,6 +11,7 @@ type
   public
     procedure AddMediatR;
     procedure AddMediatRClasses(const Package: TRttiPackage);
+    procedure AddMediatRBehaviors(const Package: TRttiPackage);
   end;
 
   // In case of previous helper goes shadowed
@@ -31,11 +32,13 @@ uses
 { TMediatRServiceCollection }
 
 var Visited: TArray<string>;
+var VisitedBehaviors: TArray<string>;
 procedure TMediatRServiceCollection.AddMediatR;
 begin
   if Contains<IMediatorImpl> then
   Exit;
   Visited := nil;
+  VisitedBehaviors := nil;
   AddTransient<IMediatorImpl, TMediator>;
 end;
 
@@ -46,6 +49,23 @@ begin
   Visited := TArray.Concat<string>([Visited, More]);
   var ServiceCollection := Self;
   Package.DiscoverImpl<IBaseHandler>(True,
+    function(T: TRttiType): Boolean
+    begin
+      Result := not T.HasAttribute<MediatorAbstractAttribute>;
+    end,
+    procedure(RIntf: TRttiInterfaceType; RClass: TRttiInstanceType)
+    begin
+      ServiceCollection.AddTransient(RIntf.Handle, RClass.MetaclassType);
+    end);
+end;
+
+procedure TMediatRServiceCollection.AddMediatRBehaviors(const Package: TRttiPackage);
+begin
+  if TArray.Contains(VisitedBehaviors, Package.Name) then Exit;
+  var More: TArray<string> := [Package.Name];
+  VisitedBehaviors := TArray.Concat<string>([VisitedBehaviors, More]);
+  var ServiceCollection := Self;
+  Package.DiscoverImpl<IBasePipelineBehavior>(True,
     function(T: TRttiType): Boolean
     begin
       Result := not T.HasAttribute<MediatorAbstractAttribute>;

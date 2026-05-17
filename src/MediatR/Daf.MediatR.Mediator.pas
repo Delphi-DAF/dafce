@@ -78,9 +78,33 @@ begin
   else if _T.Extends(HandlerType, TypeInfo(IBaseRequesteHandler)) then
     Handler := TRequestWrapper.Create(FServiceProvider, HandlerType, Instance)
   else
+  begin
     Handler := TNotificationWrapper.Create(FServiceProvider, HandlerType, Instance);
+    Handler.Handle(Result);
+    Exit;
+  end;
 
-  Handler.Handle(Result);
+  var Behaviors := FServiceProvider.GetServices(TypeInfo(IPipelineBehaviorInvoker));
+  if (Behaviors = nil) or (Behaviors.Count = 0) then
+  begin
+    Handler.Handle(Result);
+    Exit;
+  end;
+
+  var ExecutedCount := 0;
+  for var I := 0 to Behaviors.Count - 1 do
+  begin
+    var Behavior := Behaviors[I] as IPipelineBehaviorInvoker;
+    if not Behavior.Before(Instance) then
+      Break;
+    Inc(ExecutedCount);
+  end;
+
+  if ExecutedCount = Behaviors.Count then
+    Handler.Handle(Result);
+
+  for var I := ExecutedCount - 1 downto 0 do
+    (Behaviors[I] as IPipelineBehaviorInvoker).After(Instance);
 end;
 
 { THandlerWrapper }

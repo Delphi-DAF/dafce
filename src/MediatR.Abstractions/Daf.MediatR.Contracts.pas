@@ -9,6 +9,7 @@ uses
   Daf.Extensions.DependencyInjection;
 
 type
+
   IMediatorImpl = interface(IInterface)
     ['{16327968-C6F0-4CA0-B787-509026A480A6}']
     procedure InvokeHandler(PInfo: PTypeInfo; Instance: TObject; out Result);
@@ -44,6 +45,16 @@ type
 
   IBaseNotificationHandler = interface(IBaseHandler)
     ['{D7E2B7EA-E72E-4332-89AE-D405380ADB23}']
+  end;
+
+  IBasePipelineBehavior = interface(IInvokable)
+    ['{5F0EFB5C-BB72-4A9E-BD2D-64AB79E4C8CA}']
+  end;
+
+  IPipelineBehaviorInvoker = interface(IBasePipelineBehavior)
+    ['{8C8F35D2-AB67-4EFB-8C94-C5DBF5B47DBE}']
+    function Before(Request: TObject): Boolean;
+    procedure After(Request: TObject);
   end;
 
   IRequestHandler<TRequest: class, IRequest> = interface(IBaseRequesteHandler)
