@@ -92,6 +92,79 @@ Services.AddTransient<IRequestHandler<TMyCommand>, TMyCommandHandler>;
 
 ---
 
+## Behaviors de pipeline
+
+Los behaviors envuelven cada llamada `Send` con lógica transversal (logging, validación, caché, etc.).
+
+### Behaviors globales
+
+Se ejecutan para **todas** las requests. Extiende `TPipelineBehaviorBase` y sobreescribe `Invoke`:
+
+```pascal
+type
+  TLoggingBehavior = class(TPipelineBehaviorBase)
+  public
+    function Invoke(Request: TObject; Next: TFunc<TValue>): TValue; override;
+  end;
+
+function TLoggingBehavior.Invoke(Request: TObject; Next: TFunc<TValue>): TValue;
+begin
+  Log('Antes de ' + Request.ClassName);
+  Result := Next();
+  Log('Después de ' + Request.ClassName);
+end;
+```
+
+### Behaviors tipados
+
+Se ejecutan **solo** para un tipo de request específico (y sus subclases). Extiende `TPipelineBehavior<TResponse, TRequest>`:
+
+```pascal
+type
+  TPingBehavior = class(TPipelineBehavior<string, TPing>)
+  public
+    function Handle(Request: TPing; Next: TFunc<TValue>): string; override;
+  end;
+
+function TPingBehavior.Handle(Request: TPing; Next: TFunc<TValue>): string;
+begin
+  Result := Next().AsType<string>;
+end;
+```
+
+### Registro
+
+```pascal
+// Auto-descubrimiento
+Services.AddMediatRBehaviors(_T.PackageOf<TMyClass>);
+
+// Manual
+Services.AddTransient(TypeInfo(IPipelineBehaviorInvoker), TLoggingBehavior);
+Services.AddTransient(TypeInfo(IPipelineBehaviorInvoker), TPingBehavior);
+```
+
+Usa `[MediatorAbstract]` en behaviors que solo registres manualmente para excluirlos del auto-descubrimiento.
+
+### Orden de ejecución
+
+Los behaviors se ejecutan en orden de registro — el primero registrado es el envoltorio más externo.
+
+### Cortocircuito
+
+No llamar a `Next` aborta el pipeline sin invocar el handler:
+
+```pascal
+function TAuthBehavior.Invoke(Request: TObject; Next: TFunc<TValue>): TValue;
+begin
+  if not Authenticated then
+    Result := Default(TValue)
+  else
+    Result := Next();
+end;
+```
+
+---
+
 ## Documentación
 
 - 📖 [Guía de uso](docs/GUIDE.es.md) — IMediatorHelper, respuestas ARC, pipeline, [MediatorAbstract], escaneo de DI

@@ -14,7 +14,8 @@
 6. [Registering handlers](#registering-handlers)
 7. [Auto-scan with AddMediatR](#auto-scan-with-addmediatr)
 8. [MediatorAbstract attribute](#mediatorabstract-attribute)
-9. [Base class reference](#base-class-reference)
+9. [Pipeline Behaviors](#pipeline-behaviors)
+10. [Base class reference](#base-class-reference)
 
 ---
 
@@ -219,6 +220,108 @@ TCreateOrderHandler = class(TBaseOrderHandler<TCreateOrderCommand>)
   // concrete — NOT marked MediatorAbstract
 end;
 ```
+
+---
+
+## Pipeline Behaviors
+
+Behaviors intercept every `Send` call and let you add cross-cutting logic (logging, validation, caching, error handling) without touching your handlers.
+
+### Handle/Next pattern
+
+Each behavior receives the request and a `Next` closure. Call `Next()` to continue the pipeline; omit it to short-circuit.
+
+```pascal
+type
+  TLoggingBehavior = class(TPipelineBehaviorBase)
+  public
+    function Invoke(Request: TObject; Next: TFunc<TValue>): TValue; override;
+  end;
+
+function TLoggingBehavior.Invoke(Request: TObject; Next: TFunc<TValue>): TValue;
+begin
+  // before handler
+  Result := Next();
+  // after handler — Result holds the handler's return value
+end;
+```
+
+### Typed behaviors
+
+Extend `TPipelineBehavior<TResponse, TRequest>` to restrict the behavior to a specific request type (and its subclasses):
+
+```pascal
+type
+  TValidatePingBehavior = class(TPipelineBehavior<string, TPing>)
+  public
+    function Handle(Request: TPing; Next: TFunc<TValue>): string; override;
+  end;
+
+function TValidatePingBehavior.Handle(Request: TPing; Next: TFunc<TValue>): string;
+begin
+  if Request.Target.IsEmpty then
+    raise EArgumentException.Create('Target required');
+  Result := Next().AsType<string>;
+end;
+```
+
+For void requests (`IRequest`) use `TPipelineBehavior<TRequest>`.
+
+The framework uses RTTI to determine whether a behavior applies to the current request type. Typed behaviors also match subclasses.
+
+### Short-circuiting
+
+Don't call `Next` to abort:
+
+```pascal
+function TAuthBehavior.Invoke(Request: TObject; Next: TFunc<TValue>): TValue;
+begin
+  if not Authenticated then
+    Result := Default(TValue)   // handler is never called
+  else
+    Result := Next();
+end;
+```
+
+### Exception handling
+
+Wrap `Next()` to catch errors from inner behaviors and the handler:
+
+```pascal
+function TErrorBehavior.Invoke(Request: TObject; Next: TFunc<TValue>): TValue;
+begin
+  try
+    Result := Next();
+  except on E: Exception do
+    Result := Default(TValue);
+  end;
+end;
+```
+
+### Dependency injection
+
+Constructor parameters are resolved from the container automatically:
+
+```pascal
+constructor TLoggingBehavior.Create(const Logger: ILogger);
+begin
+  inherited Create;
+  FLogger := Logger;
+end;
+```
+
+### Registration
+
+```pascal
+// Auto-discovery (skips classes marked [MediatorAbstract])
+Services.AddMediatRBehaviors(_T.PackageOf<TMyClass>);
+
+// Manual
+Services.AddTransient(TypeInfo(IPipelineBehavior), TLoggingBehavior);
+Services.AddTransient(TypeInfo(IPipelineBehavior), TValidatePingBehavior);
+```
+
+Behaviors execute in registration order — first registered is outermost. For behaviors you only register manually, mark them `[MediatorAbstract]` to exclude them from auto-discovery.
 
 ---
 
