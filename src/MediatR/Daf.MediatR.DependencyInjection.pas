@@ -67,7 +67,10 @@ begin
   var More: TArray<string> := [Package.Name];
   VisitedBehaviors := TArray.Concat<string>([VisitedBehaviors, More]);
   var ServiceCollection := Self;
-  Package.DiscoverImpl<IPipelineBehavior>(True,
+  // False: include classes that implement IPipelineBehavior directly (not only strict sub-interfaces).
+  // Global behaviors (TOuterBehavior etc.) inherit IPipelineBehavior via TPipelineBehavior without
+  // re-declaring it, so StrictExtensions=True would skip them.
+  Package.DiscoverImpl<IPipelineBehavior>(False,
     function(T: TRttiType): Boolean
     begin
       Result := not T.HasAttribute<MediatorAbstractAttribute>;
