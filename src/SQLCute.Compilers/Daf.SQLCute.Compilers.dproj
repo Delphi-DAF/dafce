@@ -1,4 +1,4 @@
-<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
     <PropertyGroup>
         <ProjectGuid>{BF8CAA75-2AE1-4708-B88A-B0DD478A8BCF}</ProjectGuid>
         <MainSource>Daf.SQLCute.Compilers.dpk</MainSource>
@@ -7,7 +7,7 @@
         <Base>True</Base>
         <Config Condition="'$(Config)'==''">Release</Config>
         <Platform Condition="'$(Platform)'==''">Win32</Platform>
-        <TargetedPlatforms>1048579</TargetedPlatforms>
+        <TargetedPlatforms>1</TargetedPlatforms>
         <AppType>Package</AppType>
         <ProjectName Condition="'$(ProjectName)'==''">Daf.SQLCute.Compilers</ProjectName>
     </PropertyGroup>
@@ -61,8 +61,8 @@
         <DCC_OutputNeverBuildDcps>true</DCC_OutputNeverBuildDcps>
         <VerInfo_Locale>1027</VerInfo_Locale>
         <VerInfo_Keys>CompanyName=;FileDescription=$(MSBuildProjectName);FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProgramID=com.embarcadero.$(MSBuildProjectName);ProductName=$(MSBuildProjectName);ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
-        <CfgDependentOn>..\source.optset</CfgDependentOn>
         <DCC_UnitSearchPath>..\SQLCute;..\SQLCute.Abstractions;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <CfgDependentOn>..\source.optset</CfgDependentOn>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win32)'!=''">
         <DCC_Namespace>Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;Bde;$(DCC_Namespace)</DCC_Namespace>
@@ -110,6 +110,8 @@
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
         <DCCReference Include="rtl.dcp"/>
+        <DCCReference Include="Daf.SQLCute.Abstractions.dcp"/>
+        <DCCReference Include="Daf.SQLCute.dcp"/>
         <DCCReference Include="Daf.SQLCute.Compiler.SqlServer.pas"/>
         <DCCReference Include="Daf.SQLCute.Compiler.Postgres.pas"/>
         <DCCReference Include="Daf.SQLCute.Compiler.MySql.pas"/>
@@ -139,6 +141,7 @@
                 </Source>
             </Delphi.Personality>
             <Platforms>
+                <Platform value="Linux64">False</Platform>
                 <Platform value="Win32">True</Platform>
                 <Platform value="Win64">False</Platform>
                 <Platform value="Win64x">False</Platform>
