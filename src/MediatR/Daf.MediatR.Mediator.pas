@@ -61,6 +61,60 @@ type
     procedure Handle(out Result); override;
   end;
 
+function GetBehaviorRequestType(BehaviorClass: TClass): PTypeInfo;
+var
+  RC: TRttiContext;
+  T: TRttiType;
+  M: TRttiMethod;
+  Params: TArray<TRttiParameter>;
+begin
+  Result := nil;
+  RC := TRttiContext.Create;
+  try
+    T := RC.GetType(BehaviorClass);
+    for M in T.GetDeclaredMethods do
+    begin
+      if M.Name = 'Handle' then
+      begin
+        Params := M.GetParameters;
+        if (Length(Params) >= 1) and (Params[0].ParamType <> nil) and
+           (Params[0].ParamType.Handle <> TypeInfo(TObject)) then
+        begin
+          Result := Params[0].ParamType.Handle;
+          Exit;
+        end;
+      end;
+    end;
+  finally
+    RC.Free;
+  end;
+end;
+
+function GetHandlerResponseType(HandlerType: PTypeInfo): PTypeInfo;
+var
+  RC: TRttiContext;
+  T: TRttiType;
+  M: TRttiMethod;
+  P: TRttiParameter;
+begin
+  Result := nil;
+  RC := TRttiContext.Create;
+  try
+    T := RC.GetType(HandlerType);
+    for M in T.GetMethods do
+      if M.Name = 'Handle' then
+        for P in M.GetParameters do
+          if pfOut in P.Flags then
+          begin
+            if P.ParamType <> nil then
+              Result := P.ParamType.Handle;
+            Exit;
+          end;
+  finally
+    RC.Free;
+  end;
+end;
+
   { TMediator }
 
 constructor TMediator.Create(ServiceProvider: IServiceProvider);
@@ -70,9 +124,13 @@ begin
 end;
 
 procedure TMediator.InvokeHandler(HandlerType: PTypeInfo; Instance: TObject; out Result);
+var
+  Handler: IHandlerWrapper;
+  Chain: TFunc<TValue>;
+  FinalValue: TValue;
+  ResponseTypeInfo: PTypeInfo;
+  ResultPtr: Pointer;
 begin
-  var
-    Handler: IHandlerWrapper;
   if _T.Extends(HandlerType, TypeInfo(IBaseResponseHandler)) then
     Handler := TResponseWrapper.Create(FServiceProvider, HandlerType, Instance)
   else if _T.Extends(HandlerType, TypeInfo(IBaseRequesteHandler)) then
@@ -84,27 +142,56 @@ begin
     Exit;
   end;
 
-  var Behaviors := FServiceProvider.GetServices(TypeInfo(IPipelineBehaviorInvoker));
-  if (Behaviors = nil) or (Behaviors.Count = 0) then
+  var Behaviors_list := FServiceProvider.GetServices(TypeInfo(IPipelineBehavior));
+  if (Behaviors_list = nil) or (Behaviors_list.Count = 0) then
   begin
     Handler.Handle(Result);
     Exit;
   end;
 
-  var ExecutedCount := 0;
-  for var I := 0 to Behaviors.Count - 1 do
+  // Capture pointer to out Result before closures shadow it
+  ResultPtr := @Result;
+  ResponseTypeInfo := nil;
+  if _T.Extends(HandlerType, TypeInfo(IBaseResponseHandler)) then
+    ResponseTypeInfo := GetHandlerResponseType(HandlerType);
+
+  // Terminal: runs handler and boxes result as TValue
+  Chain := function: TValue
   begin
-    var Behavior := Behaviors[I] as IPipelineBehaviorInvoker;
-    if not Behavior.Before(Instance) then
-      Break;
-    Inc(ExecutedCount);
+    Handler.Handle(ResultPtr^);
+    if ResponseTypeInfo <> nil then
+      TValue.Make(ResultPtr, ResponseTypeInfo, Result)
+    else
+      Result := Default(TValue);
   end;
 
-  if ExecutedCount = Behaviors.Count then
-    Handler.Handle(Result);
+  // Build chain right-to-left (index 0 = outermost)
+  for var I := Behaviors_list.Count - 1 downto 0 do
+  begin
+    var Behavior := Behaviors_list[I] as IPipelineBehavior;
+    var BehaviorObj := (Behavior as TObject) as TPipelineBehavior;
+    var ReqTypeInfo := GetBehaviorRequestType(BehaviorObj.ClassType);
+    if ReqTypeInfo <> nil then
+    begin
+      var ReqClass := GetTypeData(ReqTypeInfo)^.ClassType;
+      if not Instance.ClassType.InheritsFrom(ReqClass) then
+        Continue;
+    end;
+    var PrevChain: TFunc<TValue>;
+    PrevChain := Chain;
+    var BehaviorRef: TPipelineBehavior;
+    BehaviorRef := BehaviorObj;
+    Chain := function: TValue
+    begin
+      Result := BehaviorRef.Invoke(Instance, PrevChain);
+    end;
+  end;
 
-  for var I := ExecutedCount - 1 downto 0 do
-    (Behaviors[I] as IPipelineBehaviorInvoker).After(Instance);
+  FinalValue := Chain();
+
+  // Write back modified response (behaviors may have changed it)
+  if (ResponseTypeInfo <> nil) and not FinalValue.IsEmpty then
+    FinalValue.ExtractRawData(ResultPtr);
 end;
 
 { THandlerWrapper }

@@ -38,10 +38,37 @@ type
     [Given('a configured mediator with short-circuit behavior')]
     procedure GivenMediatorWithShortCircuit(W: TMediatRWorld);
 
+    [Given('a configured mediator with typed ping behavior')]
+    procedure GivenMediatorWithTypedPingBehavior(W: TMediatRWorld);
+
+    [Given('a configured mediator with global outer behavior')]
+    procedure GivenMediatorWithGlobalOuterBehavior(W: TMediatRWorld);
+
+    [Given('a configured mediator with typed ping behavior for ping descendants')]
+    procedure GivenMediatorWithTypedPingBehaviorForDescendants(W: TMediatRWorld);
+
+    [Given('a configured mediator with response short-circuit behavior')]
+    procedure GivenMediatorWithResponseShortCircuit(W: TMediatRWorld);
+
+    [Given('a configured mediator with response-modifying behavior')]
+    procedure GivenMediatorWithResponseModifyingBehavior(W: TMediatRWorld);
+
+    [Given('a configured mediator with exception-catching behavior')]
+    procedure GivenMediatorWithExceptionCatchingBehavior(W: TMediatRWorld);
+
+    [Given('a configured mediator with global and typed behaviors')]
+    procedure GivenMediatorWithGlobalAndTypedBehaviors(W: TMediatRWorld);
+
+    [Given('a configured mediator with dependency-aware behavior')]
+    procedure GivenMediatorWithDependencyAwareBehavior(W: TMediatRWorld);
+
     // === When ===
 
     [When('I send a TJing request')]
     procedure SendJing(W: TMediatRWorld);
+
+    [When('I send a TBoomRequest')]
+    procedure SendBoom(W: TMediatRWorld);
 
     [When('I send a TPing request and get Pong1')]
     procedure SendPingAndVerifyPong1(W: TMediatRWorld);
@@ -51,6 +78,18 @@ type
 
     [When('I send requests from different scopes')]
     procedure SendFromScopes(W: TMediatRWorld);
+
+    [When('I send a TPingChild request')]
+    procedure SendPingChild(W: TMediatRWorld);
+
+    [When('I send a TPing request via response short-circuit')]
+    procedure SendPingViaShortCircuit(W: TMediatRWorld);
+
+    [When('I send a TPing request via response-modifying behavior')]
+    procedure SendPingViaModifyingBehavior(W: TMediatRWorld);
+
+    [When('I send a TBoomRequest without exception propagating')]
+    procedure SendBoomSuppressed(W: TMediatRWorld);
 
     // === Then ===
 
@@ -77,6 +116,33 @@ type
 
     [ThenAttribute('the pipeline trace should be empty')]
     procedure VerifyPipelineEmpty(W: TMediatRWorld);
+
+    [ThenAttribute('an exception should have been raised')]
+    procedure VerifyExceptionRaised(W: TMediatRWorld);
+
+    [ThenAttribute('the pipeline trace should not contain typed behavior')]
+    procedure VerifyTypedBehaviorNotExecuted(W: TMediatRWorld);
+
+    [ThenAttribute('the pipeline trace should contain typed behavior')]
+    procedure VerifyTypedBehaviorExecuted(W: TMediatRWorld);
+
+    [ThenAttribute('the pipeline trace should contain outer behavior')]
+    procedure VerifyOuterBehaviorInTrace(W: TMediatRWorld);
+
+    [ThenAttribute('the response short-circuit value should be returned')]
+    procedure VerifyResponseShortCircuitValue(W: TMediatRWorld);
+
+    [ThenAttribute('the response should be the modified value')]
+    procedure VerifyModifiedResponseValue(W: TMediatRWorld);
+
+    [ThenAttribute('the pipeline trace should show the exception was caught')]
+    procedure VerifyExceptionCaughtByBehavior(W: TMediatRWorld);
+
+    [ThenAttribute('both behaviors should appear in the pipeline trace')]
+    procedure VerifyBothBehaviorsInTrace(W: TMediatRWorld);
+
+    [ThenAttribute('the behavior dependency should appear in the pipeline trace')]
+    procedure VerifyDepBehaviorInTrace(W: TMediatRWorld);
   end;
 
 { TMediatRSteps }
@@ -131,8 +197,8 @@ begin
   GivenMediatorReady(W);
 
   RebuildWorld(W);
-  W.ServiceCollection.AddTransient(TypeInfo(IPipelineBehaviorInvoker), TOuterBehavior);
-  W.ServiceCollection.AddTransient(TypeInfo(IPipelineBehaviorInvoker), TInnerBehavior);
+  Daf.MediatR.DependencyInjection.MediatR.AddBehavior(W.ServiceCollection, TOuterBehavior);
+  Daf.MediatR.DependencyInjection.MediatR.AddBehavior(W.ServiceCollection, TInnerBehavior);
 
   TJingHandler.Done := False;
   TJingHandler.Count := 0;
@@ -149,9 +215,9 @@ begin
   GivenMediatorReady(W);
 
   RebuildWorld(W);
-  W.ServiceCollection.AddTransient(TypeInfo(IPipelineBehaviorInvoker), TOuterBehavior);
-  W.ServiceCollection.AddTransient(TypeInfo(IPipelineBehaviorInvoker), TShortCircuitBehavior);
-  W.ServiceCollection.AddTransient(TypeInfo(IPipelineBehaviorInvoker), TInnerBehavior);
+  Daf.MediatR.DependencyInjection.MediatR.AddBehavior(W.ServiceCollection, TOuterBehavior);
+  Daf.MediatR.DependencyInjection.MediatR.AddBehavior(W.ServiceCollection, TShortCircuitBehavior);
+  Daf.MediatR.DependencyInjection.MediatR.AddBehavior(W.ServiceCollection, TInnerBehavior);
 
   TJingHandler.Done := False;
   TJingHandler.Count := 0;
@@ -163,9 +229,27 @@ begin
   W.Mediator := W.RootProvider.GetRequiredService<IMediatorImpl>;
 end;
 
+procedure TMediatRSteps.GivenMediatorWithTypedPingBehavior(W: TMediatRWorld);
+begin
+  RebuildWorld(W);
+  Daf.MediatR.DependencyInjection.MediatR.AddBehavior(W.ServiceCollection, TPingBehavior);
+
+  TJingHandler.Done := False;
+  TJingHandler.Count := 0;
+  TPipelineState.Reset;
+
+  W.RootProvider := W.ServiceCollection.BuildServiceProvider;
+  W.Mediator := W.RootProvider.GetRequiredService<IMediatorImpl>;
+end;
+
 procedure TMediatRSteps.SendJing(W: TMediatRWorld);
 begin
   W.Mediator.Send(TJing.Create);
+end;
+
+procedure TMediatRSteps.SendBoom(W: TMediatRWorld);
+begin
+  W.Mediator.Send(TBoomRequest.Create);
 end;
 
 procedure TMediatRSteps.SendPingAndVerifyPong1(W: TMediatRWorld);
@@ -259,6 +343,140 @@ end;
 procedure TMediatRSteps.VerifyPipelineEmpty(W: TMediatRWorld);
 begin
   Expect(TPipelineState.Trace).ToEqual('');
+end;
+
+procedure TMediatRSteps.VerifyExceptionRaised(W: TMediatRWorld);
+begin
+  ExpectException(Raised).ToBeAny;
+end;
+
+procedure TMediatRSteps.VerifyTypedBehaviorNotExecuted(W: TMediatRWorld);
+begin
+  Expect(TPipelineState.Trace.Contains('ping-before')).ToBeFalse;
+end;
+
+procedure TMediatRSteps.VerifyTypedBehaviorExecuted(W: TMediatRWorld);
+begin
+  Expect(TPipelineState.Trace.Contains('ping-before')).ToBeTrue;
+end;
+
+procedure TMediatRSteps.GivenMediatorWithGlobalOuterBehavior(W: TMediatRWorld);
+begin
+  RebuildWorld(W);
+  Daf.MediatR.DependencyInjection.MediatR.AddBehavior(W.ServiceCollection, TOuterBehavior);
+  TPingHandler.Invoked := False;
+  TPipelineState.Reset;
+  W.RootProvider := W.ServiceCollection.BuildServiceProvider;
+  W.Mediator := W.RootProvider.GetRequiredService<IMediatorImpl>;
+end;
+
+procedure TMediatRSteps.GivenMediatorWithTypedPingBehaviorForDescendants(W: TMediatRWorld);
+begin
+  RebuildWorld(W);
+  Daf.MediatR.DependencyInjection.MediatR.AddBehavior(W.ServiceCollection, TPingBehavior);
+  TPipelineState.Reset;
+  W.RootProvider := W.ServiceCollection.BuildServiceProvider;
+  W.Mediator := W.RootProvider.GetRequiredService<IMediatorImpl>;
+end;
+
+procedure TMediatRSteps.GivenMediatorWithResponseShortCircuit(W: TMediatRWorld);
+begin
+  RebuildWorld(W);
+  Daf.MediatR.DependencyInjection.MediatR.AddBehavior(W.ServiceCollection, TResponseShortCircuitBehavior);
+  TPingHandler.Invoked := False;
+  TPipelineState.Reset;
+  W.RootProvider := W.ServiceCollection.BuildServiceProvider;
+  W.Mediator := W.RootProvider.GetRequiredService<IMediatorImpl>;
+end;
+
+procedure TMediatRSteps.GivenMediatorWithResponseModifyingBehavior(W: TMediatRWorld);
+begin
+  RebuildWorld(W);
+  Daf.MediatR.DependencyInjection.MediatR.AddBehavior(W.ServiceCollection, TResponseModifyingBehavior);
+  TPipelineState.Reset;
+  W.RootProvider := W.ServiceCollection.BuildServiceProvider;
+  W.Mediator := W.RootProvider.GetRequiredService<IMediatorImpl>;
+end;
+
+procedure TMediatRSteps.GivenMediatorWithExceptionCatchingBehavior(W: TMediatRWorld);
+begin
+  RebuildWorld(W);
+  Daf.MediatR.DependencyInjection.MediatR.AddBehavior(W.ServiceCollection, TExceptionCatchingBehavior);
+  TPipelineState.Reset;
+  W.RootProvider := W.ServiceCollection.BuildServiceProvider;
+  W.Mediator := W.RootProvider.GetRequiredService<IMediatorImpl>;
+end;
+
+procedure TMediatRSteps.GivenMediatorWithGlobalAndTypedBehaviors(W: TMediatRWorld);
+begin
+  RebuildWorld(W);
+  Daf.MediatR.DependencyInjection.MediatR.AddBehavior(W.ServiceCollection, TOuterBehavior);
+  Daf.MediatR.DependencyInjection.MediatR.AddBehavior(W.ServiceCollection, TPingBehavior);
+  TPipelineState.Reset;
+  W.RootProvider := W.ServiceCollection.BuildServiceProvider;
+  W.Mediator := W.RootProvider.GetRequiredService<IMediatorImpl>;
+end;
+
+procedure TMediatRSteps.GivenMediatorWithDependencyAwareBehavior(W: TMediatRWorld);
+begin
+  RebuildWorld(W);
+  Daf.MediatR.DependencyInjection.MediatR.AddBehavior(W.ServiceCollection, TDependencyAwareBehavior);
+  TJingHandler.Done := False;
+  TJingHandler.Count := 0;
+  TPipelineState.Reset;
+  W.RootProvider := W.ServiceCollection.BuildServiceProvider;
+  W.Mediator := W.RootProvider.GetRequiredService<IMediatorImpl>;
+end;
+
+procedure TMediatRSteps.SendPingChild(W: TMediatRWorld);
+begin
+  W.LastStringResponse := W.Mediator.Send<string, TPingChild>(TPingChild.Create);
+end;
+
+procedure TMediatRSteps.SendPingViaShortCircuit(W: TMediatRWorld);
+begin
+  W.LastStringResponse := W.Mediator.Send<string, TPing>(TPing.Create);
+end;
+
+procedure TMediatRSteps.SendPingViaModifyingBehavior(W: TMediatRWorld);
+begin
+  W.LastStringResponse := W.Mediator.Send<string, TPing>(TPing.Create);
+end;
+
+procedure TMediatRSteps.SendBoomSuppressed(W: TMediatRWorld);
+begin
+  W.Mediator.Send(TBoomRequest.Create);
+end;
+
+procedure TMediatRSteps.VerifyOuterBehaviorInTrace(W: TMediatRWorld);
+begin
+  Expect(TPipelineState.Trace.Contains('outer-before')).ToBeTrue;
+end;
+
+procedure TMediatRSteps.VerifyResponseShortCircuitValue(W: TMediatRWorld);
+begin
+  Expect(W.LastStringResponse).ToEqual('Short');
+end;
+
+procedure TMediatRSteps.VerifyModifiedResponseValue(W: TMediatRWorld);
+begin
+  Expect(W.LastStringResponse).ToEqual('[Pong1]');
+end;
+
+procedure TMediatRSteps.VerifyExceptionCaughtByBehavior(W: TMediatRWorld);
+begin
+  Expect(TPipelineState.Trace.Contains('caught')).ToBeTrue;
+end;
+
+procedure TMediatRSteps.VerifyBothBehaviorsInTrace(W: TMediatRWorld);
+begin
+  Expect(TPipelineState.Trace.Contains('outer-before')).ToBeTrue;
+  Expect(TPipelineState.Trace.Contains('ping-before')).ToBeTrue;
+end;
+
+procedure TMediatRSteps.VerifyDepBehaviorInTrace(W: TMediatRWorld);
+begin
+  Expect(TPipelineState.Trace.Contains('dep-visited')).ToBeTrue;
 end;
 
 initialization

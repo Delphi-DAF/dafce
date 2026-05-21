@@ -12,6 +12,7 @@ type
     procedure AddMediatR;
     procedure AddMediatRClasses(const Package: TRttiPackage);
     procedure AddMediatRBehaviors(const Package: TRttiPackage);
+    procedure AddBehavior(BehaviorClass: TClass);
   end;
 
   // In case of previous helper goes shadowed
@@ -19,6 +20,7 @@ type
   public
     class procedure AddTo(const ServiceCollection: IServiceCollection);overload;
     class procedure AddTo(const ServiceCollection: IServiceCollection; const Package: TRttiPackage);overload;
+    class procedure AddBehavior(const ServiceCollection: IServiceCollection; BehaviorClass: TClass);
   end;
 
 implementation
@@ -65,15 +67,23 @@ begin
   var More: TArray<string> := [Package.Name];
   VisitedBehaviors := TArray.Concat<string>([VisitedBehaviors, More]);
   var ServiceCollection := Self;
-  Package.DiscoverImpl<IBasePipelineBehavior>(True,
+  Package.DiscoverImpl<IPipelineBehavior>(True,
     function(T: TRttiType): Boolean
     begin
       Result := not T.HasAttribute<MediatorAbstractAttribute>;
     end,
     procedure(RIntf: TRttiInterfaceType; RClass: TRttiInstanceType)
     begin
-      ServiceCollection.AddTransient(RIntf.Handle, RClass.MetaclassType);
+      // Always register under IPipelineBehavior so all behaviors
+      // participate in the unified chain. Request type filtering
+      // is done by the mediator at runtime using RTTI.
+      ServiceCollection.AddTransient(TypeInfo(IPipelineBehavior), RClass.MetaclassType);
     end);
+end;
+
+procedure TMediatRServiceCollection.AddBehavior(BehaviorClass: TClass);
+begin
+  AddTransient(TypeInfo(IPipelineBehavior), BehaviorClass);
 end;
 
 { MediatR }
@@ -86,6 +96,11 @@ end;
 class procedure MediatR.AddTo(const ServiceCollection: IServiceCollection);
 begin
   ServiceCollection.AddMediatR;
+end;
+
+class procedure MediatR.AddBehavior(const ServiceCollection: IServiceCollection; BehaviorClass: TClass);
+begin
+  ServiceCollection.AddTransient(TypeInfo(IPipelineBehavior), BehaviorClass);
 end;
 
 end.

@@ -3,6 +3,8 @@ unit MediatR.Feat;
 interface
 
 uses
+  System.SysUtils,
+  System.Rtti,
   Daf.MediatR.Contracts,
   Daf.Extensions.DependencyInjection;
 
@@ -35,6 +37,7 @@ type
   private
     FDependency: IDependencyMock;
   public
+    class var Invoked: Boolean;
     constructor Create(const Dependency: IDependencyMock);
     procedure Handle(TRequest: TPing; out Result: string);
   end;
@@ -49,23 +52,71 @@ type
     procedure Handle(TRequest: TJing);
   end;
 
-  TOuterBehavior = class(TInterfacedObject, IPipelineBehaviorInvoker)
+  TOuterBehavior = class(TPipelineBehavior)
   public
-    function Before(Request: TObject): Boolean;
-    procedure After(Request: TObject);
+    function Handle(Request: TObject; Next: TFunc<TValue>): TValue; override;
   end;
 
-  TInnerBehavior = class(TInterfacedObject, IPipelineBehaviorInvoker)
+  TInnerBehavior = class(TPipelineBehavior)
   public
-    function Before(Request: TObject): Boolean;
-    procedure After(Request: TObject);
+    function Handle(Request: TObject; Next: TFunc<TValue>): TValue; override;
   end;
 
   [MediatorAbstract]
-  TShortCircuitBehavior = class(TInterfacedObject, IPipelineBehaviorInvoker)
+  TShortCircuitBehavior = class(TPipelineBehavior)
   public
-    function Before(Request: TObject): Boolean;
-    procedure After(Request: TObject);
+    function Handle(Request: TObject; Next: TFunc<TValue>): TValue; override;
+  end;
+
+  // Typed behavior: applies only to TPing requests
+  TPingBehavior = class(TPipelineBehavior<string, TPing>)
+  public
+    function Handle(Request: TPing; Next: TFunc<TValue>): string; override;
+  end;
+
+  // Descendant of TPing (for polymorphic typed behavior test)
+  TPingChild = class(TPing)
+  end;
+
+  TPingChildHandler = class(TInterfacedObject, IRequestHandler<string, TPingChild>)
+  public
+    procedure Handle(TRequest: TPingChild; out Result: string);
+  end;
+
+  [MediatorAbstract]
+  TResponseShortCircuitBehavior = class(TPipelineBehavior<string, TPing>)
+  public
+    function Handle(Request: TPing; Next: TFunc<TValue>): string; override;
+  end;
+
+  [MediatorAbstract]
+  TResponseModifyingBehavior = class(TPipelineBehavior<string, TPing>)
+  public
+    function Handle(Request: TPing; Next: TFunc<TValue>): string; override;
+  end;
+
+  [MediatorAbstract]
+  TExceptionCatchingBehavior = class(TPipelineBehavior)
+  public
+    function Handle(Request: TObject; Next: TFunc<TValue>): TValue; override;
+  end;
+
+  [MediatorAbstract]
+  TDependencyAwareBehavior = class(TPipelineBehavior)
+  private
+    FDependency: IDependencyMock;
+  public
+    constructor Create(const Dependency: IDependencyMock);
+    function Handle(Request: TObject; Next: TFunc<TValue>): TValue; override;
+  end;
+
+  // Request that raises an exception in its handler (for scenario 5.5)
+  TBoomRequest = class(TInterfacedObject, IRequest)
+  end;
+
+  TBoomHandler = class(TInterfacedObject, IRequestHandler<TBoomRequest>)
+  public
+    procedure Handle(TRequest: TBoomRequest);
   end;
 
   TPonged = class(TInterfacedObject, INotification)
@@ -88,6 +139,7 @@ type
     ServiceCollection: IServiceCollection;
     RootProvider: IServiceProvider;
     Mediator: IMediator;
+    LastStringResponse: string;
     constructor Create;
     destructor Destroy; override;
   end;
@@ -95,8 +147,6 @@ type
 implementation
 
 uses
-  System.SysUtils,
-  System.Rtti,
   Daf.MiniSpec,
   Daf.Rtti,
   Daf.DependencyInjection,
@@ -137,6 +187,7 @@ end;
 
 procedure TPingHandler.Handle(TRequest: TPing; out Result: string);
 begin
+  Invoked := True;
   FDependency.Visit;
   Result := 'Pong' + FDependency.Visites.ToString;
 end;
@@ -152,40 +203,92 @@ end;
 
 { TOuterBehavior }
 
-function TOuterBehavior.Before(Request: TObject): Boolean;
+function TOuterBehavior.Handle(Request: TObject; Next: TFunc<TValue>): TValue;
 begin
   TPipelineState.Add('outer-before');
-  Result := True;
-end;
-
-procedure TOuterBehavior.After(Request: TObject);
-begin
+  Result := Next();
   TPipelineState.Add('outer-after');
 end;
 
 { TInnerBehavior }
 
-function TInnerBehavior.Before(Request: TObject): Boolean;
+function TInnerBehavior.Handle(Request: TObject; Next: TFunc<TValue>): TValue;
 begin
   TPipelineState.Add('inner-before');
-  Result := True;
-end;
-
-procedure TInnerBehavior.After(Request: TObject);
-begin
+  Result := Next();
   TPipelineState.Add('inner-after');
 end;
 
 { TShortCircuitBehavior }
 
-function TShortCircuitBehavior.Before(Request: TObject): Boolean;
+function TShortCircuitBehavior.Handle(Request: TObject; Next: TFunc<TValue>): TValue;
 begin
   TPipelineState.Add('short');
-  Result := False;
+  Result := Default(TValue);
 end;
 
-procedure TShortCircuitBehavior.After(Request: TObject);
+{ TPingBehavior }
+
+function TPingBehavior.Handle(Request: TPing; Next: TFunc<TValue>): string;
 begin
+  TPipelineState.Add('ping-before');
+  Result := Next().AsType<string>;
+  TPipelineState.Add('ping-after');
+end;
+
+{ TPingChildHandler }
+
+procedure TPingChildHandler.Handle(TRequest: TPingChild; out Result: string);
+begin
+  Result := 'PingChild';
+end;
+
+{ TResponseShortCircuitBehavior }
+
+function TResponseShortCircuitBehavior.Handle(Request: TPing; Next: TFunc<TValue>): string;
+begin
+  Result := 'Short';
+end;
+
+{ TResponseModifyingBehavior }
+
+function TResponseModifyingBehavior.Handle(Request: TPing; Next: TFunc<TValue>): string;
+begin
+  Result := '[' + Next().AsType<string> + ']';
+end;
+
+{ TExceptionCatchingBehavior }
+
+function TExceptionCatchingBehavior.Handle(Request: TObject; Next: TFunc<TValue>): TValue;
+begin
+  try
+    Result := Next();
+  except
+    TPipelineState.Add('caught');
+    Result := Default(TValue);
+  end;
+end;
+
+{ TDependencyAwareBehavior }
+
+constructor TDependencyAwareBehavior.Create(const Dependency: IDependencyMock);
+begin
+  inherited Create;
+  FDependency := Dependency;
+end;
+
+function TDependencyAwareBehavior.Handle(Request: TObject; Next: TFunc<TValue>): TValue;
+begin
+  FDependency.Visit;
+  TPipelineState.Add('dep-visited');
+  Result := Next();
+end;
+
+{ TBoomHandler }
+
+procedure TBoomHandler.Handle(TRequest: TBoomRequest);
+begin
+  raise Exception.Create('Boom!');
 end;
 
 { TPongedHandler1 }
@@ -298,7 +401,55 @@ Feature MediatR @mediatr
     .Given('a configured mediator with ordered pipeline behaviors')
     .When('I publish a TPonged notification')
     .&Then('handler 1 should have been invoked')
-    .&And('handler 2 should have been invoked')
-    .&And('the pipeline trace should be empty');
+
+  .Scenario('Unhandled exception from handler propagates to caller')
+    .Given('a configured mediator')
+    .When('I send a TBoomRequest')
+    .&Then('an exception should have been raised')
+
+  .Scenario('Typed behavior does not execute for non-matching request')
+    .Given('a configured mediator with typed ping behavior')
+    .When('I send a TJing request')
+    .&Then('the pipeline trace should not contain typed behavior')
+
+  .Scenario('Typed behavior executes for matching request type')
+    .Given('a configured mediator with typed ping behavior')
+    .When('I send a TPing request and get Pong1')
+    .&Then('the pipeline trace should contain typed behavior')
+
+  .Scenario('Global behavior executes for response requests')
+    .Given('a configured mediator with global outer behavior')
+    .When('I send a TPing request and get Pong1')
+    .&Then('the pipeline trace should contain outer behavior')
+
+  .Scenario('Typed behavior applies to descendant request type')
+    .Given('a configured mediator with typed ping behavior for ping descendants')
+    .When('I send a TPingChild request')
+    .&Then('the pipeline trace should contain typed behavior')
+
+  .Scenario('Response behavior can short-circuit and return custom value')
+    .Given('a configured mediator with response short-circuit behavior')
+    .When('I send a TPing request via response short-circuit')
+    .&Then('the response short-circuit value should be returned')
+
+  .Scenario('Response behavior can modify the value returned by handler')
+    .Given('a configured mediator with response-modifying behavior')
+    .When('I send a TPing request via response-modifying behavior')
+    .&Then('the response should be the modified value')
+
+  .Scenario('Behavior can catch exception thrown by handler')
+    .Given('a configured mediator with exception-catching behavior')
+    .When('I send a TBoomRequest without exception propagating')
+    .&Then('the pipeline trace should show the exception was caught')
+
+  .Scenario('Global and typed behaviors both execute for matching request')
+    .Given('a configured mediator with global and typed behaviors')
+    .When('I send a TPing request and get Pong1')
+    .&Then('both behaviors should appear in the pipeline trace')
+
+  .Scenario('Behavior with injected dependency receives it from the container')
+    .Given('a configured mediator with dependency-aware behavior')
+    .When('I send a TJing request')
+    .&Then('the behavior dependency should appear in the pipeline trace');
 
 end.

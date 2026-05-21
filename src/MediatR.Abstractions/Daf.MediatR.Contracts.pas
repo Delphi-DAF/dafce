@@ -5,6 +5,7 @@ interface
 uses
   System.TypInfo,
   System.SysUtils,
+  System.Rtti,
   Daf.MemUtils,
   Daf.Extensions.DependencyInjection;
 
@@ -47,14 +48,22 @@ type
     ['{D7E2B7EA-E72E-4332-89AE-D405380ADB23}']
   end;
 
-  IBasePipelineBehavior = interface(IInvokable)
+  // Marker interface — DI scan/registration target for all pipeline behaviors.
+  // Invoke is intentionally absent: mediator casts to TPipelineBehavior (class) at runtime.
+  IPipelineBehavior = interface(IInvokable)
     ['{5F0EFB5C-BB72-4A9E-BD2D-64AB79E4C8CA}']
   end;
 
-  IPipelineBehaviorInvoker = interface(IBasePipelineBehavior)
-    ['{8C8F35D2-AB67-4EFB-8C94-C5DBF5B47DBE}']
-    function Before(Request: TObject): Boolean;
-    procedure After(Request: TObject);
+  // Typed pipeline behavior for void requests
+  IPipelineBehavior<TRequest: class, IRequest> = interface(IPipelineBehavior)
+    ['{375D7E25-BF87-433E-AF9B-BB056D4D2A7B}']
+    procedure Handle(Request: TRequest; Next: TProc);
+  end;
+
+  // Typed pipeline behavior for request/response handlers
+  IPipelineBehavior<TResponse; TRequest: class, IRequest<TResponse>> = interface(IPipelineBehavior)
+    ['{9BDE0B6A-2D89-4F26-A5ED-64C9CFB4A3B8}']
+    function Handle(Request: TRequest; Next: TFunc<TValue>): TResponse;
   end;
 
   IRequestHandler<TRequest: class, IRequest> = interface(IBaseRequesteHandler)
@@ -94,6 +103,30 @@ type
 
   [MediatorAbstract]
   TBaseHandler = class abstract(TInterfacedObject, IBaseHandler)
+  end;
+
+  // Base class for all pipeline behaviors.
+  // Invoke is the framework dispatch entry point — not virtual, not in any interface.
+  // Global behaviors override Handle(TObject,...); typed behaviors override typed Handle.
+  [MediatorAbstract]
+  TPipelineBehavior = class abstract(TInterfacedObject, IPipelineBehavior)
+  public
+    function Invoke(Request: TObject; Next: TFunc<TValue>): TValue; virtual;
+    function Handle(Request: TObject; Next: TFunc<TValue>): TValue; virtual; abstract;
+  end;
+
+  [MediatorAbstract]
+  TPipelineBehavior<TRequest: class, IRequest> = class abstract(TPipelineBehavior, IPipelineBehavior<TRequest>)
+  public
+    function Invoke(Request: TObject; Next: TFunc<TValue>): TValue; override;
+    procedure Handle(Request: TRequest; Next: TProc); virtual; abstract;
+  end;
+
+  [MediatorAbstract]
+  TPipelineBehavior<TResponse; TRequest: class, IRequest<TResponse>> = class abstract(TPipelineBehavior, IPipelineBehavior<TResponse, TRequest>)
+  public
+    function Invoke(Request: TObject; Next: TFunc<TValue>): TValue; override;
+    function Handle(Request: TRequest; Next: TFunc<TValue>): TResponse; virtual; abstract;
   end;
 
   [MediatorAbstract]
@@ -242,6 +275,46 @@ end;
 procedure TNotificacionHandler<TNotification>.Handle(Notification: TNotification);
 begin
   FNotification := Notification;
+end;
+
+{ TPipelineBehavior }
+
+function TPipelineBehavior.Invoke(Request: TObject; Next: TFunc<TValue>): TValue;
+begin
+  Result := Handle(Request, Next);
+end;
+
+{ TPipelineBehavior<TRequest> }
+
+function TPipelineBehavior<TRequest>.Invoke(Request: TObject; Next: TFunc<TValue>): TValue;
+begin
+  Handle(TRequest(Request), procedure begin Next(); end);
+  Result := Default(TValue);
+end;
+
+{ TPipelineBehavior<TResponse, TRequest> }
+
+function TPipelineBehavior<TResponse, TRequest>.Invoke(Request: TObject; Next: TFunc<TValue>): TValue;
+var
+  RC: TRttiContext;
+  M: TRttiMethod;
+  NextVal, RequestVal: TValue;
+begin
+  // Use RTTI to call typed Handle — avoids unconstrained generic return type (Delphi E2008 limitation)
+  TValue.Make(@Next, TypeInfo(TFunc<TValue>), NextVal);
+  TValue.Make(@Request, Request.ClassInfo, RequestVal);
+  RC := TRttiContext.Create;
+  try
+    for M in RC.GetType(Self.ClassType).GetDeclaredMethods do
+      if M.Name = 'Handle' then
+      begin
+        Result := M.Invoke(Self, [RequestVal, NextVal]);
+        Exit;
+      end;
+  finally
+    RC.Free;
+  end;
+  Result := Default(TValue);
 end;
 
 end.
