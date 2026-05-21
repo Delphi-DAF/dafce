@@ -90,6 +90,17 @@ begin
   end;
 end;
 
+// Each call creates its own scope so BehaviorRef/Prev are not shared
+// across loop iterations (Delphi anonymous methods capture by reference).
+function MakeBehaviorChain(Behavior: TPipelineBehavior; Instance: TObject;
+  Prev: TFunc<TValue>): TFunc<TValue>;
+begin
+  Result := function: TValue
+  begin
+    Result := Behavior.Invoke(Instance, Prev);
+  end;
+end;
+
 function GetHandlerResponseType(HandlerType: PTypeInfo): PTypeInfo;
 var
   RC: TRttiContext;
@@ -165,7 +176,9 @@ begin
       Result := Default(TValue);
   end;
 
-  // Build chain right-to-left (index 0 = outermost)
+  // Build chain right-to-left (index 0 = outermost).
+  // MakeBehaviorChain creates a fresh scope per iteration, avoiding the
+  // Delphi anonymous-method variable-capture bug (shared ActRec in loop).
   for var I := Behaviors_list.Count - 1 downto 0 do
   begin
     var Behavior := Behaviors_list[I] as IPipelineBehavior;
@@ -177,14 +190,7 @@ begin
       if not Instance.ClassType.InheritsFrom(ReqClass) then
         Continue;
     end;
-    var PrevChain: TFunc<TValue>;
-    PrevChain := Chain;
-    var BehaviorRef: TPipelineBehavior;
-    BehaviorRef := BehaviorObj;
-    Chain := function: TValue
-    begin
-      Result := BehaviorRef.Invoke(Instance, PrevChain);
-    end;
+    Chain := MakeBehaviorChain(BehaviorObj, Instance, Chain);
   end;
 
   FinalValue := Chain();
