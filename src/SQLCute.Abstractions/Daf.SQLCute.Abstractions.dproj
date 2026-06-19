@@ -2,7 +2,7 @@
     <PropertyGroup>
         <ProjectGuid>{C7D8E9F0-A1B2-3456-C789-D0E1F2A3B4C5}</ProjectGuid>
         <MainSource>Daf.SQLCute.Abstractions.dpk</MainSource>
-        <ProjectVersion>20.3</ProjectVersion>
+        <ProjectVersion>20.4</ProjectVersion>
         <FrameworkType>None</FrameworkType>
         <Base>True</Base>
         <Config Condition="'$(Config)'==''">Release</Config>
@@ -126,7 +126,7 @@
     </ItemGroup>
     <ProjectExtensions>
         <Borland.Personality>Delphi.Personality.12</Borland.Personality>
-        <Borland.ProjectType/>
+        <Borland.ProjectType>Package</Borland.ProjectType>
         <BorlandProject>
             <Delphi.Personality>
                 <Source>
@@ -134,7 +134,6 @@
                 </Source>
             </Delphi.Personality>
             <Platforms>
-                <Platform value="Linux64">False</Platform>
                 <Platform value="Win32">True</Platform>
                 <Platform value="Win64">False</Platform>
                 <Platform value="Win64x">False</Platform>

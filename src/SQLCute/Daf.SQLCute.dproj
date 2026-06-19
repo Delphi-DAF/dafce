@@ -2,7 +2,7 @@
     <PropertyGroup>
         <ProjectGuid>{D1E2F3A4-B5C6-7890-ABCD-EF1234567890}</ProjectGuid>
         <MainSource>Daf.SQLCute.dpk</MainSource>
-        <ProjectVersion>20.3</ProjectVersion>
+        <ProjectVersion>20.4</ProjectVersion>
         <FrameworkType>None</FrameworkType>
         <Base>True</Base>
         <Config Condition="'$(Config)'==''">Release</Config>
@@ -128,7 +128,7 @@
     </ItemGroup>
     <ProjectExtensions>
         <Borland.Personality>Delphi.Personality.12</Borland.Personality>
-        <Borland.ProjectType/>
+        <Borland.ProjectType>Package</Borland.ProjectType>
         <BorlandProject>
             <Delphi.Personality>
                 <Source>
@@ -136,7 +136,6 @@
                 </Source>
             </Delphi.Personality>
             <Platforms>
-                <Platform value="Linux64">False</Platform>
                 <Platform value="Win32">True</Platform>
                 <Platform value="Win64">False</Platform>
                 <Platform value="Win64x">False</Platform>
