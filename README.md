@@ -47,3 +47,6 @@ Advanced features for DAF Pro are coming soon.
 | **DAF Community** | MIT | Free for personal and commercial use |
 | **DAF Pro**       | Commercial | Documentation and professional support |
 
+
+jcangas
+
