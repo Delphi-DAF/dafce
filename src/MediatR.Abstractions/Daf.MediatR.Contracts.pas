@@ -112,21 +112,21 @@ type
   TPipelineBehavior = class abstract(TInterfacedObject, IPipelineBehavior)
   public
     function Invoke(Request: TObject; Next: TFunc<TValue>): TValue; virtual;
-    function Handle(Request: TObject; Next: TFunc<TValue>): TValue; virtual; abstract;
+    function Handle(Request: TObject; Next: TFunc<TValue>): TValue; virtual;
   end;
 
   [MediatorAbstract]
   TPipelineBehavior<TRequest: class, IRequest> = class abstract(TPipelineBehavior, IPipelineBehavior<TRequest>)
   public
     function Invoke(Request: TObject; Next: TFunc<TValue>): TValue; override;
-    procedure Handle(Request: TRequest; Next: TProc); virtual; abstract;
+    procedure Handle(Request: TRequest; Next: TProc); reintroduce; virtual; abstract;
   end;
 
   [MediatorAbstract]
   TPipelineBehavior<TResponse; TRequest: class, IRequest<TResponse>> = class abstract(TPipelineBehavior, IPipelineBehavior<TResponse, TRequest>)
   public
     function Invoke(Request: TObject; Next: TFunc<TValue>): TValue; override;
-    function Handle(Request: TRequest; Next: TFunc<TValue>): TResponse; virtual; abstract;
+    function Handle(Request: TRequest; Next: TFunc<TValue>): TResponse; reintroduce; virtual; abstract;
   end;
 
   [MediatorAbstract]
@@ -278,6 +278,11 @@ begin
 end;
 
 { TPipelineBehavior }
+
+function TPipelineBehavior.Handle(Request: TObject; Next: TFunc<TValue>): TValue;
+begin
+  raise EAbstractError.CreateFmt('%s must override Handle', [ClassName]);
+end;
 
 function TPipelineBehavior.Invoke(Request: TObject; Next: TFunc<TValue>): TValue;
 begin
