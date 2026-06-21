@@ -12,7 +12,8 @@ uses
   MediatRSample.MainForm in 'MediatRSample.MainForm.pas' {MainForm},
   MediatRSample.Requests in 'MediatRSample.Requests.pas',
   MediatRSample.Handlers in 'MediatRSample.Handlers.pas',
-  MediatRSample.Customer in 'MediatRSample.Customer.pas';
+  MediatRSample.Customer in 'MediatRSample.Customer.pas',
+  MediatRSample.Behaviors in 'MediatRSample.Behaviors.pas';
 
 {$R *.res}
 
@@ -22,6 +23,7 @@ begin
   var ServiceCollection: IServiceCollection := TServiceCollection.Create;
   MediatR.AddTo(ServiceCollection);
   MediatR.AddTo(ServiceCollection, _T.PackageOf<TMainForm>);
+  MediatR.AddBehavior(ServiceCollection, TLoggingBehavior);
   ServiceCollection.AddSingleton<ICustomerStore, TCustomerStore>;
 
   // Construir el proveedor de servicios

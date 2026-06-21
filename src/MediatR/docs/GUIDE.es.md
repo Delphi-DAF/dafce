@@ -233,12 +233,12 @@ Cada behavior recibe la request y una clausura `Next`. Llamar a `Next()` contin�
 
 ```pascal
 type
-  TLoggingBehavior = class(TPipelineBehaviorBase)
+  TLoggingBehavior = class(TPipelineBehavior)
   public
-    function Invoke(Request: TObject; Next: TFunc<TValue>): TValue; override;
+    function Handle(Request: TObject; Next: TFunc<TValue>): TValue; override;
   end;
 
-function TLoggingBehavior.Invoke(Request: TObject; Next: TFunc<TValue>): TValue;
+function TLoggingBehavior.Handle(Request: TObject; Next: TFunc<TValue>): TValue;
 begin
   // antes del handler
   Result := Next();
@@ -274,7 +274,13 @@ El framework utiliza RTTI para determinar si un behavior aplica al tipo de reque
 No llames a `Next` para abortar:
 
 ```pascal
-function TAuthBehavior.Invoke(Request: TObject; Next: TFunc<TValue>): TValue;
+type
+  TAuthBehavior = class(TPipelineBehavior)
+  public
+    function Handle(Request: TObject; Next: TFunc<TValue>): TValue; override;
+  end;
+
+function TAuthBehavior.Handle(Request: TObject; Next: TFunc<TValue>): TValue;
 begin
   if not Authenticated then
     Result := Default(TValue)   // el handler nunca se llama
@@ -288,7 +294,13 @@ end;
 Envuelve `Next()` para capturar errores de behaviors internos y del handler:
 
 ```pascal
-function TErrorBehavior.Invoke(Request: TObject; Next: TFunc<TValue>): TValue;
+type
+  TErrorBehavior = class(TPipelineBehavior)
+  public
+    function Handle(Request: TObject; Next: TFunc<TValue>): TValue; override;
+  end;
+
+function TErrorBehavior.Handle(Request: TObject; Next: TFunc<TValue>): TValue;
 begin
   try
     Result := Next();
@@ -330,8 +342,11 @@ Los behaviors se ejecutan en orden de registro — el primero registrado es el m
 | Clase base | Sobreescribe | ¿Llamar inherited? |
 |------------|--------------|---------------------|
 | `TRequestHandler<TReq>` | `procedure Handle(Request: TReq)` | No |
-| `TResponseHandler<TRes, TReq>` | `function Handle(Request: TReq): TRes` | No |
+| `TResponseHandler<TRes, TReq>` | `procedure Handle(Request: TReq; out Result: TRes)` | No |
 | `TNotificacionHandler<TNot>` | `procedure Handle(Notification: TNot)` | No |
 | `TRequest` | — | Hereda `IRequest` |
 | `TRequest<TResponse>` | — | Hereda `IRequest<TResponse>` |
 | `TNotification` | — | Hereda `INotification` |
+| `TPipelineBehavior` | `function Handle(Request: TObject; Next: TFunc<TValue>): TValue` | No |
+| `TPipelineBehavior<TReq>` | `procedure Handle(Request: TReq; Next: TProc)` | No |
+| `TPipelineBehavior<TRes, TReq>` | `function Handle(Request: TReq; Next: TFunc<TValue>): TRes` | No |
