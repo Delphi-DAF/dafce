@@ -1,4 +1,4 @@
-unit Daf.SQLCute.Compiler.SqlServer;
+﻿unit Daf.SQLCute.Compiler.SqlServer;
 
 interface
 
@@ -57,7 +57,6 @@ begin
   begin
     if Clause is TLimitClause then
     begin
-      HasLimit := True;
       LimitVal := TLimitClause(Clause).Value;
     end;
     if Clause is TOffsetClause then
@@ -84,10 +83,9 @@ function TSqlServerCompiler.CompileOffset(const Clauses: TArray<TAbstractClause>
 var
   Clause: TAbstractClause;
   OffsetVal, LimitVal: Integer;
-  HasOffset, HasLimit: Boolean;
+  HasOffset: Boolean;
 begin
   HasOffset := False;
-  HasLimit  := False;
   OffsetVal := 0;
   LimitVal  := 2147483647;
   for Clause in Clauses do
@@ -99,7 +97,6 @@ begin
     end;
     if Clause is TLimitClause then
     begin
-      HasLimit := True;
       LimitVal := TLimitClause(Clause).Value;
     end;
   end;
