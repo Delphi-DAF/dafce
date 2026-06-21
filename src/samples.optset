@@ -1,15 +1,15 @@
-﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
     <PropertyGroup>
         <DCC_RemoteDebug>false</DCC_RemoteDebug>
         <AppEnableRuntimeThemes>true</AppEnableRuntimeThemes>
         <AppDPIAwarenessMode>PerMonitorV2</AppDPIAwarenessMode>
-        <DCC_DcpOutput>$(PRJ_OUT_DIR)\samples\lib</DCC_DcpOutput>
+        <DCC_DcpOutput>$(PRJ_OUT_DIR)\samples\lib\$(Platform)</DCC_DcpOutput>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_Locale>1033</VerInfo_Locale>
-        <DCC_ExeOutput>$(PRJ_OUT_DIR)\samples\bin</DCC_ExeOutput>
-        <DCC_BplOutput>$(PRJ_OUT_DIR)\samples\lib</DCC_BplOutput>
-        <DCC_DcuOutput>$(PRJ_OUT_DIR)\samples\lib</DCC_DcuOutput>
-        <DCC_UnitSearchPath>$(PRJ_OUT_DIR)\samples\lib;$(PRJ_OUT_DIR)\lib\$(Platform)\$(Config);$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_ExeOutput>$(PRJ_OUT_DIR)\samples\bin\$(Platform)</DCC_ExeOutput>
+        <DCC_BplOutput>$(PRJ_OUT_DIR)\samples\lib\$(Platform)</DCC_BplOutput>
+        <DCC_DcuOutput>$(PRJ_OUT_DIR)\samples\lib\$(Platform)</DCC_DcuOutput>
+        <DCC_UnitSearchPath>$(PRJ_OUT_DIR)\samples\lib\$(Platform);$(PRJ_OUT_DIR)\lib\$(Platform)\Debug;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
     </PropertyGroup>
     <ProjectExtensions>
         <Borland.Personality>Delphi.Personality.12</Borland.Personality>
