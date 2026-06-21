@@ -21,6 +21,9 @@
         <Projects Include="SQLCute.Abstractions\test\SQLCuteSpecs.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="SQLCute.Compilers\test\SQLCuteCompilersSpecs.dproj">
+            <Dependencies/>
+        </Projects>
     </ItemGroup>
     <ProjectExtensions>
         <Borland.Personality>Default.Personality.12</Borland.Personality>
@@ -83,14 +86,23 @@
     <Target Name="SQLCuteSpecs:Make">
         <MSBuild Projects="SQLCute.Abstractions\test\SQLCuteSpecs.dproj" Targets="Make"/>
     </Target>
+    <Target Name="SQLCuteCompilersSpecs">
+        <MSBuild Projects="SQLCute.Compilers\test\SQLCuteCompilersSpecs.dproj"/>
+    </Target>
+    <Target Name="SQLCuteCompilersSpecs:Clean">
+        <MSBuild Projects="SQLCute.Compilers\test\SQLCuteCompilersSpecs.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="SQLCuteCompilersSpecs:Make">
+        <MSBuild Projects="SQLCute.Compilers\test\SQLCuteCompilersSpecs.dproj" Targets="Make"/>
+    </Target>
     <Target Name="Build">
-        <CallTarget Targets="MiniSpecSpecs;CommonsSpecs;ConfigurationSpecs;DISpecs;MediatRSpecs;SQLCuteSpecs"/>
+        <CallTarget Targets="MiniSpecSpecs;CommonsSpecs;ConfigurationSpecs;DISpecs;MediatRSpecs;SQLCuteSpecs;SQLCuteCompilersSpecs"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="MiniSpecSpecs:Clean;CommonsSpecs:Clean;ConfigurationSpecs:Clean;DISpecs:Clean;MediatRSpecs:Clean;SQLCuteSpecs:Clean"/>
+        <CallTarget Targets="MiniSpecSpecs:Clean;CommonsSpecs:Clean;ConfigurationSpecs:Clean;DISpecs:Clean;MediatRSpecs:Clean;SQLCuteSpecs:Clean;SQLCuteCompilersSpecs:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="MiniSpecSpecs:Make;CommonsSpecs:Make;ConfigurationSpecs:Make;DISpecs:Make;MediatRSpecs:Make;SQLCuteSpecs:Make"/>
+        <CallTarget Targets="MiniSpecSpecs:Make;CommonsSpecs:Make;ConfigurationSpecs:Make;DISpecs:Make;MediatRSpecs:Make;SQLCuteSpecs:Make;SQLCuteCompilersSpecs:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>
