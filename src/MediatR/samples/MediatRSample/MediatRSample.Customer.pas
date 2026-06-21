@@ -1,12 +1,14 @@
-﻿unit MediatRSample.Customer;
+unit MediatRSample.Customer;
 
 interface
+
 uses
   System.SysUtils,
   System.Generics.Collections;
 
 type
   TCustomerID = Integer;
+
   TCustomer = class
   public type
     TList = TObjectList<TCustomer>;
@@ -19,8 +21,10 @@ type
   ICustomerStore = interface(IInvokable)
     ['{AF30CEB0-1D70-465D-BABD-38727B5F2F8D}']
     procedure Add(Customer: TCustomer);
+    procedure Remove(const Id: TCustomerID);
     function GetNextID: TCustomerID;
     function FindAll(const Filter: TPredicate<TCustomer>): TCustomer.TList;
+    function FindById(const Id: TCustomerID): TCustomer;
   end;
 
   TCustomerStore = class(TInterfacedObject, ICustomerStore)
@@ -29,10 +33,12 @@ type
     FNextId: Integer;
   public
     constructor Create;
-    destructor Destroy;override;
+    destructor Destroy; override;
     procedure Add(Customer: TCustomer);
+    procedure Remove(const Id: TCustomerID);
     function GetNextID: TCustomerID;
     function FindAll(const Filter: TPredicate<TCustomer>): TCustomer.TList;
+    function FindById(const Id: TCustomerID): TCustomer;
   end;
 
 implementation
@@ -61,15 +67,19 @@ begin
   inherited;
 end;
 
-function TCustomerStore.FindAll(const Filter: TPredicate<TCustomer>): TCustomer.TList;
+procedure TCustomerStore.Add(Customer: TCustomer);
 begin
-  //Result no debe poseer en este caso los elementos: son de FStorage.
-  Result := TCustomer.TList.Create(False);
-  for var C in FStorage do
-  begin
-    if Filter(C) then
-    Result.Add(C);
-  end;
+  FStorage.Add(Customer);
+end;
+
+procedure TCustomerStore.Remove(const Id: TCustomerID);
+begin
+  for var I := FStorage.Count - 1 downto 0 do
+    if FStorage[I].Id = Id then
+    begin
+      FStorage.Delete(I);
+      Exit;
+    end;
 end;
 
 function TCustomerStore.GetNextID: TCustomerID;
@@ -78,9 +88,21 @@ begin
   Inc(FNextId);
 end;
 
-procedure TCustomerStore.Add(Customer: TCustomer);
+function TCustomerStore.FindAll(const Filter: TPredicate<TCustomer>): TCustomer.TList;
 begin
-  FStorage.Add(Customer);
+  // Result does not own the elements — they belong to FStorage.
+  Result := TCustomer.TList.Create(False);
+  for var C in FStorage do
+    if Filter(C) then
+      Result.Add(C);
+end;
+
+function TCustomerStore.FindById(const Id: TCustomerID): TCustomer;
+begin
+  Result := nil;
+  for var C in FStorage do
+    if C.Id = Id then
+      Exit(C);
 end;
 
 end.

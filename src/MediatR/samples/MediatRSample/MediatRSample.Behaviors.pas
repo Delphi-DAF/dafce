@@ -5,13 +5,27 @@ interface
 uses
   System.SysUtils,
   System.Rtti,
-  Daf.MediatR.Contracts;
+  Daf.MediatR.Contracts,
+  MediatRSample.AppServices,
+  MediatRSample.Requests;
 
 type
-  // Global behavior: logs every Send call to the Windows debug output.
-  // Demonstrates the Handle/Next wrapping pattern for cross-cutting concerns.
+  // Outermost behavior: logs every request entry/exit and elapsed time.
   TLoggingBehavior = class(TPipelineBehavior)
+  private
+    FLog: IAppLog;
   public
+    constructor Create(const Log: IAppLog);
+    function Handle(Request: TObject; Next: TFunc<TValue>): TValue; override;
+  end;
+
+  // Inner behavior: short-circuits TAddCustomerCommand when the name is blank.
+  // Demonstrates pipeline short-circuit without raising an exception.
+  TValidationBehavior = class(TPipelineBehavior)
+  private
+    FLog: IAppLog;
+  public
+    constructor Create(const Log: IAppLog);
     function Handle(Request: TObject; Next: TFunc<TValue>): TValue; override;
   end;
 
@@ -20,21 +34,52 @@ implementation
 uses
   Winapi.Windows;
 
+{ TLoggingBehavior }
+
+constructor TLoggingBehavior.Create(const Log: IAppLog);
+begin
+  inherited Create;
+  FLog := Log;
+end;
+
 function TLoggingBehavior.Handle(Request: TObject; Next: TFunc<TValue>): TValue;
 var
   Start: Cardinal;
 begin
-  OutputDebugString(PChar('[MediatR] >> ' + Request.ClassName));
+  FLog.Log(Format('[Pipeline] >> %s', [Request.ClassName]));
   Start := GetTickCount;
   try
     Result := Next();
-    OutputDebugString(PChar(Format('[MediatR] << %s (%d ms)', [Request.ClassName, GetTickCount - Start])));
-  except on E: Exception do
+    FLog.Log(Format('[Pipeline] << %s  (%d ms)', [Request.ClassName, GetTickCount - Start]));
+  except
+    on E: Exception do
+    begin
+      FLog.Log(Format('[Pipeline] !! %s  %s: %s', [Request.ClassName, E.ClassName, E.Message]));
+      raise;
+    end;
+  end;
+end;
+
+{ TValidationBehavior }
+
+constructor TValidationBehavior.Create(const Log: IAppLog);
+begin
+  inherited Create;
+  FLog := Log;
+end;
+
+function TValidationBehavior.Handle(Request: TObject; Next: TFunc<TValue>): TValue;
+begin
+  if Request is TAddCustomerCommand then
   begin
-    OutputDebugString(PChar(Format('[MediatR] !! %s raised %s: %s', [Request.ClassName, E.ClassName, E.Message])));
-    raise;
+    var Cmd := TAddCustomerCommand(Request);
+    if Trim(Cmd.CustomerName).IsEmpty then
+    begin
+      FLog.Log('[Validation] TAddCustomerCommand rejected — name is empty');
+      Exit(TValue.Empty);  // short-circuit: handler never called
+    end;
   end;
-  end;
+  Result := Next();
 end;
 
 end.

@@ -1,17 +1,18 @@
-﻿program MediatRSample;
+program MediatRSample;
 
 {$STRONGLINKTYPES ON}
 uses
   Vcl.Forms,
-  System.SysUtils,
   Daf.Rtti,
   Daf.Extensions.DependencyInjection,
   Daf.DependencyInjection,
   Daf.MediatR.DependencyInjection,
   Daf.MediatR.Contracts,
+  MediatRSample.AppServices in 'MediatRSample.AppServices.pas',
   MediatRSample.MainForm in 'MediatRSample.MainForm.pas' {MainForm},
   MediatRSample.Requests in 'MediatRSample.Requests.pas',
   MediatRSample.Handlers in 'MediatRSample.Handlers.pas',
+  MediatRSample.Notifications in 'MediatRSample.Notifications.pas',
   MediatRSample.Customer in 'MediatRSample.Customer.pas',
   MediatRSample.Behaviors in 'MediatRSample.Behaviors.pas';
 
@@ -19,24 +20,28 @@ uses
 
 begin
   ReportMemoryLeaksOnShutdown := True;
-  // Configurar el contenedor de servicios
+
   var ServiceCollection: IServiceCollection := TServiceCollection.Create;
+
   MediatR.AddTo(ServiceCollection);
   MediatR.AddTo(ServiceCollection, _T.PackageOf<TMainForm>);
+
+  // Behaviors run outermost-first: Logging wraps Validation wraps the handler.
   MediatR.AddBehavior(ServiceCollection, TLoggingBehavior);
+  MediatR.AddBehavior(ServiceCollection, TValidationBehavior);
+
+  ServiceCollection.AddSingleton<IAppLog, TAppLog>;
   ServiceCollection.AddSingleton<ICustomerStore, TCustomerStore>;
 
-  // Construir el proveedor de servicios
   var ServiceProvider := ServiceCollection.BuildServiceProvider;
-
-  // Listos para obtener servicios
   var Mediator := ServiceProvider.GetRequiredService<IMediatorImpl>;
+  var AppLog   := ServiceProvider.GetRequiredService<IAppLog>;
 
   Application.Initialize;
   Application.MainFormOnTaskbar := True;
   Application.CreateForm(TMainForm, MainForm);
-  MainForm.Initialize(Mediator);
+  MainForm.Initialize(Mediator, AppLog);
   Application.Run;
-  // Liberar servicios gestionados por el contenedor
+
   ServiceProvider.Shutdown;
 end.

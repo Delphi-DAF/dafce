@@ -1,126 +1,88 @@
-# Ejemplo de Mediator con VCL
+# MediatR VCL Sample
 
-Este ejemplo demuestra el uso del patrón Mediator en una aplicación VCL utilizando DAF (Delphi Application Framework). El ejemplo implementa un CRUD simple de clientes utilizando el patrón CQRS (Command Query Responsibility Segregation) y el patrón Mediator.
+Demonstrates the four core MediatR concepts using a simple customer management form:
 
-## Estructura del Proyecto
+| Concept | What it shows |
+|---------|--------------|
+| **Command** | `TAddCustomerCommand`, `TRemoveCustomerCommand` — mutate state, no return value |
+| **Query** | `TCustomerQuery` — read state with an optional filter predicate, returns `TCustomer.TList` |
+| **Notification** | `TCustomerAddedEvent`, `TCustomerRemovedEvent` — broadcast to multiple handlers |
+| **Pipeline Behavior** | `TLoggingBehavior`, `TValidationBehavior` — cross-cutting concerns, composable |
 
-El proyecto está organizado en varios archivos que separan las diferentes responsabilidades:
+## File structure
 
-- `MediatRSample.dpr`: Punto de entrada de la aplicación y configuración de dependencias
-- `MediatRSample.Requests.pas`: Define los comandos, consultas y eventos del sistema
-- `MediatRSample.Handlers.pas`: Implementa los manejadores de comandos y consultas
-- `MediatRSample.MainForm.pas`: Interfaz de usuario y coordinación
+| File | Role |
+|------|------|
+| `MediatRSample.AppServices.pas` | `IAppLog` / `TAppLog` — injects a log sink into behaviors and notification handlers |
+| `MediatRSample.Customer.pas` | Domain model (`TCustomer`) and in-memory store (`ICustomerStore`) |
+| `MediatRSample.Requests.pas` | All commands, queries, and notification types |
+| `MediatRSample.Handlers.pas` | Command and query handlers |
+| `MediatRSample.Notifications.pas` | Audit notification handlers — log only, no UI knowledge |
+| `MediatRSample.Behaviors.pas` | `TLoggingBehavior` (outer) and `TValidationBehavior` (inner) |
+| `MediatRSample.MainForm.pas` | VCL form + UI-refresh notification handlers |
+| `MediatRSample.dpr` | DI wiring and application entry point |
 
-## Patrones Utilizados
+## Pipeline flow
 
-### 1. Mediator Pattern
-El patrón Mediator se utiliza para desacoplar los componentes de la aplicación. En este ejemplo:
-- Los formularios no conocen la implementación de los comandos/queries
-- Los handlers no conocen cómo se presentan los datos
-- La comunicación se realiza a través de mensajes (comandos/queries)
+Every request goes through two behaviors before reaching its handler:
 
-### 2. CQRS (Command Query Responsibility Segregation)
-El ejemplo separa las operaciones en:
-- **Comandos**: Modifican el estado (ej: `TAddCustomerCommand`)
-- **Queries**: Consultan el estado (ej: `TCustomerQuery`)
-
-### 3. Dependency Injection
-Se utiliza el contenedor de dependencias de DAF para:
-- Registrar y resolver servicios
-- Inyectar dependencias en los handlers
-- Gestionar el ciclo de vida de los objetos
-
-## Componentes Principales
-
-### Comandos y Eventos
-```pascal
-TAddCustomerCommand = class(TCommand)
-  // Comando para agregar un nuevo cliente
-end;
-
-TCustomerAddedEvent = class(TEvent)
-  // Evento publicado cuando se agrega un cliente
-end;
+```
+FMediator.Send(TAddCustomerCommand)
+  └─ TLoggingBehavior.Handle          [Pipeline] >> TAddCustomerCommand
+       └─ TValidationBehavior.Handle  (short-circuit if name is blank)
+            └─ TAddCustomerCommandHandler.Handle
+                 └─ Mediator.Publish(TCustomerAddedEvent)
+                      ├─ TCustomerAddedAuditHandler   [Notification] CustomerAdded — #1 "Alice"
+                      └─ TFormCustomerAddedHandler    MainForm.Reload  ← reactive UI update
+       [Pipeline] << TAddCustomerCommand  (N ms)
 ```
 
-### Queries
-```pascal
-TCustomerQuery = class(TQuery)
-  // Query para obtener la lista de clientes
-end;
+The **Pipeline Log** panel in the form makes every step visible at runtime.
 
-TCustomerResult = class
-  // Resultado de la query con la lista de clientes
-end;
+## Notification handlers — two separate concerns
+
+`TCustomerAddedEvent` has two handlers:
+
+| Handler | Unit | Responsibility |
+|---------|------|----------------|
+| `TCustomerAddedAuditHandler` | `Notifications.pas` | Logs to `IAppLog` — pure domain, no UI |
+| `TFormCustomerAddedHandler` | `MainForm.pas` | Calls `MainForm.Reload` — UI refresh |
+
+This demonstrates that a single notification can fan out to independent concerns.
+
+## Validation behavior — short-circuit
+
+`TValidationBehavior` inspects `TAddCustomerCommand` before calling `Next()`. If the name
+is blank it logs the rejection and returns without ever reaching the handler:
+
+```
+[Pipeline] >> TAddCustomerCommand
+[Validation] TAddCustomerCommand rejected — name is empty
+[Pipeline] << TAddCustomerCommand  (0 ms)
 ```
 
-### Handlers
-```pascal
-TAddCustomerCommandHandler = class(TInterfacedObject, ICommandHandler<TAddCustomerCommand>)
-  // Maneja la lógica de agregar clientes
-end;
+No exception is raised. The outer `TLoggingBehavior` sees a normal return, not an error.
 
-TCustomerQueryHandler = class(TInterfacedObject, IQueryHandler<TCustomerQuery, TCustomerResult>)
-  // Maneja la lógica de consultar clientes
-end;
+## UI walkthrough
+
+1. **Add** — type a name, press Enter or click *Add*.
+   The list refreshes reactively (via `TFormCustomerAddedHandler`), not by an explicit
+   `LoadCustomers` call in the button handler.
+2. **Remove** — select a row, click *Remove Selected*.
+3. **Search** — type a substring in *Filter*, click *Search* (or clear with *All*).
+   Each search dispatches a `TCustomerQuery` with a predicate — visible in the log.
+4. **Pipeline Log** — every `Send` and `Publish` appears here with timing information.
+
+## DI registration order
+
+```pascal
+MediatR.AddBehavior(ServiceCollection, TLoggingBehavior);   // outermost
+MediatR.AddBehavior(ServiceCollection, TValidationBehavior); // inner
+
+ServiceCollection.AddSingleton<IAppLog, TAppLog>;
+ServiceCollection.AddSingleton<ICustomerStore, TCustomerStore>;
 ```
 
-## Configuración de Dependencias
-
-La configuración de dependencias se realiza en el archivo principal:
-
-```pascal
-// Configurar el contenedor de servicios
-ServiceCollection := TServiceCollection.Create;
-
-// Registrar Mediator y sus handlers
-ServiceCollection.AddMediatR;
-ServiceCollection.AddMediatRClasses(System.Rtti.TRttiContext.Create.GetPackage(MediatRSample));
-
-// Registrar el servicio compartido de clientes
-ServiceCollection.AddSingleton<TObjectList<TCustomer>>;
-
-// Construir el proveedor de servicios
-ServiceProvider := ServiceCollection.BuildServiceProvider;
-```
-
-## Flujo de la Aplicación
-
-1. **Inicio de la Aplicación**:
-   - Se configura el contenedor de dependencias
-   - Se registran los servicios y handlers
-   - Se crea el formulario principal
-
-2. **Agregar Cliente**:
-   - El usuario ingresa el nombre del cliente
-   - Se crea un `TAddCustomerCommand`
-   - El Mediator envía el comando al handler correspondiente
-   - El handler procesa el comando y publica un evento
-   - La UI se actualiza con la nueva lista de clientes
-
-3. **Consultar Clientes**:
-   - Se crea un `TCustomerQuery`
-   - El Mediator envía la query al handler correspondiente
-   - El handler retorna la lista de clientes
-   - La UI muestra los resultados
-
-## Beneficios del Diseño
-
-1. **Desacoplamiento**: Los componentes se comunican a través de mensajes, reduciendo el acoplamiento.
-2. **Testabilidad**: Los handlers pueden probarse de forma aislada.
-3. **Mantenibilidad**: La separación de responsabilidades facilita el mantenimiento.
-4. **Escalabilidad**: Es fácil agregar nuevos comandos/queries sin modificar el código existente.
-
-## Ejecución del Ejemplo
-
-1. Compilar y ejecutar la aplicación
-2. Ingresar nombres de clientes en el campo de texto
-3. Hacer clic en "Agregar Cliente" para agregar nuevos clientes
-4. La lista se actualizará automáticamente mostrando los clientes agregados
-
-## Notas Adicionales
-
-- El ejemplo utiliza un almacenamiento en memoria (TObjectList) para simplicidad
-- En una aplicación real, se podría agregar persistencia de datos
-- Se pueden agregar más comandos/queries siguiendo el mismo patrón
-- Los eventos permiten notificar cambios a múltiples componentes 
+All handlers (command, query, notification) are discovered automatically via RTTI
+from `_T.PackageOf<TMainForm>`. `{$STRONGLINKTYPES ON}` in the `.dpr` prevents the
+linker from stripping unreferenced types.
