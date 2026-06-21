@@ -1,10 +1,10 @@
 ﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
     <PropertyGroup>
-        <DCC_DcpOutput>$(PRJ_OUT_DIR)\lib</DCC_DcpOutput>
-        <DCC_ExeOutput>$(PRJ_OUT_DIR)\bin</DCC_ExeOutput>
-        <DCC_BplOutput>$(PRJ_OUT_DIR)\bin</DCC_BplOutput>
-        <DCC_DcuOutput>$(PRJ_OUT_DIR)\lib</DCC_DcuOutput>
-        <DCC_UnitSearchPath>$(BDS)\Lib\Release\Indy10;$(BDS)\lib;$(VENDOR_LIB);$(PRJ_OUT_DIR)\lib;$(DCC_UnitSearchPath);$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_DcpOutput>$(PRJ_OUT_DIR)\lib\$(Platform)\$(Config)</DCC_DcpOutput>
+        <DCC_ExeOutput>$(PRJ_OUT_DIR)\bin\$(Platform)\$(Config)</DCC_ExeOutput>
+        <DCC_BplOutput>$(PRJ_OUT_DIR)\bin\$(Platform)\$(Config)</DCC_BplOutput>
+        <DCC_DcuOutput>$(PRJ_OUT_DIR)\lib\$(Platform)\$(Config)</DCC_DcuOutput>
+        <DCC_UnitSearchPath>$(BDS)\Lib\Release\Indy10;$(BDS)\lib;$(VENDOR_LIB);$(PRJ_OUT_DIR)\lib\$(Platform)\$(Config);$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_MapFile>0</DCC_MapFile>
     </PropertyGroup>
     <ProjectExtensions>

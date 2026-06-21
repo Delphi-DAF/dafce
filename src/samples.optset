@@ -9,7 +9,7 @@
         <DCC_ExeOutput>$(PRJ_OUT_DIR)\samples\bin</DCC_ExeOutput>
         <DCC_BplOutput>$(PRJ_OUT_DIR)\samples\lib</DCC_BplOutput>
         <DCC_DcuOutput>$(PRJ_OUT_DIR)\samples\lib</DCC_DcuOutput>
-        <DCC_UnitSearchPath>$(PRJ_OUT_DIR)\samples\lib;$(PRJ_OUT_DIR)\lib;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>$(PRJ_OUT_DIR)\samples\lib;$(PRJ_OUT_DIR)\lib\$(Platform)\$(Config);$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
     </PropertyGroup>
     <ProjectExtensions>
         <Borland.Personality>Delphi.Personality.12</Borland.Personality>
