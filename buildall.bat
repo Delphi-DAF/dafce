@@ -17,8 +17,8 @@ call :step "Framework  Win64  Debug"    --path:src\DAFGroup.groupproj    --confi
 call :step "Framework  Win64  Release"  --path:src\DAFGroup.groupproj    --config:Release  --64 || goto :failed
 call :step "Samples    Win32  Debug"    --path:src\DAFSamples.groupproj  --config:Debug        || goto :failed
 call :step "Samples    Win64  Debug"    --path:src\DAFSamples.groupproj  --config:Debug    --64 || goto :failed
-call :step "Tests      Win32  Debug"    --path:src\DAFTestGroup.groupproj --config:Debug        || goto :failed
-call :step "Tests      Win64  Debug"    --path:src\DAFTestGroup.groupproj --config:Debug    --64 || goto :failed
+call :step "Tests      Win32  Debug"    --path:src\DAFSpecs.groupproj --config:Debug        || goto :failed
+call :step "Tests      Win64  Debug"    --path:src\DAFSpecs.groupproj --config:Debug    --64 || goto :failed
 
 echo.
 echo ============================================================
