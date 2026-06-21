@@ -134,6 +134,61 @@ type
     procedure Handle(Notification: TPonged);
   end;
 
+  // 1.1 Typed void behavior — traces before+after, calls Next (covers pipeline-typed-void-behavior)
+  [MediatorAbstract]
+  TVoidTracingBehavior<TRequest: class, IRequest> = class(TPipelineBehavior<TRequest>)
+  public
+    procedure Handle(Request: TRequest; Next: TProc); override;
+  end;
+
+  // 1.2 Typed void behavior — does NOT call Next (short-circuit)
+  [MediatorAbstract]
+  TVoidShortCircuitBehavior<TRequest: class, IRequest> = class(TPipelineBehavior<TRequest>)
+  public
+    procedure Handle(Request: TRequest; Next: TProc); override;
+  end;
+
+  // 1.3 Global behavior — raises before calling Next (pipeline-error-handling)
+  [MediatorAbstract]
+  TBeforeRaisingBehavior = class(TPipelineBehavior)
+  public
+    function Handle(Request: TObject; Next: TFunc<TValue>): TValue; override;
+  end;
+
+  // 1.4 Global behavior — raises after Next() returns
+  [MediatorAbstract]
+  TAfterRaisingBehavior = class(TPipelineBehavior)
+  public
+    function Handle(Request: TObject; Next: TFunc<TValue>): TValue; override;
+  end;
+
+  // 1.5 Second typed ping behavior with distinct markers for composition ordering test
+  [MediatorAbstract]
+  TSecondPingBehavior = class(TPipelineBehavior<string, TPing>)
+  public
+    function Handle(Request: TPing; Next: TFunc<TValue>): string; override;
+  end;
+
+  // 1.6 Typed ping behavior that performs a nested Send<TJing> before calling Next
+  [MediatorAbstract]
+  TNestedSendBehavior = class(TPipelineBehavior<string, TPing>)
+  private
+    FMediator: IMediator;
+  public
+    constructor Create(const Mediator: IMediator);
+    function Handle(Request: TPing; Next: TFunc<TValue>): string; override;
+  end;
+
+  // Request/notification types with no registered handlers (for error/silent scenarios)
+  TOrphanRequest = class(TInterfacedObject, IRequest)
+  end;
+
+  TOrphanQuery = class(TInterfacedObject, IRequest<string>)
+  end;
+
+  TOrphanNotification = class(TInterfacedObject, INotification)
+  end;
+
   TMediatRWorld = class
   public
     ServiceCollection: IServiceCollection;
@@ -305,6 +360,60 @@ begin
   TPongedHandler2.Done := True;
 end;
 
+{ TVoidTracingBehavior }
+
+procedure TVoidTracingBehavior<TRequest>.Handle(Request: TRequest; Next: TProc);
+begin
+  TPipelineState.Add('void-before');
+  Next();
+  TPipelineState.Add('void-after');
+end;
+
+{ TVoidShortCircuitBehavior }
+
+procedure TVoidShortCircuitBehavior<TRequest>.Handle(Request: TRequest; Next: TProc);
+begin
+  TPipelineState.Add('void-sc');
+end;
+
+{ TBeforeRaisingBehavior }
+
+function TBeforeRaisingBehavior.Handle(Request: TObject; Next: TFunc<TValue>): TValue;
+begin
+  raise Exception.Create('BeforeRaising');
+end;
+
+{ TAfterRaisingBehavior }
+
+function TAfterRaisingBehavior.Handle(Request: TObject; Next: TFunc<TValue>): TValue;
+begin
+  Result := Next();
+  raise Exception.Create('AfterRaising');
+end;
+
+{ TSecondPingBehavior }
+
+function TSecondPingBehavior.Handle(Request: TPing; Next: TFunc<TValue>): string;
+begin
+  TPipelineState.Add('ping2-before');
+  Result := Next().AsType<string>;
+  TPipelineState.Add('ping2-after');
+end;
+
+{ TNestedSendBehavior }
+
+constructor TNestedSendBehavior.Create(const Mediator: IMediator);
+begin
+  inherited Create;
+  FMediator := Mediator;
+end;
+
+function TNestedSendBehavior.Handle(Request: TPing; Next: TFunc<TValue>): string;
+begin
+  FMediator.Send(TJing.Create);
+  Result := Next().AsType<string>;
+end;
+
 { TMediatRWorld }
 
 constructor TMediatRWorld.Create;
@@ -450,6 +559,69 @@ Feature MediatR @mediatr
   .Scenario('Behavior with injected dependency receives it from the container')
     .Given('a configured mediator with dependency-aware behavior')
     .When('I send a TJing request')
-    .&Then('the behavior dependency should appear in the pipeline trace');
+    .&Then('the behavior dependency should appear in the pipeline trace')
+
+  .Scenario('Two typed response behaviors execute in order around handler')
+    .Given('a configured mediator with two typed ping behaviors')
+    .When('I send a TPing request and get Pong1')
+    .&Then('the pipeline trace should show both ping behaviors in order')
+
+  .Scenario('Nested Send inside a behavior invokes handler for nested request')
+    .Given('a configured mediator with nested-send behavior')
+    .When('I send a TPing request and get Pong1')
+    .&Then('the TJing handler should have been invoked')
+
+// --- Typed void pipeline behaviors ---
+
+.Rule('Typed void pipeline behaviors')
+
+  .Scenario('Typed void behavior executes for matching void request')
+    .Given('a configured mediator with typed void tracing behavior')
+    .When('I send a TJing request')
+    .&Then('the pipeline trace should contain the void-before marker')
+
+  .Scenario('Typed void behavior can call Next to continue the chain')
+    .Given('a configured mediator with typed void tracing behavior')
+    .When('I send a TJing request')
+    .&Then('the TJing handler should have been invoked')
+
+  .Scenario('Typed void behavior is skipped for a different void request type')
+    .Given('a configured mediator with void tracing behavior for non-matching request')
+    .When('I send a TJing request')
+    .&Then('the pipeline trace should not contain the void-before marker')
+
+  .Scenario('Typed void behavior short-circuits the chain')
+    .Given('a configured mediator with typed void short-circuit behavior')
+    .When('I send a TJing request')
+    .&Then('the TJing handler should not have been invoked')
+
+// --- Pipeline error handling ---
+
+.Rule('Pipeline error handling')
+
+  .Scenario('No handler registered for void request raises exception')
+    .Given('a configured mediator')
+    .When('I send an unhandled void request')
+    .&Then('an exception should have been raised')
+
+  .Scenario('No handler registered for response request raises exception')
+    .Given('a configured mediator')
+    .When('I send an unhandled response request')
+    .&Then('an exception should have been raised')
+
+  .Scenario('Publish with no subscribers succeeds silently')
+    .Given('a configured mediator')
+    .When('I publish an unsubscribed notification')
+    .&Then('no exception should have been raised')
+
+  .Scenario('Behavior raises before Next — exception reaches caller')
+    .Given('a configured mediator with before-raising behavior')
+    .When('I send a TJing request')
+    .&Then('an exception should have been raised')
+
+  .Scenario('Behavior raises after Next — exception reaches caller')
+    .Given('a configured mediator with after-raising behavior')
+    .When('I send a TPing request via after-raising behavior')
+    .&Then('an exception should have been raised');
 
 end.
