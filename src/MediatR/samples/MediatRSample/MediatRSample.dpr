@@ -26,9 +26,13 @@ begin
   MediatR.AddTo(ServiceCollection);
   MediatR.AddTo(ServiceCollection, _T.PackageOf<TMainForm>);
 
-  // Behaviors run outermost-first: Logging wraps Validation wraps the handler.
+  // Behaviors run outermost-first.
+  // TLoggingBehavior   — global (all requests)
+  // TValidationBehavior — typed void (TAddCustomerCommand only)
+  // TQueryResultBehavior — typed response (TCustomerQuery only)
   MediatR.AddBehavior(ServiceCollection, TLoggingBehavior);
   MediatR.AddBehavior(ServiceCollection, TValidationBehavior);
+  MediatR.AddBehavior(ServiceCollection, TQueryResultBehavior);
 
   ServiceCollection.AddSingleton<IAppLog, TAppLog>;
   ServiceCollection.AddSingleton<ICustomerStore, TCustomerStore>;

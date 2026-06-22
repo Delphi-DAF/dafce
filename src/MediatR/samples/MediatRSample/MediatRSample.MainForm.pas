@@ -1,4 +1,4 @@
-unit MediatRSample.MainForm;
+﻿unit MediatRSample.MainForm;
 
 interface
 
@@ -13,22 +13,22 @@ uses
 
 type
   TMainForm = class(TForm)
-    pnlTop: TPanel;
-    lblName: TLabel;
-    edtName: TEdit;
-    btnAdd: TButton;
-    btnRemove: TButton;
-    lblFilter: TLabel;
-    edtFilter: TEdit;
-    btnSearch: TButton;
-    btnAll: TButton;
-    lvCustomers: TListView;
-    grpLog: TGroupBox;
-    memoLog: TMemo;
-    procedure btnAddClick(Sender: TObject);
-    procedure btnRemoveClick(Sender: TObject);
-    procedure btnSearchClick(Sender: TObject);
-    procedure btnAllClick(Sender: TObject);
+    TopArea: TPanel;
+    NameLabel: TLabel;
+    NameCtl: TEdit;
+    AddCtl: TButton;
+    RemoveCtl: TButton;
+    FilterLabel: TLabel;
+    FilterCtl: TEdit;
+    SearchCtl: TButton;
+    AllCtl: TButton;
+    CustomersCtl: TListView;
+    LogArea: TGroupBox;
+    LogCtl: TMemo;
+    procedure AddCtlClick(Sender: TObject);
+    procedure RemoveCtlClick(Sender: TObject);
+    procedure SearchCtlClick(Sender: TObject);
+    procedure AllCtlClick(Sender: TObject);
   private
     FMediator: IMediator;
     FAppLog: IAppLog;
@@ -67,8 +67,8 @@ begin
   FAppLog := AppLog;
   FAppLog.SetSink(procedure(Msg: string)
   begin
-    memoLog.Lines.Add(Msg);
-    SendMessage(memoLog.Handle, EM_SCROLL, SB_BOTTOM, 0);
+    LogCtl.Lines.Add(Msg);
+    SendMessage(LogCtl.Handle, EM_SCROLL, SB_BOTTOM, 0);
   end);
   LoadCustomers;
 end;
@@ -76,7 +76,6 @@ end;
 procedure TMainForm.LoadCustomers(const FilterText: string = '');
 var
   Query: TCustomerQuery;
-  Customers: TCustomer.TList;
 begin
   if FilterText.IsEmpty then
     Query := TCustomerQuery.Create
@@ -87,19 +86,19 @@ begin
         Result := C.Name.ToLower.Contains(FilterText.ToLower);
       end);
 
-  Customers := FMediator.Send<TCustomer.TList, TCustomerQuery>(Query);
+  var Customers := FMediator.Send<TCustomer.TList, TCustomerQuery>(Query);
   try
-    lvCustomers.Items.BeginUpdate;
+    CustomersCtl.Items.BeginUpdate;
     try
-      lvCustomers.Items.Clear;
+      CustomersCtl.Items.Clear;
       for var C in Customers do
-        with lvCustomers.Items.Add do
+        with CustomersCtl.Items.Add do
         begin
           Caption := C.Name;
           SubItems.Add(C.Id.ToString);
         end;
     finally
-      lvCustomers.Items.EndUpdate;
+      CustomersCtl.Items.EndUpdate;
     end;
   finally
     Customers.Free;
@@ -108,33 +107,33 @@ end;
 
 procedure TMainForm.Reload;
 begin
-  LoadCustomers(edtFilter.Text);
+  LoadCustomers(FilterCtl.Text);
 end;
 
-procedure TMainForm.btnAddClick(Sender: TObject);
+procedure TMainForm.AddCtlClick(Sender: TObject);
 begin
   // Validation runs in TValidationBehavior — no duplicate check here.
   // The list refreshes reactively via TFormCustomerAddedHandler.
-  FMediator.Send(TAddCustomerCommand.Create(edtName.Text));
-  edtName.Clear;
+  FMediator.Send(TAddCustomerCommand.Create(NameCtl.Text));
+  NameCtl.Clear;
 end;
 
-procedure TMainForm.btnRemoveClick(Sender: TObject);
+procedure TMainForm.RemoveCtlClick(Sender: TObject);
 begin
-  if lvCustomers.Selected = nil then
+  if CustomersCtl.Selected = nil then
     Exit;
-  var CustomerId := StrToInt(lvCustomers.Selected.SubItems[0]);
+  var CustomerId := StrToInt(CustomersCtl.Selected.SubItems[0]);
   FMediator.Send(TRemoveCustomerCommand.Create(CustomerId));
 end;
 
-procedure TMainForm.btnSearchClick(Sender: TObject);
+procedure TMainForm.SearchCtlClick(Sender: TObject);
 begin
-  LoadCustomers(edtFilter.Text);
+  LoadCustomers(FilterCtl.Text);
 end;
 
-procedure TMainForm.btnAllClick(Sender: TObject);
+procedure TMainForm.AllCtlClick(Sender: TObject);
 begin
-  edtFilter.Clear;
+  FilterCtl.Clear;
   LoadCustomers;
 end;
 

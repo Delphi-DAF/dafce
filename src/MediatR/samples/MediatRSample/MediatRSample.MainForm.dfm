@@ -1,168 +1,118 @@
 object MainForm: TMainForm
   Left = 0
   Top = 0
-  Margins.Left = 6
-  Margins.Top = 6
-  Margins.Right = 6
-  Margins.Bottom = 6
   Caption = 'MediatR Sample'#13#10'Commands '#183' Queries '#183' Notifications '#183' Behaviors'
-  ClientHeight = 681
-  ClientWidth = 1283
+  ClientHeight = 340
+  ClientWidth = 641
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
-  Font.Height = -24
+  Font.Height = -12
   Font.Name = 'Segoe UI'
   Font.Style = []
   Position = poScreenCenter
-  PixelsPerInch = 192
-  TextHeight = 32
-  object pnlTop: TPanel
+  TextHeight = 15
+  object TopArea: TPanel
     Left = 0
     Top = 0
-    Width = 1283
-    Height = 130
-    Margins.Left = 6
-    Margins.Top = 6
-    Margins.Right = 6
-    Margins.Bottom = 6
+    Width = 641
+    Height = 65
     Align = alTop
     BevelOuter = bvNone
     TabOrder = 0
-    object lblName: TLabel
-      Left = 24
-      Top = 20
-      Width = 72
-      Height = 32
-      Margins.Left = 6
-      Margins.Top = 6
-      Margins.Right = 6
-      Margins.Bottom = 6
+    object NameLabel: TLabel
+      Left = 12
+      Top = 10
+      Width = 35
+      Height = 15
       Caption = 'Name:'
     end
-    object lblFilter: TLabel
-      Left = 24
-      Top = 82
-      Width = 78
-      Height = 32
-      Margins.Left = 6
-      Margins.Top = 6
-      Margins.Right = 6
-      Margins.Bottom = 6
+    object FilterLabel: TLabel
+      Left = 12
+      Top = 41
+      Width = 29
+      Height = 15
       Caption = 'Filter:'
     end
-    object edtName: TEdit
-      Left = 110
-      Top = 14
-      Width = 568
-      Height = 40
-      Margins.Left = 6
-      Margins.Top = 6
-      Margins.Right = 6
-      Margins.Bottom = 6
+    object NameCtl: TEdit
+      Left = 55
+      Top = 7
+      Width = 284
+      Height = 23
       TabOrder = 0
     end
-    object btnAdd: TButton
-      Left = 690
-      Top = 12
-      Width = 170
-      Height = 50
-      Margins.Left = 6
-      Margins.Top = 6
-      Margins.Right = 6
-      Margins.Bottom = 6
+    object AddCtl: TButton
+      Left = 345
+      Top = 6
+      Width = 85
+      Height = 25
       Caption = 'Add'
       Default = True
       TabOrder = 1
-      OnClick = btnAddClick
+      OnClick = AddCtlClick
     end
-    object btnRemove: TButton
-      Left = 872
-      Top = 12
-      Width = 260
-      Height = 50
-      Margins.Left = 6
-      Margins.Top = 6
-      Margins.Right = 6
-      Margins.Bottom = 6
+    object RemoveCtl: TButton
+      Left = 436
+      Top = 6
+      Width = 130
+      Height = 25
       Caption = 'Remove Selected'
       TabOrder = 2
-      OnClick = btnRemoveClick
+      OnClick = RemoveCtlClick
     end
-    object edtFilter: TEdit
-      Left = 110
-      Top = 76
-      Width = 360
-      Height = 40
-      Margins.Left = 6
-      Margins.Top = 6
-      Margins.Right = 6
-      Margins.Bottom = 6
+    object FilterCtl: TEdit
+      Left = 55
+      Top = 38
+      Width = 180
+      Height = 23
       TabOrder = 3
     end
-    object btnSearch: TButton
-      Left = 482
-      Top = 74
-      Width = 148
-      Height = 50
-      Margins.Left = 6
-      Margins.Top = 6
-      Margins.Right = 6
-      Margins.Bottom = 6
+    object SearchCtl: TButton
+      Left = 241
+      Top = 37
+      Width = 74
+      Height = 25
       Caption = 'Search'
       TabOrder = 4
-      OnClick = btnSearchClick
+      OnClick = SearchCtlClick
     end
-    object btnAll: TButton
-      Left = 642
-      Top = 74
-      Width = 100
-      Height = 50
-      Margins.Left = 6
-      Margins.Top = 6
-      Margins.Right = 6
-      Margins.Bottom = 6
+    object AllCtl: TButton
+      Left = 321
+      Top = 37
+      Width = 50
+      Height = 25
       Caption = 'All'
       TabOrder = 5
-      OnClick = btnAllClick
+      OnClick = AllCtlClick
     end
   end
-  object grpLog: TGroupBox
+  object LogArea: TGroupBox
     Left = 0
-    Top = 481
-    Width = 1283
-    Height = 200
-    Margins.Left = 6
-    Margins.Top = 6
-    Margins.Right = 6
-    Margins.Bottom = 6
+    Top = 240
+    Width = 641
+    Height = 100
     Align = alBottom
     Caption = 'Pipeline Log'
     TabOrder = 1
-    object memoLog: TMemo
+    object LogCtl: TMemo
       Left = 2
-      Top = 36
-      Width = 1279
-      Height = 162
-      Margins.Left = 6
-      Margins.Top = 6
-      Margins.Right = 6
-      Margins.Bottom = 6
+      Top = 17
+      Width = 637
+      Height = 81
       Align = alClient
       ReadOnly = True
       ScrollBars = ssVertical
       TabOrder = 0
+      ExplicitLeft = 1
+      ExplicitWidth = 639
+      ExplicitHeight = 82
     end
   end
-  object lvCustomers: TListView
+  object CustomersCtl: TListView
     Left = 0
-    Top = 130
-    Width = 1283
-    Height = 351
-    Margins.Left = 6
-    Margins.Top = 6
-    Margins.Right = 6
-    Margins.Bottom = 6
+    Top = 65
+    Width = 641
+    Height = 175
     Align = alClient
     Columns = <
       item

@@ -7,6 +7,7 @@ uses
   System.Rtti,
   Daf.MediatR.Contracts,
   MediatRSample.AppServices,
+  MediatRSample.Customer,
   MediatRSample.Requests;
 
 type
@@ -19,14 +20,24 @@ type
     function Handle(Request: TObject; Next: TFunc<TValue>): TValue; override;
   end;
 
-  // Inner behavior: short-circuits TAddCustomerCommand when the name is blank.
-  // Demonstrates pipeline short-circuit without raising an exception.
-  TValidationBehavior = class(TPipelineBehavior)
+  // Typed void behavior: short-circuits TAddCustomerCommand when the name is blank.
+  // The framework routes it only to TAddCustomerCommand — no runtime type check needed.
+  TValidationBehavior = class(TPipelineBehavior<TAddCustomerCommand>)
   private
     FLog: IAppLog;
   public
     constructor Create(const Log: IAppLog);
-    function Handle(Request: TObject; Next: TFunc<TValue>): TValue; override;
+    procedure Handle(Request: TAddCustomerCommand; Next: TProc); override;
+  end;
+
+  // Typed response behavior: logs the number of results returned by TCustomerQuery.
+  // Demonstrates TPipelineBehavior<TResponse, TRequest> — framework routes it only to queries.
+  TQueryResultBehavior = class(TPipelineBehavior<TCustomer.TList, TCustomerQuery>)
+  private
+    FLog: IAppLog;
+  public
+    constructor Create(const Log: IAppLog);
+    function Handle(Request: TCustomerQuery; Next: TFunc<TValue>): TCustomer.TList; override;
   end;
 
 implementation
@@ -68,18 +79,28 @@ begin
   FLog := Log;
 end;
 
-function TValidationBehavior.Handle(Request: TObject; Next: TFunc<TValue>): TValue;
+procedure TValidationBehavior.Handle(Request: TAddCustomerCommand; Next: TProc);
 begin
-  if Request is TAddCustomerCommand then
+  if Trim(Request.CustomerName).IsEmpty then
   begin
-    var Cmd := TAddCustomerCommand(Request);
-    if Trim(Cmd.CustomerName).IsEmpty then
-    begin
-      FLog.Log('[Validation] TAddCustomerCommand rejected — name is empty');
-      Exit(TValue.Empty);  // short-circuit: handler never called
-    end;
+    FLog.Log('[Validation] TAddCustomerCommand rejected — name is empty');
+    Exit;  // short-circuit: Next not called, handler never runs
   end;
-  Result := Next();
+  Next;
+end;
+
+{ TQueryResultBehavior }
+
+constructor TQueryResultBehavior.Create(const Log: IAppLog);
+begin
+  inherited Create;
+  FLog := Log;
+end;
+
+function TQueryResultBehavior.Handle(Request: TCustomerQuery; Next: TFunc<TValue>): TCustomer.TList;
+begin
+  Result := Next().AsType<TCustomer.TList>;
+  FLog.Log(Format('[Query] TCustomerQuery → %d customer(s)', [Result.Count]));
 end;
 
 end.
