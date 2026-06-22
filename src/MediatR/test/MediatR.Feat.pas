@@ -71,7 +71,7 @@ type
   // Typed behavior: applies only to TPing requests
   TPingBehavior = class(TPipelineBehavior<string, TPing>)
   public
-    function Handle(Request: TPing; Next: TFunc<TValue>): string; override;
+    function Handle(Request: TPing; Next: TNext<string>): string; override;
   end;
 
   // Descendant of TPing (for polymorphic typed behavior test)
@@ -86,13 +86,13 @@ type
   [MediatorAbstract]
   TResponseShortCircuitBehavior = class(TPipelineBehavior<string, TPing>)
   public
-    function Handle(Request: TPing; Next: TFunc<TValue>): string; override;
+    function Handle(Request: TPing; Next: TNext<string>): string; override;
   end;
 
   [MediatorAbstract]
   TResponseModifyingBehavior = class(TPipelineBehavior<string, TPing>)
   public
-    function Handle(Request: TPing; Next: TFunc<TValue>): string; override;
+    function Handle(Request: TPing; Next: TNext<string>): string; override;
   end;
 
   [MediatorAbstract]
@@ -138,14 +138,14 @@ type
   [MediatorAbstract]
   TVoidTracingBehavior<TRequest: class, IRequest> = class(TPipelineBehavior<TRequest>)
   public
-    procedure Handle(Request: TRequest; Next: TProc); override;
+    procedure Handle(Request: TRequest; Next: TNext); override;
   end;
 
   // 1.2 Typed void behavior — does NOT call Next (short-circuit)
   [MediatorAbstract]
   TVoidShortCircuitBehavior<TRequest: class, IRequest> = class(TPipelineBehavior<TRequest>)
   public
-    procedure Handle(Request: TRequest; Next: TProc); override;
+    procedure Handle(Request: TRequest; Next: TNext); override;
   end;
 
   // 1.3 Global behavior — raises before calling Next (pipeline-error-handling)
@@ -166,7 +166,7 @@ type
   [MediatorAbstract]
   TSecondPingBehavior = class(TPipelineBehavior<string, TPing>)
   public
-    function Handle(Request: TPing; Next: TFunc<TValue>): string; override;
+    function Handle(Request: TPing; Next: TNext<string>): string; override;
   end;
 
   // 1.6 Typed ping behavior that performs a nested Send<TJing> before calling Next
@@ -176,7 +176,7 @@ type
     FMediator: IMediator;
   public
     constructor Create(const Mediator: IMediator);
-    function Handle(Request: TPing; Next: TFunc<TValue>): string; override;
+    function Handle(Request: TPing; Next: TNext<string>): string; override;
   end;
 
   // Request/notification types with no registered handlers (for error/silent scenarios)
@@ -284,10 +284,10 @@ end;
 
 { TPingBehavior }
 
-function TPingBehavior.Handle(Request: TPing; Next: TFunc<TValue>): string;
+function TPingBehavior.Handle(Request: TPing; Next: TNext<string>): string;
 begin
   TPipelineState.Add('ping-before');
-  Result := Next().AsType<string>;
+  Result := Next.Call;
   TPipelineState.Add('ping-after');
 end;
 
@@ -300,16 +300,16 @@ end;
 
 { TResponseShortCircuitBehavior }
 
-function TResponseShortCircuitBehavior.Handle(Request: TPing; Next: TFunc<TValue>): string;
+function TResponseShortCircuitBehavior.Handle(Request: TPing; Next: TNext<string>): string;
 begin
   Result := 'Short';
 end;
 
 { TResponseModifyingBehavior }
 
-function TResponseModifyingBehavior.Handle(Request: TPing; Next: TFunc<TValue>): string;
+function TResponseModifyingBehavior.Handle(Request: TPing; Next: TNext<string>): string;
 begin
-  Result := '[' + Next().AsType<string> + ']';
+  Result := '[' + Next.Call + ']';
 end;
 
 { TExceptionCatchingBehavior }
@@ -362,16 +362,16 @@ end;
 
 { TVoidTracingBehavior }
 
-procedure TVoidTracingBehavior<TRequest>.Handle(Request: TRequest; Next: TProc);
+procedure TVoidTracingBehavior<TRequest>.Handle(Request: TRequest; Next: TNext);
 begin
   TPipelineState.Add('void-before');
-  Next();
+  Next.Call;
   TPipelineState.Add('void-after');
 end;
 
 { TVoidShortCircuitBehavior }
 
-procedure TVoidShortCircuitBehavior<TRequest>.Handle(Request: TRequest; Next: TProc);
+procedure TVoidShortCircuitBehavior<TRequest>.Handle(Request: TRequest; Next: TNext);
 begin
   TPipelineState.Add('void-sc');
 end;
@@ -393,10 +393,10 @@ end;
 
 { TSecondPingBehavior }
 
-function TSecondPingBehavior.Handle(Request: TPing; Next: TFunc<TValue>): string;
+function TSecondPingBehavior.Handle(Request: TPing; Next: TNext<string>): string;
 begin
   TPipelineState.Add('ping2-before');
-  Result := Next().AsType<string>;
+  Result := Next.Call;
   TPipelineState.Add('ping2-after');
 end;
 
@@ -408,10 +408,10 @@ begin
   FMediator := Mediator;
 end;
 
-function TNestedSendBehavior.Handle(Request: TPing; Next: TFunc<TValue>): string;
+function TNestedSendBehavior.Handle(Request: TPing; Next: TNext<string>): string;
 begin
   FMediator.Send(TJing.Create);
-  Result := Next().AsType<string>;
+  Result := Next.Call;
 end;
 
 { TMediatRWorld }

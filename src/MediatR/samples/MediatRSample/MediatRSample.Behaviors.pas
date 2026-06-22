@@ -27,7 +27,7 @@ type
     FLog: IAppLog;
   public
     constructor Create(const Log: IAppLog);
-    procedure Handle(Request: TAddCustomerCommand; Next: TProc); override;
+    procedure Handle(Request: TAddCustomerCommand; Next: TNext); override;
   end;
 
   // Typed response behavior: logs the number of results returned by TCustomerQuery.
@@ -37,7 +37,7 @@ type
     FLog: IAppLog;
   public
     constructor Create(const Log: IAppLog);
-    function Handle(Request: TCustomerQuery; Next: TFunc<TValue>): TCustomer.TList; override;
+    function Handle(Request: TCustomerQuery; Next: TNext<TCustomer.TList>): TCustomer.TList; override;
   end;
 
 implementation
@@ -79,14 +79,14 @@ begin
   FLog := Log;
 end;
 
-procedure TValidationBehavior.Handle(Request: TAddCustomerCommand; Next: TProc);
+procedure TValidationBehavior.Handle(Request: TAddCustomerCommand; Next: TNext);
 begin
   if Trim(Request.CustomerName).IsEmpty then
   begin
     FLog.Log('[Validation] TAddCustomerCommand rejected — name is empty');
     Exit;  // short-circuit: Next not called, handler never runs
   end;
-  Next;
+  Next.Call;
 end;
 
 { TQueryResultBehavior }
@@ -97,9 +97,9 @@ begin
   FLog := Log;
 end;
 
-function TQueryResultBehavior.Handle(Request: TCustomerQuery; Next: TFunc<TValue>): TCustomer.TList;
+function TQueryResultBehavior.Handle(Request: TCustomerQuery; Next: TNext<TCustomer.TList>): TCustomer.TList;
 begin
-  Result := Next().AsType<TCustomer.TList>;
+  Result := Next.Call;
   FLog.Log(Format('[Query] TCustomerQuery → %d customer(s)', [Result.Count]));
 end;
 

@@ -48,6 +48,25 @@ type
     ['{D7E2B7EA-E72E-4332-89AE-D405380ADB23}']
   end;
 
+  // Typed Next delegate for void pipeline behaviors.
+  TNext = record
+  private
+    FProc: TProc;
+  public
+    constructor Create(const Proc: TProc);
+    procedure Call;
+  end;
+
+  // Typed Next delegate for response pipeline behaviors.
+  // Centralizes TValue → TResponse unboxing so behaviors don't need AsType.
+  TNext<TResponse> = record
+  private
+    FFunc: TFunc<TValue>;
+  public
+    constructor Create(const Func: TFunc<TValue>);
+    function Call: TResponse;
+  end;
+
   // Marker interface — DI scan/registration target for all pipeline behaviors.
   // Invoke is intentionally absent: mediator casts to TPipelineBehavior (class) at runtime.
   IPipelineBehavior = interface(IInvokable)
@@ -57,13 +76,13 @@ type
   // Typed pipeline behavior for void requests
   IPipelineBehavior<TRequest: class, IRequest> = interface(IPipelineBehavior)
     ['{375D7E25-BF87-433E-AF9B-BB056D4D2A7B}']
-    procedure Handle(Request: TRequest; Next: TProc);
+    procedure Handle(Request: TRequest; Next: TNext);
   end;
 
   // Typed pipeline behavior for request/response handlers
   IPipelineBehavior<TResponse; TRequest: class, IRequest<TResponse>> = interface(IPipelineBehavior)
     ['{9BDE0B6A-2D89-4F26-A5ED-64C9CFB4A3B8}']
-    function Handle(Request: TRequest; Next: TFunc<TValue>): TResponse;
+    function Handle(Request: TRequest; Next: TNext<TResponse>): TResponse;
   end;
 
   IRequestHandler<TRequest: class, IRequest> = interface(IBaseRequesteHandler)
@@ -119,14 +138,15 @@ type
   TPipelineBehavior<TRequest: class, IRequest> = class abstract(TPipelineBehavior, IPipelineBehavior<TRequest>)
   public
     function Invoke(Request: TObject; Next: TFunc<TValue>): TValue; override;
-    procedure Handle(Request: TRequest; Next: TProc); reintroduce; virtual; abstract;
+    procedure Handle(Request: TRequest; Next: TNext); reintroduce; virtual; abstract;
   end;
 
   [MediatorAbstract]
   TPipelineBehavior<TResponse; TRequest: class, IRequest<TResponse>> = class abstract(TPipelineBehavior, IPipelineBehavior<TResponse, TRequest>)
   public
     function Invoke(Request: TObject; Next: TFunc<TValue>): TValue; override;
-    function Handle(Request: TRequest; Next: TFunc<TValue>): TResponse; reintroduce; virtual; abstract;
+    function HandleBridge(Request: TRequest; Next: TFunc<TValue>): TResponse;
+    function Handle(Request: TRequest; Next: TNext<TResponse>): TResponse; reintroduce; virtual; abstract;
   end;
 
   [MediatorAbstract]
@@ -277,6 +297,30 @@ begin
   FNotification := Notification;
 end;
 
+{ TNext }
+
+constructor TNext.Create(const Proc: TProc);
+begin
+  FProc := Proc;
+end;
+
+procedure TNext.Call;
+begin
+  FProc;
+end;
+
+{ TNext<TResponse> }
+
+constructor TNext<TResponse>.Create(const Func: TFunc<TValue>);
+begin
+  FFunc := Func;
+end;
+
+function TNext<TResponse>.Call: TResponse;
+begin
+  Result := FFunc().AsType<TResponse>;
+end;
+
 { TPipelineBehavior }
 
 function TPipelineBehavior.Handle(Request: TObject; Next: TFunc<TValue>): TValue;
@@ -293,7 +337,7 @@ end;
 
 function TPipelineBehavior<TRequest>.Invoke(Request: TObject; Next: TFunc<TValue>): TValue;
 begin
-  Handle(TRequest(Request), procedure begin Next(); end);
+  Handle(TRequest(Request), TNext.Create(procedure begin Next(); end));
   Result := Default(TValue);
 end;
 
@@ -305,13 +349,14 @@ var
   M: TRttiMethod;
   NextVal, RequestVal: TValue;
 begin
-  // Use RTTI to call typed Handle — avoids unconstrained generic return type (Delphi E2008 limitation)
+  // Use RTTI to call HandleBridge — avoids unconstrained generic return type (Delphi E2008 limitation).
+  // HandleBridge is non-abstract and lives on the generic base class, so GetMethods is needed.
   TValue.Make(@Next, TypeInfo(TFunc<TValue>), NextVal);
   TValue.Make(@Request, Request.ClassInfo, RequestVal);
   RC := TRttiContext.Create;
   try
-    for M in RC.GetType(Self.ClassType).GetDeclaredMethods do
-      if M.Name = 'Handle' then
+    for M in RC.GetType(Self.ClassType).GetMethods do
+      if M.Name = 'HandleBridge' then
       begin
         Result := M.Invoke(Self, [RequestVal, NextVal]);
         Exit;
@@ -320,6 +365,11 @@ begin
     RC.Free;
   end;
   Result := Default(TValue);
+end;
+
+function TPipelineBehavior<TResponse, TRequest>.HandleBridge(Request: TRequest; Next: TFunc<TValue>): TResponse;
+begin
+  Result := Handle(Request, TNext<TResponse>.Create(Next));
 end;
 
 end.
