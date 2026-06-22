@@ -48,5 +48,3 @@ Advanced features for DAF Pro are coming soon.
 | **DAF Pro**       | Commercial | Documentation and professional support |
 
 
-jcangas
-
