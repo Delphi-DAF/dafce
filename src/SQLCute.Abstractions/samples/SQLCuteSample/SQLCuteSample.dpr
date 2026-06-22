@@ -1,4 +1,4 @@
-program SQLCuteSample;
+﻿program SQLCuteSample;
 
 {
   SQLCute Sample — demonstrates all fluent query-builder capabilities:
