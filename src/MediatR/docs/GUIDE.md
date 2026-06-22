@@ -227,83 +227,103 @@ end;
 
 Behaviors intercept every `Send` call and let you add cross-cutting logic (logging, validation, caching, error handling) without touching your handlers.
 
-### Handle/Next pattern
+### Three behavior flavors
 
-Each behavior receives the request and a `Next` closure. Call `Next()` to continue the pipeline; omit it to short-circuit.
+All use the same `Next.Call` pattern; the type of `Next` varies by flavor:
+
+| Base class | Applies to | `Next` type | Override |
+|------------|-----------|-------------|----------|
+| `TPipelineBehavior` | every request | `TNextValue` | `function Handle(Request: TObject; Next: TNextValue): TValue` |
+| `TPipelineBehavior<TReq>` | one void request type | `TNext` | `procedure Handle(Request: TReq; Next: TNext)` |
+| `TPipelineBehavior<TRes, TReq>` | one response request type | `TNext<TRes>` | `function Handle(Request: TReq; Next: TNext<TRes>): TRes` |
+
+### Global behavior (all requests)
 
 ```pascal
 type
   TLoggingBehavior = class(TPipelineBehavior)
   public
-    function Handle(Request: TObject; Next: TFunc<TValue>): TValue; override;
+    function Handle(Request: TObject; Next: TNextValue): TValue; override;
   end;
 
-function TLoggingBehavior.Handle(Request: TObject; Next: TFunc<TValue>): TValue;
+function TLoggingBehavior.Handle(Request: TObject; Next: TNextValue): TValue;
 begin
-  // before handler
-  Result := Next();
-  // after handler — Result holds the handler's return value
+  Log('Before ' + Request.ClassName);
+  Result := Next.Call;
+  Log('After ' + Request.ClassName);
 end;
 ```
 
-### Typed behaviors
+### Typed void behavior (one `IRequest` type)
 
-Extend `TPipelineBehavior<TResponse, TRequest>` to restrict the behavior to a specific request type (and its subclasses):
+```pascal
+type
+  TValidationBehavior = class(TPipelineBehavior<TCreateOrderCommand>)
+  public
+    procedure Handle(Request: TCreateOrderCommand; Next: TNext); override;
+  end;
+
+procedure TValidationBehavior.Handle(Request: TCreateOrderCommand; Next: TNext);
+begin
+  if Request.Name.IsEmpty then
+    Exit;  // short-circuit — handler never called
+  Next.Call;
+end;
+```
+
+### Typed response behavior (one `IRequest<TResponse>` type)
 
 ```pascal
 type
   TValidatePingBehavior = class(TPipelineBehavior<string, TPing>)
   public
-    function Handle(Request: TPing; Next: TFunc<TValue>): string; override;
+    function Handle(Request: TPing; Next: TNext<string>): string; override;
   end;
 
-function TValidatePingBehavior.Handle(Request: TPing; Next: TFunc<TValue>): string;
+function TValidatePingBehavior.Handle(Request: TPing; Next: TNext<string>): string;
 begin
   if Request.Target.IsEmpty then
     raise EArgumentException.Create('Target required');
-  Result := Next().AsType<string>;
+  Result := Next.Call;
 end;
 ```
-
-For void requests (`IRequest`) use `TPipelineBehavior<TRequest>`.
 
 The framework uses RTTI to determine whether a behavior applies to the current request type. Typed behaviors also match subclasses.
 
 ### Short-circuiting
 
-Don't call `Next` to abort:
+Don't call `Next.Call` to abort the pipeline:
 
 ```pascal
-type
-  TAuthBehavior = class(TPipelineBehavior)
-  public
-    function Handle(Request: TObject; Next: TFunc<TValue>): TValue; override;
-  end;
-
-function TAuthBehavior.Handle(Request: TObject; Next: TFunc<TValue>): TValue;
+procedure TAuthBehavior.Handle(Request: TCreateOrderCommand; Next: TNext);
 begin
   if not Authenticated then
-    Result := Default(TValue)   // handler is never called
+    Exit;   // handler is never called
+  Next.Call;
+end;
+```
+
+For global behaviors return `Default(TValue)` instead of calling `Next.Call`:
+
+```pascal
+function TAuthBehavior.Handle(Request: TObject; Next: TNextValue): TValue;
+begin
+  if not Authenticated then
+    Result := Default(TValue)
   else
-    Result := Next();
+    Result := Next.Call;
 end;
 ```
 
 ### Exception handling
 
-Wrap `Next()` to catch errors from inner behaviors and the handler:
+Wrap `Next.Call` to catch errors from inner behaviors and the handler:
 
 ```pascal
-type
-  TErrorBehavior = class(TPipelineBehavior)
-  public
-    function Handle(Request: TObject; Next: TFunc<TValue>): TValue; override;
-  end;
-
-function TErrorBehavior.Handle(Request: TObject; Next: TFunc<TValue>): TValue;
+function TErrorBehavior.Handle(Request: TObject; Next: TNextValue): TValue;
 begin
   try
-    Result := Next();
+    Result := Next.Call;
   except on E: Exception do
     Result := Default(TValue);
   end;
@@ -326,11 +346,11 @@ end;
 
 ```pascal
 // Auto-discovery (skips classes marked [MediatorAbstract])
-Services.AddMediatRBehaviors(_T.PackageOf<TMyClass>);
+MediatR.AddTo(ServiceCollection, _T.PackageOf<TMyClass>);
 
 // Manual
-Services.AddTransient(TypeInfo(IPipelineBehavior), TLoggingBehavior);
-Services.AddTransient(TypeInfo(IPipelineBehavior), TValidatePingBehavior);
+MediatR.AddBehavior(ServiceCollection, TLoggingBehavior);
+MediatR.AddBehavior(ServiceCollection, TValidatePingBehavior);
 ```
 
 Behaviors execute in registration order — first registered is outermost. For behaviors you only register manually, mark them `[MediatorAbstract]` to exclude them from auto-discovery.
@@ -347,6 +367,6 @@ Behaviors execute in registration order — first registered is outermost. For b
 | `TRequest` | — | Inherits `IRequest` |
 | `TRequest<TResponse>` | — | Inherits `IRequest<TResponse>` |
 | `TNotification` | — | Inherits `INotification` |
-| `TPipelineBehavior` | `function Handle(Request: TObject; Next: TFunc<TValue>): TValue` | No |
-| `TPipelineBehavior<TReq>` | `procedure Handle(Request: TReq; Next: TProc)` | No |
-| `TPipelineBehavior<TRes, TReq>` | `function Handle(Request: TReq; Next: TFunc<TValue>): TRes` | No |
+| `TPipelineBehavior` | `function Handle(Request: TObject; Next: TNextValue): TValue` | No |
+| `TPipelineBehavior<TReq>` | `procedure Handle(Request: TReq; Next: TNext)` | No |
+| `TPipelineBehavior<TRes, TReq>` | `function Handle(Request: TReq; Next: TNext<TRes>): TRes` | No |

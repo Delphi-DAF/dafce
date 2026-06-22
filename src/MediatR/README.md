@@ -101,102 +101,107 @@ Services.AddTransient<IRequestHandler<TMyCommand>, TMyCommandHandler>;
 
 Behaviors wrap every `Send` call with cross-cutting logic (logging, validation, caching, etc.).
 
-### Global behaviors
+There are three behavior flavors — all use the same `Next.Call` pattern:
 
-Run for **every request**, regardless of type. Extend `TPipelineBehaviorBase` and override `Invoke`:
+| Base class | Applies to | `Next` type | Override |
+|------------|-----------|-------------|----------|
+| `TPipelineBehavior` | every request | `TNextValue` | `function Handle(Request: TObject; Next: TNextValue): TValue` |
+| `TPipelineBehavior<TReq>` | one void request type | `TNext` | `procedure Handle(Request: TReq; Next: TNext)` |
+| `TPipelineBehavior<TRes, TReq>` | one response request type | `TNext<TRes>` | `function Handle(Request: TReq; Next: TNext<TRes>): TRes` |
+
+### Global behavior (all requests)
 
 ```pascal
 type
-  TLoggingBehavior = class(TPipelineBehaviorBase)
+  TLoggingBehavior = class(TPipelineBehavior)
   public
-    function Invoke(Request: TObject; Next: TFunc<TValue>): TValue; override;
+    function Handle(Request: TObject; Next: TNextValue): TValue; override;
   end;
 
-function TLoggingBehavior.Invoke(Request: TObject; Next: TFunc<TValue>): TValue;
+function TLoggingBehavior.Handle(Request: TObject; Next: TNextValue): TValue;
 begin
   Log('Before ' + Request.ClassName);
-  Result := Next();
+  Result := Next.Call;
   Log('After ' + Request.ClassName);
 end;
 ```
 
-### Typed behaviors
-
-Run **only** for a specific request type (and its descendants). Extend `TPipelineBehavior<TResponse, TRequest>` for response requests, or `TPipelineBehavior<TRequest>` for void requests:
+### Typed void behavior (one `IRequest` type)
 
 ```pascal
-// Response behavior (IRequest<string>)
 type
-  TPingBehavior = class(TPipelineBehavior<string, TPing>)
+  TValidationBehavior = class(TPipelineBehavior<TCreateOrderCommand>)
   public
-    function Handle(Request: TPing; Next: TFunc<TValue>): string; override;
+    procedure Handle(Request: TCreateOrderCommand; Next: TNext); override;
   end;
 
-function TPingBehavior.Handle(Request: TPing; Next: TFunc<TValue>): string;
+procedure TValidationBehavior.Handle(Request: TCreateOrderCommand; Next: TNext);
 begin
-  // Call Next to invoke the rest of the pipeline and get the response
-  Result := Next().AsType<string>;
-end;
-
-// Void behavior (IRequest)
-type
-  TJingBehavior = class(TPipelineBehavior<TJing>)
-  public
-    procedure Handle(Request: TJing; Next: TProc); override;
-  end;
-
-procedure TJingBehavior.Handle(Request: TJing; Next: TProc);
-begin
-  Next();  // continue pipeline
+  if Request.Name.IsEmpty then
+    Exit;  // short-circuit — handler never called
+  Next.Call;
 end;
 ```
 
-The framework detects the concrete parameter type of `Handle` via RTTI and skips the behavior for non-matching request types automatically. Typed behaviors also apply to subclasses of the declared request type.
+### Typed response behavior (one `IRequest<TResponse>` type)
+
+```pascal
+type
+  TQueryResultBehavior = class(TPipelineBehavior<TOrderList, TGetOrdersQuery>)
+  public
+    function Handle(Request: TGetOrdersQuery; Next: TNext<TOrderList>): TOrderList; override;
+  end;
+
+function TQueryResultBehavior.Handle(Request: TGetOrdersQuery; Next: TNext<TOrderList>): TOrderList;
+begin
+  Result := Next.Call;
+  Log(Format('%d order(s) returned', [Result.Count]));
+end;
+```
+
+The framework uses RTTI to detect the concrete request type of `Handle` and skips the behavior for non-matching types automatically. Typed behaviors also apply to subclasses.
 
 ### Registration
 
 ```pascal
-// Auto-discovery (scans package for IBasePipelineBehavior implementations)
-Services.AddMediatRBehaviors(_T.PackageOf<TMyClass>);
+// Auto-discovery (scans package, skips [MediatorAbstract])
+MediatR.AddTo(ServiceCollection, _T.PackageOf<TMyClass>);
 
-// Manual registration
-Services.AddTransient(TypeInfo(IPipelineBehavior), TLoggingBehavior);
-Services.AddTransient(TypeInfo(IPipelineBehavior), TPingBehavior);
+// Manual
+MediatR.AddBehavior(ServiceCollection, TLoggingBehavior);
+MediatR.AddBehavior(ServiceCollection, TValidationBehavior);
 ```
-
-Mark behaviors with `[MediatorAbstract]` to exclude them from auto-discovery (useful for behaviors you register manually only in specific scenarios).
 
 ### Execution order
 
 Behaviors execute in **registration order** — first registered is the outermost wrapper:
 
 ```
-Invoke: Behavior1 → Invoke: Behavior2 → Handler → return to Behavior2 → return to Behavior1
+Behavior1 → Behavior2 → Handler → return to Behavior2 → return to Behavior1
 ```
 
 ### Short-circuiting
 
-Don't call `Next` (or `Next()`) to abort the pipeline. The handler and inner behaviors are never invoked, but outer behaviors still complete normally:
+Don't call `Next.Call` to abort the pipeline. The handler and inner behaviors are never invoked:
 
 ```pascal
-function TAuthBehavior.Invoke(Request: TObject; Next: TFunc<TValue>): TValue;
+procedure TValidationBehavior.Handle(Request: TCreateOrderCommand; Next: TNext);
 begin
-  if not IsAuthenticated then
-    Result := Default(TValue)  // short-circuit: handler is never called
-  else
-    Result := Next();
+  if not IsValid(Request) then
+    Exit;  // handler is never called
+  Next.Call;
 end;
 ```
 
 ### Exception handling
 
-Wrap `Next()` in a `try/except` to catch exceptions from the handler or inner behaviors:
+Wrap `Next.Call` in a `try/except` to catch exceptions from the handler or inner behaviors:
 
 ```pascal
-function TErrorHandlerBehavior.Invoke(Request: TObject; Next: TFunc<TValue>): TValue;
+function TErrorBehavior.Handle(Request: TObject; Next: TNextValue): TValue;
 begin
   try
-    Result := Next();
+    Result := Next.Call;
   except on E: Exception do
   begin
     Log('Error: ' + E.Message);
@@ -212,12 +217,12 @@ Behaviors are resolved from the DI container. Constructor parameters are injecte
 
 ```pascal
 type
-  TLoggingBehavior = class(TPipelineBehaviorBase)
+  TLoggingBehavior = class(TPipelineBehavior)
   private
     FLogger: ILogger;
   public
     constructor Create(const Logger: ILogger);
-    function Invoke(Request: TObject; Next: TFunc<TValue>): TValue; override;
+    function Handle(Request: TObject; Next: TNextValue): TValue; override;
   end;
 ```
 

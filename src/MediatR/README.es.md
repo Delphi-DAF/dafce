@@ -96,51 +96,75 @@ Services.AddTransient<IRequestHandler<TMyCommand>, TMyCommandHandler>;
 
 Los behaviors envuelven cada llamada `Send` con lógica transversal (logging, validación, caché, etc.).
 
-### Behaviors globales
+Hay tres variantes — todas usan el mismo patrón `Next.Call`:
 
-Se ejecutan para **todas** las requests. Extiende `TPipelineBehaviorBase` y sobreescribe `Invoke`:
+| Clase base | Se aplica a | Tipo de `Next` | Sobreescribe |
+|------------|------------|----------------|--------------|
+| `TPipelineBehavior` | toda request | `TNextValue` | `function Handle(Request: TObject; Next: TNextValue): TValue` |
+| `TPipelineBehavior<TReq>` | un tipo de request void | `TNext` | `procedure Handle(Request: TReq; Next: TNext)` |
+| `TPipelineBehavior<TRes, TReq>` | un tipo de request con respuesta | `TNext<TRes>` | `function Handle(Request: TReq; Next: TNext<TRes>): TRes` |
+
+### Behavior global (todas las requests)
 
 ```pascal
 type
-  TLoggingBehavior = class(TPipelineBehaviorBase)
+  TLoggingBehavior = class(TPipelineBehavior)
   public
-    function Invoke(Request: TObject; Next: TFunc<TValue>): TValue; override;
+    function Handle(Request: TObject; Next: TNextValue): TValue; override;
   end;
 
-function TLoggingBehavior.Invoke(Request: TObject; Next: TFunc<TValue>): TValue;
+function TLoggingBehavior.Handle(Request: TObject; Next: TNextValue): TValue;
 begin
   Log('Antes de ' + Request.ClassName);
-  Result := Next();
+  Result := Next.Call;
   Log('Después de ' + Request.ClassName);
 end;
 ```
 
-### Behaviors tipados
-
-Se ejecutan **solo** para un tipo de request específico (y sus subclases). Extiende `TPipelineBehavior<TResponse, TRequest>`:
+### Behavior tipado void (un tipo `IRequest`)
 
 ```pascal
 type
-  TPingBehavior = class(TPipelineBehavior<string, TPing>)
+  TValidationBehavior = class(TPipelineBehavior<TCreateOrderCommand>)
   public
-    function Handle(Request: TPing; Next: TFunc<TValue>): string; override;
+    procedure Handle(Request: TCreateOrderCommand; Next: TNext); override;
   end;
 
-function TPingBehavior.Handle(Request: TPing; Next: TFunc<TValue>): string;
+procedure TValidationBehavior.Handle(Request: TCreateOrderCommand; Next: TNext);
 begin
-  Result := Next().AsType<string>;
+  if Request.Name.IsEmpty then
+    Exit;  // cortocircuito — el handler nunca se llama
+  Next.Call;
 end;
 ```
+
+### Behavior tipado con respuesta (un tipo `IRequest<TResponse>`)
+
+```pascal
+type
+  TQueryResultBehavior = class(TPipelineBehavior<TOrderList, TGetOrdersQuery>)
+  public
+    function Handle(Request: TGetOrdersQuery; Next: TNext<TOrderList>): TOrderList; override;
+  end;
+
+function TQueryResultBehavior.Handle(Request: TGetOrdersQuery; Next: TNext<TOrderList>): TOrderList;
+begin
+  Result := Next.Call;
+  Log(Format('%d pedido(s) devueltos', [Result.Count]));
+end;
+```
+
+El framework usa RTTI para detectar el tipo concreto de request en `Handle` y omite el behavior para tipos no coincidentes. Los behaviors tipados también se aplican a subclases.
 
 ### Registro
 
 ```pascal
-// Auto-descubrimiento
-Services.AddMediatRBehaviors(_T.PackageOf<TMyClass>);
+// Auto-descubrimiento (omite [MediatorAbstract])
+MediatR.AddTo(ServiceCollection, _T.PackageOf<TMyClass>);
 
 // Manual
-Services.AddTransient(TypeInfo(IPipelineBehaviorInvoker), TLoggingBehavior);
-Services.AddTransient(TypeInfo(IPipelineBehaviorInvoker), TPingBehavior);
+MediatR.AddBehavior(ServiceCollection, TLoggingBehavior);
+MediatR.AddBehavior(ServiceCollection, TValidationBehavior);
 ```
 
 Usa `[MediatorAbstract]` en behaviors que solo registres manualmente para excluirlos del auto-descubrimiento.
@@ -151,15 +175,14 @@ Los behaviors se ejecutan en orden de registro — el primero registrado es el e
 
 ### Cortocircuito
 
-No llamar a `Next` aborta el pipeline sin invocar el handler:
+No llamar a `Next.Call` aborta el pipeline sin invocar el handler:
 
 ```pascal
-function TAuthBehavior.Invoke(Request: TObject; Next: TFunc<TValue>): TValue;
+procedure TValidationBehavior.Handle(Request: TCreateOrderCommand; Next: TNext);
 begin
-  if not Authenticated then
-    Result := Default(TValue)
-  else
-    Result := Next();
+  if not IsValid(Request) then
+    Exit;  // el handler nunca se llama
+  Next.Call;
 end;
 ```
 

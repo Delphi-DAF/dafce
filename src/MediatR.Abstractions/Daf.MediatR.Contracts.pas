@@ -367,25 +367,18 @@ end;
 function TPipelineBehavior<TResponse, TRequest>.Invoke(Request: TObject; Next: TFunc<TValue>): TValue;
 var
   RC: TRttiContext;
-  M: TRttiMethod;
   NextVal, RequestVal: TValue;
 begin
   // Use RTTI to call HandleBridge — avoids unconstrained generic return type (Delphi E2008 limitation).
-  // HandleBridge is non-abstract and lives on the generic base class, so GetMethods is needed.
+  // RTTI.Invoke boxes TResponse → TValue in the runtime layer so the generic body never sees it.
   TValue.Make(@Next, TypeInfo(TFunc<TValue>), NextVal);
   TValue.Make(@Request, Request.ClassInfo, RequestVal);
   RC := TRttiContext.Create;
   try
-    for M in RC.GetType(Self.ClassType).GetMethods do
-      if M.Name = 'HandleBridge' then
-      begin
-        Result := M.Invoke(Self, [RequestVal, NextVal]);
-        Exit;
-      end;
+    Result := RC.GetType(Self.ClassType).GetMethod('HandleBridge').Invoke(Self, [RequestVal, NextVal]);
   finally
     RC.Free;
   end;
-  Result := Default(TValue);
 end;
 
 function TPipelineBehavior<TResponse, TRequest>.HandleBridge(Request: TRequest; Next: TFunc<TValue>): TResponse;
