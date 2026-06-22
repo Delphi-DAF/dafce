@@ -48,6 +48,15 @@ type
     ['{D7E2B7EA-E72E-4332-89AE-D405380ADB23}']
   end;
 
+  // Next delegate for global (untyped) pipeline behaviors.
+  TNextValue = record
+  private
+    FFunc: TFunc<TValue>;
+  public
+    constructor Create(const Func: TFunc<TValue>);
+    function Call: TValue;
+  end;
+
   // Typed Next delegate for void pipeline behaviors.
   TNext = record
   private
@@ -131,7 +140,7 @@ type
   TPipelineBehavior = class abstract(TInterfacedObject, IPipelineBehavior)
   public
     function Invoke(Request: TObject; Next: TFunc<TValue>): TValue; virtual;
-    function Handle(Request: TObject; Next: TFunc<TValue>): TValue; virtual;
+    function Handle(Request: TObject; Next: TNextValue): TValue; virtual;
   end;
 
   [MediatorAbstract]
@@ -297,6 +306,18 @@ begin
   FNotification := Notification;
 end;
 
+{ TNextValue }
+
+constructor TNextValue.Create(const Func: TFunc<TValue>);
+begin
+  FFunc := Func;
+end;
+
+function TNextValue.Call: TValue;
+begin
+  Result := FFunc();
+end;
+
 { TNext }
 
 constructor TNext.Create(const Proc: TProc);
@@ -323,14 +344,14 @@ end;
 
 { TPipelineBehavior }
 
-function TPipelineBehavior.Handle(Request: TObject; Next: TFunc<TValue>): TValue;
+function TPipelineBehavior.Handle(Request: TObject; Next: TNextValue): TValue;
 begin
   raise EAbstractError.CreateFmt('%s must override Handle', [ClassName]);
 end;
 
 function TPipelineBehavior.Invoke(Request: TObject; Next: TFunc<TValue>): TValue;
 begin
-  Result := Handle(Request, Next);
+  Result := Handle(Request, TNextValue.Create(Next));
 end;
 
 { TPipelineBehavior<TRequest> }

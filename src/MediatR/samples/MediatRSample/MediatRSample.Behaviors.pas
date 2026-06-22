@@ -17,7 +17,7 @@ type
     FLog: IAppLog;
   public
     constructor Create(const Log: IAppLog);
-    function Handle(Request: TObject; Next: TFunc<TValue>): TValue; override;
+    function Handle(Request: TObject; Next: TNextValue): TValue; override;
   end;
 
   // Typed void behavior: short-circuits TAddCustomerCommand when the name is blank.
@@ -53,14 +53,14 @@ begin
   FLog := Log;
 end;
 
-function TLoggingBehavior.Handle(Request: TObject; Next: TFunc<TValue>): TValue;
+function TLoggingBehavior.Handle(Request: TObject; Next: TNextValue): TValue;
 var
   Start: Cardinal;
 begin
   FLog.Log(Format('[Pipeline] >> %s', [Request.ClassName]));
   Start := GetTickCount;
   try
-    Result := Next();
+    Result := Next.Call;
     FLog.Log(Format('[Pipeline] << %s  (%d ms)', [Request.ClassName, GetTickCount - Start]));
   except
     on E: Exception do

@@ -54,18 +54,18 @@ type
 
   TOuterBehavior = class(TPipelineBehavior)
   public
-    function Handle(Request: TObject; Next: TFunc<TValue>): TValue; override;
+    function Handle(Request: TObject; Next: TNextValue): TValue; override;
   end;
 
   TInnerBehavior = class(TPipelineBehavior)
   public
-    function Handle(Request: TObject; Next: TFunc<TValue>): TValue; override;
+    function Handle(Request: TObject; Next: TNextValue): TValue; override;
   end;
 
   [MediatorAbstract]
   TShortCircuitBehavior = class(TPipelineBehavior)
   public
-    function Handle(Request: TObject; Next: TFunc<TValue>): TValue; override;
+    function Handle(Request: TObject; Next: TNextValue): TValue; override;
   end;
 
   // Typed behavior: applies only to TPing requests
@@ -98,7 +98,7 @@ type
   [MediatorAbstract]
   TExceptionCatchingBehavior = class(TPipelineBehavior)
   public
-    function Handle(Request: TObject; Next: TFunc<TValue>): TValue; override;
+    function Handle(Request: TObject; Next: TNextValue): TValue; override;
   end;
 
   [MediatorAbstract]
@@ -107,7 +107,7 @@ type
     FDependency: IDependencyMock;
   public
     constructor Create(const Dependency: IDependencyMock);
-    function Handle(Request: TObject; Next: TFunc<TValue>): TValue; override;
+    function Handle(Request: TObject; Next: TNextValue): TValue; override;
   end;
 
   // Request that raises an exception in its handler (for scenario 5.5)
@@ -152,14 +152,14 @@ type
   [MediatorAbstract]
   TBeforeRaisingBehavior = class(TPipelineBehavior)
   public
-    function Handle(Request: TObject; Next: TFunc<TValue>): TValue; override;
+    function Handle(Request: TObject; Next: TNextValue): TValue; override;
   end;
 
   // 1.4 Global behavior — raises after Next() returns
   [MediatorAbstract]
   TAfterRaisingBehavior = class(TPipelineBehavior)
   public
-    function Handle(Request: TObject; Next: TFunc<TValue>): TValue; override;
+    function Handle(Request: TObject; Next: TNextValue): TValue; override;
   end;
 
   // 1.5 Second typed ping behavior with distinct markers for composition ordering test
@@ -258,25 +258,25 @@ end;
 
 { TOuterBehavior }
 
-function TOuterBehavior.Handle(Request: TObject; Next: TFunc<TValue>): TValue;
+function TOuterBehavior.Handle(Request: TObject; Next: TNextValue): TValue;
 begin
   TPipelineState.Add('outer-before');
-  Result := Next();
+  Result := Next.Call;
   TPipelineState.Add('outer-after');
 end;
 
 { TInnerBehavior }
 
-function TInnerBehavior.Handle(Request: TObject; Next: TFunc<TValue>): TValue;
+function TInnerBehavior.Handle(Request: TObject; Next: TNextValue): TValue;
 begin
   TPipelineState.Add('inner-before');
-  Result := Next();
+  Result := Next.Call;
   TPipelineState.Add('inner-after');
 end;
 
 { TShortCircuitBehavior }
 
-function TShortCircuitBehavior.Handle(Request: TObject; Next: TFunc<TValue>): TValue;
+function TShortCircuitBehavior.Handle(Request: TObject; Next: TNextValue): TValue;
 begin
   TPipelineState.Add('short');
   Result := Default(TValue);
@@ -314,10 +314,10 @@ end;
 
 { TExceptionCatchingBehavior }
 
-function TExceptionCatchingBehavior.Handle(Request: TObject; Next: TFunc<TValue>): TValue;
+function TExceptionCatchingBehavior.Handle(Request: TObject; Next: TNextValue): TValue;
 begin
   try
-    Result := Next();
+    Result := Next.Call;
   except
     TPipelineState.Add('caught');
     Result := Default(TValue);
@@ -332,11 +332,11 @@ begin
   FDependency := Dependency;
 end;
 
-function TDependencyAwareBehavior.Handle(Request: TObject; Next: TFunc<TValue>): TValue;
+function TDependencyAwareBehavior.Handle(Request: TObject; Next: TNextValue): TValue;
 begin
   FDependency.Visit;
   TPipelineState.Add('dep-visited');
-  Result := Next();
+  Result := Next.Call;
 end;
 
 { TBoomHandler }
@@ -378,16 +378,16 @@ end;
 
 { TBeforeRaisingBehavior }
 
-function TBeforeRaisingBehavior.Handle(Request: TObject; Next: TFunc<TValue>): TValue;
+function TBeforeRaisingBehavior.Handle(Request: TObject; Next: TNextValue): TValue;
 begin
   raise Exception.Create('BeforeRaising');
 end;
 
 { TAfterRaisingBehavior }
 
-function TAfterRaisingBehavior.Handle(Request: TObject; Next: TFunc<TValue>): TValue;
+function TAfterRaisingBehavior.Handle(Request: TObject; Next: TNextValue): TValue;
 begin
-  Result := Next();
+  Result := Next.Call;
   raise Exception.Create('AfterRaising');
 end;
 
