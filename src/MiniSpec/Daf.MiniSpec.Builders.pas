@@ -325,7 +325,7 @@ begin
         if Bindings.FindBinding(Kind, Desc, LBinding, LCaptures) then
           Bindings.Invoke(LBinding, World, LCaptures)
         else
-          SpecContext.Step.MarkAsPending;
+          SpecContext.Step.MarkAsUndefined;
       end;
 end;
 
@@ -441,7 +441,7 @@ begin
         if Bindings.FindBinding(Kind, Desc, LBinding, LCaptures) then
           Bindings.Invoke(LBinding, World, LCaptures)
         else
-          SpecContext.Step.MarkAsPending;
+          SpecContext.Step.MarkAsUndefined;
       end;
 end;
 
@@ -682,15 +682,16 @@ begin
         Bindings.Invoke(Binding, World, Captures);
       end
   else
+    // No binding found: treat as display-only no-op.
+    // ExampleInit already injects placeholder values into the World via RTTI;
+    // a nil-proc step in an outline is not a missing definition.
     Result := procedure(World: T)
       var
         LBinding: TStepBinding;
         LCaptures: TArray<string>;
       begin
         if Bindings.FindBinding(Kind, Desc, LBinding, LCaptures) then
-          Bindings.Invoke(LBinding, World, LCaptures)
-        else
-          SpecContext.Step.MarkAsPending;
+          Bindings.Invoke(LBinding, World, LCaptures);
       end;
 end;
 
