@@ -16,6 +16,8 @@ uses
   StepBinding.Feat in 'StepBinding.Feat.pas',
   PendingSteps.Feat in 'PendingSteps.Feat.pas',
   NoActionSteps.Feat in 'NoActionSteps.Feat.pas',
+  StepStatus.Feat in 'StepStatus.Feat.pas',
+  OutlinePlaceholderStep.Feat in 'OutlinePlaceholderStep.Feat.pas',
   Doubles.Feat in 'Doubles.Feat.pas';
 
 begin

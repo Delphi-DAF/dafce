@@ -107,6 +107,8 @@
         <DCCReference Include="StepBinding.Feat.pas"/>
         <DCCReference Include="PendingSteps.Feat.pas"/>
         <DCCReference Include="NoActionSteps.Feat.pas"/>
+        <DCCReference Include="StepStatus.Feat.pas"/>
+        <DCCReference Include="OutlinePlaceholderStep.Feat.pas"/>
         <DCCReference Include="Doubles.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
