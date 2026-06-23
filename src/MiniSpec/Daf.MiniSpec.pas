@@ -421,7 +421,9 @@ begin
     else if Param = '--pause' then
       FOptions.Pause := True
     else if Param = '--stacktrace' then
-      FOptions.StackTrace := True;
+      FOptions.StackTrace := True
+    else if Param = '--strict-pending' then
+      FOptions.StrictPending := True;
   end;
 
   // Guardar config si el archivo no existía
@@ -540,11 +542,21 @@ begin
     // Usar el runner para reportar (notificará a todos los listeners)
     FRunner.Report(FSuite, FOptions);
 
-    WriteLn(Format('Pass: %d | Fail: %d | Skip: %d (Pending: %d) | Total: %d Specs in %d Features | %d ms | at %s',
-      [FRunner.PassCount, FRunner.FailCount, FRunner.SkipCount, FRunner.PendingCount,
-       FRunner.PassCount + FRunner.FailCount + FRunner.SkipCount,
+    WriteLn('');
+    WriteLn(Format('Passed: %d | Failed: %d | Pending: %d | Undefined: %d | Skipped: %d | Total: %d Specs in %d Features | %d ms | at %s',
+      [FRunner.PassCount, FRunner.FailCount, FRunner.PendingCount, FRunner.UndefinedCount, FRunner.SkipCount,
+       FRunner.PassCount + FRunner.FailCount + FRunner.PendingCount + FRunner.UndefinedCount + FRunner.SkipCount,
        FRunner.FeatureCount, FRunner.ElapsedMs,
        FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', FRunner.CompletedAt)]));
+
+    // Exit code: failures and undefined always fail; pending only with --strict-pending
+    if (FRunner.FailCount > 0) or (FRunner.UndefinedCount > 0) then
+      ExitCode := 1
+    else if FRunner.PendingCount > 0 then
+    begin
+      if FOptions.StrictPending then
+        ExitCode := 1;
+    end;
 
     if Pause then
       OSShell.WaitForShutdown;

@@ -34,6 +34,7 @@ type
     FPause: Boolean;
     FDryRun: Boolean;
     FStackTrace: Boolean;
+    FStrictPending: Boolean;
     FReporterNames: TArray<string>;
     FReporterOptions: TObjectDictionary<string, TRunnerOptions>;
   public
@@ -57,6 +58,7 @@ type
     property Pause: Boolean read FPause write FPause;
     property IsDryRun: Boolean read FDryRun write FDryRun;
     property StackTrace: Boolean read FStackTrace write FStackTrace;
+    property StrictPending: Boolean read FStrictPending write FStrictPending;
     property ReporterNames: TArray<string> read FReporterNames write FReporterNames;
   end;
 
@@ -113,6 +115,7 @@ type
     function GetFailCount: Cardinal;
     function GetSkipCount: Cardinal;
     function GetPendingCount: Cardinal;
+    function GetUndefinedCount: Cardinal;
     function GetElapsedMs: Integer;
     function GetFeatureCount: Integer;
     function GetCompletedAt: TDateTime;
@@ -125,6 +128,7 @@ type
     property FailCount: Cardinal read GetFailCount;
     property SkipCount: Cardinal read GetSkipCount;
     property PendingCount: Cardinal read GetPendingCount;
+    property UndefinedCount: Cardinal read GetUndefinedCount;
     property ElapsedMs: Integer read GetElapsedMs;
     property FeatureCount: Integer read GetFeatureCount;
     property CompletedAt: TDateTime read GetCompletedAt;
@@ -213,6 +217,7 @@ type
     function GetPassCount: Cardinal;virtual;
     function GetSkipCount: Cardinal;virtual;
     function GetPendingCount: Cardinal;virtual;
+    function GetUndefinedCount: Cardinal;virtual;
     function GetElapsedMs: Integer;virtual;
     function GetFeatureCount: Integer;virtual;
     function GetCompletedAt: TDateTime;virtual;
@@ -822,6 +827,17 @@ end;
 
 procedure TSpecRunner.Report(Feature: IFeature);
 begin
+  var HasFinishedScenario := False;
+  for var Rule in Feature.Rules do
+    for var Scenario in Rule.Scenarios do
+      if Scenario.RunInfo.State = srsFinished then
+      begin
+        HasFinishedScenario := True;
+        Break;
+      end;
+  if not HasFinishedScenario then
+    Exit;
+
   Inc(FFeatureCount);
   BeginFeature(Feature);
   DoReport(Feature);
@@ -839,10 +855,10 @@ end;
 
 procedure TSpecRunner.Report(Rule: IRule);
 begin
-  // Solo reportar la Rule si tiene al menos un escenario visitado (ejecutado o skipped)
+  // Solo reportar la Rule si tiene al menos un escenario ejecutado
   var HasVisitedScenario := False;
   for var Scenario in Rule.Scenarios do
-    if Scenario.RunInfo.State in [srsFinished, srsSkiped] then
+    if Scenario.RunInfo.State = srsFinished then
     begin
       HasVisitedScenario := True;
       Break;
@@ -864,7 +880,7 @@ begin
   // Iterar scenarios - polimórficamente detectar Outlines
   for var Scenario in Rule.Scenarios do
   begin
-    if not (Scenario.RunInfo.State in [srsFinished, srsSkiped]) then
+    if Scenario.RunInfo.State <> srsFinished then
       Continue;
 
     var Outline: IScenarioOutline;
@@ -889,7 +905,7 @@ end;
 
 procedure TSpecRunner.Report(Scenario: IScenario);
 begin
-  if not (Scenario.RunInfo.State in [srsFinished, srsSkiped]) then
+  if Scenario.RunInfo.State <> srsFinished then
     Exit;
 
   BeginScenario(Scenario);
@@ -928,6 +944,11 @@ end;
 function TSpecRunner.GetPendingCount: Cardinal;
 begin
   Result := FSuite.RunInfo.PendingCount;
+end;
+
+function TSpecRunner.GetUndefinedCount: Cardinal;
+begin
+  Result := FSuite.RunInfo.UndefinedCount;
 end;
 
 function TSpecRunner.GetElapsedMs: Integer;
