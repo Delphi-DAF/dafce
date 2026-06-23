@@ -425,16 +425,13 @@ var
   StepsArray, TempArr: TJSONArray;
   IsSkipped: Boolean;
 begin
-  IsSkipped := Scenario.RunInfo.State = srsSkiped;
+  IsSkipped := False;  // Filtered scenarios no longer appear in runtime
 
   Data := TJSONObject.Create;
   try
     Data.AddPair('name', Scenario.Description);
     Data.AddPair('skipped', TJSONBool.Create(IsSkipped));
-    if IsSkipped then
-      Data.AddPair('success', TJSONBool.Create(True))
-    else
-      Data.AddPair('success', TJSONBool.Create(Scenario.RunInfo.IsSuccess));
+    Data.AddPair('success', TJSONBool.Create(Scenario.RunInfo.IsSuccess));
     // Use Scenario.RunInfo instead of Counters parameter
     Data.AddPair('ms', TJSONNumber.Create(Scenario.RunInfo.ExecTimeMs));
     if not IsSkipped and not Scenario.RunInfo.IsSuccess and (Scenario.RunInfo.ErrMsg <> '') then
@@ -500,9 +497,9 @@ begin
     ExamplesArray := TJSONArray.Create;
     for var Example in Outline.Examples do
     begin
-      if Example.RunInfo.State in [srsFinished, srsSkiped] then
+      if Example.RunInfo.State = srsFinished then
       begin
-        var IsSkipped := Example.RunInfo.State = srsSkiped;
+        var IsSkipped := False;  // Filtered examples no longer appear in runtime
 
         ExampleObj := TJSONObject.Create;
         RowArray := TJSONArray.Create;
