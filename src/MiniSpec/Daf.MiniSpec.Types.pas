@@ -22,13 +22,13 @@ type
   TExamplesTable = TArray<TArray<TValue>>;
   TSpecItemKind = (sikSuite, sikFeature, sikImplicitRule, sikRule, sikBackground, sikScenario, sikScenarioOutline, sikExample, sikExampleInit, sikGiven, sikWhen, sikThen, sikAnd, sikBut, sikBefore, sikAfter);
   TLastStepKind = (lskNone, lskGiven, lskWhen, lskThen);
-  TSpecRunState =  (srsPrepared, srsSkiped, srsRunning, srsFinished);
-  TSpecRunResult =  (srrNone, srrSuccess, srrFail, srrError, srrPending);
+  TSpecRunState =  (srsPrepared, srsRunning, srsFinished);
+  TSpecRunResult =  (srrNone, srrSuccess, srrFail, srrError, srrPending, srrSkipped, srrUndefined);
   /// <summary>
-  /// Result kind for counting Examples: Pass, Fail, Skip, or Pending.
+  /// Result kind for counting scenarios by outcome.
   /// Used in TSpecRunInfo.Counts for aggregated results.
   /// </summary>
-  TResultKind = (rkPass, rkFail, rkSkip, rkPending);
+  TResultKind = (rkPass, rkFail, rkSkipped, rkPending, rkUndefined);
   TSpecTags = record
   strict private
     FTags: TArray<string>;
@@ -110,6 +110,7 @@ type
     function FailCount: Cardinal;
     function SkipCount: Cardinal;
     function PendingCount: Cardinal;
+    function UndefinedCount: Cardinal;
     function TotalCount: Cardinal;
   end;
 
@@ -269,10 +270,20 @@ type
 
     procedure Run(World: TObject);
     /// <summary>
-    /// Marks this item as Pending (step not yet implemented).
+    /// Marks this item as Pending (step not yet implemented, intentional).
     /// Sets RunInfo.Result to srrPending.
     /// </summary>
     procedure MarkAsPending;
+    /// <summary>
+    /// Marks this item as Skipped (not executed because a previous step failed).
+    /// Sets RunInfo.Result to srrSkipped.
+    /// </summary>
+    procedure MarkAsSkipped;
+    /// <summary>
+    /// Marks this item as Undefined (no step definition found).
+    /// Sets RunInfo.Result to srrUndefined.
+    /// </summary>
+    procedure MarkAsUndefined;
     /// <summary>
     /// Increments the count for the given result kind and propagates to parent.
     /// Called by Scenario/Example when execution completes.
@@ -535,6 +546,8 @@ type
     destructor Destroy;override;
     procedure Run(World: TObject);virtual;
     procedure MarkAsPending;
+    procedure MarkAsSkipped;
+    procedure MarkAsUndefined;
     procedure IncCount(Kind: TResultKind);virtual;
     property Parent: ISpecItem read FParent write SetParent;
     property Description: string read GetDescription;
@@ -923,8 +936,7 @@ end;
 
 function TSpecRunInfo.IsSuccess: Boolean;
 begin
-  // Success means: no failure result AND no failure counts (for aggregates)
-  Result := (not (Self.Result in [srrFail, srrError])) and (Counts[rkFail] = 0);
+  Result := (not (Self.Result in [srrFail, srrError, srrUndefined])) and (Counts[rkFail] = 0) and (Counts[rkUndefined] = 0);
 end;
 
 function TSpecRunInfo.PassCount: Cardinal;
@@ -939,7 +951,7 @@ end;
 
 function TSpecRunInfo.SkipCount: Cardinal;
 begin
-  Result := Counts[rkSkip];
+  Result := Counts[rkSkipped];
 end;
 
 function TSpecRunInfo.PendingCount: Cardinal;
@@ -947,10 +959,14 @@ begin
   Result := Counts[rkPending];
 end;
 
+function TSpecRunInfo.UndefinedCount: Cardinal;
+begin
+  Result := Counts[rkUndefined];
+end;
+
 function TSpecRunInfo.TotalCount: Cardinal;
 begin
-  // Pending is already included in Skip, so don't count it twice
-  Result := Counts[rkPass] + Counts[rkFail] + Counts[rkSkip];
+  Result := Counts[rkPass] + Counts[rkFail] + Counts[rkSkipped] + Counts[rkPending] + Counts[rkUndefined];
 end;
 
 { TSpecItem }
@@ -961,7 +977,8 @@ begin
   FKind := Kind;
   FParent := Parent;
   FDescription := Description;
-  FTags.AddFrom(Description);
+  if FKind in [sikFeature, sikRule, sikScenario, sikScenarioOutline, sikExample] then
+    FTags.AddFrom(Description);
 end;
 
 function TSpecItem.GetKind: TSpecItemKind;
@@ -1006,6 +1023,18 @@ end;
 procedure TSpecItem.MarkAsPending;
 begin
   FRunInfo.Result := srrPending;
+  FRunInfo.State := srsFinished;
+end;
+
+procedure TSpecItem.MarkAsSkipped;
+begin
+  FRunInfo.Result := srrSkipped;
+  FRunInfo.State := srsFinished;
+end;
+
+procedure TSpecItem.MarkAsUndefined;
+begin
+  FRunInfo.Result := srrUndefined;
   FRunInfo.State := srsFinished;
 end;
 
@@ -1120,8 +1149,8 @@ procedure TScenarioStep<T>.Run(World: TObject);
 var
   Ctx: TSpecContextImpl;
 begin
-  // If already marked as pending, don't execute the step
-  if FRunInfo.Result = srrPending then
+  // If already marked (pending/skipped/undefined set before execution), don't run
+  if FRunInfo.Result in [srrPending, srrSkipped, srrUndefined] then
     Exit;
 
   var SW := TStopwatch.StartNew;
@@ -1377,19 +1406,35 @@ begin
 end;
 
 procedure TScenario<T>.RunSteps(Steps: TList<IScenarioStep>; World: TObject);
+var
+  i: Integer;
+  Aborted: Boolean;
 begin
-  for var Step in Steps do
+  Aborted := False;
+  for i := 0 to Steps.Count - 1 do
   begin
-    Step.Run(World);
-    if Step.RunInfo.Result in [srrFail, srrError] then
+    if Aborted then
     begin
-      FRunInfo.Result := srrFail;
-      Break;
-    end
-    else if Step.RunInfo.Result = srrPending then
-    begin
-      FRunInfo.Result := srrPending;
-      Break;
+      Steps[i].MarkAsSkipped;
+      Continue;
+    end;
+    Steps[i].Run(World);
+    case Steps[i].RunInfo.Result of
+      srrFail, srrError:
+        begin
+          FRunInfo.Result := srrFail;
+          Aborted := True;
+        end;
+      srrPending:
+        begin
+          FRunInfo.Result := srrPending;
+          Aborted := True;
+        end;
+      srrUndefined:
+        begin
+          FRunInfo.Result := srrUndefined;
+          Aborted := True;
+        end;
     end;
   end;
 end;
@@ -1408,10 +1453,16 @@ begin
     inherited;
     FRunInfo.State := srsRunning;
     FRunInfo.Result := srrSuccess;
-    if FRunInfo.Result = srrSuccess then RunSteps(GetStepsGiven, World);
-    if FRunInfo.Result = srrSuccess then RunSteps(GetStepsWhen, World);
-    // Always run Then steps, even if When raised an exception (it's captured now)
-    if FRunInfo.Result = srrSuccess then RunSteps(GetStepsThen, World);
+    RunSteps(GetStepsGiven, World);
+    if FRunInfo.Result = srrSuccess then
+      RunSteps(GetStepsWhen, World)
+    else
+      for var Step in GetStepsWhen do Step.MarkAsSkipped;
+    // Run Then steps only if scenario still passing (When exception is captured → still srrSuccess)
+    if FRunInfo.Result = srrSuccess then
+      RunSteps(GetStepsThen, World)
+    else
+      for var Step in GetStepsThen do Step.MarkAsSkipped;
     // After Then: check if there's an unconsumed captured raise
     if (FRunInfo.Result = srrSuccess) and FCapturedRaise.WasRaised then
     begin
@@ -1435,10 +1486,8 @@ begin
   case FRunInfo.Result of
     srrSuccess: IncCount(rkPass);
     srrFail, srrError: IncCount(rkFail);
-    srrPending: begin
-                  IncCount(rkSkip);    // Pending counts as skip for totals
-                  IncCount(rkPending); // Also track pending separately
-                end;
+    srrPending: IncCount(rkPending);
+    srrUndefined: IncCount(rkUndefined);
   end;
 end;
 
@@ -1882,9 +1931,11 @@ begin
         Feature.Run(Matcher);
         if Feature.RunInfo.Result = srrFail then
           FRunInfo.Result := srrFail;
-        FRunInfo.Counts[rkPass] := FRunInfo.Counts[rkPass] + Feature.RunInfo.PassCount;
-        FRunInfo.Counts[rkFail] := FRunInfo.Counts[rkFail] + Feature.RunInfo.FailCount;
-        FRunInfo.Counts[rkSkip] := FRunInfo.Counts[rkSkip] + Feature.RunInfo.SkipCount;
+        FRunInfo.Counts[rkPass]      := FRunInfo.Counts[rkPass]      + Feature.RunInfo.PassCount;
+        FRunInfo.Counts[rkFail]      := FRunInfo.Counts[rkFail]      + Feature.RunInfo.FailCount;
+        FRunInfo.Counts[rkSkipped]   := FRunInfo.Counts[rkSkipped]   + Feature.RunInfo.SkipCount;
+        FRunInfo.Counts[rkPending]   := FRunInfo.Counts[rkPending]   + Feature.RunInfo.PendingCount;
+        FRunInfo.Counts[rkUndefined] := FRunInfo.Counts[rkUndefined] + Feature.RunInfo.UndefinedCount;
       end;
       RunAfterHooks;
     except
@@ -2000,23 +2051,7 @@ begin
         ShouldExecute := False;
 
       if not ShouldExecute then
-      begin
-        // Marcar como Skip y continuar (pero el escenario queda visible para el reporter)
-        TSpecItem(Scenario).FRunInfo.State := srsSkiped;
-        // Si es un Outline, marcar también todos sus Examples como skip
-        var Outline: IScenarioOutline;
-        if Supports(Scenario, IScenarioOutline, Outline) then
-        begin
-          for var Example in Outline.Examples do
-          begin
-            TSpecItem(Example).FRunInfo.State := srsSkiped;
-            Example.IncCount(rkSkip);  // Propagate skip count
-          end;
-        end
-        else
-          Scenario.IncCount(rkSkip);  // Propagate skip count for simple scenario
         Continue;
-      end;
 
       // ScenarioOutline maneja sus propios Worlds (uno por Example)
       // No crear World aquí para evitar Worlds fantasma
