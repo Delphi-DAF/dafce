@@ -8,6 +8,50 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **MediatR**: Pipeline behaviors — `TPipelineBehavior<TRequest, TResponse>` con descubrimiento RTTI automático; soporte para behaviors globales y específicos por tipo de request
+- **MediatR**: `TNext<TResponse>` y `TNextValue` — delegate tipado para invocar el siguiente eslabón de la cadena de behaviors
+- **MediatR**: Sample rediseñado demostrando los cuatro conceptos clave (handler, behavior de logging, behavior de validación, pipeline completo)
+- **SQLCute**: Módulo completo de query builder SQL fluent — `IQuery`, `TAnsiSqlCompiler`, soporte para WHERE, JOINs, GROUP BY/HAVING, UNION, CTE, subqueries, EXISTS, DML (INSERT/UPDATE/DELETE), paginación, set operations
+- **SQLCute**: `SQLCute.Abstractions` — Core package con `TQueryImpl` y compilers detrás de factory pattern
+- **SQLCute**: `SQLCuteSample` — sample completo con demostración de toda la API
+- **SQLCute**: Documentación bilingüe (EN/ES) integrada en el site Quarto
+- **MiniSpec**: `srrSkipped` y `srrUndefined` en `TSpecRunResult` — resultado explícito para steps saltados y sin definición
+- **MiniSpec**: `MarkAsSkipped` / `MarkAsUndefined` en `ISpecItem`
+- **MiniSpec**: `UndefinedCount` en el runner y en el pie de resumen
+- **MiniSpec**: Flag `--strict-pending`: hace que specs pendientes cuenten como fallo del proceso
+- **MiniSpec**: Console reporter progresivo — Feature y Scenario se emiten al encontrarse, steps con símbolos Gherkin (`✓ ✗ ~ P ?`) al completarse
+
+### Fixed
+
+- **MediatR**: Closure variable capture bug en la cadena de behaviors
+- **MediatR**: Descubrimiento de behaviors globales con `StrictExtensions=False`
+- **MediatR**: Warnings de ocultación en jerarquía `TPipelineBehavior`
+- **MiniSpec**: Step sin lambda en `ScenarioOutline` se trataba como `Undefined`; ahora es no-op (display-only) porque `ExampleInit` inyecta los valores vía RTTI
+- **MiniSpec**: Tabla de ejemplos de Outline: cabecera desalineada respecto a las filas de datos
+- **MiniSpec**: Features sin escenarios ejecutados aparecían igualmente al filtrar con `-f`; ahora se suprimen en todos los reporters (console, JSON, Gherkin, JUnit)
+- **MiniSpec**: Pie de resumen pegado a la última línea Gherkin; ahora lleva una línea en blanco antes
+
+### Changed
+
+- **MiniSpec**: Pie de resumen renombrado de `Pass/Fail/Skip` a `Passed/Failed/Pending/Undefined/Skipped`
+- **MiniSpec**: `MarkAsSkipped` / `MarkAsUndefined` en `ISpecItem`
+- **MiniSpec**: `UndefinedCount` en el runner y en el pie de resumen
+- **MiniSpec**: Flag `--strict-pending`: hace que specs pendientes cuenten como fallo del proceso
+- **MiniSpec**: Console reporter progresivo — Feature y Scenario se emiten al encontrarse, steps con símbolos Gherkin (`✓ ✗ ~ P ?`) al completarse
+
+### Fixed
+
+- **MiniSpec**: Step sin lambda en `ScenarioOutline` se trataba como `Undefined`; ahora es no-op (display-only) porque `ExampleInit` inyecta los valores vía RTTI
+- **MiniSpec**: Tabla de ejemplos de Outline: cabecera desalineada respecto a las filas de datos
+- **MiniSpec**: Features sin escenarios ejecutados aparecían igualmente al filtrar con `-f`; ahora se suprimen en todos los reporters (console, JSON, Gherkin, JUnit)
+- **MiniSpec**: Pie de resumen pegado a la última línea Gherkin; ahora lleva una línea en blanco antes
+
+### Changed
+
+- **MiniSpec**: Pie de resumen renombrado de `Pass/Fail/Skip` a `Passed/Failed/Pending/Undefined/Skipped`
+
 ## [1.5.0] - 2026-03-20
 
 ### Added

@@ -146,7 +146,7 @@ Feature: Calculator - Addition
     ✓ When I add 2 and 3 (0 ms)
     ✓ Then the result is 5 (0 ms)
 
-Pass: 1 | Fail: 0 | Skip: 0 | Total: 1 Specs in 1 Features | 0 ms | at 2026-01-30T14:57:07
+Passed: 1 | Failed: 0 | Pending: 0 | Undefined: 0 | Skipped: 0 | Total: 1 Specs in 1 Features | 0 ms | at 2026-01-30T14:57:07
 ```
 
 **The cycle is simple**: describe expected behavior → run → MiniSpec tells you if the code meets the specification.

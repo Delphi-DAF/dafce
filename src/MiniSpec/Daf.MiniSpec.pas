@@ -27,7 +27,7 @@ type
 
   TMiniSpec = class
   public
-    const Version = '1.2.0';
+    const Version = '1.3.0';
   strict private
     FSuite: ISpecSuite;
     FRunner: ISpecRunner;
@@ -421,7 +421,9 @@ begin
     else if Param = '--pause' then
       FOptions.Pause := True
     else if Param = '--stacktrace' then
-      FOptions.StackTrace := True;
+      FOptions.StackTrace := True
+    else if Param = '--strict-pending' then
+      FOptions.StrictPending := True;
   end;
 
   // Guardar config si el archivo no existía
@@ -540,11 +542,21 @@ begin
     // Usar el runner para reportar (notificará a todos los listeners)
     FRunner.Report(FSuite, FOptions);
 
-    WriteLn(Format('Pass: %d | Fail: %d | Skip: %d (Pending: %d) | Total: %d Specs in %d Features | %d ms | at %s',
-      [FRunner.PassCount, FRunner.FailCount, FRunner.SkipCount, FRunner.PendingCount,
-       FRunner.PassCount + FRunner.FailCount + FRunner.SkipCount,
+    WriteLn('');
+    WriteLn(Format('Passed: %d | Failed: %d | Pending: %d | Undefined: %d | Skipped: %d | Total: %d Specs in %d Features | %d ms | at %s',
+      [FRunner.PassCount, FRunner.FailCount, FRunner.PendingCount, FRunner.UndefinedCount, FRunner.SkipCount,
+       FRunner.PassCount + FRunner.FailCount + FRunner.PendingCount + FRunner.UndefinedCount + FRunner.SkipCount,
        FRunner.FeatureCount, FRunner.ElapsedMs,
        FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', FRunner.CompletedAt)]));
+
+    // Exit code: failures and undefined always fail; pending only with --strict-pending
+    if (FRunner.FailCount > 0) or (FRunner.UndefinedCount > 0) then
+      ExitCode := 1
+    else if FRunner.PendingCount > 0 then
+    begin
+      if FOptions.StrictPending then
+        ExitCode := 1;
+    end;
 
     if Pause then
       OSShell.WaitForShutdown;
@@ -676,10 +688,11 @@ begin
   WriteLn('  --dry-run               Show what would run without executing tests');
   WriteLn('  --pause                 Wait for keypress before closing console');
   WriteLn('  --stacktrace            Show full stack trace on errors');
+  WriteLn('  --strict-pending        Treat pending specs as failures (exit code 1)');
   WriteLn('');
   WriteLn('Reporters:');
   WriteLn('  console                 Console output (default)');
-  WriteLn('  html:output=<file>      HTML dashboard report');
+  WriteLn('  junit:output=<file>     JUnit XML report (CI/CD)');
   WriteLn('  json:output=<file>      JSON report');
   WriteLn('  gherkin:output=<dir>    Export .feature files');
   WriteLn('  gherkin-results:output=<dir>  Export .feature with results');
@@ -703,7 +716,7 @@ begin
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -f "Feat:Calculator"');
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -f "Cat:Lifecycle"');
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -f "Scen:division and @arithmetic"');
-  WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -r html:output=report.html');
+  WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -r junit:output=results.xml');
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -r live:port=9000');
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -r console -r junit:output=results.xml');
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -t');

@@ -213,9 +213,10 @@ begin
       [SuiteRunInfo.TotalCount, SuiteRunInfo.FailCount, SuiteRunInfo.SkipCount, TimeToXml(SuiteRunInfo.ExecTimeMs)]);
     SB.AppendLine;
 
-    // Each feature as a testsuite
+    // Each feature as a testsuite — skip features with no executed scenarios
     for Feature in Context.Suite.Features do
-      SB.Append(BuildTestSuite(Feature));
+      if (Feature as ISpecItem).RunInfo.TotalCount > 0 then
+        SB.Append(BuildTestSuite(Feature));
 
     SB.AppendLine('</testsuites>');
 

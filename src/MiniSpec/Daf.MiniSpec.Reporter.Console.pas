@@ -10,25 +10,29 @@ uses
 
 type
   /// <summary>
-  /// Console listener - outputs test results to console in hierarchical format.
-  /// Implements ISpecListener for pure observer pattern.
+  /// Console reporter — progressive output: Feature/Scenario as headers,
+  /// steps with Gherkin-aligned status symbols emitted immediately after execution.
   /// </summary>
   TConsoleReporter = class(TCustomListener)
   private
     FCurrentRule: IRule;
-    procedure OutputLn(const Level: Byte; const Text: string; const Success: Boolean; const Duration: Integer; const ErrorMessage: string = '');overload;
-    procedure OutputLn(const Level: Byte; const Text: string);overload;
+    procedure OutputLn(const Level: Byte; const Text: string); overload;
     procedure Output(const Level: Byte; const Text: string);
     procedure OutputDataTable(const Level: Byte; const Table: TDataTableObj);
     function ExtractValue(const Match: TMatch): string;
     function Level2Margin(const Level: Byte): string;
+    function ResultSymbol(const AResult: TSpecRunResult): string;
+    procedure OutputStep(const Context: IRunContext; const Item: ISpecItem);
   public
-    function UseConsole: Boolean;override;
-    procedure OnBeginSuite(const Context: IRunContext; const Suite: ISpecSuite);override;
-    procedure OnBeginReport(const Context: IRunContext);override;
-    procedure OnEndReport(const Context: IRunContext);override;
-    procedure OnItem(const Context: IRunContext; const Item: ISpecItem);override;
-    procedure OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline);override;
+    function UseConsole: Boolean; override;
+    procedure OnBeginSuite(const Context: IRunContext; const Suite: ISpecSuite); override;
+    procedure OnBeginReport(const Context: IRunContext); override;
+    procedure OnEndReport(const Context: IRunContext); override;
+    procedure OnBeginFeature(const Context: IRunContext; const Feature: IFeature); override;
+    procedure OnBeginScenario(const Context: IRunContext; const Scenario: IScenario); override;
+    procedure OnBeginOutline(const Context: IRunContext; const Outline: IScenarioOutline); override;
+    procedure OnItem(const Context: IRunContext; const Item: ISpecItem); override;
+    procedure OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline); override;
   end;
 
 implementation
@@ -37,6 +41,13 @@ uses
   System.SysUtils,
   System.StrUtils,
   System.Rtti;
+
+const
+  CHECK_MARK  = #$2713;  // ✓
+  CROSS_MARK  = #$2717;  // ✗
+  TILDE       = '~';
+  PENDING_SYM = 'P';
+  UNDEF_SYM   = '?';
 
 { TConsoleReporter }
 
@@ -53,6 +64,20 @@ end;
 function TConsoleReporter.Level2Margin(const Level: Byte): string;
 begin
   Result := DupeString(' ', 2 * Level);
+end;
+
+function TConsoleReporter.ResultSymbol(const AResult: TSpecRunResult): string;
+begin
+  case AResult of
+    srrSuccess:   Result := CHECK_MARK;
+    srrFail:      Result := CROSS_MARK;
+    srrError:     Result := CROSS_MARK;
+    srrSkipped:   Result := TILDE;
+    srrPending:   Result := PENDING_SYM;
+    srrUndefined: Result := UNDEF_SYM;
+  else
+    Result := '?';
+  end;
 end;
 
 procedure TConsoleReporter.Output(const Level: Byte; const Text: string);
@@ -73,22 +98,6 @@ begin
   Output(Level, Text + SLineBreak);
 end;
 
-procedure TConsoleReporter.OutputLn(const Level: Byte; const Text: string; const Success: Boolean; const Duration: Integer; const ErrorMessage: string);
-const
-  CHECK_MARK = #$2713;  // ✓
-  CROSS_MARK = #$2717;  // ✗
-var
-  Msg: string;
-begin
-  Msg := ErrorMessage;
-  if not Msg.IsEmpty then
-    Msg := SLineBreak + Level2Margin(Level) + 'ERROR: "' + Msg + '"';
-  if Success then
-    OutputLn(Level, Format(CHECK_MARK + ' %s (%d ms)', [Text, Duration]))
-  else
-    OutputLn(Level, Format(CROSS_MARK + ' %s (%d ms)%s', [Text, Duration, Msg]));
-end;
-
 procedure TConsoleReporter.OutputDataTable(const Level: Byte; const Table: TDataTableObj);
 var
   ColWidths: TArray<Integer>;
@@ -98,29 +107,24 @@ var
 begin
   if Table = nil then Exit;
 
-  // Calculate column widths
   SetLength(ColWidths, Table.ColCount);
   for I := 0 to Table.ColCount - 1 do
     ColWidths[I] := 0;
 
-  // Check headers
   for I := 0 to High(Table.Headers) do
     if Length(Table.Headers[I]) > ColWidths[I] then
       ColWidths[I] := Length(Table.Headers[I]);
 
-  // Check data rows
   for Row in Table.Rows do
     for J := 0 to High(Row) do
       if Row[J].ToString.Length > ColWidths[J] then
         ColWidths[J] := Row[J].ToString.Length;
 
-  // Output header row
   Line := '| ';
   for I := 0 to High(Table.Headers) do
     Line := Line + Format('%-*s | ', [ColWidths[I], Table.Headers[I]]);
   OutputLn(Level, Line);
 
-  // Output data rows
   for Row in Table.Rows do
   begin
     Line := '| ';
@@ -128,6 +132,36 @@ begin
       Line := Line + Format('%-*s | ', [ColWidths[J], Row[J].ToString]);
     OutputLn(Level, Line);
   end;
+end;
+
+procedure TConsoleReporter.OutputStep(const Context: IRunContext; const Item: ISpecItem);
+var
+  Level: Byte;
+  Symbol, ErrMsg, Line: string;
+  Step: IScenarioStep;
+begin
+  Level := Item.Level;
+  if Assigned(FCurrentRule) and not (Item.Kind in [sikFeature, sikRule]) then
+    Inc(Level);
+
+  Symbol := ResultSymbol(Item.RunInfo.Result);
+
+  ErrMsg := '';
+  if Item.RunInfo.Result in [srrFail, srrError] then
+    ErrMsg := Context.GetErrorDetail(Item.RunInfo);
+
+  if not ErrMsg.IsEmpty then
+    Line := Format('%s %s %s (%d ms)%s%s  %s',
+      [Symbol, Item.KeyWord, Item.Description, Item.RunInfo.ExecTimeMs,
+       SLineBreak, Level2Margin(Level), 'ERROR: "' + ErrMsg + '"'])
+  else
+    Line := Format('%s %s %s (%d ms)',
+      [Symbol, Item.KeyWord, Item.Description, Item.RunInfo.ExecTimeMs]);
+
+  OutputLn(Level, Line);
+
+  if Supports(Item, IScenarioStep, Step) and Assigned(Step.DataTable) then
+    OutputDataTable(Level + 1, Step.DataTable);
 end;
 
 procedure TConsoleReporter.OnBeginSuite(const Context: IRunContext; const Suite: ISpecSuite);
@@ -138,89 +172,72 @@ end;
 
 procedure TConsoleReporter.OnBeginReport(const Context: IRunContext);
 begin
-  // Nothing to initialize for console output
 end;
 
 procedure TConsoleReporter.OnEndReport(const Context: IRunContext);
 begin
-  // Summary is printed by TReportSummaryWriter decorator, not here
+end;
+
+procedure TConsoleReporter.OnBeginFeature(const Context: IRunContext; const Feature: IFeature);
+begin
+  FCurrentRule := nil;
+  OutputLn(0, 'Feature: ' + Feature.Title);
+  if not Feature.Narrative.IsEmpty then
+    for var Line in Feature.Narrative.Split([#13, #10]) do
+      if Line.Trim <> '' then
+        OutputLn(1, Line.Trim);
+end;
+
+procedure TConsoleReporter.OnBeginScenario(const Context: IRunContext; const Scenario: IScenario);
+var
+  Level: Byte;
+begin
+  Level := 1;
+  if Assigned(FCurrentRule) then
+    Inc(Level);
+  OutputLn(Level, Scenario.KeyWord + ': ' + Scenario.Description);
+end;
+
+procedure TConsoleReporter.OnBeginOutline(const Context: IRunContext; const Outline: IScenarioOutline);
+begin
+  // Outline header printed in OnEndOutline after all examples are known
 end;
 
 procedure TConsoleReporter.OnItem(const Context: IRunContext; const Item: ISpecItem);
 var
-  Feat: IFeature;
   Rule: IRule;
-  Step: IScenarioStep;
-  DisplayText: string;
-  AllSkipped: Boolean;
-  Kind: string;
-  Level: Byte;
 begin
-  Kind := Item.KeyWord;
-  Level := Item.Level;
-
   // Track current rule for indentation
-  if Supports(Item, IRule, Rule) then
+  if Supports(Item, IRule, Rule) and (Rule.Kind = sikRule) then
   begin
-    if Rule.Kind = sikRule then
-      FCurrentRule := Rule;
-  end;
-
-  // Adjust level if inside an explicit Rule
-  if Assigned(FCurrentRule) and not (Item.Kind in [sikFeature, sikRule]) then
-    Inc(Level);
-
-  // For features, show Title and Narrative
-  if (Item.Kind = sikFeature) and Supports(Item, IFeature, Feat) then
-  begin
-    DisplayText := Feat.Title;
-    // Check if all scenarios were skipped
-    AllSkipped := True;
-    for var R in Feat.Rules do
-      for var Scenario in R.Scenarios do
-        if Scenario.RunInfo.State = srsFinished then
-        begin
-          AllSkipped := False;
-          Break;
-        end;
-    if AllSkipped then
-    begin
-      OutputLn(Level, Format('- %s (skip)', [Kind + ' ' + DisplayText]));
-      Exit;
-    end;
-    // Output Feature with success/time, then Narrative
-    OutputLn(Level, Kind + ' ' + DisplayText, Item.RunInfo.IsSuccess, Item.RunInfo.ExecTimeMs, Context.GetErrorDetail(Item.RunInfo));
-    // Show Narrative indented if present (skip empty lines)
-    if not Feat.Narrative.IsEmpty then
-      for var Line in Feat.Narrative.Split([#13, #10]) do
-        if Line.Trim <> '' then
-          OutputLn(Level + 1, Line.Trim);
+    FCurrentRule := Rule;
+    OutputLn(1, 'Rule: ' + Item.Description);
     Exit;
-  end
-  else
-    DisplayText := Item.Description;
-
-  // Handle 3 states: Finished (Pass/Fail), Skipped
-  if Item.RunInfo.State = srsSkiped then
-    OutputLn(Level, Format('- %s (skip)', [Kind + ' ' + DisplayText]))
-  else begin
-    OutputLn(Level, Kind + ' ' + DisplayText, Item.RunInfo.IsSuccess, Item.RunInfo.ExecTimeMs, Context.GetErrorDetail(Item.RunInfo));
   end;
 
-  // Output DataTable if step has one
-  if Supports(Item, IScenarioStep, Step) and Assigned(Step.DataTable) then
-    OutputDataTable(Level + 1, Step.DataTable);
+  // Feature and Scenario headers already printed in OnBegin* hooks — skip here
+  if Item.Kind in [sikFeature, sikScenario, sikScenarioOutline] then
+    Exit;
 
-  // Clear rule context when rule ends
-  if (Item.Kind = sikRule) and Assigned(FCurrentRule) then
+  // Background header
+  if Item.Kind = sikBackground then
   begin
-    // Rule end will be triggered separately; for now just keep tracking
+    var Level: Byte := 1;
+    if Assigned(FCurrentRule) then Inc(Level);
+    OutputLn(Level, 'Background: ' + Item.Description);
+    Exit;
+  end;
+
+  // Steps (Given/When/Then/And/But) and background steps
+  if Item.Kind in [sikGiven, sikWhen, sikThen, sikAnd, sikBut] then
+  begin
+    OutputStep(Context, Item);
+    Exit;
   end;
 end;
 
 procedure TConsoleReporter.OnEndOutline(const Context: IRunContext; const Outline: IScenarioOutline);
 var
-  AllSuccess, AllSkipped: Boolean;
   TotalTime: Int64;
   ColWidths: TArray<Integer>;
   Headers: TArray<string>;
@@ -229,37 +246,18 @@ var
   Values: TArray<TValue>;
   BaseLevel: Byte;
 begin
-  // Calculate base level (adjusted if inside a Rule)
   BaseLevel := 1;
   if Assigned(FCurrentRule) then
     Inc(BaseLevel);
 
-  // Determine overall Outline state
-  AllSuccess := True;
-  AllSkipped := True;
   TotalTime := 0;
   for var Example in Outline.Examples do
-  begin
     if Example.RunInfo.State = srsFinished then
-    begin
-      AllSkipped := False;
       TotalTime := TotalTime + Example.RunInfo.ExecTimeMs;
-      if not Example.RunInfo.IsSuccess then
-        AllSuccess := False;
-    end;
-  end;
 
-  // Header of Scenario Outline with result or skip
-  if AllSkipped then
-    OutputLn(BaseLevel, Format('- Scenario Outline: %s (skip)', [Outline.Description]))
-  else
-    OutputLn(BaseLevel, 'Scenario Outline: ' + Outline.Description, AllSuccess, TotalTime);
+  OutputLn(BaseLevel, 'Scenario Outline: ' + Outline.Description);
 
-  // If all skipped, don't show details
-  if AllSkipped then
-    Exit;
-
-  // Steps template (without individual time)
+  // Steps template
   for var Step in Outline.StepsGiven do
     OutputLn(BaseLevel + 1, Step.KeyWord + ' ' + Step.Description);
   for var Step in Outline.StepsWhen do
@@ -284,13 +282,11 @@ begin
   // Examples table
   OutputLn(BaseLevel + 1, 'Examples:');
 
-  // Table header (3 spaces to align with emoji)
   HeaderLine := '|';
   for i := 0 to High(Headers) do
     HeaderLine := HeaderLine + ' ' + Headers[i].PadRight(ColWidths[i]) + ' |';
-  OutputLn(BaseLevel + 2, '   ' + HeaderLine);
+  OutputLn(BaseLevel + 2, '  ' + HeaderLine);
 
-  // Each row with its result
   for var Example in Outline.Examples do
   begin
     if Example.RunInfo.State = srsFinished then
@@ -304,7 +300,8 @@ begin
         else
           Row := Row + ' ' + ''.PadRight(ColWidths[i]) + ' |';
       end;
-      OutputLn(BaseLevel + 2, Row, Example.RunInfo.IsSuccess, Example.RunInfo.ExecTimeMs, Context.GetErrorDetail(Example.RunInfo));
+      var Symbol := ResultSymbol(Example.RunInfo.Result);
+      OutputLn(BaseLevel + 2, Symbol + ' ' + Row + Format(' (%d ms)', [Example.RunInfo.ExecTimeMs]));
     end;
   end;
 end;
