@@ -146,7 +146,7 @@ Feature: Calculadora - Suma
     ✓ When sumo 2 y 3 (0 ms)
     ✓ Then el resultado es 5 (0 ms)
 
-Pass: 1 | Fail: 0 | Skip: 0 | Total: 1 Specs in 1 Features | 0 ms | at 2026-01-30T14:57:07
+Passed: 1 | Failed: 0 | Pending: 0 | Undefined: 0 | Skipped: 0 | Total: 1 Specs in 1 Features | 0 ms | at 2026-01-30T14:57:07
 ```
 
 **El ciclo es simple**: describes el comportamiento esperado → ejecutas → MiniSpec te dice si el código cumple la especificación.

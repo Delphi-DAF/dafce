@@ -39,7 +39,7 @@ The output shows the outline with its examples table:
 Feature: Calculator - Addition
   Background:
     ✓ Given I have a calculator (0 ms)
-  ✓ Scenario Outline: Adding <A> and <B> should give <Result> (0 ms)
+  Scenario Outline: Adding <A> and <B> should give <Result>
     When I add <A> and <B>
     Then the result is <Result>
     Examples:
@@ -49,10 +49,26 @@ Feature: Calculator - Addition
       ✓ | -1  | 1   | 0      | (0 ms)
       ✓ | 100 | -50 | 50     | (0 ms)
 
-Pass: 4 | Fail: 0 | Skip: 0 | Total: 4 Specs in 1 Features | 0 ms | at 2026-01-30T14:57:07
+Passed: 4 | Failed: 0 | Pending: 0 | Undefined: 0 | Skipped: 0 | Total: 4 Specs in 1 Features | 0 ms | at 2026-01-30T14:57:07
 ```
 
 > 💡 **A normal Scenario is simply an Outline with a single implicit example.** There's no conceptual difference: both specify behavior with concrete examples. The Outline just makes the data table explicit.
+
+## Display-only steps
+
+A step defined without a lambda is display-only: it appears in the report but runs as a no-op. This is useful for the `Given` row in outlines where the data already comes from the Examples table via RTTI injection — no code needed:
+
+```pascal
+.ScenarioOutline('Adding <A> and <B> should give <Result>')
+  .Given('the numbers <A> and <B>')   // display-only — values injected from Examples
+  .When('they are added', procedure(Ctx: TCalculatorWorld)
+    begin
+      Ctx.Result := Ctx.A + Ctx.B;
+    end)
+  ...
+```
+
+The `Given` line appears in the output as context but does not execute any code. If a step binding matching the substituted description is registered, it runs instead.
 
 ---
 

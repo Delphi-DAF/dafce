@@ -8,6 +8,25 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **MiniSpec**: `srrSkipped` y `srrUndefined` en `TSpecRunResult` — resultado explícito para steps saltados y sin definición
+- **MiniSpec**: `MarkAsSkipped` / `MarkAsUndefined` en `ISpecItem`
+- **MiniSpec**: `UndefinedCount` en el runner y en el pie de resumen
+- **MiniSpec**: Flag `--strict-pending`: hace que specs pendientes cuenten como fallo del proceso
+- **MiniSpec**: Console reporter progresivo — Feature y Scenario se emiten al encontrarse, steps con símbolos Gherkin (`✓ ✗ ~ P ?`) al completarse
+
+### Fixed
+
+- **MiniSpec**: Step sin lambda en `ScenarioOutline` se trataba como `Undefined`; ahora es no-op (display-only) porque `ExampleInit` inyecta los valores vía RTTI
+- **MiniSpec**: Tabla de ejemplos de Outline: cabecera desalineada respecto a las filas de datos
+- **MiniSpec**: Features sin escenarios ejecutados aparecían igualmente al filtrar con `-f`; ahora se suprimen en todos los reporters (console, JSON, Gherkin, JUnit)
+- **MiniSpec**: Pie de resumen pegado a la última línea Gherkin; ahora lleva una línea en blanco antes
+
+### Changed
+
+- **MiniSpec**: Pie de resumen renombrado de `Pass/Fail/Skip` a `Passed/Failed/Pending/Undefined/Skipped`
+
 ## [1.5.0] - 2026-03-20
 
 ### Added

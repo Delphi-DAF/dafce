@@ -27,6 +27,10 @@ MiApp.exe -r console -r junit:output=results.xml -r json:output=report.json
 
 Todos los reporters reciben los mismos eventos y generan su salida simultáneamente.
 
+## Filtrado y supresión de features
+
+Cuando se usa `-f`, los reporters solo incluyen features que tienen al menos un escenario ejecutado. Las features completamente filtradas se omiten silenciosamente — de la consola, del XML JUnit, del JSON y de los ficheros Gherkin.
+
 ## JUnit Reporter
 
 Genera XML en formato JUnit para integración CI/CD. Compatible con GitHub Actions, GitLab CI, Jenkins, Azure DevOps.

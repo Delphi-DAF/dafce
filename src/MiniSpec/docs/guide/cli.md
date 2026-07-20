@@ -16,6 +16,7 @@
 | `--pause` | Wait for key at end |
 | `--dry-run` | List scenarios without executing |
 | `--stacktrace` | Show full stack trace on errors |
+| `--strict-pending` | Treat pending specs as failures (exit code 1) |
 
 > 💡 `--stacktrace` requires a stack trace library (JclDebug, MadExcept, EurekaLog).
 

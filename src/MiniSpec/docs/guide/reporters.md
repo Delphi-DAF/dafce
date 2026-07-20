@@ -27,6 +27,10 @@ MyApp.exe -r console -r junit:output=results.xml -r json:output=report.json
 
 All reporters receive the same events and generate their output simultaneously.
 
+## Filtering and feature suppression
+
+When `-f` is used, reporters only output features that have at least one executed scenario. Features entirely filtered out are silently omitted — from the console, from the JUnit XML, from the JSON, and from the Gherkin files.
+
 ## JUnit Reporter
 
 Generates XML in JUnit format for CI/CD integration. Compatible with GitHub Actions, GitLab CI, Jenkins, Azure DevOps.
