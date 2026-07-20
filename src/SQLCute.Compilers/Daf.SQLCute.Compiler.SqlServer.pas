@@ -57,6 +57,7 @@ begin
   begin
     if Clause is TLimitClause then
     begin
+      HasLimit := True;
       LimitVal := TLimitClause(Clause).Value;
     end;
     if Clause is TOffsetClause then

@@ -5,6 +5,7 @@ program SQLCuteCompilersSpecs;
 
 uses
   Daf.MiniSpec,
+  Daf.SQLCute.Core in '..\..\SQLCute\Daf.SQLCute.Core.pas',
   SQLCute.SpecHelpers in '..\..\SQLCute.Abstractions\test\SQLCute.SpecHelpers.pas',
   SQLCute.Compilers.Feat in 'SQLCute.Compilers.Feat.pas',
   SQLCute.Compilers.Steps in 'SQLCute.Compilers.Steps.pas',

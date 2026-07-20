@@ -97,6 +97,7 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
+        <DCCReference Include="..\..\SQLCute\Daf.SQLCute.Core.pas"/>
         <DCCReference Include="..\..\SQLCute.Abstractions\test\SQLCute.SpecHelpers.pas"/>
         <DCCReference Include="SQLCute.Compilers.Feat.pas"/>
         <DCCReference Include="SQLCute.Compilers.Steps.pas"/>
