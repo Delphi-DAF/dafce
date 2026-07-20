@@ -688,10 +688,11 @@ begin
   WriteLn('  --dry-run               Show what would run without executing tests');
   WriteLn('  --pause                 Wait for keypress before closing console');
   WriteLn('  --stacktrace            Show full stack trace on errors');
+  WriteLn('  --strict-pending        Treat pending specs as failures (exit code 1)');
   WriteLn('');
   WriteLn('Reporters:');
   WriteLn('  console                 Console output (default)');
-  WriteLn('  html:output=<file>      HTML dashboard report');
+  WriteLn('  junit:output=<file>     JUnit XML report (CI/CD)');
   WriteLn('  json:output=<file>      JSON report');
   WriteLn('  gherkin:output=<dir>    Export .feature files');
   WriteLn('  gherkin-results:output=<dir>  Export .feature with results');
@@ -715,7 +716,7 @@ begin
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -f "Feat:Calculator"');
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -f "Cat:Lifecycle"');
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -f "Scen:division and @arithmetic"');
-  WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -r html:output=report.html');
+  WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -r junit:output=results.xml');
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -r live:port=9000');
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -r console -r junit:output=results.xml');
   WriteLn('  ' + ExtractFileName(ParamStr(0)) + ' -t');
