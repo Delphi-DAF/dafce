@@ -27,7 +27,7 @@ type
 
   TMiniSpec = class
   public
-    const Version = '1.2.0';
+    const Version = '1.3.0';
   strict private
     FSuite: ISpecSuite;
     FRunner: ISpecRunner;
