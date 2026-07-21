@@ -5,7 +5,8 @@ program LinqSpecs;
 
 uses
   Daf.MiniSpec,
-  Queryable.Feat in 'Queryable.Feat.pas';
+  Queryable.Feat in 'Queryable.Feat.pas',
+  Operators.Feat in 'Operators.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;
