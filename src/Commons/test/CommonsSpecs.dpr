@@ -7,7 +7,8 @@ uses
   Activator.Feat in 'Activator.Feat.pas',
   Activator.Steps in 'Activator.Steps.pas',
   CmdLnParser.Feat in 'CmdLnParser.Feat.pas',
-  CmdLnParser.Steps in 'CmdLnParser.Steps.pas';
+  CmdLnParser.Steps in 'CmdLnParser.Steps.pas',
+  Nullable.Feat in 'Nullable.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

@@ -34,6 +34,7 @@ requires
 contains
   Daf.MemUtils in 'Daf.MemUtils.pas',
   Daf.Types in 'Daf.Types.pas',
+  Daf.Nullable in 'Daf.Nullable.pas',
   Daf.Activator in 'Daf.Activator.pas',
   Daf.Expression in 'Daf.Expression.pas',
   Daf.Rtti in 'Daf.Rtti.pas',
