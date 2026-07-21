@@ -110,6 +110,7 @@
         </DelphiCompile>
         <DCCReference Include="rtl.dcp"/>
         <DCCReference Include="Daf.SQLCute.Clauses.pas"/>
+        <DCCReference Include="Daf.SQLCute.WhereTree.pas"/>
         <DCCReference Include="Daf.SQLCute.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
