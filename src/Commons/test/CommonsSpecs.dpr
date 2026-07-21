@@ -9,7 +9,8 @@ uses
   CmdLnParser.Feat in 'CmdLnParser.Feat.pas',
   CmdLnParser.Steps in 'CmdLnParser.Steps.pas',
   Nullable.Feat in 'Nullable.Feat.pas',
-  Enumerable.Feat in 'Enumerable.Feat.pas';
+  Enumerable.Feat in 'Enumerable.Feat.pas',
+  Comparers.Feat in 'Comparers.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;
