@@ -26,7 +26,8 @@ uses
   System.SysUtils,
   System.Generics.Collections,
   System.Generics.Defaults,
-  Daf.Enumerable;
+  Daf.Enumerable,
+  Daf.Arrays;
 
 type
   /// <summary>A group produced by <c>GroupBy</c>: a key plus its member elements.</summary>
@@ -124,6 +125,8 @@ type
     function ToArray: TArray<T>;
     /// <summary>Materializes the sequence into a new (caller-owned) list.</summary>
     function ToList: TList<T>;
+    /// <summary>Materializes into Commons' eager <c>TSmartArray&lt;T&gt;</c> (the lazy→eager bridge).</summary>
+    function ToSmartArray: TSmartArray<T>;
   end;
 
   /// <summary>
@@ -136,6 +139,8 @@ type
     class function From<T>(const Source: IEnumerable<T>): TQuery<T>; overload; static;
     class function From<T>(const Source: TEnumerable<T>): TQuery<T>; overload; static;
     class function From<T>(const Source: TArray<T>): TQuery<T>; overload; static;
+    /// <summary>Enters the engine over Commons' eager <c>TSmartArray&lt;T&gt;</c> (the eager→lazy bridge).</summary>
+    class function From<T>(const Source: TSmartArray<T>): TQuery<T>; overload; static;
   end;
 
 implementation
@@ -497,6 +502,11 @@ begin
     Result.Add(E.Current);
 end;
 
+function TQuery<T>.ToSmartArray: TSmartArray<T>;
+begin
+  Result := ToArray;   // TArray<T> -> TSmartArray<T> (implicit)
+end;
+
 { Linq }
 
 class function Linq.From<T>(const Source: IEnumerable<T>): TQuery<T>;
@@ -536,6 +546,12 @@ begin
         end);
     end);
   Result.FSeq := TQueryable<T>.Create(Seq);
+end;
+
+class function Linq.From<T>(const Source: TSmartArray<T>): TQuery<T>;
+begin
+  var Data: TArray<T> := Source;   // TSmartArray<T> -> TArray<T> (implicit)
+  Result := From<T>(Data);
 end;
 
 end.

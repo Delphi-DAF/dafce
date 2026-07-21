@@ -25,6 +25,8 @@ uses
   System.Generics.Defaults,
   Daf.MiniSpec,
   Daf.Enumerable,
+  Daf.Arrays,
+  Daf.Expression,
   Daf.Linq;
 
 { TOpsWorld }
@@ -228,6 +230,43 @@ Feature Linq operators @linq @operators
         Expect(W.GroupSizes[0]).ToEqual(4);
         Expect(W.GroupKeys[1]).ToEqual(0);
         Expect(W.GroupSizes[1]).ToEqual(2);
+      end)
+
+.Rule('Eager/lazy bridges and shared vocabulary')
+
+  .Scenario('A smart array flows through the engine and back')
+    .When('a TSmartArray is queried and materialized back to a smart array',
+      procedure(W: TOpsWorld)
+      begin
+        var SA: TSmartArray<Integer> := TArray<Integer>.Create(5, 3, 8, 3, 1, 8);
+        var Filtered := Linq.From<Integer>(SA)
+          .Where(function(X: Integer): Boolean begin Result := X > 3; end)
+          .ToSmartArray;
+        W.Collected := Filtered;
+      end)
+    .&Then('the eager result carries the filtered values',
+      procedure(W: TOpsWorld)
+      begin
+        Expect(Length(W.Collected)).ToEqual(3);
+        Expect(W.Collected[0]).ToEqual(5);
+        Expect(W.Collected[1]).ToEqual(8);
+        Expect(W.Collected[2]).ToEqual(8);
+      end)
+
+  .Scenario('Where reuses the TFilterSpec vocabulary')
+    .When('a TFilterSpec predicate is passed to Where',
+      procedure(W: TOpsWorld)
+      begin
+        var Spec: TFilterSpec<Integer> := TPredicate<Integer>(
+          function(X: Integer): Boolean begin Result := X = 8; end);
+        W.Collected := Linq.From<Integer>(W.Nums).Where(Spec).ToArray;
+      end)
+    .&Then('only the 8s remain',
+      procedure(W: TOpsWorld)
+      begin
+        Expect(Length(W.Collected)).ToEqual(2);
+        Expect(W.Collected[0]).ToEqual(8);
+        Expect(W.Collected[1]).ToEqual(8);
       end);
 
 end.
