@@ -1,0 +1,36 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{F95ECF51-7993-4649-988C-2E95906B90B8}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="test\LinqSpecs.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="LinqSpecs">
+        <MSBuild Projects="test\LinqSpecs.dproj"/>
+    </Target>
+    <Target Name="LinqSpecs:Clean">
+        <MSBuild Projects="test\LinqSpecs.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="LinqSpecs:Make">
+        <MSBuild Projects="test\LinqSpecs.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="LinqSpecs"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="LinqSpecs:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="LinqSpecs:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>
