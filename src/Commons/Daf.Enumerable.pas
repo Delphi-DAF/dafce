@@ -257,13 +257,16 @@ end;
 
 function ToIEnumerable<T>.ToArray: TArray<T>;
 begin
-  Result := nil;
-  for var Item in FSource do
-  begin
-    SetLength(Result, 1 + Length(Result));
-    Result[Length(Result) - 1] := Item;
+  // O(n): collect into a TList<T> (amortized geometric growth) instead of
+  // growing the result array one element at a time (which was O(n^2)).
+  var List := TList<T>.Create;
+  try
+    for var Item in FSource do
+      List.Add(Item);
+    Result := List.ToArray;
+  finally
+    List.Free;
   end;
-
 end;
 
 { TInterfaceList.TEnumerator }
