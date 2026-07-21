@@ -45,7 +45,7 @@ type
     class function NewNode(AKind: TWhereNodeKind; const AChildren: TArray<TWhereNode>): TWhereNode; static;
   end;
 
-  /// <summary>Builds precedence-correct boolean trees from flat WHERE clause lists.</summary>
+  /// <summary>Builds precedence-correct boolean trees from flat clause lists.</summary>
   TWhereTree = record
     /// <summary>
     ///   Normalizes the WHERE-relevant clauses in <c>Clauses</c> into a boolean
@@ -53,6 +53,11 @@ type
     ///   when there are no WHERE clauses. The caller owns and frees the result.
     /// </summary>
     class function Build(const Clauses: TArray<TAbstractClause>): TWhereNode; static;
+    /// <summary>
+    ///   Same normalization applied to HAVING clauses (<c>THavingClause</c>).
+    ///   HAVING has no nesting or NOT, so the tree is a flat AND/OR grouping.
+    /// </summary>
+    class function BuildHaving(const Clauses: TArray<TAbstractClause>): TWhereNode; static;
   end;
 
 implementation
@@ -66,6 +71,11 @@ begin
          or (C is TWhereInClause) or (C is TDateWhereClause);
 end;
 
+function IsHavingClause(C: TAbstractClause): Boolean;
+begin
+  Result := C is THavingClause;
+end;
+
 function ConnectorIsOr(C: TAbstractClause): Boolean;
 begin
   if C is TWhereClause then
@@ -76,6 +86,8 @@ begin
     Result := TDateWhereClause(C).Connector = TBoolOp.opOr
   else if C is TWhereInClause then
     Result := SameText(TWhereInClause(C).Connector, 'OR')
+  else if C is THavingClause then
+    Result := THavingClause(C).Connector = TBoolOp.opOr
   else
     Result := False;
 end;
@@ -132,9 +144,18 @@ begin
   Result.Children := AChildren;
 end;
 
-{ TWhereTree }
+// Shared normalizer: group consecutive AND runs, then OR the groups.
+// `Having` selects which top-level clauses participate (WHERE vs HAVING).
+function DoBuild(const Clauses: TArray<TAbstractClause>; Having: Boolean): TWhereNode;
 
-class function TWhereTree.Build(const Clauses: TArray<TAbstractClause>): TWhereNode;
+  function Accept(C: TAbstractClause): Boolean;
+  begin
+    if Having then
+      Result := IsHavingClause(C)
+    else
+      Result := IsWhereClause(C);
+  end;
+
 var
   AndGroups: TArray<TWhereNode>;
   CurrentAnd: TArray<TWhereNode>;
@@ -158,7 +179,7 @@ begin
   First := True;
   for var C in Clauses do
   begin
-    if not IsWhereClause(C) then
+    if not Accept(C) then
       Continue;
     var Node := NodeForClause(C);
     if Node = nil then
@@ -176,6 +197,18 @@ begin
     Result := AndGroups[0]            // no spurious OR wrapper for a single run
   else
     Result := TWhereNode.NewNode(TWhereNodeKind.Disjunction, AndGroups);
+end;
+
+{ TWhereTree }
+
+class function TWhereTree.Build(const Clauses: TArray<TAbstractClause>): TWhereNode;
+begin
+  Result := DoBuild(Clauses, False);
+end;
+
+class function TWhereTree.BuildHaving(const Clauses: TArray<TAbstractClause>): TWhereNode;
+begin
+  Result := DoBuild(Clauses, True);
 end;
 
 end.

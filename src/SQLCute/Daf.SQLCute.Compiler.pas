@@ -9,7 +9,8 @@ uses
   System.Variants,
   System.Generics.Collections,
   Daf.SQLCute,
-  Daf.SQLCute.Clauses;
+  Daf.SQLCute.Clauses,
+  Daf.SQLCute.WhereTree;
 
 type
   /// <summary>
@@ -54,6 +55,18 @@ type
     /// ANSI fallback: emits <c>col op ?</c>.
     /// </summary>
     function CompileDateWhere(const Clause: TDateWhereClause): string; virtual;
+    /// <summary>
+    /// Emits the SQL for a single boolean leaf clause (comparison, IN/BETWEEN,
+    /// IS NULL, LIKE, EXISTS, raw, column-column, value-IN, date, or HAVING),
+    /// adding its bindings in order. NOT is NOT applied here — the tree's Neg
+    /// node wraps it (see EmitNode).
+    /// </summary>
+    function EmitLeafClause(const Clause: TAbstractClause): string;
+    /// <summary>
+    /// Walks a normalized WHERE/HAVING tree emitting SQL with explicit precedence
+    /// parentheses (OR-group inside AND, and AND-group inside OR, are wrapped).
+    /// </summary>
+    function EmitNode(const Node: TWhereNode): string;
   public
     function Compile(const Query: IQuery): TSQLResult;
   end;
@@ -210,320 +223,177 @@ begin
   end;
 end;
 
-function TAnsiSqlCompiler.CompileWhere(const Clauses: TArray<TAbstractClause>): string;
+function TAnsiSqlCompiler.EmitLeafClause(const Clause: TAbstractClause): string;
 var
-  Sb: TStringBuilder;
-  Clause: TAbstractClause;
   W: TWhereClause;
   WI: TWhereInClause;
-  WN: TNestedWhereClause;
-  First: Boolean;
-  Expr, Keyword, Placeholders, InnerSql: string;
+  H: THavingClause;
+  Placeholders: string;
   I: Integer;
-
-  function ConnectorStr(Conn: TBoolOp): string;
-  begin
-    case Conn of
-      TBoolOp.opAnd: Result := ' AND ';
-      TBoolOp.opOr:  Result := ' OR ';
-    else
-      Result := ' AND ';
-    end;
-  end;
-
-  // Recursive compilation of a nested group's sub-clauses (no FBindings reset)
-  function CompileNestedGroup(const SubClauses: TArray<TAbstractClause>): string; forward;
-
-  function CompileNestedGroup(const SubClauses: TArray<TAbstractClause>): string;
-  begin
-    Result := CompileWhereList(SubClauses);
-  end;
-
 begin
-  Sb := TStringBuilder.Create;
-  try
-    First := True;
-    for Clause in Clauses do
+  // --- WHERE IN / NOT IN (value-array variant) ---
+  if Clause is TWhereInClause then
+  begin
+    WI := TWhereInClause(Clause);
+    Placeholders := '';
+    for I := 0 to High(WI.Values) do
     begin
-      // --- NESTED GROUP (TNestedWhereClause must be checked BEFORE TWhereClause) ---
-      if Clause is TNestedWhereClause then
-      begin
-        WN := TNestedWhereClause(Clause);
-        if First then
-          Sb.Append('WHERE ')
-        else
-          Sb.Append(ConnectorStr(WN.Connector));
-        First := False;
-        InnerSql := CompileNestedGroup(WN.SubClauses);
-        Sb.Append('(' + InnerSql + ')');
-        Continue;
-      end;
-
-      // --- WHERE IN / NOT IN (value-array variant) ---
-      if Clause is TWhereInClause then
-      begin
-        WI := TWhereInClause(Clause);
-        if First then
-          Sb.Append('WHERE ')
-        else
-          Sb.Append(' ' + WI.Connector + ' ');
-        First := False;
-
-        Placeholders := '';
-        for I := 0 to High(WI.Values) do
-        begin
-          if I > 0 then Placeholders := Placeholders + ', ';
-          AddBinding(WI.Values[I]);
-          Placeholders := Placeholders + ParamPlaceholder;
-        end;
-        if WI.Negated then
-          Keyword := ' NOT IN ('
-        else
-          Keyword := ' IN (';
-        Sb.Append(WrapColumn(WI.Column) + Keyword + Placeholders + ')');
-        Continue;
-      end;
-
-      if Clause is TDateWhereClause then
-      begin
-        if First then Sb.Append('WHERE ')
-        else case TDateWhereClause(Clause).Connector of
-          TBoolOp.opAnd: Sb.Append(' AND ');
-          TBoolOp.opOr:  Sb.Append(' OR ');
-        end;
-        First := False;
-        Sb.Append(CompileDateWhere(TDateWhereClause(Clause)));
-        Continue;
-      end;
-
-      if not (Clause is TWhereClause) then Continue;
-      W := TWhereClause(Clause);
-
-      if First then
-        Sb.Append('WHERE ')
-      else
-        case W.Connector of
-          TBoolOp.opAnd: Sb.Append(' AND ');
-          TBoolOp.opOr:  Sb.Append(' OR ');
-        end;
-      First := False;
-
-      // --- column-column comparison (no binding) ---
-      if W.IsColumnValue then
-      begin
-        Expr := WrapColumn(W.Column) + ' ' + OperatorSymbol(W.Op) + ' ' + WrapColumn(VarToStr(W.Value));
-      end
-      else
-      case W.Op of
-        TWhereOp.IsNull:
-          Expr := WrapColumn(W.Column) + ' IS NULL';
-
-        TWhereOp.IsNotNull:
-          Expr := WrapColumn(W.Column) + ' IS NOT NULL';
-
-        TWhereOp.&Exists:
-          Expr := 'EXISTS (' + CompileSubQuery(W.SubQuery as IQuery) + ')';
-
-        TWhereOp.NotExists:
-          Expr := 'NOT EXISTS (' + CompileSubQuery(W.SubQuery as IQuery) + ')';
-
-        TWhereOp.&Between:
-        begin
-          AddBinding(W.Value);
-          AddBinding(W.Value2);
-          Expr := WrapColumn(W.Column) + ' BETWEEN ' + ParamPlaceholder + ' AND ' + ParamPlaceholder;
-        end;
-
-        TWhereOp.NotBetween:
-        begin
-          AddBinding(W.Value);
-          AddBinding(W.Value2);
-          Expr := WrapColumn(W.Column) + ' NOT BETWEEN ' + ParamPlaceholder + ' AND ' + ParamPlaceholder;
-        end;
-
-        TWhereOp.&In:
-        begin
-          if W.SubQuery <> nil then
-            Expr := WrapColumn(W.Column) + ' IN (' + CompileSubQuery(W.SubQuery as IQuery) + ')'
-          else
-            Expr := WrapColumn(W.Column) + ' IN (' + VarToStr(W.Value) + ')';
-        end;
-
-        TWhereOp.NotIn:
-        begin
-          if W.SubQuery <> nil then
-            Expr := WrapColumn(W.Column) + ' NOT IN (' + CompileSubQuery(W.SubQuery as IQuery) + ')'
-          else
-            Expr := WrapColumn(W.Column) + ' NOT IN (' + VarToStr(W.Value) + ')';
-        end;
-
-        TWhereOp.Raw:
-          Expr := W.RawSql;
-
-        TWhereOp.Like, TWhereOp.NotLike:
-        begin
-          AddBinding(W.Value);
-          if W.CaseSensitive then
-            Expr := WrapColumn(W.Column) + ' ' + OperatorSymbol(W.Op) + ' ' + ParamPlaceholder
-          else
-            Expr := 'LOWER(' + WrapColumn(W.Column) + ') ' + OperatorSymbol(W.Op) + ' ' + ParamPlaceholder;
-        end;
-
-        else
-        begin
-          AddBinding(W.Value);
-          Expr := WrapColumn(W.Column) + ' ' + OperatorSymbol(W.Op) + ' ' + ParamPlaceholder;
-        end;
-      end;
-
-      if W.IsNot then
-        Expr := 'NOT (' + Expr + ')';
-
-      Sb.Append(Expr);
+      if I > 0 then Placeholders := Placeholders + ', ';
+      AddBinding(WI.Values[I]);
+      Placeholders := Placeholders + ParamPlaceholder;
     end;
+    if WI.Negated then
+      Result := WrapColumn(WI.Column) + ' NOT IN (' + Placeholders + ')'
+    else
+      Result := WrapColumn(WI.Column) + ' IN (' + Placeholders + ')';
+    Exit;
+  end;
 
-    Result := Sb.ToString;
+  // --- date/time portion filter ---
+  if Clause is TDateWhereClause then
+    Exit(CompileDateWhere(TDateWhereClause(Clause)));
+
+  // --- HAVING condition (raw, or col op ?; note: no WrapColumn, matching legacy) ---
+  if Clause is THavingClause then
+  begin
+    H := THavingClause(Clause);
+    case H.Op of
+      TWhereOp.Raw:
+        Result := H.RawSql;
+    else
+      begin
+        AddBinding(H.Value);
+        Result := H.Column + ' ' + OperatorSymbol(H.Op) + ' ' + ParamPlaceholder;
+      end;
+    end;
+    Exit;
+  end;
+
+  // --- TWhereClause: op-dispatch ---
+  W := TWhereClause(Clause);
+  if W.IsColumnValue then
+    Result := WrapColumn(W.Column) + ' ' + OperatorSymbol(W.Op) + ' ' + WrapColumn(VarToStr(W.Value))
+  else
+    case W.Op of
+      TWhereOp.IsNull:
+        Result := WrapColumn(W.Column) + ' IS NULL';
+      TWhereOp.IsNotNull:
+        Result := WrapColumn(W.Column) + ' IS NOT NULL';
+      TWhereOp.&Exists:
+        Result := 'EXISTS (' + CompileSubQuery(W.SubQuery as IQuery) + ')';
+      TWhereOp.NotExists:
+        Result := 'NOT EXISTS (' + CompileSubQuery(W.SubQuery as IQuery) + ')';
+      TWhereOp.&Between:
+      begin
+        AddBinding(W.Value);
+        AddBinding(W.Value2);
+        Result := WrapColumn(W.Column) + ' BETWEEN ' + ParamPlaceholder + ' AND ' + ParamPlaceholder;
+      end;
+      TWhereOp.NotBetween:
+      begin
+        AddBinding(W.Value);
+        AddBinding(W.Value2);
+        Result := WrapColumn(W.Column) + ' NOT BETWEEN ' + ParamPlaceholder + ' AND ' + ParamPlaceholder;
+      end;
+      TWhereOp.&In:
+      begin
+        if W.SubQuery <> nil then
+          Result := WrapColumn(W.Column) + ' IN (' + CompileSubQuery(W.SubQuery as IQuery) + ')'
+        else
+          Result := WrapColumn(W.Column) + ' IN (' + VarToStr(W.Value) + ')';
+      end;
+      TWhereOp.NotIn:
+      begin
+        if W.SubQuery <> nil then
+          Result := WrapColumn(W.Column) + ' NOT IN (' + CompileSubQuery(W.SubQuery as IQuery) + ')'
+        else
+          Result := WrapColumn(W.Column) + ' NOT IN (' + VarToStr(W.Value) + ')';
+      end;
+      TWhereOp.Raw:
+        Result := W.RawSql;
+      TWhereOp.Like, TWhereOp.NotLike:
+      begin
+        AddBinding(W.Value);
+        if W.CaseSensitive then
+          Result := WrapColumn(W.Column) + ' ' + OperatorSymbol(W.Op) + ' ' + ParamPlaceholder
+        else
+          Result := 'LOWER(' + WrapColumn(W.Column) + ') ' + OperatorSymbol(W.Op) + ' ' + ParamPlaceholder;
+      end;
+    else
+      begin
+        AddBinding(W.Value);
+        Result := WrapColumn(W.Column) + ' ' + OperatorSymbol(W.Op) + ' ' + ParamPlaceholder;
+      end;
+    end;
+end;
+
+function TAnsiSqlCompiler.EmitNode(const Node: TWhereNode): string;
+
+  // Emit a child, parenthesizing it when its kind would otherwise lose precedence.
+  function Wrapped(const Child: TWhereNode; ParenIf: TWhereNodeKind): string;
+  begin
+    Result := EmitNode(Child);
+    if Child.Kind = ParenIf then
+      Result := '(' + Result + ')';
+  end;
+
+var
+  I: Integer;
+begin
+  case Node.Kind of
+    TWhereNodeKind.Leaf:
+      Result := EmitLeafClause(Node.Clause);
+    TWhereNodeKind.Neg:
+      Result := 'NOT (' + EmitNode(Node.Children[0]) + ')';
+    TWhereNodeKind.Conjunction:
+    begin
+      Result := '';
+      for I := 0 to High(Node.Children) do
+      begin
+        if I > 0 then
+          Result := Result + ' AND ';
+        // An OR-group inside an AND must be parenthesized.
+        Result := Result + Wrapped(Node.Children[I], TWhereNodeKind.Disjunction);
+      end;
+    end;
+    TWhereNodeKind.Disjunction:
+    begin
+      Result := '';
+      for I := 0 to High(Node.Children) do
+      begin
+        if I > 0 then
+          Result := Result + ' OR ';
+        // AND-groups inside an OR get explicit parentheses (precedence-explicit).
+        Result := Result + Wrapped(Node.Children[I], TWhereNodeKind.Conjunction);
+      end;
+    end;
+  end;
+end;
+
+function TAnsiSqlCompiler.CompileWhere(const Clauses: TArray<TAbstractClause>): string;
+begin
+  var Root := TWhereTree.Build(Clauses);
+  try
+    if Root = nil then
+      Result := ''
+    else
+      Result := 'WHERE ' + EmitNode(Root);
   finally
-    Sb.Free;
+    Root.Free;
   end;
 end;
 
 function TAnsiSqlCompiler.CompileWhereList(const Clauses: TArray<TAbstractClause>): string;
-var
-  Sb: TStringBuilder;
-  Sub: TAbstractClause;
-  SubW: TWhereClause;
-  SubWI: TWhereInClause;
-  SubWN: TNestedWhereClause;
-  First: Boolean;
-  SubExpr, SubPlaceholders: string;
-  J: Integer;
 begin
-  Sb := TStringBuilder.Create;
+  // Used by JOIN ON callback conditions — same tree, without the WHERE keyword.
+  var Root := TWhereTree.Build(Clauses);
   try
-    First := True;
-    for Sub in Clauses do
-    begin
-      if Sub is TNestedWhereClause then
-      begin
-        SubWN := TNestedWhereClause(Sub);
-        if not First then
-        begin
-          if SubWN.Connector = TBoolOp.opOr then
-            Sb.Append(' OR ')
-          else
-            Sb.Append(' AND ');
-        end;
-        First := False;
-        Sb.Append('(' + CompileWhereList(SubWN.SubClauses) + ')');
-        Continue;
-      end;
-
-      if Sub is TWhereInClause then
-      begin
-        SubWI := TWhereInClause(Sub);
-        if not First then
-          Sb.Append(' ' + SubWI.Connector + ' ');
-        First := False;
-        SubPlaceholders := '';
-        for J := 0 to High(SubWI.Values) do
-        begin
-          if J > 0 then SubPlaceholders := SubPlaceholders + ', ';
-          AddBinding(SubWI.Values[J]);
-          SubPlaceholders := SubPlaceholders + ParamPlaceholder;
-        end;
-        if SubWI.Negated then
-          Sb.Append(WrapColumn(SubWI.Column) + ' NOT IN (' + SubPlaceholders + ')')
-        else
-          Sb.Append(WrapColumn(SubWI.Column) + ' IN (' + SubPlaceholders + ')');
-        Continue;
-      end;
-
-      if Sub is TDateWhereClause then
-      begin
-        if not First then
-        begin
-          if TDateWhereClause(Sub).Connector = TBoolOp.opOr then
-            Sb.Append(' OR ')
-          else
-            Sb.Append(' AND ');
-        end;
-        First := False;
-        Sb.Append(CompileDateWhere(TDateWhereClause(Sub)));
-        Continue;
-      end;
-
-      if not (Sub is TWhereClause) then Continue;
-      SubW := TWhereClause(Sub);
-
-      if not First then
-      begin
-        if SubW.Connector = TBoolOp.opOr then
-          Sb.Append(' OR ')
-        else
-          Sb.Append(' AND ');
-      end;
-      First := False;
-
-      if SubW.IsColumnValue then
-      begin
-        SubExpr := WrapColumn(SubW.Column) + ' ' + OperatorSymbol(SubW.Op) + ' ' + WrapColumn(VarToStr(SubW.Value));
-      end
-      else
-      case SubW.Op of
-        TWhereOp.IsNull:    SubExpr := WrapColumn(SubW.Column) + ' IS NULL';
-        TWhereOp.IsNotNull: SubExpr := WrapColumn(SubW.Column) + ' IS NOT NULL';
-        TWhereOp.&Exists:   SubExpr := 'EXISTS (' + CompileSubQuery(SubW.SubQuery as IQuery) + ')';
-        TWhereOp.NotExists: SubExpr := 'NOT EXISTS (' + CompileSubQuery(SubW.SubQuery as IQuery) + ')';
-        TWhereOp.&Between:
-        begin
-          AddBinding(SubW.Value);
-          AddBinding(SubW.Value2);
-          SubExpr := WrapColumn(SubW.Column) + ' BETWEEN ' + ParamPlaceholder + ' AND ' + ParamPlaceholder;
-        end;
-        TWhereOp.NotBetween:
-        begin
-          AddBinding(SubW.Value);
-          AddBinding(SubW.Value2);
-          SubExpr := WrapColumn(SubW.Column) + ' NOT BETWEEN ' + ParamPlaceholder + ' AND ' + ParamPlaceholder;
-        end;
-        TWhereOp.&In:
-        begin
-          if SubW.SubQuery <> nil then
-            SubExpr := WrapColumn(SubW.Column) + ' IN (' + CompileSubQuery(SubW.SubQuery as IQuery) + ')'
-          else
-            SubExpr := WrapColumn(SubW.Column) + ' IN (' + VarToStr(SubW.Value) + ')';
-        end;
-        TWhereOp.NotIn:
-        begin
-          if SubW.SubQuery <> nil then
-            SubExpr := WrapColumn(SubW.Column) + ' NOT IN (' + CompileSubQuery(SubW.SubQuery as IQuery) + ')'
-          else
-            SubExpr := WrapColumn(SubW.Column) + ' NOT IN (' + VarToStr(SubW.Value) + ')';
-        end;
-        TWhereOp.Raw: SubExpr := SubW.RawSql;
-        TWhereOp.Like, TWhereOp.NotLike:
-        begin
-          AddBinding(SubW.Value);
-          if SubW.CaseSensitive then
-            SubExpr := WrapColumn(SubW.Column) + ' ' + OperatorSymbol(SubW.Op) + ' ' + ParamPlaceholder
-          else
-            SubExpr := 'LOWER(' + WrapColumn(SubW.Column) + ') ' + OperatorSymbol(SubW.Op) + ' ' + ParamPlaceholder;
-        end;
-        else
-        begin
-          AddBinding(SubW.Value);
-          SubExpr := WrapColumn(SubW.Column) + ' ' + OperatorSymbol(SubW.Op) + ' ' + ParamPlaceholder;
-        end;
-      end;
-
-      if SubW.IsNot then
-        SubExpr := 'NOT (' + SubExpr + ')';
-      Sb.Append(SubExpr);
-    end;
-    Result := Sb.ToString;
+    if Root = nil then
+      Result := ''
+    else
+      Result := EmitNode(Root);
   finally
-    Sb.Free;
+    Root.Free;
   end;
 end;
 
@@ -822,46 +692,18 @@ begin
 end;
 
 function TAnsiSqlCompiler.CompileHaving(const Clauses: TArray<TAbstractClause>): string;
-var
-  Sb: TStringBuilder;
-  Clause: TAbstractClause;
-  H: THavingClause;
-  First: Boolean;
-  Expr: string;
 begin
-  Sb := TStringBuilder.Create;
+  // Built from the same shared normalizer as WHERE, so precedence (AND before
+  // OR) and parenthesization are identical. HAVING leaves emit their column
+  // verbatim (aggregate expressions like COUNT(*)) — see EmitLeafClause.
+  var Root := TWhereTree.BuildHaving(Clauses);
   try
-    First := True;
-    for Clause in Clauses do
-    begin
-      if not (Clause is THavingClause) then Continue;
-      H := THavingClause(Clause);
-
-      if First then
-        Sb.Append('HAVING ')
-      else
-        case H.Connector of
-          TBoolOp.opAnd: Sb.Append(' AND ');
-          TBoolOp.opOr:  Sb.Append(' OR ');
-        end;
-      First := False;
-
-      case H.Op of
-        TWhereOp.Raw:
-          Expr := H.RawSql;
-        else
-        begin
-          AddBinding(H.Value);
-          // HAVING column is always output verbatim (aggregate expressions like COUNT(*))
-          Expr := H.Column + ' ' + OperatorSymbol(H.Op) + ' ' + ParamPlaceholder;
-        end;
-      end;
-
-      Sb.Append(Expr);
-    end;
-    Result := Sb.ToString;
+    if Root = nil then
+      Result := ''
+    else
+      Result := 'HAVING ' + EmitNode(Root);
   finally
-    Sb.Free;
+    Root.Free;
   end;
 end;
 

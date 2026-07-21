@@ -27,12 +27,16 @@ TQuery — WHERE groups, WhereColumns, When @unit @sqlcute @f2
 
 // -------------------------------------------------------------------------
 
-.Rule('Where(callback) wraps inner conditions in parentheses')
+.Rule('Where(callback) parenthesises groups where precedence requires')
 
-  .Scenario('Single AND group produces parenthesised block')
+  // With the shared WHERE-tree normalizer the SQL is precedence-explicit: a
+  // group that is the whole WHERE clause needs no (redundant) outer parens;
+  // groups only get parentheses when nested inside a higher-precedence operator
+  // (see the following scenarios). Output stays semantically identical.
+  .Scenario('Single AND group at top level needs no redundant parentheses')
     .Given('a WHERE group query')
     .When('I compile with ANSI')
-    .&Then('SQL is "SELECT * FROM users WHERE (age > ? AND active = ?)"')
+    .&Then('SQL is "SELECT * FROM users WHERE age > ? AND active = ?"')
     .&Then('has 2 bindings')
 
   .Scenario('Outer condition AND group keeps correct connectors')
