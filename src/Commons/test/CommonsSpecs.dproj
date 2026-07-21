@@ -102,6 +102,7 @@
         <DCCReference Include="CmdLnParser.Feat.pas"/>
         <DCCReference Include="CmdLnParser.Steps.pas"/>
         <DCCReference Include="Nullable.Feat.pas"/>
+        <DCCReference Include="Enumerable.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>

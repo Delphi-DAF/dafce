@@ -43,6 +43,48 @@ type
     function GetGenericCurrent: T;
   end;
 
+  /// <summary>
+  ///   Generator closure: advances its captured state, writes the next element
+  ///   into <c>Current</c>, and returns <c>False</c> once the sequence is
+  ///   exhausted. The hand-written substitute for <c>yield</c> — Delphi has none.
+  /// </summary>
+  TGeneratorFunc<T> = reference to function(var Current: T): Boolean;
+
+  /// <summary>
+  ///   <c>IEnumerator&lt;T&gt;</c> driven by a generator closure, yielding
+  ///   elements lazily one <c>MoveNext</c> at a time. Value-type <c>T</c>
+  ///   (records, <c>TNullable&lt;&gt;</c>) is supported through the generic
+  ///   <c>GetCurrent</c> method-resolution clause. <c>Reset</c> is unsupported.
+  /// </summary>
+  TGeneratorEnumerator<T> = class(TInterfacedObject, IEnumerator, IEnumerator<T>)
+  private
+    FCurrent: T;
+    FGenerator: TGeneratorFunc<T>;
+  public
+    constructor Create(const Generator: TGeneratorFunc<T>);
+    function MoveNext: Boolean;
+    procedure Reset;
+    function GetCurrent: TObject; overload;
+    function IEnumerator<T>.GetCurrent = GetGenericCurrent;
+    function GetGenericCurrent: T;
+  end;
+
+  /// <summary>
+  ///   <c>IEnumerable&lt;T&gt;</c> built from an enumerator-factory closure — the
+  ///   deferred / lazy sequence primitive every operator needs. Nothing runs
+  ///   until <c>GetEnumerator</c> is called; each iteration re-invokes the
+  ///   factory, so the sequence can be walked more than once.
+  /// </summary>
+  TDeferredEnumerable<T> = class(TInterfacedObject, IEnumerable, IEnumerable<T>)
+  private
+    FFactory: TFunc<IEnumerator<T>>;
+  public
+    constructor Create(const Factory: TFunc<IEnumerator<T>>);
+    function GetEnumerator: IEnumerator; overload;
+    function IEnumerable<T>.GetEnumerator = GetGenericEnumerator;
+    function GetGenericEnumerator: IEnumerator<T>;
+  end;
+
   TInterfaceList = class(System.Classes.TInterfaceList)
   public type
     TItem = IInterface;
@@ -159,6 +201,53 @@ end;
 function TEnumeratorAdapter<T>.GetGenericCurrent: T;
 begin
   Result := FSource.Current;
+end;
+
+{ TGeneratorEnumerator<T> }
+
+constructor TGeneratorEnumerator<T>.Create(const Generator: TGeneratorFunc<T>);
+begin
+  inherited Create;
+  FGenerator := Generator;
+  FCurrent := Default(T);
+end;
+
+function TGeneratorEnumerator<T>.MoveNext: Boolean;
+begin
+  Result := FGenerator(FCurrent);
+end;
+
+procedure TGeneratorEnumerator<T>.Reset;
+begin
+  raise ENotImplemented.Create('Reset is not supported');
+end;
+
+function TGeneratorEnumerator<T>.GetCurrent: TObject;
+begin
+  Result := TObject(Pointer(@FCurrent));
+end;
+
+function TGeneratorEnumerator<T>.GetGenericCurrent: T;
+begin
+  Result := FCurrent;
+end;
+
+{ TDeferredEnumerable<T> }
+
+constructor TDeferredEnumerable<T>.Create(const Factory: TFunc<IEnumerator<T>>);
+begin
+  inherited Create;
+  FFactory := Factory;
+end;
+
+function TDeferredEnumerable<T>.GetEnumerator: IEnumerator;
+begin
+  Result := FFactory();
+end;
+
+function TDeferredEnumerable<T>.GetGenericEnumerator: IEnumerator<T>;
+begin
+  Result := FFactory();
 end;
 
 class operator ToIEnumerable<T>.Implicit(Source: IEnumerable<T>): ToIEnumerable<T>;
