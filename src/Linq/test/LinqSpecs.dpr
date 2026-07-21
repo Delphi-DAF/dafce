@@ -4,7 +4,8 @@ program LinqSpecs;
 {$STRONGLINKTYPES ON}
 
 uses
-  Daf.MiniSpec;
+  Daf.MiniSpec,
+  Queryable.Feat in 'Queryable.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;
