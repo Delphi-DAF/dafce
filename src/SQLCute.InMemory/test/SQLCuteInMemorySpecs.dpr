@@ -5,7 +5,9 @@ program SQLCuteInMemorySpecs;
 
 uses
   Daf.MiniSpec,
-  Daf.SQLCute.InMemory;
+  Daf.SQLCute.Core in '..\..\SQLCute\Daf.SQLCute.Core.pas',
+  Daf.SQLCute.InMemory,
+  FastPath.Feat in 'FastPath.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;
