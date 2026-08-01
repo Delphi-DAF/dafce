@@ -17,10 +17,12 @@ type
   private
     FId: Integer;
     FName: string;
+    FCountry: string;
   public
-    constructor Create(const AId: Integer; const AName: string);
+    constructor Create(const AId: Integer; const AName, ACountry: string);
     property Id: Integer read FId write FId;
     property Name: string read FName write FName;
+    property Country: string read FCountry write FCountry;
   end;
 
   TOrder = class
@@ -44,6 +46,8 @@ type
     FirstPerson: string;
     FirstTotal: Integer;
     CaraTotalIsNull: Boolean;
+    GroupCountry: string;
+    GroupCount: Integer;
     constructor Create;
     destructor Destroy; override;
   end;
@@ -61,11 +65,12 @@ uses
 
 { TPerson }
 
-constructor TPerson.Create(const AId: Integer; const AName: string);
+constructor TPerson.Create(const AId: Integer; const AName, ACountry: string);
 begin
   inherited Create;
   FId := AId;
   FName := AName;
+  FCountry := ACountry;
 end;
 
 { TOrder }
@@ -84,9 +89,9 @@ constructor TCtxWorld.Create;
 begin
   inherited;
   People := TObjectList<TPerson>.Create(True);
-  People.Add(TPerson.Create(1, 'Ann'));
-  People.Add(TPerson.Create(2, 'Bob'));
-  People.Add(TPerson.Create(3, 'Cara'));   // no orders
+  People.Add(TPerson.Create(1, 'Ann', 'US'));
+  People.Add(TPerson.Create(2, 'Bob', 'US'));
+  People.Add(TPerson.Create(3, 'Cara', 'UK'));   // no orders
   Orders := TObjectList<TOrder>.Create(True);
   Orders.Add(TOrder.Create(10, 1, 100));   // Ann
   Orders.Add(TOrder.Create(11, 1, 200));   // Ann
@@ -197,6 +202,38 @@ Feature SQLCute in-memory multi-source @inmemory @context
               Ctx.Free;
             end;
           end).ToBe(EInMemoryQueryError);
+      end)
+
+.Rule('GROUP BY with aggregates and HAVING emits flat rows')
+
+  .Scenario('Grouped counts filtered by HAVING')
+    .When('people grouped by country selecting COUNT(*), HAVING count > 1',
+      procedure(W: TCtxWorld)
+      begin
+        var Ctx := TQueryContext.Create;
+        try
+          Ctx.Map<TPerson>('people', W.People);
+          W.Count := 0;
+          W.GroupCountry := '';
+          W.GroupCount := 0;
+          for var R in TInMemory.Rows(
+            TQuery.New.From('people').Select('country').SelectCount('*', 'count')
+              .GroupBy('country').Having('count', '>', 1), Ctx) do
+          begin
+            Inc(W.Count);
+            W.GroupCountry := AsStr(R, 'country');
+            W.GroupCount := R.Get('count').AsInteger;
+          end;
+        finally
+          Ctx.Free;
+        end;
+      end)
+    .&Then('only the US group (2 members) survives, as a flat country+count row',
+      procedure(W: TCtxWorld)
+      begin
+        Expect(W.Count).ToEqual(1);          // US has 2, UK has 1 -> filtered out
+        Expect(W.GroupCountry).ToEqual('US');
+        Expect(W.GroupCount).ToEqual(2);
       end);
 
 end.

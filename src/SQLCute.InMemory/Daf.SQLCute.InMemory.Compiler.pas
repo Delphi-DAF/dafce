@@ -62,6 +62,16 @@ type
     Output: string;   // alias when present, otherwise the column name
   end;
 
+  /// <summary>An aggregate function over a group's members (Decision 11).</summary>
+  TAggFunc = (Count, Sum, Avg, Min, Max);
+
+  /// <summary>One aggregate output column: function, argument column ('*' for COUNT(*)), output name.</summary>
+  TAggregateSpec = record
+    Func: TAggFunc;
+    Column: string;
+    Output: string;
+  end;
+
   /// <summary>
   ///   Non-generic compiled plan for a single-source query. Reusable across
   ///   sources; carries no reference to the original AST (everything is
@@ -72,6 +82,9 @@ type
     Predicate: TValuePredicate;   // nil = no WHERE
     Orders: TArray<TOrderSpec>;
     Projection: TArray<TProjColumn>;   // nil = no reshape (all columns / preserve T)
+    GroupBy: TArray<string>;           // nil = no grouping
+    Aggregates: TArray<TAggregateSpec>;
+    Having: TValuePredicate;           // nil = no HAVING (filters flat aggregate rows)
     Distinct: Boolean;
     HasLimit: Boolean;
     Limit: Int64;
@@ -415,6 +428,21 @@ begin
   if Clause is TDateWhereClause then
     raise EInMemoryQueryError.Create(
       'Date/time WHERE conditions are not supported in the single-source fast path.');
+  if Clause is THavingClause then
+  begin
+    // HAVING leaf: compares an aggregate/output column against a bound value.
+    var H := THavingClause(Clause);
+    if H.Op = TWhereOp.Raw then
+      raise EInMemoryQueryError.Create('Raw HAVING expressions cannot be evaluated in memory.');
+    var HCol := H.Column;
+    var HOp := H.Op;
+    var HBound := VariantToValue(H.Value);
+    Exit(
+      function(const Get: TColumnGetter): TTriState
+      begin
+        Result := CompareOp(HOp, Get(HCol), HBound);
+      end);
+  end;
   if Clause is TWhereClause then
   begin
     var W := TWhereClause(Clause);
@@ -505,6 +533,82 @@ begin
   end;
 end;
 
+// HAVING predicate over the flat aggregate rows (same tree/precedence as WHERE).
+function HavingPredicate(const Clauses: TArray<TAbstractClause>): TValuePredicate;
+begin
+  var Root := TWhereTree.BuildHaving(Clauses);
+  try
+    if Root = nil then
+      Result := nil
+    else
+      Result := BuildNode(Root);
+  finally
+    Root.Free;
+  end;
+end;
+
+// Parses a raw aggregate select expression "FUNC(col) AS alias" into a spec.
+// Returns False when it is not a recognised aggregate.
+function TryParseAggregate(const Raw: string; out Spec: TAggregateSpec): Boolean;
+begin
+  Result := False;
+  var Expr := Trim(Raw);
+  var Alias := '';
+  var AsPos := Pos(' AS ', UpperCase(Expr));
+  if AsPos > 0 then
+  begin
+    Alias := Trim(Copy(Expr, AsPos + 4, MaxInt));
+    Expr := Trim(Copy(Expr, 1, AsPos - 1));
+  end;
+  var Paren := Pos('(', Expr);
+  var LastParen := 0;
+  for var I := Length(Expr) downto 1 do
+    if Expr[I] = ')' then
+    begin
+      LastParen := I;
+      Break;
+    end;
+  if (Paren = 0) or (LastParen <= Paren) then
+    Exit;
+  var FuncName := UpperCase(Trim(Copy(Expr, 1, Paren - 1)));
+  var Col := Trim(Copy(Expr, Paren + 1, LastParen - Paren - 1));
+  if FuncName = 'COUNT' then Spec.Func := TAggFunc.Count
+  else if FuncName = 'SUM' then Spec.Func := TAggFunc.Sum
+  else if FuncName = 'AVG' then Spec.Func := TAggFunc.Avg
+  else if FuncName = 'MIN' then Spec.Func := TAggFunc.Min
+  else if FuncName = 'MAX' then Spec.Func := TAggFunc.Max
+  else
+    Exit;
+  Spec.Column := Col;
+  if Alias <> '' then
+    Spec.Output := Alias
+  else
+    Spec.Output := LowerCase(FuncName);
+  Result := True;
+end;
+
+function ExtractGroupBy(const Clauses: TArray<TAbstractClause>): TArray<string>;
+begin
+  Result := nil;
+  for var C in Clauses do
+    if C is TGroupByClause then
+      Result := Result + [TGroupByClause(C).Column];
+end;
+
+function ExtractAggregates(const Clauses: TArray<TAbstractClause>): TArray<TAggregateSpec>;
+begin
+  Result := nil;
+  for var C in Clauses do
+    if C is TSelectClause then
+      for var Col in TSelectClause(C).Columns do
+        if Col.IsRaw then
+        begin
+          var Spec: TAggregateSpec;
+          if TryParseAggregate(Col.Column, Spec) then
+            Result := Result + [Spec];
+        end;
+end;
+
 { ---- Source / shape analysis (fail-fast, Decision 5) ---- }
 
 // Extracts the SELECT projection as (source -> output) columns. A lone '*'
@@ -513,6 +617,11 @@ end;
 function ExtractProjection(const Clauses: TArray<TAbstractClause>): TArray<TProjColumn>;
 begin
   Result := nil;
+  // A grouped query's output is the flat aggregate row (group keys + aggregate
+  // columns) built by the engine — there is no separate column projection.
+  for var C in Clauses do
+    if C is TGroupByClause then
+      Exit(nil);
   for var C in Clauses do
     if C is TSelectClause then
       for var Col in TSelectClause(C).Columns do
@@ -617,6 +726,9 @@ begin
     Result.Predicate := WherePredicate(Clauses);
     Result.Orders := ExtractOrders(Clauses);
     Result.Projection := ExtractProjection(Clauses);
+    Result.GroupBy := ExtractGroupBy(Clauses);
+    Result.Aggregates := ExtractAggregates(Clauses);
+    Result.Having := HavingPredicate(Clauses);
     Result.Distinct := HasDistinct(Clauses);
     ExtractLimits(Clauses, Result);
   except

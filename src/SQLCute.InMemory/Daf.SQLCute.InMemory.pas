@@ -216,6 +216,7 @@ implementation
 
 uses
   System.TypInfo,          // TMemberVisibility (mvPublic / mvPublished)
+  System.Variants,         // VarToStr / Variant coercion (group keys, aggregates)
   Daf.SQLCute.Clauses,     // TFromClause / TJoinClause / TJoinType (multi-source engine)
   Daf.Comparers,           // TValueComparers, IsNullValue
   Daf.Rtti;                // TRttiProperty smart SetValue + CoerceForAssign (shared coercion)
@@ -631,8 +632,6 @@ begin
   begin
     if C is TUnionClause then
       raise EInMemoryQueryError.Create('Set operations (UNION/INTERSECT/EXCEPT) require Phase 3C.');
-    if (C is TGroupByClause) or (C is THavingClause) then
-      raise EInMemoryQueryError.Create('GROUP BY / HAVING aggregation requires Phase 3B.');
     if C is TJoinSubqueryClause then
       raise EInMemoryQueryError.Create('Subquery JOINs require Phase 3C.');
     if (C is TFromSubqueryClause) or (C is TFromRawClause) then
@@ -773,9 +772,173 @@ begin
   end;
 end;
 
-// Resolves FROM + JOINs into composite rows, then applies WHERE / DISTINCT /
-// ORDER BY / paging (deferred). The SELECT projection is returned via Proj for
-// the caller to apply (dynamic IRow) or materialize (TResult).
+{ GROUP BY / aggregates / HAVING (Phase 3B, Decision 11) }
+
+function AsNumber(const V: TValue): Double;
+begin
+  try
+    Result := V.AsVariant;   // numeric / date families coerce to Double
+  except
+    Result := 0;
+  end;
+end;
+
+// One aggregate over a group's members; NULLs are skipped (COUNT(*) counts rows).
+function ComputeAggregate(const Agg: TAggregateSpec; const Members: TArray<IRow>): TValue;
+begin
+  case Agg.Func of
+    TAggFunc.Count:
+      if Agg.Column = '*' then
+        Result := Length(Members)
+      else
+      begin
+        var N := 0;
+        for var R in Members do
+          if not IsNullValue(R.Get(Agg.Column)) then
+            Inc(N);
+        Result := N;
+      end;
+    TAggFunc.Sum:
+      begin
+        var S: Double := 0;
+        var Any := False;
+        for var R in Members do
+        begin
+          var V := R.Get(Agg.Column);
+          if not IsNullValue(V) then
+          begin
+            S := S + AsNumber(V);
+            Any := True;
+          end;
+        end;
+        if Any then Result := S else Result := TValue.Empty;
+      end;
+    TAggFunc.Avg:
+      begin
+        var S: Double := 0;
+        var N := 0;
+        for var R in Members do
+        begin
+          var V := R.Get(Agg.Column);
+          if not IsNullValue(V) then
+          begin
+            S := S + AsNumber(V);
+            Inc(N);
+          end;
+        end;
+        if N > 0 then Result := S / N else Result := TValue.Empty;
+      end;
+    TAggFunc.Min, TAggFunc.Max:
+      begin
+        var Best := TValue.Empty;
+        var HasBest := False;
+        for var R in Members do
+        begin
+          var V := R.Get(Agg.Column);
+          if IsNullValue(V) then
+            Continue;
+          if not HasBest then
+          begin
+            Best := V;
+            HasBest := True;
+          end
+          else
+          begin
+            var Cmp := CompareValues(V, Best);
+            if ((Agg.Func = TAggFunc.Min) and (Cmp < 0))
+               or ((Agg.Func = TAggFunc.Max) and (Cmp > 0)) then
+              Best := V;
+          end;
+        end;
+        Result := Best;
+      end;
+  else
+    Result := TValue.Empty;
+  end;
+end;
+
+// Canonical group key: a NULL sentinel keeps all NULL keys in one group.
+function GroupKey(const R: IRow; const Cols: TArray<string>): string;
+begin
+  Result := '';
+  for var C in Cols do
+  begin
+    var V := R.Get(C);
+    if IsNullValue(V) then
+      Result := Result + #0 + '<null>' + #1
+    else
+      Result := Result + #0 + VarToStr(V.AsVariant) + #1;
+  end;
+end;
+
+// Groups rows by the GROUP BY columns, computes aggregates over each group's
+// members, applies HAVING, and emits one flat row per surviving group.
+function GroupAndAggregate(const Rows: TArray<IRow>; const C: TCompiledQuery): TArray<IRow>;
+begin
+  var Buckets := TDictionary<string, TList<IRow>>.Create;
+  var Order := TList<string>.Create;
+  var Reps := TDictionary<string, IRow>.Create;
+  try
+    for var R in Rows do
+    begin
+      var K := GroupKey(R, C.GroupBy);
+      var Bucket: TList<IRow>;
+      if not Buckets.TryGetValue(K, Bucket) then
+      begin
+        Bucket := TList<IRow>.Create;
+        Buckets.Add(K, Bucket);
+        Order.Add(K);
+        Reps.Add(K, R);
+      end;
+      Bucket.Add(R);
+    end;
+    Result := nil;
+    for var K in Order do
+    begin
+      var Members := Buckets[K].ToArray;
+      var Flat := TDictRow.Create;
+      for var Gc in C.GroupBy do
+        Flat.Put(Gc, Reps[K].Get(Gc));
+      for var Agg in C.Aggregates do
+        Flat.Put(Agg.Output, ComputeAggregate(Agg, Members));
+      var FlatRow: IRow := Flat;
+      var Keep := True;
+      if Assigned(C.Having) then
+        Keep := C.Having(
+          function(const Col: string): TValue
+          begin
+            Result := FlatRow.Get(Col);
+          end) = TTriState.Yes;
+      if Keep then
+        Result := Result + [FlatRow];
+    end;
+  finally
+    for var Pair in Buckets do
+      Pair.Value.Free;
+    Buckets.Free;
+    Order.Free;
+    Reps.Free;
+  end;
+end;
+
+// Eager WHERE filter — the grouping path must materialize before grouping.
+function FilterRows(const Rows: TArray<IRow>; const Pred: TValuePredicate): TArray<IRow>;
+begin
+  if not Assigned(Pred) then
+    Exit(Rows);
+  Result := nil;
+  for var R in Rows do
+    if Pred(
+      function(const Col: string): TValue
+      begin
+        Result := R.Get(Col);
+      end) = TTriState.Yes then
+      Result := Result + [R];
+end;
+
+// Resolves FROM + JOINs into composite rows, then applies WHERE / (GROUP BY +
+// aggregates + HAVING) / DISTINCT / ORDER BY / paging. The SELECT projection is
+// returned via Proj for the caller to apply (dynamic IRow) or materialize.
 function ExecuteMultiCore(const Query: IQuery; const Context: IQueryContext;
   out Proj: TArray<TProjColumn>): IQueryable<IRow>;
 begin
@@ -806,10 +969,20 @@ begin
 
   var Cq := TInMemoryCompiler.CompileMulti(Query);
   try
-    Proj := Cq.Projection;
-    var Q: TQuery<IRow> := Linq.From<IRow>(Composite);
-    if Assigned(Cq.Predicate) then
-      Q := Q.Where(MakeRowPredicate(Cq.Predicate));
+    var Q: TQuery<IRow>;
+    if Length(Cq.GroupBy) > 0 then
+    begin
+      // WHERE runs before grouping; the flat aggregate rows are the output.
+      Q := Linq.From<IRow>(GroupAndAggregate(FilterRows(Composite, Cq.Predicate), Cq));
+      Proj := nil;
+    end
+    else
+    begin
+      Q := Linq.From<IRow>(Composite);
+      if Assigned(Cq.Predicate) then
+        Q := Q.Where(MakeRowPredicate(Cq.Predicate));
+      Proj := Cq.Projection;
+    end;
     if Cq.Distinct then
       Q := Q.Distinct(MakeRowDistinct(DistinctColumns(Cq)));
     if Length(Cq.Orders) > 0 then
