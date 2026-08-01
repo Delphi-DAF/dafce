@@ -9,7 +9,8 @@ uses
   Daf.SQLCute.InMemory,
   FastPath.Feat in 'FastPath.Feat.pas',
   Projection.Feat in 'Projection.Feat.pas',
-  Context.Feat in 'Context.Feat.pas';
+  Context.Feat in 'Context.Feat.pas',
+  Parity.Feat in 'Parity.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;
