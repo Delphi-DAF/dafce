@@ -1,0 +1,48 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{9C6E5A20-3F4B-4D71-8E92-6B0D7C1A5F38}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="samples\InMemoryQuerySample\InMemoryQuerySample.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="samples\InMemoryJoinSample\InMemoryJoinSample.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="InMemoryQuerySample">
+        <MSBuild Projects="samples\InMemoryQuerySample\InMemoryQuerySample.dproj"/>
+    </Target>
+    <Target Name="InMemoryQuerySample:Clean">
+        <MSBuild Projects="samples\InMemoryQuerySample\InMemoryQuerySample.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="InMemoryQuerySample:Make">
+        <MSBuild Projects="samples\InMemoryQuerySample\InMemoryQuerySample.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="InMemoryJoinSample">
+        <MSBuild Projects="samples\InMemoryJoinSample\InMemoryJoinSample.dproj"/>
+    </Target>
+    <Target Name="InMemoryJoinSample:Clean">
+        <MSBuild Projects="samples\InMemoryJoinSample\InMemoryJoinSample.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="InMemoryJoinSample:Make">
+        <MSBuild Projects="samples\InMemoryJoinSample\InMemoryJoinSample.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="InMemoryQuerySample;InMemoryJoinSample"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="InMemoryQuerySample:Clean;InMemoryJoinSample:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="InMemoryQuerySample:Make;InMemoryJoinSample:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>
