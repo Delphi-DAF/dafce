@@ -8,7 +8,8 @@ uses
   Daf.SQLCute.Core in '..\..\SQLCute\Daf.SQLCute.Core.pas',
   Daf.SQLCute.InMemory,
   FastPath.Feat in 'FastPath.Feat.pas',
-  Projection.Feat in 'Projection.Feat.pas';
+  Projection.Feat in 'Projection.Feat.pas',
+  Context.Feat in 'Context.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

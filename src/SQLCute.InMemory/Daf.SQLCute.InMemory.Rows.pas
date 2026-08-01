@@ -68,6 +68,42 @@ type
     function Columns: TArray<string>;
   end;
 
+  /// <summary>One side of a composite join row: a source alias and its row.</summary>
+  TJoinChild = record
+    Alias: string;
+    Row: IRow;
+  end;
+
+  /// <summary>Internal access to a composite's children, so joins can append a side.</summary>
+  IJoinRow = interface
+    ['{A3D5E1F2-9C4B-4D6E-8F71-2B3C4D5E6F70}']
+    function Children: TArray<TJoinChild>;
+  end;
+
+  /// <summary>
+  ///   A composite row combining named child rows (Decision 4). Resolves a
+  ///   qualified <c>alias.column</c> to the matching side and a bare column to the
+  ///   first side that carries it, so joined rows expose every side's columns.
+  /// </summary>
+  TJoinRow = class(TInterfacedObject, IRow, IJoinRow)
+  private
+    FChildren: TArray<TJoinChild>;
+  public
+    constructor Create(const AChildren: TArray<TJoinChild>);
+    function Children: TArray<TJoinChild>;
+    function Get(const Column: string): TValue;
+    function Has(const Column: string): Boolean;
+    function Columns: TArray<string>;
+  end;
+
+  /// <summary>An all-NULL row — the absent side of an outer join.</summary>
+  TNullRow = class(TInterfacedObject, IRow)
+  public
+    function Get(const Column: string): TValue;
+    function Has(const Column: string): Boolean;
+    function Columns: TArray<string>;
+  end;
+
 /// <summary>Wraps the tri-state predicate as a two-valued predicate over a row (keep iff True).</summary>
 function MakeRowPredicate(const Pred: TValuePredicate): TPredicate<IRow>;
 /// <summary>ORDER BY comparer over rows (multi-column, direction + NULL policy).</summary>
@@ -76,6 +112,10 @@ function MakeRowComparer(const Orders: TArray<TOrderSpec>): IComparer<IRow>;
 function MakeRowDistinct(const Columns: TArray<string>): IEqualityComparer<IRow>;
 /// <summary>Applies a SELECT projection to a row (nil projection = the row unchanged).</summary>
 function ProjectRow(const Row: IRow; const Proj: TArray<TProjColumn>): IRow;
+/// <summary>A single-child composite tagged with a source alias (the FROM row).</summary>
+function SingleRow(const Alias: string; const Row: IRow): IRow;
+/// <summary>Appends a named right side to a composite row, yielding a new composite.</summary>
+function CombineRows(const Left: IRow; const Alias: string; const Right: IRow): IRow;
 
 implementation
 
@@ -98,7 +138,7 @@ end;
 
 function TDictRow.KeyOf(const Column: string): string;
 begin
-  Result := LowerCase(BareColumn(Column));
+  Result := NormalizeName(Column);   // snake_case ↔ PascalCase bridge
 end;
 
 procedure TDictRow.Put(const Column: string; const Value: TValue);
@@ -238,6 +278,114 @@ begin
     Result := Row
   else
     Result := TProjectedRow.Create(Row, Proj);
+end;
+
+{ TJoinRow }
+
+constructor TJoinRow.Create(const AChildren: TArray<TJoinChild>);
+begin
+  inherited Create;
+  FChildren := AChildren;
+end;
+
+function TJoinRow.Children: TArray<TJoinChild>;
+begin
+  Result := FChildren;
+end;
+
+function TJoinRow.Get(const Column: string): TValue;
+begin
+  var Dot := Pos('.', Column);
+  if Dot > 0 then
+  begin
+    var Prefix := Copy(Column, 1, Dot - 1);
+    var Rest := Copy(Column, Dot + 1, MaxInt);
+    for var Ch in FChildren do
+      if SameText(Ch.Alias, Prefix) then
+        Exit(Ch.Row.Get(Rest));
+    // qualified, but no alias matched — any side carrying the bare name
+    for var Ch in FChildren do
+      if Ch.Row.Has(Rest) then
+        Exit(Ch.Row.Get(Rest));
+    Exit(TValue.Empty);
+  end;
+  // bare name — the first side that carries it
+  for var Ch in FChildren do
+    if Ch.Row.Has(Column) then
+      Exit(Ch.Row.Get(Column));
+  Result := TValue.Empty;
+end;
+
+function TJoinRow.Has(const Column: string): Boolean;
+begin
+  var Dot := Pos('.', Column);
+  if Dot > 0 then
+  begin
+    var Prefix := Copy(Column, 1, Dot - 1);
+    var Rest := Copy(Column, Dot + 1, MaxInt);
+    for var Ch in FChildren do
+      if SameText(Ch.Alias, Prefix) then
+        Exit(Ch.Row.Has(Rest));
+  end;
+  for var Ch in FChildren do
+    if Ch.Row.Has(Column) then
+      Exit(True);
+  Result := False;
+end;
+
+function TJoinRow.Columns: TArray<string>;
+begin
+  Result := nil;
+  for var Ch in FChildren do
+    for var Col in Ch.Row.Columns do
+      Result := Result + [Ch.Alias + '.' + Col];
+end;
+
+{ TNullRow }
+
+function TNullRow.Get(const Column: string): TValue;
+begin
+  Result := TValue.Empty;
+end;
+
+function TNullRow.Has(const Column: string): Boolean;
+begin
+  Result := False;
+end;
+
+function TNullRow.Columns: TArray<string>;
+begin
+  Result := nil;
+end;
+
+{ composition helpers }
+
+function SingleRow(const Alias: string; const Row: IRow): IRow;
+var
+  Ch: TJoinChild;
+begin
+  Ch.Alias := Alias;
+  Ch.Row := Row;
+  Result := TJoinRow.Create([Ch]);
+end;
+
+function CombineRows(const Left: IRow; const Alias: string; const Right: IRow): IRow;
+var
+  Children: TArray<TJoinChild>;
+  JR: IJoinRow;
+  Ch: TJoinChild;
+begin
+  if Supports(Left, IJoinRow, JR) then
+    Children := JR.Children
+  else
+  begin
+    Ch.Alias := '';
+    Ch.Row := Left;
+    Children := [Ch];
+  end;
+  Ch.Alias := Alias;
+  Ch.Row := Right;
+  Result := TJoinRow.Create(Children + [Ch]);
 end;
 
 end.

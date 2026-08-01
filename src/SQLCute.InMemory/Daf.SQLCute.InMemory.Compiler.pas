@@ -79,13 +79,19 @@ type
     Offset: Int64;
   end;
 
-  /// <summary>Compiles an <c>IQuery</c> into a <c>TCompiledQuery</c> (single-source lane).</summary>
+  /// <summary>Compiles an <c>IQuery</c> into a <c>TCompiledQuery</c>.</summary>
   TInMemoryCompiler = record
     /// <summary>
-    ///   Builds the plan. Raises <see cref="EInMemoryQueryError"/> if the query
-    ///   needs the general multi-source lane. The caller owns the result.
+    ///   Builds the plan for the single-source lane. Raises
+    ///   <see cref="EInMemoryQueryError"/> if the query needs the general
+    ///   multi-source lane. The caller owns the result.
     /// </summary>
     class function Compile(const Query: IQuery): TCompiledQuery; static;
+    /// <summary>
+    ///   Same extraction without the single-source veto — for the general
+    ///   multi-source lane, where FROM/JOIN resolution is handled separately.
+    /// </summary>
+    class function CompileMulti(const Query: IQuery): TCompiledQuery; static;
   end;
 
 // --- Three-valued logic combinators (Decision 10) ---------------------------
@@ -105,8 +111,22 @@ function CompareForOrder(const L, R: TValue; const Spec: TOrderSpec): Integer;
 function SqlLikeMatch(const S, P: string): Boolean;
 /// <summary>The bare (unqualified) column name — drops any <c>table.</c> prefix.</summary>
 function BareColumn(const Column: string): string;
+/// <summary>
+///   Canonical match key for a column vs a Delphi member: bare, lower-cased and
+///   underscore-stripped, so SQL <c>user_id</c> matches member <c>UserId</c>
+///   (snake_case ↔ PascalCase) — the naming bridge the symmetry goal needs.
+/// </summary>
+function NormalizeName(const Column: string): string;
 /// <summary>Folds a value hash into an accumulator (wraparound; overflow-safe).</summary>
 function CombineHash(Acc, Value: Integer): Integer;
+/// <summary>3VL comparison of two values by operator (a NULL operand ⇒ Unknown).</summary>
+function CompareOp(Op: TWhereOp; const L, R: TValue): TTriState;
+/// <summary>
+///   Builds a tri-state predicate from a flat WHERE/ON clause list via the shared
+///   <c>Daf.SQLCute.WhereTree</c> (nil when there are no conditions). Reused by the
+///   multi-source engine for JOIN ON callbacks and future HAVING.
+/// </summary>
+function WherePredicate(const Clauses: TArray<TAbstractClause>): TValuePredicate;
 
 implementation
 
@@ -159,6 +179,11 @@ begin
     Result := Copy(Column, P + 1, MaxInt)
   else
     Result := Column;
+end;
+
+function NormalizeName(const Column: string): string;
+begin
+  Result := StringReplace(LowerCase(BareColumn(Column)), '_', '', [rfReplaceAll]);
 end;
 
 {$IFOPT Q+}{$DEFINE _RESTORE_Q}{$ENDIF}
@@ -467,6 +492,19 @@ begin
   end;
 end;
 
+function WherePredicate(const Clauses: TArray<TAbstractClause>): TValuePredicate;
+begin
+  var Root := TWhereTree.Build(Clauses);
+  try
+    if Root = nil then
+      Result := nil
+    else
+      Result := BuildNode(Root);   // extracted data captured; the tree is freed below
+  finally
+    Root.Free;
+  end;
+end;
+
 { ---- Source / shape analysis (fail-fast, Decision 5) ---- }
 
 // Extracts the SELECT projection as (source -> output) columns. A lone '*'
@@ -570,21 +608,13 @@ begin
       Exit(True);
 end;
 
-{ TInMemoryCompiler }
-
-class function TInMemoryCompiler.Compile(const Query: IQuery): TCompiledQuery;
+// Shared extraction: WHERE predicate, ORDER BY, projection, DISTINCT, LIMIT/OFFSET.
+// Source shape (single vs multi) is vetoed by the callers, not here.
+function Populate(const Clauses: TArray<TAbstractClause>): TCompiledQuery;
 begin
-  var Clauses := Query.Clauses;
-  EnsureSingleSource(Clauses);       // fail fast before allocating the plan
   Result := TCompiledQuery.Create;
   try
-    var Root := TWhereTree.Build(Clauses);
-    try
-      if Root <> nil then
-        Result.Predicate := BuildNode(Root);
-    finally
-      Root.Free;                     // predicate captured extracted data, not the tree
-    end;
+    Result.Predicate := WherePredicate(Clauses);
     Result.Orders := ExtractOrders(Clauses);
     Result.Projection := ExtractProjection(Clauses);
     Result.Distinct := HasDistinct(Clauses);
@@ -593,6 +623,21 @@ begin
     Result.Free;
     raise;
   end;
+end;
+
+{ TInMemoryCompiler }
+
+class function TInMemoryCompiler.Compile(const Query: IQuery): TCompiledQuery;
+begin
+  var Clauses := Query.Clauses;
+  EnsureSingleSource(Clauses);       // fail fast before allocating the plan
+  Result := Populate(Clauses);
+end;
+
+class function TInMemoryCompiler.CompileMulti(const Query: IQuery): TCompiledQuery;
+begin
+  // No single-source veto: FROM/JOIN resolution is the engine's job.
+  Result := Populate(Query.Clauses);
 end;
 
 end.

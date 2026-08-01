@@ -120,6 +120,40 @@ type
     function Over(const Source: IEnumerable<T>): IQueryable<T>; overload;
   end;
 
+  /// <summary>
+  ///   Per-call catalog mapping source names to row sequences (Decision 6 — never
+  ///   global). Supplied at execution time for the general multi-source lane.
+  /// </summary>
+  IQueryContext = interface
+    ['{B4E6F2A3-1D5C-4E7F-9A82-3C4D5E6F7081}']
+    /// <summary>The rows for a named source; raises when the name is unmapped.</summary>
+    function Resolve(const Name: string): TArray<IRow>;
+    /// <summary>True when a source is mapped to <c>Name</c>.</summary>
+    function Has(const Name: string): Boolean;
+  end;
+
+  /// <summary>
+  ///   Builds an <c>IQueryContext</c>: <c>Map('people', list).Map('orders', list)</c>.
+  ///   Not ref-counted — the caller owns it and frees it (a per-call, short-lived
+  ///   catalog). Typed sources are adapted to <c>IRow</c> up front (objects via
+  ///   <c>TRttiRow&lt;T&gt;</c>; an <c>IRow</c> element is used as-is).
+  /// </summary>
+  TQueryContext = class(TInterfacedObject, IQueryContext)
+  protected
+    function _AddRef: Integer; stdcall;
+    function _Release: Integer; stdcall;
+  private
+    FSources: TDictionary<string, TArray<IRow>>;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    function Map<T>(const Name: string; const Source: TEnumerable<T>): TQueryContext; overload;
+    function Map<T>(const Name: string; const Source: TArray<T>): TQueryContext; overload;
+    function Map(const Name: string; const Rows: TArray<IRow>): TQueryContext; overload;
+    function Resolve(const Name: string): TArray<IRow>;
+    function Has(const Name: string): Boolean;
+  end;
+
   /// <summary>Entry point: compile a SQLCute AST onto the in-memory engine.</summary>
   TInMemory = record
   strict private
@@ -150,6 +184,11 @@ type
       const Query: IQuery; const Source: TArray<TSource>): IQueryable<TResult>; overload; static;
     class function Project<TSource; TResult: class, constructor>(
       const Query: IQuery; const Source: IEnumerable<TSource>): IQueryable<TResult>; overload; static;
+    /// <summary>Runs a multi-source <c>Query</c> over a context, yielding dynamic <c>IRow</c>s (JOINs, projected).</summary>
+    class function Rows(const Query: IQuery; const Context: IQueryContext): IQueryable<IRow>; overload; static;
+    /// <summary>Runs a multi-source <c>Query</c> over a context, materializing each final row into <c>TResult</c>.</summary>
+    class function Project<TResult: class, constructor>(
+      const Query: IQuery; const Context: IQueryContext): IQueryable<TResult>; overload; static;
   end;
 
 /// <summary>
@@ -164,12 +203,22 @@ procedure AssignMember(const Instance: TObject; M: TRttiMember; const Source: TV
 /// <summary>DISTINCT output columns on the pre-projection row (projection sources, or nil = all).</summary>
 function DistinctColumns(const C: TCompiledQuery): TArray<string>;
 
+/// <summary>
+///   Resolves FROM + JOINs against the context and applies WHERE / DISTINCT /
+///   ORDER BY / paging (deferred), returning the pre-projection composite rows;
+///   the SELECT projection is returned via <c>Proj</c>. Declared here (not
+///   implementation-local) so the generic context <c>Project</c> can reference it.
+/// </summary>
+function ExecuteMultiCore(const Query: IQuery; const Context: IQueryContext;
+  out Proj: TArray<TProjColumn>): IQueryable<IRow>;
+
 implementation
 
 uses
-  System.TypInfo,    // TMemberVisibility (mvPublic / mvPublished)
-  Daf.Comparers,     // TValueComparers, IsNullValue
-  Daf.Rtti;          // TRttiProperty smart SetValue + CoerceForAssign (shared coercion)
+  System.TypInfo,          // TMemberVisibility (mvPublic / mvPublished)
+  Daf.SQLCute.Clauses,     // TFromClause / TJoinClause / TJoinType (multi-source engine)
+  Daf.Comparers,           // TValueComparers, IsNullValue
+  Daf.Rtti;                // TRttiProperty smart SetValue + CoerceForAssign (shared coercion)
 
 // Assigns a column value to a result-class member. A NULL source leaves the
 // member at its default (a TNullable member stays IsNull). Coercion (incl.
@@ -207,21 +256,21 @@ function TRttiAccessors<T>.Resolve(const Column: string): TRttiMember;
 var
   M: TRttiMember;
 begin
-  var Key := LowerCase(BareColumn(Column));
+  var Key := NormalizeName(Column);   // snake_case ↔ PascalCase bridge
   if FCache.TryGetValue(Key, M) then
     Exit(M);
   M := nil;
   if FType <> nil then
   begin
     for var P in FType.GetProperties do
-      if SameText(P.Name, Key) then
+      if NormalizeName(P.Name) = Key then
       begin
         M := P;
         Break;
       end;
     if M = nil then
       for var F in FType.GetFields do
-        if SameText(F.Name, Key) then
+        if NormalizeName(F.Name) = Key then
         begin
           M := F;
           Break;
@@ -329,21 +378,21 @@ function TResultWriter<TResult>.Resolve(const Name: string): TRttiMember;
 var
   M: TRttiMember;
 begin
-  var Key := LowerCase(Name);
+  var Key := NormalizeName(Name);   // snake_case ↔ PascalCase bridge
   if FCache.TryGetValue(Key, M) then
     Exit(M);
   M := nil;
   if FType <> nil then
   begin
     for var P in FType.GetProperties do
-      if SameText(P.Name, Name) and P.IsWritable then
+      if (NormalizeName(P.Name) = Key) and P.IsWritable then
       begin
         M := P;
         Break;
       end;
     if M = nil then
       for var F in FType.GetFields do
-        if SameText(F.Name, Name) then
+        if NormalizeName(F.Name) = Key then
         begin
           M := F;
           Break;
@@ -494,6 +543,287 @@ begin
   end;
 end;
 
+{ TQueryContext }
+
+constructor TQueryContext.Create;
+begin
+  inherited Create;
+  FSources := TDictionary<string, TArray<IRow>>.Create;
+end;
+
+destructor TQueryContext.Destroy;
+begin
+  FSources.Free;
+  inherited;
+end;
+
+// Not ref-counted: a per-call context is owned and freed by the caller, so a
+// short-lived IQueryContext parameter never disposes it.
+function TQueryContext._AddRef: Integer;
+begin
+  Result := -1;
+end;
+
+function TQueryContext._Release: Integer;
+begin
+  Result := -1;
+end;
+
+function TQueryContext.Map<T>(const Name: string; const Source: TEnumerable<T>): TQueryContext;
+begin
+  var Rows: TArray<IRow> := nil;
+  if TypeInfo(T) = TypeInfo(IRow) then
+  begin
+    for var X in Source do
+      Rows := Rows + [TValue.From<T>(X).AsType<IRow>];
+  end
+  else
+  begin
+    var Acc: IRttiAccessors<T> := TRttiAccessors<T>.Create;
+    for var X in Source do
+      Rows := Rows + [TRttiRow<T>.Create(Acc, X)];
+  end;
+  FSources.AddOrSetValue(LowerCase(Name), Rows);
+  Result := Self;
+end;
+
+function TQueryContext.Map<T>(const Name: string; const Source: TArray<T>): TQueryContext;
+begin
+  var Rows: TArray<IRow> := nil;
+  if TypeInfo(T) = TypeInfo(IRow) then
+  begin
+    for var X in Source do
+      Rows := Rows + [TValue.From<T>(X).AsType<IRow>];
+  end
+  else
+  begin
+    var Acc: IRttiAccessors<T> := TRttiAccessors<T>.Create;
+    for var X in Source do
+      Rows := Rows + [TRttiRow<T>.Create(Acc, X)];
+  end;
+  FSources.AddOrSetValue(LowerCase(Name), Rows);
+  Result := Self;
+end;
+
+function TQueryContext.Map(const Name: string; const Rows: TArray<IRow>): TQueryContext;
+begin
+  FSources.AddOrSetValue(LowerCase(Name), Rows);
+  Result := Self;
+end;
+
+function TQueryContext.Resolve(const Name: string): TArray<IRow>;
+begin
+  if not FSources.TryGetValue(LowerCase(Name), Result) then
+    raise EInMemoryQueryError.CreateFmt('Query context has no source mapped to "%s".', [Name]);
+end;
+
+function TQueryContext.Has(const Name: string): Boolean;
+begin
+  Result := FSources.ContainsKey(LowerCase(Name));
+end;
+
+{ multi-source engine (Phase 3A: FROM + JOINs) }
+
+// Fail-fast on the multi-source features not yet handled by this lane.
+procedure EnsureMultiSupported(const Clauses: TArray<TAbstractClause>);
+begin
+  for var C in Clauses do
+  begin
+    if C is TUnionClause then
+      raise EInMemoryQueryError.Create('Set operations (UNION/INTERSECT/EXCEPT) require Phase 3C.');
+    if (C is TGroupByClause) or (C is THavingClause) then
+      raise EInMemoryQueryError.Create('GROUP BY / HAVING aggregation requires Phase 3B.');
+    if C is TJoinSubqueryClause then
+      raise EInMemoryQueryError.Create('Subquery JOINs require Phase 3C.');
+    if (C is TFromSubqueryClause) or (C is TFromRawClause) then
+      raise EInMemoryQueryError.Create('Derived-table / raw FROM sources require Phase 3C.');
+    if C is TWithClause then
+      raise EInMemoryQueryError.Create('CTEs (WITH) are not supported by the in-memory backend.');
+    if (C is TInsertClause) or (C is TUpdateSetClause) or (C is TDeleteClause) then
+      raise EInMemoryQueryError.Create('The in-memory backend is read-only; DML stays SQL-only.');
+  end;
+end;
+
+// The ON predicate over the combined row: column-column, callback (WHERE clauses),
+// or (unsupported) raw. CROSS / empty ON keeps every pair.
+function BuildJoinOn(const Jc: TJoinClause): TPredicate<IRow>;
+begin
+  if Length(Jc.ConditionClauses) > 0 then
+  begin
+    var Pred := WherePredicate(Jc.ConditionClauses);
+    if Assigned(Pred) then
+      Result := MakeRowPredicate(Pred)
+    else
+      Result := function(R: IRow): Boolean begin Result := True; end;
+  end
+  else if Jc.Col1 <> '' then
+  begin
+    var Op := ParseWhereOp(Jc.Op);
+    var C1 := Jc.Col1;
+    var C2 := Jc.Col2;
+    Result :=
+      function(R: IRow): Boolean
+      begin
+        Result := CompareOp(Op, R.Get(C1), R.Get(C2)) = TTriState.Yes;
+      end;
+  end
+  else if Jc.Condition <> '' then
+    raise EInMemoryQueryError.Create(
+      'Raw JOIN ON conditions cannot be evaluated in memory; use a column or callback ON.')
+  else
+    Result := function(R: IRow): Boolean begin Result := True; end;
+end;
+
+// An all-NULL left composite, carrying the same aliases as the accumulated left
+// side, for the unmatched right rows of a RIGHT / FULL OUTER join.
+function NullLeft(const Left: TArray<IRow>): IRow;
+var
+  Children: TArray<TJoinChild>;
+  JR: IJoinRow;
+begin
+  Children := nil;
+  if (Length(Left) > 0) and Supports(Left[0], IJoinRow, JR) then
+    for var Ch in JR.Children do
+    begin
+      var NC: TJoinChild;
+      NC.Alias := Ch.Alias;
+      NC.Row := TNullRow.Create;
+      Children := Children + [NC];
+    end;
+  Result := TJoinRow.Create(Children);
+end;
+
+function ApplyJoin(const Left: TArray<IRow>; const Context: IQueryContext;
+  const Jc: TJoinClause): TArray<IRow>;
+begin
+  var RightAlias := Jc.Alias;
+  if RightAlias = '' then
+    RightAlias := Jc.Table;
+  var Rights := Context.Resolve(Jc.Table);
+  var OnPred := BuildJoinOn(Jc);
+  Result := nil;
+  case Jc.JoinType of
+    TJoinType.Inner, TJoinType.Cross:
+      for var L in Left do
+        for var R in Rights do
+        begin
+          var Combined := CombineRows(L, RightAlias, R);
+          if (Jc.JoinType = TJoinType.Cross) or OnPred(Combined) then
+            Result := Result + [Combined];
+        end;
+    TJoinType.Left:
+      for var L in Left do
+      begin
+        var Matched := False;
+        for var R in Rights do
+        begin
+          var Combined := CombineRows(L, RightAlias, R);
+          if OnPred(Combined) then
+          begin
+            Result := Result + [Combined];
+            Matched := True;
+          end;
+        end;
+        if not Matched then
+          Result := Result + [CombineRows(L, RightAlias, TNullRow.Create)];
+      end;
+    TJoinType.Right:
+      for var R in Rights do
+      begin
+        var Matched := False;
+        for var L in Left do
+        begin
+          var Combined := CombineRows(L, RightAlias, R);
+          if OnPred(Combined) then
+          begin
+            Result := Result + [Combined];
+            Matched := True;
+          end;
+        end;
+        if not Matched then
+          Result := Result + [CombineRows(NullLeft(Left), RightAlias, R)];
+      end;
+    TJoinType.FullOuter:
+      begin
+        var MatchedRight := TDictionary<IRow, Byte>.Create;
+        try
+          for var L in Left do
+          begin
+            var Matched := False;
+            for var R in Rights do
+            begin
+              var Combined := CombineRows(L, RightAlias, R);
+              if OnPred(Combined) then
+              begin
+                Result := Result + [Combined];
+                Matched := True;
+                MatchedRight.AddOrSetValue(R, 0);
+              end;
+            end;
+            if not Matched then
+              Result := Result + [CombineRows(L, RightAlias, TNullRow.Create)];
+          end;
+          for var R in Rights do
+            if not MatchedRight.ContainsKey(R) then
+              Result := Result + [CombineRows(NullLeft(Left), RightAlias, R)];
+        finally
+          MatchedRight.Free;
+        end;
+      end;
+  end;
+end;
+
+// Resolves FROM + JOINs into composite rows, then applies WHERE / DISTINCT /
+// ORDER BY / paging (deferred). The SELECT projection is returned via Proj for
+// the caller to apply (dynamic IRow) or materialize (TResult).
+function ExecuteMultiCore(const Query: IQuery; const Context: IQueryContext;
+  out Proj: TArray<TProjColumn>): IQueryable<IRow>;
+begin
+  var Clauses := Query.Clauses;
+  EnsureMultiSupported(Clauses);
+
+  var FromCl: TFromClause := nil;
+  for var C in Clauses do
+    if C is TFromClause then
+    begin
+      FromCl := TFromClause(C);
+      Break;
+    end;
+  if FromCl = nil then
+    raise EInMemoryQueryError.Create('A multi-source query needs a FROM table mapped in the context.');
+
+  var FromAlias := FromCl.Alias;
+  if FromAlias = '' then
+    FromAlias := FromCl.Table;
+
+  var Composite: TArray<IRow> := nil;
+  for var R in Context.Resolve(FromCl.Table) do
+    Composite := Composite + [SingleRow(FromAlias, R)];
+
+  for var C in Clauses do
+    if C is TJoinClause then
+      Composite := ApplyJoin(Composite, Context, TJoinClause(C));
+
+  var Cq := TInMemoryCompiler.CompileMulti(Query);
+  try
+    Proj := Cq.Projection;
+    var Q: TQuery<IRow> := Linq.From<IRow>(Composite);
+    if Assigned(Cq.Predicate) then
+      Q := Q.Where(MakeRowPredicate(Cq.Predicate));
+    if Cq.Distinct then
+      Q := Q.Distinct(MakeRowDistinct(DistinctColumns(Cq)));
+    if Length(Cq.Orders) > 0 then
+      Q := Q.OrderBy(MakeRowComparer(Cq.Orders));
+    if Cq.HasOffset and (Cq.Offset > 0) then
+      Q := Q.Skip(Integer(Cq.Offset));
+    if Cq.HasLimit then
+      Q := Q.Take(Integer(Cq.Limit));
+    Result := Q.AsQueryable;
+  finally
+    Cq.Free;   // predicate/orders/projection are captured / copied out above
+  end;
+end;
+
 class function TInMemory.MapToRows<T>(const Start: TQuery<T>): TQuery<IRow>;
 begin
   if TypeInfo(T) = TypeInfo(IRow) then
@@ -612,6 +942,30 @@ class function TInMemory.Project<TSource, TResult>(
   const Query: IQuery; const Source: IEnumerable<TSource>): IQueryable<TResult>;
 begin
   Result := ProjectCore<TSource, TResult>(Query, Linq.From<TSource>(Source));
+end;
+
+class function TInMemory.Rows(const Query: IQuery; const Context: IQueryContext): IQueryable<IRow>;
+begin
+  var Proj: TArray<TProjColumn>;
+  var Q: TQuery<IRow> := ExecuteMultiCore(Query, Context, Proj);
+  Result := Q.Select<IRow>(
+    function(R: IRow): IRow
+    begin
+      Result := ProjectRow(R, Proj);
+    end).AsQueryable;
+end;
+
+class function TInMemory.Project<TResult>(
+  const Query: IQuery; const Context: IQueryContext): IQueryable<TResult>;
+begin
+  var Proj: TArray<TProjColumn>;
+  var Q: TQuery<IRow> := ExecuteMultiCore(Query, Context, Proj);
+  var Writer: IResultWriter<TResult> := TResultWriter<TResult>.Create;
+  Result := Q.Select<TResult>(
+    function(R: IRow): TResult
+    begin
+      Result := Writer.Materialize(R, Proj);
+    end).AsQueryable;
 end;
 
 end.
