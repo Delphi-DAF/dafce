@@ -115,6 +115,7 @@
         <DCCReference Include="Daf.SQLCute.Abstractions.dcp"/>
         <DCCReference Include="Daf.SQLCute.dcp"/>
         <DCCReference Include="Daf.SQLCute.InMemory.Compiler.pas"/>
+        <DCCReference Include="Daf.SQLCute.InMemory.Rows.pas"/>
         <DCCReference Include="Daf.SQLCute.InMemory.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

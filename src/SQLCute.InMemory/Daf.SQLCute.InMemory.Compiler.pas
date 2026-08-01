@@ -56,6 +56,12 @@ type
     Nulls: TNullsPolicy;
   end;
 
+  /// <summary>One projected (output) column: the source column and its output name.</summary>
+  TProjColumn = record
+    Source: string;   // underlying column read from the row
+    Output: string;   // alias when present, otherwise the column name
+  end;
+
   /// <summary>
   ///   Non-generic compiled plan for a single-source query. Reusable across
   ///   sources; carries no reference to the original AST (everything is
@@ -65,6 +71,7 @@ type
   public
     Predicate: TValuePredicate;   // nil = no WHERE
     Orders: TArray<TOrderSpec>;
+    Projection: TArray<TProjColumn>;   // nil = no reshape (all columns / preserve T)
     Distinct: Boolean;
     HasLimit: Boolean;
     Limit: Int64;
@@ -462,14 +469,29 @@ end;
 
 { ---- Source / shape analysis (fail-fast, Decision 5) ---- }
 
-procedure EnsureNoReshape(Sel: TSelectClause);
+// Extracts the SELECT projection as (source -> output) columns. A lone '*'
+// means "all columns" (no reshape -> nil). Raw / subquery SELECT columns need
+// the general lane and fail fast here.
+function ExtractProjection(const Clauses: TArray<TAbstractClause>): TArray<TProjColumn>;
 begin
-  for var Col in Sel.Columns do
-    if (Col.SubQuery <> nil) or Col.IsRaw or (Col.Alias <> '')
-       or ((Col.Column <> '') and (Col.Column <> '*')) then
-      raise EInMemoryQueryError.Create(
-        'SELECT projection reshapes the row; use typed projection (Phase 2). '
-        + 'The single-source fast path preserves the element type.');
+  Result := nil;
+  for var C in Clauses do
+    if C is TSelectClause then
+      for var Col in TSelectClause(C).Columns do
+      begin
+        if (Col.Column = '*') and (Col.Alias = '') and (not Col.IsRaw) and (Col.SubQuery = nil) then
+          Continue;   // '*' — no explicit projection entry
+        if Col.IsRaw or (Col.SubQuery <> nil) then
+          raise EInMemoryQueryError.Create(
+            'Raw / subquery SELECT columns require the general lane (Phase 3).');
+        var P: TProjColumn;
+        P.Source := Col.Column;
+        if Col.Alias <> '' then
+          P.Output := Col.Alias
+        else
+          P.Output := Col.Column;
+        Result := Result + [P];
+      end;
 end;
 
 procedure EnsureSingleSource(const Clauses: TArray<TAbstractClause>);
@@ -501,8 +523,6 @@ begin
         raise EInMemoryQueryError.Create(
           'Subquery / EXISTS WHERE conditions require a query context (Phase 3).');
     end;
-    if C is TSelectClause then
-      EnsureNoReshape(TSelectClause(C));
     if (C is TOrderByClause) and TOrderByClause(C).IsRaw then
       raise EInMemoryQueryError.Create('Raw ORDER BY expressions cannot be evaluated in memory.');
   end;
@@ -566,6 +586,7 @@ begin
       Root.Free;                     // predicate captured extracted data, not the tree
     end;
     Result.Orders := ExtractOrders(Clauses);
+    Result.Projection := ExtractProjection(Clauses);
     Result.Distinct := HasDistinct(Clauses);
     ExtractLimits(Clauses, Result);
   except

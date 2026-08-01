@@ -58,6 +58,12 @@ type
     procedure SetValue(Instance: Pointer;const AValue: TValue);
   end;
 
+  TRttiFieldHelper = class Helper for TRttiField
+  public
+    /// <summary>Smart set (coercion + record Implicit operator), symmetric with the property helper.</summary>
+    procedure SetValue(Instance: Pointer; const AValue: TValue);
+  end;
+
   TRttiTypeHelper = class helper for TRttiType
   private
   public
@@ -100,6 +106,15 @@ function TryGetMethod(const Instance: TObject; const MethodName: string; out Met
 function GetInterfaceIID(const I: IInterface; var IID: TGUID): Boolean;
 function GetRttiFromInterface(AIntf: IInterface; out RttiType: TRttiInterfaceType): Boolean;
 function HasRtti(PInfo: PTypeInfo): Boolean;
+/// <summary>
+///   Converts <c>Source</c> to a value assignable to <c>Target</c>, returning False when no
+///   reasonable conversion exists. Handles: exact type; a record with an <c>Implicit(X)</c>
+///   operator returning <c>Target</c> (the value is coerced to <c>X</c> then wrapped — e.g.
+///   <c>TNullable&lt;X&gt;</c>); a direct cast; and coercion through a Variant. Shared by the
+///   smart <c>SetValue</c> helpers and by callers that materialize values (e.g. the in-memory
+///   query engine).
+/// </summary>
+function CoerceForAssign(const Target: TRttiType; const Source: TValue; out Res: TValue): Boolean;
 
 implementation
 
@@ -432,30 +447,79 @@ end;
 
 { TRttiPropertyHelper }
 
-procedure TRttiPropertyHelper.SetValue(Instance: Pointer;const AValue: TValue);
+function CoerceForAssign(const Target: TRttiType; const Source: TValue; out Res: TValue): Boolean;
 begin
-  var
-  ValueToSet := AValue;
-  if PropertyType is TRttiRecordType then
+  Res := TValue.Empty;
+  if Target = nil then
+    Exit(False);
+
+  // 1. Exact type — nothing to convert.
+  if Source.TypeInfo = Target.Handle then
   begin
-    // Probar si existe operador de conversion implicita
-    for var M in PropertyType.GetMethods do
-    begin
-      if(M.Name = '&op_Implicit')then
+    Res := Source;
+    Exit(True);
+  end;
+
+  // 2. Record with an Implicit(X) operator returning Target (e.g. TNullable<X>):
+  //    coerce the source to X, then wrap it through the operator.
+  if Target is TRttiRecordType then
+    for var Op in Target.GetMethods do
+      if SameText(Op.Name, '&op_Implicit') and (Op.ReturnType <> nil)
+         and (Op.ReturnType.Handle = Target.Handle) and (Length(Op.GetParameters) = 1) then
       begin
-        var
-        P := M.GetParameters[0];
-        if P.ParamType.Handle = ValueToSet.TypeInfo then
+        var ParamT := Op.GetParameters[0].ParamType;
+        var Inner: TValue;
+        if (ParamT <> nil) and CoerceForAssign(ParamT, Source, Inner) then
         begin
-          ValueToSet := M.Invoke(GetValue(Instance),[ValueToSet]);
-          inherited SetValue(Instance, ValueToSet);
-          Break;
+          var Dummy: TValue;
+          TValue.Make(nil, Target.Handle, Dummy);   // static operator: instance is a dummy
+          Res := Op.Invoke(Dummy, [Inner]);
+          Exit(True);
         end;
       end;
+
+  // 3. Direct cast (compatible ordinals, class/interface hierarchy, …).
+  if Source.TryCast(Target.Handle, Res) then
+    Exit(True);
+
+  // 4. Coerce through a Variant (numeric/string/date/bool families).
+  try
+    var Tmp := TValue.FromVariant(Source.AsVariant);
+    if Tmp.TypeInfo = Target.Handle then
+    begin
+      Res := Tmp;
+      Exit(True);
     end;
-  end
+    Result := Tmp.TryCast(Target.Handle, Res);
+  except
+    Result := False;
+  end;
+end;
+
+procedure TRttiPropertyHelper.SetValue(Instance: Pointer;const AValue: TValue);
+var
+  V: TValue;
+begin
+  // Smart set via CoerceForAssign: exact type, a record Implicit operator (e.g.
+  // TNullable), a direct cast, or Variant coercion. We already hold the
+  // TRttiProperty, so we set through modern RTTI directly — no name re-lookup
+  // (SetPropValue would re-resolve the PPropInfo) and public members work too.
+  // If nothing converts, let modern RTTI raise a clear EInvalidCast.
+  if CoerceForAssign(PropertyType, AValue, V) then
+    inherited SetValue(Instance, V)
   else
-    SetPropValue(Instance, Self.Name, ValueToSet.AsVariant);
+    inherited SetValue(Instance, AValue);
+end;
+
+procedure TRttiFieldHelper.SetValue(Instance: Pointer; const AValue: TValue);
+var
+  V: TValue;
+begin
+  // Same smart coercion as the property helper (see CoerceForAssign), via modern RTTI.
+  if CoerceForAssign(FieldType, AValue, V) then
+    inherited SetValue(Instance, V)
+  else
+    inherited SetValue(Instance, AValue);
 end;
 
 { TRttiTypeHelper }

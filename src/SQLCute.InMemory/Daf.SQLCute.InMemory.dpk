@@ -36,6 +36,7 @@ requires
 
 contains
   Daf.SQLCute.InMemory.Compiler in 'Daf.SQLCute.InMemory.Compiler.pas',
+  Daf.SQLCute.InMemory.Rows in 'Daf.SQLCute.InMemory.Rows.pas',
   Daf.SQLCute.InMemory in 'Daf.SQLCute.InMemory.pas';
 
 end.
