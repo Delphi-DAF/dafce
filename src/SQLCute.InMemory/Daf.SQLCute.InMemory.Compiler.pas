@@ -46,6 +46,14 @@ type
   /// <summary>A tri-state predicate over a column-getter — element-agnostic.</summary>
   TValuePredicate = reference to function(const Get: TColumnGetter): TTriState;
 
+  /// <summary>
+  ///   Evaluates a subquery WHERE leaf (IN / NOT IN / EXISTS / NOT EXISTS) against
+  ///   execution-time state. Supplied by the multi-source engine (which owns the
+  ///   context); the compiler captures it while building the predicate.
+  /// </summary>
+  TSubqueryResolver = reference to function(const Clause: TWhereClause;
+    const Get: TColumnGetter): TTriState;
+
   /// <summary>NULL-ordering policy for one ORDER BY column.</summary>
   TNullsPolicy = (Default, First, Last);
 
@@ -140,11 +148,27 @@ function CompareOp(Op: TWhereOp; const L, R: TValue): TTriState;
 ///   multi-source engine for JOIN ON callbacks and future HAVING.
 /// </summary>
 function WherePredicate(const Clauses: TArray<TAbstractClause>): TValuePredicate;
+/// <summary>
+///   Installs the subquery resolver used while building the next predicate(s);
+///   pass <c>nil</c> to clear (subquery WHERE leaves then fail fast). Set by the
+///   engine around <c>CompileMulti</c>; the built predicate captures it.
+/// </summary>
+procedure UseSubqueryResolver(const Resolver: TSubqueryResolver);
 
 implementation
 
 uses
   Daf.Comparers;   // IsNullValue
+
+var
+  // Subquery resolver in effect while a predicate is being built (see
+  // UseSubqueryResolver). Captured by subquery leaves; not read at run time.
+  FSubqueryResolver: TSubqueryResolver = nil;
+
+procedure UseSubqueryResolver(const Resolver: TSubqueryResolver);
+begin
+  FSubqueryResolver := Resolver;
+end;
 
 { ---- Three-valued logic ---- }
 
@@ -459,8 +483,19 @@ begin
       TWhereOp.Raw:
         raise EInMemoryQueryError.Create('Raw WHERE fragments cannot be evaluated in memory.');
       TWhereOp.&In, TWhereOp.NotIn, TWhereOp.&Exists, TWhereOp.NotExists:
-        raise EInMemoryQueryError.Create(
-          'Subquery / EXISTS WHERE conditions require a query context (Phase 3).');
+        if (W.SubQuery <> nil) and Assigned(FSubqueryResolver) then
+        begin
+          var Resolver: TSubqueryResolver := FSubqueryResolver;   // explicit type: assign, don't invoke
+          var WC := W;
+          Exit(
+            function(const Get: TColumnGetter): TTriState
+            begin
+              Result := Resolver(WC, Get);
+            end);
+        end
+        else
+          raise EInMemoryQueryError.Create(
+            'Subquery / EXISTS WHERE conditions require a query context.');
     else
       raise EInMemoryQueryError.Create('Unsupported WHERE operator in the single-source fast path.');
     end;

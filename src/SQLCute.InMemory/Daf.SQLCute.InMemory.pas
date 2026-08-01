@@ -204,13 +204,12 @@ procedure AssignMember(const Instance: TObject; M: TRttiMember; const Source: TV
 function DistinctColumns(const C: TCompiledQuery): TArray<string>;
 
 /// <summary>
-///   Resolves FROM + JOINs against the context and applies WHERE / DISTINCT /
-///   ORDER BY / paging (deferred), returning the pre-projection composite rows;
-///   the SELECT projection is returned via <c>Proj</c>. Declared here (not
-///   implementation-local) so the generic context <c>Project</c> can reference it.
+///   Runs a multi-source query end-to-end against the context — FROM + JOINs,
+///   WHERE, GROUP BY, projection and set operations (UNION/…) — yielding the
+///   final projected <c>IRow</c>s. Declared here (not implementation-local) so
+///   the generic context <c>Project</c> can reference it.
 /// </summary>
-function ExecuteMultiCore(const Query: IQuery; const Context: IQueryContext;
-  out Proj: TArray<TProjColumn>): IQueryable<IRow>;
+function ExecuteToRows(const Query: IQuery; const Context: IQueryContext): IQueryable<IRow>;
 
 implementation
 
@@ -630,10 +629,8 @@ procedure EnsureMultiSupported(const Clauses: TArray<TAbstractClause>);
 begin
   for var C in Clauses do
   begin
-    if C is TUnionClause then
-      raise EInMemoryQueryError.Create('Set operations (UNION/INTERSECT/EXCEPT) require Phase 3C.');
     if C is TJoinSubqueryClause then
-      raise EInMemoryQueryError.Create('Subquery JOINs require Phase 3C.');
+      raise EInMemoryQueryError.Create('Subquery JOINs are not supported by the in-memory backend.');
     if (C is TFromSubqueryClause) or (C is TFromRawClause) then
       raise EInMemoryQueryError.Create('Derived-table / raw FROM sources require Phase 3C.');
     if C is TWithClause then
@@ -936,6 +933,72 @@ begin
       Result := Result + [R];
 end;
 
+function ProjectedRows(const Query: IQuery; const Context: IQueryContext): IQueryable<IRow>; forward;
+
+type
+  TSubqueryResult = record
+    Clause: Pointer;
+    Values: TArray<TValue>;
+    NonEmpty: Boolean;
+  end;
+
+// Resolves an uncorrelated subquery WHERE leaf against the context. Each subquery
+// is evaluated once and cached by clause identity; IN/NOT IN test membership in the
+// subquery's first output column, EXISTS/NOT EXISTS test non-emptiness (3VL).
+function MakeSubqueryResolver(const Context: IQueryContext): TSubqueryResolver;
+var
+  Cache: TArray<TSubqueryResult>;   // captured by the closure (managed; freed with it)
+begin
+  Cache := nil;
+  Result :=
+    function(const Clause: TWhereClause; const Get: TColumnGetter): TTriState
+    begin
+      var Idx := -1;
+      for var I := 0 to High(Cache) do
+        if Cache[I].Clause = Pointer(Clause) then
+        begin
+          Idx := I;
+          Break;
+        end;
+      if Idx < 0 then
+      begin
+        var SR: TSubqueryResult;
+        SR.Clause := Pointer(Clause);
+        SR.Values := nil;
+        var SubRows := TQuery<IRow>(ProjectedRows(Clause.SubQuery as IQuery, Context)).ToArray;
+        SR.NonEmpty := Length(SubRows) > 0;
+        for var R in SubRows do
+        begin
+          var Cols := R.Columns;
+          if Length(Cols) > 0 then
+            SR.Values := SR.Values + [R.Get(Cols[0])];
+        end;
+        Cache := Cache + [SR];
+        Idx := High(Cache);
+      end;
+
+      if (Clause.Op = TWhereOp.&Exists) or (Clause.Op = TWhereOp.NotExists) then
+        Exit(BoolToTri(Cache[Idx].NonEmpty = (Clause.Op = TWhereOp.&Exists)));
+
+      // IN / NOT IN — 3VL membership against the subquery's values.
+      var ColVal := Get(Clause.Column);
+      if IsNullValue(ColVal) then
+        Exit(TTriState.Unknown);
+      var Found := False;
+      var AnyNull := False;
+      for var V in Cache[Idx].Values do
+        if IsNullValue(V) then
+          AnyNull := True
+        else if CompareValues(ColVal, V) = 0 then
+          Found := True;
+      if Found then
+        Exit(BoolToTri(Clause.Op = TWhereOp.&In));
+      if AnyNull then
+        Exit(TTriState.Unknown);
+      Result := BoolToTri(Clause.Op = TWhereOp.NotIn);
+    end;
+end;
+
 // Resolves FROM + JOINs into composite rows, then applies WHERE / (GROUP BY +
 // aggregates + HAVING) / DISTINCT / ORDER BY / paging. The SELECT projection is
 // returned via Proj for the caller to apply (dynamic IRow) or materialize.
@@ -967,7 +1030,15 @@ begin
     if C is TJoinClause then
       Composite := ApplyJoin(Composite, Context, TJoinClause(C));
 
-  var Cq := TInMemoryCompiler.CompileMulti(Query);
+  // Build the predicate with a subquery resolver in scope; the built predicate
+  // captures it, so the global is cleared right after compilation.
+  UseSubqueryResolver(MakeSubqueryResolver(Context));
+  var Cq: TCompiledQuery;
+  try
+    Cq := TInMemoryCompiler.CompileMulti(Query);
+  finally
+    UseSubqueryResolver(nil);
+  end;
   try
     var Q: TQuery<IRow>;
     if Length(Cq.GroupBy) > 0 then
@@ -995,6 +1066,165 @@ begin
   finally
     Cq.Free;   // predicate/orders/projection are captured / copied out above
   end;
+end;
+
+// The main query's final projected rows (FROM+JOINs+WHERE+GROUP BY, then SELECT).
+function ProjectedRows(const Query: IQuery; const Context: IQueryContext): IQueryable<IRow>;
+begin
+  var Proj: TArray<TProjColumn>;
+  var Q: TQuery<IRow> := ExecuteMultiCore(Query, Context, Proj);
+  Result := Q.Select<IRow>(
+    function(R: IRow): IRow
+    begin
+      Result := ProjectRow(R, Proj);
+    end).AsQueryable;
+end;
+
+{ set operations (Phase 3C) — row equality by output columns, NULLs equal }
+
+function DedupRows(const Rows: TArray<IRow>; const Cmp: IEqualityComparer<IRow>): TArray<IRow>;
+begin
+  var Seen := TDictionary<IRow, Byte>.Create(Cmp);
+  try
+    Result := nil;
+    for var R in Rows do
+      if not Seen.ContainsKey(R) then
+      begin
+        Seen.Add(R, 0);
+        Result := Result + [R];
+      end;
+  finally
+    Seen.Free;
+  end;
+end;
+
+function CountRows(const Rows: TArray<IRow>; const Cmp: IEqualityComparer<IRow>): TDictionary<IRow, Integer>;
+begin
+  Result := TDictionary<IRow, Integer>.Create(Cmp);
+  for var R in Rows do
+  begin
+    var N: Integer;
+    if Result.TryGetValue(R, N) then
+      Result[R] := N + 1
+    else
+      Result.Add(R, 1);
+  end;
+end;
+
+function CombineSets(Kind: TUnionKind; const A, B: TArray<IRow>): TArray<IRow>;
+begin
+  var Cmp := MakeRowDistinct(nil);   // compare by each row's own output columns
+  case Kind of
+    TUnionKind.UnionAll:
+      Result := A + B;
+    TUnionKind.Union:
+      Result := DedupRows(A + B, Cmp);
+    TUnionKind.Intersect:
+      begin
+        var BSet := CountRows(B, Cmp);
+        try
+          Result := nil;
+          for var R in DedupRows(A, Cmp) do
+            if BSet.ContainsKey(R) then
+              Result := Result + [R];
+        finally
+          BSet.Free;
+        end;
+      end;
+    TUnionKind.&Except:
+      begin
+        var BSet := CountRows(B, Cmp);
+        try
+          Result := nil;
+          for var R in DedupRows(A, Cmp) do
+            if not BSet.ContainsKey(R) then
+              Result := Result + [R];
+        finally
+          BSet.Free;
+        end;
+      end;
+    TUnionKind.IntersectAll:
+      begin
+        var BCount := CountRows(B, Cmp);
+        var Emitted := TDictionary<IRow, Integer>.Create(Cmp);
+        try
+          Result := nil;
+          for var R in A do
+          begin
+            var Avail, Used: Integer;
+            if not BCount.TryGetValue(R, Avail) then
+              Continue;
+            if not Emitted.TryGetValue(R, Used) then
+              Used := 0;
+            if Used < Avail then
+            begin
+              Result := Result + [R];
+              Emitted.AddOrSetValue(R, Used + 1);
+            end;
+          end;
+        finally
+          BCount.Free;
+          Emitted.Free;
+        end;
+      end;
+    TUnionKind.ExceptAll:
+      begin
+        var BCount := CountRows(B, Cmp);
+        var Removed := TDictionary<IRow, Integer>.Create(Cmp);
+        try
+          Result := nil;
+          for var R in A do
+          begin
+            var Rem, Used: Integer;
+            if not BCount.TryGetValue(R, Rem) then
+              Rem := 0;
+            if not Removed.TryGetValue(R, Used) then
+              Used := 0;
+            if Used < Rem then
+              Removed.AddOrSetValue(R, Used + 1)   // one occurrence subtracted
+            else
+              Result := Result + [R];
+          end;
+        finally
+          BCount.Free;
+          Removed.Free;
+        end;
+      end;
+  else
+    Result := A;
+  end;
+end;
+
+// Applies each UNION/INTERSECT/EXCEPT clause of the main query against the context.
+function ApplyUnions(const Main: IQueryable<IRow>; const Query: IQuery;
+  const Context: IQueryContext): IQueryable<IRow>;
+begin
+  var HasUnion := False;
+  for var C in Query.Clauses do
+    if C is TUnionClause then
+    begin
+      HasUnion := True;
+      Break;
+    end;
+  if not HasUnion then
+    Exit(Main);
+
+  var Acc := TQuery<IRow>(Main).ToArray;
+  for var C in Query.Clauses do
+    if C is TUnionClause then
+    begin
+      var U := TUnionClause(C);
+      if U.SubQuery = nil then
+        raise EInMemoryQueryError.Create('Raw set operations (CombineRaw) cannot be evaluated in memory.');
+      var Other := TQuery<IRow>(ProjectedRows(U.SubQuery as IQuery, Context)).ToArray;
+      Acc := CombineSets(U.Kind, Acc, Other);
+    end;
+  Result := Linq.From<IRow>(Acc);
+end;
+
+function ExecuteToRows(const Query: IQuery; const Context: IQueryContext): IQueryable<IRow>;
+begin
+  Result := ApplyUnions(ProjectedRows(Query, Context), Query, Context);
 end;
 
 class function TInMemory.MapToRows<T>(const Start: TQuery<T>): TQuery<IRow>;
@@ -1119,25 +1349,19 @@ end;
 
 class function TInMemory.Rows(const Query: IQuery; const Context: IQueryContext): IQueryable<IRow>;
 begin
-  var Proj: TArray<TProjColumn>;
-  var Q: TQuery<IRow> := ExecuteMultiCore(Query, Context, Proj);
-  Result := Q.Select<IRow>(
-    function(R: IRow): IRow
-    begin
-      Result := ProjectRow(R, Proj);
-    end).AsQueryable;
+  Result := ExecuteToRows(Query, Context);
 end;
 
 class function TInMemory.Project<TResult>(
   const Query: IQuery; const Context: IQueryContext): IQueryable<TResult>;
 begin
-  var Proj: TArray<TProjColumn>;
-  var Q: TQuery<IRow> := ExecuteMultiCore(Query, Context, Proj);
+  // The rows are already projected; materialize maps each output column to a member.
+  var Q: TQuery<IRow> := ExecuteToRows(Query, Context);
   var Writer: IResultWriter<TResult> := TResultWriter<TResult>.Create;
   Result := Q.Select<TResult>(
     function(R: IRow): TResult
     begin
-      Result := Writer.Materialize(R, Proj);
+      Result := Writer.Materialize(R, nil);
     end).AsQueryable;
 end;
 

@@ -48,6 +48,7 @@ type
     CaraTotalIsNull: Boolean;
     GroupCountry: string;
     GroupCount: Integer;
+    Countries: TArray<string>;
     constructor Create;
     destructor Destroy; override;
   end;
@@ -234,6 +235,68 @@ Feature SQLCute in-memory multi-source @inmemory @context
         Expect(W.Count).ToEqual(1);          // US has 2, UK has 1 -> filtered out
         Expect(W.GroupCountry).ToEqual('US');
         Expect(W.GroupCount).ToEqual(2);
+      end)
+
+.Rule('Set operations combine result sets')
+
+  .Scenario('UNION returns the distinct union of both result sets')
+    .When('the country projection is UNIONed with itself',
+      procedure(W: TCtxWorld)
+      begin
+        var Ctx := TQueryContext.Create;
+        try
+          Ctx.Map<TPerson>('people', W.People);
+          W.Countries := nil;
+          for var R in TInMemory.Rows(
+            TQuery.New.From('people').Select('country')
+              .Union(TQuery.New.From('people').Select('country')), Ctx) do
+            W.Countries := W.Countries + [AsStr(R, 'country')];
+        finally
+          Ctx.Free;
+        end;
+      end)
+    .&Then('duplicate rows collapse: the distinct countries US and UK',
+      procedure(W: TCtxWorld)
+      begin
+        Expect(Length(W.Countries)).ToEqual(2);   // US×3, UK×1 across both sides -> {US, UK}
+        var HasUS := False;
+        var HasUK := False;
+        for var C in W.Countries do
+        begin
+          if C = 'US' then HasUS := True;
+          if C = 'UK' then HasUK := True;
+        end;
+        Expect(HasUS).ToBeTrue;
+        Expect(HasUK).ToBeTrue;
+      end)
+
+.Rule('Subqueries filter against context sources')
+
+  .Scenario('WHERE IN (subquery) keeps only elements matched by the subquery')
+    .When('people whose id is IN (SELECT user_id FROM orders) are selected',
+      procedure(W: TCtxWorld)
+      begin
+        var Ctx := TQueryContext.Create;
+        try
+          Ctx.Map<TPerson>('people', W.People).Map<TOrder>('orders', W.Orders);
+          W.Names := nil;
+          for var R in TInMemory.Rows(
+            TQuery.New.From('people').WhereInQuery('id',
+              TQuery.New.From('orders').Select('user_id')), Ctx) do
+            W.Names := W.Names + [AsStr(R, 'name')];
+          W.Count := Length(W.Names);
+        finally
+          Ctx.Free;
+        end;
+      end)
+    .&Then('only people with at least one order remain (Ann, Bob — not Cara)',
+      procedure(W: TCtxWorld)
+      begin
+        Expect(W.Count).ToEqual(2);
+        var HasCara := False;
+        for var N in W.Names do
+          if N = 'Cara' then HasCara := True;
+        Expect(HasCara).ToBeFalse;
       end);
 
 end.
