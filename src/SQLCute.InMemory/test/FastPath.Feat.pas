@@ -42,6 +42,7 @@ type
   public
     People: TObjectList<TPerson>;
     Names: TArray<string>;
+    SecondNames: TArray<string>;
     Count: Integer;
     SecondCount: Integer;
     constructor Create;
@@ -53,7 +54,9 @@ implementation
 uses
   System.SysUtils,
   System.Variants,
+  System.Generics.Defaults,
   Daf.MiniSpec,
+  Daf.Linq,
   Daf.SQLCute,
   Daf.SQLCute.InMemory,
   Daf.SQLCute.InMemory.Compiler;
@@ -105,6 +108,27 @@ begin
     Result := Result + [P.Name];
 end;
 
+// Sorts the world by age ascending under an explicit NULL policy, driving the
+// very comparison the compiled plan uses (CompareForOrder + TOrderSpec).
+function SortByAge(W: TFastPathWorld; Nulls: TNullsPolicy): TArray<string>;
+var
+  Spec: TOrderSpec;
+begin
+  Spec.Column := 'age';
+  Spec.Descending := False;
+  Spec.Nulls := Nulls;
+  var Acc: IRttiAccessors<TPerson> := TRttiAccessors<TPerson>.Create;
+  var Sorted := Linq.From<TPerson>(W.People).OrderBy(
+    TComparer<TPerson>.Construct(
+      function(const A, B: TPerson): Integer
+      begin
+        Result := CompareForOrder(Acc.Get('age', A), Acc.Get('age', B), Spec);
+      end));
+  Result := nil;
+  for var P in Sorted do
+    Result := Result + [P.Name];
+end;
+
 initialization
 
 Feature('''
@@ -145,6 +169,25 @@ Feature SQLCute in-memory fast path @inmemory @fastpath
       procedure(W: TFastPathWorld)
       begin
         Expect(W.Count).ToEqual(3);
+      end)
+
+  .Scenario('An explicit OrWhere group is honored as a unit')
+    .When('country=US OR (country=UK AND age=25) runs with an explicit group',
+      procedure(W: TFastPathWorld)
+      begin
+        W.Names := RunNames(W, TQuery.New.From('people')
+          .Where('country', 'US')
+          .OrWhere(
+            function(Q: IQuery): IQuery
+            begin
+              Result := Q.Where('country', 'UK').Where('age', 25);
+            end));
+        W.Count := Length(W.Names);
+      end)
+    .&Then('the group binds tighter than the OR: Ann, Bob, Eve, Cara, Finn',
+      procedure(W: TFastPathWorld)
+      begin
+        Expect(W.Count).ToEqual(5);   // 3 US + Cara/Finn (UK, 25); Dan (UK, NULL) out
       end)
 
   .Scenario('IS NULL selects absent values')
@@ -269,6 +312,22 @@ Feature SQLCute in-memory fast path @inmemory @fastpath
       procedure(W: TFastPathWorld)
       begin
         Expect(W.Names[0]).ToEqual('Dan');
+      end)
+
+  .Scenario('An explicit NullsLast policy overrides the NULL-smallest default')
+    .When('the same ascending age sort is run under Default and under NullsLast',
+      procedure(W: TFastPathWorld)
+      begin
+        // The SQLCute AST cannot express a per-column NULL policy, so the
+        // override is exercised where it lives: the compiled order spec.
+        W.Names := SortByAge(W, TNullsPolicy.Default);
+        W.SecondNames := SortByAge(W, TNullsPolicy.Last);
+      end)
+    .&Then('Dan (NULL) leads under the default and trails under NullsLast',
+      procedure(W: TFastPathWorld)
+      begin
+        Expect(W.Names[0]).ToEqual('Dan');
+        Expect(W.SecondNames[High(W.SecondNames)]).ToEqual('Dan');
       end)
 
   .Scenario('Ordered, paginated result')

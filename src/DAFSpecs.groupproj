@@ -24,6 +24,12 @@
         <Projects Include="SQLCute.Compilers\test\SQLCuteCompilersSpecs.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="Linq\test\LinqSpecs.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="SQLCute.InMemory\test\SQLCuteInMemorySpecs.dproj">
+            <Dependencies/>
+        </Projects>
     </ItemGroup>
     <ProjectExtensions>
         <Borland.Personality>Default.Personality.12</Borland.Personality>
@@ -95,14 +101,32 @@
     <Target Name="SQLCuteCompilersSpecs:Make">
         <MSBuild Projects="SQLCute.Compilers\test\SQLCuteCompilersSpecs.dproj" Targets="Make"/>
     </Target>
+    <Target Name="LinqSpecs">
+        <MSBuild Projects="Linq\test\LinqSpecs.dproj"/>
+    </Target>
+    <Target Name="LinqSpecs:Clean">
+        <MSBuild Projects="Linq\test\LinqSpecs.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="LinqSpecs:Make">
+        <MSBuild Projects="Linq\test\LinqSpecs.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="SQLCuteInMemorySpecs">
+        <MSBuild Projects="SQLCute.InMemory\test\SQLCuteInMemorySpecs.dproj"/>
+    </Target>
+    <Target Name="SQLCuteInMemorySpecs:Clean">
+        <MSBuild Projects="SQLCute.InMemory\test\SQLCuteInMemorySpecs.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="SQLCuteInMemorySpecs:Make">
+        <MSBuild Projects="SQLCute.InMemory\test\SQLCuteInMemorySpecs.dproj" Targets="Make"/>
+    </Target>
     <Target Name="Build">
-        <CallTarget Targets="MiniSpecSpecs;CommonsSpecs;ConfigurationSpecs;DISpecs;MediatRSpecs;SQLCuteSpecs;SQLCuteCompilersSpecs"/>
+        <CallTarget Targets="MiniSpecSpecs;CommonsSpecs;ConfigurationSpecs;DISpecs;MediatRSpecs;SQLCuteSpecs;SQLCuteCompilersSpecs;LinqSpecs;SQLCuteInMemorySpecs"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="MiniSpecSpecs:Clean;CommonsSpecs:Clean;ConfigurationSpecs:Clean;DISpecs:Clean;MediatRSpecs:Clean;SQLCuteSpecs:Clean;SQLCuteCompilersSpecs:Clean"/>
+        <CallTarget Targets="MiniSpecSpecs:Clean;CommonsSpecs:Clean;ConfigurationSpecs:Clean;DISpecs:Clean;MediatRSpecs:Clean;SQLCuteSpecs:Clean;SQLCuteCompilersSpecs:Clean;LinqSpecs:Clean;SQLCuteInMemorySpecs:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="MiniSpecSpecs:Make;CommonsSpecs:Make;ConfigurationSpecs:Make;DISpecs:Make;MediatRSpecs:Make;SQLCuteSpecs:Make;SQLCuteCompilersSpecs:Make"/>
+        <CallTarget Targets="MiniSpecSpecs:Make;CommonsSpecs:Make;ConfigurationSpecs:Make;DISpecs:Make;MediatRSpecs:Make;SQLCuteSpecs:Make;SQLCuteCompilersSpecs:Make;LinqSpecs:Make;SQLCuteInMemorySpecs:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

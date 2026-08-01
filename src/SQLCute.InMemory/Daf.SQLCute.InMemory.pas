@@ -870,51 +870,37 @@ end;
 
 // Groups rows by the GROUP BY columns, computes aggregates over each group's
 // members, applies HAVING, and emits one flat row per surviving group.
+// The hybrid of Decision 11: Daf.Linq does the grouping (key + members, its own
+// general-purpose shape) and this compiler layers SQL's flat aggregate row on
+// top — the SQL shape is not baked into the sequence library.
 function GroupAndAggregate(const Rows: TArray<IRow>; const C: TCompiledQuery): TArray<IRow>;
 begin
-  var Buckets := TDictionary<string, TList<IRow>>.Create;
-  var Order := TList<string>.Create;
-  var Reps := TDictionary<string, IRow>.Create;
-  try
-    for var R in Rows do
+  var Cols := C.GroupBy;
+  var Groups := Linq.From<IRow>(Rows).GroupBy<string>(
+    function(R: IRow): string
     begin
-      var K := GroupKey(R, C.GroupBy);
-      var Bucket: TList<IRow>;
-      if not Buckets.TryGetValue(K, Bucket) then
-      begin
-        Bucket := TList<IRow>.Create;
-        Buckets.Add(K, Bucket);
-        Order.Add(K);
-        Reps.Add(K, R);
-      end;
-      Bucket.Add(R);
-    end;
-    Result := nil;
-    for var K in Order do
-    begin
-      var Members := Buckets[K].ToArray;
-      var Flat := TDictRow.Create;
-      for var Gc in C.GroupBy do
-        Flat.Put(Gc, Reps[K].Get(Gc));
-      for var Agg in C.Aggregates do
-        Flat.Put(Agg.Output, ComputeAggregate(Agg, Members));
-      var FlatRow: IRow := Flat;
-      var Keep := True;
-      if Assigned(C.Having) then
-        Keep := C.Having(
-          function(const Col: string): TValue
-          begin
-            Result := FlatRow.Get(Col);
-          end) = TTriState.Yes;
-      if Keep then
-        Result := Result + [FlatRow];
-    end;
-  finally
-    for var Pair in Buckets do
-      Pair.Value.Free;
-    Buckets.Free;
-    Order.Free;
-    Reps.Free;
+      Result := GroupKey(R, Cols);   // NULL sentinel: all NULL keys are one group
+    end);
+
+  Result := nil;
+  for var G in Groups do             // key order preserved by GroupBy
+  begin
+    var Members := G.Members;
+    var Flat := TDictRow.Create;
+    for var Gc in Cols do
+      Flat.Put(Gc, Members[0].Get(Gc));   // any member carries the group's key values
+    for var Agg in C.Aggregates do
+      Flat.Put(Agg.Output, ComputeAggregate(Agg, Members));
+    var FlatRow: IRow := Flat;
+    var Keep := True;
+    if Assigned(C.Having) then
+      Keep := C.Having(
+        function(const Col: string): TValue
+        begin
+          Result := FlatRow.Get(Col);
+        end) = TTriState.Yes;
+    if Keep then
+      Result := Result + [FlatRow];
   end;
 end;
 
