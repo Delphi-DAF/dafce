@@ -16,6 +16,11 @@ type
     Pulled: Integer;
     GroupKeys: TArray<Integer>;
     GroupSizes: TArray<Integer>;
+    Flag1: Boolean;
+    Flag2: Boolean;
+    Num1: Integer;
+    Num2: Integer;
+    Num3: Integer;
     constructor Create;
     destructor Destroy; override;
   end;
@@ -232,6 +237,225 @@ Feature Linq operators @linq @operators
         Expect(W.GroupSizes[0]).ToEqual(4);
         Expect(W.GroupKeys[1]).ToEqual(0);
         Expect(W.GroupSizes[1]).ToEqual(2);
+      end)
+
+.Rule('Existence and emptiness terminals')
+
+  .Scenario('IsEmpty distinguishes an empty source from a populated one')
+    .When('IsEmpty is asked of an empty array and of the world list',
+      procedure(W: TOpsWorld)
+      begin
+        var Empty: TArray<Integer> := nil;
+        W.Flag1 := Linq.From<Integer>(Empty).IsEmpty;
+        W.Flag2 := Linq.From<Integer>(W.Nums).IsEmpty;
+      end)
+    .&Then('the empty source reports True and the populated one False',
+      procedure(W: TOpsWorld)
+      begin
+        Expect(W.Flag1).ToBeTrue;
+        Expect(W.Flag2).ToBeFalse;
+      end)
+
+  .Scenario('A terminal does not exhaust the query')
+    .When('IsEmpty runs and the same query value is then enumerated in full',
+      procedure(W: TOpsWorld)
+      begin
+        var Q := Linq.From<Integer>(W.Nums);
+        W.Flag1 := Q.IsEmpty;
+        W.Collected := Q.ToArray;       // the query is still usable
+      end)
+    .&Then('every element is still produced afterwards',
+      procedure(W: TOpsWorld)
+      begin
+        Expect(W.Flag1).ToBeFalse;
+        Expect(Length(W.Collected)).ToEqual(6);
+      end)
+
+  .Scenario('IsEmpty stops consuming the source after the first element')
+    .When('IsEmpty is applied to a large lazy generator',
+      procedure(W: TOpsWorld)
+      begin
+        W.Pulled := 0;
+        var Seq: IEnumerable<Integer> := TDeferredEnumerable<Integer>.Create(
+          function: IEnumerator<Integer>
+          var
+            N: Integer;
+          begin
+            N := 0;
+            Result := TGeneratorEnumerator<Integer>.Create(
+              function(var Current: Integer): Boolean
+              begin
+                Inc(W.Pulled);
+                Inc(N);
+                Current := N;
+                Result := N <= 1000000;
+              end);
+          end);
+        W.Flag1 := Linq.From<Integer>(Seq).IsEmpty;
+      end)
+    .&Then('exactly one element was pulled',
+      procedure(W: TOpsWorld)
+      begin
+        Expect(W.Flag1).ToBeFalse;
+        Expect(W.Pulled).ToEqual(1);
+      end)
+
+  .Scenario('Any reports whether some element satisfies the filter')
+    .When('Any is asked for an element over 7 and for one over 100',
+      procedure(W: TOpsWorld)
+      begin
+        W.Flag1 := Linq.From<Integer>(W.Nums).Any(
+          function(X: Integer): Boolean begin Result := X > 7; end);
+        W.Flag2 := Linq.From<Integer>(W.Nums).Any(
+          function(X: Integer): Boolean begin Result := X > 100; end);
+      end)
+    .&Then('the first is True and the second False',
+      procedure(W: TOpsWorld)
+      begin
+        Expect(W.Flag1).ToBeTrue;
+        Expect(W.Flag2).ToBeFalse;
+      end)
+
+.Rule('First, last and single access')
+
+  .Scenario('First and last of a populated sequence')
+    .When('FirstOrDefault and LastOrDefault run over 5,3,8,3,1,8',
+      procedure(W: TOpsWorld)
+      begin
+        W.Num1 := Linq.From<Integer>(W.Nums).FirstOrDefault;
+        W.Num2 := Linq.From<Integer>(W.Nums).LastOrDefault;
+      end)
+    .&Then('they yield the first and the last element in sequence order',
+      procedure(W: TOpsWorld)
+      begin
+        Expect(W.Num1).ToEqual(5);
+        Expect(W.Num2).ToEqual(8);
+      end)
+
+  .Scenario('An empty sequence yields the default or the supplied fallback')
+    .When('the terminals run over an empty source',
+      procedure(W: TOpsWorld)
+      begin
+        var Empty: TArray<Integer> := nil;
+        W.Num1 := Linq.From<Integer>(Empty).FirstOrDefault;
+        W.Num2 := Linq.From<Integer>(Empty).FirstOrDefault(-1);
+        W.Num3 := Linq.From<Integer>(Empty).LastOrDefault(-2);
+      end)
+    .&Then('the default is 0 and the fallbacks are honored',
+      procedure(W: TOpsWorld)
+      begin
+        Expect(W.Num1).ToEqual(0);
+        Expect(W.Num2).ToEqual(-1);
+        Expect(W.Num3).ToEqual(-2);
+      end)
+
+  .Scenario('TryFirst tells an empty sequence from a first element equal to the default')
+    .When('TryFirst runs over an empty source and over one starting with 0',
+      procedure(W: TOpsWorld)
+      begin
+        var Empty: TArray<Integer> := nil;
+        var Zeros: TArray<Integer> := TArray<Integer>.Create(0, 7);
+        W.Flag1 := Linq.From<Integer>(Empty).TryFirst(W.Num1);
+        W.Flag2 := Linq.From<Integer>(Zeros).TryFirst(W.Num2);
+      end)
+    .&Then('the empty one reports False and the zero-leading one True, both yielding 0',
+      procedure(W: TOpsWorld)
+      begin
+        Expect(W.Flag1).ToBeFalse;
+        Expect(W.Flag2).ToBeTrue;
+        Expect(W.Num1).ToEqual(0);
+        Expect(W.Num2).ToEqual(0);
+      end)
+
+  .Scenario('Single yields the only element of a one-element sequence')
+    .When('the Single family runs over a sequence filtered down to one element',
+      procedure(W: TOpsWorld)
+      begin
+        var One := Linq.From<Integer>(W.Nums).Where(
+          function(X: Integer): Boolean begin Result := X = 5; end);
+        W.Num1 := One.Single;
+        W.Num2 := One.SingleOrDefault;
+        W.Flag1 := One.TrySingle(W.Num3);
+      end)
+    .&Then('all three agree on the element',
+      procedure(W: TOpsWorld)
+      begin
+        Expect(W.Num1).ToEqual(5);
+        Expect(W.Num2).ToEqual(5);
+        Expect(W.Flag1).ToBeTrue;
+        Expect(W.Num3).ToEqual(5);
+      end)
+
+  .Scenario('More than one element is an error, not a silent first')
+    .When('TrySingle runs over a sequence holding two 8s',
+      procedure(W: TOpsWorld)
+      begin
+        var Two := Linq.From<Integer>(W.Nums).Where(
+          function(X: Integer): Boolean begin Result := X = 8; end);
+        W.Flag1 := Two.TrySingle(W.Num1);
+      end)
+    .&Then('TrySingle reports False, and Single and SingleOrDefault raise',
+      procedure(W: TOpsWorld)
+      begin
+        Expect(W.Flag1).ToBeFalse;
+        ExpectException(
+          procedure
+          begin
+            Linq.From<Integer>(W.Nums).Where(
+              function(X: Integer): Boolean begin Result := X = 8; end).Single;
+          end).ToBe(ELinqError);
+        ExpectException(
+          procedure
+          begin
+            Linq.From<Integer>(W.Nums).Where(
+              function(X: Integer): Boolean begin Result := X = 8; end).SingleOrDefault;
+          end).ToBe(ELinqError);
+      end)
+
+  .Scenario('An empty sequence raises for Single but not for SingleOrDefault')
+    .When('the Single family runs over an empty source',
+      procedure(W: TOpsWorld)
+      begin
+        var Empty: TArray<Integer> := nil;
+        W.Num1 := Linq.From<Integer>(Empty).SingleOrDefault;
+        W.Num2 := Linq.From<Integer>(Empty).SingleOrDefault(-9);
+        W.Flag1 := Linq.From<Integer>(Empty).TrySingle(W.Num3);
+      end)
+    .&Then('SingleOrDefault tolerates empty, TrySingle reports False and Single raises',
+      procedure(W: TOpsWorld)
+      begin
+        Expect(W.Num1).ToEqual(0);
+        Expect(W.Num2).ToEqual(-9);
+        Expect(W.Flag1).ToBeFalse;
+        ExpectException(
+          procedure
+          begin
+            var Empty: TArray<Integer> := nil;
+            Linq.From<Integer>(Empty).Single;
+          end).ToBe(ELinqError);
+      end)
+
+  .Scenario('ToList appends to a list the caller owns')
+    .When('a query is materialized into a list that already holds an element',
+      procedure(W: TOpsWorld)
+      begin
+        var Target := TList<Integer>.Create;
+        try
+          Target.Add(99);
+          Linq.From<Integer>(W.Nums).Where(
+            function(X: Integer): Boolean begin Result := X = 8; end).ToList(Target);
+          W.Collected := Target.ToArray;
+        finally
+          Target.Free;      // ownership stayed with the caller
+        end;
+      end)
+    .&Then('the pre-existing element is preserved and the sequence appended',
+      procedure(W: TOpsWorld)
+      begin
+        Expect(Length(W.Collected)).ToEqual(3);
+        Expect(W.Collected[0]).ToEqual(99);
+        Expect(W.Collected[1]).ToEqual(8);
+        Expect(W.Collected[2]).ToEqual(8);
       end)
 
 .Rule('Eager/lazy bridges and shared vocabulary')

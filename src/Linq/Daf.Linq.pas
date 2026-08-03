@@ -31,6 +31,9 @@ uses
   Daf.Arrays;
 
 type
+  /// <summary>Raised by the terminals that assert a shape (see <c>Single</c>).</summary>
+  ELinqError = class(Exception);
+
   /// <summary>A group produced by <c>GroupBy</c>: a key plus its member elements.</summary>
   IGrouping<TKey, T> = interface(IEnumerable<T>)
     function GetKey: TKey;
@@ -128,10 +131,51 @@ type
     /// <summary>Groups elements by key (key order preserved).</summary>
     function GroupBy<TKey>(const KeySelector: TFunc<T, TKey>;
       const Comparer: IEqualityComparer<TKey> = nil): IQueryable<IGrouping<TKey, T>>;
+    // --- terminals ---------------------------------------------------------
+    // All of these enumerate without consuming the query: the same TQuery<T>
+    // value stays usable afterwards and a terminal may be called again. Note
+    // that each call re-enumerates the source, so with an expensive or
+    // single-shot source materialize once (ToArray/ToList) and query that.
+
+    /// <summary>True when the sequence produces no element (stops at the first).</summary>
+    function IsEmpty: Boolean;
+    /// <summary>True when at least one element matches (stops at the first match).</summary>
+    function Any(const Spec: TFilterSpec<T>): Boolean;
+    /// <summary>The first element, or <c>Default(T)</c> when the sequence is empty.</summary>
+    function FirstOrDefault: T; overload;
+    /// <summary>The first element, or <c>Fallback</c> when the sequence is empty.</summary>
+    function FirstOrDefault(const Fallback: T): T; overload;
+    /// <summary>
+    ///   The first element with an explicit found/not-found result — the only
+    ///   form that tells an empty sequence from one whose first element equals
+    ///   <c>Default(T)</c>.
+    /// </summary>
+    function TryFirst(out Value: T): Boolean;
+    /// <summary>The last element, or <c>Default(T)</c> when the sequence is empty.</summary>
+    function LastOrDefault: T; overload;
+    /// <summary>The last element, or <c>Fallback</c> when the sequence is empty.</summary>
+    function LastOrDefault(const Fallback: T): T; overload;
+    /// <summary>
+    ///   The one and only element. Raises <see cref="ELinqError"/> when the
+    ///   sequence is empty or holds more than one — use <see cref="FirstOrDefault"/>
+    ///   when "the first of possibly many" is what you mean.
+    /// </summary>
+    function Single: T;
+    /// <summary>
+    ///   The only element, or <c>Default(T)</c> when the sequence is empty. Still
+    ///   raises when it holds more than one.
+    /// </summary>
+    function SingleOrDefault: T; overload;
+    /// <summary>As <see cref="SingleOrDefault"/>, with an explicit empty-sequence fallback.</summary>
+    function SingleOrDefault(const Fallback: T): T; overload;
+    /// <summary>Non-raising <see cref="Single"/>: False unless there is exactly one element.</summary>
+    function TrySingle(out Value: T): Boolean;
     /// <summary>Materializes the sequence into a new array.</summary>
     function ToArray: TArray<T>;
     /// <summary>Materializes the sequence into a new (caller-owned) list.</summary>
-    function ToList: TList<T>;
+    function ToList: TList<T>; overload;
+    /// <summary>Appends the sequence to a list the caller owns (ownership is not taken).</summary>
+    procedure ToList(const List: TList<T>); overload;
     /// <summary>Materializes into Commons' eager <c>TSmartArray&lt;T&gt;</c> (the lazy→eager bridge).</summary>
     function ToSmartArray: TSmartArray<T>;
   end;
@@ -508,6 +552,112 @@ begin
   var E := FSeq.GetEnumerator;
   while E.MoveNext do
     Result.Add(E.Current);
+end;
+
+procedure TQuery<T>.ToList(const List: TList<T>);
+begin
+  var E := FSeq.GetEnumerator;
+  while E.MoveNext do
+    List.Add(E.Current);
+end;
+
+function TQuery<T>.IsEmpty: Boolean;
+begin
+  Result := not FSeq.GetEnumerator.MoveNext;   // stops at the first element
+end;
+
+function TQuery<T>.Any(const Spec: TFilterSpec<T>): Boolean;
+begin
+  Result := not Where(Spec).IsEmpty;
+end;
+
+function TQuery<T>.TryFirst(out Value: T): Boolean;
+begin
+  var E := FSeq.GetEnumerator;
+  Result := E.MoveNext;
+  if Result then
+    Value := E.Current
+  else
+    Value := Default(T);
+end;
+
+function TQuery<T>.FirstOrDefault: T;
+begin
+  TryFirst(Result);
+end;
+
+function TQuery<T>.FirstOrDefault(const Fallback: T): T;
+begin
+  if not TryFirst(Result) then
+    Result := Fallback;
+end;
+
+function TQuery<T>.LastOrDefault: T;
+begin
+  Result := Default(T);
+  var E := FSeq.GetEnumerator;
+  while E.MoveNext do
+    Result := E.Current;
+end;
+
+function TQuery<T>.LastOrDefault(const Fallback: T): T;
+begin
+  var Found := False;
+  Result := Default(T);
+  var E := FSeq.GetEnumerator;
+  while E.MoveNext do
+  begin
+    Result := E.Current;
+    Found := True;
+  end;
+  if not Found then
+    Result := Fallback;
+end;
+
+function TQuery<T>.TrySingle(out Value: T): Boolean;
+begin
+  var E := FSeq.GetEnumerator;
+  Result := E.MoveNext;
+  if not Result then
+  begin
+    Value := Default(T);
+    Exit;
+  end;
+  Value := E.Current;
+  if E.MoveNext then           // a second element: not "single"
+  begin
+    Value := Default(T);
+    Result := False;
+  end;
+end;
+
+function TQuery<T>.Single: T;
+begin
+  var E := FSeq.GetEnumerator;
+  if not E.MoveNext then
+    raise ELinqError.Create('Single: the sequence is empty; expected exactly one element.');
+  Result := E.Current;
+  if E.MoveNext then
+    raise ELinqError.Create(
+      'Single: the sequence holds more than one element; expected exactly one. '
+      + 'Use FirstOrDefault when the first of several is what you mean.');
+end;
+
+function TQuery<T>.SingleOrDefault: T;
+begin
+  Result := SingleOrDefault(Default(T));
+end;
+
+function TQuery<T>.SingleOrDefault(const Fallback: T): T;
+begin
+  var E := FSeq.GetEnumerator;
+  if not E.MoveNext then
+    Exit(Fallback);            // empty is tolerated
+  Result := E.Current;
+  if E.MoveNext then
+    raise ELinqError.Create(
+      'SingleOrDefault: the sequence holds more than one element; expected at most one. '
+      + 'Use FirstOrDefault when the first of several is what you mean.');
 end;
 
 function TQuery<T>.ToSmartArray: TSmartArray<T>;
