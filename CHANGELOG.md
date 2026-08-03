@@ -17,12 +17,11 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 - **SQLCute.InMemory**: `IRow` con adaptadores `TRttiRow<T>`, `TDictRow`, `TJoinRow`, `TNullRow`; materialización por RTTI a clase de resultado
 - **SQLCute.InMemory**: JOINs (INNER/LEFT/RIGHT/CROSS/FULL OUTER), GROUP BY/HAVING, subconsultas, UNION/INTERSECT/EXCEPT
 - **SQLCute.InMemory**: Semántica ANSI de NULL — lógica de tres valores, agregados que ignoran NULL, DISTINCT con NULLs iguales, GROUP BY con un grupo para NULL, ORDER BY con NULL como menor
-- **SQLCute.InMemory**: Arnés de paridad entre back-ends; samples `InMemoryQuerySample` e `InMemoryJoinSample`; documentación bilingüe
+- **SQLCute.InMemory**: Samples `InMemoryQuerySample` e `InMemoryJoinSample`; documentación bilingüe (EN/ES)
 - **SQLCute**: `Daf.SQLCute.WhereTree` — normalizador de precedencia WHERE compartido por ambos back-ends
 - **Commons**: `TNullable<T>` en `Daf.Nullable`
 - **Commons**: `TDeferredEnumerable<T>` en `Daf.Enumerable`
 - **Commons**: `Daf.Comparers` — comparadores conscientes de NULL para `TValue` y `TNullable<T>`
-- **Commons**: Specs para `TSmartArray<T>` y `TMacrosList`
 
 ### Changed
 
