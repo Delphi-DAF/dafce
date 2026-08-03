@@ -61,7 +61,14 @@ type
     class operator Implicit(CSVStr: string): TSmartArray<T>;
     class property Empty: TSmartArray<T> read GetEmpty;
     procedure FreeItems;
-    function Select<TTarget>(const Map: TExpresion<TMapper<T, TTarget>>): TSmartArray<TTarget>;
+    /// <summary>
+    ///   Projects each element. Takes a plain <c>TFunc&lt;T, TTarget&gt;</c> — the same
+    ///   type the lazy <c>Daf.Linq</c> <c>Select</c> takes — so one mapper value
+    ///   serves both APIs. (It used to take <c>TExpresion&lt;TMapper&lt;T,TTarget&gt;&gt;</c>,
+    ///   a deferred-value wrapper that was unwrapped on entry and never
+    ///   exercised, and that blocked passing a mapper to anything else.)
+    /// </summary>
+    function Select<TTarget>(const Map: TFunc<T, TTarget>): TSmartArray<TTarget>;
     function Any(const Filter: TFilterSpec<T>): Boolean;
     function Where(const Filter: TFilterSpec<T>): TSmartArray<T>;
     function GetEnumerator: TEnumerator;
@@ -394,12 +401,11 @@ begin
   Result := False;
 end;
 
-function TSmartArray<T>.Select<TTarget>(const Map: TExpresion<TMapper<T, TTarget>> ): TSmartArray<TTarget>;
+function TSmartArray<T>.Select<TTarget>(const Map: TFunc<T, TTarget> ): TSmartArray<TTarget>;
 begin
-  var Mapper: TMapper<T, TTarget> := Map;
   Result := nil;
   for var item in FValues do
-    Result.Concat(Mapper(Item));
+    Result.Concat(Map(Item));
 end;
 
 

@@ -11,6 +11,7 @@ type
     Nums: TList<Integer>;
     Collected: TArray<Integer>;
     Strs: TArray<string>;
+    LazyStrs: TArray<string>;
     EagerNums: TArray<Integer>;
     Pulled: Integer;
     GroupKeys: TArray<Integer>;
@@ -305,6 +306,28 @@ Feature Linq operators @linq @operators
         Expect(Length(W.Collected)).ToEqual(2);   // 8, 8
         Expect(W.Collected[0]).ToEqual(8);
         Expect(W.Collected[1]).ToEqual(8);
+      end)
+
+  .Scenario('One mapper value serves both the eager and the lazy API')
+    .When('the same TFunc mapper is applied to a TSmartArray and to a query',
+      procedure(W: TOpsWorld)
+      begin
+        var Mapper: TFunc<Integer, string> :=
+          function(X: Integer): string
+          begin
+            Result := 'n' + IntToStr(X);
+          end;
+        var Eager: TSmartArray<Integer> := W.Nums.ToArray;
+        W.Strs := Eager.Select<string>(Mapper);                                   // Commons, eager
+        W.LazyStrs := Linq.From<Integer>(W.Nums).Select<string>(Mapper).ToArray;  // Daf.Linq, lazy
+      end)
+    .&Then('both APIs project the same values',
+      procedure(W: TOpsWorld)
+      begin
+        Expect(Length(W.Strs)).ToEqual(6);
+        Expect(Length(W.LazyStrs)).ToEqual(6);
+        for var I := 0 to High(W.Strs) do
+          Expect(W.LazyStrs[I]).ToEqual(W.Strs[I]);
       end)
 
   .Scenario('The declared filter parameter is TFilterSpec, not a bare closure type')
