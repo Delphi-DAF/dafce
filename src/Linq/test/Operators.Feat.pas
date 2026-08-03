@@ -11,6 +11,7 @@ type
     Nums: TList<Integer>;
     Collected: TArray<Integer>;
     Strs: TArray<string>;
+    EagerNums: TArray<Integer>;
     Pulled: Integer;
     GroupKeys: TArray<Integer>;
     GroupSizes: TArray<Integer>;
@@ -267,6 +268,57 @@ Feature Linq operators @linq @operators
         Expect(Length(W.Collected)).ToEqual(2);
         Expect(W.Collected[0]).ToEqual(8);
         Expect(W.Collected[1]).ToEqual(8);
+      end)
+
+  .Scenario('One filter value serves both the eager and the lazy API')
+    .When('the same TFilterSpec is applied to a TSmartArray and to a query',
+      procedure(W: TOpsWorld)
+      begin
+        var Spec: TFilterSpec<Integer> := TPredicate<Integer>(
+          function(X: Integer): Boolean begin Result := X > 3; end);
+        var Eager: TSmartArray<Integer> := W.Nums.ToArray;
+        W.EagerNums := Eager.Where(Spec);                                 // Commons, eager
+        W.Collected := Linq.From<Integer>(W.Nums).Where(Spec).ToArray;    // Daf.Linq, lazy
+      end)
+    .&Then('both APIs select the same elements',
+      procedure(W: TOpsWorld)
+      begin
+        Expect(Length(W.EagerNums)).ToEqual(3);
+        Expect(Length(W.Collected)).ToEqual(3);
+        for var I := 0 to High(W.Collected) do
+          Expect(W.Collected[I]).ToEqual(W.EagerNums[I]);
+      end)
+
+  .Scenario('A composed filter is accepted by the lazy API')
+    .When('two specs are combined with and before being passed to Where',
+      procedure(W: TOpsWorld)
+      begin
+        var Big: TFilterSpec<Integer> := TPredicate<Integer>(
+          function(X: Integer): Boolean begin Result := X > 3; end);
+        var Even: TFilterSpec<Integer> := TPredicate<Integer>(
+          function(X: Integer): Boolean begin Result := X mod 2 = 0; end);
+        W.Collected := Linq.From<Integer>(W.Nums).Where(Big and Even).ToArray;
+      end)
+    .&Then('only elements satisfying both remain',
+      procedure(W: TOpsWorld)
+      begin
+        Expect(Length(W.Collected)).ToEqual(2);   // 8, 8
+        Expect(W.Collected[0]).ToEqual(8);
+        Expect(W.Collected[1]).ToEqual(8);
+      end)
+
+  .Scenario('The declared filter parameter is TFilterSpec, not a bare closure type')
+    .When('a constant Boolean is passed as the filter',
+      procedure(W: TOpsWorld)
+      begin
+        // TFilterSpec<T> converts from Boolean; TPredicate<T> does not. This only
+        // compiles while Where's declared parameter really is TFilterSpec<T>.
+        W.Collected := Linq.From<Integer>(W.Nums).Where(True).ToArray;
+      end)
+    .&Then('the constant filter keeps every element',
+      procedure(W: TOpsWorld)
+      begin
+        Expect(Length(W.Collected)).ToEqual(6);
       end);
 
 end.

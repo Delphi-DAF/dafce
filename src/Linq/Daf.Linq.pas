@@ -27,6 +27,7 @@ uses
   System.Generics.Collections,
   System.Generics.Defaults,
   Daf.Enumerable,
+  Daf.Expression,
   Daf.Arrays;
 
 type
@@ -99,10 +100,16 @@ type
     /// <summary>The underlying deferred sequence.</summary>
     function AsQueryable: IQueryable<T>;
 
-    /// <summary>Keeps only elements matching the predicate (lazy).</summary>
-    function Where(const Predicate: TPredicate<T>): TQuery<T>;
+    /// <summary>
+    ///   Keeps only elements matching the filter (lazy). Takes Commons'
+    ///   <c>TFilterSpec&lt;T&gt;</c> — the same type the eager
+    ///   <c>TSmartArray&lt;T&gt;.Where</c> takes — so one filter value serves both
+    ///   APIs and can be composed with <c>and</c> / <c>or</c> / <c>not</c>
+    ///   beforehand. A bare closure still works: it converts implicitly.
+    /// </summary>
+    function Where(const Spec: TFilterSpec<T>): TQuery<T>;
     /// <summary>Alias of <see cref="Where"/>.</summary>
-    function Filter(const Predicate: TPredicate<T>): TQuery<T>;
+    function Filter(const Spec: TFilterSpec<T>): TQuery<T>;
     /// <summary>Projects each element through the mapper (lazy).</summary>
     function Select<TResult>(const Mapper: TFunc<T, TResult>): TQuery<TResult>;
     /// <summary>Alias of <see cref="Select"/>.</summary>
@@ -232,9 +239,10 @@ begin
   Result := FSeq.GetEnumerator;
 end;
 
-function TQuery<T>.Where(const Predicate: TPredicate<T>): TQuery<T>;
+function TQuery<T>.Where(const Spec: TFilterSpec<T>): TQuery<T>;
 begin
   var Src := FSeq;
+  var Filter := Spec;   // local copy: a const parameter is not safely captured
   Result.FSeq := TQueryable<T>.Create(TDeferredEnumerable<T>.Create(
     function: IEnumerator<T>
     var
@@ -245,7 +253,7 @@ begin
         function(var Current: T): Boolean
         begin
           while Inner.MoveNext do
-            if Predicate(Inner.Current) then
+            if Filter.Eval(Inner.Current) then
             begin
               Current := Inner.Current;
               Exit(True);
@@ -255,9 +263,9 @@ begin
     end));
 end;
 
-function TQuery<T>.Filter(const Predicate: TPredicate<T>): TQuery<T>;
+function TQuery<T>.Filter(const Spec: TFilterSpec<T>): TQuery<T>;
 begin
-  Result := Where(Predicate);
+  Result := Where(Spec);
 end;
 
 function TQuery<T>.Select<TResult>(const Mapper: TFunc<T, TResult>): TQuery<TResult>;
