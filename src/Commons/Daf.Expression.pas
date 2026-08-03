@@ -15,19 +15,6 @@ type
     class operator Implicit(const Expresion: TExpresion<T>): T;
   end;
 
-  TBooleanExpresion = record
-  private
-    FFunc: TFunc<Boolean>;
-  public
-    class operator Initialize(out Dest: TBooleanExpresion);
-    class operator LogicalNot(const Expr: TBooleanExpresion): Boolean;
-    class operator LogicalOr(const Left: TBooleanExpresion;const Right: Boolean): Boolean;
-    class operator LogicalAnd(const Left: TBooleanExpresion;const Right: Boolean): Boolean;
-    class operator Implicit(const Value: Boolean): TBooleanExpresion;
-    class operator Implicit(const Func: TFunc<Boolean>): TBooleanExpresion;
-    class operator Implicit(const Expresion: TBooleanExpresion): Boolean;
-  end;
-
   TFilterSpec<T> = record
   private
     FClosureExpr: TPredicate<T>;
@@ -69,49 +56,6 @@ begin
     begin
       Result := Default(T);
     end;
-end;
-
-{ TBooleanExpresion }
-
-class operator TBooleanExpresion.Implicit(const Value: Boolean): TBooleanExpresion;
-begin
-  Result.FFunc := function: Boolean
-    begin
-      Result := Value
-    end;
-end;
-
-class operator TBooleanExpresion.Implicit(const Func: TFunc<Boolean>): TBooleanExpresion;
-begin
-  Result.FFunc := Func;
-end;
-
-class operator TBooleanExpresion.Implicit(const Expresion: TBooleanExpresion): Boolean;
-begin
-  Result := Expresion.FFunc();
-end;
-
-class operator TBooleanExpresion.Initialize(out Dest: TBooleanExpresion);
-begin
-  Dest.FFunc := function: Boolean
-    begin
-      Result := Default(Boolean);
-    end;
-end;
-
-class operator TBooleanExpresion.LogicalNot(const Expr: TBooleanExpresion): Boolean;
-begin
-  Result := not Expr.FFunc();
-end;
-
-class operator TBooleanExpresion.LogicalOr(const Left: TBooleanExpresion;const Right: Boolean): Boolean;
-begin
-  Result := Left.FFunc() or Right;
-end;
-
-class operator TBooleanExpresion.LogicalAnd(const Left: TBooleanExpresion;const Right: Boolean): Boolean;
-begin
-  Result := Left.FFunc() and Right;
 end;
 
 { TFilterSpec<T> }
