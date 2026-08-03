@@ -1,4 +1,4 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to this project will be documented in this file.
 
@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
 ## [Unreleased]
+
+### Added
+
+- **Daf.Linq**: Módulo nuevo — secuencias perezosas con conteo de referencias: `IQueryable<T>` (desciende de `System.IEnumerable<T>`), `TQuery<T>`, `IGrouping<TKey, T>`, `Linq.From<T>`
+- **Daf.Linq**: Operadores `Where`/`Filter`, `Select`/`Map`, `Take`, `Skip`, `Zip`, `Distinct`, `OrderBy`, `GroupBy`
+- **Daf.Linq**: Terminales `IsEmpty`, `Any`, `FirstOrDefault`/`LastOrDefault`, `TryFirst`, `Single`, `SingleOrDefault`, `TrySingle`, `ToArray`, `ToList`, `ToSmartArray`
+- **SQLCute.InMemory**: Módulo nuevo — segundo back-end: ejecuta un `IQuery` sobre colecciones en memoria. Carril tipado sobre `TList<T>` y carril general con `IQueryContext`
+- **SQLCute.InMemory**: `IRow` con adaptadores `TRttiRow<T>`, `TDictRow`, `TJoinRow`, `TNullRow`; materialización por RTTI a clase de resultado
+- **SQLCute.InMemory**: JOINs (INNER/LEFT/RIGHT/CROSS/FULL OUTER), GROUP BY/HAVING, subconsultas, UNION/INTERSECT/EXCEPT
+- **SQLCute.InMemory**: Semántica ANSI de NULL — lógica de tres valores, agregados que ignoran NULL, DISTINCT con NULLs iguales, GROUP BY con un grupo para NULL, ORDER BY con NULL como menor
+- **SQLCute.InMemory**: Arnés de paridad entre back-ends; samples `InMemoryQuerySample` e `InMemoryJoinSample`; documentación bilingüe
+- **SQLCute**: `Daf.SQLCute.WhereTree` — normalizador de precedencia WHERE compartido por ambos back-ends
+- **Commons**: `TNullable<T>` en `Daf.Nullable`
+- **Commons**: `TDeferredEnumerable<T>` en `Daf.Enumerable`
+- **Commons**: `Daf.Comparers` — comparadores conscientes de NULL para `TValue` y `TNullable<T>`
+- **Commons**: Specs para `TSmartArray<T>` y `TMacrosList`
+
+### Changed
+
+- **SQLCute**: `CompileWhere` y `CompileHaving` emiten paréntesis explícitos de precedencia
+- **Commons**: `TSmartArray<T>.Select` toma `TFunc<T, TTarget>` en lugar de `TExpresion<TMapper<T, TTarget>>`
+- **Daf.Linq**: `Where` / `Filter` toman `TFilterSpec<T>`
+- **Commons**: `Daf.Enumerable.ToArray` usa colector `TList<T>` (O(n) en lugar de O(n²))
+
+### Removed
+
+- **Commons**: `TBooleanExpresion`
+
+### Fixed
+
+- **Commons**: `TMacrosList.GetValueFromIndex` no asignaba `Result`; toda lectura de macro devolvía cadena vacía
 
 ## [1.6.0] - 2026-07-20
 
