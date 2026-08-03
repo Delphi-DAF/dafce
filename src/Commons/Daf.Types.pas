@@ -229,7 +229,7 @@ end;
 
 function TMacrosList.GetValueFromIndex(Index: Integer):string;
 begin
-  FExpresions.ValueList[Index];
+  Result := FExpresions.ValueList[Index];
 end;
 
 function TMacrosList.GetExpression(const Name:string): TMacroExpression;
