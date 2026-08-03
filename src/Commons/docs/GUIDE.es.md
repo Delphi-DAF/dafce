@@ -1,4 +1,4 @@
-# Commons — Guía de uso
+﻿# Commons — Guía de uso
 
 **🌍 Idioma: [English](GUIDE.md) | Español**
 
@@ -339,3 +339,20 @@ var Más: TSmartArray<string> := Items + ['delta', 'epsilon'];
 // Ordenar
 Items.Sort;
 ```
+`Where` / `Any` toman un `TFilterSpec<T>` y `Select` un `TFunc<T, TTarget>` — los
+mismos tipos que toman los operadores perezosos de `Daf.Linq`,
+así que un filtro o un mapper escrito una vez sirve para las dos APIs. Los closures
+en línea convierten implícitamente, como arriba; construye el valor por separado
+cuando quieras reutilizarlo o componerlo:
+
+```pascal
+uses Daf.Expression;
+
+var Largos: TFilterSpec<string> := TPredicate<string>(
+  function(S: string): Boolean begin Result := Length(S) > 4; end);
+var Gritos: TFilterSpec<string> := TPredicate<string>(
+  function(S: string): Boolean begin Result := S = S.ToUpper; end);
+
+Items.Where(Largos and not Gritos);      // compuesto con and / or / not
+```
+

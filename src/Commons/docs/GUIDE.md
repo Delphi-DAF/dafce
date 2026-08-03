@@ -1,4 +1,4 @@
-# Commons — Usage Guide
+﻿# Commons — Usage Guide
 
 **🌍 Language: English | [Español](GUIDE.es.md)**
 
@@ -339,3 +339,19 @@ var More: TSmartArray<string> := Items + ['delta', 'epsilon'];
 // Sort
 Items.Sort;
 ```
+`Where` / `Any` take a `TFilterSpec<T>` and `Select` a `TFunc<T, TTarget>` — the very
+types the lazy `Daf.Linq` operators take, so a filter or a
+mapper written once works with both APIs. Inline closures convert implicitly, as
+above; build the value separately when you want to reuse or compose it:
+
+```pascal
+uses Daf.Expression;
+
+var Long: TFilterSpec<string> := TPredicate<string>(
+  function(S: string): Boolean begin Result := Length(S) > 4; end);
+var Loud: TFilterSpec<string> := TPredicate<string>(
+  function(S: string): Boolean begin Result := S = S.ToUpper; end);
+
+Items.Where(Long and not Loud);          // composed with and / or / not
+```
+

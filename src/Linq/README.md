@@ -45,7 +45,7 @@ for var P in Adults do                        // nothing ran until this line
 
 | Operator | Kind | Behavior |
 |----------|------|----------|
-| `Where` / `Filter` | lazy | Keeps elements matching a `TPredicate<T>` |
+| `Where` / `Filter` | lazy | Keeps elements matching a `TFilterSpec<T>` (a bare closure converts implicitly) |
 | `Select<TResult>` / `Map<TResult>` | lazy | Projects each element through a `TFunc<T, TResult>` |
 | `Take(N)` | lazy | Yields at most `N`, then **stops consuming the source** |
 | `Skip(N)` | lazy | Drops the first `N` |
@@ -53,9 +53,64 @@ for var P in Adults do                        // nothing ran until this line
 | `Distinct(Comparer)` | buffered | De-duplicates by value; pass a NULL-aware comparer for SQL semantics |
 | `OrderBy(Comparer)` | buffered | Sorts by an `IComparer<T>` |
 | `GroupBy<TKey>(KeySelector)` | buffered | Yields `IQueryable<IGrouping<TKey, T>>`, key order preserved |
-| `ToArray` / `ToList` / `ToSmartArray` | terminal | Materializes the sequence |
+| `IsEmpty` | terminal | True when nothing is produced; stops at the first element |
+| `Any(Spec)` | terminal | True when some element matches; stops at the first match |
+| `FirstOrDefault` / `LastOrDefault` | terminal | The first / last element, or `Default(T)` (or a supplied fallback) |
+| `TryFirst(out Value)` | terminal | The first element **plus** a found/not-found result |
+| `Single` / `SingleOrDefault` / `TrySingle` | terminal | The one and only element — see below |
+| `ToArray` / `ToList` / `ToList(List)` / `ToSmartArray` | terminal | Materializes the sequence |
 
 **Deferred by default.** `Where`/`Select`/`Take`/`Skip`/`Zip` run element-by-element while iterating. `OrderBy`/`Distinct`/`GroupBy` need every element, so they materialize once when enumeration starts — but still nothing happens until then.
+
+**Terminals are non-destructive.** They enumerate without consuming the query, so the same value stays usable and a terminal can be called twice:
+
+```pascal
+var Q := Linq.From<TPerson>(People).Where(IsAdult);
+if not Q.IsEmpty then
+  for var P in Q do ...          // still yields everything
+```
+
+The flip side is that each terminal call **re-enumerates the source**. With an expensive or single-shot source, materialize once (`ToArray` / `ToList`) and query that.
+
+### `First…` or `Single…`?
+
+`Single` asserts a shape: it raises `ELinqError` when the sequence is empty **or holds more than one element**. `SingleOrDefault` tolerates empty but still raises on more than one. Use them when "more than one" means your data is wrong and you want to hear about it:
+
+```pascal
+Users.Where(EmailIs(X)).SingleOrDefault;   // a duplicate email is a bug → raise
+Log.OrderByDesc(Stamp).FirstOrDefault;     // many entries expected → take the newest
+```
+
+`TryFirst` / `TrySingle` are the non-raising forms. `TryFirst` is also the only way to tell an empty sequence from one whose first element happens to equal `Default(T)` — something `FirstOrDefault` cannot express for value types.
+
+---
+
+## One vocabulary, two execution strategies
+
+Commons ships an eager collection (`TSmartArray<T>`) that predates this module. Both speak the **same** filter and mapper types, so a value written once works with either:
+
+| Concern | Shared type | Eager (`TSmartArray<T>`) | Lazy (`TQuery<T>`) |
+|---------|-------------|--------------------------|--------------------|
+| filter | `TFilterSpec<T>` | `Where`, `Any` | `Where` / `Filter`, `Any` |
+| projection | `TFunc<T, U>` | `Select<U>` | `Select<U>` / `Map<U>` |
+| eager → lazy | — | `Linq.From<T>(SmartArray)` | |
+| lazy → eager | — | | `ToSmartArray` |
+
+```pascal
+var Adults: TFilterSpec<TPerson> := ...;
+var Names:  TFunc<TPerson, string> := ...;
+
+Eager.Where(Adults).Select<string>(Names);                  // eager, Commons
+Linq.From<TPerson>(People).Where(Adults).Select<string>(Names);  // lazy, here
+```
+
+Deliberately different on each side:
+
+- **`Sort` vs `OrderBy`** — the eager `Sort` mutates in place; `OrderBy` returns a new deferred sequence. Different semantics, different names.
+- **Lazy only** — `Take`, `Skip`, `Zip`, `GroupBy`, `Distinct` and the terminals above.
+- **Eager only** — `Concat`, `BinarySearch`, `FreeItems`, `First`/`Last` properties: container concerns, not sequence ones.
+
+**Why both exist.** Commons' own `Daf.Rtti` chains `Where(...).Select(...)` over a `TSmartArray` and sits *below* this module in the dependency graph, so it cannot use the lazy API without inverting that graph. The duplication of *implementation* is therefore structural, not accidental — but the vocabulary is not duplicated.
 
 ---
 

@@ -45,7 +45,7 @@ for var P in Adultos do                        // nada se ejecutó hasta esta l�
 
 | Operador | Tipo | Comportamiento |
 |----------|------|----------------|
-| `Where` / `Filter` | perezoso | Conserva los elementos que cumplen un `TPredicate<T>` |
+| `Where` / `Filter` | perezoso | Conserva los elementos que cumplen un `TFilterSpec<T>` (un closure pelado convierte implícitamente) |
 | `Select<TResult>` / `Map<TResult>` | perezoso | Proyecta cada elemento con un `TFunc<T, TResult>` |
 | `Take(N)` | perezoso | Produce como mucho `N` y **deja de consumir la fuente** |
 | `Skip(N)` | perezoso | Descarta los primeros `N` |
@@ -53,9 +53,64 @@ for var P in Adultos do                        // nada se ejecutó hasta esta l�
 | `Distinct(Comparer)` | con buffer | Elimina duplicados por valor; pasa un comparador consciente de NULL para semántica SQL |
 | `OrderBy(Comparer)` | con buffer | Ordena mediante un `IComparer<T>` |
 | `GroupBy<TKey>(KeySelector)` | con buffer | Devuelve `IQueryable<IGrouping<TKey, T>>`, preservando el orden de las claves |
-| `ToArray` / `ToList` / `ToSmartArray` | terminal | Materializa la secuencia |
+| `IsEmpty` | terminal | True si no produce nada; se detiene en el primer elemento |
+| `Any(Spec)` | terminal | True si algún elemento cumple; se detiene en la primera coincidencia |
+| `FirstOrDefault` / `LastOrDefault` | terminal | El primer / último elemento, o `Default(T)` (o el fallback indicado) |
+| `TryFirst(out Value)` | terminal | El primer elemento **y además** un resultado encontrado/no encontrado |
+| `Single` / `SingleOrDefault` / `TrySingle` | terminal | El único elemento — ver más abajo |
+| `ToArray` / `ToList` / `ToList(List)` / `ToSmartArray` | terminal | Materializa la secuencia |
 
 **Diferido por defecto.** `Where`/`Select`/`Take`/`Skip`/`Zip` se ejecutan elemento a elemento durante la iteración. `OrderBy`/`Distinct`/`GroupBy` necesitan todos los elementos, así que materializan una vez al comenzar la enumeración — pero tampoco antes de ella.
+
+**Los terminales no son destructivos.** Enumeran sin consumir la query, así que el mismo valor sigue usable y un terminal puede llamarse dos veces:
+
+```pascal
+var Q := Linq.From<TPersona>(Personas).Where(EsAdulto);
+if not Q.IsEmpty then
+  for var P in Q do ...          // sigue produciendo todo
+```
+
+La contrapartida es que cada llamada a un terminal **vuelve a recorrer la fuente**. Con una fuente costosa o de una sola pasada, materializa una vez (`ToArray` / `ToList`) y consulta eso.
+
+### ¿`First…` o `Single…`?
+
+`Single` afirma una forma: lanza `ELinqError` si la secuencia está vacía **o tiene más de un elemento**. `SingleOrDefault` tolera vacío pero sigue lanzando con más de uno. Úsalos cuando "más de uno" signifique que tus datos están mal y quieras enterarte:
+
+```pascal
+Usuarios.Where(EmailEs(X)).SingleOrDefault;   // un email duplicado es un bug → lanza
+Log.OrderByDesc(Fecha).FirstOrDefault;        // se esperan muchos → coge el más reciente
+```
+
+`TryFirst` / `TrySingle` son las formas que no lanzan. `TryFirst` es además la única manera de distinguir una secuencia vacía de una cuyo primer elemento vale justo `Default(T)` — algo que `FirstOrDefault` no puede expresar en tipos valor.
+
+---
+
+## Un vocabulario, dos estrategias de ejecución
+
+Commons trae una colección ansiosa (`TSmartArray<T>`) anterior a este módulo. Ambas hablan **los mismos** tipos de filtro y de mapper, así que un valor escrito una vez sirve para las dos:
+
+| Concepto | Tipo compartido | Ansioso (`TSmartArray<T>`) | Perezoso (`TQuery<T>`) |
+|----------|-----------------|----------------------------|------------------------|
+| filtro | `TFilterSpec<T>` | `Where`, `Any` | `Where` / `Filter`, `Any` |
+| proyección | `TFunc<T, U>` | `Select<U>` | `Select<U>` / `Map<U>` |
+| ansioso → perezoso | — | `Linq.From<T>(SmartArray)` | |
+| perezoso → ansioso | — | | `ToSmartArray` |
+
+```pascal
+var Adultos: TFilterSpec<TPersona> := ...;
+var Nombres: TFunc<TPersona, string> := ...;
+
+Ansioso.Where(Adultos).Select<string>(Nombres);                        // ansioso, Commons
+Linq.From<TPersona>(Personas).Where(Adultos).Select<string>(Nombres);  // perezoso, aquí
+```
+
+Deliberadamente distinto en cada lado:
+
+- **`Sort` frente a `OrderBy`** — el `Sort` ansioso muta en sitio; `OrderBy` devuelve una secuencia diferida nueva. Semánticas distintas, nombres distintos.
+- **Solo perezoso** — `Take`, `Skip`, `Zip`, `GroupBy`, `Distinct` y los terminales de arriba.
+- **Solo ansioso** — `Concat`, `BinarySearch`, `FreeItems`, propiedades `First`/`Last`: son asuntos de contenedor, no de secuencia.
+
+**Por qué existen los dos.** El propio `Daf.Rtti` de Commons encadena `Where(...).Select(...)` sobre un `TSmartArray` y está *por debajo* de este módulo en el grafo de dependencias, así que no puede usar la API perezosa sin invertir ese grafo. La duplicación de *implementación* es por tanto estructural, no un descuido — pero el vocabulario no está duplicado.
 
 ---
 
