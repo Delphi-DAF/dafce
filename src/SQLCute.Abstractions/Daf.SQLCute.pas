@@ -112,6 +112,20 @@ type
     function OrWhere(const Callback: TQueryBuilderCallback): IQuery; overload;
 
     /// <summary>
+    /// Adds an AND-connected WHERE group wrapped in NOT (...).
+    /// The callback receives a fresh IQuery, adds conditions, and returns it.
+    /// The whole group is negated, not each condition: NOT (a = ? AND b = ?)
+    /// matches when *either* inner condition fails.
+    /// To negate a single condition prefer the leaf form WhereNot(column, value).
+    /// </summary>
+    function WhereNot(const Callback: TQueryBuilderCallback): IQuery; overload;
+    /// <summary>
+    /// Adds an OR-connected WHERE group wrapped in NOT (...).
+    /// The negation applies to this group's own conditions only.
+    /// </summary>
+    function OrWhereNot(const Callback: TQueryBuilderCallback): IQuery; overload;
+
+    /// <summary>
     /// Adds WHERE col1 op col2 (column-to-column comparison, no binding).
     /// NOTE: col1 and col2 are emitted verbatim — pass developer-controlled names only.
     /// </summary>

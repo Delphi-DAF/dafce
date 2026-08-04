@@ -154,6 +154,73 @@ OR-connected group:
 
 ---
 
+## Negated Grouped WHERE (Callback)
+
+`WhereNot` and `OrWhereNot` also accept a callback. The group is built exactly as
+with `Where` / `OrWhere`, then wrapped in `NOT (…)`:
+
+```pascal
+TQuery.New.From('orders')
+  .Where('active', True)
+  .WhereNot(function(Q: IQuery): IQuery
+    begin
+      Result := Q.Where('status', 'cancelled')
+                 .Where('refunded', True);
+    end)
+// → WHERE active = ? AND NOT (status = ? AND refunded = ?)
+```
+
+OR-connected group:
+
+```pascal
+.OrWhereNot(function(Q: IQuery): IQuery
+  begin
+    Result := Q.Where('role', 'guest').OrWhere('banned', True);
+  end)
+// → OR NOT (role = ? OR banned = ?)
+```
+
+> ⚠️ **The negation applies to the group as a whole, not to each condition.**
+> `NOT (status = ? AND refunded = ?)` matches whenever *either* inner condition
+> fails — a cancelled order that was never refunded still matches. If you meant
+> "neither of them", negate each condition instead:
+> `.WhereNot('status', 'cancelled').WhereNot('refunded', True)`.
+
+The negation applies to its own subtree only: sibling conditions and the
+enclosing group are untouched.
+
+```pascal
+.WhereNot(function(Q: IQuery): IQuery
+  begin
+    Result := Q.Where('a', 1);
+  end)
+.Where('b', 2)
+// → WHERE NOT (a = ?) AND b = ?     — b is not negated
+```
+
+To negate a **single** condition, use the leaf form. It is the idiomatic way and
+produces the same SQL as a one-element group:
+
+```pascal
+.WhereNot('role', 'guest')          // → WHERE NOT (role = ?)   ← idiomatic
+```
+
+A negated group whose callback adds no condition is omitted from the query, just
+like an empty unnegated group — `NOT ()` is never emitted:
+
+```pascal
+.Where('a', 1)
+.WhereNot(function(Q: IQuery): IQuery begin Result := Q end)
+// → WHERE a = ?
+```
+
+Under SQL three-valued logic, a negated group containing a comparison against
+`NULL` evaluates to *unknown*, so the row is **excluded** — the same rule `NOT`
+already follows for a single condition. The in-memory back-end applies it
+identically.
+
+---
+
 ## WhereColumns
 
 Column-to-column comparison (no binding — values are emitted verbatim):

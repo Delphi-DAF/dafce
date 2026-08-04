@@ -59,6 +59,54 @@ TQuery — WHERE groups, WhereColumns, When @unit @sqlcute @f2
 
 // -------------------------------------------------------------------------
 
+.Rule('WhereNot(callback) / OrWhereNot(callback) wrap the group in NOT (...)')
+
+  // The whole group is negated, not each condition: NOT (b = ? AND c = ?)
+  // matches whenever *either* inner condition fails.
+  .Scenario('NegatedAndGroup: WhereNot connects with AND and negates the group')
+    .Given('a negated WHERE group query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users WHERE a = ? AND NOT (b = ? AND c = ?)"')
+    .&Then('has 3 bindings')
+
+  .Scenario('NegatedOrGroup: OrWhereNot connects with OR and negates the group')
+    .Given('a negated OR WHERE group query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users WHERE a = ? OR NOT (b = ? OR c = ?)"')
+    .&Then('has 3 bindings')
+
+  .Scenario('NegatedGroupInsideGroup: the negation applies to its own subtree')
+    .Given('a negated group inside a WHERE group')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users WHERE x = ? AND NOT (y = ? OR z = ?)"')
+    .&Then('has 3 bindings')
+
+  .Scenario('SiblingOfNegatedGroupIsUnaffected: a later condition is not negated')
+    .Given('a negated WHERE group followed by a plain condition')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users WHERE NOT (a = ?) AND b = ?"')
+    .&Then('has 2 bindings')
+
+  .Scenario('NegatedGroupKeepsBindingOrder: negating changes no binding')
+    .Given('a negated WHERE group query')
+    .When('I compile with ANSI')
+    .&Then('bindings in order are "1, 2, 3"')
+    .&Then('the binding count equals the same query with the group unnegated')
+
+  .Scenario('EmptyNegatedGroup: a group with no condition is omitted, never NOT ()')
+    .Given('a negated WHERE group whose callback adds nothing')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users WHERE a = ?"')
+    .&Then('has 1 binding')
+
+  .Scenario('NegationSurvivesClone: the clone keeps the NOT (...) wrapper')
+    .Given('a negated WHERE group query')
+    .When('I clone the query and compile the clone')
+    .&Then('SQL is "SELECT * FROM users WHERE a = ? AND NOT (b = ? AND c = ?)"')
+    .&Then('has 3 bindings')
+
+// -------------------------------------------------------------------------
+
 .Rule('WhereColumns compares two columns without adding bindings')
 
   .Scenario('Equality column-to-column comparison')

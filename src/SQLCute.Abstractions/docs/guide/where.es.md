@@ -154,6 +154,73 @@ Grupo con conector OR:
 
 ---
 
+## WHERE Agrupado Negado (Callback)
+
+`WhereNot` y `OrWhereNot` también aceptan un callback. El grupo se construye
+igual que con `Where` / `OrWhere` y después se envuelve en `NOT (…)`:
+
+```pascal
+TQuery.New.From('pedidos')
+  .Where('activo', True)
+  .WhereNot(function(Q: IQuery): IQuery
+    begin
+      Result := Q.Where('estado', 'cancelado')
+                 .Where('reembolsado', True);
+    end)
+// → WHERE activo = ? AND NOT (estado = ? AND reembolsado = ?)
+```
+
+Grupo con conector OR:
+
+```pascal
+.OrWhereNot(function(Q: IQuery): IQuery
+  begin
+    Result := Q.Where('rol', 'invitado').OrWhere('bloqueado', True);
+  end)
+// → OR NOT (rol = ? OR bloqueado = ?)
+```
+
+> ⚠️ **La negación se aplica al grupo entero, no a cada condición.**
+> `NOT (estado = ? AND reembolsado = ?)` se cumple cuando falla *cualquiera* de
+> las condiciones internas — un pedido cancelado pero no reembolsado sigue
+> cumpliendo. Si lo que querías es "ninguna de las dos", niega cada condición:
+> `.WhereNot('estado', 'cancelado').WhereNot('reembolsado', True)`.
+
+La negación afecta solo a su propio subárbol: ni las condiciones hermanas ni el
+grupo que lo contiene se ven alterados.
+
+```pascal
+.WhereNot(function(Q: IQuery): IQuery
+  begin
+    Result := Q.Where('a', 1);
+  end)
+.Where('b', 2)
+// → WHERE NOT (a = ?) AND b = ?     — b no queda negada
+```
+
+Para negar una **sola** condición usa la forma de hoja. Es la idiomática y
+produce el mismo SQL que un grupo de un solo elemento:
+
+```pascal
+.WhereNot('rol', 'invitado')        // → WHERE NOT (rol = ?)   ← idiomática
+```
+
+Un grupo negado cuyo callback no añade ninguna condición se omite de la consulta,
+igual que un grupo sin negar vacío — nunca se emite `NOT ()`:
+
+```pascal
+.Where('a', 1)
+.WhereNot(function(Q: IQuery): IQuery begin Result := Q end)
+// → WHERE a = ?
+```
+
+Bajo la lógica trivaluada de SQL, un grupo negado que contiene una comparación
+contra `NULL` se evalúa como *desconocido*, así que la fila queda **excluida** —
+la misma regla que `NOT` ya aplica sobre una condición suelta. El back-end en
+memoria la aplica de forma idéntica.
+
+---
+
 ## WhereColumns
 
 Comparación columna a columna (sin binding — los valores se emiten literalmente):

@@ -44,7 +44,7 @@ type
     function AddWithClause(const Name: string; const SubQuery: IQuery;
       IsRecursive: Boolean): IQuery;
     function AddNestedWhereGroup(const Callback: TQueryBuilderCallback;
-      Conn: TBoolOp): IQuery;
+      Conn: TBoolOp; IsNot: Boolean = False): IQuery;
     procedure SelectAggregateRaw(const AggFunc, Column, Alias: string);
     function AddWhereLikeClause(const Column, Pattern: string;
       Op: TWhereOp; Conn: TBoolOp; CaseSensitive: Boolean): IQuery;
@@ -153,6 +153,8 @@ type
     // IQuery — F2: groups, columns, when
     function Where(const Callback: TQueryBuilderCallback): IQuery; overload;
     function OrWhere(const Callback: TQueryBuilderCallback): IQuery; overload;
+    function WhereNot(const Callback: TQueryBuilderCallback): IQuery; overload;
+    function OrWhereNot(const Callback: TQueryBuilderCallback): IQuery; overload;
     function WhereColumns(const Col1, Op, Col2: string): IQuery;
     function OrWhereColumns(const Col1, Op, Col2: string): IQuery;
     function When(const Condition: Boolean;
@@ -1238,7 +1240,7 @@ end;
 // --- F2: WHERE groups, WhereColumns, When ---
 
 function TQueryImpl.AddNestedWhereGroup(const Callback: TQueryBuilderCallback;
-  Conn: TBoolOp): IQuery;
+  Conn: TBoolOp; IsNot: Boolean = False): IQuery;
 var
   Inner: IQuery;
   Nested: TNestedWhereClause;
@@ -1251,6 +1253,7 @@ begin
   InnerImpl := Inner as TQueryImpl;
   Nested := TNestedWhereClause.Create;
   Nested.Connector := Conn;
+  Nested.IsNot     := IsNot;
   SetLength(Nested.SubClauses, 0);
   for Cl in InnerImpl.FClauses do
     if (Cl is TWhereClause) or (Cl is TWhereInClause) or (Cl is TNestedWhereClause) or (Cl is TDateWhereClause) then
@@ -1271,6 +1274,16 @@ end;
 function TQueryImpl.OrWhere(const Callback: TQueryBuilderCallback): IQuery;
 begin
   Result := AddNestedWhereGroup(Callback, TBoolOp.opOr);
+end;
+
+function TQueryImpl.WhereNot(const Callback: TQueryBuilderCallback): IQuery;
+begin
+  Result := AddNestedWhereGroup(Callback, TBoolOp.opAnd, True);
+end;
+
+function TQueryImpl.OrWhereNot(const Callback: TQueryBuilderCallback): IQuery;
+begin
+  Result := AddNestedWhereGroup(Callback, TBoolOp.opOr, True);
 end;
 
 function TQueryImpl.WhereColumns(const Col1, Op, Col2: string): IQuery;

@@ -183,6 +183,18 @@ begin
     MakeCase('not-of-unknown',
       TQuery.New.From('people').WhereNot('age', '>', 18).OrderBy('name'),
       ['name'], 'Bob'),                       // NOT(unknown) stays unknown
+    // Negated group: NOT (country = UK AND age > 18). Dan (UK, NULL) is dropped
+    // because the group is unknown, while Gil (ES, NULL) is kept because the
+    // country mismatch already makes the group false.
+    MakeCase('negated-group',
+      TQuery.New.From('people')
+        .WhereNot(
+          function(Q: IQuery): IQuery
+          begin
+            Result := Q.Where('country', 'UK').Where('age', '>', 18);
+          end)
+        .OrderBy('name'),
+      ['name'], 'Ann, Bob, Eve, Gil'),
     MakeCase('is-null',
       TQuery.New.From('people').WhereNull('age').OrderBy('name'),
       ['name'], 'Dan, Gil'),

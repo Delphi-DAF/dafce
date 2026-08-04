@@ -73,6 +73,24 @@ type
     [Given('an OR WHERE group query')]
     procedure GivenOrWhereGroup(W: TSQLCuteWorld);
 
+    [Given('a negated WHERE group query')]
+    procedure GivenNegatedWhereGroup(W: TSQLCuteWorld);
+
+    [Given('a negated OR WHERE group query')]
+    procedure GivenNegatedOrWhereGroup(W: TSQLCuteWorld);
+
+    [Given('a negated group inside a WHERE group')]
+    procedure GivenNegatedGroupInsideGroup(W: TSQLCuteWorld);
+
+    [Given('a negated WHERE group followed by a plain condition')]
+    procedure GivenNegatedGroupThenPlainCondition(W: TSQLCuteWorld);
+
+    [Given('a negated WHERE group whose callback adds nothing')]
+    procedure GivenEmptyNegatedWhereGroup(W: TSQLCuteWorld);
+
+    [ThenAttribute('the binding count equals the same query with the group unnegated')]
+    procedure ThenBindingCountEqualsUnnegated(W: TSQLCuteWorld);
+
     [Given('a WhereColumns equality query')]
     procedure GivenWhereColumnsEquality(W: TSQLCuteWorld);
 
@@ -222,6 +240,85 @@ begin
       begin
         Result := Q.Where('age', '>', 18).Where('active', True);
       end);
+end;
+
+// --- negated WHERE groups (WhereNot / OrWhereNot callback forms) -------
+
+// The three bindings 1, 2, 3 are deliberate: they double as the authored
+// binding order asserted by the binding-order scenario.
+procedure TSQLCuteStepsWhereAdvanced.GivenNegatedWhereGroup(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('users')
+    .Where('a', 1)
+    .WhereNot(
+      function(Q: IQuery): IQuery
+      begin
+        Result := Q.Where('b', 2).Where('c', 3);
+      end);
+end;
+
+procedure TSQLCuteStepsWhereAdvanced.GivenNegatedOrWhereGroup(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('users')
+    .Where('a', 1)
+    .OrWhereNot(
+      function(Q: IQuery): IQuery
+      begin
+        Result := Q.Where('b', 2).OrWhere('c', 3);
+      end);
+end;
+
+procedure TSQLCuteStepsWhereAdvanced.GivenNegatedGroupInsideGroup(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('users')
+    .Where(
+      function(Q: IQuery): IQuery
+      begin
+        Result := Q.Where('x', 1).WhereNot(
+          function(Q2: IQuery): IQuery
+          begin
+            Result := Q2.Where('y', 2).OrWhere('z', 3);
+          end);
+      end);
+end;
+
+procedure TSQLCuteStepsWhereAdvanced.GivenNegatedGroupThenPlainCondition(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('users')
+    .WhereNot(
+      function(Q: IQuery): IQuery
+      begin
+        Result := Q.Where('a', 1);
+      end)
+    .Where('b', 2);
+end;
+
+procedure TSQLCuteStepsWhereAdvanced.GivenEmptyNegatedWhereGroup(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('users')
+    .Where('a', 1)
+    .WhereNot(
+      function(Q: IQuery): IQuery
+      begin
+        Result := Q;
+      end);
+end;
+
+// Compiles the same shape with Where instead of WhereNot: negating a group
+// must not add, drop or reorder a single binding.
+procedure TSQLCuteStepsWhereAdvanced.ThenBindingCountEqualsUnnegated(W: TSQLCuteWorld);
+var
+  Unnegated: TSQLResult;
+begin
+  Unnegated := TQuery.New.From('users')
+    .Where('a', 1)
+    .Where(
+      function(Q: IQuery): IQuery
+      begin
+        Result := Q.Where('b', 2).Where('c', 3);
+      end)
+    .Compile(W.Compiler);
+  Expect(Length(W.LastResult.Bindings)).ToEqual(Length(Unnegated.Bindings));
 end;
 
 procedure TSQLCuteStepsWhereAdvanced.GivenWhereColumnsEquality(W: TSQLCuteWorld);

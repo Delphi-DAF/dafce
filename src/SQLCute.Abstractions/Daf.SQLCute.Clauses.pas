@@ -333,7 +333,8 @@ type
   /// A parenthesized group of WHERE clauses, produced by Where(callback) /
   /// OrWhere(callback). SubClauses holds the inner conditions; Connector
   /// controls how this group connects with the preceding sibling.
-  /// IsNot is reserved for future NOT (...) support.
+  /// IsNot wraps the whole group in NOT (...), as set by WhereNot(callback) /
+  /// OrWhereNot(callback).
   /// </summary>
   TNestedWhereClause = class(TAbstractClause)
   public

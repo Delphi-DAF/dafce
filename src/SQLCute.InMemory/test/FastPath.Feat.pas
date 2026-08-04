@@ -218,6 +218,48 @@ Feature SQLCute in-memory fast path @inmemory @fastpath
         Expect(W.Names[0]).ToEqual('Bob');
       end)
 
+  .Scenario('A negated group drops exactly the elements its conditions match')
+    .When('WhereNot(country = US AND age > 18) runs over the list',
+      procedure(W: TFastPathWorld)
+      begin
+        W.Names := RunNames(W, TQuery.New.From('people')
+          .WhereNot(
+            function(Q: IQuery): IQuery
+            begin
+              Result := Q.Where('country', 'US').Where('age', '>', 18);
+            end));
+        W.Count := Length(W.Names);
+      end)
+    .&Then('Ann and Eve (US adults) are dropped, the other four kept',
+      procedure(W: TFastPathWorld)
+      begin
+        // Dan is UK, so the group is No before his NULL age matters.
+        Expect(W.Count).ToEqual(4);   // Bob, Cara, Dan, Finn
+      end)
+
+  // The 3VL discriminator: under two-valued logic Dan's group would be False
+  // and NOT would keep him, giving 4. Unknown propagates through NOT, so 3.
+  .Scenario('A negated group containing an unknown comparison stays unknown')
+    .When('WhereNot(country = UK AND age > 18) runs — Dan is UK with a NULL age',
+      procedure(W: TFastPathWorld)
+      begin
+        W.Names := RunNames(W, TQuery.New.From('people')
+          .WhereNot(
+            function(Q: IQuery): IQuery
+            begin
+              Result := Q.Where('country', 'UK').Where('age', '>', 18);
+            end));
+        W.Count := Length(W.Names);
+      end)
+    .&Then('Dan is excluded: (Yes AND Unknown) = Unknown, and NOT Unknown = Unknown',
+      procedure(W: TFastPathWorld)
+      begin
+        Expect(W.Count).ToEqual(3);
+        Expect(W.Names[0]).ToEqual('Ann');
+        Expect(W.Names[1]).ToEqual('Bob');
+        Expect(W.Names[2]).ToEqual('Eve');
+      end)
+
   .Scenario('BETWEEN keeps values in range and skips NULL')
     .When('WhereBetween(age, 25, 30) runs',
       procedure(W: TFastPathWorld)

@@ -110,6 +110,31 @@ Feature WhereTree @wheretree @sqlcute
         Expect(Ord(W.Root.Kind)).ToEqual(Ord(TWhereNodeKind.Neg));
         Expect(Length(W.Root.Children)).ToEqual(1);
         Expect(Ord(W.Root.Children[0].Kind)).ToEqual(Ord(TWhereNodeKind.Leaf));
+      end)
+
+  // The negation wraps the group's subtree whole — it is not pushed down onto
+  // the inner conditions, so the subtree under Neg is exactly the one the same
+  // group yields without WhereNot (a Disjunction of two leaves).
+  .Scenario('WhereNot(callback) wraps the whole group subtree in a negation node')
+    .When('a negated group of two OR-joined conditions is built',
+      procedure(W: TWhereTreeWorld)
+      begin
+        W.Query.From('t').WhereNot(
+          function(Q: IQuery): IQuery
+          begin
+            Result := Q.Where('a', '=', 1).OrWhere('b', '=', 2);
+          end);
+        W.Root := TWhereTree.Build(W.Query.Clauses);
+      end)
+    .&Then('the root is a negation of the disjunction the unnegated group yields',
+      procedure(W: TWhereTreeWorld)
+      begin
+        Expect(Ord(W.Root.Kind)).ToEqual(Ord(TWhereNodeKind.Neg));
+        Expect(Length(W.Root.Children)).ToEqual(1);
+        Expect(Ord(W.Root.Children[0].Kind)).ToEqual(Ord(TWhereNodeKind.Disjunction));
+        Expect(Length(W.Root.Children[0].Children)).ToEqual(2);
+        Expect(Ord(W.Root.Children[0].Children[0].Kind)).ToEqual(Ord(TWhereNodeKind.Leaf));
+        Expect(Ord(W.Root.Children[0].Children[1].Kind)).ToEqual(Ord(TWhereNodeKind.Leaf));
       end);
 
 end.

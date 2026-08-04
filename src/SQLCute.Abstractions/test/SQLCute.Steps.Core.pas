@@ -86,6 +86,9 @@ type
     [ThenAttribute('has (\d+) bindings?')]
     procedure ThenBindingCount(W: TSQLCuteWorld; Expected: Integer);
 
+    [ThenAttribute('bindings in order are "(.*)"')]
+    procedure ThenBindingsInOrder(W: TSQLCuteWorld; Expected: string);
+
   end;
 
 // -----------------------------------------------------------------------
@@ -233,6 +236,21 @@ end;
 procedure TSQLCuteStepsCore.ThenBindingCount(W: TSQLCuteWorld; Expected: Integer);
 begin
   Expect(Length(W.LastResult.Bindings)).ToEqual(Expected);
+end;
+
+procedure TSQLCuteStepsCore.ThenBindingsInOrder(W: TSQLCuteWorld; Expected: string);
+var
+  Actual: string;
+  I: Integer;
+begin
+  Actual := '';
+  for I := 0 to High(W.LastResult.Bindings) do
+  begin
+    if I > 0 then
+      Actual := Actual + ', ';
+    Actual := Actual + VarToStr(W.LastResult.Bindings[I]);
+  end;
+  Expect(Actual).ToEqual(Expected);
 end;
 
 
