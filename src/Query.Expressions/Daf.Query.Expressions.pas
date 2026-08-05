@@ -21,8 +21,10 @@ interface
 uses
   System.SysUtils,
   System.Rtti,
+  System.TypInfo,
   System.Variants,
-  Daf.Nullable;
+  Daf.Nullable,
+  Daf.Rtti;
 
 type
   /// <summary>
@@ -330,6 +332,115 @@ function Prop(const Name: string): TExpr;
 /// <summary>A named placeholder carrying its bound value.</summary>
 function Prm(const Name: string; const Value: Variant): TExpr;
 
+type
+  // ---------------------------------------------------------------------------
+  //  Name resolution — one seam, two questions
+  // ---------------------------------------------------------------------------
+
+  /// <summary>
+  ///   Answers the layer's only two naming questions: which column backs this
+  ///   member, and which table backs this type. They are the same kind of
+  ///   question, so they belong to one strategy — the ORM then plugs into one
+  ///   seam rather than two.
+  /// </summary>
+  /// <remarks>
+  ///   What is deliberately absent is everything richer: keys, lock columns,
+  ///   attributes, inheritance mapping. That is ORM metadata, and the ORM is not
+  ///   designed yet; baking a mapping model in here would prejudge that design
+  ///   from the wrong layer. This layer commits to the seam, not the mapping —
+  ///   whatever the ORM turns out to be, it supplies its own implementation and
+  ///   nothing here changes.
+  /// </remarks>
+  INameResolution = interface
+    ['{E8A1C704-3D62-4F95-B08A-71C3D65E24BF}']
+    /// <summary>The column backing <c>Member</c> of <c>EntityType</c>.</summary>
+    function ColumnFor(EntityType: PTypeInfo; const Member: string): string;
+    /// <summary>The table backing <c>EntityType</c>.</summary>
+    function TableFor(EntityType: PTypeInfo): string;
+  end;
+
+  /// <summary>
+  ///   The defaults, both deliberately minimal: a member's column is its own
+  ///   name, and a type's table is the type name with a leading <c>T</c>
+  ///   removed. No pluralization and no case conversion — those are naming
+  ///   <i>policy</i>, and guessing them would collide with whatever the ORM
+  ///   decides while looking like a feature.
+  /// </summary>
+  /// <remarks>
+  ///   A documented convention applied uniformly is a default, not the hazard a
+  ///   pass-through is: it is visible, replaceable, and wrong in the same way
+  ///   for everybody rather than on one back-end only.
+  /// </remarks>
+  TDefaultNameResolution = class(TInterfacedObject, INameResolution)
+  public
+    function ColumnFor(EntityType: PTypeInfo; const Member: string): string;
+    function TableFor(EntityType: PTypeInfo): string;
+  end;
+
+/// <summary>
+///   The shared default strategy. Stateless, so one instance serves every
+///   caller that supplies none of its own.
+/// </summary>
+function DefaultNameResolution: INameResolution;
+
+type
+  // ---------------------------------------------------------------------------
+  //  The entity proxy
+  // ---------------------------------------------------------------------------
+
+  /// <summary>
+  ///   A member name that resolves to no property or field of the entity.
+  /// </summary>
+  /// <remarks>
+  ///   Raised where the expression is authored, never carried forward. The
+  ///   hazard being avoided is a pass-through default: it makes a wrong name
+  ///   look right on whichever path tolerates it — SQL will happily send an
+  ///   unmapped column to the server — so the divergence surfaces far from its
+  ///   cause and on only one back-end. The house precedent is already set;
+  ///   <c>TRttiAccessors&lt;T&gt;.Get</c> raises naming both the column and the
+  ///   type rather than returning an empty value.
+  /// </remarks>
+  EExprMemberError = class(Exception);
+
+  /// <summary>
+  ///   An entity's members as expression leaves, resolved through RTTI. This is
+  ///   the always-available authoring path: nothing in this layer is reachable
+  ///   only through the optional metamodel, so adopting or dropping one later is
+  ///   a local edit rather than a migration.
+  /// </summary>
+  TEntityExpr<T> = record
+  strict private
+    FNames: INameResolution;
+    function Names: INameResolution;
+  public
+    /// <summary>Binds the proxy to a strategy; <c>nil</c> means the defaults.</summary>
+    constructor Create(const ANames: INameResolution);
+    /// <summary>
+    ///   The leaf for <c>Member</c>, carrying the property name as RTTI spells
+    ///   it. Raises when the member resolves to nothing.
+    /// </summary>
+    function Prop(const Member: string): TExpr;
+    /// <summary>The column <c>Member</c> resolves to. Also validates the member.</summary>
+    function Column(const Member: string): string;
+    /// <summary>The table <c>T</c> resolves to, through the same strategy.</summary>
+    function Table: string;
+  end;
+
+/// <summary>
+///   The property or field of <c>EntityType</c> named <c>Member</c>, or
+///   <c>nil</c>. Properties win over fields, matching the in-memory lane's own
+///   resolution order.
+/// </summary>
+function FindEntityMember(EntityType: PTypeInfo; const Member: string): TRttiMember;
+
+/// <summary>
+///   The property name as RTTI spells it, raising <c>EExprMemberError</c> when
+///   the member resolves to nothing. Both authoring paths — the runtime proxy and
+///   a metamodel leaf — go through here, so neither can disagree with the other
+///   about casing, and both fail at the same point for the same reason.
+/// </summary>
+function ResolvedMemberName(EntityType: PTypeInfo; const Member: string): string;
+
 implementation
 
 { TExprNode }
@@ -602,6 +713,102 @@ end;
 function Prm(const Name: string; const Value: Variant): TExpr;
 begin
   Result := TNode.Param(Name, Value);
+end;
+
+{ TDefaultNameResolution }
+
+function TDefaultNameResolution.ColumnFor(EntityType: PTypeInfo; const Member: string): string;
+begin
+  // Identity, which is already the shipped convention: the in-memory lane's
+  // TRttiAccessors resolves a column name against a property of the same name.
+  Result := Member;
+end;
+
+function TDefaultNameResolution.TableFor(EntityType: PTypeInfo): string;
+begin
+  Result := _T.NameOf(EntityType);
+  // The leading T is stripped only when what follows is upper case, i.e. when
+  // the name really follows the Delphi T-prefix convention. Without that guard
+  // a type named `Thing` would silently become `hing` — a wrong answer dressed
+  // as a default, which is the one thing a default must not be.
+  if (Length(Result) > 1) and (Result[1] = 'T') and CharInSet(Result[2], ['A'..'Z']) then
+    Result := Copy(Result, 2, MaxInt);
+end;
+
+var
+  GDefaultNames: INameResolution;
+
+function DefaultNameResolution: INameResolution;
+begin
+  if GDefaultNames = nil then
+    GDefaultNames := TDefaultNameResolution.Create;
+  Result := GDefaultNames;
+end;
+
+{ Member resolution }
+
+function FindEntityMember(EntityType: PTypeInfo; const Member: string): TRttiMember;
+begin
+  Result := nil;
+  if EntityType = nil then
+    Exit;
+  var Ctx := TRttiContext.Create;
+  try
+    var RType := Ctx.GetType(EntityType);
+    if RType = nil then
+      Exit;
+    for var P in RType.GetProperties do
+      if SameText(P.Name, Member) then
+        Exit(P);
+    for var F in RType.GetFields do
+      if SameText(F.Name, Member) then
+        Exit(F);
+  finally
+    Ctx.Free;
+  end;
+end;
+
+function ResolvedMemberName(EntityType: PTypeInfo; const Member: string): string;
+begin
+  var M := FindEntityMember(EntityType, Member);
+  if M = nil then
+    raise EExprMemberError.CreateFmt(
+      'Member "%s" resolves to no property or field of %s.',
+      [Member, _T.NameOf(EntityType)]);
+  Result := M.Name;
+end;
+
+{ TEntityExpr<T> }
+
+constructor TEntityExpr<T>.Create(const ANames: INameResolution);
+begin
+  FNames := ANames;
+end;
+
+function TEntityExpr<T>.Names: INameResolution;
+begin
+  if FNames <> nil then
+    Result := FNames
+  else
+    Result := DefaultNameResolution;
+end;
+
+function TEntityExpr<T>.Prop(const Member: string): TExpr;
+begin
+  // The leaf carries the PROPERTY name. The column is the emitter's business and
+  // it asks the strategy for it once, at emit time — declaring it here would put
+  // persistence vocabulary in a unit that must stay free of it.
+  Result := TNode.Member(ResolvedMemberName(TypeInfo(T), Member));
+end;
+
+function TEntityExpr<T>.Column(const Member: string): string;
+begin
+  Result := Names.ColumnFor(TypeInfo(T), ResolvedMemberName(TypeInfo(T), Member));
+end;
+
+function TEntityExpr<T>.Table: string;
+begin
+  Result := Names.TableFor(TypeInfo(T));
 end;
 
 end.
