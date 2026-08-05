@@ -43,6 +43,11 @@ type
     /// comma-separated sort keys) rather than a suffix.
     /// </summary>
     function CompileOrderByColumn(const O: TOrderByClause): string; virtual;
+    /// <summary>
+    /// <c>ASC</c> / <c>DESC</c> for a sort direction. Shared by the ORDER BY hook
+    /// and by the dialects that emulate NULL placement with an extra sort key.
+    /// </summary>
+    function SortDirKeyword(Dir: TSortDir): string;
     function CompileLimit(const Clauses: TArray<TAbstractClause>): string; virtual;
     function CompileOffset(const Clauses: TArray<TAbstractClause>): string; virtual;
     function CompileWith(const Clauses: TArray<TAbstractClause>): string; virtual;
@@ -405,13 +410,17 @@ begin
   end;
 end;
 
+function TAnsiSqlCompiler.SortDirKeyword(Dir: TSortDir): string;
+begin
+  if Dir = TSortDir.Desc then
+    Result := 'DESC'
+  else
+    Result := 'ASC';
+end;
+
 function TAnsiSqlCompiler.CompileOrderByColumn(const O: TOrderByClause): string;
 begin
-  Result := WrapColumn(O.Column);
-  case O.Direction of
-    TSortDir.Asc:  Result := Result + ' ASC';
-    TSortDir.Desc: Result := Result + ' DESC';
-  end;
+  Result := WrapColumn(O.Column) + ' ' + SortDirKeyword(O.Direction);
   // Default emits nothing: the database applies its own rule, as before.
   case O.Nulls of
     TNullsOrder.First: Result := Result + ' NULLS FIRST';
