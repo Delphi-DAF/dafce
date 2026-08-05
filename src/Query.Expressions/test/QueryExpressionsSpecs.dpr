@@ -11,7 +11,8 @@
 
 uses
   Daf.MiniSpec,
-  Daf.Query.Expressions;
+  Daf.Query.Expressions,
+  Model.Feat in 'Model.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;
