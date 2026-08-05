@@ -1,4 +1,4 @@
-unit Daf.MiniSpec.Reporter.Gherkin;
+﻿unit Daf.MiniSpec.Reporter.Gherkin;
 
 interface
 

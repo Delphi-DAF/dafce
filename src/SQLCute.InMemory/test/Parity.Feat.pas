@@ -1,4 +1,4 @@
-unit Parity.Feat;
+﻿unit Parity.Feat;
 
 {
   Phase 4 — the symmetry harness. One shared query set is pushed through every

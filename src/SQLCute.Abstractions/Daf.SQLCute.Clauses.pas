@@ -1,4 +1,4 @@
-unit Daf.SQLCute.Clauses;
+﻿unit Daf.SQLCute.Clauses;
 
 {$SCOPEDENUMS ON}
 

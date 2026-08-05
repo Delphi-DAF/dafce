@@ -1,4 +1,4 @@
-unit SQLCute.Compilers.Feat;
+﻿unit SQLCute.Compilers.Feat;
 
 {
   Dialect compiler specs: quoting, param placeholders, and pagination

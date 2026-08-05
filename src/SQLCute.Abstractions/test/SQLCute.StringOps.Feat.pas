@@ -1,4 +1,4 @@
-unit SQLCute.StringOps.Feat;
+﻿unit SQLCute.StringOps.Feat;
 
 {
   TQuery: F3 features — string/LIKE operations.

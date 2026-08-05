@@ -1,4 +1,4 @@
-unit SQLCute.DML.Feat;
+﻿unit SQLCute.DML.Feat;
 
 {
   TQuery: DML — INSERT (single row, multi-row, INSERT FROM SELECT),

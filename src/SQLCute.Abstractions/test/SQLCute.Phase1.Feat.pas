@@ -1,4 +1,4 @@
-unit SQLCute.Phase1.Feat;
+﻿unit SQLCute.Phase1.Feat;
 
 {
   TQuery: Fase 1 — Set operations (IntersectAll, ExceptAll, CombineRaw),

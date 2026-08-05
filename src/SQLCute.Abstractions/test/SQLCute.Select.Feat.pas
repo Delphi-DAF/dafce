@@ -1,4 +1,4 @@
-unit SQLCute.Select.Feat;
+﻿unit SQLCute.Select.Feat;
 
 {
   TQuery: SELECT, FROM, DISTINCT, ORDER BY, LIMIT/OFFSET,

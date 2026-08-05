@@ -1,4 +1,4 @@
-unit SQLCute.Where.Feat;
+﻿unit SQLCute.Where.Feat;
 
 {
   TQuery: WHERE conditions — equality, comparison, IS NULL, AND/OR, BETWEEN,

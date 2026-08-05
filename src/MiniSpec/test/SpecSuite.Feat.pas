@@ -1,4 +1,4 @@
-unit SpecSuite.Feat;
+﻿unit SpecSuite.Feat;
 
 interface
 

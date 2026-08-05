@@ -1,4 +1,4 @@
-unit ConsoleSample.AppSettings;
+﻿unit ConsoleSample.AppSettings;
 
 interface
 

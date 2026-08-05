@@ -1,4 +1,4 @@
-program CommonsSpecs;
+﻿program CommonsSpecs;
 
 {$APPTYPE CONSOLE}
 

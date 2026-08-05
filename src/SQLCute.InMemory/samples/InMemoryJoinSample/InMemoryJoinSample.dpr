@@ -1,4 +1,4 @@
-program InMemoryJoinSample;
+﻿program InMemoryJoinSample;
 
 {
   SQLCute In-Memory Sample — the general multi-source lane.

@@ -1,4 +1,4 @@
-program DISpecs;
+﻿program DISpecs;
 
 {$APPTYPE CONSOLE}
 

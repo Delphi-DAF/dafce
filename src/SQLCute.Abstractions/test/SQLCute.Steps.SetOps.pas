@@ -1,4 +1,4 @@
-unit SQLCute.Steps.SetOps;
+﻿unit SQLCute.Steps.SetOps;
 
 {
   UNION, INTERSECT, EXCEPT and pagination steps

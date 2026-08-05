@@ -1,4 +1,4 @@
-program LinqSpecs;
+﻿program LinqSpecs;
 
 {$APPTYPE CONSOLE}
 {$STRONGLINKTYPES ON}

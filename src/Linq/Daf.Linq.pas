@@ -1,4 +1,4 @@
-unit Daf.Linq;
+﻿unit Daf.Linq;
 
 {
   Daf.Linq — a standalone, lazy, ref-counted collection-transformation library

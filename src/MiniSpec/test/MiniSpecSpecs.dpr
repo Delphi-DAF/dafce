@@ -1,4 +1,4 @@
-program MiniSpecSpecs;
+﻿program MiniSpecSpecs;
 
 {$APPTYPE CONSOLE}
 

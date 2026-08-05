@@ -1,4 +1,4 @@
-unit FastPath.Feat;
+﻿unit FastPath.Feat;
 
 {
   Phase 1 — single-source fast lane. A SQLCute IQuery is compiled onto a typed

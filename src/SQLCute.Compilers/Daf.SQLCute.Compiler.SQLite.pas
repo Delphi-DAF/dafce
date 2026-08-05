@@ -1,4 +1,4 @@
-unit Daf.SQLCute.Compiler.SQLite;
+﻿unit Daf.SQLCute.Compiler.SQLite;
 
 interface
 

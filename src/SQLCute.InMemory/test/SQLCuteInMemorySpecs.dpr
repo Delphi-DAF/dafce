@@ -1,4 +1,4 @@
-program SQLCuteInMemorySpecs;
+﻿program SQLCuteInMemorySpecs;
 
 {$APPTYPE CONSOLE}
 {$STRONGLINKTYPES ON}

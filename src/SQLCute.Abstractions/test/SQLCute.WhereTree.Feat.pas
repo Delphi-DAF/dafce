@@ -1,4 +1,4 @@
-unit SQLCute.WhereTree.Feat;
+﻿unit SQLCute.WhereTree.Feat;
 
 interface
 

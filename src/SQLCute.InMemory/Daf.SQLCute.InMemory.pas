@@ -1,4 +1,4 @@
-unit Daf.SQLCute.InMemory;
+﻿unit Daf.SQLCute.InMemory;
 
 {
   Daf.SQLCute.InMemory — the in-memory compiler: a second SQLCute back-end

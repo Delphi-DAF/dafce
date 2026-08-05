@@ -1,4 +1,4 @@
-unit Daf.SQLCute;
+﻿unit Daf.SQLCute;
 
 {$SCOPEDENUMS ON}
 

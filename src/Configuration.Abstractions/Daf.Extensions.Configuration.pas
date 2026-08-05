@@ -1,4 +1,4 @@
-unit Daf.Extensions.Configuration;
+﻿unit Daf.Extensions.Configuration;
 
 interface
 uses

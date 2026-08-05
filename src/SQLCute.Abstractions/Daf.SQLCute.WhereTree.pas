@@ -1,4 +1,4 @@
-unit Daf.SQLCute.WhereTree;
+﻿unit Daf.SQLCute.WhereTree;
 
 {$SCOPEDENUMS ON}
 

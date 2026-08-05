@@ -1,4 +1,4 @@
-unit Mastermind.DetectGameOver.Feat;
+﻿unit Mastermind.DetectGameOver.Feat;
 
 interface
 uses

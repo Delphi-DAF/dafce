@@ -1,4 +1,4 @@
-unit Daf.MiniSpec.Reporter.Live;
+﻿unit Daf.MiniSpec.Reporter.Live;
 
 interface
 

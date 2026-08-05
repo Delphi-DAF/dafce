@@ -1,4 +1,4 @@
-unit Daf.MiniSpec.Doubles;
+﻿unit Daf.MiniSpec.Doubles;
 {******************************************************************************
   MiniSpec Test Doubles — Elegant mocking for Delphi
 

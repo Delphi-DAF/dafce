@@ -1,4 +1,4 @@
-unit SQLCute.Groups.Feat;
+﻿unit SQLCute.Groups.Feat;
 
 {
   TQuery: F2 features — nested WHERE groups (callbacks), column-to-column

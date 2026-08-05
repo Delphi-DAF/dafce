@@ -1,4 +1,4 @@
-unit SQLCute.Steps.Aggregation;
+﻿unit SQLCute.Steps.Aggregation;
 
 {
   GROUP BY, HAVING, COUNT and aggregate SELECT steps

@@ -1,4 +1,4 @@
-unit Macros.Feat;
+﻿unit Macros.Feat;
 
 {
   Coverage for TMacrosList, the live consumer of TExpresion<string>

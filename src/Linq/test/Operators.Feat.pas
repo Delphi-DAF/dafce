@@ -1,4 +1,4 @@
-unit Operators.Feat;
+﻿unit Operators.Feat;
 
 interface
 

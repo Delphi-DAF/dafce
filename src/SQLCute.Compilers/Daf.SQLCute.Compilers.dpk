@@ -1,4 +1,4 @@
-package Daf.SQLCute.Compilers;
+﻿package Daf.SQLCute.Compilers;
 {$R *.res}
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
 {$ALIGN 8}

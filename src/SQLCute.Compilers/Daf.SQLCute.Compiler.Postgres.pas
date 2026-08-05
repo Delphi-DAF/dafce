@@ -1,4 +1,4 @@
-unit Daf.SQLCute.Compiler.Postgres;
+﻿unit Daf.SQLCute.Compiler.Postgres;
 
 interface
 

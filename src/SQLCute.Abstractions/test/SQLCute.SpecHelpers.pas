@@ -1,4 +1,4 @@
-unit SQLCute.SpecHelpers;
+﻿unit SQLCute.SpecHelpers;
 
 interface
 

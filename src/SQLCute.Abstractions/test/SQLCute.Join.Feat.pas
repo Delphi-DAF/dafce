@@ -1,4 +1,4 @@
-unit SQLCute.Join.Feat;
+﻿unit SQLCute.Join.Feat;
 
 {
   TQuery: JOIN (all types), GROUP BY, HAVING, set operations,

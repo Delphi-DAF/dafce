@@ -1,4 +1,4 @@
-unit Context.Feat;
+﻿unit Context.Feat;
 
 {
   Phase 3A — the general multi-source lane. A per-call IQueryContext maps table

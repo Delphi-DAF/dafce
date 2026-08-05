@@ -1,4 +1,4 @@
-unit Daf.SQLCute.InMemory.Rows;
+﻿unit Daf.SQLCute.InMemory.Rows;
 
 {
   The dynamic row model (Decision 4) and the IRow-based pipeline helpers used by

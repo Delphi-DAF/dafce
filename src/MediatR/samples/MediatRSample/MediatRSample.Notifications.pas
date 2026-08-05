@@ -1,4 +1,4 @@
-unit MediatRSample.Notifications;
+﻿unit MediatRSample.Notifications;
 
 // Audit notification handlers — pure domain concern, no UI knowledge.
 // Each notification type gets logged via IAppLog.

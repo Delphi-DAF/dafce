@@ -1,4 +1,4 @@
-unit SQLCute.Steps.Joins;
+﻿unit SQLCute.Steps.Joins;
 
 {
   JOIN types and JOIN callback steps

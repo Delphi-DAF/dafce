@@ -1,4 +1,4 @@
-unit Arrays.Feat;
+﻿unit Arrays.Feat;
 
 {
   Coverage for Commons' eager collection API (TSmartArray<T>): its filter and

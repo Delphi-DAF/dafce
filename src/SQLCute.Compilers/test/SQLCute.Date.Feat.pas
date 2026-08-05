@@ -1,4 +1,4 @@
-unit SQLCute.Date.Feat;
+﻿unit SQLCute.Date.Feat;
 
 {
   Dialect compiler specs for F7: date/time WHERE operations.

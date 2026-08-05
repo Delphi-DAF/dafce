@@ -1,4 +1,4 @@
-unit Daf.SQLCute.Compiler.Firebird;
+﻿unit Daf.SQLCute.Compiler.Firebird;
 
 interface
 

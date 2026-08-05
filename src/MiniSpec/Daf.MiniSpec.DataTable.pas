@@ -1,4 +1,4 @@
-unit Daf.MiniSpec.DataTable;
+﻿unit Daf.MiniSpec.DataTable;
 
 interface
 

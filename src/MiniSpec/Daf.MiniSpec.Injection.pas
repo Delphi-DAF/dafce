@@ -1,4 +1,4 @@
-unit Daf.MiniSpec.Injection;
+﻿unit Daf.MiniSpec.Injection;
 
 interface
 

@@ -1,4 +1,4 @@
-unit Daf.MiniSpec.Types;
+﻿unit Daf.MiniSpec.Types;
 
 interface
 uses

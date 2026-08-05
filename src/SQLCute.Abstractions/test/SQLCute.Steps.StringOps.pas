@@ -1,4 +1,4 @@
-unit SQLCute.Steps.StringOps;
+﻿unit SQLCute.Steps.StringOps;
 
 {
   LIKE and string-match WHERE steps

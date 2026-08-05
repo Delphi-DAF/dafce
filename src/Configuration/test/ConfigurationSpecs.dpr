@@ -1,4 +1,4 @@
-program ConfigurationSpecs;
+﻿program ConfigurationSpecs;
 
 {$APPTYPE CONSOLE}
 

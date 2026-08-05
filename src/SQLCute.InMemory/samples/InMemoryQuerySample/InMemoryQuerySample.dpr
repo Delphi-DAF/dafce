@@ -1,4 +1,4 @@
-program InMemoryQuerySample;
+﻿program InMemoryQuerySample;
 
 {
   SQLCute In-Memory Sample — the fast typed lane.

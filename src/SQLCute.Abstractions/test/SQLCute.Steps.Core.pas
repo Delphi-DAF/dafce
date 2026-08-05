@@ -1,4 +1,4 @@
-unit SQLCute.Steps.Core;
+﻿unit SQLCute.Steps.Core;
 
 {
   Basic query construction, WHEN and THEN steps

@@ -1,4 +1,4 @@
-unit SQLCute.Compilers.Steps;
+﻿unit SQLCute.Compilers.Steps;
 
 {
   Step bindings for SQLCute dialect compiler specs.

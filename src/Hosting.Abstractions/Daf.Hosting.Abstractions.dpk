@@ -1,4 +1,4 @@
-package Daf.Hosting.Abstractions;
+﻿package Daf.Hosting.Abstractions;
 
 {$R *.res}
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}

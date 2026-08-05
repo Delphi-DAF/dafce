@@ -1,4 +1,4 @@
-unit SQLCute.Steps.Subqueries;
+﻿unit SQLCute.Steps.Subqueries;
 
 {
   CTE, subquery, WHERE EXISTS and raw query steps

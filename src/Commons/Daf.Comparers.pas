@@ -1,4 +1,4 @@
-unit Daf.Comparers;
+﻿unit Daf.Comparers;
 
 {
   NULL-aware comparison for the value currency used by the in-memory query

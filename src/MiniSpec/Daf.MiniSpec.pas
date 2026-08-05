@@ -1,4 +1,4 @@
-unit Daf.MiniSpec;
+﻿unit Daf.MiniSpec;
 
 interface
 

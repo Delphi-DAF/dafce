@@ -1,4 +1,4 @@
-program MediatRSpecs;
+﻿program MediatRSpecs;
 
 {$APPTYPE CONSOLE}
 {$STRONGLINKTYPES ON}

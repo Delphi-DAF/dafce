@@ -1,4 +1,4 @@
-program MediatRSample;
+﻿program MediatRSample;
 
 {$STRONGLINKTYPES ON}
 uses

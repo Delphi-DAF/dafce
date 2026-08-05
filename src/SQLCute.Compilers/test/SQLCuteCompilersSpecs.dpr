@@ -1,4 +1,4 @@
-program SQLCuteCompilersSpecs;
+﻿program SQLCuteCompilersSpecs;
 
 {$APPTYPE CONSOLE}
 {$STRONGLINKTYPES ON}

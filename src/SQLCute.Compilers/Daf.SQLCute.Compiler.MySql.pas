@@ -1,4 +1,4 @@
-unit Daf.SQLCute.Compiler.MySql;
+﻿unit Daf.SQLCute.Compiler.MySql;
 
 interface
 

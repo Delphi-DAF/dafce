@@ -1,4 +1,4 @@
-unit Daf.SQLCute.Compiler.Oracle;
+﻿unit Daf.SQLCute.Compiler.Oracle;
 
 interface
 

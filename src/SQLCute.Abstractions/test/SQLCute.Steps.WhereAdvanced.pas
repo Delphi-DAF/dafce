@@ -1,4 +1,4 @@
-unit SQLCute.Steps.WhereAdvanced;
+﻿unit SQLCute.Steps.WhereAdvanced;
 
 {
   Advanced WHERE: OR variants, groups, columns, conditional steps

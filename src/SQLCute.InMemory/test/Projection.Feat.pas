@@ -1,4 +1,4 @@
-unit Projection.Feat;
+﻿unit Projection.Feat;
 
 {
   Phase 2 — row model + typed projection. Exercises IRow / TRttiRow / TDictRow

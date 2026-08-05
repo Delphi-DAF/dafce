@@ -1,4 +1,4 @@
-unit Daf.MiniSpec.Reporter.JUnit;
+﻿unit Daf.MiniSpec.Reporter.JUnit;
 
 interface
 

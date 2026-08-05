@@ -1,4 +1,4 @@
-unit DAF.Logging.Builder;
+﻿unit DAF.Logging.Builder;
 
 interface
 
