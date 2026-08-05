@@ -50,6 +50,8 @@ type
       Op: TWhereOp; Conn: TBoolOp; CaseSensitive: Boolean): IQuery;
     function AddDateWhereClause(Part: TDatePart; const Column, Op: string;
       const Value: Variant; Conn: TBoolOp): IQuery;
+    function AddOrderByClause(const Column: string; Dir: TSortDir;
+      Nulls: TNullsOrder): IQuery;
   public
     constructor Create;
     destructor Destroy; override;
@@ -79,8 +81,10 @@ type
     function OrWhereBetween(const Column: string; const Low, High: Variant): IQuery;
     function OrWhereNotBetween(const Column: string; const Low, High: Variant): IQuery;
     function WhereRaw(const Sql: string): IQuery;
-    function OrderBy(const Column: string): IQuery;
-    function OrderByDesc(const Column: string): IQuery;
+    function OrderBy(const Column: string): IQuery; overload;
+    function OrderBy(const Column: string; Nulls: TNullsOrder): IQuery; overload;
+    function OrderByDesc(const Column: string): IQuery; overload;
+    function OrderByDesc(const Column: string; Nulls: TNullsOrder): IQuery; overload;
     function OrderByRaw(const Expression: string): IQuery;
     function Limit(const Value: Int64): IQuery;
     function Offset(const Value: Int64): IQuery;
@@ -440,28 +444,38 @@ end;
 
 // --- ORDER BY ---
 
-function TQueryImpl.OrderBy(const Column: string): IQuery;
+function TQueryImpl.AddOrderByClause(const Column: string; Dir: TSortDir;
+  Nulls: TNullsOrder): IQuery;
 var
   O: TOrderByClause;
 begin
   O := TOrderByClause.Create;
   O.Column    := Column;
-  O.Direction := TSortDir.Asc;
+  O.Direction := Dir;
   O.IsRaw     := False;
+  O.Nulls     := Nulls;
   FClauses.Add(O);
   Result := Self;
 end;
 
-function TQueryImpl.OrderByDesc(const Column: string): IQuery;
-var
-  O: TOrderByClause;
+function TQueryImpl.OrderBy(const Column: string): IQuery;
 begin
-  O := TOrderByClause.Create;
-  O.Column    := Column;
-  O.Direction := TSortDir.Desc;
-  O.IsRaw     := False;
-  FClauses.Add(O);
-  Result := Self;
+  Result := AddOrderByClause(Column, TSortDir.Asc, TNullsOrder.Default);
+end;
+
+function TQueryImpl.OrderBy(const Column: string; Nulls: TNullsOrder): IQuery;
+begin
+  Result := AddOrderByClause(Column, TSortDir.Asc, Nulls);
+end;
+
+function TQueryImpl.OrderByDesc(const Column: string): IQuery;
+begin
+  Result := AddOrderByClause(Column, TSortDir.Desc, TNullsOrder.Default);
+end;
+
+function TQueryImpl.OrderByDesc(const Column: string; Nulls: TNullsOrder): IQuery;
+begin
+  Result := AddOrderByClause(Column, TSortDir.Desc, Nulls);
 end;
 
 function TQueryImpl.OrderByRaw(const Expression: string): IQuery;

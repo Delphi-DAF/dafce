@@ -204,9 +204,18 @@ type
     // --- ORDER BY -------------------------------------------------------
 
     /// <summary>Adds an ORDER BY column ASC clause.</summary>
-    function OrderBy(const Column: string): IQuery;
+    function OrderBy(const Column: string): IQuery; overload;
+    /// <summary>
+    /// Adds an ORDER BY column ASC clause placing NULLs as requested.
+    /// <c>TNullsOrder.Default</c> leaves the placement to the database.
+    /// </summary>
+    function OrderBy(const Column: string; Nulls: TNullsOrder): IQuery; overload;
     /// <summary>Adds an ORDER BY column DESC clause.</summary>
-    function OrderByDesc(const Column: string): IQuery;
+    function OrderByDesc(const Column: string): IQuery; overload;
+    /// <summary>
+    /// Adds an ORDER BY column DESC clause placing NULLs as requested.
+    /// </summary>
+    function OrderByDesc(const Column: string; Nulls: TNullsOrder): IQuery; overload;
     /// <summary>Adds a raw ORDER BY expression.</summary>
     function OrderByRaw(const Expression: string): IQuery;
 
