@@ -19,6 +19,7 @@
 interface
 
 uses
+  System.SysUtils,
   System.Rtti,
   System.Variants,
   Daf.Nullable;
@@ -262,8 +263,72 @@ type
     ///   Variant's <c>Null</c> from the leaf onward — and no node carries a null
     ///   flag of its own.
     /// </summary>
-    class function From<T>(const V: TNullable<T>): Variant; static;
+    class function From<T>(const V: TNullable<T>): Variant; overload; static;
+    /// <summary>
+    ///   A GUID as its canonical string form — the same thing the DAL's
+    ///   dedicated <c>SetAsGUID</c> accessor did, minus the boilerplate around
+    ///   it. Narrowing here rather than in the lowering is what keeps the two
+    ///   lanes honest: a leaf holding a real <c>TGUID</c> would leave the
+    ///   in-memory side comparing a record while SQL compares a string.
+    /// </summary>
+    class function From(const V: TGUID): Variant; overload; static;
   end;
+
+  // ---------------------------------------------------------------------------
+  //  Authoring
+  // ---------------------------------------------------------------------------
+
+  /// <summary>
+  ///   The authoring surface: one node, wrapped in the record Delphi lets us
+  ///   overload operators on, so a predicate is written as Delphi code and read
+  ///   back as a tree.
+  /// </summary>
+  /// <remarks>
+  ///   What is borrowed from Commons' <c>Daf.Expression</c> is the
+  ///   operator-overloading <i>shape</i>, never the type. <c>TFilterSpec&lt;T&gt;</c>
+  ///   composes closures, and a closure is opaque to SQL by construction — you
+  ///   cannot translate it, only run it. This layer needs a tree it can inspect,
+  ///   so the two are siblings serving different worlds rather than rivals:
+  ///   there is no <c>TFilterSpec</c>, and no closure of any kind, anywhere in
+  ///   this unit.
+  /// </remarks>
+  TExpr = record
+  strict private
+    FNode: IExpr;
+  public
+    class operator Implicit(const Node: IExpr): TExpr;
+    class operator Implicit(const E: TExpr): IExpr;
+
+    class operator Equal(const L: TExpr; const R: Variant): TExpr; overload;
+    class operator NotEqual(const L: TExpr; const R: Variant): TExpr; overload;
+    /// <summary>
+    ///   Comparison against a value with no direct <c>Variant</c> form. The
+    ///   narrowing is visible in the call it belongs to, not hidden in the
+    ///   lowering — one typed overload per such type, added as the types show up.
+    /// </summary>
+    class operator Equal(const L: TExpr; const R: TGUID): TExpr; overload;
+    class operator NotEqual(const L: TExpr; const R: TGUID): TExpr; overload;
+    class operator LessThan(const L: TExpr; const R: Variant): TExpr;
+    class operator LessThanOrEqual(const L: TExpr; const R: Variant): TExpr;
+    class operator GreaterThan(const L: TExpr; const R: Variant): TExpr;
+    class operator GreaterThanOrEqual(const L: TExpr; const R: Variant): TExpr;
+
+    class operator LogicalAnd(const L, R: TExpr): TExpr;
+    class operator LogicalOr(const L, R: TExpr): TExpr;
+    class operator LogicalNot(const E: TExpr): TExpr;
+
+    /// <summary>The node this record wraps.</summary>
+    function Node: IExpr;
+  end;
+
+/// <summary>
+///   A reference to a member by name — the always-available authoring path. The
+///   name is a property name; nothing here knows about columns.
+/// </summary>
+function Prop(const Name: string): TExpr;
+
+/// <summary>A named placeholder carrying its bound value.</summary>
+function Prm(const Name: string; const Value: Variant): TExpr;
 
 implementation
 
@@ -448,6 +513,95 @@ begin
     Result := Null
   else
     Result := TValue.From<T>(V.Value).AsVariant;
+end;
+
+class function TExprValue.From(const V: TGUID): Variant;
+begin
+  Result := GUIDToString(V);
+end;
+
+{ TExpr }
+
+class operator TExpr.Implicit(const Node: IExpr): TExpr;
+begin
+  Result.FNode := Node;
+end;
+
+class operator TExpr.Implicit(const E: TExpr): IExpr;
+begin
+  Result := E.FNode;
+end;
+
+function TExpr.Node: IExpr;
+begin
+  Result := FNode;
+end;
+
+class operator TExpr.Equal(const L: TExpr; const R: Variant): TExpr;
+begin
+  Result := TNode.Compare(TCompareOp.Equal, L.FNode, [TNode.Value(R)]);
+end;
+
+class operator TExpr.NotEqual(const L: TExpr; const R: Variant): TExpr;
+begin
+  Result := TNode.Compare(TCompareOp.NotEqual, L.FNode, [TNode.Value(R)]);
+end;
+
+class operator TExpr.Equal(const L: TExpr; const R: TGUID): TExpr;
+begin
+  Result := TNode.Compare(TCompareOp.Equal, L.FNode, [TNode.Value(TExprValue.From(R))]);
+end;
+
+class operator TExpr.NotEqual(const L: TExpr; const R: TGUID): TExpr;
+begin
+  Result := TNode.Compare(TCompareOp.NotEqual, L.FNode, [TNode.Value(TExprValue.From(R))]);
+end;
+
+class operator TExpr.LessThan(const L: TExpr; const R: Variant): TExpr;
+begin
+  Result := TNode.Compare(TCompareOp.Less, L.FNode, [TNode.Value(R)]);
+end;
+
+class operator TExpr.LessThanOrEqual(const L: TExpr; const R: Variant): TExpr;
+begin
+  Result := TNode.Compare(TCompareOp.LessOrEqual, L.FNode, [TNode.Value(R)]);
+end;
+
+class operator TExpr.GreaterThan(const L: TExpr; const R: Variant): TExpr;
+begin
+  Result := TNode.Compare(TCompareOp.Greater, L.FNode, [TNode.Value(R)]);
+end;
+
+class operator TExpr.GreaterThanOrEqual(const L: TExpr; const R: Variant): TExpr;
+begin
+  Result := TNode.Compare(TCompareOp.GreaterOrEqual, L.FNode, [TNode.Value(R)]);
+end;
+
+class operator TExpr.LogicalAnd(const L, R: TExpr): TExpr;
+begin
+  Result := TNode.Logical(TLogicalOp.opAnd, L.FNode, R.FNode);
+end;
+
+class operator TExpr.LogicalOr(const L, R: TExpr): TExpr;
+begin
+  Result := TNode.Logical(TLogicalOp.opOr, L.FNode, R.FNode);
+end;
+
+class operator TExpr.LogicalNot(const E: TExpr): TExpr;
+begin
+  Result := TNode.Unary(TUnaryOp.opNot, E.FNode);
+end;
+
+{ Authoring entry points }
+
+function Prop(const Name: string): TExpr;
+begin
+  Result := TNode.Member(Name);
+end;
+
+function Prm(const Name: string; const Value: Variant): TExpr;
+begin
+  Result := TNode.Param(Name, Value);
 end;
 
 end.
