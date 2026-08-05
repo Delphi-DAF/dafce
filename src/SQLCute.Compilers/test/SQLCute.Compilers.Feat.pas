@@ -148,6 +148,45 @@ TQuery — Dialect Compilers @unit @sqlcute
     .When('compiled with the "Postgres" dialect')
     .&Then('SQL is "SELECT * FROM "people" ORDER BY "age" ASC"')
 
+// -------------------------------------------------------------------------
+
+.Rule('MySQL and SQL Server emulate the requested order with a leading sort key')
+
+  .Scenario('MySQL sorts a boolean NULL test before the column')
+    .Given('a dialect query from "people" ordered by "age" nulls last')
+    .When('compiled with the "MySQL" dialect')
+    .&Then('SQL is "SELECT * FROM `people` ORDER BY (`age` IS NULL) ASC, `age` ASC"')
+    .&Then('SQL does not contain "NULLS LAST"')
+    .&Then('has 0 bindings')
+
+  .Scenario('MySQL puts NULLs first by sorting the NULL test descending')
+    .Given('a dialect query from "people" ordered by "age" desc nulls first')
+    .When('compiled with the "MySQL" dialect')
+    .&Then('SQL is "SELECT * FROM `people` ORDER BY (`age` IS NULL) DESC, `age` DESC"')
+
+  .Scenario('SQL Server uses a CASE key, since ORDER BY takes no boolean expression')
+    .Given('a dialect query from "people" ordered by "age" nulls last')
+    .When('compiled with the "SqlServer" dialect')
+    .&Then('SQL is "SELECT * FROM [people] ORDER BY CASE WHEN [age] IS NULL THEN 1 ELSE 0 END ASC, [age] ASC"')
+    .&Then('SQL does not contain "NULLS"')
+
+  .Scenario('SQL Server puts NULLs first on a descending sort')
+    .Given('a dialect query from "people" ordered by "age" desc nulls first')
+    .When('compiled with the "SqlServer" dialect')
+    .&Then('SQL is "SELECT * FROM [people] ORDER BY CASE WHEN [age] IS NULL THEN 1 ELSE 0 END DESC, [age] DESC"')
+
+  .Scenario('An unqualified sort emits no NULL-testing key at all')
+    .Given('a dialect query from "people" ordered by "age"')
+    .When('compiled with the "MySQL" dialect')
+    .&Then('SQL is "SELECT * FROM `people` ORDER BY `age` ASC"')
+    .&Then('SQL does not contain "IS NULL"')
+
+  .Scenario('An unqualified sort on SQL Server emits no CASE key')
+    .Given('a dialect query from "people" ordered by "age"')
+    .When('compiled with the "SqlServer" dialect')
+    .&Then('SQL is "SELECT * FROM [people] ORDER BY [age] ASC"')
+    .&Then('SQL does not contain "CASE"')
+
 ;
 
 end.
