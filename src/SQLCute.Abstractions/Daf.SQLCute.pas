@@ -218,6 +218,19 @@ type
     function OrderByDesc(const Column: string; Nulls: TNullsOrder): IQuery; overload;
     /// <summary>Adds a raw ORDER BY expression.</summary>
     function OrderByRaw(const Expression: string): IQuery;
+    /// <summary>
+    /// Places NULLs first in the ORDER BY column added last, e.g.
+    /// <c>OrderBy('age').NullsFirst</c>. Raises when there is no ordered column
+    /// to qualify — a raw ORDER BY expression does not count, since it is
+    /// emitted verbatim.
+    /// </summary>
+    function NullsFirst: IQuery;
+    /// <summary>
+    /// Places NULLs last in the ORDER BY column added last, e.g.
+    /// <c>OrderBy('age').NullsLast</c>. Raises when there is no ordered column
+    /// to qualify.
+    /// </summary>
+    function NullsLast: IQuery;
 
     // --- LIMIT / OFFSET -------------------------------------------------
 

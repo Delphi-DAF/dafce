@@ -52,6 +52,7 @@ type
       const Value: Variant; Conn: TBoolOp): IQuery;
     function AddOrderByClause(const Column: string; Dir: TSortDir;
       Nulls: TNullsOrder): IQuery;
+    function QualifyLastOrderBy(Nulls: TNullsOrder; const Modifier: string): IQuery;
   public
     constructor Create;
     destructor Destroy; override;
@@ -86,6 +87,8 @@ type
     function OrderByDesc(const Column: string): IQuery; overload;
     function OrderByDesc(const Column: string; Nulls: TNullsOrder): IQuery; overload;
     function OrderByRaw(const Expression: string): IQuery;
+    function NullsFirst: IQuery;
+    function NullsLast: IQuery;
     function Limit(const Value: Int64): IQuery;
     function Offset(const Value: Int64): IQuery;
     function Take(const Value: Int64): IQuery;
@@ -487,6 +490,37 @@ begin
   O.IsRaw  := True;
   FClauses.Add(O);
   Result := Self;
+end;
+
+// The one place the builder rewrites an already-added clause: the NULL-ordering
+// modifiers qualify the ORDER BY column added last. Raw expressions are skipped
+// (they are emitted verbatim), and with nothing to qualify this fails fast
+// rather than dropping the caller's intent.
+function TQueryImpl.QualifyLastOrderBy(Nulls: TNullsOrder;
+  const Modifier: string): IQuery;
+begin
+  for var I := FClauses.Count - 1 downto 0 do
+    if FClauses[I] is TOrderByClause then
+    begin
+      var O := TOrderByClause(FClauses[I]);
+      if not O.IsRaw then
+      begin
+        O.Nulls := Nulls;
+        Exit(Self);
+      end;
+    end;
+  raise EInvalidOpException.CreateFmt(
+    '%s requires a preceding OrderBy/OrderByDesc column to qualify.', [Modifier]);
+end;
+
+function TQueryImpl.NullsFirst: IQuery;
+begin
+  Result := QualifyLastOrderBy(TNullsOrder.First, 'NullsFirst');
+end;
+
+function TQueryImpl.NullsLast: IQuery;
+begin
+  Result := QualifyLastOrderBy(TNullsOrder.Last, 'NullsLast');
 end;
 
 // --- LIMIT / OFFSET ---
