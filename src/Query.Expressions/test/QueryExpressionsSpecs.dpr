@@ -14,7 +14,8 @@ uses
   Daf.Query.Expressions,
   Model.Feat in 'Model.Feat.pas',
   Authoring.Feat in 'Authoring.Feat.pas',
-  Metamodel.Feat in 'Metamodel.Feat.pas';
+  Metamodel.Feat in 'Metamodel.Feat.pas',
+  Specification.Feat in 'Specification.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

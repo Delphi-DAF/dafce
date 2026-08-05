@@ -508,6 +508,90 @@ type
     function Node: IExpr;
   end;
 
+  // ---------------------------------------------------------------------------
+  //  Specifications and the repository port
+  // ---------------------------------------------------------------------------
+
+  /// <summary>One ordering term: a member of the entity, and a direction.</summary>
+  TOrderTerm = record
+    /// The property name, as everywhere else in this unit.
+    Member: string;
+    Descending: Boolean;
+  end;
+
+  /// <summary>
+  ///   A reusable query rule as a domain object: a filter expression plus
+  ///   optional ordering and paging, inspectable and assertable with no database
+  ///   anywhere near it.
+  /// </summary>
+  /// <remarks>
+  ///   It carries <b>only</b> the expression tree. There is no overload taking a
+  ///   closure, and that is the point: a specification that cannot be translated
+  ///   must be unrepresentable rather than silently evaluated client-side. EF
+  ///   Core shipped that silent fallback and removed it in 3.0. Nothing is lost
+  ///   — the closure world is served by <c>Daf.Linq</c>'s
+  ///   <c>TQuery&lt;T&gt;.Where(TFilterSpec&lt;T&gt;)</c> over a materialized
+  ///   sequence, which is a sibling, not a rival.
+  ///
+  ///   Eager-loading directives are absent for a second, independent reason:
+  ///   besides having nothing to lower into, they are the wrong owner. A
+  ///   specification says <i>what</i> to select; how an aggregate gets assembled
+  ///   is the adapter's business.
+  /// </remarks>
+  TSpecification<T> = record
+  strict private
+    FFilter: IExpr;
+    FOrder: TArray<TOrderTerm>;
+    FSkip: Int64;
+    FTake: Int64;
+    function WithOrder(const Member: string; Descending: Boolean): TSpecification<T>;
+  public
+    /// <summary>An empty rule: everything, unordered, unpaged.</summary>
+    class function New: TSpecification<T>; static;
+
+    /// <summary>The rule with <c>Expression</c> as its filter.</summary>
+    function Where(const Expression: TExpr): TSpecification<T>;
+    /// <summary>The rule ordered ascending by <c>Member</c>; raises if it resolves to nothing.</summary>
+    function OrderBy(const Member: string): TSpecification<T>;
+    /// <summary>The rule ordered descending by <c>Member</c>.</summary>
+    function OrderByDesc(const Member: string): TSpecification<T>;
+    /// <summary>The rule skipping <c>Count</c> elements. Zero means no offset.</summary>
+    function Skip(const Count: Int64): TSpecification<T>;
+    /// <summary>The rule limited to <c>Count</c> elements. Zero means no limit.</summary>
+    function Take(const Count: Int64): TSpecification<T>;
+
+    function Filter: IExpr;
+    function Order: TArray<TOrderTerm>;
+    function SkipCount: Int64;
+    function TakeCount: Int64;
+
+    /// <summary>
+    ///   A canonical key for the whole rule — filter, ordering and page. Equal
+    ///   keys mean the same query, which is what lets an adapter compile a plan
+    ///   once and reuse it.
+    /// </summary>
+    function Key: string;
+  end;
+
+  /// <summary>
+  ///   The port: it resolves a specification into entities, and its signature
+  ///   mentions no SQL, no connection, no row and no query. A domain service
+  ///   written against it links none of those.
+  /// </summary>
+  /// <remarks>
+  ///   Note what is <b>not</b> here: a <c>T: TEntity</c> constraint, or any other
+  ///   base class. Nothing downstream needs one — <c>TRttiAccessors&lt;T&gt;</c>
+  ///   imposes none and records work too. The DAL's <c>IRepository&lt;T: TEntity&gt;</c>
+  ///   invites copying that constraint by inertia; it is the one door through
+  ///   which <c>TEntity</c> would creep back in, and it stays shut.
+  /// </remarks>
+  IRepository<T> = interface
+    /// <summary>
+    ///   The entities satisfying <c>Spec</c>, in its declared order and page.
+    /// </summary>
+    function List(const Spec: TSpecification<T>): TArray<T>;
+  end;
+
 implementation
 
 { TExprNode }
@@ -994,6 +1078,83 @@ end;
 class operator TPropExpr<T>.GreaterThanOrEqual(const L: TPropExpr<T>; const R: Variant): TExpr;
 begin
   Result := L.FExpr >= R;
+end;
+
+{ TSpecification<T> }
+
+class function TSpecification<T>.New: TSpecification<T>;
+begin
+  Result := Default(TSpecification<T>);
+end;
+
+function TSpecification<T>.Where(const Expression: TExpr): TSpecification<T>;
+begin
+  Result := Self;
+  Result.FFilter := Expression.Node;
+end;
+
+function TSpecification<T>.WithOrder(const Member: string; Descending: Boolean): TSpecification<T>;
+begin
+  var Term: TOrderTerm;
+  // Validated here for the same reason a member leaf is: an ordering member that
+  // resolves to nothing must fail where the rule is declared.
+  Term.Member := ResolvedMemberName(TypeInfo(T), Member);
+  Term.Descending := Descending;
+  Result := Self;
+  Result.FOrder := Result.FOrder + [Term];
+end;
+
+function TSpecification<T>.OrderBy(const Member: string): TSpecification<T>;
+begin
+  Result := WithOrder(Member, False);
+end;
+
+function TSpecification<T>.OrderByDesc(const Member: string): TSpecification<T>;
+begin
+  Result := WithOrder(Member, True);
+end;
+
+function TSpecification<T>.Skip(const Count: Int64): TSpecification<T>;
+begin
+  Result := Self;
+  Result.FSkip := Count;
+end;
+
+function TSpecification<T>.Take(const Count: Int64): TSpecification<T>;
+begin
+  Result := Self;
+  Result.FTake := Count;
+end;
+
+function TSpecification<T>.Filter: IExpr;
+begin
+  Result := FFilter;
+end;
+
+function TSpecification<T>.Order: TArray<TOrderTerm>;
+begin
+  Result := FOrder;
+end;
+
+function TSpecification<T>.SkipCount: Int64;
+begin
+  Result := FSkip;
+end;
+
+function TSpecification<T>.TakeCount: Int64;
+begin
+  Result := FTake;
+end;
+
+function TSpecification<T>.Key: string;
+begin
+  Result := _T.NameOf<T> + '|' + ExprToText(FFilter);
+  for var Term in FOrder do
+    if Term.Descending then
+      Result := Result + '|desc:' + Term.Member
+    else
+      Result := Result + '|asc:' + Term.Member;
+  Result := Result + Format('|skip:%d|take:%d', [FSkip, FTake]);
 end;
 
 end.
