@@ -122,6 +122,46 @@ TQuery.New.From('productos')
 // → SELECT * FROM productos ORDER BY categoria ASC, precio DESC
 ```
 
+### Dónde caen los NULL
+
+Un `OrderBy` sobre una columna nullable no dice nada de los NULL, así que **cada
+base de datos aplica su propia regla**: Postgres y Oracle los ordenan al final en
+ascendente; MySQL, SQL Server, SQLite y Firebird los ponen al principio. Cuando
+importa, dilo explícitamente con `NullsFirst` / `NullsLast`:
+
+```pascal
+TQuery.New.From('personas').OrderBy('edad').NullsLast
+// → SELECT * FROM personas ORDER BY edad ASC NULLS LAST
+
+TQuery.New.From('personas').OrderByDesc('edad').NullsFirst
+// → SELECT * FROM personas ORDER BY edad DESC NULLS FIRST
+```
+
+El modificador cualifica la **última** columna añadida al ORDER BY, de modo que
+cada columna conserva su propia colocación:
+
+```pascal
+TQuery.New.From('personas')
+  .OrderBy('edad').NullsLast
+  .OrderBy('nombre')
+// → SELECT * FROM personas ORDER BY edad ASC NULLS LAST, nombre ASC
+```
+
+Lo mismo en una sola llamada, cuando pasar la opción se lee mejor que encadenar:
+
+```pascal
+TQuery.New.From('personas').OrderBy('edad', TNullsOrder.Last)       // Daf.SQLCute.Clauses
+TQuery.New.From('personas').OrderByDesc('edad', TNullsOrder.First)
+```
+
+`NullsFirst` / `NullsLast` lanzan excepción si no hay columna ordenada que
+cualificar — una expresión `OrderByRaw` no cuenta, porque se emite tal cual.
+
+No todos los dialectos tienen la sintaxis `NULLS FIRST/LAST`; los que no la
+tienen la emulan, así que una ordenación cualificada significa lo mismo en todas
+partes. Consulta [Compiladores de Dialecto](dialects.es.md#ordenación-de-null-por-dialecto)
+para el detalle por dialecto y el valor por omisión de cada base de datos.
+
 ---
 
 ## LIMIT y OFFSET

@@ -136,6 +136,46 @@ TQuery.New.From('products')
 // → SELECT * FROM products ORDER BY category ASC, price DESC
 ```
 
+### Where NULLs land
+
+An `OrderBy` over a nullable column says nothing about the NULLs, so **each
+database applies its own rule** — Postgres and Oracle sort them last ascending,
+MySQL, SQL Server, SQLite and Firebird sort them first. Say it out loud when it
+matters, with `NullsFirst` / `NullsLast`:
+
+```pascal
+TQuery.New.From('people').OrderBy('age').NullsLast
+// → SELECT * FROM people ORDER BY age ASC NULLS LAST
+
+TQuery.New.From('people').OrderByDesc('age').NullsFirst
+// → SELECT * FROM people ORDER BY age DESC NULLS FIRST
+```
+
+The modifier qualifies the ORDER BY column added **last**, so each column keeps
+its own placement:
+
+```pascal
+TQuery.New.From('people')
+  .OrderBy('age').NullsLast
+  .OrderBy('name')
+// → SELECT * FROM people ORDER BY age ASC NULLS LAST, name ASC
+```
+
+The same thing as one call, when passing the option reads better than chaining:
+
+```pascal
+TQuery.New.From('people').OrderBy('age', TNullsOrder.Last)      // Daf.SQLCute.Clauses
+TQuery.New.From('people').OrderByDesc('age', TNullsOrder.First)
+```
+
+`NullsFirst` / `NullsLast` raise if there is no ordered column to qualify — a
+raw `OrderByRaw` expression does not count, since it is emitted verbatim.
+
+Not every dialect has the `NULLS FIRST/LAST` syntax; the ones that don't emulate
+it, so a qualified sort means the same thing everywhere. See
+[Dialect Compilers](dialects.md#null-ordering-per-dialect) for the per-dialect
+detail and for each database's own default.
+
 ---
 
 ## LIMIT and OFFSET
