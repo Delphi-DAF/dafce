@@ -19,6 +19,13 @@ type
     function CompileLimit(const Clauses: TArray<TAbstractClause>): string; override;
     function CompileOffset(const Clauses: TArray<TAbstractClause>): string; override;
     function CompileDateWhere(const Clause: TDateWhereClause): string; override;
+    /// <summary>
+    /// T-SQL has no <c>NULLS FIRST/LAST</c>, and no boolean expression is
+    /// allowed in <c>ORDER BY</c>, so a requested placement is emulated with a
+    /// leading <c>CASE</c> key: 1 for NULL and 0 otherwise, sorted DESC for
+    /// nulls-first and ASC for nulls-last. Adds no binding.
+    /// </summary>
+    function CompileOrderByColumn(const O: TOrderByClause): string; override;
   public
     function Compile(const Query: IQuery): TSQLResult;
   end;
@@ -42,6 +49,21 @@ function TSqlServerCompiler.ParamPlaceholder: string;
 begin
   Result := '@p' + IntToStr(FParamIndex);
   Inc(FParamIndex);
+end;
+
+function TSqlServerCompiler.CompileOrderByColumn(const O: TOrderByClause): string;
+var
+  Col: string;
+begin
+  if O.Nulls = TNullsOrder.Default then
+    Exit(inherited CompileOrderByColumn(O));
+  Col := WrapColumn(O.Column);
+  Result := 'CASE WHEN ' + Col + ' IS NULL THEN 1 ELSE 0 END ';
+  if O.Nulls = TNullsOrder.First then
+    Result := Result + 'DESC'
+  else
+    Result := Result + 'ASC';
+  Result := Result + ', ' + Col + ' ' + SortDirKeyword(O.Direction);
 end;
 
 function TSqlServerCompiler.CompileSelect(const Clauses: TArray<TAbstractClause>): string;
