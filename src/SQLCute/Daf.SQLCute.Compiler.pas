@@ -412,6 +412,11 @@ begin
     TSortDir.Asc:  Result := Result + ' ASC';
     TSortDir.Desc: Result := Result + ' DESC';
   end;
+  // Default emits nothing: the database applies its own rule, as before.
+  case O.Nulls of
+    TNullsOrder.First: Result := Result + ' NULLS FIRST';
+    TNullsOrder.Last:  Result := Result + ' NULLS LAST';
+  end;
 end;
 
 function TAnsiSqlCompiler.CompileOrderBy(const Clauses: TArray<TAbstractClause>): string;
