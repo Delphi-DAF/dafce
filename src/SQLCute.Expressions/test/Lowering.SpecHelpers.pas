@@ -15,12 +15,31 @@ interface
 
 uses
   System.SysUtils,
+  System.Generics.Collections,
   Daf.SQLCute,
   Daf.SQLCute.Clauses,
   Daf.SQLCute.WhereTree,
   Daf.Query.Expressions;
 
 type
+  /// <summary>
+  ///   The entity the SQL-side suite queries. A plain class: public properties, a
+  ///   parameterless constructor, no framework base class. <c>Price</c> is a
+  ///   Variant so it can carry SQL NULL.
+  /// </summary>
+  TProduct = class
+  private
+    FName: string;
+    FPrice: Variant;
+    FActive: Boolean;
+  public
+    constructor Create; overload;
+    constructor Create(const AName: string; const APrice: Variant; AActive: Boolean); overload;
+    property Name: string read FName write FName;
+    property Price: Variant read FPrice write FPrice;
+    property Active: Boolean read FActive write FActive;
+  end;
+
   /// <summary>SQL's three truth values, so NULL behaviour is pinned by construction.</summary>
   TTri = (triFalse, triTrue, triUnknown);
 
@@ -71,11 +90,52 @@ function SqlOf(const Q: IQuery): string;
 /// </summary>
 function AllAssignments(LeafCount: Integer): TArray<TAssignment>;
 
+/// <summary>Six products, one of them with a NULL price so 3VL has something to say.</summary>
+function SampleProducts: TObjectList<TProduct>;
+
+/// <summary>The names a query yields over <c>Source</c>, in order.</summary>
+function NamesOf(const Source: TEnumerable<TProduct>; const Q: IQuery): TArray<string>;
+
 implementation
 
 uses
+  System.Variants,
   Daf.SQLCute.Compiler,
+  Daf.SQLCute.InMemory,
   Daf.SQLCute.Expressions;
+
+{ TProduct }
+
+constructor TProduct.Create;
+begin
+  inherited Create;
+end;
+
+constructor TProduct.Create(const AName: string; const APrice: Variant; AActive: Boolean);
+begin
+  inherited Create;
+  FName := AName;
+  FPrice := APrice;
+  FActive := AActive;
+end;
+
+function SampleProducts: TObjectList<TProduct>;
+begin
+  Result := TObjectList<TProduct>.Create(True {owns});
+  Result.Add(TProduct.Create('Anvil', 120, True));
+  Result.Add(TProduct.Create('Bolt', 5, True));
+  Result.Add(TProduct.Create('Crane', 900, False));
+  Result.Add(TProduct.Create('Drill', Null, True));
+  Result.Add(TProduct.Create('Engine', 150, True));
+  Result.Add(TProduct.Create('File', 5, False));
+end;
+
+function NamesOf(const Source: TEnumerable<TProduct>; const Q: IQuery): TArray<string>;
+begin
+  Result := nil;
+  for var P in TInMemory.Queryable<TProduct>(Q, Source) do
+    Result := Result + [P.Name];
+end;
 
 function Not3(V: TTri): TTri;
 begin

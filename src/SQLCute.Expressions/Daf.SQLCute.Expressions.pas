@@ -95,7 +95,22 @@ type
     /// </summary>
     class function Where(const Query: IQuery; const Expression: IExpr;
       const Names: INameResolution; EntityType: PTypeInfo): IQuery; overload; static;
+    /// <summary>
+    ///   Lowers a whole specification — filter, ordering and page — onto
+    ///   <c>Query</c>. They travel together so a caller never has to remember to
+    ///   apply the ordering separately from the rule it belongs to.
+    /// </summary>
+    class function Apply<T>(const Query: IQuery; const Spec: TSpecification<T>;
+      const Names: INameResolution = nil): IQuery; static;
   end;
+
+/// <summary>
+///   The column a member resolves to: through <c>Names</c> when one is supplied,
+///   verbatim otherwise. The single point at which persistence vocabulary enters,
+///   which is why it is one function and not a rule repeated per call site.
+/// </summary>
+function ColumnFor(const Names: INameResolution; EntityType: PTypeInfo;
+  const Member: string): string;
 
 implementation
 
@@ -122,6 +137,17 @@ const
     '', '',
     '', '');
 
+{ ColumnFor }
+
+function ColumnFor(const Names: INameResolution; EntityType: PTypeInfo;
+  const Member: string): string;
+begin
+  if Names = nil then
+    Result := Member
+  else
+    Result := Names.ColumnFor(EntityType, Member);
+end;
+
 { TEmitCtx }
 
 function TEmitCtx.ColumnOf(const Node: IExpr): string;
@@ -129,11 +155,7 @@ begin
   if (Node = nil) or (Node.Kind <> TExprKind.Member) then
     raise EExprLoweringError.Create(
       'The left-hand side of a comparison must be a member reference.');
-  var Member := (Node as IMemberExpr).Name;
-  if Names = nil then
-    Result := Member
-  else
-    Result := Names.ColumnFor(EntityType, Member);
+  Result := ColumnFor(Names, EntityType, (Node as IMemberExpr).Name);
 end;
 
 function TEmitCtx.ValueOf(const Node: IExpr): Variant;
@@ -380,6 +402,27 @@ begin
   Ctx.EntityType := EntityType;
   EmitTop(Expression, Query, Ctx);
   Result := Query;
+end;
+
+class function TExprLowering.Apply<T>(const Query: IQuery;
+  const Spec: TSpecification<T>; const Names: INameResolution): IQuery;
+begin
+  Result := Where(Query, Spec.Filter, Names, TypeInfo(T));
+
+  for var Term in Spec.Order do
+  begin
+    var Col := ColumnFor(Names, TypeInfo(T), Term.Member);
+    if Term.Descending then
+      Result.OrderByDesc(Col)
+    else
+      Result.OrderBy(Col);
+  end;
+
+  // Zero means unset for both, so an unpaged rule adds no clause at all.
+  if Spec.SkipCount > 0 then
+    Result.Offset(Spec.SkipCount);
+  if Spec.TakeCount > 0 then
+    Result.Limit(Spec.TakeCount);
 end;
 
 end.

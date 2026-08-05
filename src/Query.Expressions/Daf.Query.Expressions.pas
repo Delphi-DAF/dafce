@@ -319,6 +319,29 @@ type
     class operator LogicalOr(const L, R: TExpr): TExpr;
     class operator LogicalNot(const E: TExpr): TExpr;
 
+    // --- breadth ----------------------------------------------------------
+    //
+    // Everything SQLCute already expresses is reached by lowering to the clause
+    // that says it, so each of these is a new operator value and no new node
+    // type. Only WHERE-shaped predicates ever need real nodes; the rest are
+    // fluent pass-throughs, and that is how this layer inherits SQLCute's
+    // breadth for free instead of re-earning it.
+
+    /// <summary>A LIKE match against <c>Pattern</c>, case-insensitive by default.</summary>
+    function Like(const Pattern: string; CaseSensitive: Boolean = False): TExpr;
+    function NotLike(const Pattern: string; CaseSensitive: Boolean = False): TExpr;
+    /// <summary>LIKE with the pattern built for you.</summary>
+    function StartsWith(const Value: string; CaseSensitive: Boolean = False): TExpr;
+    function EndsWith(const Value: string; CaseSensitive: Boolean = False): TExpr;
+    function Contains(const Value: string; CaseSensitive: Boolean = False): TExpr;
+    function Between(const Lo, Hi: Variant): TExpr;
+    function NotBetween(const Lo, Hi: Variant): TExpr;
+    /// <summary>Membership in a value set. Named <c>IsIn</c> because <c>in</c> is reserved.</summary>
+    function IsIn(const Values: TArray<Variant>): TExpr;
+    function NotIn(const Values: TArray<Variant>): TExpr;
+    function IsNull: TExpr;
+    function IsNotNull: TExpr;
+
     /// <summary>The node this record wraps.</summary>
     function Node: IExpr;
   end;
@@ -502,6 +525,21 @@ type
     class operator LessThanOrEqual(const L: TPropExpr<T>; const R: Variant): TExpr;
     class operator GreaterThan(const L: TPropExpr<T>; const R: Variant): TExpr;
     class operator GreaterThanOrEqual(const L: TPropExpr<T>; const R: Variant): TExpr;
+
+    // The breadth surface, delegated one line each. It exists here so that
+    // nothing is reachable only through the runtime path either — optionality
+    // has to cut both ways or it is not optionality.
+    function Like(const Pattern: string; CaseSensitive: Boolean = False): TExpr;
+    function NotLike(const Pattern: string; CaseSensitive: Boolean = False): TExpr;
+    function StartsWith(const Value: string; CaseSensitive: Boolean = False): TExpr;
+    function EndsWith(const Value: string; CaseSensitive: Boolean = False): TExpr;
+    function Contains(const Value: string; CaseSensitive: Boolean = False): TExpr;
+    function Between(const Lo, Hi: Variant): TExpr;
+    function NotBetween(const Lo, Hi: Variant): TExpr;
+    function IsIn(const Values: TArray<Variant>): TExpr;
+    function NotIn(const Values: TArray<Variant>): TExpr;
+    function IsNull: TExpr;
+    function IsNotNull: TExpr;
 
     /// <summary>The leaf, for the places that take an expression rather than build one.</summary>
     function Expr: TExpr;
@@ -854,6 +892,67 @@ begin
   Result := TNode.Unary(TUnaryOp.opNot, E.FNode);
 end;
 
+function TExpr.Like(const Pattern: string; CaseSensitive: Boolean): TExpr;
+begin
+  Result := TNode.Compare(TCompareOp.Like, FNode, [TNode.Value(Pattern)], CaseSensitive);
+end;
+
+function TExpr.NotLike(const Pattern: string; CaseSensitive: Boolean): TExpr;
+begin
+  Result := TNode.Compare(TCompareOp.NotLike, FNode, [TNode.Value(Pattern)], CaseSensitive);
+end;
+
+function TExpr.StartsWith(const Value: string; CaseSensitive: Boolean): TExpr;
+begin
+  Result := TNode.Compare(TCompareOp.StartsWith, FNode, [TNode.Value(Value)], CaseSensitive);
+end;
+
+function TExpr.EndsWith(const Value: string; CaseSensitive: Boolean): TExpr;
+begin
+  Result := TNode.Compare(TCompareOp.EndsWith, FNode, [TNode.Value(Value)], CaseSensitive);
+end;
+
+function TExpr.Contains(const Value: string; CaseSensitive: Boolean): TExpr;
+begin
+  Result := TNode.Compare(TCompareOp.Contains, FNode, [TNode.Value(Value)], CaseSensitive);
+end;
+
+function TExpr.Between(const Lo, Hi: Variant): TExpr;
+begin
+  Result := TNode.Compare(TCompareOp.&Between, FNode, [TNode.Value(Lo), TNode.Value(Hi)]);
+end;
+
+function TExpr.NotBetween(const Lo, Hi: Variant): TExpr;
+begin
+  Result := TNode.Compare(TCompareOp.NotBetween, FNode, [TNode.Value(Lo), TNode.Value(Hi)]);
+end;
+
+function TExpr.IsIn(const Values: TArray<Variant>): TExpr;
+begin
+  var Operands: TArray<IExpr> := nil;
+  for var V in Values do
+    Operands := Operands + [TNode.Value(V)];
+  Result := TNode.Compare(TCompareOp.&In, FNode, Operands);
+end;
+
+function TExpr.NotIn(const Values: TArray<Variant>): TExpr;
+begin
+  var Operands: TArray<IExpr> := nil;
+  for var V in Values do
+    Operands := Operands + [TNode.Value(V)];
+  Result := TNode.Compare(TCompareOp.NotIn, FNode, Operands);
+end;
+
+function TExpr.IsNull: TExpr;
+begin
+  Result := TNode.Compare(TCompareOp.IsNull, FNode, []);
+end;
+
+function TExpr.IsNotNull: TExpr;
+begin
+  Result := TNode.Compare(TCompareOp.IsNotNull, FNode, []);
+end;
+
 { Authoring entry points }
 
 function Prop(const Name: string): TExpr;
@@ -1078,6 +1177,61 @@ end;
 class operator TPropExpr<T>.GreaterThanOrEqual(const L: TPropExpr<T>; const R: Variant): TExpr;
 begin
   Result := L.FExpr >= R;
+end;
+
+function TPropExpr<T>.Like(const Pattern: string; CaseSensitive: Boolean): TExpr;
+begin
+  Result := FExpr.Like(Pattern, CaseSensitive);
+end;
+
+function TPropExpr<T>.NotLike(const Pattern: string; CaseSensitive: Boolean): TExpr;
+begin
+  Result := FExpr.NotLike(Pattern, CaseSensitive);
+end;
+
+function TPropExpr<T>.StartsWith(const Value: string; CaseSensitive: Boolean): TExpr;
+begin
+  Result := FExpr.StartsWith(Value, CaseSensitive);
+end;
+
+function TPropExpr<T>.EndsWith(const Value: string; CaseSensitive: Boolean): TExpr;
+begin
+  Result := FExpr.EndsWith(Value, CaseSensitive);
+end;
+
+function TPropExpr<T>.Contains(const Value: string; CaseSensitive: Boolean): TExpr;
+begin
+  Result := FExpr.Contains(Value, CaseSensitive);
+end;
+
+function TPropExpr<T>.Between(const Lo, Hi: Variant): TExpr;
+begin
+  Result := FExpr.Between(Lo, Hi);
+end;
+
+function TPropExpr<T>.NotBetween(const Lo, Hi: Variant): TExpr;
+begin
+  Result := FExpr.NotBetween(Lo, Hi);
+end;
+
+function TPropExpr<T>.IsIn(const Values: TArray<Variant>): TExpr;
+begin
+  Result := FExpr.IsIn(Values);
+end;
+
+function TPropExpr<T>.NotIn(const Values: TArray<Variant>): TExpr;
+begin
+  Result := FExpr.NotIn(Values);
+end;
+
+function TPropExpr<T>.IsNull: TExpr;
+begin
+  Result := FExpr.IsNull;
+end;
+
+function TPropExpr<T>.IsNotNull: TExpr;
+begin
+  Result := FExpr.IsNotNull;
 end;
 
 { TSpecification<T> }

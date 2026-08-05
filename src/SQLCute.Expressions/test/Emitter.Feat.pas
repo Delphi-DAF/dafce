@@ -16,9 +16,11 @@
 interface
 
 uses
+  System.Generics.Collections,
   Daf.SQLCute,
   Daf.SQLCute.WhereTree,
-  Daf.Query.Expressions;
+  Daf.Query.Expressions,
+  Lowering.SpecHelpers;
 
 type
   TEmitterWorld = class
@@ -30,6 +32,9 @@ type
     /// Assignments where the two evaluations disagreed. Must stay empty.
     Divergences: TArray<string>;
     Checked: Integer;
+    /// For the scenarios that run the lowered query rather than only read it.
+    Products: TObjectList<TProduct>;
+    Names: TArray<string>;
     destructor Destroy; override;
   end;
 
@@ -39,11 +44,12 @@ uses
   System.SysUtils,
   Daf.MiniSpec,
   Daf.SQLCute.Clauses,
-  Lowering.SpecHelpers;
+  Daf.SQLCute.Expressions;
 
 destructor TEmitterWorld.Destroy;
 begin
   Tree.Free;   // the normalizer hands ownership to its caller
+  Products.Free;
   inherited;
 end;
 
@@ -241,6 +247,101 @@ Feature Lowering an expression to WHERE clauses @expressions @emitter
           Expect(Child.Kind = TWhereNodeKind.Conjunction).ToBeTrue;
           Expect(Length(Child.Children)).ToEqual(2);
         end;
+      end)
+
+.Rule('Breadth is inherited by lowering, not by new node types')
+
+  .Scenario('LikeLowersToExistingClause')
+    .When('LIKE, BETWEEN and IN expressions are lowered',
+      procedure(W: TEmitterWorld)
+      begin
+        W.Authored := Prop('Name').Like('%son%');
+        W.Query := Lower(W.Authored);
+        W.Sql := SqlOf(LowerFrom('Product', W.Authored));
+      end)
+    .&Then('LIKE becomes SQLCute''s own LIKE clause, built by the same node type',
+      procedure(W: TEmitterWorld)
+      begin
+        var Clauses := WhereClausesOf(W.Query);
+        Expect(Length(Clauses)).ToEqual(1);
+        Expect(Clauses[0] is TWhereClause).ToBeTrue;
+        Expect(TWhereClause(Clauses[0]).Op = TWhereOp.Like).ToBeTrue;
+        Expect(W.Sql).ToContain('LIKE');
+
+        // No dedicated node type was introduced for it: the authored node is the
+        // same class an equality produces, carrying a different operator value.
+        Expect((W.Authored as TExprNode).ClassName)
+          .ToEqual(((Prop('Price') > 1).Node as TExprNode).ClassName);
+      end)
+    .&Then('BETWEEN and IN likewise reach the clauses SQLCute already has',
+      procedure(W: TEmitterWorld)
+      begin
+        var Between := WhereClausesOf(Lower(Prop('Price').Between(10, 200)));
+        Expect(Length(Between)).ToEqual(1);
+        Expect(TWhereClause(Between[0]).Op = TWhereOp.&Between).ToBeTrue;
+
+        // IN has its own clause type in the AST, and the fluent verb sets its
+        // Connector as the string 'AND'/'OR' the normalizer compares it as.
+        var InSet := WhereClausesOf(Lower(Prop('Price').IsIn([5, 120])));
+        Expect(Length(InSet)).ToEqual(1);
+        Expect(InSet[0] is TWhereInClause).ToBeTrue;
+        Expect(TWhereInClause(InSet[0]).Negated).ToBeFalse;
+        Expect(TWhereInClause(InSet[0]).Connector).ToEqual('AND');
+      end)
+
+  .Scenario('OrderingAndPagingLowerWithTheFilter')
+    .When('a specification with a filter, an ordering and a page is applied',
+      procedure(W: TEmitterWorld)
+      begin
+        var Spec := TSpecification<TProduct>.New
+          .Where(Prop('Active') = True)
+          .OrderByDesc('Price')
+          .Skip(1)
+          .Take(2);
+        W.Query := TExprLowering.Apply<TProduct>(TQuery.New.From('Product'), Spec);
+        W.Sql := SqlOf(W.Query);
+      end)
+    .&Then('one query carries all three, so a caller never applies them separately',
+      procedure(W: TEmitterWorld)
+      begin
+        var Wheres := 0;
+        var Orders := 0;
+        var Limits := 0;
+        var Offsets := 0;
+        for var C in W.Query.Clauses do
+        begin
+          if C is TWhereClause then Inc(Wheres);
+          if C is TOrderByClause then Inc(Orders);
+          if C is TLimitClause then Inc(Limits);
+          if C is TOffsetClause then Inc(Offsets);
+        end;
+        Expect(Wheres).ToEqual(1);
+        Expect(Orders).ToEqual(1);
+        Expect(Limits).ToEqual(1);
+        Expect(Offsets).ToEqual(1);
+
+        Expect(W.Sql).ToContain('WHERE');
+        Expect(W.Sql).ToContain('ORDER BY');
+        Expect(W.Sql).ToContain('DESC');
+      end)
+
+  .Scenario('LoweringNeedsNoTableName')
+    .When('an expression is lowered with no FROM and run over a plain list',
+      procedure(W: TEmitterWorld)
+      begin
+        W.Products := SampleProducts;
+        W.Query := Lower((Prop('Price') > 100) and (Prop('Active') = True));
+        W.Names := NamesOf(W.Products, W.Query);
+      end)
+    .&Then('no table was invented, and the in-memory lane ran it anyway',
+      procedure(W: TEmitterWorld)
+      begin
+        for var C in W.Query.Clauses do
+          Expect(C is TFromClause).ToBeFalse;
+        // The source arrives as a parameter, so there is nothing for a FROM to name.
+        Expect(Length(W.Names)).ToEqual(2);
+        Expect(W.Names[0]).ToEqual('Anvil');
+        Expect(W.Names[1]).ToEqual('Engine');
       end);
 
 end.
