@@ -107,6 +107,66 @@ TQuery — ORDER BY NULL ordering @unit @sqlcute
       procedure(W: TOrderByNullsWorld)
       begin
         Expect(W.FirstNulls).ToEqual('Last');
+      end)
+
+// -------------------------------------------------------------------------
+
+.Rule('The fluent surface writes the option, per column')
+
+  .Scenario('The overload sets the option on the column it adds')
+    .When('a query calls OrderBy(age, Last) and OrderByDesc(name, First)',
+      procedure(W: TOrderByNullsWorld)
+      begin
+        W.Query := TQuery.New.From('people')
+          .OrderBy('age', TNullsOrder.Last)
+          .OrderByDesc('name', TNullsOrder.First);
+        W.FirstNulls := NullsAt(W.Query, 0);
+        W.SecondNulls := NullsAt(W.Query, 1);
+      end)
+    .&Then('each column carries the option it was given',
+      procedure(W: TOrderByNullsWorld)
+      begin
+        Expect(W.FirstNulls).ToEqual('Last');
+        Expect(W.SecondNulls).ToEqual('First');
+      end)
+
+  .Scenario('A modifier qualifies only the preceding column')
+    .When('a query calls OrderBy(age).NullsLast.OrderBy(name)',
+      procedure(W: TOrderByNullsWorld)
+      begin
+        W.Query := TQuery.New.From('people')
+          .OrderBy('age').NullsLast
+          .OrderBy('name');
+        W.FirstNulls := NullsAt(W.Query, 0);
+        W.SecondNulls := NullsAt(W.Query, 1);
+      end)
+    .&Then('age carries Last and the later name column keeps Default',
+      procedure(W: TOrderByNullsWorld)
+      begin
+        Expect(W.FirstNulls).ToEqual('Last');
+        Expect(W.SecondNulls).ToEqual('Default');
+      end)
+
+  .Scenario('A modifier with no column to qualify fails fast')
+    .&Then('NullsLast on a query with no ordered column raises',
+      procedure(W: TOrderByNullsWorld)
+      begin
+        ExpectException(
+          procedure
+          begin
+            TQuery.New.From('people').NullsLast;
+          end).ToBe(EInvalidOpException);
+      end)
+
+  .Scenario('A raw ORDER BY is not a column a modifier can qualify')
+    .&Then('NullsFirst after only an OrderByRaw raises',
+      procedure(W: TOrderByNullsWorld)
+      begin
+        ExpectException(
+          procedure
+          begin
+            TQuery.New.From('people').OrderByRaw('FIELD(status, ''a'', ''b'')').NullsFirst;
+          end).ToBe(EInvalidOpException);
       end);
 
 end.
