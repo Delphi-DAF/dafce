@@ -167,6 +167,71 @@ TQuery — ORDER BY NULL ordering @unit @sqlcute
           begin
             TQuery.New.From('people').OrderByRaw('FIELD(status, ''a'', ''b'')').NullsFirst;
           end).ToBe(EInvalidOpException);
+      end)
+
+// -------------------------------------------------------------------------
+
+.Rule('ANSI SQL emits the clause only when it was asked for')
+
+  .Scenario('Default emits exactly the SQL it did before this option existed')
+    .When('an unqualified OrderBy(name) is compiled with ANSI',
+      procedure(W: TOrderByNullsWorld)
+      begin
+        W.Sql := TQuery.New.From('users').OrderBy('name').Compile(W.Compiler).SQL;
+      end)
+    .&Then('the SQL carries no NULLS clause',
+      procedure(W: TOrderByNullsWorld)
+      begin
+        Expect(W.Sql).ToEqual('SELECT * FROM users ORDER BY name ASC');
+      end)
+
+  .Scenario('The requested placement is emitted after the direction')
+    .When('OrderBy(age).NullsLast and OrderByDesc(age).NullsFirst are compiled',
+      procedure(W: TOrderByNullsWorld)
+      begin
+        W.Sql := TQuery.New.From('people')
+          .OrderBy('age').NullsLast.Compile(W.Compiler).SQL;
+        W.SecondSql := TQuery.New.From('people')
+          .OrderByDesc('age').NullsFirst.Compile(W.Compiler).SQL;
+      end)
+    .&Then('each column reads "col DIR NULLS FIRST|LAST"',
+      procedure(W: TOrderByNullsWorld)
+      begin
+        Expect(W.Sql).ToEqual('SELECT * FROM people ORDER BY age ASC NULLS LAST');
+        Expect(W.SecondSql).ToEqual('SELECT * FROM people ORDER BY age DESC NULLS FIRST');
+      end)
+
+  .Scenario('Only the qualified column of a multi-column sort is affected')
+    .When('OrderBy(age).NullsLast.OrderBy(name) is compiled',
+      procedure(W: TOrderByNullsWorld)
+      begin
+        W.Sql := TQuery.New.From('people')
+          .OrderBy('age').NullsLast
+          .OrderBy('name').Compile(W.Compiler).SQL;
+      end)
+    .&Then('the second column is emitted plainly',
+      procedure(W: TOrderByNullsWorld)
+      begin
+        Expect(W.Sql).ToEqual(
+          'SELECT * FROM people ORDER BY age ASC NULLS LAST, name ASC');
+      end)
+
+  .Scenario('The option adds no bindings')
+    .When('the same filtered query is compiled unqualified and qualified',
+      procedure(W: TOrderByNullsWorld)
+      begin
+        var Plain := TQuery.New.From('people').Where('country', 'US')
+          .OrderBy('age').Compile(W.Compiler);
+        var Qualified := TQuery.New.From('people').Where('country', 'US')
+          .OrderBy('age').NullsLast.Compile(W.Compiler);
+        W.Bindings := Length(Plain.Bindings);
+        W.SecondBindings := Length(Qualified.Bindings);
+      end)
+    .&Then('both carry the same binding count',
+      procedure(W: TOrderByNullsWorld)
+      begin
+        Expect(W.Bindings).ToEqual(1);
+        Expect(W.SecondBindings).ToEqual(W.Bindings);
       end);
 
 end.
