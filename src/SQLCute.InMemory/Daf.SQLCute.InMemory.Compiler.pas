@@ -722,7 +722,13 @@ begin
       var S: TOrderSpec;
       S.Column := O.Column;
       S.Descending := (O.Direction = TSortDir.Desc);
-      S.Nulls := TNullsPolicy.Default;   // the AST cannot express a per-column override
+      // The AST's SQL vocabulary maps onto the plan's own (Decision 6).
+      case O.Nulls of
+        TNullsOrder.First: S.Nulls := TNullsPolicy.First;
+        TNullsOrder.Last:  S.Nulls := TNullsPolicy.Last;
+      else
+        S.Nulls := TNullsPolicy.Default;
+      end;
       Result := Result + [S];
     end;
 end;
