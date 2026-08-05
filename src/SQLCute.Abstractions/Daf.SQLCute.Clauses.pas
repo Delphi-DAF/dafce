@@ -33,6 +33,12 @@ type
   TSortDir = (Asc, Desc);
 
   /// <summary>
+  /// Where NULLs land within one ORDER BY column. <c>Default</c> emits nothing
+  /// and leaves the placement to the database (each dialect has its own rule).
+  /// </summary>
+  TNullsOrder = (Default, First, Last);
+
+  /// <summary>
   /// Kind of JOIN clause.
   /// </summary>
   TJoinType = (Inner, Left, Right, Cross, FullOuter);
@@ -151,6 +157,9 @@ type
     Column: string;
     Direction: TSortDir;
     IsRaw: Boolean;
+    /// NULL placement for this column. Default = leave it to the database.
+    /// Meaningless (and ignored) when IsRaw, since a raw term is emitted verbatim.
+    Nulls: TNullsOrder;
     function Clone: TAbstractClause; override;
   end;
 
@@ -446,6 +455,7 @@ begin
   C.Column    := Column;
   C.Direction := Direction;
   C.IsRaw     := IsRaw;
+  C.Nulls     := Nulls;
   Result := C;
 end;
 
