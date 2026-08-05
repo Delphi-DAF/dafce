@@ -36,6 +36,9 @@
         <Projects Include="SQLCute.InMemory\samples\InMemoryJoinSample\InMemoryJoinSample.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="SQLCute.Expressions\samples\CatalogServiceSample\CatalogServiceSample.dproj">
+            <Dependencies/>
+        </Projects>
     </ItemGroup>
     <ProjectExtensions>
         <Borland.Personality>Default.Personality.12</Borland.Personality>
@@ -143,14 +146,23 @@
     <Target Name="InMemoryJoinSample:Make">
         <MSBuild Projects="SQLCute.InMemory\samples\InMemoryJoinSample\InMemoryJoinSample.dproj" Targets="Make"/>
     </Target>
+    <Target Name="CatalogServiceSample">
+        <MSBuild Projects="SQLCute.Expressions\samples\CatalogServiceSample\CatalogServiceSample.dproj"/>
+    </Target>
+    <Target Name="CatalogServiceSample:Clean">
+        <MSBuild Projects="SQLCute.Expressions\samples\CatalogServiceSample\CatalogServiceSample.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="CatalogServiceSample:Make">
+        <MSBuild Projects="SQLCute.Expressions\samples\CatalogServiceSample\CatalogServiceSample.dproj" Targets="Make"/>
+    </Target>
     <Target Name="Build">
-        <CallTarget Targets="ConfigExample;MediatRSample;ConsoleSample;HostedService;PingProcess;CalculatorSpecs;MasterMind_Specs;TicTacToeApp;SQLCuteSample;InMemoryQuerySample;InMemoryJoinSample"/>
+        <CallTarget Targets="ConfigExample;MediatRSample;ConsoleSample;HostedService;PingProcess;CalculatorSpecs;MasterMind_Specs;TicTacToeApp;SQLCuteSample;InMemoryQuerySample;InMemoryJoinSample;CatalogServiceSample"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="ConfigExample:Clean;MediatRSample:Clean;ConsoleSample:Clean;HostedService:Clean;PingProcess:Clean;CalculatorSpecs:Clean;MasterMind_Specs:Clean;TicTacToeApp:Clean;SQLCuteSample:Clean;InMemoryQuerySample:Clean;InMemoryJoinSample:Clean"/>
+        <CallTarget Targets="ConfigExample:Clean;MediatRSample:Clean;ConsoleSample:Clean;HostedService:Clean;PingProcess:Clean;CalculatorSpecs:Clean;MasterMind_Specs:Clean;TicTacToeApp:Clean;SQLCuteSample:Clean;InMemoryQuerySample:Clean;InMemoryJoinSample:Clean;CatalogServiceSample:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="ConfigExample:Make;MediatRSample:Make;ConsoleSample:Make;HostedService:Make;PingProcess:Make;CalculatorSpecs:Make;MasterMind_Specs:Make;TicTacToeApp:Make;SQLCuteSample:Make;InMemoryQuerySample:Make;InMemoryJoinSample:Make"/>
+        <CallTarget Targets="ConfigExample:Make;MediatRSample:Make;ConsoleSample:Make;HostedService:Make;PingProcess:Make;CalculatorSpecs:Make;MasterMind_Specs:Make;TicTacToeApp:Make;SQLCuteSample:Make;InMemoryQuerySample:Make;InMemoryJoinSample:Make;CatalogServiceSample:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>
