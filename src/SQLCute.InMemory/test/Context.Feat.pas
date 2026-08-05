@@ -13,16 +13,20 @@ uses
   System.Generics.Collections;
 
 type
+  /// <summary>Age is Variant so one person can carry SQL NULL (NULL ordering).</summary>
   TPerson = class
   private
     FId: Integer;
     FName: string;
     FCountry: string;
+    FAge: Variant;
   public
-    constructor Create(const AId: Integer; const AName, ACountry: string);
+    constructor Create(const AId: Integer; const AName, ACountry: string;
+      const AAge: Variant);
     property Id: Integer read FId write FId;
     property Name: string read FName write FName;
     property Country: string read FCountry write FCountry;
+    property Age: Variant read FAge write FAge;
   end;
 
   TOrder = class
@@ -66,12 +70,14 @@ uses
 
 { TPerson }
 
-constructor TPerson.Create(const AId: Integer; const AName, ACountry: string);
+constructor TPerson.Create(const AId: Integer; const AName, ACountry: string;
+  const AAge: Variant);
 begin
   inherited Create;
   FId := AId;
   FName := AName;
   FCountry := ACountry;
+  FAge := AAge;
 end;
 
 { TOrder }
@@ -90,9 +96,9 @@ constructor TCtxWorld.Create;
 begin
   inherited;
   People := TObjectList<TPerson>.Create(True);
-  People.Add(TPerson.Create(1, 'Ann', 'US'));
-  People.Add(TPerson.Create(2, 'Bob', 'US'));
-  People.Add(TPerson.Create(3, 'Cara', 'UK'));   // no orders
+  People.Add(TPerson.Create(1, 'Ann', 'US', 30));
+  People.Add(TPerson.Create(2, 'Bob', 'US', 17));
+  People.Add(TPerson.Create(3, 'Cara', 'UK', Null));   // no orders, NULL age
   Orders := TObjectList<TOrder>.Create(True);
   Orders.Add(TOrder.Create(10, 1, 100));   // Ann
   Orders.Add(TOrder.Create(11, 1, 200));   // Ann
@@ -268,6 +274,55 @@ Feature SQLCute in-memory multi-source @inmemory @context
         end;
         Expect(HasUS).ToBeTrue;
         Expect(HasUK).ToBeTrue;
+      end)
+
+.Rule('ORDER BY carries its NULL placement into the general lane')
+
+  .Scenario('NullsLast sends the NULL age to the end of an ascending sort')
+    .When('people are ordered by age ascending with NullsLast',
+      procedure(W: TCtxWorld)
+      begin
+        var Ctx := TQueryContext.Create;
+        try
+          Ctx.Map<TPerson>('people', W.People);
+          W.Names := nil;
+          for var R in TInMemory.Rows(
+            TQuery.New.From('people').OrderBy('age').NullsLast, Ctx) do
+            W.Names := W.Names + [AsStr(R, 'name')];
+        finally
+          Ctx.Free;
+        end;
+      end)
+    .&Then('Bob, Ann and then Cara (NULL age) come out',
+      procedure(W: TCtxWorld)
+      begin
+        Expect(Length(W.Names)).ToEqual(3);
+        Expect(W.Names[0]).ToEqual('Bob');    // 17
+        Expect(W.Names[1]).ToEqual('Ann');    // 30
+        Expect(W.Names[2]).ToEqual('Cara');   // NULL, held back by NullsLast
+      end)
+
+  .Scenario('NullsFirst brings the NULL age to the front of a descending sort')
+    .When('people are ordered by age descending with NullsFirst',
+      procedure(W: TCtxWorld)
+      begin
+        var Ctx := TQueryContext.Create;
+        try
+          Ctx.Map<TPerson>('people', W.People);
+          W.Names := nil;
+          for var R in TInMemory.Rows(
+            TQuery.New.From('people').OrderByDesc('age').NullsFirst, Ctx) do
+            W.Names := W.Names + [AsStr(R, 'name')];
+        finally
+          Ctx.Free;
+        end;
+      end)
+    .&Then('Cara leads, then Ann and Bob by descending age',
+      procedure(W: TCtxWorld)
+      begin
+        Expect(W.Names[0]).ToEqual('Cara');
+        Expect(W.Names[1]).ToEqual('Ann');
+        Expect(W.Names[2]).ToEqual('Bob');
       end)
 
 .Rule('Subqueries filter against context sources')
