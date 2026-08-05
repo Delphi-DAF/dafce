@@ -13,7 +13,9 @@ uses
   Daf.MiniSpec,
   Daf.SQLCute.Core in '..\..\SQLCute\Daf.SQLCute.Core.pas',
   Daf.Query.Expressions,
-  Daf.SQLCute.Expressions;
+  Daf.SQLCute.Expressions,
+  Lowering.SpecHelpers in 'Lowering.SpecHelpers.pas',
+  Emitter.Feat in 'Emitter.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;
