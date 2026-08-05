@@ -13,7 +13,8 @@ uses
   Daf.MiniSpec,
   Daf.Query.Expressions,
   Model.Feat in 'Model.Feat.pas',
-  Authoring.Feat in 'Authoring.Feat.pas';
+  Authoring.Feat in 'Authoring.Feat.pas',
+  Metamodel.Feat in 'Metamodel.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

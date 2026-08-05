@@ -332,6 +332,14 @@ function Prop(const Name: string): TExpr;
 /// <summary>A named placeholder carrying its bound value.</summary>
 function Prm(const Name: string; const Value: Variant): TExpr;
 
+/// <summary>
+///   A canonical text rendering of the tree — structural, stable, and blind to
+///   how the tree was authored. It is what makes "these two expressions are the
+///   same" an assertion rather than an opinion, and it doubles as a cache key.
+///   It is never a step on the way to execution: the emitter reads the tree.
+/// </summary>
+function ExprToText(const Node: IExpr): string;
+
 type
   // ---------------------------------------------------------------------------
   //  Name resolution — one seam, two questions
@@ -440,6 +448,65 @@ function FindEntityMember(EntityType: PTypeInfo; const Member: string): TRttiMem
 ///   about casing, and both fail at the same point for the same reason.
 /// </summary>
 function ResolvedMemberName(EntityType: PTypeInfo; const Member: string): string;
+
+type
+  // ---------------------------------------------------------------------------
+  //  The optional metamodel
+  // ---------------------------------------------------------------------------
+
+  /// <summary>
+  ///   One member of a hand-written metamodel, generic over the entity it
+  ///   belongs to:
+  ///   <code>
+  ///   ProductMeta = class
+  ///   public
+  ///     class var Price: TPropExpr&lt;TProduct&gt;;
+  ///     class constructor Create;
+  ///   end;
+  ///   </code>
+  ///   <c>class var</c> plus a <c>class constructor</c> means the call site is a
+  ///   field read and initialization runs once per class. The entity is
+  ///   untouched — the metamodel is a separate type, so no persistence strings
+  ///   leak into the POCO.
+  /// </summary>
+  /// <remarks>
+  ///   Be precise about what this buys. Typo-safety and discoverability, yes:
+  ///   <c>ProductMeta.Pric</c> does not compile and code completion lists the
+  ///   members. Rename-safety, no: the field holds a string, so renaming the
+  ///   property still compiles. Validating on construction is what turns that
+  ///   into an early loud failure — a stale name raises when the metamodel class
+  ///   initializes, which is the first time a test touches it.
+  ///
+  ///   It stays an option the developer may take. Every operator here delegates
+  ///   to <c>TExpr</c>'s, and the leaf comes from the same constructor the
+  ///   runtime path calls, so the nodes are identical rather than merely alike:
+  ///   nothing downstream can tell the two apart, and no capability is reachable
+  ///   only this way. A metamodel-only feature would stop being an option and
+  ///   become a tax.
+  /// </remarks>
+  TPropExpr<T> = record
+  strict private
+    FExpr: TExpr;
+  public
+    /// <summary>Validates <c>Member</c> against <c>T</c> and builds the leaf.</summary>
+    constructor Create(const Member: string);
+
+    class operator Implicit(const P: TPropExpr<T>): TExpr;
+    class operator Implicit(const P: TPropExpr<T>): IExpr;
+
+    class operator Equal(const L: TPropExpr<T>; const R: Variant): TExpr; overload;
+    class operator NotEqual(const L: TPropExpr<T>; const R: Variant): TExpr; overload;
+    class operator Equal(const L: TPropExpr<T>; const R: TGUID): TExpr; overload;
+    class operator NotEqual(const L: TPropExpr<T>; const R: TGUID): TExpr; overload;
+    class operator LessThan(const L: TPropExpr<T>; const R: Variant): TExpr;
+    class operator LessThanOrEqual(const L: TPropExpr<T>; const R: Variant): TExpr;
+    class operator GreaterThan(const L: TPropExpr<T>; const R: Variant): TExpr;
+    class operator GreaterThanOrEqual(const L: TPropExpr<T>; const R: Variant): TExpr;
+
+    /// <summary>The leaf, for the places that take an expression rather than build one.</summary>
+    function Expr: TExpr;
+    function Node: IExpr;
+  end;
 
 implementation
 
@@ -715,6 +782,56 @@ begin
   Result := TNode.Param(Name, Value);
 end;
 
+{ ExprToText }
+
+// A value's rendering carries its Variant type as well as its text, so 100 and
+// '100' are not silently the same key.
+function ValueText(const V: Variant): string;
+begin
+  Result := Format('%s#%d', [VarToStrDef(V, 'null'), VarType(V)]);
+end;
+
+function ExprToText(const Node: IExpr): string;
+begin
+  if Node = nil then
+    Exit('<nil>');
+  case Node.Kind of
+    TExprKind.Member:
+      Result := 'm:' + (Node as IMemberExpr).Name;
+    TExprKind.Value:
+      Result := 'v:' + ValueText((Node as IValueExpr).Value);
+    TExprKind.Param:
+      Result := Format('p:%s=%s', [(Node as IParamExpr).Name,
+                                   ValueText((Node as IParamExpr).Value)]);
+    TExprKind.Compare:
+      begin
+        var C := Node as ICompareExpr;
+        Result := '(' + ExprToText(C.Target) + ' '
+                + GetEnumName(TypeInfo(TCompareOp), Ord(C.Op));
+        for var Operand in C.Operands do
+          Result := Result + ' ' + ExprToText(Operand);
+        if C.CaseSensitive then
+          Result := Result + ' cs';
+        Result := Result + ')';
+      end;
+    TExprKind.Logical:
+      begin
+        var L := Node as ILogicalExpr;
+        Result := Format('(%s %s %s)', [ExprToText(L.Left),
+                                        GetEnumName(TypeInfo(TLogicalOp), Ord(L.Op)),
+                                        ExprToText(L.Right)]);
+      end;
+    TExprKind.Unary:
+      begin
+        var U := Node as IUnaryExpr;
+        Result := Format('(%s %s)', [GetEnumName(TypeInfo(TUnaryOp), Ord(U.Op)),
+                                     ExprToText(U.Operand)]);
+      end;
+  else
+    Result := '<unknown>';
+  end;
+end;
+
 { TDefaultNameResolution }
 
 function TDefaultNameResolution.ColumnFor(EntityType: PTypeInfo; const Member: string): string;
@@ -809,6 +926,74 @@ end;
 function TEntityExpr<T>.Table: string;
 begin
   Result := Names.TableFor(TypeInfo(T));
+end;
+
+{ TPropExpr<T> }
+
+constructor TPropExpr<T>.Create(const Member: string);
+begin
+  // Same constructor the runtime path calls, same validation, same failure.
+  FExpr := TNode.Member(ResolvedMemberName(TypeInfo(T), Member));
+end;
+
+function TPropExpr<T>.Expr: TExpr;
+begin
+  Result := FExpr;
+end;
+
+function TPropExpr<T>.Node: IExpr;
+begin
+  Result := FExpr.Node;
+end;
+
+class operator TPropExpr<T>.Implicit(const P: TPropExpr<T>): TExpr;
+begin
+  Result := P.FExpr;
+end;
+
+class operator TPropExpr<T>.Implicit(const P: TPropExpr<T>): IExpr;
+begin
+  Result := P.FExpr.Node;
+end;
+
+class operator TPropExpr<T>.Equal(const L: TPropExpr<T>; const R: Variant): TExpr;
+begin
+  Result := L.FExpr = R;
+end;
+
+class operator TPropExpr<T>.NotEqual(const L: TPropExpr<T>; const R: Variant): TExpr;
+begin
+  Result := L.FExpr <> R;
+end;
+
+class operator TPropExpr<T>.Equal(const L: TPropExpr<T>; const R: TGUID): TExpr;
+begin
+  Result := L.FExpr = R;
+end;
+
+class operator TPropExpr<T>.NotEqual(const L: TPropExpr<T>; const R: TGUID): TExpr;
+begin
+  Result := L.FExpr <> R;
+end;
+
+class operator TPropExpr<T>.LessThan(const L: TPropExpr<T>; const R: Variant): TExpr;
+begin
+  Result := L.FExpr < R;
+end;
+
+class operator TPropExpr<T>.LessThanOrEqual(const L: TPropExpr<T>; const R: Variant): TExpr;
+begin
+  Result := L.FExpr <= R;
+end;
+
+class operator TPropExpr<T>.GreaterThan(const L: TPropExpr<T>; const R: Variant): TExpr;
+begin
+  Result := L.FExpr > R;
+end;
+
+class operator TPropExpr<T>.GreaterThanOrEqual(const L: TPropExpr<T>; const R: Variant): TExpr;
+begin
+  Result := L.FExpr >= R;
 end;
 
 end.
