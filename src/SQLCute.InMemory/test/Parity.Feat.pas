@@ -221,6 +221,14 @@ begin
     MakeCase('order-desc-nulls-last',
       TQuery.New.From('people').OrderByDesc('age').OrderBy('name'),
       ['name'], 'Eve, Ann, Cara, Finn, Bob, Dan, Gil'),
+    // Explicitly qualified ordering: the option is what makes one declared
+    // result set valid for every back-end, instead of each applying its own rule.
+    MakeCase('order-explicit-nulls-last',
+      TQuery.New.From('people').OrderBy('age').NullsLast.OrderBy('name'),
+      ['name'], 'Bob, Cara, Finn, Ann, Eve, Dan, Gil'),
+    MakeCase('order-desc-explicit-nulls-first',
+      TQuery.New.From('people').OrderByDesc('age').NullsFirst.OrderBy('name'),
+      ['name'], 'Dan, Gil, Eve, Ann, Cara, Finn, Bob'),
     MakeCase('paging',
       TQuery.New.From('people').OrderBy('name').ForPage(2, 3),
       ['name'], 'Dan, Eve, Finn'),
