@@ -42,6 +42,15 @@ type
     [Given('a dialect query from "(\w+)" limited to (\d+) offset (\d+)')]
     procedure GivenFromLimitOffset(W: TSQLCuteWorld; Table: string; Lim, Off: Integer);
 
+    [Given('a dialect query from "(\w+)" ordered by "(\w+)"$')]
+    procedure GivenFromOrderBy(W: TSQLCuteWorld; Table, Col: string);
+
+    [Given('a dialect query from "(\w+)" ordered by "(\w+)" nulls (first|last)')]
+    procedure GivenFromOrderByNulls(W: TSQLCuteWorld; Table, Col, Placement: string);
+
+    [Given('a dialect query from "(\w+)" ordered by "(\w+)" desc nulls (first|last)')]
+    procedure GivenFromOrderByDescNulls(W: TSQLCuteWorld; Table, Col, Placement: string);
+
     [Given('a date query from "(\w+)" wheredate "(\w+)" equals "([^"]+)"')]
     procedure GivenWhereDateEq(W: TSQLCuteWorld; Table, Col, Val: string);
 
@@ -70,6 +79,9 @@ type
 
     [ThenAttribute('SQL contains "(.*)"')]
     procedure ThenSqlContains(W: TSQLCuteWorld; Expected: string);
+
+    [ThenAttribute('SQL does not contain "(.*)"')]
+    procedure ThenSqlDoesNotContain(W: TSQLCuteWorld; Unexpected: string);
 
     [ThenAttribute('has (\d+) bindings?')]
     procedure ThenBindingCount(W: TSQLCuteWorld; Count: Integer);
@@ -111,6 +123,32 @@ begin
   W.Query := TQuery.New.From(Table).Limit(Lim).Offset(Off);
 end;
 
+procedure TSQLCuteCompilersSteps.GivenFromOrderBy(W: TSQLCuteWorld;
+  Table, Col: string);
+begin
+  W.Query := TQuery.New.From(Table).OrderBy(Col);
+end;
+
+procedure TSQLCuteCompilersSteps.GivenFromOrderByNulls(W: TSQLCuteWorld;
+  Table, Col, Placement: string);
+begin
+  W.Query := TQuery.New.From(Table).OrderBy(Col);
+  if SameText(Placement, 'first') then
+    W.Query.NullsFirst
+  else
+    W.Query.NullsLast;
+end;
+
+procedure TSQLCuteCompilersSteps.GivenFromOrderByDescNulls(W: TSQLCuteWorld;
+  Table, Col, Placement: string);
+begin
+  W.Query := TQuery.New.From(Table).OrderByDesc(Col);
+  if SameText(Placement, 'first') then
+    W.Query.NullsFirst
+  else
+    W.Query.NullsLast;
+end;
+
 // -----------------------------------------------------------------------
 //  WHEN implementations
 // -----------------------------------------------------------------------
@@ -149,6 +187,12 @@ end;
 procedure TSQLCuteCompilersSteps.ThenSqlContains(W: TSQLCuteWorld; Expected: string);
 begin
   Expect(W.LastResult.SQL).ToContain(Expected);
+end;
+
+procedure TSQLCuteCompilersSteps.ThenSqlDoesNotContain(W: TSQLCuteWorld;
+  Unexpected: string);
+begin
+  Expect(W.LastResult.SQL.Contains(Unexpected)).ToBeFalse;
 end;
 
 procedure TSQLCuteCompilersSteps.ThenBindingCount(W: TSQLCuteWorld; Count: Integer);

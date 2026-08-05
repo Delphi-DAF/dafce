@@ -118,6 +118,36 @@ TQuery — Dialect Compilers @unit @sqlcute
     .When('compiled with the "Firebird" dialect')
     .&Then('SQL is "SELECT * FROM orders ROWS 21 TO 30"')
 
+// -------------------------------------------------------------------------
+
+.Rule('Postgres, Oracle, SQLite and Firebird emit NULLS FIRST/LAST natively')
+
+  .Scenario('Postgres emits the clause after the ordered column')
+    .Given('a dialect query from "people" ordered by "age" nulls first')
+    .When('compiled with the "Postgres" dialect')
+    .&Then('SQL is "SELECT * FROM "people" ORDER BY "age" ASC NULLS FIRST"')
+    .&Then('has 0 bindings')
+
+  .Scenario('SQLite emits the clause after the ordered column')
+    .Given('a dialect query from "people" ordered by "age" nulls first')
+    .When('compiled with the "SQLite" dialect')
+    .&Then('SQL is "SELECT * FROM "people" ORDER BY "age" ASC NULLS FIRST"')
+
+  .Scenario('Oracle emits the clause after its uppercased column')
+    .Given('a dialect query from "people" ordered by "age" nulls last')
+    .When('compiled with the "Oracle" dialect')
+    .&Then('SQL is "SELECT * FROM "PEOPLE" ORDER BY "AGE" ASC NULLS LAST"')
+
+  .Scenario('Firebird emits the clause on its unquoted column')
+    .Given('a dialect query from "people" ordered by "age" desc nulls first')
+    .When('compiled with the "Firebird" dialect')
+    .&Then('SQL is "SELECT * FROM people ORDER BY age DESC NULLS FIRST"')
+
+  .Scenario('An unqualified sort emits no NULLS clause on a native dialect')
+    .Given('a dialect query from "people" ordered by "age"')
+    .When('compiled with the "Postgres" dialect')
+    .&Then('SQL is "SELECT * FROM "people" ORDER BY "age" ASC"')
+
 ;
 
 end.
