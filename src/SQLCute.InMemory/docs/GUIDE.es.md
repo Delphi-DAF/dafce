@@ -197,7 +197,18 @@ Todas las claves NULL caen en exactamente un grupo.
 
 ### ORDER BY
 
-NULL se trata como el valor más pequeño: nulls primero en ascendente, al final en descendente. En el plan compilado existe una anulación por columna `NullsFirst` / `NullsLast` (`TOrderSpec.Nulls`), aunque el AST de SQLCute todavía no puede expresarla.
+Un `OrderBy` sin cualificar trata NULL como el valor más pequeño: nulls primero en ascendente, al final en descendente.
+
+Una consulta puede anularlo por columna, y el plan lo respeta:
+
+```pascal
+TInMemory.Queryable<TPersona>(
+  TQuery.New.From('personas').OrderBy('edad').NullsLast, Personas);   // NULL al final
+```
+
+Sirven ambas formas fluidas (`NullsFirst` / `NullsLast`, o la sobrecarga `OrderBy(col, TNullsOrder.Last)`); el compilador lee la opción de la cláusula en `TOrderSpec.Nulls`.
+
+> **El único punto donde los dos back-ends aún pueden discrepar.** Una ordenación *sin cualificar* sobre una columna nullable sigue el valor por omisión de cada lado: NULL-es-el-menor en memoria, y lo que haga el dialecto en SQL — donde Postgres y Oracle hacen lo contrario (nulls al final en ascendente). Este carril no conoce dialectos y dárselos acoplaría los back-ends, así que el valor por omisión se queda como está. **Cualificar la ordenación es la forma soportada de obtener resultados idénticos en ambos**, que es precisamente lo que fija el arnés de simetría.
 
 ### Materialización
 

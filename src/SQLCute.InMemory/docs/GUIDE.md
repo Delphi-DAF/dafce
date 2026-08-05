@@ -197,7 +197,18 @@ All NULL keys fall into exactly one group.
 
 ### ORDER BY
 
-NULL is treated as the smallest value: nulls first ascending, nulls last descending. A per-column `NullsFirst` / `NullsLast` override exists in the compiled plan (`TOrderSpec.Nulls`), though the SQLCute AST cannot yet express it.
+An unqualified `OrderBy` treats NULL as the smallest value: nulls first ascending, nulls last descending.
+
+A query can override that per column, and the plan honors it:
+
+```pascal
+TInMemory.Queryable<TPerson>(
+  TQuery.New.From('people').OrderBy('age').NullsLast, People);   // NULLs at the end
+```
+
+Both fluent forms work (`NullsFirst` / `NullsLast`, or the `OrderBy(col, TNullsOrder.Last)` overload); the compiler reads the clause's option into `TOrderSpec.Nulls`.
+
+> **The one place the two back-ends can still disagree.** An *unqualified* sort over a nullable column follows each side's own default: NULL-is-smallest in memory, whatever the dialect does in SQL — and Postgres and Oracle do the opposite (nulls last ascending). This lane has no notion of a dialect and acquiring one would couple the back-ends, so the default stays as it is. **Qualifying the sort is the supported way to get identical results from both**, which is exactly what the symmetry harness pins.
 
 ### Materialization
 
