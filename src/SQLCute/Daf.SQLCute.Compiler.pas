@@ -35,6 +35,14 @@ type
     function CompileGroupBy(const Clauses: TArray<TAbstractClause>): string; virtual;
     function CompileHaving(const Clauses: TArray<TAbstractClause>): string; virtual;
     function CompileOrderBy(const Clauses: TArray<TAbstractClause>): string; virtual;
+    /// <summary>
+    /// Emits one ordered column's whole contribution to the ORDER BY list —
+    /// including the NULL-ordering option, if any. A dialect without
+    /// <c>NULLS FIRST/LAST</c> overrides this to emulate the requested order,
+    /// which is why the hook returns the entire term (and may return several
+    /// comma-separated sort keys) rather than a suffix.
+    /// </summary>
+    function CompileOrderByColumn(const O: TOrderByClause): string; virtual;
     function CompileLimit(const Clauses: TArray<TAbstractClause>): string; virtual;
     function CompileOffset(const Clauses: TArray<TAbstractClause>): string; virtual;
     function CompileWith(const Clauses: TArray<TAbstractClause>): string; virtual;
@@ -397,12 +405,20 @@ begin
   end;
 end;
 
+function TAnsiSqlCompiler.CompileOrderByColumn(const O: TOrderByClause): string;
+begin
+  Result := WrapColumn(O.Column);
+  case O.Direction of
+    TSortDir.Asc:  Result := Result + ' ASC';
+    TSortDir.Desc: Result := Result + ' DESC';
+  end;
+end;
+
 function TAnsiSqlCompiler.CompileOrderBy(const Clauses: TArray<TAbstractClause>): string;
 var
   Parts: TList<string>;
   Clause: TAbstractClause;
   O: TOrderByClause;
-  Expr: string;
   I: Integer;
 begin
   Result := '';
@@ -413,16 +429,9 @@ begin
       begin
         O := TOrderByClause(Clause);
         if O.IsRaw then
-          Expr := O.Column
+          Parts.Add(O.Column)          // a raw expression is emitted verbatim
         else
-        begin
-          Expr := WrapColumn(O.Column);
-          case O.Direction of
-            TSortDir.Asc:  Expr := Expr + ' ASC';
-            TSortDir.Desc: Expr := Expr + ' DESC';
-          end;
-        end;
-        Parts.Add(Expr);
+          Parts.Add(CompileOrderByColumn(O));
       end;
 
     if Parts.Count > 0 then
