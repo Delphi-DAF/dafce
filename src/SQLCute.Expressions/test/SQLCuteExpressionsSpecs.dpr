@@ -15,7 +15,9 @@ uses
   Daf.Query.Expressions,
   Daf.SQLCute.Expressions,
   Lowering.SpecHelpers in 'Lowering.SpecHelpers.pas',
-  Emitter.Feat in 'Emitter.Feat.pas';
+  Emitter.Feat in 'Emitter.Feat.pas',
+  Repository.Feat in 'Repository.Feat.pas',
+  Parity.Feat in 'Parity.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

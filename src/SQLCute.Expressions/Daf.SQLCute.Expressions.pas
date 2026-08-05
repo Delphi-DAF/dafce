@@ -42,8 +42,10 @@ uses
   System.SysUtils,
   System.TypInfo,
   System.Variants,
+  System.Generics.Collections,
   Daf.SQLCute,
   Daf.SQLCute.Clauses,
+  Daf.SQLCute.InMemory,
   Daf.Query.Expressions;
 
 type
@@ -102,6 +104,58 @@ type
     /// </summary>
     class function Apply<T>(const Query: IQuery; const Spec: TSpecification<T>;
       const Names: INameResolution = nil): IQuery; static;
+  end;
+
+  /// <summary>
+  ///   The in-memory adapter: a specification becomes an <c>IQuery</c>, and that
+  ///   query is handed to the in-memory back-end over the collection this
+  ///   repository holds.
+  /// </summary>
+  /// <remarks>
+  ///   This is not a test stub. It is the answer to the second reason a data layer
+  ///   filters in memory — running several rules over one already-loaded set — so
+  ///   it carries production weight, and with the same specification type that
+  ///   would go to a database.
+  ///
+  ///   Plans are cached by the specification's key, so N rules over one loaded
+  ///   collection compile N plans and reload nothing. The source is referenced,
+  ///   never owned or copied.
+  ///
+  ///   Nothing here catches <c>EInMemoryQueryError</c>. When the lane cannot
+  ///   execute a query the error is the answer: filtering the collection in Delphi
+  ///   instead would be the silent client-side fallback EF Core shipped and then
+  ///   removed in 3.0.
+  /// </remarks>
+  TInMemoryRepository<T> = class(TInterfacedObject, IRepository<T>)
+  strict private
+    FSource: TEnumerable<T>;
+    FNames: INameResolution;
+    FBase: IQuery;
+    FPlans: TDictionary<string, IInMemoryPlan<T>>;
+    FCompiled: Integer;
+    function NewQuery: IQuery;
+    function PlanFor(const Spec: TSpecification<T>): IInMemoryPlan<T>;
+  public
+    constructor Create(const Source: TEnumerable<T>;
+      const Names: INameResolution = nil); overload;
+    /// <summary>
+    ///   Scopes the repository to <c>BaseQuery</c>: every specification is lowered
+    ///   onto a clone of it, so the caller's query is never mutated. It is also
+    ///   the only route by which a query the in-memory lane rejects can reach
+    ///   this adapter, since the expression model cannot express one.
+    /// </summary>
+    constructor Create(const Source: TEnumerable<T>; const BaseQuery: IQuery;
+      const Names: INameResolution = nil); overload;
+    destructor Destroy; override;
+
+    function List(const Spec: TSpecification<T>): TArray<T>;
+
+    /// <summary>
+    ///   How many plans this repository has compiled. Observable so that "the
+    ///   collection is not reloaded, and the plan is not recompiled" is a spec
+    ///   rather than a claim.
+    /// </summary>
+    property Compiled: Integer read FCompiled;
   end;
 
 /// <summary>
@@ -423,6 +477,63 @@ begin
     Result.Offset(Spec.SkipCount);
   if Spec.TakeCount > 0 then
     Result.Limit(Spec.TakeCount);
+end;
+
+{ TInMemoryRepository<T> }
+
+constructor TInMemoryRepository<T>.Create(const Source: TEnumerable<T>;
+  const Names: INameResolution);
+begin
+  inherited Create;
+  FSource := Source;
+  FNames := Names;
+  FPlans := TDictionary<string, IInMemoryPlan<T>>.Create;
+end;
+
+constructor TInMemoryRepository<T>.Create(const Source: TEnumerable<T>;
+  const BaseQuery: IQuery; const Names: INameResolution);
+begin
+  Create(Source, Names);
+  FBase := BaseQuery;
+end;
+
+destructor TInMemoryRepository<T>.Destroy;
+begin
+  FPlans.Free;
+  inherited;
+end;
+
+function TInMemoryRepository<T>.NewQuery: IQuery;
+begin
+  if FBase <> nil then
+    // A clone, because lowering adds clauses: applying rule after rule to the
+    // caller's own query would accumulate them.
+    Result := FBase.Clone
+  else
+    Result := TQuery.New;
+end;
+
+function TInMemoryRepository<T>.PlanFor(const Spec: TSpecification<T>): IInMemoryPlan<T>;
+begin
+  var K := Spec.Key;
+  if FPlans.TryGetValue(K, Result) then
+    Exit;
+
+  var Q := TExprLowering.Apply<T>(NewQuery, Spec, FNames);
+  // Compile is where the lane checks what it can execute, and where it raises if
+  // it cannot. Deliberately uncaught.
+  Result := TInMemory.Compile<T>(Q);
+  Inc(FCompiled);
+  FPlans.Add(K, Result);
+end;
+
+function TInMemoryRepository<T>.List(const Spec: TSpecification<T>): TArray<T>;
+begin
+  Result := nil;
+  // The plan is reusable across sources and reused across calls; the collection
+  // is never reloaded, only re-run over.
+  for var Item in PlanFor(Spec).Over(FSource) do
+    Result := Result + [Item];
 end;
 
 end.
