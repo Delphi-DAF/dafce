@@ -15,6 +15,7 @@ uses
   SQLCute.Phase1.Feat in 'SQLCute.Phase1.Feat.pas',
   SQLCute.Groups.Feat in 'SQLCute.Groups.Feat.pas',
   SQLCute.StringOps.Feat in 'SQLCute.StringOps.Feat.pas',
+  SQLCute.OrderByNulls.Feat in 'SQLCute.OrderByNulls.Feat.pas',
   SQLCute.Steps.Core in 'SQLCute.Steps.Core.pas',
   SQLCute.Steps.Joins in 'SQLCute.Steps.Joins.pas',
   SQLCute.Steps.Aggregation in 'SQLCute.Steps.Aggregation.pas',

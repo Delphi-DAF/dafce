@@ -107,6 +107,7 @@
         <DCCReference Include="SQLCute.Phase1.Feat.pas"/>
         <DCCReference Include="SQLCute.Groups.Feat.pas"/>
         <DCCReference Include="SQLCute.StringOps.Feat.pas"/>
+        <DCCReference Include="SQLCute.OrderByNulls.Feat.pas"/>
         <DCCReference Include="SQLCute.Steps.Core.pas"/>
         <DCCReference Include="SQLCute.Steps.Joins.pas"/>
         <DCCReference Include="SQLCute.Steps.Aggregation.pas"/>
