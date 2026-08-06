@@ -45,6 +45,8 @@ type
       IsRecursive: Boolean): IQuery;
     function AddNestedWhereGroup(const Callback: TQueryBuilderCallback;
       Conn: TBoolOp; IsNot: Boolean = False): IQuery;
+    function AddEmptyInGroup(const Column: string; Negated: Boolean;
+      Conn: TBoolOp): IQuery;
     procedure SelectAggregateRaw(const AggFunc, Column, Alias: string);
     function AddWhereLikeClause(const Column, Pattern: string;
       Op: TWhereOp; Conn: TBoolOp; CaseSensitive: Boolean): IQuery;
@@ -1020,10 +1022,36 @@ begin
   Result := Self;
 end;
 
+// The empty value set, resolved here so no consumer downstream is ever handed a
+// TWhereInClause with nothing in it.
+//
+// `x IN (a, b)` is `x = a OR x = b`, so an empty list is the empty disjunction:
+// False without consulting the column, and True for the negated form. That rules
+// out every constant that reads the column — `col <> col`, `col = NULL`, a raw
+// `1 = 0` the in-memory lane refuses — and leaves IS NULL / IS NOT NULL, the only
+// two predicates in the model that never answer Unknown. Exactly one of them
+// holds for any value, so their conjunction is False for every row, NULL ones
+// included, and its negation is True for every row.
+//
+// Naming the column also keeps the emitted SQL traceable back to the call that
+// produced it, which `1 = 0` would not.
+function TQueryImpl.AddEmptyInGroup(const Column: string; Negated: Boolean;
+  Conn: TBoolOp): IQuery;
+begin
+  Result := AddNestedWhereGroup(
+    function(Sub: IQuery): IQuery
+    begin
+      Result := Sub.WhereNull(Column).WhereNotNull(Column);
+    end,
+    Conn, Negated);
+end;
+
 function TQueryImpl.WhereIn(const Column: string; const Values: TArray<Variant>): IQuery;
 var
   C: TWhereInClause;
 begin
+  if Length(Values) = 0 then
+    Exit(AddEmptyInGroup(Column, False, TBoolOp.opAnd));
   C           := TWhereInClause.Create;
   C.Column    := Column;
   C.Values    := Values;
@@ -1037,6 +1065,8 @@ function TQueryImpl.WhereNotIn(const Column: string; const Values: TArray<Varian
 var
   C: TWhereInClause;
 begin
+  if Length(Values) = 0 then
+    Exit(AddEmptyInGroup(Column, True, TBoolOp.opAnd));
   C           := TWhereInClause.Create;
   C.Column    := Column;
   C.Values    := Values;
@@ -1050,6 +1080,8 @@ function TQueryImpl.OrWhereIn(const Column: string; const Values: TArray<Variant
 var
   C: TWhereInClause;
 begin
+  if Length(Values) = 0 then
+    Exit(AddEmptyInGroup(Column, False, TBoolOp.opOr));
   C           := TWhereInClause.Create;
   C.Column    := Column;
   C.Values    := Values;
@@ -1063,6 +1095,8 @@ function TQueryImpl.OrWhereNotIn(const Column: string; const Values: TArray<Vari
 var
   C: TWhereInClause;
 begin
+  if Length(Values) = 0 then
+    Exit(AddEmptyInGroup(Column, True, TBoolOp.opOr));
   C           := TWhereInClause.Create;
   C.Column    := Column;
   C.Values    := Values;

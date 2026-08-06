@@ -10,6 +10,7 @@ uses
   FastPath.Feat in 'FastPath.Feat.pas',
   Projection.Feat in 'Projection.Feat.pas',
   Context.Feat in 'Context.Feat.pas',
+  EmptyIn.Feat in 'EmptyIn.Feat.pas',
   Parity.Feat in 'Parity.Feat.pas';
 
 begin
