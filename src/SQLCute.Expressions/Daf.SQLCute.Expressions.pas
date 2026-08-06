@@ -332,8 +332,9 @@ begin
 
     TCompareOp.&In, TCompareOp.NotIn:
       begin
-        if Length(C.Operands) = 0 then
-          raise EExprLoweringError.Create('An IN condition needs at least one value.');
+        // No arity floor: an empty value set is the empty disjunction, and the
+        // builder resolves it into an unsatisfiable group before any clause is
+        // created. Nothing here has to know that.
         var Vals := Ctx.ValuesOf(C.Operands);
         if (C.Op = TCompareOp.NotIn) <> Negated then
           if IsOr then Q.OrWhereNotIn(Col, Vals) else Q.WhereNotIn(Col, Vals)

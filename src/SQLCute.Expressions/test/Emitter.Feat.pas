@@ -355,6 +355,32 @@ Feature Lowering an expression to WHERE clauses @expressions @emitter
         Expect(Length(W.Names)).ToEqual(2);
         Expect(W.Names[0]).ToEqual('Anvil');
         Expect(W.Names[1]).ToEqual('Engine');
+      end)
+
+  // The emitter used to refuse an empty set rather than hand SQLCute a clause
+  // that compiled to `IN ()`. With the builder resolving the empty case itself,
+  // there is nothing here to refuse: IN goes through the same call every other
+  // operator does.
+  .Scenario('EmptySetLowersWithoutRaising')
+    .When('a membership expression over an empty value set is lowered and run',
+      procedure(W: TEmitterWorld)
+      begin
+        W.Products := SampleProducts;
+        W.Query := Lower(Prop('Price').IsIn([]));
+        W.Names := NamesOf(W.Products, W.Query);
+      end)
+    .&Then('it lowered without raising and the query selects nothing',
+      procedure(W: TEmitterWorld)
+      begin
+        // Drill's Price is NULL, and it is excluded like every other row: the
+        // empty disjunction is False without consulting the column at all.
+        Expect(Length(W.Names)).ToEqual(0);
+      end)
+    .&Then('and it emitted no IN clause for the emitter or a compiler to puzzle over',
+      procedure(W: TEmitterWorld)
+      begin
+        for var C in WhereClausesOf(W.Query) do
+          Expect(C is TWhereInClause).ToBeFalse;
       end);
 
 end.
