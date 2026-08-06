@@ -32,6 +32,18 @@
   harness cannot catch this class of bug: SQL and in-memory agree, on the wrong
   answer. That is why emission is asserted here, at the emitter, and why the
   assertion is semantic rather than structural.
+
+  The emitter's answer is to not speak that grammar at all. It transcribes the
+  tree — one group per node — and inlines only along a spine of the same
+  operator, where associativity says nesting cannot change the meaning. So there
+  is no encoding to get wrong: correctness is by induction, not by argument.
+
+  Nesting more costs nothing in SQL. TAnsiSqlCompiler parenthesizes a child by
+  its node KIND (an OR inside an AND, or the reverse), and NodeForClause returns
+  a nested group's subtree directly with no wrapper — so the compiler cannot even
+  tell a subtree came from a group. Excluding the associative case is not about
+  parentheses; it keeps the normalized tree n-ary, and with it the in-memory
+  lane's predicate flat instead of one closure deeper per level, per row.
 }
 
 {$SCOPEDENUMS ON}
@@ -232,8 +244,9 @@ end;
 
 procedure EmitTop(const Node: IExpr; const Q: IQuery; const Ctx: TEmitCtx); forward;
 
-// The spine of one logical operator, left to right. A node that is not that
-// operator is a spine of one, which is what makes the callers uniform.
+// The spine of one logical operator, left to right — the associative run that can
+// be inlined. A node that is not that operator is a spine of one, which is what
+// makes the caller uniform.
 function FlattenLogical(const Node: IExpr; Op: TLogicalOp): TArray<IExpr>;
 begin
   if (Node <> nil) and (Node.Kind = TExprKind.Logical) and ((Node as ILogicalExpr).Op = Op) then
@@ -397,9 +410,10 @@ begin
       end;
 
     TExprKind.Logical:
-      // Reaching here means a disjunction inside an AND-run, and it MUST become a
-      // nested group. Inlined, the normalizer would read the list as
-      // OR-of-AND-runs and regroup it into a different predicate.
+      // A logical node reaching here has an operator its parent list does not
+      // share, so it becomes a group. Inlining it would leave the alternation
+      // implicit, and the normalizer — which reads a flat list as OR-of-AND-runs
+      // — would regroup it into a different predicate.
       EmitGroup(Node, Q, Ctx, Connector, False);
   else
     raise EExprLoweringError.CreateFmt(
@@ -409,34 +423,33 @@ begin
   end;
 end;
 
-// One operand of the OR-list: a run of AND-ed elements. The first carries the
-// run's connector, the rest carry AND — which is exactly Rule 2's "an And inside
-// an OR-list inlines".
-procedure EmitAndRun(const Node: IExpr; const Q: IQuery; const Ctx: TEmitCtx;
-  LeadConnector: TLogicalOp);
-begin
-  var Items := FlattenLogical(Node, TLogicalOp.opAnd);
-  for var I := 0 to High(Items) do
-    if I = 0 then
-      EmitItem(Items[I], Q, Ctx, LeadConnector)
-    else
-      EmitItem(Items[I], Q, Ctx, TLogicalOp.opAnd);
-end;
-
-// The whole content of one clause list: an OR of AND-runs, which is the grammar
-// the normalizer reads back.
+// The whole content of one clause list — the outer query's, or one nested group's.
+//
+// One group per node, except along a spine of the same operator, where nesting
+// would change nothing: associativity is the ONLY reason anything is ever inlined
+// here. That is what makes this correct by induction instead of by argument. The
+// emitter never reasons about OR-of-AND-runs; it transcribes the tree and lets the
+// normalizer read back what it wrote.
 procedure EmitTop(const Node: IExpr; const Q: IQuery; const Ctx: TEmitCtx);
 begin
   if Node = nil then
     Exit;
-  var Operands := FlattenLogical(Node, TLogicalOp.opOr);
+
+  if Node.Kind <> TExprKind.Logical then
+  begin
+    // A single condition is a list of one. Its connector is the head's, which
+    // DoBuild ignores, so the neutral AND means nothing and nothing may read it.
+    EmitItem(Node, Q, Ctx, TLogicalOp.opAnd);
+    Exit;
+  end;
+
+  var Op := (Node as ILogicalExpr).Op;
+  var Operands := FlattenLogical(Node, Op);
   for var I := 0 to High(Operands) do
     if I = 0 then
-      // The head element's connector is ignored by DoBuild. Nothing may depend on
-      // it, so it is set to the neutral AND and means nothing.
-      EmitAndRun(Operands[I], Q, Ctx, TLogicalOp.opAnd)
+      EmitItem(Operands[I], Q, Ctx, TLogicalOp.opAnd)   // head: connector ignored
     else
-      EmitAndRun(Operands[I], Q, Ctx, TLogicalOp.opOr);
+      EmitItem(Operands[I], Q, Ctx, Op);
 end;
 
 { TExprLowering }

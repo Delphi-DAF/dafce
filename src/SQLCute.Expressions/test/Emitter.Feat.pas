@@ -229,13 +229,26 @@ Feature Lowering an expression to WHERE clauses @expressions @emitter
         W.Query := Lower(W.Authored);
         W.Tree := Normalized(W.Query);
       end)
-    .&Then('the emitter produced a flat list with no group of its own',
+    .&Then('the emitter transcribed the tree it was given, deciding nothing',
       procedure(W: TEmitterWorld)
       begin
-        // Nothing about the grouping came from this layer: it emitted four plain
-        // clauses and let the shared normalizer decide.
-        Expect(Length(WhereClausesOf(W.Query))).ToEqual(4);
-        Expect(NestedGroupCount(W.Query)).ToEqual(0);
+        // Delphi's parser already grouped this as Or(And(a,b), And(c,d)) — `and`
+        // binds tighter than `or` in Delphi exactly as in SQL. The emitter walked
+        // that tree and wrote one group per operator change: two conjunctions
+        // under a disjunction, so two groups and nothing else at this level.
+        //
+        // The evidence is the SHAPE MATCHING THE TREE, not the list being flat. A
+        // flat list was evidence for an earlier emission rule; it said nothing
+        // about whether this layer computes precedence — and it does not, because
+        // there is no precedence table, no operator ranking and no reordering
+        // anywhere in the lowering.
+        var Root := W.Authored as ILogicalExpr;
+        Expect(Root.Op = TLogicalOp.opOr).ToBeTrue;
+        Expect(Root.Left.Kind = TExprKind.Logical).ToBeTrue;
+        Expect(Root.Right.Kind = TExprKind.Logical).ToBeTrue;
+
+        Expect(Length(WhereClausesOf(W.Query))).ToEqual(2);
+        Expect(NestedGroupCount(W.Query)).ToEqual(2);
       end)
     .&Then('and the normalizer grouped it as (a and b) or (c and d)',
       procedure(W: TEmitterWorld)
