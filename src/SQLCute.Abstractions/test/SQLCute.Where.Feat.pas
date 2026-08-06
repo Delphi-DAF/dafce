@@ -10,8 +10,66 @@ interface
 implementation
 
 uses
+  System.StrUtils,
   Daf.MiniSpec,
+  Daf.SQLCute,
+  Daf.SQLCute.Clauses,
   SQLCute.SpecHelpers;
+
+// Every clause of Q, nested groups flattened, so a scenario that asks whether a
+// clause exists cannot be answered "no" merely because it moved inside a group.
+function AllClauses(const Clauses: TArray<TAbstractClause>): TArray<TAbstractClause>;
+begin
+  Result := nil;
+  for var C in Clauses do
+  begin
+    Result := Result + [C];
+    if C is TNestedWhereClause then
+      Result := Result + AllClauses(TNestedWhereClause(C).SubClauses);
+  end;
+end;
+
+function ValueLessInClauseCount(const Q: IQuery): Integer;
+begin
+  Result := 0;
+  for var C in AllClauses(Q.Clauses) do
+    if (C is TWhereInClause) and (Length(TWhereInClause(C).Values) = 0) then
+      Inc(Result);
+end;
+
+function InClauseCount(const Q: IQuery): Integer;
+begin
+  Result := 0;
+  for var C in AllClauses(Q.Clauses) do
+    if C is TWhereInClause then
+      Inc(Result);
+end;
+
+// A raw fragment is what the in-memory lane refuses outright, so counting them
+// is how "the other back-end can read this query" is asserted from here.
+function RawConditionCount(const Q: IQuery): Integer;
+begin
+  Result := 0;
+  for var C in AllClauses(Q.Clauses) do
+    if (C is TRawClause) or ((C is TWhereClause) and (TWhereClause(C).Op = TWhereOp.Raw)) then
+      Inc(Result);
+end;
+
+function FirstInClause(const Q: IQuery): TWhereInClause;
+begin
+  Result := nil;
+  for var C in AllClauses(Q.Clauses) do
+    if C is TWhereInClause then
+      Exit(TWhereInClause(C));
+end;
+
+function FirstNestedGroup(const Q: IQuery): TNestedWhereClause;
+begin
+  Result := nil;
+  for var C in Q.Clauses do
+    if C is TNestedWhereClause then
+      Exit(TNestedWhereClause(C));
+end;
 
 initialization
 
@@ -303,6 +361,132 @@ TQuery — WHERE @unit @sqlcute
     .When('I compile with ANSI')
     .&Then('SQL is "SELECT * FROM users WHERE active = ? OR id NOT IN (SELECT user_id FROM banned)"')
     .&Then('has 1 binding')
+
+// -------------------------------------------------------------------------
+// The empty value set. `x IN (a, b)` is `x = a OR x = b`, so an empty list is
+// the empty disjunction — False without consulting the column. The builder
+// resolves it when the condition is added, which is why nothing below has to
+// ask what either compiler does with a value-less clause: there isn't one.
+// The scenarios that need a lane that executes live in EmptyIn.Feat, in the
+// in-memory suite; this suite links no back-end but the SQL compiler.
+
+.Rule('An empty IN set never reaches the AST or the SQL')
+
+  .Scenario('EmptyInCompilesToValidSql')
+    .When('a query with an empty IN set is compiled with ANSI',
+      procedure(W: TSQLCuteWorld)
+      begin
+        W.Query := TQuery.New.From('products').WhereIn('price', []);
+        W.LastResult := W.Compiler.Compile(W.Query);
+      end)
+    .&Then('the SQL carries no empty IN list and names the filtered column',
+      procedure(W: TSQLCuteWorld)
+      begin
+        Expect(W.LastResult.SQL).ToEqual(
+          'SELECT * FROM products WHERE price IS NULL AND price IS NOT NULL');
+        Expect(ContainsText(W.LastResult.SQL, 'IN ()')).ToBeFalse;
+      end)
+    .&Then('and it binds nothing, because there was nothing to bind',
+      procedure(W: TSQLCuteWorld)
+      begin
+        Expect(Length(W.LastResult.Bindings)).ToEqual(0);
+      end)
+    .&Then('and no condition is a raw fragment, so the in-memory lane accepts it too',
+      procedure(W: TSQLCuteWorld)
+      begin
+        Expect(RawConditionCount(W.Query)).ToEqual(0);
+      end)
+
+  .Scenario('EmptyNotInCompilesToAnAlwaysTrueCondition')
+    .When('a query with an empty NOT IN set is compiled with ANSI',
+      procedure(W: TSQLCuteWorld)
+      begin
+        W.Query := TQuery.New.From('products').WhereNotIn('price', []);
+        W.LastResult := W.Compiler.Compile(W.Query);
+      end)
+    .&Then('the always-false group is negated whole',
+      procedure(W: TSQLCuteWorld)
+      begin
+        Expect(W.LastResult.SQL).ToEqual(
+          'SELECT * FROM products WHERE NOT (price IS NULL AND price IS NOT NULL)');
+      end)
+
+  .Scenario('ValueLessInClauseIsNotConstructible')
+    .When('queries are built with an empty set through all four fluent verbs',
+      procedure(W: TSQLCuteWorld)
+      begin
+        W.Query := TQuery.New.From('products')
+          .WhereIn('a', [])
+          .WhereNotIn('b', [])
+          .OrWhereIn('c', [])
+          .OrWhereNotIn('d', []);
+      end)
+    .&Then('the clause list holds no IN clause with an empty value set',
+      procedure(W: TSQLCuteWorld)
+      begin
+        // Not "the compiler handles it": the degenerate state stopped existing.
+        Expect(ValueLessInClauseCount(W.Query)).ToEqual(0);
+        Expect(InClauseCount(W.Query)).ToEqual(0);
+      end)
+
+  .Scenario('EmptyOrFormsCarryTheOrConnector')
+    .When('an OR-connected empty set follows another condition',
+      procedure(W: TSQLCuteWorld)
+      begin
+        W.Query := TQuery.New.From('products')
+          .Where('active', True)
+          .OrWhereIn('price', []);
+        W.LastResult := W.Compiler.Compile(W.Query);
+      end)
+    .&Then('the group joins its predecessor with OR',
+      procedure(W: TSQLCuteWorld)
+      begin
+        Expect(W.LastResult.SQL).ToEqual(
+          'SELECT * FROM products WHERE active = ? OR (price IS NULL AND price IS NOT NULL)');
+      end)
+    .&Then('and it carries the connector as the enum the normalizer reads on a group',
+      procedure(W: TSQLCuteWorld)
+      begin
+        // The delegation goes through OrWhere, so the connector is TBoolOp on a
+        // nested group — not the 'AND'/'OR' string a TWhereInClause carries.
+        Expect(FirstNestedGroup(W.Query) <> nil).ToBeTrue;
+        Expect(FirstNestedGroup(W.Query).Connector = TBoolOp.opOr).ToBeTrue;
+      end)
+
+  .Scenario('NonEmptyInIsUnchanged')
+    .When('a query with a three-value IN set is compiled with ANSI',
+      procedure(W: TSQLCuteWorld)
+      begin
+        W.Query := TQuery.New.From('users').WhereIn('id', [1, 2, 3]);
+        W.LastResult := W.Compiler.Compile(W.Query);
+      end)
+    .&Then('it still produces one IN clause carrying its three values',
+      procedure(W: TSQLCuteWorld)
+      begin
+        Expect(InClauseCount(W.Query)).ToEqual(1);
+        Expect(Length(FirstInClause(W.Query).Values)).ToEqual(3);
+        Expect(FirstInClause(W.Query).Connector).ToEqual('AND');
+      end)
+    .&Then('and the same SQL and bindings as before the guard existed',
+      procedure(W: TSQLCuteWorld)
+      begin
+        Expect(W.LastResult.SQL).ToEqual('SELECT * FROM users WHERE id IN (?, ?, ?)');
+        Expect(Length(W.LastResult.Bindings)).ToEqual(3);
+      end)
+
+  .Scenario('NonEmptyOrInStillCarriesTheOrString')
+    .When('a non-empty OrWhereIn follows another condition',
+      procedure(W: TSQLCuteWorld)
+      begin
+        W.Query := TQuery.New.From('users')
+          .Where('active', True)
+          .OrWhereIn('id', [10, 20]);
+      end)
+    .&Then('its connector is the string the normalizer compares it as',
+      procedure(W: TSQLCuteWorld)
+      begin
+        Expect(FirstInClause(W.Query).Connector).ToEqual('OR');
+      end)
 
 ;
 
