@@ -91,6 +91,32 @@ Passing `Null` directly to `Where` also generates `IS NULL`:
 .OrWhereNotIn('tag', ['spam', 'bot'])
 ```
 
+### The empty value set
+
+A computed set can come out empty, and `IN` over nothing has an answer: `x IN (a, b)`
+is `x = a OR x = b`, so an empty list is the empty disjunction — **false without
+consulting the column**, and true for `NOT IN`.
+
+The four verbs resolve that case where the condition is added, so no `IN ()` is ever
+emitted:
+
+```pascal
+.WhereIn('price', [])
+// → WHERE (price IS NULL AND price IS NOT NULL)      matches no row
+
+.WhereNotIn('price', [])
+// → WHERE NOT (price IS NULL AND price IS NOT NULL)  matches every row
+```
+
+`IS NULL` and `IS NOT NULL` are the only predicates in the model that never yield
+*unknown*: exactly one of them holds for any value. That is what makes the group false
+for every row **including one whose column is NULL**, where `price <> price` or
+`price = NULL` would yield *unknown* and quietly drop the row. It also names the column,
+so a logged statement points back at the call that produced it — which `1 = 0` would not.
+
+Both back-ends read the same clauses, so the SQL lane and the in-memory lane answer
+identically.
+
 ---
 
 ## WHERE EXISTS (subquery)

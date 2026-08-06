@@ -91,6 +91,33 @@ Pasar `Null` directamente a `Where` también genera `IS NULL`:
 .OrWhereNotIn('etiqueta', ['spam', 'bot'])
 ```
 
+### El conjunto vacío
+
+Un conjunto calculado puede salir vacío, e `IN` sobre nada tiene respuesta: `x IN (a, b)`
+es `x = a OR x = b`, así que una lista vacía es la disyunción vacía — **falsa sin
+consultar la columna**, y verdadera para `NOT IN`.
+
+Los cuatro verbos resuelven ese caso al añadir la condición, de modo que nunca se emite
+un `IN ()`:
+
+```pascal
+.WhereIn('precio', [])
+// → WHERE (precio IS NULL AND precio IS NOT NULL)      no casa ninguna fila
+
+.WhereNotIn('precio', [])
+// → WHERE NOT (precio IS NULL AND precio IS NOT NULL)  casa todas las filas
+```
+
+`IS NULL` e `IS NOT NULL` son los únicos predicados del modelo que nunca dan
+*desconocido*: exactamente uno de los dos se cumple para cualquier valor. Eso es lo que
+hace el grupo falso para todas las filas **incluida aquella cuya columna es NULL**, donde
+`precio <> precio` o `precio = NULL` darían *desconocido* y la descartarían en silencio.
+Además nombra la columna, así que una sentencia registrada apunta de vuelta a la llamada
+que la produjo — cosa que `1 = 0` no haría.
+
+Los dos back-ends leen las mismas cláusulas, así que el lane SQL y el lane en memoria
+responden igual.
+
 ---
 
 ## WHERE EXISTS (subconsulta)

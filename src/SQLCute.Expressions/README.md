@@ -101,6 +101,14 @@ Prop('Price').IsNull             // → IS NULL
 
 Every clause is produced through the fluent `IQuery` surface, which is also what keeps `TWhereInClause.Connector` the string `'AND'`/`'OR'` the normalizer compares it as, and what keeps emission to the four clause types the normalizer accepts.
 
+Going through that surface is also why the empty set needs no special case here:
+
+```pascal
+Prop('Price').IsIn([])           // → WHERE (Price IS NULL AND Price IS NOT NULL)
+```
+
+`x IN (a, b)` is `x = a OR x = b`, so an empty list is the empty disjunction — false without consulting the column, and true for `IsNotIn`. SQLCute's builder resolves that where the condition is added, so this layer lowers `IsIn([])` through the same call every other operator uses. No arity floor, no error, no branch of its own.
+
 ---
 
 ## The in-memory repository

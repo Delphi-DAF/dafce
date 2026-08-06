@@ -101,6 +101,14 @@ Prop('Price').IsNull             // → IS NULL
 
 Cada cláusula se produce a través de la superficie fluida de `IQuery`, que es también lo que mantiene `TWhereInClause.Connector` como la cadena `'AND'`/`'OR'` con la que el normalizador lo compara, y lo que mantiene la emisión dentro de los cuatro tipos de cláusula que el normalizador acepta.
 
+Pasar por esa superficie es también la razón de que el conjunto vacío no necesite ningún caso especial aquí:
+
+```pascal
+Prop('Price').IsIn([])           // → WHERE (Price IS NULL AND Price IS NOT NULL)
+```
+
+`x IN (a, b)` es `x = a OR x = b`, así que una lista vacía es la disyunción vacía — falsa sin consultar la columna, y verdadera para `IsNotIn`. El constructor de SQLCute resuelve eso al añadir la condición, de modo que esta capa baja `IsIn([])` con la misma llamada que usa cualquier otro operador. Sin aridad mínima, sin error y sin rama propia.
+
 ---
 
 ## El repositorio en memoria
