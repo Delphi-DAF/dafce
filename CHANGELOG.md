@@ -19,6 +19,13 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 - **SQLCute.InMemory**: Semántica ANSI de NULL — lógica de tres valores, agregados que ignoran NULL, DISTINCT con NULLs iguales, GROUP BY con un grupo para NULL, ORDER BY con NULL como menor
 - **SQLCute.InMemory**: Samples `InMemoryQuerySample` e `InMemoryJoinSample`; documentación bilingüe (EN/ES)
 - **SQLCute**: `Daf.SQLCute.WhereTree` — normalizador de precedencia WHERE compartido por ambos back-ends
+- **Daf.Query.Expressions**: Módulo nuevo — condiciones de consulta escritas con operadores Delphi que siguen siendo un **árbol inspeccionable**, sin SQL y sin referenciar SQLCute: `IExpr` y su juego acotado de nodos, `Prop`/`Prm`, `TEntityExpr<T>` (proxy RTTI que valida cada miembro donde se escribe) y el metamodelo opcional `TPropExpr<T>`
+- **Daf.Query.Expressions**: `TSpecification<T>` — una regla reutilizable con filtro, orden y paginación, afirmable en un test sin base de datos; `IRepository<T>` como puerto, sin restricción de clase base
+- **Daf.Query.Expressions**: `INameResolver` — la única costura de nombres: miembro → columna y tipo → tabla, con identidad y «nombre del tipo sin la T inicial» por defecto
+- **SQLCute.Expressions**: Módulo nuevo — `TExprEmitter` emite una expresión como cláusulas WHERE sobre un `IQuery`, de modo que la misma regla va a la base de datos o a una colección cargada sin traducirse dos veces
+- **SQLCute.Expressions**: `TInMemoryRepository<T>` — adaptador de `IRepository<T>` sobre una colección ya cargada, con caché de planes por regla; sample `CatalogServiceSample` y documentación bilingüe (EN/ES)
+- **SQLCute**: `WhereNot(Callback)` y `OrWhereNot(Callback)` — grupos WHERE entre paréntesis negados como una unidad, `NOT (…)`
+- **SQLCute**: Orden de NULL por columna en ORDER BY — sobrecargas `OrderBy`/`OrderByDesc` con `TNullsOrder` y modificadores `NullsFirst`/`NullsLast`. Postgres, Oracle, Firebird y SQLite emiten `NULLS FIRST`/`NULLS LAST` nativo; MySQL y SQL Server, que no tienen esa sintaxis, lo **emulan** con una clave de orden previa, así que el orden pedido se respeta en todos los dialectos
 - **Commons**: `TNullable<T>` en `Daf.Nullable`
 - **Commons**: `TDeferredEnumerable<T>` en `Daf.Enumerable`
 - **Commons**: `Daf.Comparers` — comparadores conscientes de NULL para `TValue` y `TNullable<T>`
@@ -36,6 +43,7 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
 ### Fixed
 
+- **SQLCute**: `WhereIn` con un conjunto de valores **vacío** emitía `col IN ()`, sintácticamente inválido en casi cualquier motor, así que el fallo llegaba desde el servidor y lejos de la llamada que lo causó. Un conjunto vacío es la disyunción vacía, así que ahora `WhereIn` no casa ninguna fila y `WhereNotIn` casa todas — incluida aquella cuya columna es NULL, donde antes el carril en memoria respondía *desconocido* y descartaba la fila de ambos. Los dos back-ends dan ya la misma respuesta. Afecta también a `OrWhereIn`/`OrWhereNotIn` y a `IsIn([])` de la capa de expresiones
 - **Commons**: `TMacrosList.GetValueFromIndex` no asignaba `Result`; toda lectura de macro devolvía cadena vacía
 
 ## [1.6.0] - 2026-07-20
