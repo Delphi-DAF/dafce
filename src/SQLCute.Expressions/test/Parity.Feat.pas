@@ -1,18 +1,18 @@
 ﻿unit Parity.Feat;
 
 {
-  One specification, one lowering, both back-ends.
+  One specification, one emission, both back-ends.
 
   DAFce ships no database driver, so this harness cannot execute the emitted SQL
   — the same constraint the in-memory module's own parity harness works under.
   The oracle is therefore declared: the row set a SQL database returns for this
-  query over this seed. What is proved is that one lowering serves both lanes,
+  query over this seed. What is proved is that one emission serves both lanes,
   that the SQL back-end accepts the very same AST with self-consistent bindings
   and the predicate intact, that the in-memory lane produces the declared rows,
   and that neither lane mutated the query.
 
   Parity itself is inherited rather than tested into existence: both lanes consume
-  the SQLCute AST, so a single lowering is the whole mechanism. The thing worth
+  the SQLCute AST, so a single emission is the whole mechanism. The thing worth
   asserting is that there is only one.
 }
 
@@ -22,7 +22,7 @@ uses
   System.Generics.Collections,
   Daf.SQLCute,
   Daf.Query.Expressions,
-  Lowering.SpecHelpers;
+  Emission.SpecHelpers;
 
 type
   TSpecParityWorld = class
@@ -67,16 +67,16 @@ Feature('''
 Feature One specification, two back-ends @expressions @parity
 
   As a developer who wants the same rule to run against a database or a list
-  I want a single lowering to serve both back-ends
+  I want a single emission to serve both back-ends
   So parity is a property of the architecture rather than a standing test burden
 ''')
 
 .UseWorld<TSpecParityWorld>
 
-.Rule('One lowering feeds both lanes')
+.Rule('One emission feeds both lanes')
 
-  .Scenario('OneLoweringServesTheSqlCompilerAndTheInMemoryLane')
-    .When('a specification is lowered once and the query handed to both lanes',
+  .Scenario('OneEmissionServesTheSqlCompilerAndTheInMemoryLane')
+    .When('a specification is emitted once and the query handed to both lanes',
       procedure(W: TSpecParityWorld)
       begin
         W.Products := SampleProducts;
@@ -86,7 +86,7 @@ Feature One specification, two back-ends @expressions @parity
           .OrderByDesc('Price');
 
         // Lowered exactly once, into one query, which is then shared.
-        W.Query := TExprLowering.Apply<TProduct>(TQuery.New.From('Product'), Spec);
+        W.Query := TExprEmitter.Apply<TProduct>(TQuery.New.From('Product'), Spec);
         W.ClausesBefore := Length(W.Query.Clauses);
 
         var Compiler: IQueryCompiler := TAnsiSqlCompiler.Create;
@@ -117,10 +117,10 @@ Feature One specification, two back-ends @expressions @parity
         // 100 but inactive; Drill's NULL price makes the comparison unknown.
         Expect(string.Join(',', W.InMemory)).ToEqual('Engine,Anvil');
       end)
-    .&Then('exactly one lowering happened, and neither lane mutated the query',
+    .&Then('exactly one emission happened, and neither lane mutated the query',
       procedure(W: TSpecParityWorld)
       begin
-        // A second lowering onto the same query would have appended its clauses,
+        // A second emission onto the same query would have appended its clauses,
         // so the count is what makes "once" checkable rather than merely intended.
         // One FROM, two WHERE conditions, one ORDER BY.
         Expect(W.ClausesBefore).ToEqual(4);

@@ -254,7 +254,7 @@ type
   /// <summary>
   ///   Converts a value with no direct <c>Variant</c> form into the one the
   ///   leaves carry. The caller invokes it, visibly, where the expression is
-  ///   written — the lowering never narrows behind anyone's back, because a leaf
+  ///   written — the emission never narrows behind anyone's back, because a leaf
   ///   holding a richer value would leave the in-memory lane comparing one thing
   ///   while SQL compares another, in the one place this design promises parity.
   /// </summary>
@@ -269,7 +269,7 @@ type
     /// <summary>
     ///   A GUID as its canonical string form — the same thing the DAL's
     ///   dedicated <c>SetAsGUID</c> accessor did, minus the boilerplate around
-    ///   it. Narrowing here rather than in the lowering is what keeps the two
+    ///   it. Narrowing here rather than in the emission is what keeps the two
     ///   lanes honest: a leaf holding a real <c>TGUID</c> would leave the
     ///   in-memory side comparing a record while SQL compares a string.
     /// </summary>
@@ -306,7 +306,7 @@ type
     /// <summary>
     ///   Comparison against a value with no direct <c>Variant</c> form. The
     ///   narrowing is visible in the call it belongs to, not hidden in the
-    ///   lowering — one typed overload per such type, added as the types show up.
+    ///   emission — one typed overload per such type, added as the types show up.
     /// </summary>
     class operator Equal(const L: TExpr; const R: TGUID): TExpr; overload;
     class operator NotEqual(const L: TExpr; const R: TGUID): TExpr; overload;
@@ -321,7 +321,7 @@ type
 
     // --- breadth ----------------------------------------------------------
     //
-    // Everything SQLCute already expresses is reached by lowering to the clause
+    // Everything SQLCute already expresses is reached by emitting the clause
     // that says it, so each of these is a new operator value and no new node
     // type. Only WHERE-shaped predicates ever need real nodes; the rest are
     // fluent pass-throughs, and that is how this layer inherits SQLCute's

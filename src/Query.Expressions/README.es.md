@@ -11,7 +11,7 @@ var Spec := TSpecification<TProduct>.New
   .Take(10);
 ```
 
-Ese valor es un objeto de dominio: se puede afirmar en un test unitario, pasar por un puerto, guardar, registrar — y más tarde bajarlo a SQL con [`Daf.SQLCute.Expressions`](../SQLCute.Expressions/README.es.md). **Este paquete no contiene SQL y no referencia SQLCute.** Un servicio de dominio que dependa de él no enlaza nada de eso.
+Ese valor es un objeto de dominio: se puede afirmar en un test unitario, pasar por un puerto, guardar, registrar — y más tarde emitirlo a SQL con [`Daf.SQLCute.Expressions`](../SQLCute.Expressions/README.es.md). **Este paquete no contiene SQL y no referencia SQLCute.** Un servicio de dominio que dependa de él no enlaza nada de eso.
 
 [![Delphi 12+](https://img.shields.io/badge/Delphi-12%2B-red.svg)](https://www.embarcadero.com/products/delphi)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../legal/LICENSE.md)
@@ -68,7 +68,7 @@ Prop('Id')  = SomeGuid                       // sobrecarga tipada → cadena can
 Prop('Age') = TExprValue.From<Integer>(N)    // TNullable → su valor, o Null
 ```
 
-El estrechamiento ocurre **donde se escribe**, nunca dentro del descenso: una hoja con un valor más rico dejaría al carril en memoria comparando un registro mientras SQL compara su texto.
+El estrechamiento ocurre **donde se escribe**, nunca dentro de la emisión: una hoja con un valor más rico dejaría al carril en memoria comparando un registro mientras SQL compara su texto.
 
 ---
 
@@ -129,6 +129,6 @@ Un nombre de miembro que no resuelve a nada lanza en el punto donde se escribe l
 | Recurso | Descripción |
 |---------|-------------|
 | [**Guía de uso**](docs/GUIDE.es.md) | Autoría, el proxy, el metamodelo, especificaciones |
-| [Daf.SQLCute.Expressions](../SQLCute.Expressions/README.es.md) | El descenso a `IQuery` y el adaptador en memoria |
-| [SQLCute](../SQLCute.Abstractions/README.es.md) | El constructor de consultas al que esto acaba bajando |
+| [Daf.SQLCute.Expressions](../SQLCute.Expressions/README.es.md) | La emisión a `IQuery` y el adaptador en memoria |
+| [SQLCute](../SQLCute.Abstractions/README.es.md) | El constructor de consultas al que esto acaba emitiendo |
 | [Daf.Linq](../Linq/README.es.md) | El mundo de las clausuras — el hermano, no el rival |

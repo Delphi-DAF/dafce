@@ -21,7 +21,7 @@ uses
   Daf.SQLCute,
   Daf.Query.Expressions,
   Daf.SQLCute.Expressions,
-  Lowering.SpecHelpers;
+  Emission.SpecHelpers;
 
 type
   TRepositoryWorld = class
@@ -180,7 +180,7 @@ Feature In-memory repository adapter @expressions @repository
       procedure(W: TRepositoryWorld)
       begin
         // Translatable is not the same as in-memory-executable. The failure above
-        // is the lane's, not the lowering's — and it is loud at plan-compile time.
+        // is the lane's, not the emission's — and it is loud at plan-compile time.
         var Compiler: IQueryCompiler := TAnsiSqlCompiler.Create;
         var Sql := TQuery.New.From('Product')
           .WhereExists(TQuery.New.From('Order').Where('total', '>', 0))

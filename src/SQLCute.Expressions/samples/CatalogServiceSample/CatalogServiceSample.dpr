@@ -61,19 +61,19 @@ end;
 // ---------------------------------------------------------------------------
 //  The same rule, seen as SQL. Nothing in the domain asked for this — it is here
 //  to make the point that the rule the service just ran is the rule a database
-//  would receive, from one lowering.
+//  would receive, from one emission.
 // ---------------------------------------------------------------------------
 
 procedure ShowAsSql;
 begin
-  var Q := TExprLowering.Apply<TProduct>(
+  var Q := TExprEmitter.Apply<TProduct>(
     TQuery.New.From('Product'), TCatalogRules.Bargains);
 
   var Compiler: IQueryCompiler := TAnsiSqlCompiler.Create;
   var Compiled := Q.Compile(Compiler);
 
   Writeln;
-  Writeln('The same rule, lowered once and compiled for a database');
+  Writeln('The same rule, emitted once and compiled for a database');
   Writeln('-------------------------------------------------------');
   Writeln('  ', Compiled.SQL);
   Write('  bindings: ');

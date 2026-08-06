@@ -14,7 +14,7 @@ uses
   Daf.SQLCute.Core in '..\..\SQLCute\Daf.SQLCute.Core.pas',
   Daf.Query.Expressions,
   Daf.SQLCute.Expressions,
-  Lowering.SpecHelpers in 'Lowering.SpecHelpers.pas',
+  Emission.SpecHelpers in 'Emission.SpecHelpers.pas',
   Emitter.Feat in 'Emitter.Feat.pas',
   Repository.Feat in 'Repository.Feat.pas',
   Parity.Feat in 'Parity.Feat.pas';

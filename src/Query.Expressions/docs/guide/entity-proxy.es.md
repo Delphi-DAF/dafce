@@ -82,11 +82,11 @@ P.Column('Price');    // 'price_eur'
 P.Table;              // 'products'
 ```
 
-…o se le entrega la estrategia al descenso, que es donde de verdad hace falta un nombre de columna:
+…o se le entrega la estrategia a la emisión, que es donde de verdad hace falta un nombre de columna:
 
 ```pascal
-TExprLowering.Where(Q, MyExpr, TMappedNames.Create, TypeInfo(TProduct));
-TExprLowering.Apply<TProduct>(Q, Spec, TMappedNames.Create);
+TExprEmitter.Where(Q, MyExpr, TMappedNames.Create, TypeInfo(TProduct));
+TExprEmitter.Apply<TProduct>(Q, Spec, TMappedNames.Create);
 ```
 
 ---

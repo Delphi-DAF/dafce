@@ -24,7 +24,7 @@ out\samples\bin\CatalogServiceSample.exe
 - **A service that knows nothing about persistence.** `TCatalogService` holds an `IRepository<TProduct>` and states rules. It would compile and run against any adapter, and is testable with a five-line stub.
 - **NULL handled as SQL handles it.** `Drill` has no price, so it is absent from every price comparison and present in `Price IS NULL` — three-valued logic, not a special case.
 - **One loaded set, five rules.** The list is loaded once and referenced, never copied; the plan count printed at the end shows what was compiled.
-- **One lowering, two destinations.** The last section takes the same `Bargains` rule, lowers it once, and compiles it for a database — the SQL a driver would receive for the rule the service just ran over a list.
+- **One emission, two destinations.** The last section takes the same `Bargains` rule, emits it once, and compiles it for a database — the SQL a driver would receive for the rule the service just ran over a list.
 
 ## Ownership
 

@@ -20,7 +20,7 @@ uses
   Daf.SQLCute,
   Daf.SQLCute.WhereTree,
   Daf.Query.Expressions,
-  Lowering.SpecHelpers;
+  Emission.SpecHelpers;
 
 type
   TEmitterWorld = class
@@ -32,7 +32,7 @@ type
     /// Assignments where the two evaluations disagreed. Must stay empty.
     Divergences: TArray<string>;
     Checked: Integer;
-    /// For the scenarios that run the lowered query rather than only read it.
+    /// For the scenarios that run the emitted query rather than only read it.
     Products: TObjectList<TProduct>;
     Names: TArray<string>;
     destructor Destroy; override;
@@ -75,9 +75,9 @@ end;
 initialization
 
 Feature('''
-Feature Lowering an expression to WHERE clauses @expressions @emitter
+Feature Emitting an expression to WHERE clauses @expressions @emitter
 
-  As the author of the one lowering in this layer
+  As the author of the one emission in this layer
   I want the emitted clause list to normalize back to what was written
   So both back-ends inherit a correct predicate instead of agreeing on a wrong one
 ''')
@@ -87,11 +87,11 @@ Feature Lowering an expression to WHERE clauses @expressions @emitter
 .Rule('A disjunction under a conjunction keeps its grouping')
 
   .Scenario('OrUnderAndKeepsItsGroup')
-    .When('(a or b) and c is lowered',
+    .When('(a or b) and c is emitted',
       procedure(W: TEmitterWorld)
       begin
         W.Authored := (Leaf('a') or Leaf('b')) and Leaf('c');
-        W.Query := Lower(W.Authored);
+        W.Query := Emit(W.Authored);
         W.Tree := Normalized(W.Query);
       end)
     .&Then('the disjunction is emitted as a nested group, not inlined',
@@ -125,11 +125,11 @@ Feature Lowering an expression to WHERE clauses @expressions @emitter
 .Rule('Negation is emitted, never rewritten')
 
   .Scenario('NegatedGroupSurvivesAsNegatedGroup')
-    .When('not ((a and b) or (c and d)) is lowered',
+    .When('not ((a and b) or (c and d)) is emitted',
       procedure(W: TEmitterWorld)
       begin
         W.Authored := not ((Leaf('a') and Leaf('b')) or (Leaf('c') and Leaf('d')));
-        W.Query := LowerFrom('t', W.Authored);
+        W.Query := EmitFrom('t', W.Authored);
         W.Tree := Normalized(W.Query);
         W.Sql := SqlOf(W.Query);
       end)
@@ -157,17 +157,17 @@ Feature Lowering an expression to WHERE clauses @expressions @emitter
       end)
 
   .Scenario('NegatedLeafNeedsNoGroup')
-    .When('a negated equality and a negated LIKE are lowered',
+    .When('a negated equality and a negated LIKE are emitted',
       procedure(W: TEmitterWorld)
       begin
         W.Authored := not Leaf('a');
-        W.Query := Lower(W.Authored);
+        W.Query := Emit(W.Authored);
 
         // The fluent .Like arrives with the breadth pass-throughs; the node it
         // will build is already expressible, so the emitter is exercised now.
         var Like := TNode.Compare(TCompareOp.Like, TNode.Member('Name'),
                                   [TNode.Value('%son%')]);
-        W.Sql := SqlOf(LowerFrom('t', TNode.Unary(TUnaryOp.opNot, Like)));
+        W.Sql := SqlOf(EmitFrom('t', TNode.Unary(TUnaryOp.opNot, Like)));
       end)
     .&Then('each is a single clause carrying its own negation, with no group',
       procedure(W: TEmitterWorld)
@@ -191,7 +191,7 @@ Feature Lowering an expression to WHERE clauses @expressions @emitter
       begin
         for var Shape in ShapesUnderTest do
         begin
-          var Q := Lower(Shape);
+          var Q := Emit(Shape);
           var Tree := Normalized(Q);
           try
             for var A in AllAssignments(4) do
@@ -220,13 +220,13 @@ Feature Lowering an expression to WHERE clauses @expressions @emitter
 .Rule('Precedence is inherited from the normalizer, not implemented here')
 
   .Scenario('PrecedenceIsNotImplementedHere')
-    .When('a and b or c and d is lowered with no explicit grouping',
+    .When('a and b or c and d is emitted with no explicit grouping',
       procedure(W: TEmitterWorld)
       begin
         // Delphi's own precedence already binds `and` tighter than `or`, exactly as
         // SQL does, so no parentheses are written here either.
         W.Authored := Leaf('a') and Leaf('b') or Leaf('c') and Leaf('d');
-        W.Query := Lower(W.Authored);
+        W.Query := Emit(W.Authored);
         W.Tree := Normalized(W.Query);
       end)
     .&Then('the emitter transcribed the tree it was given, deciding nothing',
@@ -241,7 +241,7 @@ Feature Lowering an expression to WHERE clauses @expressions @emitter
         // flat list was evidence for an earlier emission rule; it said nothing
         // about whether this layer computes precedence — and it does not, because
         // there is no precedence table, no operator ranking and no reordering
-        // anywhere in the lowering.
+        // anywhere in the emission.
         var Root := W.Authored as ILogicalExpr;
         Expect(Root.Op = TLogicalOp.opOr).ToBeTrue;
         Expect(Root.Left.Kind = TExprKind.Logical).ToBeTrue;
@@ -262,15 +262,15 @@ Feature Lowering an expression to WHERE clauses @expressions @emitter
         end;
       end)
 
-.Rule('Breadth is inherited by lowering, not by new node types')
+.Rule('Breadth is inherited by emission, not by new node types')
 
-  .Scenario('LikeLowersToExistingClause')
-    .When('LIKE, BETWEEN and IN expressions are lowered',
+  .Scenario('LikeEmitsTheExistingClause')
+    .When('LIKE, BETWEEN and IN expressions are emitted',
       procedure(W: TEmitterWorld)
       begin
         W.Authored := Prop('Name').Like('%son%');
-        W.Query := Lower(W.Authored);
-        W.Sql := SqlOf(LowerFrom('Product', W.Authored));
+        W.Query := Emit(W.Authored);
+        W.Sql := SqlOf(EmitFrom('Product', W.Authored));
       end)
     .&Then('LIKE becomes SQLCute''s own LIKE clause, built by the same node type',
       procedure(W: TEmitterWorld)
@@ -289,13 +289,13 @@ Feature Lowering an expression to WHERE clauses @expressions @emitter
     .&Then('BETWEEN and IN likewise reach the clauses SQLCute already has',
       procedure(W: TEmitterWorld)
       begin
-        var Between := WhereClausesOf(Lower(Prop('Price').Between(10, 200)));
+        var Between := WhereClausesOf(Emit(Prop('Price').Between(10, 200)));
         Expect(Length(Between)).ToEqual(1);
         Expect(TWhereClause(Between[0]).Op = TWhereOp.&Between).ToBeTrue;
 
         // IN has its own clause type in the AST, and the fluent verb sets its
         // Connector as the string 'AND'/'OR' the normalizer compares it as.
-        var InSet := WhereClausesOf(Lower(Prop('Price').IsIn([5, 120])));
+        var InSet := WhereClausesOf(Emit(Prop('Price').IsIn([5, 120])));
         Expect(Length(InSet)).ToEqual(1);
         Expect(InSet[0] is TWhereInClause).ToBeTrue;
         Expect(TWhereInClause(InSet[0]).Negated).ToBeFalse;
@@ -311,7 +311,7 @@ Feature Lowering an expression to WHERE clauses @expressions @emitter
           .OrderByDesc('Price')
           .Skip(1)
           .Take(2);
-        W.Query := TExprLowering.Apply<TProduct>(TQuery.New.From('Product'), Spec);
+        W.Query := TExprEmitter.Apply<TProduct>(TQuery.New.From('Product'), Spec);
         W.Sql := SqlOf(W.Query);
       end)
     .&Then('one query carries all three, so a caller never applies them separately',
@@ -338,12 +338,12 @@ Feature Lowering an expression to WHERE clauses @expressions @emitter
         Expect(W.Sql).ToContain('DESC');
       end)
 
-  .Scenario('LoweringNeedsNoTableName')
-    .When('an expression is lowered with no FROM and run over a plain list',
+  .Scenario('EmissionNeedsNoTableName')
+    .When('an expression is emitted with no FROM and run over a plain list',
       procedure(W: TEmitterWorld)
       begin
         W.Products := SampleProducts;
-        W.Query := Lower((Prop('Price') > 100) and (Prop('Active') = True));
+        W.Query := Emit((Prop('Price') > 100) and (Prop('Active') = True));
         W.Names := NamesOf(W.Products, W.Query);
       end)
     .&Then('no table was invented, and the in-memory lane ran it anyway',
@@ -361,15 +361,15 @@ Feature Lowering an expression to WHERE clauses @expressions @emitter
   // that compiled to `IN ()`. With the builder resolving the empty case itself,
   // there is nothing here to refuse: IN goes through the same call every other
   // operator does.
-  .Scenario('EmptySetLowersWithoutRaising')
-    .When('a membership expression over an empty value set is lowered and run',
+  .Scenario('EmptySetEmitsWithoutRaising')
+    .When('a membership expression over an empty value set is emitted and run',
       procedure(W: TEmitterWorld)
       begin
         W.Products := SampleProducts;
-        W.Query := Lower(Prop('Price').IsIn([]));
+        W.Query := Emit(Prop('Price').IsIn([]));
         W.Names := NamesOf(W.Products, W.Query);
       end)
-    .&Then('it lowered without raising and the query selects nothing',
+    .&Then('it emitted without raising and the query selects nothing',
       procedure(W: TEmitterWorld)
       begin
         // Drill's Price is NULL, and it is excluded like every other row: the
@@ -381,6 +381,117 @@ Feature Lowering an expression to WHERE clauses @expressions @emitter
       begin
         for var C in WhereClausesOf(W.Query) do
           Expect(C is TWhereInClause).ToBeFalse;
+      end)
+
+// ---------------------------------------------------------------------------
+// Every way emission refuses, one scenario per raise site.
+//
+// The stake is not tidiness. Emitting fewer clauses than the expression carries
+// *widens* the resulting query — the query returns rows it was asked to exclude
+// — and it does so silently, on both back-ends at once, since both read the
+// clause list that came out. So each of these has to raise, and each has to say
+// what was wrong: a caller who lands here is looking at an expression that
+// cannot mean what they wrote.
+
+.Rule('Emission refuses what it cannot express')
+
+  .Scenario('NonMemberComparisonSidesAreRefused')
+    .&Then('a comparison whose left-hand side is not a member reference raises',
+      procedure(W: TEmitterWorld)
+      begin
+        // Value = Value: nothing here names a column, so there is no condition
+        // to emit and no defensible clause to emit instead.
+        var Bad := TNode.Compare(TCompareOp.Equal, TNode.Value(1), [TNode.Value(1)]);
+        ExpectException(
+          procedure
+          begin
+            Emit(Bad);
+          end).ToBe(EExprEmissionError);
+      end)
+    .&Then('and a comparison whose right-hand side is neither value nor parameter raises',
+      procedure(W: TEmitterWorld)
+      begin
+        var Bad := TNode.Compare(TCompareOp.Equal, TNode.Member('Price'),
+                                 [TNode.Member('Name')]);
+        ExpectException(
+          procedure
+          begin
+            Emit(Bad);
+          end).ToBe(EExprEmissionError);
+      end)
+
+  .Scenario('WrongArityIsRefused')
+    .&Then('BETWEEN given one operand raises, naming operator and arity',
+      procedure(W: TEmitterWorld)
+      begin
+        var Bad := TNode.Compare(TCompareOp.&Between, TNode.Member('Price'),
+                                 [TNode.Value(10)]);
+        ExpectException(
+          procedure
+          begin
+            Emit(Bad);
+          end).ToMatchMessage('Between.*2.*1');
+      end)
+    .&Then('and IS NULL given an operand raises too — arity is checked in both directions',
+      procedure(W: TEmitterWorld)
+      begin
+        var Bad := TNode.Compare(TCompareOp.IsNull, TNode.Member('Price'),
+                                 [TNode.Value(10)]);
+        ExpectException(
+          procedure
+          begin
+            Emit(Bad);
+          end).ToBe(EExprEmissionError);
+      end)
+
+  .Scenario('ANodeThatIsNotAPredicateIsRefused')
+    .&Then('a bare member where a condition belongs raises, naming the node kind',
+      procedure(W: TEmitterWorld)
+      begin
+        // `Prop('Active')` on its own is a column reference, not a condition.
+        // Emitting it as `Active = True` would be the emitter guessing.
+        ExpectException(
+          procedure
+          begin
+            Emit(TNode.Member('Active'));
+          end).ToMatchMessage('Member');
+      end)
+
+  // Two things look alike here and must not be confused, because the difference
+  // is between an unfiltered rule and a widened one.
+  .Scenario('NoFilterIsNotTheSameAsABrokenOne')
+    .&Then('a whole expression that is absent leaves the query unfiltered, deliberately',
+      procedure(W: TEmitterWorld)
+      begin
+        // Apply<T> hands Spec.Filter straight through, and that is nil for a rule
+        // built with only an ordering or a page. Emitting nothing is what such a
+        // rule means, so this is a contract and not an oversight.
+        var Q := Emit(nil);
+        Expect(Length(WhereClausesOf(Q))).ToEqual(0);
+      end)
+    .&Then('but an expression with a hole in it raises rather than emitting the rest',
+      procedure(W: TEmitterWorld)
+      begin
+        // Here the caller did ask for a condition. Skipping the missing operand
+        // would emit `b` alone in place of `a AND b` — strictly more rows than
+        // were asked for, on both back-ends, with nothing said.
+        var Holed := TNode.Logical(TLogicalOp.opAnd, nil, Leaf('b'));
+        ExpectException(
+          procedure
+          begin
+            Emit(Holed);
+          end).ToBe(EExprEmissionError);
+      end)
+
+  .Scenario('EmissionNeedsAQueryToEmitOnto')
+    .&Then('emitting onto no query raises rather than inventing one',
+      procedure(W: TEmitterWorld)
+      begin
+        ExpectException(
+          procedure
+          begin
+            TExprEmitter.Where(nil, Prop('Price') > 100);
+          end).ToBe(EExprEmissionError);
       end);
 
 end.

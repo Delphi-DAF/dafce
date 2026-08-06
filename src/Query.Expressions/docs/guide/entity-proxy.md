@@ -82,11 +82,11 @@ P.Column('Price');    // 'price_eur'
 P.Table;              // 'products'
 ```
 
-…or hand the strategy to the lowering, which is where a column name is actually needed:
+…or hand the strategy to the emission, which is where a column name is actually needed:
 
 ```pascal
-TExprLowering.Where(Q, MyExpr, TMappedNames.Create, TypeInfo(TProduct));
-TExprLowering.Apply<TProduct>(Q, Spec, TMappedNames.Create);
+TExprEmitter.Where(Q, MyExpr, TMappedNames.Create, TypeInfo(TProduct));
+TExprEmitter.Apply<TProduct>(Q, Spec, TMappedNames.Create);
 ```
 
 ---

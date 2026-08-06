@@ -8,8 +8,8 @@
 
 ## Índice
 
-1. [Bajar una expresión](#bajar-una-expresión)
-2. [Bajar una especificación](#bajar-una-especificación)
+1. [Emitir una expresión](#emitir-una-expresión)
+2. [Emitir una especificación](#emitir-una-especificación)
 3. [La costura de resolución de nombres](#la-costura-de-resolución-de-nombres)
 4. [Cómo la emisión sigue siendo fiel](#cómo-la-emisión-sigue-siendo-fiel)
 5. [El repositorio en memoria](#el-repositorio-en-memoria)
@@ -17,14 +17,14 @@
 
 ---
 
-## Bajar una expresión
+## Emitir una expresión
 
 Una llamada, un destino: cláusulas WHERE sobre la consulta que le pasas, que es también lo que devuelve.
 
 ```pascal
 uses Daf.SQLCute, Daf.Query.Expressions, Daf.SQLCute.Expressions;
 
-var Q := TExprLowering.Where(TQuery.New.From('Product'),
+var Q := TExprEmitter.Where(TQuery.New.From('Product'),
   (Prop('Price') > 100) and (Prop('Active') = True));
 ```
 
@@ -34,10 +34,10 @@ La consulta es tuya: añádele cosas antes o después, compílala, clónala, eje
 Q.Select(['Name', 'Price']).OrderBy('Name');
 ```
 
-No hace falta un FROM. El carril en memoria recibe su fuente como parámetro y nunca resuelve una tabla, así que una regla se puede bajar y ejecutar sobre una lista sin inventar un nombre de tabla:
+No hace falta un FROM. El carril en memoria recibe su fuente como parámetro y nunca resuelve una tabla, así que una regla se puede emitir y ejecutar sobre una lista sin inventar un nombre de tabla:
 
 ```pascal
-var Q := TExprLowering.Where(TQuery.New, Prop('Active') = True);
+var Q := TExprEmitter.Where(TQuery.New, Prop('Active') = True);
 for var P in TInMemory.Queryable<TProduct>(Q, Loaded) do ...
 ```
 
@@ -45,9 +45,9 @@ Añade el FROM cuando la consulta vaya a SQL, que es quien lo necesita.
 
 ---
 
-## Bajar una especificación
+## Emitir una especificación
 
-`Apply<T>` baja la regla completa — filtro, orden y página — sobre una sola consulta, así que el llamante nunca tiene que acordarse de aplicar el orden aparte de la regla a la que pertenece.
+`Apply<T>` emite la regla completa — filtro, orden y página — sobre una sola consulta, así que el llamante nunca tiene que acordarse de aplicar el orden aparte de la regla a la que pertenece.
 
 ```pascal
 var Spec := TSpecification<TProduct>.New
@@ -56,7 +56,7 @@ var Spec := TSpecification<TProduct>.New
   .Skip(10)
   .Take(5);
 
-var Q := TExprLowering.Apply<TProduct>(TQuery.New.From('Product'), Spec);
+var Q := TExprEmitter.Apply<TProduct>(TQuery.New.From('Product'), Spec);
 // → WHERE … ORDER BY Price DESC LIMIT 5 OFFSET 10
 ```
 
@@ -66,11 +66,11 @@ var Q := TExprLowering.Apply<TProduct>(TQuery.New.From('Product'), Spec);
 
 ## La costura de resolución de nombres
 
-Por defecto un miembro se convierte en columna tal cual, que es ya la convención vigente. Aporta una `INameResolution` para cambiarlo, y el descenso le pregunta una vez por miembro, en el momento de emitir:
+Por defecto un miembro se convierte en columna tal cual, que es ya la convención vigente. Aporta una `INameResolution` para cambiarlo, y la emisión le pregunta una vez por miembro, en el momento de emitir:
 
 ```pascal
-TExprLowering.Where(Q, MyExpr, MyNames, TypeInfo(TProduct));
-TExprLowering.Apply<TProduct>(Q, Spec, MyNames);
+TExprEmitter.Where(Q, MyExpr, MyNames, TypeInfo(TProduct));
+TExprEmitter.Apply<TProduct>(Q, Spec, MyNames);
 ```
 
 `ColumnFor` está expuesta para lo mismo fuera del recorrido — por ejemplo para resolver tú una columna de orden o un nombre de tabla:
@@ -152,10 +152,10 @@ La propiedad `Compiled` de la clase concreta informa de cuántos planes se han c
 | Situación | Qué ocurre |
 |-----------|------------|
 | Un nombre de miembro que no resuelve a nada | `EExprMemberError`, donde se escribe la expresión (en `Daf.Query.Expressions`) |
-| Un nodo que no es predicado donde va una condición | `EExprLoweringError` al bajar |
-| Un operador con el número de operandos equivocado | `EExprLoweringError` al bajar |
+| Un nodo que no es predicado donde va una condición | `EExprEmissionError` al emitir |
+| Un operador con el número de operandos equivocado | `EExprEmissionError` al emitir |
 | Una consulta que el carril en memoria no puede ejecutar | `EInMemoryQueryError` al compilar el plan |
 
-Nada se omite y nada degrada. Una cláusula descartada en silencio durante el descenso *ensancharía* la consulta, que es el peor modo de fallo de un filtro — así que un nodo que el emisor no entiende lanza.
+Nada se omite y nada degrada. Una cláusula descartada en silencio durante la emisión *ensancharía* la consulta, que es el peor modo de fallo de un filtro — así que un nodo que el emisor no entiende lanza.
 
 Y la asimetría que conviene repetir: **traducible no es lo mismo que ejecutable en memoria.** Las condiciones con subconsulta o `EXISTS`, `GROUP BY`/`HAVING`, los joins y las operaciones de conjuntos compilan a SQL pero lanzan en el carril de lista única. El adaptador nunca captura ese error y nunca filtra la colección en Delphi en su lugar.

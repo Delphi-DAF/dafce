@@ -10,7 +10,7 @@
 
 This package holds the domain-side half of the expression layer: a tree, the operators that build it, the seam that names things, and the specification and port that carry it across a boundary. It compiles against Commons and nothing else, so everything here is usable and testable with no database and no SQL unit linked.
 
-The SQL-side half is [`Daf.SQLCute.Expressions`](../../SQLCute.Expressions/README.md), which lowers a tree into a SQLCute `IQuery` and ships the in-memory repository adapter.
+The SQL-side half is [`Daf.SQLCute.Expressions`](../../SQLCute.Expressions/README.md), which emits a tree into a SQLCute `IQuery` and ships the in-memory repository adapter.
 
 ```pascal
 uses Daf.Query.Expressions;

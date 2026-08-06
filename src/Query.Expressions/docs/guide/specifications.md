@@ -40,7 +40,7 @@ Spec.TakeCount                                 // 5
 Spec.Key                                       // canonical, whole-rule
 ```
 
-`Skip(0)` and `Take(0)` mean *unset*, so an unpaged rule adds no clause at all when lowered.
+`Skip(0)` and `Take(0)` mean *unset*, so an unpaged rule adds no clause at all when emitted.
 
 ---
 

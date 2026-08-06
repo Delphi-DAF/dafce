@@ -52,7 +52,7 @@ La capa no implementa ninguna precedencia. Escribe la agrupación explícita cua
 
 ## La superficie de amplitud
 
-Todo lo que SQLCute ya expresa se alcanza bajando a la cláusula que lo dice, así que cada una de estas es un valor de operador y **ningún tipo de nodo nuevo**:
+Todo lo que SQLCute ya expresa se alcanza emitiendo la cláusula que lo dice, así que cada una de estas es un valor de operador y **ningún tipo de nodo nuevo**:
 
 ```pascal
 Prop('Name').Like('%son%')

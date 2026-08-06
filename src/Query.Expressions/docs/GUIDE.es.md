@@ -10,7 +10,7 @@
 
 Este paquete contiene la mitad de dominio de la capa de expresiones: un árbol, los operadores que lo construyen, la costura que da nombres, y la especificación y el puerto que lo llevan al otro lado de una frontera. Compila contra Commons y nada más, así que todo esto se usa y se prueba sin base de datos y sin enlazar ninguna unidad de SQL.
 
-La mitad de SQL es [`Daf.SQLCute.Expressions`](../../SQLCute.Expressions/README.es.md), que baja un árbol a un `IQuery` de SQLCute y trae el adaptador de repositorio en memoria.
+La mitad de SQL es [`Daf.SQLCute.Expressions`](../../SQLCute.Expressions/README.es.md), que emite un árbol a un `IQuery` de SQLCute y trae el adaptador de repositorio en memoria.
 
 ```pascal
 uses Daf.Query.Expressions;
@@ -72,7 +72,7 @@ Sirve para afirmar que dos expresiones son la misma cosa, como clave de caché o
 | Ausente | Por qué |
 |---------|---------|
 | Un filtro con clausura en una especificación | Lo intraducible debe ser irrepresentable; para ese mundo está `Daf.Linq` |
-| Directivas de carga anticipada (`includes`) | No hay a qué bajarlas, y es el dueño equivocado — montar un agregado es del adaptador |
+| Directivas de carga anticipada (`includes`) | No hay a qué emitirlas, y es el dueño equivocado — montar un agregado es del adaptador |
 | Una restricción `T: TEntity` | Nada aguas abajo la necesita; los registros también funcionan |
 | Metadatos de mapeo entidad↔tabla | Territorio del ORM, y el ORM aún no está diseñado |
 | DML dirigido por instancia | Necesita el conjunto de miembros persistentes, la clave primaria y seguimiento de cambios — todo metadato del ORM |

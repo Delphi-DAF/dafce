@@ -8,8 +8,8 @@
 
 ## Table of Contents
 
-1. [Lowering an expression](#lowering-an-expression)
-2. [Lowering a specification](#lowering-a-specification)
+1. [Emitting an expression](#emitting-an-expression)
+2. [Emitting a specification](#emitting-a-specification)
 3. [The name-resolution seam](#the-name-resolution-seam)
 4. [How emission stays faithful](#how-emission-stays-faithful)
 5. [The in-memory repository](#the-in-memory-repository)
@@ -17,14 +17,14 @@
 
 ---
 
-## Lowering an expression
+## Emitting an expression
 
 One call, one target: WHERE clauses on the query you hand it, which is also what comes back.
 
 ```pascal
 uses Daf.SQLCute, Daf.Query.Expressions, Daf.SQLCute.Expressions;
 
-var Q := TExprLowering.Where(TQuery.New.From('Product'),
+var Q := TExprEmitter.Where(TQuery.New.From('Product'),
   (Prop('Price') > 100) and (Prop('Active') = True));
 ```
 
@@ -34,10 +34,10 @@ The query is yours: add to it before or after, compile it, clone it, run it.
 Q.Select(['Name', 'Price']).OrderBy('Name');
 ```
 
-No FROM is required. The in-memory lane takes its source as a parameter and never resolves a table, so a rule can be lowered and run over a list without inventing a table name:
+No FROM is required. The in-memory lane takes its source as a parameter and never resolves a table, so a rule can be emitted and run over a list without inventing a table name:
 
 ```pascal
-var Q := TExprLowering.Where(TQuery.New, Prop('Active') = True);
+var Q := TExprEmitter.Where(TQuery.New, Prop('Active') = True);
 for var P in TInMemory.Queryable<TProduct>(Q, Loaded) do ...
 ```
 
@@ -45,9 +45,9 @@ Add a FROM when the query is headed for SQL, since that is who needs it.
 
 ---
 
-## Lowering a specification
+## Emitting a specification
 
-`Apply<T>` lowers the whole rule — filter, ordering and page — onto one query, so a caller never has to remember to apply the ordering separately from the rule it belongs to.
+`Apply<T>` emits the whole rule — filter, ordering and page — onto one query, so a caller never has to remember to apply the ordering separately from the rule it belongs to.
 
 ```pascal
 var Spec := TSpecification<TProduct>.New
@@ -56,7 +56,7 @@ var Spec := TSpecification<TProduct>.New
   .Skip(10)
   .Take(5);
 
-var Q := TExprLowering.Apply<TProduct>(TQuery.New.From('Product'), Spec);
+var Q := TExprEmitter.Apply<TProduct>(TQuery.New.From('Product'), Spec);
 // → WHERE … ORDER BY Price DESC LIMIT 5 OFFSET 10
 ```
 
@@ -66,11 +66,11 @@ var Q := TExprLowering.Apply<TProduct>(TQuery.New.From('Product'), Spec);
 
 ## The name-resolution seam
 
-By default a member becomes a column verbatim, which is already the shipped convention. Supply an `INameResolution` to change that, and the lowering asks it once per member, at emit time:
+By default a member becomes a column verbatim, which is already the shipped convention. Supply an `INameResolution` to change that, and the emission asks it once per member, at emit time:
 
 ```pascal
-TExprLowering.Where(Q, MyExpr, MyNames, TypeInfo(TProduct));
-TExprLowering.Apply<TProduct>(Q, Spec, MyNames);
+TExprEmitter.Where(Q, MyExpr, MyNames, TypeInfo(TProduct));
+TExprEmitter.Apply<TProduct>(Q, Spec, MyNames);
 ```
 
 `ColumnFor` is exposed for the same purpose outside the walk — for instance to resolve an ordering column or a table name yourself:
@@ -152,10 +152,10 @@ The `Compiled` property on the concrete class reports how many plans have been b
 | Situation | What happens |
 |-----------|--------------|
 | A member name that resolves to nothing | `EExprMemberError`, where the expression is authored (in `Daf.Query.Expressions`) |
-| A non-predicate node where a condition belongs | `EExprLoweringError` at lowering time |
-| An operator given the wrong number of operands | `EExprLoweringError` at lowering time |
+| A non-predicate node where a condition belongs | `EExprEmissionError` at emission time |
+| An operator given the wrong number of operands | `EExprEmissionError` at emission time |
 | A query the in-memory lane cannot execute | `EInMemoryQueryError` when the plan is compiled |
 
-Nothing is skipped and nothing degrades. A clause silently dropped during lowering would *widen* the query, which is the worst failure mode a filter has — so a node the emitter does not understand raises instead.
+Nothing is skipped and nothing degrades. A clause silently dropped during emission would *widen* the query, which is the worst failure mode a filter has — so a node the emitter does not understand raises instead.
 
 And the asymmetry worth repeating: **translatable is not the same as in-memory-executable.** Subquery/`EXISTS` conditions, `GROUP BY`/`HAVING`, joins and set operations compile to SQL but raise on the single-list lane. The adapter never catches that error and never filters the collection in Delphi instead.

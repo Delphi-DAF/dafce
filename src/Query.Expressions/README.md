@@ -11,7 +11,7 @@ var Spec := TSpecification<TProduct>.New
   .Take(10);
 ```
 
-That value is a domain object. It can be asserted in a unit test, passed across a port, stored, logged — and later lowered to SQL by [`Daf.SQLCute.Expressions`](../SQLCute.Expressions/README.md). **This package contains no SQL and does not reference SQLCute.** A domain service that depends on it links none.
+That value is a domain object. It can be asserted in a unit test, passed across a port, stored, logged — and later emitted to SQL by [`Daf.SQLCute.Expressions`](../SQLCute.Expressions/README.md). **This package contains no SQL and does not reference SQLCute.** A domain service that depends on it links none.
 
 [![Delphi 12+](https://img.shields.io/badge/Delphi-12%2B-red.svg)](https://www.embarcadero.com/products/delphi)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../legal/LICENSE.md)
@@ -51,7 +51,7 @@ They are siblings serving different worlds. Which is why `TSpecification<T>` has
 
 ## The model is data-driven
 
-Six node types, three operator enums. Adding a comparison is a new **enum value**, never a new class — the same binary node carries every operator, and `Like`, `Between` and `In` are lowered to the SQLCute clause that already says them.
+Six node types, three operator enums. Adding a comparison is a new **enum value**, never a new class — the same binary node carries every operator, and `Like`, `Between` and `In` are emitted as the SQLCute clause that already says them.
 
 ```pascal
 Prop('Name').Like('%son%')          // one node, operator Like
@@ -68,7 +68,7 @@ Prop('Id')  = SomeGuid                       // typed overload → canonical str
 Prop('Age') = TExprValue.From<Integer>(N)    // TNullable → its value, or Null
 ```
 
-Narrowing happens **where you write it**, never inside the lowering: a leaf holding a richer value would leave the in-memory lane comparing a record while SQL compares its text.
+Narrowing happens **where you write it**, never inside the emission: a leaf holding a richer value would leave the in-memory lane comparing a record while SQL compares its text.
 
 ---
 
@@ -129,6 +129,6 @@ A member name that resolves to nothing raises at the point the expression is aut
 | Resource | Description |
 |----------|-------------|
 | [**Usage Guide**](docs/GUIDE.md) | Authoring, the proxy, the metamodel, specifications |
-| [Daf.SQLCute.Expressions](../SQLCute.Expressions/README.md) | The lowering into `IQuery`, and the in-memory adapter |
-| [SQLCute](../SQLCute.Abstractions/README.md) | The query builder this eventually lowers into |
+| [Daf.SQLCute.Expressions](../SQLCute.Expressions/README.md) | The emission into `IQuery`, and the in-memory adapter |
+| [SQLCute](../SQLCute.Abstractions/README.md) | The query builder this eventually emits into |
 | [Daf.Linq](../Linq/README.md) | The closure world — the sibling, not the rival |

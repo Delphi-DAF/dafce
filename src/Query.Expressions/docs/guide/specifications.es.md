@@ -40,7 +40,7 @@ Spec.TakeCount                                 // 5
 Spec.Key                                       // canónica, de la regla completa
 ```
 
-`Skip(0)` y `Take(0)` significan *sin fijar*, así que una regla sin paginar no añade ninguna cláusula al bajarla.
+`Skip(0)` y `Take(0)` significan *sin fijar*, así que una regla sin paginar no añade ninguna cláusula al emitirla.
 
 ---
 
@@ -64,7 +64,7 @@ Los dos son hermanos. Uno es traducible; el otro no, y lo dice siendo un tipo di
 
 ## Tampoco hay includes
 
-Las directivas de carga anticipada no forman parte de una especificación. Más allá de que no hay cláusula a la que bajarlas, son el dueño equivocado: un repositorio devuelve agregados, y cómo se hidrata un agregado es asunto del adaptador. Una especificación dice *qué* seleccionar.
+Las directivas de carga anticipada no forman parte de una especificación. Más allá de que no hay cláusula a la que emitirlas, son el dueño equivocado: un repositorio devuelve agregados, y cómo se hidrata un agregado es asunto del adaptador. Una especificación dice *qué* seleccionar.
 
 ---
 

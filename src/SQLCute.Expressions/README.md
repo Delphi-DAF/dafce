@@ -1,4 +1,4 @@
-# Daf.SQLCute.Expressions — One Expression, One Lowering
+# Daf.SQLCute.Expressions — One Expression, One Emission
 
 **🌍 Language: English | [Español](README.es.md)**
 
@@ -7,7 +7,7 @@ The SQL-side half of the expression layer. It takes a tree authored with [`Daf.Q
 ```pascal
 uses Daf.SQLCute, Daf.Query.Expressions, Daf.SQLCute.Expressions;
 
-var Q := TExprLowering.Where(TQuery.New.From('Product'),
+var Q := TExprEmitter.Where(TQuery.New.From('Product'),
   (Prop('Price') > 100) and (Prop('Active') = True));
 
 // …a database:
@@ -21,13 +21,13 @@ for var P in TInMemory.Queryable<TProduct>(Q, Loaded) do ...
 
 ---
 
-## Why there is only one lowering
+## Why there is only one emission
 
 Both back-ends are already downstream of the SQLCute AST:
 
 ```
               expression tree
-                    │  one lowering
+                    │  one emission
                     ▼
           SQLCute clauses (IQuery)
                     │
@@ -40,7 +40,7 @@ Both back-ends are already downstream of the SQLCute AST:
          SQL text     in-memory execution
 ```
 
-So "one query, two back-ends" is a property this package **inherits**, not one it implements. A second lowering to a `Daf.Linq` predicate would re-implement the in-memory compiler in a different shape and make back-end parity a permanent test burden. There is no such translator here, and there should never be one.
+So "one query, two back-ends" is a property this package **inherits**, not one it implements. A second emission to a `Daf.Linq` predicate would re-implement the in-memory compiler in a different shape and make back-end parity a permanent test burden. There is no such translator here, and there should never be one.
 
 ---
 
@@ -48,12 +48,12 @@ So "one query, two back-ends" is a property this package **inherits**, not one i
 
 | Concept | Description |
 |---------|-------------|
-| `TExprLowering.Where` | Expression + `IQuery` → the same `IQuery`, carrying the conditions |
-| `TExprLowering.Apply<T>` | A whole specification — filter, ordering, page — onto one query |
+| `TExprEmitter.Where` | Expression + `IQuery` → the same `IQuery`, carrying the conditions |
+| `TExprEmitter.Apply<T>` | A whole specification — filter, ordering, page — onto one query |
 | `TInMemoryRepository<T>` | The in-memory `IRepository<T>` adapter, with a per-rule plan cache |
 | `ColumnFor` | Member → column, through the supplied strategy or verbatim |
 | `WhereOpFor` | The model's operators mapped onto SQLCute's `TWhereOp` — a table |
-| `EExprLoweringError` | A node that is not a predicate, or an operator given the wrong arity |
+| `EExprEmissionError` | A node that is not a predicate, or an operator given the wrong arity |
 
 ---
 
@@ -89,7 +89,7 @@ The spec that guards all of this is semantic, not structural: over three express
 
 ## Breadth without new nodes
 
-Everything SQLCute already expresses is reached by lowering to the clause that says it:
+Everything SQLCute already expresses is reached by emitting the clause that says it:
 
 ```pascal
 Prop('Name').Like('%son%')       // → LIKE clause
@@ -107,7 +107,7 @@ Going through that surface is also why the empty set needs no special case here:
 Prop('Price').IsIn([])           // → WHERE (Price IS NULL AND Price IS NOT NULL)
 ```
 
-`x IN (a, b)` is `x = a OR x = b`, so an empty list is the empty disjunction — false without consulting the column, and true for `IsNotIn`. SQLCute's builder resolves that where the condition is added, so this layer lowers `IsIn([])` through the same call every other operator uses. No arity floor, no error, no branch of its own.
+`x IN (a, b)` is `x = a OR x = b`, so an empty list is the empty disjunction — false without consulting the column, and true for `IsNotIn`. SQLCute's builder resolves that where the condition is added, so this layer emits `IsIn([])` through the same call every other operator uses. No arity floor, no error, no branch of its own.
 
 ---
 
@@ -148,8 +148,8 @@ As the in-memory back-end grows those phases, this package inherits them with no
 
 | Resource | Description |
 |----------|-------------|
-| [**Usage Guide**](docs/GUIDE.md) | Lowering, the name seam, the adapter, what fails and when |
+| [**Usage Guide**](docs/GUIDE.md) | Emission, the name seam, the adapter, what fails and when |
 | [CatalogServiceSample](samples/CatalogServiceSample/README.md) | A domain service over `IRepository<T>`, resolved from a `TList<T>` |
 | [Daf.Query.Expressions](../Query.Expressions/README.md) | The tree, the authoring surface, specifications and the port |
-| [SQLCute In-Memory](../SQLCute.InMemory/README.md) | The back-end this lowering reaches through `IQuery` |
+| [SQLCute In-Memory](../SQLCute.InMemory/README.md) | The back-end this emission reaches through `IQuery` |
 | [SQLCute](../SQLCute.Abstractions/README.md) | The AST and the fluent surface this emits into |

@@ -52,7 +52,7 @@ The layer implements no precedence. Write explicit grouping when you mean someth
 
 ## The breadth surface
 
-Anything SQLCute already expresses is reached by lowering to the clause that says it, so each of these is an operator value and **no new node type**:
+Anything SQLCute already expresses is reached by emitting the clause that says it, so each of these is an operator value and **no new node type**:
 
 ```pascal
 Prop('Name').Like('%son%')

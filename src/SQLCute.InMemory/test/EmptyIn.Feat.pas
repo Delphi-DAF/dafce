@@ -8,13 +8,13 @@
   The discriminator in every scenario below is the row whose column is NULL. A
   rule that reads the column answers Unknown for that row and drops it from IN
   and from NOT IN alike, which is exactly how the two back-ends used to disagree.
-  The lowering the builder applies — (col IS NULL AND col IS NOT NULL) — is made
+  The group the builder substitutes — (col IS NULL AND col IS NOT NULL) — is made
   of the only two predicates in the model that never answer Unknown, so the NULL
   row is decided like any other.
 
   The parity scenario keeps both lanes in one place on purpose: this suite is the
   only one that compiles SQL and executes the same AST in memory, and the whole
-  point of the lowering is that neither back-end was taught the rule separately.
+  point of the substitution is that neither back-end was taught the rule apart.
 }
 
 interface

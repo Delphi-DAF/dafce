@@ -2,10 +2,10 @@
 
 {
   Daf.SQLCute.Expressions — the SQL-side half of the expression layer: the one
-  lowering (expression tree -> WHERE clauses on an IQuery) and the in-memory
+  emission (expression tree -> WHERE clauses on an IQuery) and the in-memory
   IRepository<T> adapter.
 
-  There is exactly one lowering and one target. Both back-ends are already
+  There is exactly one emission and one target. Both back-ends are already
   downstream of the SQLCute AST — the dialect compilers emit SQL from it and
   TInMemory compiles an executable plan from it — so "one query, two back-ends"
   is a property this unit inherits rather than one it implements. There is no
@@ -62,12 +62,12 @@ uses
 
 type
   /// <summary>
-  ///   An expression that cannot be lowered — a non-predicate node where a
+  ///   An expression that cannot be emitted — a non-predicate node where a
   ///   condition belongs, or an operator handed the wrong number of operands.
   ///   It is raised rather than skipped: a clause silently dropped here would
   ///   widen the query, which is the worst possible failure mode for a filter.
   /// </summary>
-  EExprLoweringError = class(Exception);
+  EExprEmissionError = class(Exception);
 
 const
   /// <summary>
@@ -93,13 +93,13 @@ const
 
 type
   /// <summary>
-  ///   The lowering. One expression in, WHERE clauses on one <c>IQuery</c> out,
+  ///   The emitter. One expression in, WHERE clauses on one <c>IQuery</c> out,
   ///   and nothing else — no SQL text, no predicate, no second target.
   /// </summary>
-  TExprLowering = record
+  TExprEmitter = record
   public
     /// <summary>
-    ///   Lowers <c>Expression</c> into WHERE clauses on <c>Query</c> and returns
+    ///   Emits <c>Expression</c> into WHERE clauses on <c>Query</c> and returns
     ///   <c>Query</c>. Members become columns verbatim.
     /// </summary>
     class function Where(const Query: IQuery; const Expression: IExpr): IQuery; overload; static;
@@ -110,7 +110,7 @@ type
     class function Where(const Query: IQuery; const Expression: IExpr;
       const Names: INameResolution; EntityType: PTypeInfo): IQuery; overload; static;
     /// <summary>
-    ///   Lowers a whole specification — filter, ordering and page — onto
+    ///   Emits a whole specification — filter, ordering and page — onto
     ///   <c>Query</c>. They travel together so a caller never has to remember to
     ///   apply the ordering separately from the rule it belongs to.
     /// </summary>
@@ -151,7 +151,7 @@ type
     constructor Create(const Source: TEnumerable<T>;
       const Names: INameResolution = nil); overload;
     /// <summary>
-    ///   Scopes the repository to <c>BaseQuery</c>: every specification is lowered
+    ///   Scopes the repository to <c>BaseQuery</c>: every specification is emitted
     ///   onto a clone of it, so the caller's query is never mutated. It is also
     ///   the only route by which a query the in-memory lane rejects can reach
     ///   this adapter, since the expression model cannot express one.
@@ -219,7 +219,7 @@ end;
 function TEmitCtx.ColumnOf(const Node: IExpr): string;
 begin
   if (Node = nil) or (Node.Kind <> TExprKind.Member) then
-    raise EExprLoweringError.Create(
+    raise EExprEmissionError.Create(
       'The left-hand side of a comparison must be a member reference.');
   Result := ColumnFor(Names, EntityType, (Node as IMemberExpr).Name);
 end;
@@ -228,7 +228,7 @@ function TEmitCtx.ValueOf(const Node: IExpr): Variant;
 begin
   // A param leaf is a value leaf with a name, so one branch serves both.
   if (Node = nil) or not ((Node.Kind = TExprKind.Value) or (Node.Kind = TExprKind.Param)) then
-    raise EExprLoweringError.Create(
+    raise EExprEmissionError.Create(
       'The right-hand side of a comparison must be a value or a parameter.');
   Result := (Node as IValueExpr).Value;
 end;
@@ -261,7 +261,7 @@ end;
 procedure RequireArity(const C: ICompareExpr; Expected: Integer);
 begin
   if Length(C.Operands) <> Expected then
-    raise EExprLoweringError.CreateFmt(
+    raise EExprEmissionError.CreateFmt(
       'Operator %s takes %d operand(s), got %d.',
       [GetEnumName(TypeInfo(TCompareOp), Ord(C.Op)), Expected, Length(C.Operands)]);
 end;
@@ -390,7 +390,7 @@ procedure EmitItem(const Node: IExpr; const Q: IQuery; const Ctx: TEmitCtx;
   Connector: TLogicalOp);
 begin
   if Node = nil then
-    raise EExprLoweringError.Create('An empty expression cannot be lowered.');
+    raise EExprEmissionError.Create('An empty expression cannot be emitted.');
 
   case Node.Kind of
     TExprKind.Compare:
@@ -417,7 +417,7 @@ begin
       // — would regroup it into a different predicate.
       EmitGroup(Node, Q, Ctx, Connector, False);
   else
-    raise EExprLoweringError.CreateFmt(
+    raise EExprEmissionError.CreateFmt(
       'A %s node is not a predicate, so it cannot become a WHERE condition. '
       + 'Compare it against something.',
       [GetEnumName(TypeInfo(TExprKind), Ord(Node.Kind))]);
@@ -453,18 +453,18 @@ begin
       EmitItem(Operands[I], Q, Ctx, Op);
 end;
 
-{ TExprLowering }
+{ TExprEmitter }
 
-class function TExprLowering.Where(const Query: IQuery; const Expression: IExpr): IQuery;
+class function TExprEmitter.Where(const Query: IQuery; const Expression: IExpr): IQuery;
 begin
   Result := Where(Query, Expression, nil, nil);
 end;
 
-class function TExprLowering.Where(const Query: IQuery; const Expression: IExpr;
+class function TExprEmitter.Where(const Query: IQuery; const Expression: IExpr;
   const Names: INameResolution; EntityType: PTypeInfo): IQuery;
 begin
   if Query = nil then
-    raise EExprLoweringError.Create('An expression must be lowered onto a query.');
+    raise EExprEmissionError.Create('An expression must be emitted onto a query.');
   var Ctx: TEmitCtx;
   Ctx.Names := Names;
   Ctx.EntityType := EntityType;
@@ -472,7 +472,7 @@ begin
   Result := Query;
 end;
 
-class function TExprLowering.Apply<T>(const Query: IQuery;
+class function TExprEmitter.Apply<T>(const Query: IQuery;
   const Spec: TSpecification<T>; const Names: INameResolution): IQuery;
 begin
   Result := Where(Query, Spec.Filter, Names, TypeInfo(T));
@@ -520,7 +520,7 @@ end;
 function TInMemoryRepository<T>.NewQuery: IQuery;
 begin
   if FBase <> nil then
-    // A clone, because lowering adds clauses: applying rule after rule to the
+    // A clone, because emission adds clauses: applying rule after rule to the
     // caller's own query would accumulate them.
     Result := FBase.Clone
   else
@@ -533,7 +533,7 @@ begin
   if FPlans.TryGetValue(K, Result) then
     Exit;
 
-  var Q := TExprLowering.Apply<T>(NewQuery, Spec, FNames);
+  var Q := TExprEmitter.Apply<T>(NewQuery, Spec, FNames);
   // Compile is where the lane checks what it can execute, and where it raises if
   // it cannot. Deliberately uncaught.
   Result := TInMemory.Compile<T>(Q);

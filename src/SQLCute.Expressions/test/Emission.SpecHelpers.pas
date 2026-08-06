@@ -1,4 +1,4 @@
-﻿unit Lowering.SpecHelpers;
+﻿unit Emission.SpecHelpers;
 
 {
   Shared harness for the emitter specs: lower an expression, read the clause list
@@ -58,13 +58,13 @@ function TriName(V: TTri): string;
 function Leaf(const Name: string): TExpr;
 
 /// <summary>
-///   Lowers <c>E</c> onto a fresh query. No FROM clause: the in-memory lane takes
+///   Emits <c>E</c> onto a fresh query. No FROM clause: the in-memory lane takes
 ///   its source as a parameter, so nothing here needs to invent a table name.
 /// </summary>
-function Lower(const E: IExpr): IQuery;
+function Emit(const E: IExpr): IQuery;
 
-/// <summary>Lowers <c>E</c> onto a query with a FROM, for the scenarios that read SQL.</summary>
-function LowerFrom(const Table: string; const E: IExpr): IQuery;
+/// <summary>Emits <c>E</c> onto a query with a FROM, for the scenarios that read SQL.</summary>
+function EmitFrom(const Table: string; const E: IExpr): IQuery;
 
 /// <summary>The WHERE-family clauses of <c>Q</c>, in order.</summary>
 function WhereClausesOf(const Q: IQuery): TArray<TAbstractClause>;
@@ -192,14 +192,14 @@ begin
   Result := A[I];
 end;
 
-function Lower(const E: IExpr): IQuery;
+function Emit(const E: IExpr): IQuery;
 begin
-  Result := TExprLowering.Where(TQuery.New, E);
+  Result := TExprEmitter.Where(TQuery.New, E);
 end;
 
-function LowerFrom(const Table: string; const E: IExpr): IQuery;
+function EmitFrom(const Table: string; const E: IExpr): IQuery;
 begin
-  Result := TExprLowering.Where(TQuery.New.From(Table), E);
+  Result := TExprEmitter.Where(TQuery.New.From(Table), E);
 end;
 
 function IsWhereFamily(C: TAbstractClause): Boolean;
