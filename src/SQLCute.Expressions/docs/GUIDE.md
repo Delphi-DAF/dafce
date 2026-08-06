@@ -66,7 +66,7 @@ var Q := TExprEmitter.Apply<TProduct>(TQuery.New.From('Product'), Spec);
 
 ## The name-resolution seam
 
-By default a member becomes a column verbatim, which is already the shipped convention. Supply an `INameResolution` to change that, and the emission asks it once per member, at emit time:
+By default a member becomes a column verbatim, which is already the shipped convention. Supply an `INameResolver` to change that, and the emission asks it once per member, at emit time:
 
 ```pascal
 TExprEmitter.Where(Q, MyExpr, MyNames, TypeInfo(TProduct));

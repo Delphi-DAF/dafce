@@ -382,7 +382,7 @@ type
   ///   whatever the ORM turns out to be, it supplies its own implementation and
   ///   nothing here changes.
   /// </remarks>
-  INameResolution = interface
+  INameResolver = interface
     ['{E8A1C704-3D62-4F95-B08A-71C3D65E24BF}']
     /// <summary>The column backing <c>Member</c> of <c>EntityType</c>.</summary>
     function ColumnFor(EntityType: PTypeInfo; const Member: string): string;
@@ -402,17 +402,20 @@ type
   ///   pass-through is: it is visible, replaceable, and wrong in the same way
   ///   for everybody rather than on one back-end only.
   /// </remarks>
-  TDefaultNameResolution = class(TInterfacedObject, INameResolution)
+  TDefaultNameResolver = class(TInterfacedObject, INameResolver)
+  strict private
+    class var FInstance: INameResolver;
   public
+    /// <summary>
+    ///   The shared default strategy. One instance, because the strategy is
+    ///   stateless — every caller supplying none of its own observes this same
+    ///   object. Held here rather than in a unit variable so the state belongs
+    ///   to the type that answers for it.
+    /// </summary>
+    class function Instance: INameResolver; static;
     function ColumnFor(EntityType: PTypeInfo; const Member: string): string;
     function TableFor(EntityType: PTypeInfo): string;
   end;
-
-/// <summary>
-///   The shared default strategy. Stateless, so one instance serves every
-///   caller that supplies none of its own.
-/// </summary>
-function DefaultNameResolution: INameResolution;
 
 type
   // ---------------------------------------------------------------------------
@@ -441,11 +444,11 @@ type
   /// </summary>
   TEntityExpr<T> = record
   strict private
-    FNames: INameResolution;
-    function Names: INameResolution;
+    FResolver: INameResolver;
+    function Resolver: INameResolver;
   public
     /// <summary>Binds the proxy to a strategy; <c>nil</c> means the defaults.</summary>
-    constructor Create(const ANames: INameResolution);
+    constructor Create(const AResolver: INameResolver);
     /// <summary>
     ///   The leaf for <c>Member</c>, carrying the property name as RTTI spells
     ///   it. Raises when the member resolves to nothing.
@@ -456,21 +459,6 @@ type
     /// <summary>The table <c>T</c> resolves to, through the same strategy.</summary>
     function Table: string;
   end;
-
-/// <summary>
-///   The property or field of <c>EntityType</c> named <c>Member</c>, or
-///   <c>nil</c>. Properties win over fields, matching the in-memory lane's own
-///   resolution order.
-/// </summary>
-function FindEntityMember(EntityType: PTypeInfo; const Member: string): TRttiMember;
-
-/// <summary>
-///   The property name as RTTI spells it, raising <c>EExprMemberError</c> when
-///   the member resolves to nothing. Both authoring paths — the runtime proxy and
-///   a metamodel leaf — go through here, so neither can disagree with the other
-///   about casing, and both fail at the same point for the same reason.
-/// </summary>
-function ResolvedMemberName(EntityType: PTypeInfo; const Member: string): string;
 
 type
   // ---------------------------------------------------------------------------
@@ -629,6 +617,20 @@ type
     /// </summary>
     function List(const Spec: TSpecification<T>): TArray<T>;
   end;
+
+// Interface-section under protest, not by choice: Delphi rejects E2506 — "method
+// of parameterized type declared in interface section must not use local symbol"
+// — for a unit-level routine that a generic method declared above references.
+// TEntityExpr<T> and TPropExpr<T> both reach ResolvedMemberName. There is no
+// visibility that expresses "public only to the generics of this unit".
+
+/// <summary>
+///   The property name as RTTI spells it, raising <c>EExprMemberError</c> when
+///   the member resolves to nothing. Both authoring paths — the runtime proxy and
+///   a metamodel leaf — go through here, so neither can disagree with the other
+///   about casing, and both fail at the same point for the same reason.
+/// </summary>
+function ResolvedMemberName(EntityType: PTypeInfo; const Member: string): string;
 
 implementation
 
@@ -1015,16 +1017,16 @@ begin
   end;
 end;
 
-{ TDefaultNameResolution }
+{ TDefaultNameResolver }
 
-function TDefaultNameResolution.ColumnFor(EntityType: PTypeInfo; const Member: string): string;
+function TDefaultNameResolver.ColumnFor(EntityType: PTypeInfo; const Member: string): string;
 begin
   // Identity, which is already the shipped convention: the in-memory lane's
   // TRttiAccessors resolves a column name against a property of the same name.
   Result := Member;
 end;
 
-function TDefaultNameResolution.TableFor(EntityType: PTypeInfo): string;
+function TDefaultNameResolver.TableFor(EntityType: PTypeInfo): string;
 begin
   Result := _T.NameOf(EntityType);
   // The leading T is stripped only when what follows is upper case, i.e. when
@@ -1035,14 +1037,11 @@ begin
     Result := Copy(Result, 2, MaxInt);
 end;
 
-var
-  GDefaultNames: INameResolution;
-
-function DefaultNameResolution: INameResolution;
+class function TDefaultNameResolver.Instance: INameResolver;
 begin
-  if GDefaultNames = nil then
-    GDefaultNames := TDefaultNameResolution.Create;
-  Result := GDefaultNames;
+  if FInstance = nil then
+    FInstance := TDefaultNameResolver.Create;
+  Result := FInstance;
 end;
 
 { Member resolution }
@@ -1080,17 +1079,17 @@ end;
 
 { TEntityExpr<T> }
 
-constructor TEntityExpr<T>.Create(const ANames: INameResolution);
+constructor TEntityExpr<T>.Create(const AResolver: INameResolver);
 begin
-  FNames := ANames;
+  FResolver := AResolver;
 end;
 
-function TEntityExpr<T>.Names: INameResolution;
+function TEntityExpr<T>.Resolver: INameResolver;
 begin
-  if FNames <> nil then
-    Result := FNames
+  if FResolver <> nil then
+    Result := FResolver
   else
-    Result := DefaultNameResolution;
+    Result := TDefaultNameResolver.Instance;
 end;
 
 function TEntityExpr<T>.Prop(const Member: string): TExpr;
@@ -1103,12 +1102,12 @@ end;
 
 function TEntityExpr<T>.Column(const Member: string): string;
 begin
-  Result := Names.ColumnFor(TypeInfo(T), ResolvedMemberName(TypeInfo(T), Member));
+  Result := Resolver.ColumnFor(TypeInfo(T), ResolvedMemberName(TypeInfo(T), Member));
 end;
 
 function TEntityExpr<T>.Table: string;
 begin
-  Result := Names.TableFor(TypeInfo(T));
+  Result := Resolver.TableFor(TypeInfo(T));
 end;
 
 { TPropExpr<T> }

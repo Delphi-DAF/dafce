@@ -104,18 +104,18 @@ type
     /// </summary>
     class function Where(const Query: IQuery; const Expression: IExpr): IQuery; overload; static;
     /// <summary>
-    ///   Same, resolving each member to its column through <c>Names</c> — the one
+    ///   Same, resolving each member to its column through <c>Resolver</c> — the one
     ///   place and the one time a column name is decided.
     /// </summary>
     class function Where(const Query: IQuery; const Expression: IExpr;
-      const Names: INameResolution; EntityType: PTypeInfo): IQuery; overload; static;
+      const Resolver: INameResolver; EntityType: PTypeInfo): IQuery; overload; static;
     /// <summary>
     ///   Emits a whole specification — filter, ordering and page — onto
     ///   <c>Query</c>. They travel together so a caller never has to remember to
     ///   apply the ordering separately from the rule it belongs to.
     /// </summary>
     class function Apply<T>(const Query: IQuery; const Spec: TSpecification<T>;
-      const Names: INameResolution = nil): IQuery; static;
+      const Resolver: INameResolver = nil): IQuery; static;
   end;
 
   /// <summary>
@@ -141,7 +141,7 @@ type
   TInMemoryRepository<T> = class(TInterfacedObject, IRepository<T>)
   strict private
     FSource: TEnumerable<T>;
-    FNames: INameResolution;
+    FResolver: INameResolver;
     FBase: IQuery;
     FPlans: TDictionary<string, IInMemoryPlan<T>>;
     FCompiled: Integer;
@@ -149,7 +149,7 @@ type
     function PlanFor(const Spec: TSpecification<T>): IInMemoryPlan<T>;
   public
     constructor Create(const Source: TEnumerable<T>;
-      const Names: INameResolution = nil); overload;
+      const Resolver: INameResolver = nil); overload;
     /// <summary>
     ///   Scopes the repository to <c>BaseQuery</c>: every specification is emitted
     ///   onto a clone of it, so the caller's query is never mutated. It is also
@@ -157,7 +157,7 @@ type
     ///   this adapter, since the expression model cannot express one.
     /// </summary>
     constructor Create(const Source: TEnumerable<T>; const BaseQuery: IQuery;
-      const Names: INameResolution = nil); overload;
+      const Resolver: INameResolver = nil); overload;
     destructor Destroy; override;
 
     function List(const Spec: TSpecification<T>): TArray<T>;
@@ -171,11 +171,11 @@ type
   end;
 
 /// <summary>
-///   The column a member resolves to: through <c>Names</c> when one is supplied,
+///   The column a member resolves to: through <c>Resolver</c> when one is supplied,
 ///   verbatim otherwise. The single point at which persistence vocabulary enters,
 ///   which is why it is one function and not a rule repeated per call site.
 /// </summary>
-function ColumnFor(const Names: INameResolution; EntityType: PTypeInfo;
+function ColumnFor(const Resolver: INameResolver; EntityType: PTypeInfo;
   const Member: string): string;
 
 implementation
@@ -184,7 +184,7 @@ type
   /// How a member becomes a column while walking the tree. No strategy means
   /// identity, which is the shipped convention.
   TEmitCtx = record
-    Names: INameResolution;
+    Resolver: INameResolver;
     EntityType: PTypeInfo;
     function ColumnOf(const Node: IExpr): string;
     function ValueOf(const Node: IExpr): Variant;
@@ -205,13 +205,13 @@ const
 
 { ColumnFor }
 
-function ColumnFor(const Names: INameResolution; EntityType: PTypeInfo;
+function ColumnFor(const Resolver: INameResolver; EntityType: PTypeInfo;
   const Member: string): string;
 begin
-  if Names = nil then
+  if Resolver = nil then
     Result := Member
   else
-    Result := Names.ColumnFor(EntityType, Member);
+    Result := Resolver.ColumnFor(EntityType, Member);
 end;
 
 { TEmitCtx }
@@ -221,7 +221,7 @@ begin
   if (Node = nil) or (Node.Kind <> TExprKind.Member) then
     raise EExprEmissionError.Create(
       'The left-hand side of a comparison must be a member reference.');
-  Result := ColumnFor(Names, EntityType, (Node as IMemberExpr).Name);
+  Result := ColumnFor(Resolver, EntityType, (Node as IMemberExpr).Name);
 end;
 
 function TEmitCtx.ValueOf(const Node: IExpr): Variant;
@@ -461,25 +461,25 @@ begin
 end;
 
 class function TExprEmitter.Where(const Query: IQuery; const Expression: IExpr;
-  const Names: INameResolution; EntityType: PTypeInfo): IQuery;
+  const Resolver: INameResolver; EntityType: PTypeInfo): IQuery;
 begin
   if Query = nil then
     raise EExprEmissionError.Create('An expression must be emitted onto a query.');
   var Ctx: TEmitCtx;
-  Ctx.Names := Names;
+  Ctx.Resolver := Resolver;
   Ctx.EntityType := EntityType;
   EmitTop(Expression, Query, Ctx);
   Result := Query;
 end;
 
 class function TExprEmitter.Apply<T>(const Query: IQuery;
-  const Spec: TSpecification<T>; const Names: INameResolution): IQuery;
+  const Spec: TSpecification<T>; const Resolver: INameResolver): IQuery;
 begin
-  Result := Where(Query, Spec.Filter, Names, TypeInfo(T));
+  Result := Where(Query, Spec.Filter, Resolver, TypeInfo(T));
 
   for var Term in Spec.Order do
   begin
-    var Col := ColumnFor(Names, TypeInfo(T), Term.Member);
+    var Col := ColumnFor(Resolver, TypeInfo(T), Term.Member);
     if Term.Descending then
       Result.OrderByDesc(Col)
     else
@@ -496,18 +496,18 @@ end;
 { TInMemoryRepository<T> }
 
 constructor TInMemoryRepository<T>.Create(const Source: TEnumerable<T>;
-  const Names: INameResolution);
+  const Resolver: INameResolver);
 begin
   inherited Create;
   FSource := Source;
-  FNames := Names;
+  FResolver := Resolver;
   FPlans := TDictionary<string, IInMemoryPlan<T>>.Create;
 end;
 
 constructor TInMemoryRepository<T>.Create(const Source: TEnumerable<T>;
-  const BaseQuery: IQuery; const Names: INameResolution);
+  const BaseQuery: IQuery; const Resolver: INameResolver);
 begin
-  Create(Source, Names);
+  Create(Source, Resolver);
   FBase := BaseQuery;
 end;
 
@@ -533,7 +533,7 @@ begin
   if FPlans.TryGetValue(K, Result) then
     Exit;
 
-  var Q := TExprEmitter.Apply<T>(NewQuery, Spec, FNames);
+  var Q := TExprEmitter.Apply<T>(NewQuery, Spec, FResolver);
   // Compile is where the lane checks what it can execute, and where it raises if
   // it cannot. Deliberately uncaught.
   Result := TInMemory.Compile<T>(Q);

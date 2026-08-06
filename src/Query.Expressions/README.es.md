@@ -29,7 +29,7 @@ Ese valor es un objeto de dominio: se puede afirmar en un test unitario, pasar p
 | `Prop(Name)` | Una referencia a miembro por nombre — el camino siempre disponible |
 | `TEntityExpr<T>` | Proxy RTTI: los miembros de una entidad como hojas, validados donde se escriben |
 | `TPropExpr<T>` | La hoja del metamodelo **opcional**, para autoría comprobada en compilación |
-| `INameResolution` | La única costura: miembro → columna, tipo → tabla |
+| `INameResolver` | La única costura: miembro → columna, tipo → tabla |
 | `TSpecification<T>` | Una regla reutilizable: filtro + orden + paginación |
 | `IRepository<T>` | El puerto; `T` **no** está restringido a ninguna clase base |
 | `ExprToText` | Una representación canónica — para aserciones, claves de caché y diagnóstico |
@@ -108,8 +108,8 @@ Sigue siendo una **opción**. Ambas formas producen nodos idénticos, se combina
 Una sola estrategia responde a las dos preguntas de nombres, y el mapeo más rico es del ORM:
 
 ```pascal
-INameResolution.ColumnFor(EntityType, Member)   // por defecto: el nombre del miembro
-INameResolution.TableFor(EntityType)            // por defecto: el nombre del tipo sin la T inicial
+INameResolver.ColumnFor(EntityType, Member)   // por defecto: el nombre del miembro
+INameResolver.TableFor(EntityType)            // por defecto: el nombre del tipo sin la T inicial
 ```
 
 El valor por defecto de la tabla quita la `T` solo cuando le sigue una mayúscula, así que `TProduct` → `Product` mientras `Thing` se deja en paz. Sin pluralización y sin conversión de caso: eso es *política* de nombres, y adivinarla chocaría con lo que decida el ORM mientras parece una funcionalidad.

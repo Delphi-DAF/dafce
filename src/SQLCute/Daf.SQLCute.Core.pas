@@ -1567,11 +1567,8 @@ end;
 
 { Factory registration }
 
-
-{ Factory registration }
-
 initialization
-  RegisterIQueryFactory(function: IQuery
+  TQuery.RegisterFactory(function: IQuery
     begin
       Result := TQueryImpl.Create;
     end);

@@ -117,10 +117,6 @@ type
 
 // --- Three-valued logic combinators (Decision 10) ---------------------------
 function BoolToTri(B: Boolean): TTriState;
-function TriNot(A: TTriState): TTriState;
-function TriAnd(const A, B: TTriState): TTriState;
-function TriOr(const A, B: TTriState): TTriState;
-
 // --- Value helpers (shared with the generic half) ---------------------------
 /// <summary>Converts a SQLCute Variant binding to TValue; NULL/empty → empty TValue.</summary>
 function VariantToValue(const V: Variant): TValue;
@@ -128,10 +124,6 @@ function VariantToValue(const V: Variant): TValue;
 function CompareValues(const L, R: TValue): Integer;
 /// <summary>Order comparison honoring direction and NULL policy (Decision 10/12).</summary>
 function CompareForOrder(const L, R: TValue; const Spec: TOrderSpec): Integer;
-/// <summary>SQL LIKE matcher: <c>%</c> = any sequence, <c>_</c> = any single char.</summary>
-function SqlLikeMatch(const S, P: string): Boolean;
-/// <summary>The bare (unqualified) column name — drops any <c>table.</c> prefix.</summary>
-function BareColumn(const Column: string): string;
 /// <summary>
 ///   Canonical match key for a column vs a Delphi member: bare, lower-cased and
 ///   underscore-stripped, so SQL <c>user_id</c> matches member <c>UserId</c>

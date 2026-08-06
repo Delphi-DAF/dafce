@@ -191,12 +191,18 @@ type
       const Query: IQuery; const Context: IQueryContext): IQueryable<TResult>; overload; static;
   end;
 
+// These three stay in the interface section under protest, and it is not a style
+// choice: Delphi rejects E2506 — "method of parameterized type declared in
+// interface section must not use local symbol" — for any unit-level routine a
+// generic method declared above references. TResultWriter reaches AssignMember,
+// TInMemory.Project reaches ExecuteToRows, and both reach DistinctColumns. There
+// is no visibility that expresses "public only to the generics of this unit".
+
 /// <summary>
 ///   Assigns a column value to a result-class member, coercing the <c>TValue</c>
 ///   to the member's type. A NULL source leaves the member at its default (a
 ///   <c>TNullable</c> member stays <c>IsNull</c>); a <c>TNullable&lt;X&gt;</c>
-///   member is built through its <c>Implicit(X)</c> operator. Declared here (not
-///   implementation-local) so the generic <c>TResultWriter</c> can reference it.
+///   member is built through its <c>Implicit(X)</c> operator.
 /// </summary>
 procedure AssignMember(const Instance: TObject; M: TRttiMember; const Source: TValue);
 
@@ -206,8 +212,7 @@ function DistinctColumns(const C: TCompiledQuery): TArray<string>;
 /// <summary>
 ///   Runs a multi-source query end-to-end against the context — FROM + JOINs,
 ///   WHERE, GROUP BY, projection and set operations (UNION/…) — yielding the
-///   final projected <c>IRow</c>s. Declared here (not implementation-local) so
-///   the generic context <c>Project</c> can reference it.
+///   final projected <c>IRow</c>s.
 /// </summary>
 function ExecuteToRows(const Query: IQuery; const Context: IQueryContext): IQueryable<IRow>;
 

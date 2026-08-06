@@ -397,28 +397,40 @@ type
   end;
 
   // ---------------------------------------------------------------------------
-  //  TQuery  —  factory
+  //  TQuery  —  the factory, and the seam that feeds it
   // ---------------------------------------------------------------------------
-
-  /// <summary>
-  /// Factory class providing the TQuery.New entry point.
-  /// </summary>
-  TQuery = class
-  public
-    /// <summary>Creates a new, empty query builder (ref-counted).</summary>
-    class function New: IQuery; static;
-  end;
-
-// ---------------------------------------------------------------------------
-//  Query factory
-// ---------------------------------------------------------------------------
 
   /// <summary>Factory function type used to decouple IQuery creation from Abstractions.</summary>
   TIQueryFactory = reference to function: IQuery;
 
-/// <summary>Registers the factory function that TQuery.New delegates to.
-/// Called automatically by Daf.SQLCute.Core in its initialization section.</summary>
+  /// <summary>
+  /// Factory class providing the TQuery.New entry point, and the registration
+  /// that feeds it.
+  /// </summary>
+  /// <remarks>
+  /// Registering and creating are two halves of one thing, so they live on one
+  /// type and the factory is held here rather than in a unit variable — the
+  /// state belongs to whoever answers for it.
+  /// </remarks>
+  TQuery = class
+  strict private
+    class var FFactory: TIQueryFactory;
+  public
+    /// <summary>Creates a new, empty query builder (ref-counted).</summary>
+    class function New: IQuery; static;
+    /// <summary>Registers the factory function that TQuery.New delegates to.
+    /// Called automatically by Daf.SQLCute.Core in its initialization section.</summary>
+    class procedure RegisterFactory(const AFactory: TIQueryFactory); static;
+  end;
+
+/// <summary>Registers the factory function that TQuery.New delegates to.</summary>
+/// <remarks>
+/// Kept because it shipped: a consumer who registered an IQuery implementation of
+/// their own against v1.6.0 or earlier calls this. It forwards, so both entry
+/// points are indistinguishable, and it goes away in the next major.
+/// </remarks>
 procedure RegisterIQueryFactory(const AFactory: TIQueryFactory);
+  deprecated 'Use TQuery.RegisterFactory';
 
 
 // ---------------------------------------------------------------------------
@@ -430,9 +442,6 @@ function ParseWhereOp(const Op: string): TWhereOp;
 
 
 implementation
-
-var
-  FIQueryFactory: TIQueryFactory;
 
 { TSQLResult }
 
@@ -475,23 +484,28 @@ begin
   raise EArgumentException.CreateFmt('Unknown SQL operator: "%s"', [Op]);
 end;
 
-{ RegisterIQueryFactory }
+{ TQuery }
 
-procedure RegisterIQueryFactory(const AFactory: TIQueryFactory);
+class procedure TQuery.RegisterFactory(const AFactory: TIQueryFactory);
 begin
   if not Assigned(AFactory) then
     raise EInvalidOpException.Create('Argument Factory cannot be nil');
-  FIQueryFactory := AFactory;
+  FFactory := AFactory;
 end;
-
-{ TQuery }
 
 class function TQuery.New: IQuery;
 begin
-  if not Assigned(FIQueryFactory) then
+  if not Assigned(FFactory) then
     raise EInvalidOpException.Create(
       'IQuery factory not registered. Ensure Daf.SQLCute.Core is linked.');
-  Result := FIQueryFactory();
+  Result := FFactory();
+end;
+
+{ RegisterIQueryFactory — the deprecated forwarder }
+
+procedure RegisterIQueryFactory(const AFactory: TIQueryFactory);
+begin
+  TQuery.RegisterFactory(AFactory);
 end;
 
 end.

@@ -38,7 +38,7 @@ type
   ///   What an ORM's strategy would look like from here: richer names for both
   ///   questions, plugged into the one seam.
   /// </summary>
-  TMappedNames = class(TInterfacedObject, INameResolution)
+  TMappedResolver = class(TInterfacedObject, INameResolver)
   public
     function ColumnFor(EntityType: PTypeInfo; const Member: string): string;
     function TableFor(EntityType: PTypeInfo): string;
@@ -67,9 +67,9 @@ uses
   System.Variants,
   Daf.MiniSpec;
 
-{ TMappedNames }
+{ TMappedResolver }
 
-function TMappedNames.ColumnFor(EntityType: PTypeInfo; const Member: string): string;
+function TMappedResolver.ColumnFor(EntityType: PTypeInfo; const Member: string): string;
 begin
   if SameText(Member, 'Price') then
     Result := 'price_eur'
@@ -77,7 +77,7 @@ begin
     Result := Member;
 end;
 
-function TMappedNames.TableFor(EntityType: PTypeInfo): string;
+function TMappedResolver.TableFor(EntityType: PTypeInfo): string;
 begin
   Result := 'products';
 end;
@@ -143,7 +143,7 @@ Feature Expression authoring @expressions @authoring
         var Plain := TEntityExpr<TProduct>.Create(nil);
         W.DefaultColumn := Plain.Column('Price');
 
-        var Mapped := TEntityExpr<TProduct>.Create(TMappedNames.Create);
+        var Mapped := TEntityExpr<TProduct>.Create(TMappedResolver.Create);
         W.MappedColumn := Mapped.Column('Price');
       end)
     .&Then('the default is the property name unchanged, and the strategy overrides it',
@@ -159,7 +159,7 @@ Feature Expression authoring @expressions @authoring
       begin
         W.DefaultTable := TEntityExpr<TProduct>.Create(nil).Table;
         W.UnprefixedTable := TEntityExpr<Thing>.Create(nil).Table;
-        W.MappedTable := TEntityExpr<TProduct>.Create(TMappedNames.Create).Table;
+        W.MappedTable := TEntityExpr<TProduct>.Create(TMappedResolver.Create).Table;
       end)
     .&Then('the leading T goes, nothing else is touched, and a strategy wins',
       procedure(W: TAuthoringWorld)
@@ -191,6 +191,28 @@ Feature Expression authoring @expressions @authoring
           begin
             TEntityExpr<TProduct>.Create(nil).Prop('Pricee');
           end).ToHaveMessage('TProduct');
+      end)
+
+// The default strategy carries no state, so duplicating it would be waste — but
+// "shared" only stays true if nothing hands out a fresh one. That is the property
+// a refactor of the accessor could break silently, since a per-call instance
+// resolves names identically and every other spec would still pass.
+.Rule('The default resolver is owned by its own type')
+
+  .Scenario('DefaultResolverIsOneSharedInstance')
+    .&Then('reading Instance twice yields the same object',
+      procedure(W: TAuthoringWorld)
+      begin
+        Expect(TDefaultNameResolver.Instance = TDefaultNameResolver.Instance).ToBeTrue;
+      end)
+    .&Then('and a proxy built with no strategy resolves through that same instance',
+      procedure(W: TAuthoringWorld)
+      begin
+        // Same answers as the shared instance, on both questions it owns.
+        var Shared := TDefaultNameResolver.Instance;
+        Expect(TEntityExpr<TProduct>.Create(nil).Table)
+          .ToEqual(Shared.TableFor(TypeInfo(TProduct)));
+        Expect(Shared.ColumnFor(TypeInfo(TProduct), 'Price')).ToEqual('Price');
       end);
 
 end.

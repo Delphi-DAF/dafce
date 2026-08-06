@@ -29,7 +29,7 @@ That value is a domain object. It can be asserted in a unit test, passed across 
 | `Prop(Name)` | A member reference by name — the always-available path |
 | `TEntityExpr<T>` | RTTI proxy: an entity's members as leaves, validated where written |
 | `TPropExpr<T>` | The **optional** metamodel leaf, for compile-time-checked authoring |
-| `INameResolution` | The one seam: member → column, type → table |
+| `INameResolver` | The one seam: member → column, type → table |
 | `TSpecification<T>` | A reusable rule: filter + ordering + paging |
 | `IRepository<T>` | The port; `T` is constrained to **no** base class |
 | `ExprToText` | A canonical rendering — for assertions, cache keys and diagnostics |
@@ -108,8 +108,8 @@ It stays an **option**. Both forms produce identical nodes, mix freely in one ex
 One strategy answers both naming questions, and richer mapping is the ORM's:
 
 ```pascal
-INameResolution.ColumnFor(EntityType, Member)   // default: the member name
-INameResolution.TableFor(EntityType)            // default: type name minus a leading T
+INameResolver.ColumnFor(EntityType, Member)   // default: the member name
+INameResolver.TableFor(EntityType)            // default: type name minus a leading T
 ```
 
 The table default strips `T` only when an upper-case letter follows, so `TProduct` → `Product` while `Thing` is left alone. No pluralization, no case conversion — those are naming *policy*, and guessing them would collide with whatever the ORM decides while looking like a feature.

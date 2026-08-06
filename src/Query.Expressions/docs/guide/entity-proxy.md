@@ -36,10 +36,10 @@ Not a column name. Three independent reasons:
 
 ## One strategy, two questions
 
-`INameResolution` answers both naming questions, because they are the same kind of question:
+`INameResolver` answers both naming questions, because they are the same kind of question:
 
 ```pascal
-INameResolution = interface
+INameResolver = interface
   function ColumnFor(EntityType: PTypeInfo; const Member: string): string;
   function TableFor(EntityType: PTypeInfo): string;
 end;
@@ -57,18 +57,18 @@ The `T` is stripped only when an upper-case letter follows, so `TProduct` → `P
 Supplying your own is one class:
 
 ```pascal
-TMappedNames = class(TInterfacedObject, INameResolution)
+TMappedResolver = class(TInterfacedObject, INameResolver)
 public
   function ColumnFor(EntityType: PTypeInfo; const Member: string): string;
   function TableFor(EntityType: PTypeInfo): string;
 end;
 
-function TMappedNames.ColumnFor(EntityType: PTypeInfo; const Member: string): string;
+function TMappedResolver.ColumnFor(EntityType: PTypeInfo; const Member: string): string;
 begin
   if SameText(Member, 'Price') then Result := 'price_eur' else Result := Member;
 end;
 
-function TMappedNames.TableFor(EntityType: PTypeInfo): string;
+function TMappedResolver.TableFor(EntityType: PTypeInfo): string;
 begin
   Result := 'products';
 end;
@@ -77,7 +77,7 @@ end;
 Then either ask the proxy:
 
 ```pascal
-var P := TEntityExpr<TProduct>.Create(TMappedNames.Create);
+var P := TEntityExpr<TProduct>.Create(TMappedResolver.Create);
 P.Column('Price');    // 'price_eur'
 P.Table;              // 'products'
 ```
@@ -85,8 +85,8 @@ P.Table;              // 'products'
 …or hand the strategy to the emission, which is where a column name is actually needed:
 
 ```pascal
-TExprEmitter.Where(Q, MyExpr, TMappedNames.Create, TypeInfo(TProduct));
-TExprEmitter.Apply<TProduct>(Q, Spec, TMappedNames.Create);
+TExprEmitter.Where(Q, MyExpr, TMappedResolver.Create, TypeInfo(TProduct));
+TExprEmitter.Apply<TProduct>(Q, Spec, TMappedResolver.Create);
 ```
 
 ---
@@ -95,7 +95,7 @@ TExprEmitter.Apply<TProduct>(Q, Spec, TMappedNames.Create);
 
 It is a seam for names, not a mapping model. Keys, lock columns, attributes, inheritance mapping and instance-driven DML are all ORM metadata, and the ORM is not designed yet. Baking a mapping model in here would prejudge that design from the wrong layer.
 
-So this layer commits to the seam: whatever the ORM turns out to be, it supplies its own `INameResolution` and nothing here changes.
+So this layer commits to the seam: whatever the ORM turns out to be, it supplies its own `INameResolver` and nothing here changes.
 
 ---
 

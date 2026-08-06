@@ -36,10 +36,10 @@ No un nombre de columna. Tres razones independientes:
 
 ## Una estrategia, dos preguntas
 
-`INameResolution` responde a las dos preguntas de nombres, porque son la misma clase de pregunta:
+`INameResolver` responde a las dos preguntas de nombres, porque son la misma clase de pregunta:
 
 ```pascal
-INameResolution = interface
+INameResolver = interface
   function ColumnFor(EntityType: PTypeInfo; const Member: string): string;
   function TableFor(EntityType: PTypeInfo): string;
 end;
@@ -57,18 +57,18 @@ La `T` se quita solo cuando le sigue una mayúscula, así que `TProduct` → `Pr
 Aportar la tuya es una clase:
 
 ```pascal
-TMappedNames = class(TInterfacedObject, INameResolution)
+TMappedResolver = class(TInterfacedObject, INameResolver)
 public
   function ColumnFor(EntityType: PTypeInfo; const Member: string): string;
   function TableFor(EntityType: PTypeInfo): string;
 end;
 
-function TMappedNames.ColumnFor(EntityType: PTypeInfo; const Member: string): string;
+function TMappedResolver.ColumnFor(EntityType: PTypeInfo; const Member: string): string;
 begin
   if SameText(Member, 'Price') then Result := 'price_eur' else Result := Member;
 end;
 
-function TMappedNames.TableFor(EntityType: PTypeInfo): string;
+function TMappedResolver.TableFor(EntityType: PTypeInfo): string;
 begin
   Result := 'products';
 end;
@@ -77,7 +77,7 @@ end;
 Luego, o se le pregunta al proxy:
 
 ```pascal
-var P := TEntityExpr<TProduct>.Create(TMappedNames.Create);
+var P := TEntityExpr<TProduct>.Create(TMappedResolver.Create);
 P.Column('Price');    // 'price_eur'
 P.Table;              // 'products'
 ```
@@ -85,8 +85,8 @@ P.Table;              // 'products'
 …o se le entrega la estrategia a la emisión, que es donde de verdad hace falta un nombre de columna:
 
 ```pascal
-TExprEmitter.Where(Q, MyExpr, TMappedNames.Create, TypeInfo(TProduct));
-TExprEmitter.Apply<TProduct>(Q, Spec, TMappedNames.Create);
+TExprEmitter.Where(Q, MyExpr, TMappedResolver.Create, TypeInfo(TProduct));
+TExprEmitter.Apply<TProduct>(Q, Spec, TMappedResolver.Create);
 ```
 
 ---
@@ -95,7 +95,7 @@ TExprEmitter.Apply<TProduct>(Q, Spec, TMappedNames.Create);
 
 Es una costura para nombres, no un modelo de mapeo. Claves, columnas de bloqueo, atributos, mapeo de herencia y DML dirigido por instancia son todos metadatos del ORM, y el ORM aún no está diseñado. Meter aquí un modelo de mapeo prejuzgaría ese diseño desde la capa equivocada.
 
-Así que esta capa se compromete con la costura: sea lo que sea el ORM, aportará su propia `INameResolution` y aquí no cambiará nada.
+Así que esta capa se compromete con la costura: sea lo que sea el ORM, aportará su propia `INameResolver` y aquí no cambiará nada.
 
 ---
 

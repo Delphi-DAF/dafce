@@ -66,7 +66,7 @@ var Q := TExprEmitter.Apply<TProduct>(TQuery.New.From('Product'), Spec);
 
 ## La costura de resolución de nombres
 
-Por defecto un miembro se convierte en columna tal cual, que es ya la convención vigente. Aporta una `INameResolution` para cambiarlo, y la emisión le pregunta una vez por miembro, en el momento de emitir:
+Por defecto un miembro se convierte en columna tal cual, que es ya la convención vigente. Aporta una `INameResolver` para cambiarlo, y la emisión le pregunta una vez por miembro, en el momento de emitir:
 
 ```pascal
 TExprEmitter.Where(Q, MyExpr, MyNames, TypeInfo(TProduct));
