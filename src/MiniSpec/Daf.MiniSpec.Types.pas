@@ -998,17 +998,36 @@ begin
 end;
 
 procedure TSpecItem.ExpandPlaceholders(const World: TObject);
+const
+  // A placeholder never continues a word: it opens at the start of the description
+  // or after a separator. The lookbehind is what tells `<Expected>` apart from the
+  // `<T>` of a generic type — `AsType<T>`, `TList<T>`, `IQueryable<T>` — which is
+  // ordinary prose in a suite that tests generic code and must be left alone.
+  //
+  // The boundary is asserted only BEFORE the placeholder, on purpose. A generic
+  // always carries its identifier glued to the `<`, so that side does the whole
+  // job; requiring one AFTER the `>` would cost legitimate steps like
+  // 'the <n>th attempt' or 'the <name>Model is loaded' their substitution, and
+  // silently. Nested generics (`TList<TList<T>>`) are caught here too: the inner
+  // `<T>` follows a letter.
+  PlaceholderPattern = '(?<![A-Za-z0-9_])<(\w+)>';
 begin
   var RttiCtx: TRttiContext;
-  var Regex := TRegEx.Create('<(\w+)>');
+  var Regex := TRegEx.Create(PlaceholderPattern);
   var RTTType := RttiCtx.GetType(World.ClassInfo) as TRttiInstanceType;
 
   for var Match in Regex.Matches(FDescription) do
   begin
     var PHName := Match.Groups[1].Value;
     var Field := RTTType.GetField(PHName);
+    // Still loud: a misspelled placeholder in an Outline would otherwise print
+    // garbage and pass. Only the diagnosis changed, to name both readings.
     if not Assigned(Field) then
-      raise Exception.CreateFmt('%s: %s not found in World', [FDescription, PHName]);
+      raise Exception.CreateFmt(
+        '%s: placeholder <%s> has no matching field in World %s. If it was meant ' +
+        'as a generic type, write it without the angle brackets — a placeholder is ' +
+        'recognised only when it does not continue a word.',
+        [FDescription, PHName, World.ClassName]);
     var ValueStr := Val2Str(Field.GetValue(World));
     FDescription := PlaceHolder(FDescription, PHName, ValueStr);
   end;

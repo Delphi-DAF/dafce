@@ -45,6 +45,7 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
 - **SQLCute**: `WhereIn` con un conjunto de valores **vacío** emitía `col IN ()`, sintácticamente inválido en casi cualquier motor, así que el fallo llegaba desde el servidor y lejos de la llamada que lo causó. Un conjunto vacío es la disyunción vacía, así que ahora `WhereIn` no casa ninguna fila y `WhereNotIn` casa todas — incluida aquella cuya columna es NULL, donde antes el carril en memoria respondía *desconocido* y descartaba la fila de ambos. Los dos back-ends dan ya la misma respuesta. Afecta también a `OrWhereIn`/`OrWhereNotIn` y a `IsIn([])` de la capa de expresiones
 - **Commons**: `TMacrosList.GetValueFromIndex` no asignaba `Result`; toda lectura de macro devolvía cadena vacía
+- **MiniSpec**: Un tipo genérico en la descripción de un step —`AsType<T>`, `TList<T>`— se leía como placeholder de Scenario Outline y el step fallaba con `T not found in World`, apuntando al World en lugar de al texto. Un placeholder nunca continúa una palabra, así que ahora solo se reconoce cuando no va pegado a un identificador; los `<Expected>` de un Outline siguen expandiendo igual, incluso tras coma o paréntesis. Un placeholder que no casa con ningún campo sigue siendo error, y el mensaje nombra las dos lecturas posibles
 
 ## [1.6.0] - 2026-07-20
 
