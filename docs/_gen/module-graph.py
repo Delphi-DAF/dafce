@@ -233,6 +233,14 @@ def render(graph, lang):
     return "\n".join(lines)
 
 
+def normalized(text: str) -> str:
+    """.gitattributes declares `*.md text eol=crlf`, so a fresh checkout — the CI
+    runner included — hands us CRLF while this script writes LF. Comparing the raw
+    bytes would fail on every clean clone and say the graph is stale when it is
+    identical. Line endings are git's business, not the graph's."""
+    return text.replace("\r\n", "\n")
+
+
 def main():
     check = "--check" in sys.argv
     graph = read_graph()
@@ -242,7 +250,7 @@ def main():
         content = render(graph, lang)
         if check:
             current = target.read_text(encoding="utf-8") if target.exists() else ""
-            if current != content:
+            if normalized(current) != normalized(content):
                 stale.append(target.relative_to(ROOT))
         else:
             target.parent.mkdir(parents=True, exist_ok=True)
