@@ -31,8 +31,10 @@
 requires
   rtl,
   Daf.Commons,
-  Daf.Configuration,
+  Daf.Configuration.Abstractions,
   Daf.DependencyInjection.Abstractions,
+  Daf.DependencyInjection,
+  Daf.Hosting.Abstractions,
   Daf.Hosting;
 
 contains

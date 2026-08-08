@@ -1,0 +1,27 @@
+name: Package invariants
+
+# Runs on any source change, not just .dpk: adding a `uses` to an existing unit
+# creates a dependency without touching a package file, and that is precisely the
+# drift this catches. Needs no Delphi — it reads the .dpk and .pas text.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'tools/check-packages.py'
+      - '.github/workflows/package-invariants.yml'
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tools/check-packages.py'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check package invariants
+        run: python3 tools/check-packages.py

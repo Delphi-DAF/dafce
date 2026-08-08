@@ -29,10 +29,7 @@
 
 requires
   rtl,
-  Daf.Commons,
-  Daf.Linq,
   Daf.SQLCute.Abstractions,
-  Daf.SQLCute,
   Daf.SQLCute.InMemory,
   Daf.Query.Expressions;
 

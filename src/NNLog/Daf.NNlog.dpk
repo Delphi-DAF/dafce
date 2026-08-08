@@ -32,10 +32,14 @@ requires
   rtl,
   IndyCore,
   IndySystem,
+  Daf.Commons,
+  Daf.Configuration.Abstractions,
+  // DAF.NNLog.Loader uses DAF.Configuration.Binder to bind its own config, so the
+  // concrete package is a real dependency, not just the contract.
+  Daf.Configuration,
   Daf.Logging.Abstractions,
   Daf.Logging,
-  Daf.Hosting.Abstractions,
-  Daf.Configuration;
+  Daf.Hosting.Abstractions;
 
 contains
   DAF.NNLog.Targets.Console in 'Targets\DAF.NNLog.Targets.Console.pas',
