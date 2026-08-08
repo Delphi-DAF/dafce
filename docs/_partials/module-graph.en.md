@@ -2,7 +2,7 @@
 
 Read from the `requires` clause of every `.dpk`, so it cannot drift from the packages. Arrows read *requires*.
 
-**21 packages**, **27 real edges** between them, **19** more declared but already implied by another path, **0** cycles.
+**21 packages**, **26 real edges** between them, **21** more declared but already implied by another path, **0** cycles.
 
 ```{mermaid}
 graph TD
@@ -29,8 +29,8 @@ graph TD
   SQLCuteInMemory[SQLCute.InMemory]
   RTIndy[("IndyCore · IndyProtocols · IndySystem")]
   Application --> Hosting
-  Configuration --> Commons
   Configuration --> ConfigurationAbstractions
+  ConfigurationAbstractions --> Commons
   DependencyInjection --> DependencyInjectionAbstractions
   DependencyInjectionAbstractions --> Commons
   Hosting --> Configuration
@@ -45,7 +45,6 @@ graph TD
   LoggingAbstractions --> Commons
   MediatR --> MediatRAbstractions
   MediatRAbstractions --> DependencyInjectionAbstractions
-  NNlog --> Configuration
   NNlog --> HostingAbstractions
   NNlog --> Logging
   QueryExpressions --> Commons
@@ -67,7 +66,7 @@ Drawn as a transitive reduction: only the edges that do not already arrive by an
 
 Dotted border marks a contract package (`.Abstractions`); the dashed rounded nodes are third-party runtimes.
 
-Installable on their own, with no dependency on another DAF package: `Commons`, `Configuration.Abstractions`, `MiniSpec`, `SQLCute.Abstractions`.
+Installable on their own, with no dependency on another DAF package: `Commons`, `MiniSpec`, `SQLCute.Abstractions`.
 
 | Package | Runtime packages it pulls in |
 |---|---|

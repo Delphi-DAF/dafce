@@ -41,7 +41,6 @@ contains
   Daf.Configuration.Ini in 'Daf.Configuration.Ini.pas',
   Daf.Configuration.Env in 'Daf.Configuration.Env.pas',
   Daf.Configuration.ConfigurationRoot in 'Daf.Configuration.ConfigurationRoot.pas',
-  Daf.Configuration.Binder in 'Daf.Configuration.Binder.pas',
   Daf.Configuration.Chained in 'Daf.Configuration.Chained.pas';
 
 end.

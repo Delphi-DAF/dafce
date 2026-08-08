@@ -2,7 +2,7 @@
 
 Leído del `requires` de cada `.dpk`, así que no puede desviarse de los paquetes. Las flechas se leen *requiere*.
 
-**21 paquetes**, **27 aristas reales** entre ellos, **19** más declaradas pero ya implicadas por otro camino, **0** ciclos.
+**21 paquetes**, **26 aristas reales** entre ellos, **21** más declaradas pero ya implicadas por otro camino, **0** ciclos.
 
 ```{mermaid}
 graph TD
@@ -29,8 +29,8 @@ graph TD
   SQLCuteInMemory[SQLCute.InMemory]
   RTIndy[("IndyCore · IndyProtocols · IndySystem")]
   Application --> Hosting
-  Configuration --> Commons
   Configuration --> ConfigurationAbstractions
+  ConfigurationAbstractions --> Commons
   DependencyInjection --> DependencyInjectionAbstractions
   DependencyInjectionAbstractions --> Commons
   Hosting --> Configuration
@@ -45,7 +45,6 @@ graph TD
   LoggingAbstractions --> Commons
   MediatR --> MediatRAbstractions
   MediatRAbstractions --> DependencyInjectionAbstractions
-  NNlog --> Configuration
   NNlog --> HostingAbstractions
   NNlog --> Logging
   QueryExpressions --> Commons
@@ -67,7 +66,7 @@ Dibujado como reducción transitiva: solo las aristas que no llegan ya por otro 
 
 El borde de puntos marca un paquete de contrato (`.Abstractions`); los nodos redondeados a trazos son runtimes ajenos.
 
-Instalables solos, sin depender de ningún otro paquete de DAF: `Commons`, `Configuration.Abstractions`, `MiniSpec`, `SQLCute.Abstractions`.
+Instalables solos, sin depender de ningún otro paquete de DAF: `Commons`, `MiniSpec`, `SQLCute.Abstractions`.
 
 | Paquete | Runtimes que arrastra |
 |---|---|

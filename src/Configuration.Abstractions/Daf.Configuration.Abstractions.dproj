@@ -110,7 +110,9 @@
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
         <DCCReference Include="rtl.dcp"/>
+        <DCCReference Include="Daf.Commons.dcp"/>
         <DCCReference Include="Daf.Extensions.Configuration.pas"/>
+        <DCCReference Include="Daf.Configuration.Binder.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\source.optset</DependentOn>
