@@ -125,7 +125,7 @@ begin
     .Where('salary', '>', 3000)
     .OrderByDesc('salary');
   ShowSql(Q);
-  for var E in TInMemory.Queryable<TEmployee>(Q, Employees) do
+  for var E in TInMemory.Elements<TEmployee>(Q, Employees) do
     Writeln(Format('  %-5s %-12s %5d', [E.Name, E.Department, E.Salary]));
 end;
 
@@ -136,7 +136,7 @@ begin
   Title('Page 2 of 3, ordered by name (deferred; Limit short-circuits)');
   var Q := TQuery.New.From('employees').OrderBy('name').ForPage(2, 3);
   ShowSql(Q);
-  var Page := TInMemory.Queryable<TEmployee>(Q, Employees);   // nothing ran yet
+  var Page := TInMemory.Elements<TEmployee>(Q, Employees);   // nothing ran yet
   for var E in Page do
     Writeln('  ' + E.Name);
 end;
@@ -223,19 +223,19 @@ begin
   Writeln;
 
   Write('  age > 18       :');
-  for var E in TInMemory.Queryable<TEmployee>(
+  for var E in TInMemory.Elements<TEmployee>(
       TQuery.New.From('employees').Where('age', '>', 18), Employees) do
     Write(' ' + E.Name);
   Writeln;
 
   Write('  NOT(age > 18)  :');
-  for var E in TInMemory.Queryable<TEmployee>(
+  for var E in TInMemory.Elements<TEmployee>(
       TQuery.New.From('employees').WhereNot('age', '>', 18), Employees) do
     Write(' ' + E.Name);
   Writeln('        <- Dan and Gil are in neither result: unknown is not true');
 
   Write('  age IS NULL    :');
-  for var E in TInMemory.Queryable<TEmployee>(
+  for var E in TInMemory.Elements<TEmployee>(
       TQuery.New.From('employees').WhereNull('age'), Employees) do
     Write(' ' + E.Name);
   Writeln;
@@ -246,7 +246,7 @@ procedure FailFast(Employees: TObjectList<TEmployee>);
 begin
   Title('A multi-source query on the single-list entry point fails fast');
   try
-    TInMemory.Queryable<TEmployee>(
+    TInMemory.Elements<TEmployee>(
       TQuery.New.From('employees').Join('departments', 'employees.department', 'departments.name'),
       Employees);
     Writeln('  (unexpected: no error)');

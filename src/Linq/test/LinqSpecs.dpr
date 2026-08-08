@@ -5,7 +5,7 @@
 
 uses
   Daf.MiniSpec,
-  Queryable.Feat in 'Queryable.Feat.pas',
+  Sequence.Feat in 'Sequence.Feat.pas',
   Operators.Feat in 'Operators.Feat.pas';
 
 begin

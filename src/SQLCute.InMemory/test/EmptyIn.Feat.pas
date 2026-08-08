@@ -87,7 +87,7 @@ end;
 function RunNames(W: TEmptyInWorld; const Q: IQuery): TArray<string>;
 begin
   Result := nil;
-  for var P in TInMemory.Queryable<TPart>(Q, W.Parts) do
+  for var P in TInMemory.Elements<TPart>(Q, W.Parts) do
     Result := Result + [P.Name];
 end;
 

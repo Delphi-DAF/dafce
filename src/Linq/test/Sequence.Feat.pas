@@ -1,4 +1,4 @@
-﻿unit Queryable.Feat;
+﻿unit Sequence.Feat;
 
 interface
 
@@ -52,13 +52,13 @@ Feature('''
 Feature Linq @linq
 
   As a developer
-  I want a deferred, ref-counted IQueryable<T> that extends IEnumerable<T>
+  I want a deferred, ref-counted sequence that is a plain IEnumerable<T>
   So I can iterate it with for..in and pass it wherever IEnumerable<T> is expected
 ''')
 
 .UseWorld<TLinqWorld>
 
-.Rule('IQueryable is a for..in-able, deferred sequence')
+.Rule('the sequence is a for..in-able, deferred IEnumerable<T>')
 
   .Scenario('for..in over a queryable yields every element')
     .Given('a queryable over a list [10,20,30]').NoAction

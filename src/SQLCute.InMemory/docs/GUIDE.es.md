@@ -1,4 +1,4 @@
-# SQLCute In-Memory — Guía de Uso
+﻿# SQLCute In-Memory — Guía de Uso
 
 **🌍 Idioma: [English](GUIDE.md) | Español**
 
@@ -21,10 +21,10 @@ uses Daf.SQLCute, Daf.SQLCute.Compiler, Daf.SQLCute.InMemory;
 var Q := TQuery.New.From('people').Where('age', '>', 18).OrderBy('name');
 
 var Sql := TAnsiSqlCompiler.Create.Compile(Q);        // → SQL + bindings
-var Filas := TInMemory.Queryable<TPersona>(Q, Personas); // → IQueryable<TPersona>
+var Filas := TInMemory.Elements<TPersona>(Q, Personas); // → IEnumerable<TPersona>
 ```
 
-Existe un tercer punto de entrada, `Linq.From<T>` en [`Daf.Linq`](../../Linq/README.es.md), para entrar al mismo motor de ejecución directamente con closures tipados y sin SQLCute de por medio. Los tres convergen en `IQueryable<T>`.
+Existe un tercer punto de entrada, `Linq.From<T>` en [`Daf.Linq`](../../Linq/README.es.md), para entrar al mismo motor de ejecución directamente con closures tipados y sin SQLCute de por medio. Los tres convergen en `IEnumerable<T>`.
 
 ---
 
@@ -51,8 +51,8 @@ El compilador analiza el AST y elige uno de los dos carriles de ejecución. No l
 | Fuente | un `TList<T>` / array / `IEnumerable<T>` | un `IQueryContext` con fuentes nombradas |
 | Representación de fila | el propio `T` — sin envoltorio | compuestos `IRow` |
 | Soporta | WHERE, ORDER BY, LIMIT/OFFSET, DISTINCT | todo, incl. JOIN, GROUP BY, subconsultas, conjuntos |
-| Salida | `IQueryable<T>` | `IQueryable<IRow>` o `IQueryable<TResult>` |
-| Punto de entrada | `TInMemory.Queryable<T>` / `Compile<T>` | `TInMemory.Rows` / `Project<TResult>` |
+| Salida | `IEnumerable<T>` | `IEnumerable<IRow>` o `IEnumerable<TResult>` |
+| Punto de entrada | `TInMemory.Elements<T>` / `Compile<T>` | `TInMemory.Rows` / `Project<TResult>` |
 
 Cualquiera de estos elementos fuerza el carril general, y usarlo con una lista única lanza `EInMemoryQueryError`:
 
@@ -63,7 +63,7 @@ Cualquiera de estos elementos fuerza el carril general, y usarlo con una lista �
 - `WITH` (CTE)
 - `GroupBy` / `Having`
 
-Una proyección `SELECT` no fuerza el carril general, pero sí descarta `Queryable<T>` (que preserva `T`): usa `Rows<T>` o `Project<TSource, TResult>`.
+Una proyección `SELECT` no fuerza el carril general, pero sí descarta `Elements<T>` (que preserva `T`): usa `Rows<T>` o `Project<TSource, TResult>`.
 
 ---
 
@@ -79,7 +79,7 @@ for var P in Plan.Over(EquipoB) do ...
 
 `Over` acepta un `TEnumerable<T>` (por tanto `TList<T>`, `TObjectList<T>`, …), un `TArray<T>` o un `IEnumerable<T>`. No se copia nada: el plan lee la fuente mientras itera.
 
-`TInMemory.Queryable<T>(Q, Source)` es azúcar para `Compile<T>(Q).Over(Source)`.
+`TInMemory.Elements<T>(Q, Source)` es azúcar para `Compile<T>(Q).Over(Source)`.
 
 **La ejecución es diferida.** Construir el queryable no recorre nada; el trabajo empieza con el `for..in`. `Limit` cortocircuita — un `Limit(10)` sobre un millón de elementos deja de consumir la fuente tras el décimo resultado.
 
@@ -141,7 +141,7 @@ for var V in TInMemory.Project<TPersona, TPersonaView>(
 
 Los alias se mapean a miembros por nombre: `SelectAs('full_name', 'display_name')` puebla un miembro `DisplayName`.
 
-Sin clase de resultado, la secuencia produce `IRow` (`Rows<T>` / `Rows`), y una consulta de fuente única sin proyección produce el `T` original (`Queryable<T>`).
+Sin clase de resultado, la secuencia produce `IRow` (`Rows<T>` / `Rows`), y una consulta de fuente única sin proyección produce el `T` original (`Elements<T>`).
 
 Las instancias materializadas pertenecen a quien llama — recógelas en un `TObjectList<TResult>` si deben sobrevivir al bucle.
 
@@ -202,7 +202,7 @@ Un `OrderBy` sin cualificar trata NULL como el valor más pequeño: nulls primer
 Una consulta puede anularlo por columna, y el plan lo respeta:
 
 ```pascal
-TInMemory.Queryable<TPersona>(
+TInMemory.Elements<TPersona>(
   TQuery.New.From('personas').OrderBy('edad').NullsLast, Personas);   // NULL al final
 ```
 
@@ -290,7 +290,7 @@ Todo lo que el motor no puede ejecutar fielmente lanza `EInMemoryQueryError` en 
 | `WITH` (CTE), JOIN sobre subconsulta | no soportado |
 | columnas `SELECT` crudas o con subconsulta | no soportado |
 | una consulta multi-fuente ejecutada con una sola lista | necesita un contexto |
-| una consulta con proyección vía `Queryable<T>` | usa `Rows` o `Project` |
+| una consulta con proyección vía `Elements<T>` | usa `Rows` o `Project` |
 
 La ejecución es un recorrido completo ingenuo — sin índices ni optimizador. Es deliberado para los tamaños de colección a los que apunta.
 

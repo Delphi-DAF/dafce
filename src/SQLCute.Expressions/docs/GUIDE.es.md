@@ -1,4 +1,4 @@
-# Daf.SQLCute.Expressions — Guía de uso
+﻿# Daf.SQLCute.Expressions — Guía de uso
 
 **🌍 Idioma: [English](GUIDE.md) | Español**
 
@@ -38,7 +38,7 @@ No hace falta un FROM. El carril en memoria recibe su fuente como parámetro y n
 
 ```pascal
 var Q := TExprEmitter.Where(TQuery.New, Prop('Active') = True);
-for var P in TInMemory.Queryable<TProduct>(Q, Loaded) do ...
+for var P in TInMemory.Elements<TProduct>(Q, Loaded) do ...
 ```
 
 Añade el FROM cuando la consulta vaya a SQL, que es quien lo necesita.

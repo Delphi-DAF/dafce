@@ -1,4 +1,4 @@
-# Daf.Linq — Secuencias Perezosas para Delphi
+﻿# Daf.Linq — Secuencias Perezosas para Delphi
 
 **🌍 Idioma: [English](README.md) | Español**
 
@@ -13,12 +13,11 @@ Biblioteca autónoma de transformación de colecciones: perezosa y con conteo de
 
 | Concepto | Descripción |
 |----------|-------------|
-| `IQueryable<T>` | La **secuencia** diferida y con conteo de referencias — desciende de `System.IEnumerable<T>`, así que `for..in` e interoperabilidad salen gratis |
-| `TQuery<T>` | La **superficie de operadores** fluida: un tipo valor que envuelve un `IQueryable<T>` y convierte implícitamente hacia y desde él |
+| `TQuery<T>` | La **superficie de operadores** fluida: un tipo valor que envuelve un `System.IEnumerable<T>` diferido y convierte implícitamente hacia y desde él |
 | `IGrouping<TKey, T>` | Un grupo producido por `GroupBy`: una `Key` y sus `Members` |
 | `Linq.From<T>` | Punto de entrada — construye un `TQuery<T>` sobre un array, un `TEnumerable<T>`, un `IEnumerable<T>` o un `TSmartArray<T>` |
 
-Las interfaces de Delphi no pueden declarar métodos genéricos: por eso los operadores genéricos (`Select`, `Map`, `Zip`, `GroupBy`) viven en el record `TQuery<T>` y no en la interfaz. Pasa `IQueryable<T>`; encadena sobre `TQuery<T>`.
+Las interfaces de Delphi no pueden declarar métodos genéricos: por eso los operadores genéricos (`Select`, `Map`, `Zip`, `GroupBy`) viven en el record `TQuery<T>` y no en la interfaz. Pasa `IEnumerable<T>`; encadena sobre `TQuery<T>`.
 
 ---
 
@@ -37,7 +36,7 @@ for var P in Adultos do                        // nada se ejecutó hasta esta l�
   Writeln(P.Nombre);
 ```
 
-`Adultos` es un `IQueryable<TPersona>` — con conteo de referencias, sin `Free`, y asignable allí donde se espere un `System.IEnumerable<TPersona>`.
+`Adultos` es un `IEnumerable<TPersona>` — diferido, con conteo de referencias, sin `Free`.
 
 ---
 
@@ -52,7 +51,7 @@ for var P in Adultos do                        // nada se ejecutó hasta esta l�
 | `Zip<TOther, TResult>` | perezoso | Empareja con otra secuencia elemento a elemento hasta que una termina |
 | `Distinct(Comparer)` | con buffer | Elimina duplicados por valor; pasa un comparador consciente de NULL para semántica SQL |
 | `OrderBy(Comparer)` | con buffer | Ordena mediante un `IComparer<T>` |
-| `GroupBy<TKey>(KeySelector)` | con buffer | Devuelve `IQueryable<IGrouping<TKey, T>>`, preservando el orden de las claves |
+| `GroupBy<TKey>(KeySelector)` | con buffer | Devuelve `IEnumerable<IGrouping<TKey, T>>`, preservando el orden de las claves |
 | `IsEmpty` | terminal | True si no produce nada; se detiene en el primer elemento |
 | `Any(Spec)` | terminal | True si algún elemento cumple; se detiene en la primera coincidencia |
 | `FirstOrDefault` / `LastOrDefault` | terminal | El primer / último elemento, o `Default(T)` (o el fallback indicado) |

@@ -1,4 +1,4 @@
-# SQLCute In-Memory — One Query, Two Back-Ends
+﻿# SQLCute In-Memory — One Query, Two Back-Ends
 
 **🌍 Language: English | [Español](README.es.md)**
 
@@ -22,7 +22,7 @@ The payoff is **symmetry**: one query object filters a database or a `TList<T>` 
 | `TRttiRow<T>` / `TDictRow` / `TJoinRow` | Row adapters: object view, generic bag, join composite |
 | `EInMemoryQueryError` | Raised when a query cannot be executed in memory — always fail-fast, never a wrong result |
 
-Results are `IQueryable<T>` from [`Daf.Linq`](../Linq/README.md) — deferred, ref-counted, `for..in`-able.
+Results are `IEnumerable<T>` from [`Daf.Linq`](../Linq/README.md) — deferred, ref-counted, `for..in`-able.
 
 ---
 
@@ -40,7 +40,7 @@ var Q := TQuery.New.From('people')
 var R := TAnsiSqlCompiler.Create.Compile(Q);       // SQL + bindings
 
 // …or the list you already loaded — same query object.
-for var P in TInMemory.Queryable<TPerson>(Q, People) do
+for var P in TInMemory.Elements<TPerson>(Q, People) do
   Writeln(P.Name);
 ```
 
@@ -86,11 +86,11 @@ Running a multi-source query through the single-list entry point raises `EInMemo
 
 | You call | You get |
 |----------|---------|
-| `TInMemory.Queryable<T>(Q, Source)` | `IQueryable<T>` — the original elements (no projection allowed) |
-| `TInMemory.Rows<T>(Q, Source)` | `IQueryable<IRow>` — dynamic rows, projected when the query has a `SELECT` |
-| `TInMemory.Project<TSource, TResult>(Q, Source)` | `IQueryable<TResult>` — each row materialized into a result class by RTTI |
-| `TInMemory.Rows(Q, Context)` | `IQueryable<IRow>` — the general lane |
-| `TInMemory.Project<TResult>(Q, Context)` | `IQueryable<TResult>` — the general lane, materialized |
+| `TInMemory.Elements<T>(Q, Source)` | `IEnumerable<T>` — the original elements (no projection allowed) |
+| `TInMemory.Rows<T>(Q, Source)` | `IEnumerable<IRow>` — dynamic rows, projected when the query has a `SELECT` |
+| `TInMemory.Project<TSource, TResult>(Q, Source)` | `IEnumerable<TResult>` — each row materialized into a result class by RTTI |
+| `TInMemory.Rows(Q, Context)` | `IEnumerable<IRow>` — the general lane |
+| `TInMemory.Project<TResult>(Q, Context)` | `IEnumerable<TResult>` — the general lane, materialized |
 
 ```pascal
 // Projection into a user class; a NULL column leaves a TNullable member IsNull.

@@ -1,4 +1,4 @@
-# SQLCute In-Memory — Usage Guide
+﻿# SQLCute In-Memory — Usage Guide
 
 **🌍 Language: English | [Español](GUIDE.es.md)**
 
@@ -21,10 +21,10 @@ uses Daf.SQLCute, Daf.SQLCute.Compiler, Daf.SQLCute.InMemory;
 var Q := TQuery.New.From('people').Where('age', '>', 18).OrderBy('name');
 
 var Sql := TAnsiSqlCompiler.Create.Compile(Q);       // → SQL + bindings
-var Rows := TInMemory.Queryable<TPerson>(Q, People); // → IQueryable<TPerson>
+var Rows := TInMemory.Elements<TPerson>(Q, People); // → IEnumerable<TPerson>
 ```
 
-There is a third entry point, `Linq.From<T>` in [`Daf.Linq`](../../Linq/README.md), for entering the same execution engine directly with typed closures and no SQLCute involved. All three converge on `IQueryable<T>`.
+There is a third entry point, `Linq.From<T>` in [`Daf.Linq`](../../Linq/README.md), for entering the same execution engine directly with typed closures and no SQLCute involved. All three converge on `IEnumerable<T>`.
 
 ---
 
@@ -51,8 +51,8 @@ The compiler analyses the AST and picks one of two execution lanes. You do not s
 | Source | one `TList<T>` / array / `IEnumerable<T>` | an `IQueryContext` mapping named sources |
 | Row representation | `T` itself — no wrapper allocated | `IRow` composites |
 | Supports | WHERE, ORDER BY, LIMIT/OFFSET, DISTINCT | everything, incl. JOIN, GROUP BY, subqueries, set ops |
-| Output | `IQueryable<T>` | `IQueryable<IRow>` or `IQueryable<TResult>` |
-| Entry point | `TInMemory.Queryable<T>` / `Compile<T>` | `TInMemory.Rows` / `Project<TResult>` |
+| Output | `IEnumerable<T>` | `IEnumerable<IRow>` or `IEnumerable<TResult>` |
+| Entry point | `TInMemory.Elements<T>` / `Compile<T>` | `TInMemory.Rows` / `Project<TResult>` |
 
 Anything in the following list forces the general lane, and using it with a single list raises `EInMemoryQueryError`:
 
@@ -63,7 +63,7 @@ Anything in the following list forces the general lane, and using it with a sing
 - `WITH` (CTE)
 - `GroupBy` / `Having`
 
-A `SELECT` projection does not force the general lane, but it does rule out `Queryable<T>` (which preserves `T`): use `Rows<T>` or `Project<TSource, TResult>` instead.
+A `SELECT` projection does not force the general lane, but it does rule out `Elements<T>` (which preserves `T`): use `Rows<T>` or `Project<TSource, TResult>` instead.
 
 ---
 
@@ -79,7 +79,7 @@ for var P in Plan.Over(TeamB) do ...
 
 `Over` accepts a `TEnumerable<T>` (so `TList<T>`, `TObjectList<T>`, …), a `TArray<T>` or an `IEnumerable<T>`. Nothing is copied: the plan reads the source as it iterates.
 
-`TInMemory.Queryable<T>(Q, Source)` is sugar for `Compile<T>(Q).Over(Source)`.
+`TInMemory.Elements<T>(Q, Source)` is sugar for `Compile<T>(Q).Over(Source)`.
 
 **Execution is deferred.** Building the queryable scans nothing; work starts when the `for..in` begins. `Limit` short-circuits — a `Limit(10)` over a million elements stops consuming the source after the tenth result.
 
@@ -141,7 +141,7 @@ for var V in TInMemory.Project<TPerson, TPersonView>(
 
 Aliases map to members by name: `SelectAs('full_name', 'display_name')` populates a `DisplayName` member.
 
-Without a result class the sequence yields `IRow` (`Rows<T>` / `Rows`), and an unprojected single-source query yields the original `T` (`Queryable<T>`).
+Without a result class the sequence yields `IRow` (`Rows<T>` / `Rows`), and an unprojected single-source query yields the original `T` (`Elements<T>`).
 
 The caller owns materialized instances — collect them into a `TObjectList<TResult>` if they must outlive the loop.
 
@@ -202,7 +202,7 @@ An unqualified `OrderBy` treats NULL as the smallest value: nulls first ascendin
 A query can override that per column, and the plan honors it:
 
 ```pascal
-TInMemory.Queryable<TPerson>(
+TInMemory.Elements<TPerson>(
   TQuery.New.From('people').OrderBy('age').NullsLast, People);   // NULLs at the end
 ```
 
@@ -290,7 +290,7 @@ Everything the engine cannot faithfully execute raises `EInMemoryQueryError` at 
 | `WITH` (CTEs), subquery JOINs | not supported |
 | raw / subquery `SELECT` columns | not supported |
 | a multi-source query run with a single list | needs a context |
-| a projecting query run through `Queryable<T>` | use `Rows` or `Project` |
+| a projecting query run through `Elements<T>` | use `Rows` or `Project` |
 
 Execution is a naive full scan — no indexes, no optimizer. That is deliberate for the collection sizes this targets.
 

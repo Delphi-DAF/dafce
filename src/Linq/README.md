@@ -1,4 +1,4 @@
-# Daf.Linq — Lazy Sequences for Delphi
+﻿# Daf.Linq — Lazy Sequences for Delphi
 
 **🌍 Language: English | [Español](README.es.md)**
 
@@ -13,12 +13,11 @@ A standalone, ref-counted, lazy collection-transformation library — LINQ-to-Ob
 
 | Concept | Description |
 |---------|-------------|
-| `IQueryable<T>` | The deferred, ref-counted **sequence** — descends from `System.IEnumerable<T>`, so `for..in` and interop are free |
-| `TQuery<T>` | The fluent **operator surface**: a value type wrapping an `IQueryable<T>`, converting implicitly to and from it |
+| `TQuery<T>` | The fluent **operator surface**: a value type wrapping a deferred `System.IEnumerable<T>`, converting implicitly to and from it |
 | `IGrouping<TKey, T>` | A group produced by `GroupBy`: a `Key` plus its `Members` |
 | `Linq.From<T>` | Entry point — builds a `TQuery<T>` over an array, a `TEnumerable<T>`, an `IEnumerable<T>` or a `TSmartArray<T>` |
 
-Delphi interfaces cannot declare generic methods, which is why the generic operators (`Select`, `Map`, `Zip`, `GroupBy`) live on the `TQuery<T>` record rather than on the interface. Pass `IQueryable<T>` around; chain on `TQuery<T>`.
+Delphi interfaces cannot declare generic methods, which is why the generic operators (`Select`, `Map`, `Zip`, `GroupBy`) live on the `TQuery<T>` record rather than on the interface. Pass `IEnumerable<T>` around; chain on `TQuery<T>`.
 
 ---
 
@@ -37,7 +36,7 @@ for var P in Adults do                        // nothing ran until this line
   Writeln(P.Name);
 ```
 
-`Adults` is an `IQueryable<TPerson>` — ref-counted, no `Free`, and assignable anywhere a `System.IEnumerable<TPerson>` is expected.
+`Adults` is an `IEnumerable<TPerson>` — deferred, ref-counted, no `Free`.
 
 ---
 
@@ -52,7 +51,7 @@ for var P in Adults do                        // nothing ran until this line
 | `Zip<TOther, TResult>` | lazy | Pairs with another sequence element-wise until either ends |
 | `Distinct(Comparer)` | buffered | De-duplicates by value; pass a NULL-aware comparer for SQL semantics |
 | `OrderBy(Comparer)` | buffered | Sorts by an `IComparer<T>` |
-| `GroupBy<TKey>(KeySelector)` | buffered | Yields `IQueryable<IGrouping<TKey, T>>`, key order preserved |
+| `GroupBy<TKey>(KeySelector)` | buffered | Yields `IEnumerable<IGrouping<TKey, T>>`, key order preserved |
 | `IsEmpty` | terminal | True when nothing is produced; stops at the first element |
 | `Any(Spec)` | terminal | True when some element matches; stops at the first match |
 | `FirstOrDefault` / `LastOrDefault` | terminal | The first / last element, or `Default(T)` (or a supplied fallback) |

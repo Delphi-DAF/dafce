@@ -10,11 +10,12 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
 ### Added
 
-- **Daf.Linq**: Módulo nuevo — secuencias perezosas con conteo de referencias: `IQueryable<T>` (desciende de `System.IEnumerable<T>`), `TQuery<T>`, `IGrouping<TKey, T>`, `Linq.From<T>`
+- **Daf.Linq**: Módulo nuevo — secuencias perezosas con conteo de referencias sobre `System.IEnumerable<T>`: `TQuery<T>` (la superficie de operadores), `IGrouping<TKey, T>` y `Linq.From<T>`. La secuencia **es** un `IEnumerable<T>`, no un tipo propio: este es el mundo de los closures, el equivalente de LINQ-to-Objects, y así se llama en .NET. El nombre `IQueryable<T>` queda **reservado** para lo que significa allí —un árbol componible que se difiere a un back-end—, que DAF todavía no tiene
 - **Daf.Linq**: Operadores `Where`/`Filter`, `Select`/`Map`, `Take`, `Skip`, `Zip`, `Distinct`, `OrderBy`, `GroupBy`
 - **Daf.Linq**: Terminales `IsEmpty`, `Any`, `FirstOrDefault`/`LastOrDefault`, `TryFirst`, `Single`, `SingleOrDefault`, `TrySingle`, `ToArray`, `ToList`, `ToSmartArray`
 - **SQLCute.InMemory**: Módulo nuevo — segundo back-end: ejecuta un `IQuery` sobre colecciones en memoria. Carril tipado sobre `TList<T>` y carril general con `IQueryContext`
 - **SQLCute.InMemory**: `IRow` con adaptadores `TRttiRow<T>`, `TDictRow`, `TJoinRow`, `TNullRow`; materialización por RTTI a clase de resultado
+- **SQLCute.InMemory**: Tres puntos de entrada por lo que devuelven: `TInMemory.Elements<T>` (los elementos originales), `Rows<T>` (filas dinámicas) y `Project<TSource, TResult>` (materializadas por RTTI)
 - **SQLCute.InMemory**: JOINs (INNER/LEFT/RIGHT/CROSS/FULL OUTER), GROUP BY/HAVING, subconsultas, UNION/INTERSECT/EXCEPT
 - **SQLCute.InMemory**: Semántica ANSI de NULL — lógica de tres valores, agregados que ignoran NULL, DISTINCT con NULLs iguales, GROUP BY con un grupo para NULL, ORDER BY con NULL como menor
 - **SQLCute.InMemory**: Samples `InMemoryQuerySample` e `InMemoryJoinSample`; documentación bilingüe (EN/ES)

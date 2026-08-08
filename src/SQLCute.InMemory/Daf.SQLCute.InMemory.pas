@@ -13,8 +13,8 @@
     * TResultWriter<TResult> — the RTTI materializer IRow -> TResult (column/alias
       -> member, TValue coercion, TNullable via its Implicit operator).
     * TInMemoryPlan<T> / TInMemory — the reusable plan and the façade:
-        Queryable<T>          preserve T (fast lane, no projection)
-        Rows<T>               yield IQueryable<IRow> (dynamic / projected)
+        Elements<T>           preserve T (fast lane, no projection)
+        Rows<T>               yield IEnumerable<IRow> (dynamic / projected)
         Project<TSrc,TResult> materialize into a result class
 
   Depends on Daf.Linq (the sequence engine), Daf.SQLCute (the AST), the shared
@@ -98,9 +98,9 @@ type
 
   /// <summary>A reusable in-memory execution plan (preserve-T lane); run over any source of <c>T</c>.</summary>
   IInMemoryPlan<T> = interface
-    function Over(const Source: TEnumerable<T>): IQueryable<T>; overload;
-    function Over(const Source: TArray<T>): IQueryable<T>; overload;
-    function Over(const Source: IEnumerable<T>): IQueryable<T>; overload;
+    function Over(const Source: TEnumerable<T>): IEnumerable<T>; overload;
+    function Over(const Source: TArray<T>): IEnumerable<T>; overload;
+    function Over(const Source: IEnumerable<T>): IEnumerable<T>; overload;
   end;
 
   /// <summary>Concrete preserve-T plan: composes Daf.Linq operators from a <c>TCompiledQuery</c>.</summary>
@@ -108,16 +108,16 @@ type
   private
     FCompiled: TCompiledQuery;
     FAccessors: IRttiAccessors<T>;
-    function Apply(const Start: TQuery<T>): IQueryable<T>;
+    function Apply(const Start: TQuery<T>): IEnumerable<T>;
     function OrderComparer: IComparer<T>;
     function DistinctComparer: IEqualityComparer<T>;
   public
     /// <summary>Takes ownership of <c>Compiled</c>.</summary>
     constructor Create(const Compiled: TCompiledQuery);
     destructor Destroy; override;
-    function Over(const Source: TEnumerable<T>): IQueryable<T>; overload;
-    function Over(const Source: TArray<T>): IQueryable<T>; overload;
-    function Over(const Source: IEnumerable<T>): IQueryable<T>; overload;
+    function Over(const Source: TEnumerable<T>): IEnumerable<T>; overload;
+    function Over(const Source: TArray<T>): IEnumerable<T>; overload;
+    function Over(const Source: IEnumerable<T>): IEnumerable<T>; overload;
   end;
 
   /// <summary>
@@ -159,36 +159,36 @@ type
   strict private
     class function MapToRows<T>(const Start: TQuery<T>): TQuery<IRow>; static;
     class function BuildRowPipeline<T>(const C: TCompiledQuery; const Start: TQuery<T>): TQuery<IRow>; static;
-    class function RowsCore<T>(const Query: IQuery; const Start: TQuery<T>): IQueryable<IRow>; static;
+    class function RowsCore<T>(const Query: IQuery; const Start: TQuery<T>): IEnumerable<IRow>; static;
     class function ProjectCore<TSource; TResult: class, constructor>(
-      const Query: IQuery; const Start: TQuery<TSource>): IQueryable<TResult>; static;
+      const Query: IQuery; const Start: TQuery<TSource>): IEnumerable<TResult>; static;
   public
     /// <summary>Compiles <c>Query</c> into a reusable preserve-T plan (single-source fast lane).</summary>
     class function Compile<T>(const Query: IQuery): IInMemoryPlan<T>; static;
     /// <summary>
-    ///   Fabricates the <c>IQueryable&lt;T&gt;</c> for <c>Query</c> over <c>Source</c> preserving
+    ///   Fabricates the <c>IEnumerable&lt;T&gt;</c> for <c>Query</c> over <c>Source</c> preserving
     ///   <c>T</c> — sugar over <c>Compile&lt;T&gt;(Query).Over(Source)</c>. Raises if the query
     ///   projects (use <see cref="Rows"/> / <see cref="Project"/> instead).
     /// </summary>
-    class function Queryable<T>(const Query: IQuery; const Source: TEnumerable<T>): IQueryable<T>; overload; static;
-    class function Queryable<T>(const Query: IQuery; const Source: TArray<T>): IQueryable<T>; overload; static;
-    class function Queryable<T>(const Query: IQuery; const Source: IEnumerable<T>): IQueryable<T>; overload; static;
+    class function Elements<T>(const Query: IQuery; const Source: TEnumerable<T>): IEnumerable<T>; overload; static;
+    class function Elements<T>(const Query: IQuery; const Source: TArray<T>): IEnumerable<T>; overload; static;
+    class function Elements<T>(const Query: IQuery; const Source: IEnumerable<T>): IEnumerable<T>; overload; static;
     /// <summary>Runs <c>Query</c> over <c>Source</c> yielding dynamic <c>IRow</c>s (projected when the query has a SELECT).</summary>
-    class function Rows<T>(const Query: IQuery; const Source: TEnumerable<T>): IQueryable<IRow>; overload; static;
-    class function Rows<T>(const Query: IQuery; const Source: TArray<T>): IQueryable<IRow>; overload; static;
-    class function Rows<T>(const Query: IQuery; const Source: IEnumerable<T>): IQueryable<IRow>; overload; static;
+    class function Rows<T>(const Query: IQuery; const Source: TEnumerable<T>): IEnumerable<IRow>; overload; static;
+    class function Rows<T>(const Query: IQuery; const Source: TArray<T>): IEnumerable<IRow>; overload; static;
+    class function Rows<T>(const Query: IQuery; const Source: IEnumerable<T>): IEnumerable<IRow>; overload; static;
     /// <summary>Runs <c>Query</c> over <c>Source</c> materializing each final row into <c>TResult</c>.</summary>
     class function Project<TSource; TResult: class, constructor>(
-      const Query: IQuery; const Source: TEnumerable<TSource>): IQueryable<TResult>; overload; static;
+      const Query: IQuery; const Source: TEnumerable<TSource>): IEnumerable<TResult>; overload; static;
     class function Project<TSource; TResult: class, constructor>(
-      const Query: IQuery; const Source: TArray<TSource>): IQueryable<TResult>; overload; static;
+      const Query: IQuery; const Source: TArray<TSource>): IEnumerable<TResult>; overload; static;
     class function Project<TSource; TResult: class, constructor>(
-      const Query: IQuery; const Source: IEnumerable<TSource>): IQueryable<TResult>; overload; static;
+      const Query: IQuery; const Source: IEnumerable<TSource>): IEnumerable<TResult>; overload; static;
     /// <summary>Runs a multi-source <c>Query</c> over a context, yielding dynamic <c>IRow</c>s (JOINs, projected).</summary>
-    class function Rows(const Query: IQuery; const Context: IQueryContext): IQueryable<IRow>; overload; static;
+    class function Rows(const Query: IQuery; const Context: IQueryContext): IEnumerable<IRow>; overload; static;
     /// <summary>Runs a multi-source <c>Query</c> over a context, materializing each final row into <c>TResult</c>.</summary>
     class function Project<TResult: class, constructor>(
-      const Query: IQuery; const Context: IQueryContext): IQueryable<TResult>; overload; static;
+      const Query: IQuery; const Context: IQueryContext): IEnumerable<TResult>; overload; static;
   end;
 
 // These three stay in the interface section under protest, and it is not a style
@@ -214,7 +214,7 @@ function DistinctColumns(const C: TCompiledQuery): TArray<string>;
 ///   WHERE, GROUP BY, projection and set operations (UNION/…) — yielding the
 ///   final projected <c>IRow</c>s.
 /// </summary>
-function ExecuteToRows(const Query: IQuery; const Context: IQueryContext): IQueryable<IRow>;
+function ExecuteToRows(const Query: IQuery; const Context: IQueryContext): IEnumerable<IRow>;
 
 implementation
 
@@ -479,12 +479,12 @@ begin
     end);
 end;
 
-function TInMemoryPlan<T>.Apply(const Start: TQuery<T>): IQueryable<T>;
+function TInMemoryPlan<T>.Apply(const Start: TQuery<T>): IEnumerable<T>;
 begin
   if FCompiled.Projection <> nil then
     raise EInMemoryQueryError.Create(
       'This query has a SELECT projection; use TInMemory.Rows<T> or '
-      + 'TInMemory.Project<TSource, TResult> instead of Queryable<T>.');
+      + 'TInMemory.Project<TSource, TResult> instead of Elements<T>.');
 
   var Q := Start;
 
@@ -515,20 +515,20 @@ begin
   if FCompiled.HasLimit then
     Q := Q.Take(Integer(FCompiled.Limit));   // Take short-circuits when unordered
 
-  Result := Q.AsQueryable;
+  Result := Q.AsEnumerable;
 end;
 
-function TInMemoryPlan<T>.Over(const Source: TEnumerable<T>): IQueryable<T>;
+function TInMemoryPlan<T>.Over(const Source: TEnumerable<T>): IEnumerable<T>;
 begin
   Result := Apply(Linq.From<T>(Source));
 end;
 
-function TInMemoryPlan<T>.Over(const Source: TArray<T>): IQueryable<T>;
+function TInMemoryPlan<T>.Over(const Source: TArray<T>): IEnumerable<T>;
 begin
   Result := Apply(Linq.From<T>(Source));
 end;
 
-function TInMemoryPlan<T>.Over(const Source: IEnumerable<T>): IQueryable<T>;
+function TInMemoryPlan<T>.Over(const Source: IEnumerable<T>): IEnumerable<T>;
 begin
   Result := Apply(Linq.From<T>(Source));
 end;
@@ -924,7 +924,7 @@ begin
       Result := Result + [R];
 end;
 
-function ProjectedRows(const Query: IQuery; const Context: IQueryContext): IQueryable<IRow>; forward;
+function ProjectedRows(const Query: IQuery; const Context: IQueryContext): IEnumerable<IRow>; forward;
 
 type
   TSubqueryResult = record
@@ -994,7 +994,7 @@ end;
 // aggregates + HAVING) / DISTINCT / ORDER BY / paging. The SELECT projection is
 // returned via Proj for the caller to apply (dynamic IRow) or materialize.
 function ExecuteMultiCore(const Query: IQuery; const Context: IQueryContext;
-  out Proj: TArray<TProjColumn>): IQueryable<IRow>;
+  out Proj: TArray<TProjColumn>): IEnumerable<IRow>;
 begin
   var Clauses := Query.Clauses;
   EnsureMultiSupported(Clauses);
@@ -1053,14 +1053,14 @@ begin
       Q := Q.Skip(Integer(Cq.Offset));
     if Cq.HasLimit then
       Q := Q.Take(Integer(Cq.Limit));
-    Result := Q.AsQueryable;
+    Result := Q.AsEnumerable;
   finally
     Cq.Free;   // predicate/orders/projection are captured / copied out above
   end;
 end;
 
 // The main query's final projected rows (FROM+JOINs+WHERE+GROUP BY, then SELECT).
-function ProjectedRows(const Query: IQuery; const Context: IQueryContext): IQueryable<IRow>;
+function ProjectedRows(const Query: IQuery; const Context: IQueryContext): IEnumerable<IRow>;
 begin
   var Proj: TArray<TProjColumn>;
   var Q: TQuery<IRow> := ExecuteMultiCore(Query, Context, Proj);
@@ -1068,7 +1068,7 @@ begin
     function(R: IRow): IRow
     begin
       Result := ProjectRow(R, Proj);
-    end).AsQueryable;
+    end).AsEnumerable;
 end;
 
 { set operations (Phase 3C) — row equality by output columns, NULLs equal }
@@ -1187,8 +1187,8 @@ begin
 end;
 
 // Applies each UNION/INTERSECT/EXCEPT clause of the main query against the context.
-function ApplyUnions(const Main: IQueryable<IRow>; const Query: IQuery;
-  const Context: IQueryContext): IQueryable<IRow>;
+function ApplyUnions(const Main: IEnumerable<IRow>; const Query: IQuery;
+  const Context: IQueryContext): IEnumerable<IRow>;
 begin
   var HasUnion := False;
   for var C in Query.Clauses do
@@ -1213,7 +1213,7 @@ begin
   Result := Linq.From<IRow>(Acc);
 end;
 
-function ExecuteToRows(const Query: IQuery; const Context: IQueryContext): IQueryable<IRow>;
+function ExecuteToRows(const Query: IQuery; const Context: IQueryContext): IEnumerable<IRow>;
 begin
   Result := ApplyUnions(ProjectedRows(Query, Context), Query, Context);
 end;
@@ -1253,7 +1253,7 @@ begin
   Result := Rows;
 end;
 
-class function TInMemory.RowsCore<T>(const Query: IQuery; const Start: TQuery<T>): IQueryable<IRow>;
+class function TInMemory.RowsCore<T>(const Query: IQuery; const Start: TQuery<T>): IEnumerable<IRow>;
 begin
   var C := TInMemoryCompiler.Compile(Query);
   try
@@ -1262,14 +1262,14 @@ begin
       function(R: IRow): IRow
       begin
         Result := ProjectRow(R, Proj);
-      end).AsQueryable;
+      end).AsEnumerable;
   finally
     C.Free;   // predicate/orders/projection are captured in the closures above
   end;
 end;
 
 class function TInMemory.ProjectCore<TSource, TResult>(
-  const Query: IQuery; const Start: TQuery<TSource>): IQueryable<TResult>;
+  const Query: IQuery; const Start: TQuery<TSource>): IEnumerable<TResult>;
 begin
   var C := TInMemoryCompiler.Compile(Query);
   try
@@ -1279,7 +1279,7 @@ begin
       function(R: IRow): TResult
       begin
         Result := Writer.Materialize(R, Proj);
-      end).AsQueryable;
+      end).AsEnumerable;
   finally
     C.Free;
   end;
@@ -1290,61 +1290,61 @@ begin
   Result := TInMemoryPlan<T>.Create(TInMemoryCompiler.Compile(Query));
 end;
 
-class function TInMemory.Queryable<T>(const Query: IQuery; const Source: TEnumerable<T>): IQueryable<T>;
+class function TInMemory.Elements<T>(const Query: IQuery; const Source: TEnumerable<T>): IEnumerable<T>;
 begin
   Result := Compile<T>(Query).Over(Source);
 end;
 
-class function TInMemory.Queryable<T>(const Query: IQuery; const Source: TArray<T>): IQueryable<T>;
+class function TInMemory.Elements<T>(const Query: IQuery; const Source: TArray<T>): IEnumerable<T>;
 begin
   Result := Compile<T>(Query).Over(Source);
 end;
 
-class function TInMemory.Queryable<T>(const Query: IQuery; const Source: IEnumerable<T>): IQueryable<T>;
+class function TInMemory.Elements<T>(const Query: IQuery; const Source: IEnumerable<T>): IEnumerable<T>;
 begin
   Result := Compile<T>(Query).Over(Source);
 end;
 
-class function TInMemory.Rows<T>(const Query: IQuery; const Source: TEnumerable<T>): IQueryable<IRow>;
+class function TInMemory.Rows<T>(const Query: IQuery; const Source: TEnumerable<T>): IEnumerable<IRow>;
 begin
   Result := RowsCore<T>(Query, Linq.From<T>(Source));
 end;
 
-class function TInMemory.Rows<T>(const Query: IQuery; const Source: TArray<T>): IQueryable<IRow>;
+class function TInMemory.Rows<T>(const Query: IQuery; const Source: TArray<T>): IEnumerable<IRow>;
 begin
   Result := RowsCore<T>(Query, Linq.From<T>(Source));
 end;
 
-class function TInMemory.Rows<T>(const Query: IQuery; const Source: IEnumerable<T>): IQueryable<IRow>;
+class function TInMemory.Rows<T>(const Query: IQuery; const Source: IEnumerable<T>): IEnumerable<IRow>;
 begin
   Result := RowsCore<T>(Query, Linq.From<T>(Source));
 end;
 
 class function TInMemory.Project<TSource, TResult>(
-  const Query: IQuery; const Source: TEnumerable<TSource>): IQueryable<TResult>;
+  const Query: IQuery; const Source: TEnumerable<TSource>): IEnumerable<TResult>;
 begin
   Result := ProjectCore<TSource, TResult>(Query, Linq.From<TSource>(Source));
 end;
 
 class function TInMemory.Project<TSource, TResult>(
-  const Query: IQuery; const Source: TArray<TSource>): IQueryable<TResult>;
+  const Query: IQuery; const Source: TArray<TSource>): IEnumerable<TResult>;
 begin
   Result := ProjectCore<TSource, TResult>(Query, Linq.From<TSource>(Source));
 end;
 
 class function TInMemory.Project<TSource, TResult>(
-  const Query: IQuery; const Source: IEnumerable<TSource>): IQueryable<TResult>;
+  const Query: IQuery; const Source: IEnumerable<TSource>): IEnumerable<TResult>;
 begin
   Result := ProjectCore<TSource, TResult>(Query, Linq.From<TSource>(Source));
 end;
 
-class function TInMemory.Rows(const Query: IQuery; const Context: IQueryContext): IQueryable<IRow>;
+class function TInMemory.Rows(const Query: IQuery; const Context: IQueryContext): IEnumerable<IRow>;
 begin
   Result := ExecuteToRows(Query, Context);
 end;
 
 class function TInMemory.Project<TResult>(
-  const Query: IQuery; const Context: IQueryContext): IQueryable<TResult>;
+  const Query: IQuery; const Context: IQueryContext): IEnumerable<TResult>;
 begin
   // The rows are already projected; materialize maps each output column to a member.
   var Q: TQuery<IRow> := ExecuteToRows(Query, Context);
@@ -1353,7 +1353,7 @@ begin
     function(R: IRow): TResult
     begin
       Result := Writer.Materialize(R, nil);
-    end).AsQueryable;
+    end).AsEnumerable;
 end;
 
 end.

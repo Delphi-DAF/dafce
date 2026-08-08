@@ -1,4 +1,4 @@
-# Daf.SQLCute.Expressions — Una expresión, una emisión
+﻿# Daf.SQLCute.Expressions — Una expresión, una emisión
 
 **🌍 Idioma: [English](README.md) | Español**
 
@@ -13,7 +13,7 @@ var Q := TExprEmitter.Where(TQuery.New.From('Product'),
 // …una base de datos:
 var Sql := TAnsiSqlCompiler.Create.Compile(Q);
 // …o la lista que ya tienes cargada — el mismo objeto de consulta:
-for var P in TInMemory.Queryable<TProduct>(Q, Loaded) do ...
+for var P in TInMemory.Elements<TProduct>(Q, Loaded) do ...
 ```
 
 [![Delphi 12+](https://img.shields.io/badge/Delphi-12%2B-red.svg)](https://www.embarcadero.com/products/delphi)

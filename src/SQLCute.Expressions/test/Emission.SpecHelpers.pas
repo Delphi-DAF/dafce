@@ -133,7 +133,7 @@ end;
 function NamesOf(const Source: TEnumerable<TProduct>; const Q: IQuery): TArray<string>;
 begin
   Result := nil;
-  for var P in TInMemory.Queryable<TProduct>(Q, Source) do
+  for var P in TInMemory.Elements<TProduct>(Q, Source) do
     Result := Result + [P.Name];
 end;
 

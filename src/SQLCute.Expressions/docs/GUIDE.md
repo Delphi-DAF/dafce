@@ -1,4 +1,4 @@
-# Daf.SQLCute.Expressions — Usage Guide
+﻿# Daf.SQLCute.Expressions — Usage Guide
 
 **🌍 Language: English | [Español](GUIDE.es.md)**
 
@@ -38,7 +38,7 @@ No FROM is required. The in-memory lane takes its source as a parameter and neve
 
 ```pascal
 var Q := TExprEmitter.Where(TQuery.New, Prop('Active') = True);
-for var P in TInMemory.Queryable<TProduct>(Q, Loaded) do ...
+for var P in TInMemory.Elements<TProduct>(Q, Loaded) do ...
 ```
 
 Add a FROM when the query is headed for SQL, since that is who needs it.

@@ -1,4 +1,4 @@
-# SQLCute In-Memory — Una Consulta, Dos Back-Ends
+﻿# SQLCute In-Memory — Una Consulta, Dos Back-Ends
 
 **🌍 Idioma: [English](README.md) | Español**
 
@@ -22,7 +22,7 @@ La ganancia es la **simetría**: un mismo objeto consulta filtra una base de dat
 | `TRttiRow<T>` / `TDictRow` / `TJoinRow` | Adaptadores de fila: vista sobre objeto, bolsa genérica, compuesto de join |
 | `EInMemoryQueryError` | Se lanza cuando una consulta no puede ejecutarse en memoria — siempre fallo temprano, nunca un resultado incorrecto |
 
-Los resultados son `IQueryable<T>` de [`Daf.Linq`](../Linq/README.es.md) — diferidos, con conteo de referencias y recorribles con `for..in`.
+Los resultados son `IEnumerable<T>` de [`Daf.Linq`](../Linq/README.es.md) — diferidos, con conteo de referencias y recorribles con `for..in`.
 
 ---
 
@@ -40,7 +40,7 @@ var Q := TQuery.New.From('people')
 var R := TAnsiSqlCompiler.Create.Compile(Q);       // SQL + bindings
 
 // …o la lista que ya cargaste — el mismo objeto consulta.
-for var P in TInMemory.Queryable<TPerson>(Q, Personas) do
+for var P in TInMemory.Elements<TPerson>(Q, Personas) do
   Writeln(P.Name);
 ```
 
@@ -86,11 +86,11 @@ Ejecutar una consulta multi-fuente por el punto de entrada de lista única lanza
 
 | Llamas a | Obtienes |
 |----------|----------|
-| `TInMemory.Queryable<T>(Q, Source)` | `IQueryable<T>` — los elementos originales (no admite proyección) |
-| `TInMemory.Rows<T>(Q, Source)` | `IQueryable<IRow>` — filas dinámicas, proyectadas si la consulta tiene `SELECT` |
-| `TInMemory.Project<TSource, TResult>(Q, Source)` | `IQueryable<TResult>` — cada fila materializada en una clase de resultado por RTTI |
-| `TInMemory.Rows(Q, Context)` | `IQueryable<IRow>` — el carril general |
-| `TInMemory.Project<TResult>(Q, Context)` | `IQueryable<TResult>` — el carril general, materializado |
+| `TInMemory.Elements<T>(Q, Source)` | `IEnumerable<T>` — los elementos originales (no admite proyección) |
+| `TInMemory.Rows<T>(Q, Source)` | `IEnumerable<IRow>` — filas dinámicas, proyectadas si la consulta tiene `SELECT` |
+| `TInMemory.Project<TSource, TResult>(Q, Source)` | `IEnumerable<TResult>` — cada fila materializada en una clase de resultado por RTTI |
+| `TInMemory.Rows(Q, Context)` | `IEnumerable<IRow>` — el carril general |
+| `TInMemory.Project<TResult>(Q, Context)` | `IEnumerable<TResult>` — el carril general, materializado |
 
 ```pascal
 // Proyección a una clase de usuario; una columna NULL deja el miembro TNullable en IsNull.

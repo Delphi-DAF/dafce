@@ -8,7 +8,7 @@
                           SQL whose '?' placeholders match its bindings 1:1.
     * general lane      — TInMemory.Rows(Q, Context): composite IRow rows.
     * single-list rows  — TInMemory.Rows<T>(Q, list): IRow over one typed list.
-    * fast typed lane   — TInMemory.Queryable<T>(Q, list): preserve-T, no IRow.
+    * fast typed lane   — TInMemory.Elements<T>(Q, list): preserve-T, no IRow.
 
   DAFce ships no database driver, so the harness cannot execute the emitted SQL.
   The oracle is therefore declared per case — the row set a SQL database returns
@@ -142,7 +142,7 @@ type
     Query: IQuery;
     Cols: TArray<string>;    // columns forming each row's signature
     Expected: string;        // oracle: the SQL result set over the seed
-    TypedLane: Boolean;      // also runnable through TInMemory.Queryable<T>
+    TypedLane: Boolean;      // also runnable through TInMemory.Elements<T>
     RowLane: Boolean;        // also runnable through TInMemory.Rows<T> (one list)
     Unordered: Boolean;      // no ORDER BY — compare as a sorted set
   end;
@@ -298,7 +298,7 @@ end;
 
 { the four lanes }
 
-function RunRows(const Rows: IQueryable<IRow>; const C: TParityCase): string;
+function RunRows(const Rows: IEnumerable<IRow>; const C: TParityCase): string;
 begin
   var Sigs: TArray<string> := nil;
   for var R in Rows do
@@ -330,7 +330,7 @@ function RunFastTyped(W: TParityWorld; const C: TParityCase): string;
 begin
   var Acc: IRttiAccessors<TPerson> := TRttiAccessors<TPerson>.Create;
   var Sigs: TArray<string> := nil;
-  for var P in TInMemory.Queryable<TPerson>(C.Query, W.People) do
+  for var P in TInMemory.Elements<TPerson>(C.Query, W.People) do
   begin
     // Bind the view to an interface variable: a const-parameter temporary would
     // never be released.

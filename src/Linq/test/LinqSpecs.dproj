@@ -97,7 +97,7 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
-        <DCCReference Include="Queryable.Feat.pas"/>
+        <DCCReference Include="Sequence.Feat.pas"/>
         <DCCReference Include="Operators.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

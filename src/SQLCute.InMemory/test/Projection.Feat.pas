@@ -3,7 +3,7 @@
 {
   Phase 2 — row model + typed projection. Exercises IRow / TRttiRow / TDictRow
   and qualified-name resolution; the SELECT projection lanes (preserve T vs
-  IQueryable<IRow> vs materialize into a result class); and NULL -> TNullable
+  IEnumerable<IRow> vs materialize into a result class); and NULL -> TNullable
   materialization (three-valued NULL surfacing in the output).
 }
 
@@ -176,11 +176,11 @@ Feature SQLCute in-memory row model & projection @inmemory @projection
 .Rule('SELECT projection picks the lane')
 
   .Scenario('Unprojected single-source query yields the original T')
-    .When('Queryable preserves T with no SELECT',
+    .When('Elements preserves T with no SELECT',
       procedure(W: TProjWorld)
       begin
         W.Names := nil;
-        for var P in TInMemory.Queryable<TPerson>(
+        for var P in TInMemory.Elements<TPerson>(
           TQuery.New.From('people').Where('age', '>', 18), W.People) do
           W.Names := W.Names + [P.Name];
       end)
@@ -191,14 +191,14 @@ Feature SQLCute in-memory row model & projection @inmemory @projection
         Expect(W.Names[0]).ToEqual('Ann');
       end)
 
-  .Scenario('Queryable rejects a projecting query')
+  .Scenario('Elements rejects a projecting query')
     .&Then('a SELECT projection on the preserve-T lane raises',
       procedure(W: TProjWorld)
       begin
         ExpectException(
           procedure
           begin
-            TInMemory.Queryable<TPerson>(
+            TInMemory.Elements<TPerson>(
               TQuery.New.From('people').Select(['name', 'age']), W.People);
           end).ToBe(EInMemoryQueryError);
       end)

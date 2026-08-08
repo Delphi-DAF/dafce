@@ -5,14 +5,17 @@
   (LINQ-to-Objects / Kotlin sequences / Rust iterators in spirit). Knows nothing
   about SQL; built on Commons' Daf.Enumerable.
 
-  Two cooperating types:
-    * IQueryable<T> : IEnumerable<T> — the deferred, ref-counted *sequence*
-      (the noun). Assignable anywhere IEnumerable<T> is expected; for..in works.
-    * TQuery<T> — the fluent *operator surface* (a value-type wrapper over
-      IQueryable<T>). Delphi interfaces cannot declare generic methods, so the
+  The sequence type is System.IEnumerable<T> itself, deliberately: this is the
+  closure world, the counterpart of LINQ-to-Objects, and .NET names it
+  IEnumerable<T>. The name IQueryable<T> is reserved for what it means in .NET —
+  a composable tree deferred to a back-end — which DAF does not have yet.
+
+  So there is one type of our own:
+    * TQuery<T> — the fluent *operator surface* (a value-type wrapper over an
+      IEnumerable<T>). Delphi interfaces cannot declare generic methods, so the
       generic operators (Select/Map/Zip/GroupBy) live here rather than on the
-      interface. TQuery<T> converts implicitly to/from IQueryable<T> and
-      IEnumerable<T> and is itself for..in-able.
+      interface. TQuery<T> converts implicitly to/from IEnumerable<T> and is
+      itself for..in-able.
 
   Deferred by default: Where/Select/Take/Skip run element-by-element on
   iteration (Take short-circuits); OrderBy/Distinct/GroupBy materialize once at
@@ -43,13 +46,6 @@ type
   end;
 
   /// <summary>
-  ///   A deferred, ref-counted sequence extending <c>System.IEnumerable&lt;T&gt;</c>.
-  ///   The pure sequence identity — operators are provided by <c>TQuery&lt;T&gt;</c>.
-  /// </summary>
-  IQueryable<T> = interface(IEnumerable<T>)
-  end;
-
-  /// <summary>
   ///   Base that solves the <c>System.IEnumerable&lt;T&gt;</c> plumbing (the
   ///   non-generic <c>GetCurrent: TObject</c> baggage) via the method-resolution
   ///   clause — the proven <c>Daf.Enumerable</c> pattern.
@@ -63,8 +59,8 @@ type
     function GetGenericEnumerator: IEnumerator<T>;
   end;
 
-  /// <summary>Concrete <c>IQueryable&lt;T&gt;</c> — a lazy wrapper over an <c>IEnumerable&lt;T&gt;</c>.</summary>
-  TQueryable<T> = class(TQueryableBase<T>, IQueryable<T>)
+  /// <summary>A lazy <c>IEnumerable&lt;T&gt;</c> wrapper over another <c>IEnumerable&lt;T&gt;</c>.</summary>
+  TQueryable<T> = class(TQueryableBase<T>)
   private
     FSource: IEnumerable<T>;
   protected
@@ -87,21 +83,20 @@ type
   end;
 
   /// <summary>
-  ///   The fluent operator surface over an <c>IQueryable&lt;T&gt;</c>. A value type:
+  ///   The fluent operator surface over an <c>IEnumerable&lt;T&gt;</c>. A value type:
   ///   copy-cheap, ref-counted through its inner sequence. Converts implicitly to
-  ///   <c>IQueryable&lt;T&gt;</c> / <c>IEnumerable&lt;T&gt;</c> and is for..in-able.
+  ///   <c>IEnumerable&lt;T&gt;</c> and is for..in-able.
   /// </summary>
   TQuery<T> = record
   private
-    FSeq: IQueryable<T>;
+    FSeq: IEnumerable<T>;
   public
-    class operator Implicit(const Seq: IQueryable<T>): TQuery<T>;
-    class operator Implicit(const Query: TQuery<T>): IQueryable<T>;
+    class operator Implicit(const Seq: IEnumerable<T>): TQuery<T>;
     class operator Implicit(const Query: TQuery<T>): IEnumerable<T>;
     /// <summary>Enables <c>for..in</c> over the query directly.</summary>
     function GetEnumerator: IEnumerator<T>;
     /// <summary>The underlying deferred sequence.</summary>
-    function AsQueryable: IQueryable<T>;
+    function AsEnumerable: IEnumerable<T>;
 
     /// <summary>
     ///   Keeps only elements matching the filter (lazy). Takes Commons'
@@ -130,7 +125,7 @@ type
       const Zipper: TFunc<T, TOther, TResult>): TQuery<TResult>;
     /// <summary>Groups elements by key (key order preserved).</summary>
     function GroupBy<TKey>(const KeySelector: TFunc<T, TKey>;
-      const Comparer: IEqualityComparer<TKey> = nil): IQueryable<IGrouping<TKey, T>>;
+      const Comparer: IEqualityComparer<TKey> = nil): IEnumerable<IGrouping<TKey, T>>;
     // --- terminals ---------------------------------------------------------
     // All of these enumerate without consuming the query: the same TQuery<T>
     // value stays usable afterwards and a terminal may be called again. Note
@@ -258,14 +253,9 @@ end;
 
 { TQuery<T> }
 
-class operator TQuery<T>.Implicit(const Seq: IQueryable<T>): TQuery<T>;
+class operator TQuery<T>.Implicit(const Seq: IEnumerable<T>): TQuery<T>;
 begin
   Result.FSeq := Seq;
-end;
-
-class operator TQuery<T>.Implicit(const Query: TQuery<T>): IQueryable<T>;
-begin
-  Result := Query.FSeq;
 end;
 
 class operator TQuery<T>.Implicit(const Query: TQuery<T>): IEnumerable<T>;
@@ -273,7 +263,7 @@ begin
   Result := Query.FSeq;
 end;
 
-function TQuery<T>.AsQueryable: IQueryable<T>;
+function TQuery<T>.AsEnumerable: IEnumerable<T>;
 begin
   Result := FSeq;
 end;
@@ -487,7 +477,7 @@ begin
 end;
 
 function TQuery<T>.GroupBy<TKey>(const KeySelector: TFunc<T, TKey>;
-  const Comparer: IEqualityComparer<TKey>): IQueryable<IGrouping<TKey, T>>;
+  const Comparer: IEqualityComparer<TKey>): IEnumerable<IGrouping<TKey, T>>;
 begin
   var Src := FSeq;
   var Cmp := Comparer;

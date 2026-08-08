@@ -2,7 +2,7 @@
 
 {
   Phase 1 — single-source fast lane. A SQLCute IQuery is compiled onto a typed
-  TList<T> via TInMemory.Queryable<T>, preserving T end-to-end: no IRow, no catalog.
+  TList<T> via TInMemory.Elements<T>, preserving T end-to-end: no IRow, no catalog.
   Covers WHERE (comparisons, precedence, IS NULL, BETWEEN, IN/NOT IN, column-to-
   column, LIKE), three-valued NULL logic, ORDER BY / LIMIT / OFFSET / DISTINCT,
   plan reuse, and multi-source fail-fast.
@@ -101,7 +101,7 @@ end;
 function RunNames(W: TFastPathWorld; const Q: IQuery): TArray<string>;
 begin
   Result := nil;
-  for var P in TInMemory.Queryable<TPerson>(Q, W.People) do
+  for var P in TInMemory.Elements<TPerson>(Q, W.People) do
     Result := Result + [P.Name];
 end;
 
@@ -275,7 +275,7 @@ Feature SQLCute in-memory fast path @inmemory @fastpath
           Rows.Add(TRow2.Create(2, 8));
           Rows.Add(TRow2.Create(7, 7));
           W.Count := 0;
-          for var R in TInMemory.Queryable<TRow2>(
+          for var R in TInMemory.Elements<TRow2>(
             TQuery.New.From('rows').WhereColumns('a', '>', 'b'), Rows) do
             Inc(W.Count);
         finally
@@ -400,7 +400,7 @@ Feature SQLCute in-memory fast path @inmemory @fastpath
           Dups.Add(TPerson.Create('Z', Null, 'US'));
           Dups.Add(TPerson.Create('Z', Null, 'US'));   // duplicate NULL age
           W.Count := 0;
-          for var P in TInMemory.Queryable<TPerson>(
+          for var P in TInMemory.Elements<TPerson>(
             TQuery.New.From('people').Distinct, Dups) do
             Inc(W.Count);
         finally
@@ -449,7 +449,7 @@ Feature SQLCute in-memory fast path @inmemory @fastpath
         ExpectException(
           procedure
           begin
-            TInMemory.Queryable<TPerson>(
+            TInMemory.Elements<TPerson>(
               TQuery.New.From('people').Join('orders', 'people.id', 'orders.person_id'),
               W.People);
           end).ToBe(EInMemoryQueryError);
