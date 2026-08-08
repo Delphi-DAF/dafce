@@ -28,8 +28,7 @@
 {$IMPLICITBUILD OFF}
 
 requires
-  rtl,
-  dbrtl;
+  rtl;
 
 contains
   Daf.MemUtils in 'Daf.MemUtils.pas',
