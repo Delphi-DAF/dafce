@@ -2,7 +2,7 @@
 
 Leído del `requires` de cada `.dpk`, así que no puede desviarse de los paquetes. Las flechas se leen *requiere*.
 
-**21 paquetes**, **26 aristas reales** entre ellos, **21** más declaradas pero ya implicadas por otro camino, **0** ciclos.
+**20 paquetes**, **25 aristas reales** entre ellos, **20** más declaradas pero ya implicadas por otro camino, **0** ciclos.
 
 ```{mermaid}
 graph TD
@@ -24,7 +24,6 @@ graph TD
   QueryExpressions[Query.Expressions]
   SQLCute[SQLCute]
   SQLCuteAbstractions[SQLCute.Abstractions]
-  SQLCuteCompilers[SQLCute.Compilers]
   SQLCuteExpressions[SQLCute.Expressions]
   SQLCuteInMemory[SQLCute.InMemory]
   RTIndy[("IndyCore · IndyProtocols · IndySystem")]
@@ -49,7 +48,6 @@ graph TD
   NNlog --> Logging
   QueryExpressions --> Commons
   SQLCute --> SQLCuteAbstractions
-  SQLCuteCompilers --> SQLCute
   SQLCuteExpressions --> QueryExpressions
   SQLCuteExpressions --> SQLCuteInMemory
   SQLCuteInMemory --> Linq
@@ -62,7 +60,7 @@ graph TD
   class RTIndy rt;
 ```
 
-Dibujado como reducción transitiva: solo las aristas que no llegan ya por otro camino. `rtl` no se dibuja porque lo requieren los 21 paquetes; los de Indy van agrupados en un nodo por familia, con los nombres reales en la etiqueta.
+Dibujado como reducción transitiva: solo las aristas que no llegan ya por otro camino. `rtl` no se dibuja porque lo requieren los 20 paquetes; los de Indy van agrupados en un nodo por familia, con los nombres reales en la etiqueta.
 
 El borde de puntos marca un paquete de contrato (`.Abstractions`); los nodos redondeados a trazos son runtimes ajenos.
 
@@ -88,8 +86,7 @@ Instalables solos, sin depender de ningún otro paquete de DAF: `Commons`, `Mini
 | `Query.Expressions` | `rtl` |
 | `SQLCute` | `rtl` |
 | `SQLCute.Abstractions` | `rtl` |
-| `SQLCute.Compilers` | `rtl` |
 | `SQLCute.Expressions` | `rtl` |
 | `SQLCute.InMemory` | `rtl` |
 
-19 de 21 no piden más que `rtl`.
+18 de 20 no piden más que `rtl`.

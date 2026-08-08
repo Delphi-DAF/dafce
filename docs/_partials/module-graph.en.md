@@ -2,7 +2,7 @@
 
 Read from the `requires` clause of every `.dpk`, so it cannot drift from the packages. Arrows read *requires*.
 
-**21 packages**, **26 real edges** between them, **21** more declared but already implied by another path, **0** cycles.
+**20 packages**, **25 real edges** between them, **20** more declared but already implied by another path, **0** cycles.
 
 ```{mermaid}
 graph TD
@@ -24,7 +24,6 @@ graph TD
   QueryExpressions[Query.Expressions]
   SQLCute[SQLCute]
   SQLCuteAbstractions[SQLCute.Abstractions]
-  SQLCuteCompilers[SQLCute.Compilers]
   SQLCuteExpressions[SQLCute.Expressions]
   SQLCuteInMemory[SQLCute.InMemory]
   RTIndy[("IndyCore · IndyProtocols · IndySystem")]
@@ -49,7 +48,6 @@ graph TD
   NNlog --> Logging
   QueryExpressions --> Commons
   SQLCute --> SQLCuteAbstractions
-  SQLCuteCompilers --> SQLCute
   SQLCuteExpressions --> QueryExpressions
   SQLCuteExpressions --> SQLCuteInMemory
   SQLCuteInMemory --> Linq
@@ -62,7 +60,7 @@ graph TD
   class RTIndy rt;
 ```
 
-Drawn as a transitive reduction: only the edges that do not already arrive by another path. `rtl` is left out because all 21 packages require it; the Indy packages are grouped one node per family, with the real names in the label.
+Drawn as a transitive reduction: only the edges that do not already arrive by another path. `rtl` is left out because all 20 packages require it; the Indy packages are grouped one node per family, with the real names in the label.
 
 Dotted border marks a contract package (`.Abstractions`); the dashed rounded nodes are third-party runtimes.
 
@@ -88,8 +86,7 @@ Installable on their own, with no dependency on another DAF package: `Commons`, 
 | `Query.Expressions` | `rtl` |
 | `SQLCute` | `rtl` |
 | `SQLCute.Abstractions` | `rtl` |
-| `SQLCute.Compilers` | `rtl` |
 | `SQLCute.Expressions` | `rtl` |
 | `SQLCute.InMemory` | `rtl` |
 
-19 of 21 need nothing beyond `rtl`.
+18 of 20 need nothing beyond `rtl`.

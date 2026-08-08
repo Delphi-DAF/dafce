@@ -27,7 +27,7 @@
         <Projects Include="Application\samples\TicTacToeApp\TicTacToeApp.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="SQLCute.Abstractions\samples\SQLCuteSample\SQLCuteSample.dproj">
+        <Projects Include="SQLCute\samples\SQLCuteSample\SQLCuteSample.dproj">
             <Dependencies/>
         </Projects>
         <Projects Include="SQLCute.InMemory\samples\InMemoryQuerySample\InMemoryQuerySample.dproj">
@@ -120,13 +120,13 @@
         <MSBuild Projects="Application\samples\TicTacToeApp\TicTacToeApp.dproj" Targets="Make"/>
     </Target>
     <Target Name="SQLCuteSample">
-        <MSBuild Projects="SQLCute.Abstractions\samples\SQLCuteSample\SQLCuteSample.dproj"/>
+        <MSBuild Projects="SQLCute\samples\SQLCuteSample\SQLCuteSample.dproj"/>
     </Target>
     <Target Name="SQLCuteSample:Clean">
-        <MSBuild Projects="SQLCute.Abstractions\samples\SQLCuteSample\SQLCuteSample.dproj" Targets="Clean"/>
+        <MSBuild Projects="SQLCute\samples\SQLCuteSample\SQLCuteSample.dproj" Targets="Clean"/>
     </Target>
     <Target Name="SQLCuteSample:Make">
-        <MSBuild Projects="SQLCute.Abstractions\samples\SQLCuteSample\SQLCuteSample.dproj" Targets="Make"/>
+        <MSBuild Projects="SQLCute\samples\SQLCuteSample\SQLCuteSample.dproj" Targets="Make"/>
     </Target>
     <Target Name="InMemoryQuerySample">
         <MSBuild Projects="SQLCute.InMemory\samples\InMemoryQuerySample\InMemoryQuerySample.dproj"/>

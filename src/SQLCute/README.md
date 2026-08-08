@@ -115,5 +115,4 @@ var R := TPostgresCompiler.Create.Compile(Q);
 | [String Operations](docs/guide/string-ops.md) | LIKE, starts/ends/contains |
 | [Date Operations](docs/guide/date-ops.md) | WhereDate, dialect casting |
 | [Dialect Compilers](docs/guide/dialects.md) | Postgres, MySQL, SQLite, SQL Server, Oracle, Firebird |
-| [**Compilers Package**](../SQLCute.Compilers/README.md) | Dialect compiler classes |
 | [**In-Memory Back-End**](../SQLCute.InMemory/README.md) | Run the same `IQuery` over an already-loaded collection |

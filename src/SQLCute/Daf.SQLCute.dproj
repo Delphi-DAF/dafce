@@ -113,6 +113,13 @@
         <DCCReference Include="Daf.SQLCute.Abstractions.dcp"/>
         <DCCReference Include="Daf.SQLCute.Core.pas"/>
         <DCCReference Include="Daf.SQLCute.Compiler.pas"/>
+        <DCCReference Include="Daf.SQLCute.WhereTree.pas"/>
+        <DCCReference Include="Daf.SQLCute.Compiler.SqlServer.pas"/>
+        <DCCReference Include="Daf.SQLCute.Compiler.Postgres.pas"/>
+        <DCCReference Include="Daf.SQLCute.Compiler.MySql.pas"/>
+        <DCCReference Include="Daf.SQLCute.Compiler.SQLite.pas"/>
+        <DCCReference Include="Daf.SQLCute.Compiler.Oracle.pas"/>
+        <DCCReference Include="Daf.SQLCute.Compiler.Firebird.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\source.optset</DependentOn>

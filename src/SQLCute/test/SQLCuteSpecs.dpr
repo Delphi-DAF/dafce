@@ -5,7 +5,7 @@
 
 uses
   Daf.MiniSpec,
-  Daf.SQLCute.Core in '..\..\SQLCute\Daf.SQLCute.Core.pas',
+  Daf.SQLCute.Core in '..\Daf.SQLCute.Core.pas',
   SQLCute.SpecHelpers in 'SQLCute.SpecHelpers.pas',
   SQLCute.Select.Feat in 'SQLCute.Select.Feat.pas',
   SQLCute.Where.Feat in 'SQLCute.Where.Feat.pas',
@@ -25,7 +25,11 @@ uses
   SQLCute.Steps.Dml in 'SQLCute.Steps.Dml.pas',
   SQLCute.Steps.WhereIn in 'SQLCute.Steps.WhereIn.pas',
   SQLCute.Steps.WhereAdvanced in 'SQLCute.Steps.WhereAdvanced.pas',
-  SQLCute.Steps.StringOps in 'SQLCute.Steps.StringOps.pas';
+  SQLCute.Steps.StringOps in 'SQLCute.Steps.StringOps.pas',
+  // Del runner SQLCuteCompilersSpecs, fusionado aqui: un runner por modulo.
+  SQLCute.Compilers.Feat in 'SQLCute.Compilers.Feat.pas',
+  SQLCute.Compilers.Steps in 'SQLCute.Compilers.Steps.pas',
+  SQLCute.Date.Feat in 'SQLCute.Date.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

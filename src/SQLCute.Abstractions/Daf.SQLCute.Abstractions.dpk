@@ -32,7 +32,6 @@ requires
 
 contains
   Daf.SQLCute.Clauses in 'Daf.SQLCute.Clauses.pas',
-  Daf.SQLCute.WhereTree in 'Daf.SQLCute.WhereTree.pas',
   Daf.SQLCute in 'Daf.SQLCute.pas';
 
 end.

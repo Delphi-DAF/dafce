@@ -3,10 +3,9 @@ sidebar: modules-es
 lang: es
 ---
 
-{{< include ../../../src/SQLCute.Abstractions/README.es.md >}}
+{{< include ../../../src/SQLCute/README.es.md >}}
 
 ---
 
 ## Compiladores
 
-{{< include ../../../src/SQLCute.Compilers/README.es.md >}}

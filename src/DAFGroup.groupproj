@@ -51,9 +51,6 @@
         <Projects Include="SQLCute\Daf.SQLCute.dproj">
             <Dependencies>SQLCute.Abstractions\Daf.SQLCute.Abstractions.dproj</Dependencies>
         </Projects>
-        <Projects Include="SQLCute.Compilers\Daf.SQLCute.Compilers.dproj">
-            <Dependencies>SQLCute\Daf.SQLCute.dproj</Dependencies>
-        </Projects>
         <Projects Include="Linq\Daf.Linq.dproj">
             <Dependencies/>
         </Projects>
@@ -218,15 +215,6 @@
     <Target Name="Daf_SQLCute:Make" DependsOnTargets="Daf_SQLCute_Abstractions:Make">
         <MSBuild Projects="SQLCute\Daf.SQLCute.dproj" Targets="Make"/>
     </Target>
-    <Target Name="Daf_SQLCute_Compilers" DependsOnTargets="Daf_SQLCute">
-        <MSBuild Projects="SQLCute.Compilers\Daf.SQLCute.Compilers.dproj"/>
-    </Target>
-    <Target Name="Daf_SQLCute_Compilers:Clean" DependsOnTargets="Daf_SQLCute:Clean">
-        <MSBuild Projects="SQLCute.Compilers\Daf.SQLCute.Compilers.dproj" Targets="Clean"/>
-    </Target>
-    <Target Name="Daf_SQLCute_Compilers:Make" DependsOnTargets="Daf_SQLCute:Make">
-        <MSBuild Projects="SQLCute.Compilers\Daf.SQLCute.Compilers.dproj" Targets="Make"/>
-    </Target>
     <Target Name="Daf_Linq">
         <MSBuild Projects="Linq\Daf.Linq.dproj"/>
     </Target>
@@ -264,13 +252,13 @@
         <MSBuild Projects="SQLCute.Expressions\Daf.SQLCute.Expressions.dproj" Targets="Make"/>
     </Target>
     <Target Name="Build">
-        <CallTarget Targets="Daf_Commons;Daf_DependencyInjection_Abstractions;Daf_Configuration_Abstractions;Daf_Logging_Abstractions;Daf_Hosting_Abstractions;Daf_MediatR_Abstractions;Daf_DependencyInjection;Daf_Configuration;Daf_Hosting;Daf_Logging;Daf_NNlog;Daf_MediatR;Daf_Application;Daf_MiniSpec;Daf_SQLCute_Abstractions;Daf_SQLCute;Daf_SQLCute_Compilers;Daf_Linq;Daf_SQLCute_InMemory;Daf_Query_Expressions;Daf_SQLCute_Expressions"/>
+        <CallTarget Targets="Daf_Commons;Daf_DependencyInjection_Abstractions;Daf_Configuration_Abstractions;Daf_Logging_Abstractions;Daf_Hosting_Abstractions;Daf_MediatR_Abstractions;Daf_DependencyInjection;Daf_Configuration;Daf_Hosting;Daf_Logging;Daf_NNlog;Daf_MediatR;Daf_Application;Daf_MiniSpec;Daf_SQLCute_Abstractions;Daf_SQLCute;Daf_Linq;Daf_SQLCute_InMemory;Daf_Query_Expressions;Daf_SQLCute_Expressions"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="Daf_Commons:Clean;Daf_DependencyInjection_Abstractions:Clean;Daf_Configuration_Abstractions:Clean;Daf_Logging_Abstractions:Clean;Daf_Hosting_Abstractions:Clean;Daf_MediatR_Abstractions:Clean;Daf_DependencyInjection:Clean;Daf_Configuration:Clean;Daf_Hosting:Clean;Daf_Logging:Clean;Daf_NNlog:Clean;Daf_MediatR:Clean;Daf_Application:Clean;Daf_MiniSpec:Clean;Daf_SQLCute_Abstractions:Clean;Daf_SQLCute:Clean;Daf_SQLCute_Compilers:Clean;Daf_Linq:Clean;Daf_SQLCute_InMemory:Clean;Daf_Query_Expressions:Clean;Daf_SQLCute_Expressions:Clean"/>
+        <CallTarget Targets="Daf_Commons:Clean;Daf_DependencyInjection_Abstractions:Clean;Daf_Configuration_Abstractions:Clean;Daf_Logging_Abstractions:Clean;Daf_Hosting_Abstractions:Clean;Daf_MediatR_Abstractions:Clean;Daf_DependencyInjection:Clean;Daf_Configuration:Clean;Daf_Hosting:Clean;Daf_Logging:Clean;Daf_NNlog:Clean;Daf_MediatR:Clean;Daf_Application:Clean;Daf_MiniSpec:Clean;Daf_SQLCute_Abstractions:Clean;Daf_SQLCute:Clean;Daf_Linq:Clean;Daf_SQLCute_InMemory:Clean;Daf_Query_Expressions:Clean;Daf_SQLCute_Expressions:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="Daf_Commons:Make;Daf_DependencyInjection_Abstractions:Make;Daf_Configuration_Abstractions:Make;Daf_Logging_Abstractions:Make;Daf_Hosting_Abstractions:Make;Daf_MediatR_Abstractions:Make;Daf_DependencyInjection:Make;Daf_Configuration:Make;Daf_Hosting:Make;Daf_Logging:Make;Daf_NNlog:Make;Daf_MediatR:Make;Daf_Application:Make;Daf_MiniSpec:Make;Daf_SQLCute_Abstractions:Make;Daf_SQLCute:Make;Daf_SQLCute_Compilers:Make;Daf_Linq:Make;Daf_SQLCute_InMemory:Make;Daf_Query_Expressions:Make;Daf_SQLCute_Expressions:Make"/>
+        <CallTarget Targets="Daf_Commons:Make;Daf_DependencyInjection_Abstractions:Make;Daf_Configuration_Abstractions:Make;Daf_Logging_Abstractions:Make;Daf_Hosting_Abstractions:Make;Daf_MediatR_Abstractions:Make;Daf_DependencyInjection:Make;Daf_Configuration:Make;Daf_Hosting:Make;Daf_Logging:Make;Daf_NNlog:Make;Daf_MediatR:Make;Daf_Application:Make;Daf_MiniSpec:Make;Daf_SQLCute_Abstractions:Make;Daf_SQLCute:Make;Daf_Linq:Make;Daf_SQLCute_InMemory:Make;Daf_Query_Expressions:Make;Daf_SQLCute_Expressions:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
     <ItemGroup Condition="'$(BuildGroup)'=='Debug'">

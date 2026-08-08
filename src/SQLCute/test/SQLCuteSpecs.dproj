@@ -55,7 +55,7 @@
         <DCC_Namespace>System;Xml;Data;Datasnap;Web;Soap;Winapi;$(DCC_Namespace)</DCC_Namespace>
         <Icon_MainIcon>$(BDS)\bin\delphi_PROJECTICON.ico</Icon_MainIcon>
         <Icns_MainIcns>$(BDS)\bin\delphi_PROJECTICNS.icns</Icns_MainIcns>
-        <DCC_UnitSearchPath>..\..\SQLCute;..;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>..;..\..\SQLCute.Abstractions;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <CfgDependentOn>..\..\test.optset</CfgDependentOn>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win32)'!=''">
@@ -97,7 +97,7 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
-        <DCCReference Include="..\..\SQLCute\Daf.SQLCute.Core.pas"/>
+        <DCCReference Include="..\Daf.SQLCute.Core.pas"/>
         <DCCReference Include="SQLCute.SpecHelpers.pas"/>
         <DCCReference Include="SQLCute.Select.Feat.pas"/>
         <DCCReference Include="SQLCute.Where.Feat.pas"/>
@@ -117,6 +117,9 @@
         <DCCReference Include="SQLCute.Steps.WhereIn.pas"/>
         <DCCReference Include="SQLCute.Steps.WhereAdvanced.pas"/>
         <DCCReference Include="SQLCute.Steps.StringOps.pas"/>
+        <DCCReference Include="SQLCute.Compilers.Feat.pas"/>
+        <DCCReference Include="SQLCute.Compilers.Steps.pas"/>
+        <DCCReference Include="SQLCute.Date.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>

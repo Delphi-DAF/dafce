@@ -37,6 +37,12 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 - **Daf.Linq**: `Where` / `Filter` toman `TFilterSpec<T>`
 - **Commons**: `Daf.Enumerable.ToArray` usa colector `TList<T>` (O(n) en lugar de O(n²))
 
+### Changed
+
+- **SQLCute**: El módulo pasa de **5 paquetes a 4**. `Daf.SQLCute.Compilers` desaparece y sus seis compiladores de dialecto se integran en `Daf.SQLCute`, que ya contenía el compilador ANSI: la frontera no aislaba ninguna dependencia —requería exactamente lo mismo que `Daf.SQLCute`— y a cambio separaba ANSI de los otros seis sin motivo. Los nombres de las **unidades no cambian**, así que ningún `uses` se toca; quien referenciara el **paquete** `Daf.SQLCute.Compilers` en un `requires` o un `DCCReference` debe usar `Daf.SQLCute`
+- **SQLCute**: `Daf.SQLCute.WhereTree` pasa de `SQLCute.Abstractions` a `Daf.SQLCute`. Es el normalizador de precedencia de WHERE que comparten los dos back-ends, y ningún contrato lo usa: es implementación compartida, no superficie de `IQuery`
+- **SQLCute**: Tests, samples y documentación del módulo se mudan de `src/SQLCute.Abstractions/` a `src/SQLCute/`, y las dos suites (`SQLCuteSpecs` y `SQLCuteCompilersSpecs`) se fusionan en un runner único de 199 specs. Es la convención del proyecto: un módulo partido en `.Abstractions` + implementación pone tests y samples solo en la implementación, con un runner por módulo
+
 ### Removed
 
 - **Commons**: `TBooleanExpresion`
