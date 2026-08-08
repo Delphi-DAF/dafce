@@ -8,6 +8,9 @@ on:
       - 'src/**/README*.md'
       - 'src/**/docs/GUIDE*.md'
       - 'src/**/docs/TESTING-PATTERNS*.md'
+      # The dependency graph is generated from the requires clauses, so a package
+      # rewiring changes the site without any docs/ file being touched.
+      - 'src/**/*.dpk'
   workflow_dispatch:
 
 permissions:
@@ -25,6 +28,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # Fails the build rather than publishing a graph that no longer matches the
+      # packages: a stale diagram still renders, so nothing else would catch it.
+      - name: Check the dependency graph is up to date
+        run: python3 docs/_gen/module-graph.py --check
 
       - name: Setup Quarto
         uses: quarto-dev/quarto-actions/setup@v2

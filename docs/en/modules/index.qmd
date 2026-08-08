@@ -20,3 +20,11 @@ DAFce ships **10 modules** organized in independent packages. Each module has it
 | [Web](web.qmd) | `Daf.Web` | Lightweight HTTP server and routing |
 
 Modules marked with **Abstractions** also ship a `Daf.X.Abstractions` package containing only interfaces, for cleaner compile-time dependencies.
+
+## What depends on what
+
+Install only the modules you want — but a module brings the packages it requires, and some of them
+bring a runtime package from the RAD Studio installation. Both are below, generated from the
+packages themselves.
+
+{{< include ../../_partials/module-graph.en.md >}}

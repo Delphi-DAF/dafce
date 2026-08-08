@@ -21,3 +21,11 @@ DAFce incluye **10 módulos** organizados en paquetes independientes. Cada módu
 | [Web](web.qmd) | `Daf.Web` | Servidor HTTP ligero y routing |
 
 Los módulos marcados con **Abstractions** incluyen también un paquete `Daf.X.Abstractions` con solo interfaces, para dependencias de compilación más limpias.
+
+## Qué depende de qué
+
+Instala solo los módulos que quieras — pero un módulo se lleva los paquetes que requiere, y algunos
+de ellos se llevan un paquete del runtime de RAD Studio. Las dos cosas están abajo, generadas de los
+propios paquetes.
+
+{{< include ../../_partials/module-graph.es.md >}}
