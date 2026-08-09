@@ -46,36 +46,19 @@ type
   end;
 
   /// <summary>
-  ///   Base that solves the <c>System.IEnumerable&lt;T&gt;</c> plumbing (the
-  ///   non-generic <c>GetCurrent: TObject</c> baggage) via the method-resolution
-  ///   clause — the proven <c>Daf.Enumerable</c> pattern.
+  ///   Concrete <c>IGrouping&lt;TKey,T&gt;</c> — a key and its captured members.
   /// </summary>
-  TQueryableBase<T> = class(TInterfacedObject, IEnumerable, IEnumerable<T>)
-  protected
-    function DoGetEnumerator: IEnumerator<T>; virtual; abstract;
-  public
-    function GetEnumerator: IEnumerator; overload;
-    function IEnumerable<T>.GetEnumerator = GetGenericEnumerator;
-    function GetGenericEnumerator: IEnumerator<T>;
-  end;
-
-  /// <summary>A lazy <c>IEnumerable&lt;T&gt;</c> wrapper over another <c>IEnumerable&lt;T&gt;</c>.</summary>
-  TQueryable<T> = class(TQueryableBase<T>)
-  private
-    FSource: IEnumerable<T>;
-  protected
-    function DoGetEnumerator: IEnumerator<T>; override;
-  public
-    constructor Create(const Source: IEnumerable<T>);
-  end;
-
-  /// <summary>Concrete <c>IGrouping&lt;TKey,T&gt;</c> — a key and its captured members.</summary>
-  TGrouping<TKey, T> = class(TQueryableBase<T>, IGrouping<TKey, T>)
+  /// <remarks>
+  ///   In the interface section under protest, not by choice: <c>TQuery&lt;T&gt;.GroupBy&lt;TKey&gt;</c>
+  ///   is a generic method of a generic type declared above, and Delphi rejects E2506 —
+  ///   "must not use local symbol" — if it names a type from the implementation
+  ///   section. It is an implementation detail all the same; consumers hold
+  ///   <c>IGrouping&lt;TKey,T&gt;</c>.
+  /// </remarks>
+  TGrouping<TKey, T> = class(TDeferredEnumerable<T>, IGrouping<TKey, T>)
   private
     FKey: TKey;
     FMembers: TArray<T>;
-  protected
-    function DoGetEnumerator: IEnumerator<T>; override;
   public
     constructor Create(const Key: TKey; const Members: TArray<T>);
     function GetKey: TKey;
@@ -191,36 +174,28 @@ type
 
 implementation
 
-{ TQueryableBase<T> }
-
-function TQueryableBase<T>.GetEnumerator: IEnumerator;
-begin
-  Result := DoGetEnumerator;
-end;
-
-function TQueryableBase<T>.GetGenericEnumerator: IEnumerator<T>;
-begin
-  Result := DoGetEnumerator;
-end;
-
-{ TQueryable<T> }
-
-constructor TQueryable<T>.Create(const Source: IEnumerable<T>);
-begin
-  inherited Create;
-  FSource := Source;
-end;
-
-function TQueryable<T>.DoGetEnumerator: IEnumerator<T>;
-begin
-  Result := FSource.GetEnumerator;
-end;
-
 { TGrouping<TKey, T> }
 
 constructor TGrouping<TKey, T>.Create(const Key: TKey; const Members: TArray<T>);
 begin
-  inherited Create;
+  // La factoría captura una copia local, no Self: nada de ciclos de referencia,
+  // y cada enumeración arranca su propio índice.
+  var Data := Members;
+  inherited Create(
+    function: IEnumerator<T>
+    var
+      Idx: Integer;
+    begin
+      Idx := -1;
+      Result := TGeneratorEnumerator<T>.Create(
+        function(var Current: T): Boolean
+        begin
+          Inc(Idx);
+          Result := Idx <= High(Data);
+          if Result then
+            Current := Data[Idx];
+        end);
+    end);
   FKey := Key;
   FMembers := Members;
 end;
@@ -233,22 +208,6 @@ end;
 function TGrouping<TKey, T>.Members: TArray<T>;
 begin
   Result := FMembers;
-end;
-
-function TGrouping<TKey, T>.DoGetEnumerator: IEnumerator<T>;
-var
-  Idx: Integer;
-begin
-  var Data := FMembers;
-  Idx := -1;
-  Result := TGeneratorEnumerator<T>.Create(
-    function(var Current: T): Boolean
-    begin
-      Inc(Idx);
-      Result := Idx <= High(Data);
-      if Result then
-        Current := Data[Idx];
-    end);
 end;
 
 { TQuery<T> }
@@ -277,7 +236,7 @@ function TQuery<T>.Where(const Spec: TFilterSpec<T>): TQuery<T>;
 begin
   var Src := FSeq;
   var Filter := Spec;   // local copy: a const parameter is not safely captured
-  Result.FSeq := TQueryable<T>.Create(TDeferredEnumerable<T>.Create(
+  Result.FSeq := TDeferredEnumerable<T>.Create(
     function: IEnumerator<T>
     var
       Inner: IEnumerator<T>;
@@ -294,7 +253,7 @@ begin
             end;
           Result := False;
         end);
-    end));
+    end);
 end;
 
 function TQuery<T>.Filter(const Spec: TFilterSpec<T>): TQuery<T>;
@@ -305,7 +264,7 @@ end;
 function TQuery<T>.Select<TResult>(const Mapper: TFunc<T, TResult>): TQuery<TResult>;
 begin
   var Src := FSeq;
-  Result.FSeq := TQueryable<TResult>.Create(TDeferredEnumerable<TResult>.Create(
+  Result.FSeq := TDeferredEnumerable<TResult>.Create(
     function: IEnumerator<TResult>
     var
       Inner: IEnumerator<T>;
@@ -318,7 +277,7 @@ begin
           if Result then
             Current := Mapper(Inner.Current);
         end);
-    end));
+    end);
 end;
 
 function TQuery<T>.Map<TResult>(const Mapper: TFunc<T, TResult>): TQuery<TResult>;
@@ -330,7 +289,7 @@ function TQuery<T>.Take(Count: Integer): TQuery<T>;
 begin
   var Src := FSeq;
   var Limit := Count;
-  Result.FSeq := TQueryable<T>.Create(TDeferredEnumerable<T>.Create(
+  Result.FSeq := TDeferredEnumerable<T>.Create(
     function: IEnumerator<T>
     var
       Inner: IEnumerator<T>;
@@ -350,14 +309,14 @@ begin
             Inc(Taken);
           end;
         end);
-    end));
+    end);
 end;
 
 function TQuery<T>.Skip(Count: Integer): TQuery<T>;
 begin
   var Src := FSeq;
   var Drop := Count;
-  Result.FSeq := TQueryable<T>.Create(TDeferredEnumerable<T>.Create(
+  Result.FSeq := TDeferredEnumerable<T>.Create(
     function: IEnumerator<T>
     var
       Inner: IEnumerator<T>;
@@ -374,7 +333,7 @@ begin
           if Result then
             Current := Inner.Current;
         end);
-    end));
+    end);
 end;
 
 function TQuery<T>.Distinct(const Comparer: IEqualityComparer<T>): TQuery<T>;
@@ -383,7 +342,7 @@ begin
   var Cmp := Comparer;
   if Cmp = nil then
     Cmp := TEqualityComparer<T>.Default;
-  Result.FSeq := TQueryable<T>.Create(TDeferredEnumerable<T>.Create(
+  Result.FSeq := TDeferredEnumerable<T>.Create(
     function: IEnumerator<T>
     var
       Inner: IEnumerator<T>;
@@ -414,14 +373,14 @@ begin
           if Result then
             Current := Acc[Idx];
         end);
-    end));
+    end);
 end;
 
 function TQuery<T>.OrderBy(const Comparer: IComparer<T>): TQuery<T>;
 begin
   var Src := FSeq;
   var Cmp := Comparer;
-  Result.FSeq := TQueryable<T>.Create(TDeferredEnumerable<T>.Create(
+  Result.FSeq := TDeferredEnumerable<T>.Create(
     function: IEnumerator<T>
     var
       Inner: IEnumerator<T>;
@@ -450,7 +409,7 @@ begin
           if Result then
             Current := Acc[Idx];
         end);
-    end));
+    end);
 end;
 
 function TQuery<T>.Zip<TOther, TResult>(const Other: IEnumerable<TOther>;
@@ -458,7 +417,7 @@ function TQuery<T>.Zip<TOther, TResult>(const Other: IEnumerable<TOther>;
 begin
   var Src := FSeq;
   var Oth := Other;
-  Result.FSeq := TQueryable<TResult>.Create(TDeferredEnumerable<TResult>.Create(
+  Result.FSeq := TDeferredEnumerable<TResult>.Create(
     function: IEnumerator<TResult>
     var
       A: IEnumerator<T>;
@@ -473,7 +432,7 @@ begin
           if Result then
             Current := Zipper(A.Current, B.Current);
         end);
-    end));
+    end);
 end;
 
 function TQuery<T>.GroupBy<TKey>(const KeySelector: TFunc<T, TKey>;
@@ -483,7 +442,7 @@ begin
   var Cmp := Comparer;
   if Cmp = nil then
     Cmp := TEqualityComparer<TKey>.Default;
-  Result := TQueryable<IGrouping<TKey, T>>.Create(TDeferredEnumerable<IGrouping<TKey, T>>.Create(
+  Result := TDeferredEnumerable<IGrouping<TKey, T>>.Create(
     function: IEnumerator<IGrouping<TKey, T>>
     var
       Groups: TArray<IGrouping<TKey, T>>;
@@ -523,7 +482,7 @@ begin
           if Result then
             Current := Groups[Idx];
         end);
-    end));
+    end);
 end;
 
 function TQuery<T>.ToArray: TArray<T>;
@@ -659,7 +618,7 @@ end;
 
 class function Linq.From<T>(const Source: IEnumerable<T>): TQuery<T>;
 begin
-  Result.FSeq := TQueryable<T>.Create(Source);
+  Result.FSeq := Source;
 end;
 
 class function Linq.From<T>(const Source: TEnumerable<T>): TQuery<T>;
@@ -672,7 +631,7 @@ begin
     begin
       Result := TEnumeratorAdapter<T>.Create(Src.GetEnumerator);
     end);
-  Result.FSeq := TQueryable<T>.Create(Seq);
+  Result.FSeq := Seq;
 end;
 
 class function Linq.From<T>(const Source: TArray<T>): TQuery<T>;
@@ -693,7 +652,7 @@ begin
             Current := Data[Idx];
         end);
     end);
-  Result.FSeq := TQueryable<T>.Create(Seq);
+  Result.FSeq := Seq;
 end;
 
 class function Linq.From<T>(const Source: TSmartArray<T>): TQuery<T>;
