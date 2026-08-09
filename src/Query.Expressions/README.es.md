@@ -1,8 +1,8 @@
-# Daf.Query.Expressions — Consultas tipadas, sin SQL
+﻿# Daf.Query.Expressions — Consultas tipadas, sin SQL
 
 **🌍 Idioma: [English](README.md) | Español**
 
-Una condición de consulta, escrita como código Delphi con operadores, que sigue siendo un **árbol inspeccionable** en lugar de convertirse en una clausura.
+El **patrón Specification** con un giro: la condición se escribe como código Delphi con operadores y sigue siendo un **árbol inspeccionable** en lugar de convertirse en una clausura. El juego de nodos es a propósito más estrecho que un árbol de expresión general — `System.Linq.Expressions` puede llevar cualquier cosa, este no —, así que una regla sin traducción posible es irrepresentable en vez de ejecutarse en el cliente en silencio.
 
 ```pascal
 var Spec := TSpecification<TProduct>.New

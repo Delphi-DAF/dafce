@@ -4,8 +4,3 @@ lang: es
 ---
 
 {{< include ../../../src/SQLCute/README.es.md >}}
-
----
-
-## Compiladores
-

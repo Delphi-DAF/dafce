@@ -3,8 +3,3 @@ sidebar: modules
 ---
 
 {{< include ../../../src/SQLCute/README.md >}}
-
----
-
-## Compilers
-

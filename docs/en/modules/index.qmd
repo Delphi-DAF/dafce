@@ -4,7 +4,7 @@ sidebar: modules
 toc: false
 ---
 
-DAFce ships **10 modules** organized in independent packages. Each module has its own search path — add only what you need.
+DAFce ships **14 modules** in independent packages. Each has its own search path — add only what you need. Where a module ports a design from another community, the table says which: naming the lineage is deliberate, because porting what is already proven beats reinventing it.
 
 | Module | Package | Description |
 |--------|---------|-------------|
@@ -17,7 +17,12 @@ DAFce ships **10 modules** organized in independent packages. Each module has it
 | [MediatR](mediator.qmd) | `Daf.MediatR` | CQRS: commands, queries, notifications, pipelines |
 | [MiniSpec](minispec.qmd) | `Daf.MiniSpec` | BDD testing: Gherkin specs, expectations, live dashboard |
 | [NNLog](nnlog.qmd) | `Daf.NNLog` | NLog-inspired logging engine integrated with DAF |
-| [Web](web.qmd) | `Daf.Web` | Lightweight HTTP server and routing |
+| [SQLCute](sqlcute.qmd) | `Daf.SQLCute` | Fluent SQL builder after **SqlKata**: `IQuery` as a public AST, one compiler per dialect |
+| [SQLCute.InMemory](sqlcute-inmemory.qmd) | `Daf.SQLCute.InMemory` | A second back-end: runs the same `IQuery` over loaded collections, ANSI NULL semantics. **No analogue** — SqlKata only compiles to text |
+| [SQLCute.Expressions](sqlcute-expressions.qmd) | `Daf.SQLCute.Expressions` | The seam: emits a Query.Expressions rule as WHERE clauses on an `IQuery` |
+| [Linq](linq.qmd) | `Daf.Linq` | **LINQ-to-Objects**: lazy sequences over `IEnumerable<T>`, closures, no SQL |
+| [Query.Expressions](query-expressions.qmd) | `Daf.Query.Expressions` | **Specification pattern** — filter, order and paging over a deliberately bounded predicate tree, narrower than `System.Linq.Expressions` so that what cannot be translated is unrepresentable |
+| [Web](web.qmd) | *not packaged yet* | Lightweight HTTP server and routing — sources under `src/web/`, no `.dpk` and no group entry |
 
 Modules marked with **Abstractions** also ship a `Daf.X.Abstractions` package containing only interfaces, for cleaner compile-time dependencies.
 

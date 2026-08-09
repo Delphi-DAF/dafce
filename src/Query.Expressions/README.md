@@ -1,8 +1,8 @@
-# Daf.Query.Expressions — Typed Query Authoring, SQL-Free
+﻿# Daf.Query.Expressions — Typed Query Authoring, SQL-Free
 
 **🌍 Language: English | [Español](README.es.md)**
 
-A query condition, written as Delphi code with operators, that stays an **inspectable tree** instead of becoming a closure.
+The **Specification pattern** with a twist: the condition is written as Delphi code with operators and stays an **inspectable tree** instead of becoming a closure. The node set is deliberately narrower than a general expression tree — `System.Linq.Expressions` can carry anything, this cannot, so a rule that has no translation is unrepresentable rather than silently run client-side.
 
 ```pascal
 var Spec := TSpecification<TProduct>.New
