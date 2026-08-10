@@ -45,12 +45,12 @@ website:
             href: en/modules/sqlcute.qmd
           - text: "SQLCute.InMemory"
             href: en/modules/sqlcute-inmemory.qmd
-          - text: "SQLCute.Expressions"
-            href: en/modules/sqlcute-expressions.qmd
+          - text: "SQLCute.Specification"
+            href: en/modules/sqlcute-specification.qmd
           - text: "Linq"
             href: en/modules/linq.qmd
-          - text: "Query.Expressions"
-            href: en/modules/query-expressions.qmd
+          - text: "Specification"
+            href: en/modules/specification.qmd
           - text: "Web"
             href: en/modules/web.qmd
       - href: en/blog/index.qmd
@@ -116,12 +116,12 @@ website:
               href: en/modules/sqlcute-guide.qmd
             - text: "SQLCute.InMemory"
               href: en/modules/sqlcute-inmemory.qmd
-            - text: "SQLCute.Expressions"
-              href: en/modules/sqlcute-expressions.qmd
+            - text: "SQLCute.Specification"
+              href: en/modules/sqlcute-specification.qmd
             - text: "Linq"
               href: en/modules/linq.qmd
-            - text: "Query.Expressions"
-              href: en/modules/query-expressions.qmd
+            - text: "Specification"
+              href: en/modules/specification.qmd
         - section: "Utilities"
           contents:
             - text: "Commons"
@@ -167,12 +167,12 @@ website:
               href: es/modules/sqlcute-guide.qmd
             - text: "SQLCute.InMemory"
               href: es/modules/sqlcute-inmemory.qmd
-            - text: "SQLCute.Expressions"
-              href: es/modules/sqlcute-expressions.qmd
+            - text: "SQLCute.Specification"
+              href: es/modules/sqlcute-specification.qmd
             - text: "Linq"
               href: es/modules/linq.qmd
-            - text: "Query.Expressions"
-              href: es/modules/query-expressions.qmd
+            - text: "Specification"
+              href: es/modules/specification.qmd
         - section: "Utilidades"
           contents:
             - text: "Commons"

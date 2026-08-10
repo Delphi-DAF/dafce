@@ -346,7 +346,7 @@ en línea convierten implícitamente, como arriba; construye el valor por separa
 cuando quieras reutilizarlo o componerlo:
 
 ```pascal
-uses Daf.Expression;
+uses Daf.FilterSpec;
 
 var Largos: TFilterSpec<string> := TPredicate<string>(
   function(S: string): Boolean begin Result := Length(S) > 4; end);

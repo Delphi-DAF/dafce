@@ -21,7 +21,7 @@ Utilidades transversales para aplicaciones DAFce — punteros inteligentes, toke
 | `Daf.Rtti` | Helpers de RTTI — `_T.Extends`, predicados de tipo |
 | `Daf.Activator` | Crear instancias de clases mediante RTTI |
 | `Daf.Arrays` | `TArrayHelper` (`Map`, `Trim`), `TSmartArray<T>` (estilo LINQ: `Where`, `Select`, `Contains`, `Sort`, …) |
-| `Daf.Expression` | Evaluador de expresiones simple |
+| `Daf.FilterSpec` | `TFilterSpec<T>` — predicado por clausuras, componible con `and` / `or` / `not` |
 | `Daf.Types` | Tipos base comunes |
 
 ---

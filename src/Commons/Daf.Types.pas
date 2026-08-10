@@ -7,11 +7,33 @@ uses
   System.Classes,
   System.Rtti,
   System.SysUtils,
-  System.Generics.Collections,
-  Daf.Expression;
+  System.Generics.Collections;
 
 type
-  TMacroExpression = TExpresion<string>;
+  /// <summary>
+  ///   A value that may be given either directly or as a thunk, and that is
+  ///   re-evaluated on <b>every</b> read.
+  /// </summary>
+  /// <remarks>
+  ///   Named for what it does, and deliberately not for what it resembles.
+  ///   It is <i>not</i> .NET's <c>Expression&lt;TDelegate&gt;</c>, which is an
+  ///   inspectable expression tree — that world is <c>IExpr</c> /
+  ///   <c>TSpecification&lt;T&gt;</c> in <c>Daf.Specification</c>, and calling
+  ///   this one an expression claimed a correspondence that does not hold.
+  ///   Nor is it <c>Lazy&lt;T&gt;</c>, which memoizes: here the thunk runs
+  ///   again on each read, which is exactly what macro resolution wants.
+  /// </remarks>
+  TDeferred<T> = record
+  private
+    FFunc: TFunc<T>;
+  public
+    class operator Initialize(out Dest: TDeferred<T>);
+    class operator Implicit(const Value: T): TDeferred<T>;
+    class operator Implicit(const Func: TFunc<T>): TDeferred<T>;
+    class operator Implicit(const Deferred: TDeferred<T>): T;
+  end;
+
+  TMacroExpression = TDeferred<string>;
   TMacrosList = class
   strict private
     FExpresions: TOrderedDictionary<string, TMacroExpression>;
@@ -101,6 +123,34 @@ uses
   System.RegularExpressions,
   System.Generics.Defaults,
   System.StrUtils;
+
+{ TDeferred<T> }
+
+class operator TDeferred<T>.Implicit(const Value: T): TDeferred<T>;
+begin
+  Result.FFunc := function: T
+    begin
+      Result := Value
+    end;
+end;
+
+class operator TDeferred<T>.Implicit(const Func: TFunc<T>): TDeferred<T>;
+begin
+  Result.FFunc := Func;
+end;
+
+class operator TDeferred<T>.Implicit(const Deferred: TDeferred<T>): T;
+begin
+  Result := Deferred.FFunc();
+end;
+
+class operator TDeferred<T>.Initialize(out Dest: TDeferred<T>);
+begin
+  Dest.FFunc := function: T
+    begin
+      Result := Default(T);
+    end;
+end;
 
 { TEnvVars }
 

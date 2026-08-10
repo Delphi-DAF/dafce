@@ -29,7 +29,7 @@ implementation
 uses
   System.SysUtils,
   Daf.MiniSpec,
-  Daf.Expression,
+  Daf.FilterSpec,
   Daf.Arrays;
 
 initialization

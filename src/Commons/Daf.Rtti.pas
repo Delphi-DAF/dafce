@@ -5,7 +5,7 @@ uses
   System.SysUtils,
   System.TypInfo,
   System.Rtti,
-  Daf.Expression,
+  Daf.FilterSpec,
   Daf.Arrays;
 
 type

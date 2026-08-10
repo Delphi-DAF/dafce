@@ -21,7 +21,7 @@ Cross-cutting utilities for DAFce applications — smart pointers, cancellation 
 | `Daf.Rtti` | RTTI helpers — `_T.Extends`, type predicates |
 | `Daf.Activator` | Create class instances via RTTI |
 | `Daf.Arrays` | `TArrayHelper` (`Map`, `Trim`), `TSmartArray<T>` (LINQ-style: `Where`, `Select`, `Contains`, `Sort`, …) |
-| `Daf.Expression` | Simple expression evaluator |
+| `Daf.FilterSpec` | `TFilterSpec<T>` — closure predicate, composable with `and` / `or` / `not` |
 | `Daf.Types` | Common base types |
 
 ---

@@ -33,7 +33,7 @@ uses
   Daf.MiniSpec,
   Daf.Enumerable,
   Daf.Arrays,
-  Daf.Expression,
+  Daf.FilterSpec,
   Daf.Linq;
 
 { TOpsWorld }

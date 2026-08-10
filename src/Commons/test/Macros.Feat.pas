@@ -1,11 +1,11 @@
 ﻿unit Macros.Feat;
 
 {
-  Coverage for TMacrosList, the live consumer of TExpresion<string>
+  Coverage for TMacrosList, the only consumer of TDeferred<string>
   (TMacroExpression). A macro genuinely is "a value or a function producing a
-  value", which is what TExpresion<T> is for — so this is the type's legitimate
-  use, and this spec is the net that keeps it working while the unused
-  TBooleanExpresion is removed from the same unit.
+  value", re-read on every use, which is what TDeferred<T> is for — so this is
+  the type's legitimate use, and this spec is the net that held it while the
+  type moved units and lost its old misspelt name.
 }
 
 interface
@@ -25,7 +25,6 @@ implementation
 uses
   System.SysUtils,
   Daf.MiniSpec,
-  Daf.Expression,
   Daf.Types;
 
 initialization

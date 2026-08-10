@@ -20,11 +20,11 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 - **SQLCute.InMemory**: Semántica ANSI de NULL — lógica de tres valores, agregados que ignoran NULL, DISTINCT con NULLs iguales, GROUP BY con un grupo para NULL, ORDER BY con NULL como menor
 - **SQLCute.InMemory**: Samples `InMemoryQuerySample` e `InMemoryJoinSample`; documentación bilingüe (EN/ES)
 - **SQLCute**: `Daf.SQLCute.WhereTree` — normalizador de precedencia WHERE compartido por ambos back-ends, en el paquete `Daf.SQLCute`
-- **Daf.Query.Expressions**: Módulo nuevo — condiciones de consulta escritas con operadores Delphi que siguen siendo un **árbol inspeccionable**, sin SQL y sin referenciar SQLCute: `IExpr` y su juego acotado de nodos, `Prop`/`Prm`, `TEntityExpr<T>` (proxy RTTI que valida cada miembro donde se escribe) y el metamodelo opcional `TPropExpr<T>`
-- **Daf.Query.Expressions**: `TSpecification<T>` — una regla reutilizable con filtro, orden y paginación, afirmable en un test sin base de datos; `IRepository<T>` como puerto, sin restricción de clase base
-- **Daf.Query.Expressions**: `INameResolver` — la única costura de nombres: miembro → columna y tipo → tabla, con identidad y «nombre del tipo sin la T inicial» por defecto
-- **SQLCute.Expressions**: Módulo nuevo — `TExprEmitter` emite una expresión como cláusulas WHERE sobre un `IQuery`, de modo que la misma regla va a la base de datos o a una colección cargada sin traducirse dos veces
-- **SQLCute.Expressions**: `TInMemoryRepository<T>` — adaptador de `IRepository<T>` sobre una colección ya cargada, con caché de planes por regla; sample `CatalogServiceSample` y documentación bilingüe (EN/ES)
+- **Daf.Specification**: Módulo nuevo — condiciones de consulta escritas con operadores Delphi que siguen siendo un **árbol inspeccionable**, sin SQL y sin referenciar SQLCute: `IExpr` y su juego acotado de nodos, `Prop`/`Prm`, `TEntityExpr<T>` (proxy RTTI que valida cada miembro donde se escribe) y el metamodelo opcional `TPropExpr<T>`
+- **Daf.Specification**: `TSpecification<T>` — una regla reutilizable con filtro, orden y paginación, afirmable en un test sin base de datos; `IRepository<T>` como puerto, sin restricción de clase base
+- **Daf.Specification**: `INameResolver` — la única costura de nombres: miembro → columna y tipo → tabla, con identidad y «nombre del tipo sin la T inicial» por defecto
+- **SQLCute.Specification**: Módulo nuevo — `TExprEmitter` emite una expresión como cláusulas WHERE sobre un `IQuery`, de modo que la misma regla va a la base de datos o a una colección cargada sin traducirse dos veces
+- **SQLCute.Specification**: `TInMemoryRepository<T>` — adaptador de `IRepository<T>` sobre una colección ya cargada, con caché de planes por regla; sample `CatalogServiceSample` y documentación bilingüe (EN/ES)
 - **SQLCute**: `WhereNot(Callback)` y `OrWhereNot(Callback)` — grupos WHERE entre paréntesis negados como una unidad, `NOT (…)`
 - **SQLCute**: Orden de NULL por columna en ORDER BY — sobrecargas `OrderBy`/`OrderByDesc` con `TNullsOrder` y modificadores `NullsFirst`/`NullsLast`. Postgres, Oracle, Firebird y SQLite emiten `NULLS FIRST`/`NULLS LAST` nativo; MySQL y SQL Server, que no tienen esa sintaxis, lo **emulan** con una clave de orden previa, así que el orden pedido se respeta en todos los dialectos
 - **Commons**: `TNullable<T>` en `Daf.Nullable`
@@ -34,15 +34,19 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 ### Changed
 
 - **SQLCute**: `CompileWhere` y `CompileHaving` emiten paréntesis explícitos de precedencia
-- **Commons**: `TSmartArray<T>.Select` toma `TFunc<T, TTarget>` en lugar de `TExpresion<TMapper<T, TTarget>>`
+- **Commons**: `TSmartArray<T>.Select` toma `TFunc<T, TTarget>` en lugar de `TDeferred<TMapper<T, TTarget>>`
 - **Daf.Linq**: `Where` / `Filter` toman `TFilterSpec<T>`
 - **Commons**: `Daf.Enumerable.ToArray` usa colector `TList<T>` (O(n) en lugar de O(n²))
 - **SQLCute**: El módulo pasa de **5 paquetes a 4**. `Daf.SQLCute.Compilers` desaparece y sus seis compiladores de dialecto se integran en `Daf.SQLCute`, que ya contenía el compilador ANSI: la frontera no aislaba ninguna dependencia —requería exactamente lo mismo que `Daf.SQLCute`— y a cambio separaba ANSI de los otros seis sin motivo. Los nombres de las **unidades no cambian**, así que ningún `uses` se toca; quien referenciara el **paquete** `Daf.SQLCute.Compilers` en un `requires` o un `DCCReference` debe usar `Daf.SQLCute`
 - **SQLCute**: Tests, samples y documentación del módulo se mudan de `src/SQLCute.Abstractions/` a `src/SQLCute/`, y las dos suites (`SQLCuteSpecs` y `SQLCuteCompilersSpecs`) se fusionan en un runner único de 199 specs. Es la convención del proyecto: un módulo partido en `.Abstractions` + implementación pone tests y samples solo en la implementación, con un runner por módulo
+- **Specification**: El módulo pasa a llamarse `Daf.Specification` (antes `Daf.Query.Expressions`), y el emisor, `Daf.SQLCute.Specification` (antes `Daf.SQLCute.Expressions`). Nombran el patrón que implementan y el valor que bajan a SQL. `Query.` decía justo lo contrario de lo que el módulo es: `IQuery` es el AST de SQLCute, la única dependencia que este paquete no puede tener. Ningún tipo cambia de nombre ni de firma; hay que tocar el `uses`, el `requires` y la ruta `src/Specification/` y `src/SQLCute.Specification/`
+- **Commons**: `TFilterSpec<T>` —el filtro por clausuras— pasa a su propia unidad, `Daf.FilterSpec`. La unidad `Daf.Expression` guardaba dos tipos sin relación y llevaba el nombre del que tiene un solo consumidor, además de nombrar el mundo de los árboles para una clausura
+- **Commons**: `TExpresion<T>` pasa a llamarse **`TDeferred<T>`** y se muda a `Daf.Types`, junto a su único consumidor. El nombre nuevo dice lo que hace —el valor se evalúa al leerlo, y en cada lectura— y deja de sugerir el `Expression<TDelegate>` de .NET, que es un árbol inspeccionable; tampoco es `Lazy<T>`, que memoiza. La firma no cambia y `TMacroExpression` sigue siendo el alias, así que quien use macros no toca nada
 
 ### Removed
 
 - **Commons**: `TBooleanExpresion`
+- **Commons**: La unidad `Daf.Expression`, disuelta en `Daf.FilterSpec` y `Daf.Types`
 
 ### Fixed
 

@@ -36,7 +36,7 @@ contains
   Daf.Nullable in 'Daf.Nullable.pas',
   Daf.Comparers in 'Daf.Comparers.pas',
   Daf.Activator in 'Daf.Activator.pas',
-  Daf.Expression in 'Daf.Expression.pas',
+  Daf.FilterSpec in 'Daf.FilterSpec.pas',
   Daf.Rtti in 'Daf.Rtti.pas',
   Daf.CmdLn.Parser in 'Daf.CmdLn.Parser.pas',
   Daf.Arrays in 'Daf.Arrays.pas',

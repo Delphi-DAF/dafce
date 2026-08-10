@@ -30,7 +30,7 @@ uses
   System.Generics.Collections,
   System.Generics.Defaults,
   Daf.Enumerable,
-  Daf.Expression,
+  Daf.FilterSpec,
   Daf.Arrays;
 
 type

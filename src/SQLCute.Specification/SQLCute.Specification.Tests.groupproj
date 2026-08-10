@@ -1,0 +1,36 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{AEC3900E-E818-4B74-A3F6-E49B105BAF2D}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="test\SQLCuteSpecificationSpecs.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="SQLCuteSpecificationSpecs">
+        <MSBuild Projects="test\SQLCuteSpecificationSpecs.dproj"/>
+    </Target>
+    <Target Name="SQLCuteSpecificationSpecs:Clean">
+        <MSBuild Projects="test\SQLCuteSpecificationSpecs.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="SQLCuteSpecificationSpecs:Make">
+        <MSBuild Projects="test\SQLCuteSpecificationSpecs.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="SQLCuteSpecificationSpecs"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="SQLCuteSpecificationSpecs:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="SQLCuteSpecificationSpecs:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

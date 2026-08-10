@@ -36,7 +36,7 @@
         <Projects Include="SQLCute.InMemory\samples\InMemoryJoinSample\InMemoryJoinSample.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="SQLCute.Expressions\samples\CatalogServiceSample\CatalogServiceSample.dproj">
+        <Projects Include="SQLCute.Specification\samples\CatalogServiceSample\CatalogServiceSample.dproj">
             <Dependencies/>
         </Projects>
     </ItemGroup>
@@ -147,13 +147,13 @@
         <MSBuild Projects="SQLCute.InMemory\samples\InMemoryJoinSample\InMemoryJoinSample.dproj" Targets="Make"/>
     </Target>
     <Target Name="CatalogServiceSample">
-        <MSBuild Projects="SQLCute.Expressions\samples\CatalogServiceSample\CatalogServiceSample.dproj"/>
+        <MSBuild Projects="SQLCute.Specification\samples\CatalogServiceSample\CatalogServiceSample.dproj"/>
     </Target>
     <Target Name="CatalogServiceSample:Clean">
-        <MSBuild Projects="SQLCute.Expressions\samples\CatalogServiceSample\CatalogServiceSample.dproj" Targets="Clean"/>
+        <MSBuild Projects="SQLCute.Specification\samples\CatalogServiceSample\CatalogServiceSample.dproj" Targets="Clean"/>
     </Target>
     <Target Name="CatalogServiceSample:Make">
-        <MSBuild Projects="SQLCute.Expressions\samples\CatalogServiceSample\CatalogServiceSample.dproj" Targets="Make"/>
+        <MSBuild Projects="SQLCute.Specification\samples\CatalogServiceSample\CatalogServiceSample.dproj" Targets="Make"/>
     </Target>
     <Target Name="Build">
         <CallTarget Targets="ConfigExample;MediatRSample;ConsoleSample;HostedService;PingProcess;CalculatorSpecs;MasterMind_Specs;TicTacToeApp;SQLCuteSample;InMemoryQuerySample;InMemoryJoinSample;CatalogServiceSample"/>

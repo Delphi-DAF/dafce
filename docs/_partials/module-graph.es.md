@@ -21,11 +21,11 @@ graph TD
   MediatRAbstractions[MediatR.Abstractions]
   MiniSpec[MiniSpec]
   NNlog[NNlog]
-  QueryExpressions[Query.Expressions]
   SQLCute[SQLCute]
   SQLCuteAbstractions[SQLCute.Abstractions]
-  SQLCuteExpressions[SQLCute.Expressions]
   SQLCuteInMemory[SQLCute.InMemory]
+  SQLCuteSpecification[SQLCute.Specification]
+  Specification[Specification]
   RTIndy[("IndyCore · IndyProtocols · IndySystem")]
   Application --> Hosting
   Configuration --> ConfigurationAbstractions
@@ -46,12 +46,12 @@ graph TD
   MediatRAbstractions --> DependencyInjectionAbstractions
   NNlog --> HostingAbstractions
   NNlog --> Logging
-  QueryExpressions --> Commons
   SQLCute --> SQLCuteAbstractions
-  SQLCuteExpressions --> QueryExpressions
-  SQLCuteExpressions --> SQLCuteInMemory
   SQLCuteInMemory --> Linq
   SQLCuteInMemory --> SQLCute
+  SQLCuteSpecification --> SQLCuteInMemory
+  SQLCuteSpecification --> Specification
+  Specification --> Commons
   MiniSpec --> RTIndy
   NNlog -->|IndyCore · IndySystem| RTIndy
   classDef abs stroke-dasharray:4 3;
@@ -83,10 +83,10 @@ Instalables solos, sin depender de ningún otro paquete de DAF: `Commons`, `Mini
 | `MediatR.Abstractions` | `rtl` |
 | `MiniSpec` | `IndyCore` · `IndyProtocols` · `IndySystem` · `rtl` |
 | `NNlog` | `IndyCore` · `IndySystem` · `rtl` |
-| `Query.Expressions` | `rtl` |
 | `SQLCute` | `rtl` |
 | `SQLCute.Abstractions` | `rtl` |
-| `SQLCute.Expressions` | `rtl` |
 | `SQLCute.InMemory` | `rtl` |
+| `SQLCute.Specification` | `rtl` |
+| `Specification` | `rtl` |
 
 18 de 20 no piden más que `rtl`.

@@ -1,6 +1,0 @@
----
-sidebar: modules-es
-lang: es
----
-
-{{< include ../../../src/SQLCute.Expressions/README.es.md >}}

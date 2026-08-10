@@ -27,10 +27,10 @@
         <Projects Include="SQLCute.InMemory\test\SQLCuteInMemorySpecs.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="Query.Expressions\test\QueryExpressionsSpecs.dproj">
+        <Projects Include="Specification\test\SpecificationSpecs.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="SQLCute.Expressions\test\SQLCuteExpressionsSpecs.dproj">
+        <Projects Include="SQLCute.Specification\test\SQLCuteSpecificationSpecs.dproj">
             <Dependencies/>
         </Projects>
     </ItemGroup>
@@ -113,32 +113,32 @@
     <Target Name="SQLCuteInMemorySpecs:Make">
         <MSBuild Projects="SQLCute.InMemory\test\SQLCuteInMemorySpecs.dproj" Targets="Make"/>
     </Target>
-    <Target Name="QueryExpressionsSpecs">
-        <MSBuild Projects="Query.Expressions\test\QueryExpressionsSpecs.dproj"/>
+    <Target Name="SpecificationSpecs">
+        <MSBuild Projects="Specification\test\SpecificationSpecs.dproj"/>
     </Target>
-    <Target Name="QueryExpressionsSpecs:Clean">
-        <MSBuild Projects="Query.Expressions\test\QueryExpressionsSpecs.dproj" Targets="Clean"/>
+    <Target Name="SpecificationSpecs:Clean">
+        <MSBuild Projects="Specification\test\SpecificationSpecs.dproj" Targets="Clean"/>
     </Target>
-    <Target Name="QueryExpressionsSpecs:Make">
-        <MSBuild Projects="Query.Expressions\test\QueryExpressionsSpecs.dproj" Targets="Make"/>
+    <Target Name="SpecificationSpecs:Make">
+        <MSBuild Projects="Specification\test\SpecificationSpecs.dproj" Targets="Make"/>
     </Target>
-    <Target Name="SQLCuteExpressionsSpecs">
-        <MSBuild Projects="SQLCute.Expressions\test\SQLCuteExpressionsSpecs.dproj"/>
+    <Target Name="SQLCuteSpecificationSpecs">
+        <MSBuild Projects="SQLCute.Specification\test\SQLCuteSpecificationSpecs.dproj"/>
     </Target>
-    <Target Name="SQLCuteExpressionsSpecs:Clean">
-        <MSBuild Projects="SQLCute.Expressions\test\SQLCuteExpressionsSpecs.dproj" Targets="Clean"/>
+    <Target Name="SQLCuteSpecificationSpecs:Clean">
+        <MSBuild Projects="SQLCute.Specification\test\SQLCuteSpecificationSpecs.dproj" Targets="Clean"/>
     </Target>
-    <Target Name="SQLCuteExpressionsSpecs:Make">
-        <MSBuild Projects="SQLCute.Expressions\test\SQLCuteExpressionsSpecs.dproj" Targets="Make"/>
+    <Target Name="SQLCuteSpecificationSpecs:Make">
+        <MSBuild Projects="SQLCute.Specification\test\SQLCuteSpecificationSpecs.dproj" Targets="Make"/>
     </Target>
     <Target Name="Build">
-        <CallTarget Targets="MiniSpecSpecs;CommonsSpecs;ConfigurationSpecs;DISpecs;MediatRSpecs;SQLCuteSpecs;LinqSpecs;SQLCuteInMemorySpecs;QueryExpressionsSpecs;SQLCuteExpressionsSpecs"/>
+        <CallTarget Targets="MiniSpecSpecs;CommonsSpecs;ConfigurationSpecs;DISpecs;MediatRSpecs;SQLCuteSpecs;LinqSpecs;SQLCuteInMemorySpecs;SpecificationSpecs;SQLCuteSpecificationSpecs"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="MiniSpecSpecs:Clean;CommonsSpecs:Clean;ConfigurationSpecs:Clean;DISpecs:Clean;MediatRSpecs:Clean;SQLCuteSpecs:Clean;LinqSpecs:Clean;SQLCuteInMemorySpecs:Clean;QueryExpressionsSpecs:Clean;SQLCuteExpressionsSpecs:Clean"/>
+        <CallTarget Targets="MiniSpecSpecs:Clean;CommonsSpecs:Clean;ConfigurationSpecs:Clean;DISpecs:Clean;MediatRSpecs:Clean;SQLCuteSpecs:Clean;LinqSpecs:Clean;SQLCuteInMemorySpecs:Clean;SpecificationSpecs:Clean;SQLCuteSpecificationSpecs:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="MiniSpecSpecs:Make;CommonsSpecs:Make;ConfigurationSpecs:Make;DISpecs:Make;MediatRSpecs:Make;SQLCuteSpecs:Make;LinqSpecs:Make;SQLCuteInMemorySpecs:Make;QueryExpressionsSpecs:Make;SQLCuteExpressionsSpecs:Make"/>
+        <CallTarget Targets="MiniSpecSpecs:Make;CommonsSpecs:Make;ConfigurationSpecs:Make;DISpecs:Make;MediatRSpecs:Make;SQLCuteSpecs:Make;LinqSpecs:Make;SQLCuteInMemorySpecs:Make;SpecificationSpecs:Make;SQLCuteSpecificationSpecs:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

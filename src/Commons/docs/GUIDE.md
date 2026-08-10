@@ -345,7 +345,7 @@ mapper written once works with both APIs. Inline closures convert implicitly, as
 above; build the value separately when you want to reuse or compose it:
 
 ```pascal
-uses Daf.Expression;
+uses Daf.FilterSpec;
 
 var Long: TFilterSpec<string> := TPredicate<string>(
   function(S: string): Boolean begin Result := Length(S) > 4; end);
