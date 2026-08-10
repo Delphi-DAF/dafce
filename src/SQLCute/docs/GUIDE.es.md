@@ -1,4 +1,4 @@
-# SQLCute — Guía de Uso
+﻿# SQLCute — Guía de Uso
 
 **🌍 Idioma: [English](GUIDE.md) | Español**
 
@@ -91,5 +91,4 @@ Todos los métodos `Where*` que reciben un `Variant` aceptan valores `Null`. Cua
 
 ## Ver También
 
-- [Paquete de Compiladores](../../../SQLCute.Compilers/README.es.md)
 - [Aplicación de Muestra](../samples/SQLCuteSample/README.md)

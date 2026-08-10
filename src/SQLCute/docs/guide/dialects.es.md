@@ -1,4 +1,4 @@
-# Compiladores de Dialecto
+﻿# Compiladores de Dialecto
 
 **🌍 Idioma: [English](dialects.md) | Español**
 
@@ -30,7 +30,7 @@ El `TAnsiSqlCompiler` por defecto genera SQL ANSI genérico con marcadores `?` y
 | `TOracleCompiler` | `"` | `:p1`, `:p2`… | `Daf.SQLCute.Compiler.Oracle` |
 | `TFirebirdCompiler` | `"` | `?` | `Daf.SQLCute.Compiler.Firebird` |
 
-Todos los compiladores de dialecto están en el paquete `SQLCute.Compilers` — añádelo a tu proyecto junto con `SQLCute.Abstractions` y `SQLCute`.
+Todos los compiladores de dialecto viven en el paquete `Daf.SQLCute`, junto al `TAnsiSqlCompiler` del que extienden. Basta con requerir `Daf.SQLCute`: no hay un paquete de compiladores aparte que añadir.
 
 ---
 
