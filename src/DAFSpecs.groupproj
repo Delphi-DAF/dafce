@@ -33,6 +33,9 @@
         <Projects Include="SQLCute.Specification\test\SQLCuteSpecificationSpecs.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="web\test\WebSpecs.dproj">
+            <Dependencies/>
+        </Projects>
     </ItemGroup>
     <ProjectExtensions>
         <Borland.Personality>Default.Personality.12</Borland.Personality>
@@ -131,14 +134,23 @@
     <Target Name="SQLCuteSpecificationSpecs:Make">
         <MSBuild Projects="SQLCute.Specification\test\SQLCuteSpecificationSpecs.dproj" Targets="Make"/>
     </Target>
+    <Target Name="WebSpecs">
+        <MSBuild Projects="web\test\WebSpecs.dproj"/>
+    </Target>
+    <Target Name="WebSpecs:Clean">
+        <MSBuild Projects="web\test\WebSpecs.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="WebSpecs:Make">
+        <MSBuild Projects="web\test\WebSpecs.dproj" Targets="Make"/>
+    </Target>
     <Target Name="Build">
-        <CallTarget Targets="MiniSpecSpecs;CommonsSpecs;ConfigurationSpecs;DISpecs;MediatRSpecs;SQLCuteSpecs;LinqSpecs;SQLCuteInMemorySpecs;SpecificationSpecs;SQLCuteSpecificationSpecs"/>
+        <CallTarget Targets="MiniSpecSpecs;CommonsSpecs;ConfigurationSpecs;DISpecs;MediatRSpecs;SQLCuteSpecs;LinqSpecs;SQLCuteInMemorySpecs;SpecificationSpecs;SQLCuteSpecificationSpecs;WebSpecs"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="MiniSpecSpecs:Clean;CommonsSpecs:Clean;ConfigurationSpecs:Clean;DISpecs:Clean;MediatRSpecs:Clean;SQLCuteSpecs:Clean;LinqSpecs:Clean;SQLCuteInMemorySpecs:Clean;SpecificationSpecs:Clean;SQLCuteSpecificationSpecs:Clean"/>
+        <CallTarget Targets="MiniSpecSpecs:Clean;CommonsSpecs:Clean;ConfigurationSpecs:Clean;DISpecs:Clean;MediatRSpecs:Clean;SQLCuteSpecs:Clean;LinqSpecs:Clean;SQLCuteInMemorySpecs:Clean;SpecificationSpecs:Clean;SQLCuteSpecificationSpecs:Clean;WebSpecs:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="MiniSpecSpecs:Make;CommonsSpecs:Make;ConfigurationSpecs:Make;DISpecs:Make;MediatRSpecs:Make;SQLCuteSpecs:Make;LinqSpecs:Make;SQLCuteInMemorySpecs:Make;SpecificationSpecs:Make;SQLCuteSpecificationSpecs:Make"/>
+        <CallTarget Targets="MiniSpecSpecs:Make;CommonsSpecs:Make;ConfigurationSpecs:Make;DISpecs:Make;MediatRSpecs:Make;SQLCuteSpecs:Make;LinqSpecs:Make;SQLCuteInMemorySpecs:Make;SpecificationSpecs:Make;SQLCuteSpecificationSpecs:Make;WebSpecs:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

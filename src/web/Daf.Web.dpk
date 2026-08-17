@@ -1,0 +1,56 @@
+﻿package Daf.Web;
+{$R *.res}
+{$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
+{$ALIGN 8}
+{$ASSERTIONS ON}
+{$BOOLEVAL OFF}
+{$DEBUGINFO OFF}
+{$EXTENDEDSYNTAX ON}
+{$IMPORTEDDATA ON}
+{$IOCHECKS ON}
+{$LOCALSYMBOLS ON}
+{$LONGSTRINGS ON}
+{$OPENSTRINGS ON}
+{$OPTIMIZATION OFF}
+{$OVERFLOWCHECKS ON}
+{$RANGECHECKS ON}
+{$REFERENCEINFO ON}
+{$SAFEDIVIDE OFF}
+{$STACKFRAMES ON}
+{$TYPEDADDRESS OFF}
+{$VARSTRINGCHECKS ON}
+{$WRITEABLECONST OFF}
+{$MINENUMSIZE 1}
+{$IMAGEBASE $400000}
+{$DEFINE DEBUG}
+{$ENDIF IMPLICITBUILDING}
+{$RUNONLY}
+{$IMPLICITBUILD OFF}
+
+requires
+  rtl,
+  // Web.HTTPApp and Web.WebReq: WebBroker's request, response and dispatcher.
+  inet,
+  // Web.Stencils, which Daf.Web.Render is built on. It is what brings the
+  // System.Bindings units with it — the cost of server-side rendering, not
+  // residue.
+  inetstn,
+  // The HTTP server itself and the socket handle the port check binds.
+  IndySystem,
+  IndyCore,
+  IndyProtocols,
+  // REST.Json, which turns an action's object into the response body.
+  RESTComponents,
+  Daf.DependencyInjection.Abstractions,
+  Daf.Configuration.Abstractions,
+  Daf.Logging.Abstractions;
+
+contains
+  Daf.Extensions.HttpServer in 'Daf.Extensions.HttpServer.pas',
+  Daf.HttpServer in 'Daf.HttpServer.pas',
+  Daf.Web.Router in 'Daf.Web.Router.pas',
+  Daf.Web.Controller in 'Daf.Web.Controller.pas' {WebController: TDataModule},
+  Daf.Web.Render in 'Daf.Web.Render.pas',
+  Daf.Web.ActionResult in 'Daf.Web.ActionResult.pas';
+
+end.

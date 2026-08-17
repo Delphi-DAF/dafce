@@ -33,10 +33,8 @@ type
     function GetOnStopped: TNotifyEvent;
     procedure SetOnStopped(const Value: TNotifyEvent);
     procedure ClearBindings;
-    procedure TerminateThreads;
     function CanBindPort: Boolean;overload;
     function CanBindPort(const APort: Integer): Boolean; overload;
-    function GetIndyVersion: string;
     function GetSessionID: string;
     function GetOnError: TNotifyEvent;
     procedure SetOnError(const Value: TNotifyEvent);
@@ -50,7 +48,6 @@ type
     procedure Start;
     procedure Stop;
     property Logger: ILogger read FLogger;
-    property Version: string read GetIndyVersion;
     property SessionID: string read GetSessionID;
     property Port: Word read GetPort write SetPort;
     property Active: Boolean read GetActive;
@@ -64,10 +61,8 @@ type
 
 implementation
 uses
-  IPPeerServer,
-  IPPeerAPI,
   Web.WebReq,
-  Datasnap.DSSession;
+  IdSocketHandle;
 
 { TDafHttpServer }
 
@@ -184,14 +179,35 @@ end;
 
 function TDafHttpServer.CanBindPort(const APort: Integer): Boolean;
 var
-  LTestServer: IIPTestServer;
+  Probe: TIdSocketHandle;
 begin
+  if not Assigned(FWebBrokerBridge) then
+    Exit(False);
+
+  // While this server holds the port itself, a bind would fail against its own
+  // socket. The question being asked is whether it can serve there, and it can.
+  if FWebBrokerBridge.Active then
+    Exit(FWebBrokerBridge.DefaultPort = APort);
+
+  // The bridge is an Indy TCP server, so one of its own bindings answers the
+  // question — the same Add / AllocateSocket / Bind that Startup performs, and
+  // no remoting stack for the sake of one boolean. Closing the socket and
+  // freeing the binding is what leaves the port free for the Start this
+  // usually precedes.
   Result := True;
+  Probe := FWebBrokerBridge.Bindings.Add;
   try
-    LTestServer := PeerFactory.CreatePeer('', IIPTestServer) as IIPTestServer;
-    LTestServer.TestOpenPort(APort, nil);
-  except
-    Result := False;
+    Probe.Port := APort;
+    try
+      Probe.AllocateSocket;
+      Probe.Bind;
+    except
+      Result := False;
+    end;
+    if Probe.HandleAllocated then
+      Probe.CloseSocket;
+  finally
+    Probe.Free;
   end;
 end;
 
@@ -205,12 +221,6 @@ function TDafHttpServer.GetSessionID: string;
 begin
   if not Assigned(FWebBrokerBridge) then Exit('');
   Result := FWebBrokerBridge.SessionIDCookieName;
-end;
-
-function TDafHttpServer.GetIndyVersion: string;
-begin
-  if not Assigned(FWebBrokerBridge) then Exit('');
-  Result := FWebBrokerBridge.SessionList.Version;
 end;
 
 procedure TDafHttpServer.SetPort(const Value: Word);
@@ -245,17 +255,10 @@ begin
   if Assigned(FOnStopping) then
     OnStopping(Self);
 
-  TerminateThreads;
   SetActive(False);
   ClearBindings;
   if Assigned(FOnStopped) then
     OnStopped(Self);
-end;
-
-procedure TDafHttpServer.TerminateThreads;
-begin
-  if TDSSessionManager.Instance <> nil then
-    TDSSessionManager.Instance.TerminateAllSessions;
 end;
 
 procedure TDafHttpServer.ClearBindings;

@@ -30,6 +30,8 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 - **Commons**: `TNullable<T>` en `Daf.Nullable`
 - **Commons**: `TDeferredEnumerable<T>` en `Daf.Enumerable`
 - **Commons**: `Daf.Comparers` — comparadores conscientes de NULL para `TValue` y `TNullable<T>`
+- **Daf.Web**: Módulo nuevo en paquete — servidor HTTP ligero sobre Indy y WebBroker, controladores enrutados por atributos y construidos por el contenedor, y action results. Sus fuentes y su README ya se publicaban; lo que faltaba era el `.dpk` con el que instalarlo
+- **Daf.Web**: El paquete **no enlaza DataSnap ni DBX**. El `uses` del servidor era el de la plantilla *DataSnap WebBroker Application* y traía 59 unidades —gestores de sesión, transportes, lectores de metadatos, un escáner SQL— al servicio de un `TerminateThreads` que sin DataSnap no hacía nada y de una comprobación de puerto que ahora responde el propio servidor Indy. Quien lo instale se lleva un servidor HTTP, no una pila de remoting
 
 ### Changed
 

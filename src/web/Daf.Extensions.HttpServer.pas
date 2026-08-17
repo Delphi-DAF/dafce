@@ -6,8 +6,15 @@ uses
   System.SysUtils;
 
 type
+  /// <remarks>
+  /// There is deliberately no member here reporting a version. The one that
+  /// existed returned Indy's, under a name that said so, and a contract naming
+  /// the library its implementation happens to use is a dependency that cannot
+  /// be replaced. What a caller actually wants — which pieces the platform is
+  /// made of, and at which versions: Indy, OpenSSL, WebBroker — is an API of
+  /// its own, and it is designed as one rather than smuggled in as a string.
+  /// </remarks>
   IDafHttpServer = interface(IInvokable)
-    function GetIndyVersion: string;
     function GetSessionID: string;
     function CanBindPort(const APort: Integer): Boolean;overload;
     function CanBindPort: Boolean;overload;
@@ -29,7 +36,6 @@ type
     function GetOnDestroy: TNotifyEvent;
     procedure SetOnDestroy(const Value: TNotifyEvent);
 
-    property IndyVersion: string read GetIndyVersion;
     property SessionID: string read GetSessionID;
     property Port: Word read GetPort write SetPort;
     property Active: Boolean read GetActive;

@@ -7,8 +7,7 @@ uses
   System.Classes,
   Web.HTTPApp,
   Daf.Web.Router,
-  Daf.Web.Render,
-  Web.Stencils;
+  Daf.Web.Render;
 
 type
   // to simplify uses clause in WebControllerss descendents
@@ -109,6 +108,14 @@ type
   TDataModule = TWebController;
 
 implementation
+
+// TWebController descends from TDataModule and constructs with an owner, so
+// InitInheritedComponent needs its form resource present. Without this line the
+// .dfm sits in the repository linked to nothing and the first construction of
+// any descendant raises EResNotFound — at runtime, with nothing said at compile
+// time.
+{$R *.dfm}
+
 uses
   Daf.Web.ActionResult;
 

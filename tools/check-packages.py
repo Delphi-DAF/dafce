@@ -27,6 +27,12 @@ Invariants
    allowed only through INTENTIONAL below, with the reason written down — because a
    `requires` also drags the required package's `initialization`, and sometimes that
    is exactly the point.
+
+4. Some stacks are out of bounds for some packages. FORBIDDEN below names them by
+   unit prefix, per package. This is the one invariant here that no behaviour test
+   could ever stand in for: `Daf.Web` served its routes and bound its port perfectly
+   well while dragging DataSnap and DBX behind it, because what was wrong was the
+   dependency, and tests are blind to dependencies by construction.
 """
 
 from __future__ import annotations
@@ -47,6 +53,21 @@ INTENTIONAL = {
 
 # The floor. Kept as a set so the message can name what appeared.
 FLOOR = {"Daf.Commons": {"rtl"}}
+
+# Stacks a package must not link, by the prefix of the unit names that would bring
+# them. Keyed by package, because this is not a rule about DAF in general: what is
+# intolerable in a lightweight HTTP server is ordinary in a data module.
+#
+# Unlike the spec-vs-code check, this one is a gate rather than a report. "Does this
+# package link DataSnap" has no second reading that could make the answer acceptable.
+FORBIDDEN = {
+    "Daf.Web": (
+        ("datasnap.", "data.dbx"),
+        "a module whose purpose is to serve HTTP has no business carrying session "
+        "managers, data transports, metadata readers or an SQL scanner into a "
+        "consumer's application",
+    ),
+}
 
 
 def parse():
@@ -75,10 +96,10 @@ def is_daf(name: str) -> bool:
     return name.lower().startswith("daf")
 
 
-def direct_uses(pkg, contains, owner):
-    """The packages this one's own units name in a uses clause. Both sections: an
-    implementation-only use is still a dependency."""
-    used = set()
+def imported_units(pkg, contains):
+    """Every unit this package's own units name in a uses clause, as (by, imported)
+    pairs. Both sections: an implementation-only use is still a link."""
+    pairs = []
     for unit in contains[pkg]:
         # Recursive on purpose: NNLog keeps its targets in src/NNLog/Targets/, and a
         # one-level glob skipped four units in silence — a checker with blind spots is
@@ -93,9 +114,17 @@ def direct_uses(pkg, contains, owner):
         text = hits[0].read_text(encoding="utf-8-sig")
         for clause in re.finditer(r"\buses\b(.*?);", text, re.S):
             for token in re.findall(r"[\w.]+", clause.group(1)):
-                holder = owner.get(token.lower())
-                if holder and holder != pkg:
-                    used.add(holder)
+                pairs.append((unit, token))
+    return pairs
+
+
+def direct_uses(pkg, imports, owner):
+    """The packages this one's own units name in a uses clause."""
+    used = set()
+    for _, token in imports:
+        holder = owner.get(token.lower())
+        if holder and holder != pkg:
+            used.add(holder)
     return used
 
 
@@ -133,8 +162,17 @@ def main():
                 f"{', '.join(concrete)}. Contracts may require other contracts and Commons.")
 
     for pkg in sorted(requires):
+        imports = imported_units(pkg, contains)
+
+        if pkg in FORBIDDEN:
+            prefixes, reason = FORBIDDEN[pkg]
+            for unit, imported in imports:
+                if imported.lower().startswith(prefixes):
+                    breaches.append(
+                        f"{pkg} links {imported}, brought in by {unit}: {reason}.")
+
         declared = {fold(r) for r in requires[pkg] if is_daf(r)}
-        used = direct_uses(pkg, contains, owner)
+        used = direct_uses(pkg, imports, owner)
         for dep in sorted(declared - used):
             if (pkg, dep) not in INTENTIONAL:
                 breaches.append(
