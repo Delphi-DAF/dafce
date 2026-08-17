@@ -4,7 +4,7 @@ sidebar: modules
 toc: false
 ---
 
-DAFce ships **14 modules** in independent packages. Each has its own search path — add only what you need. Where a module ports a design from another community, the table says which: naming the lineage is deliberate, because porting what is already proven beats reinventing it.
+DAFce ships **15 modules** in independent packages. Each has its own search path — add only what you need. Where a module ports a design from another community, the table says which: naming the lineage is deliberate, because porting what is already proven beats reinventing it.
 
 | Module | Package | Description |
 |--------|---------|-------------|
@@ -22,7 +22,7 @@ DAFce ships **14 modules** in independent packages. Each has its own search path
 | [SQLCute.Specification](sqlcute-specification.qmd) | `Daf.SQLCute.Specification` | The seam: lowers a whole specification — filter, order and paging — onto an `IQuery` |
 | [Linq](linq.qmd) | `Daf.Linq` | **LINQ-to-Objects**: lazy sequences over `IEnumerable<T>`, closures, no SQL |
 | [Specification](specification.qmd) | `Daf.Specification` | **Specification pattern** — filter, order and paging over a deliberately bounded predicate tree, narrower than `System.Linq.Expressions` so that what cannot be translated is unrepresentable |
-| [Web](web.qmd) | *not packaged yet* | Lightweight HTTP server and routing — sources under `src/web/`, no `.dpk` and no group entry |
+| [Web](web.qmd) | `Daf.Web` | Lightweight HTTP server, attribute routing and action results — and no remoting stack: it links neither DataSnap nor DBX |
 
 Modules marked with **Abstractions** also ship a `Daf.X.Abstractions` package containing only interfaces, for cleaner compile-time dependencies.
 

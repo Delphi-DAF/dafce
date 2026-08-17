@@ -1,4 +1,4 @@
-# web — Usage Guide
+# Daf.Web — Usage Guide
 
 **🌍 Language: English | [Español](GUIDE.es.md)**
 
@@ -29,8 +29,11 @@ TDafHttpServer  (Indy TIdHTTPWebBrokerBridge)
 TWebModule      (WebBroker dispatcher)
      │
      ▼
-TWebControllerBase / TWebController
-     │  (routing by [WebRoute] attributes)
+TWebRouter      (BeforeDispatch — matches [WebRoute] by RTTI)
+     │
+     ▼
+TWebController  (built for this request from the service scope)
+     │
      ▼
 Action method → IActionResult → HTTP Response
 ```
@@ -39,24 +42,25 @@ Action method → IActionResult → HTTP Response
 
 ## Controllers
 
-### TWebControllerBase
+### TWebController
 
-Plain class — DI-friendly, no VCL / DataModule dependency. Preferred for new controllers.
+A controller descends from `TWebController`. This is the class the router builds, and the one to use.
 
 ```pascal
-uses Daf.Web.Controller;
+uses Web.HTTPApp, Daf.Web.Controller;
 
 type
-  TUserController = class(TWebControllerBase)
+  [WebRoutePrefix('/api/users')]
+  TUserController = class(TWebController)
   private
     FService: IUserService;
   public
-    constructor Create(Service: IUserService);
-    [WebRoute('GET', '/{id}')]
+    constructor Create(const Service: IUserService); reintroduce;
+    [WebRoute(mtGet, '/{id}')]
     function GetUser(Id: Integer): IActionResult;
   end;
 
-constructor TUserController.Create(Service: IUserService);
+constructor TUserController.Create(const Service: IUserService);
 begin
   inherited Create;
   FService := Service;
@@ -73,9 +77,11 @@ begin
 end;
 ```
 
-### TWebController
+`TWebController` extends `TDataModule`, which is what makes it usable from the IDE designer alongside WebBroker action items. Action methods must be `public` or `published`, or RTTI will not see them.
 
-Extends `TDataModule` — compatible with WebBroker's action items and legacy code.
+### TWebControllerBase
+
+A plain-class variant that does not descend from `TDataModule`. **The router does not build it**: it constructs the matched class and treats it as a `TWebController`, so routing a `TWebControllerBase` descendant is not supported. Use it only outside the router, or not at all.
 
 ---
 
@@ -87,22 +93,25 @@ Applied to the controller class. All route paths in the class are prefixed.
 
 ```pascal
 [WebRoutePrefix('/api/users')]
-TUserController = class(TWebControllerBase)
+TUserController = class(TWebController)
 ```
 
 ### [WebRoute]
 
-Applied to an action method.
+Applied to an action method. The verb is a `TMethodType`, not a string — the constants live in `Web.HTTPApp`.
 
 ```pascal
-[WebRoute('GET',    '/')]          // GET /api/users/
-[WebRoute('GET',    '/{id}')]      // GET /api/users/42
-[WebRoute('POST',   '/')]          // POST /api/users/
-[WebRoute('PUT',    '/{id}')]      // PUT /api/users/42
-[WebRoute('DELETE', '/{id}')]      // DELETE /api/users/42
+[WebRoute(mtGet,    '/')]          // GET /api/users/
+[WebRoute(mtGet,    '/{id}')]      // GET /api/users/42
+[WebRoute(mtPost,   '/')]          // POST /api/users/
+[WebRoute(mtPut,    '/{id}')]      // PUT /api/users/42
+[WebRoute(mtDelete, '/{id}')]      // DELETE /api/users/42
+[WebRoute(mtAny,    '/health')]    // any verb
 ```
 
-Route segments starting with `{name}` are path parameters — matched into method parameters by name.
+Route segments written `{name}` are path parameters — matched into method parameters by name.
+
+A request whose path matches but whose verb no action declares is **not** dispatched to an action of another verb: the router leaves it unhandled and WebBroker answers.
 
 ---
 
@@ -110,69 +119,84 @@ Route segments starting with `{name}` are path parameters — matched into metho
 
 | Attribute | Source | Example |
 |-----------|--------|---------|
-| *(none)* | Path segment | `[WebRoute('GET','/{id}')] function Get(Id: Integer)` |
+| *(none)* | Path segment | `[WebRoute(mtGet,'/{id}')] function Get(Id: Integer)` |
 | `[FromQuery]` | Query string | `function Search([FromQuery] Q: string)` |
 | `[FromBody]` | Request body (JSON) | `function Create([FromBody] Cmd: TCreateUserCmd)` |
 | `[FromServices]` | DI container | `function Ping([FromServices] Logger: ILogger)` |
+
+A parameter typed `TWebRequest` or `TWebResponse` receives the request or the response itself, with no attribute needed.
 
 ---
 
 ## Action results reference
 
-All helpers are methods of `TWebControllerBase`:
+All helpers are protected methods of the controller. Every status helper takes an optional message, which becomes the response **body** — none of them sets a `Location` header.
 
 ```pascal
 // 2xx
-Ok(Value: TObject): IActionResult;       overload;
-Ok(const S: string): IActionResult;      overload;
-Ok(B: Boolean): IActionResult;           overload;
-Created(const Location: string): IActionResult;
-Accepted: IActionResult;
-NoContent: IActionResult;
-NotModified: IActionResult;
+Ok(const Value: TObject): IActionResult;   overload;   // serialized as JSON
+Ok(const Value: string): IActionResult;    overload;
+Ok(const Value: Boolean): IActionResult;   overload;
+Created(const Msg: string = 'Created'): IActionResult;
+Accepted(const Msg: string = 'Accepted'): IActionResult;
+NoContent(const Msg: string = 'No content'): IActionResult;
 
-// Redirect
-Html(const Body: string): IActionResult;
-Page(const FileName: string): IActionResult;
-Partial(const FileName: string): IActionResult;
+// 3xx
+MovedPermanently(const Msg: string = 'Moved permanently'): IActionResult;
+MovedTemporarily(const Msg: string = 'Moved temporarily'): IActionResult;
+NotModified(const Msg: string = 'Not modified'): IActionResult;
+
+// Content
+Html(const HtmlText: string): IActionResult;
+Page(const FileName: string): IActionResult;      // <root>/pages/<name>.html
+Partial(const FileName: string): IActionResult;   // <root>/partials/<name>.html
 
 // 4xx / 5xx
-BadRequest: IActionResult;               overload;
-BadRequest(const Msg: string): IActionResult; overload;
-Unauthorized: IActionResult;
-Forbidden: IActionResult;
-NotFound: IActionResult;
-Conflict: IActionResult;
-InternalServerError: IActionResult;      overload;
-InternalServerError(const Msg: string): IActionResult; overload;
+BadRequest(const Msg: string = 'Bad request'): IActionResult;
+Unauthorized(const Msg: string = 'Unauthorized'): IActionResult;
+Forbidden(const Msg: string = 'Forbidden'): IActionResult;
+NotFound(const Msg: string = 'Not found'): IActionResult;
+NotAcceptable(const Msg: string = 'Not acceptable'): IActionResult;
+Conflict(const Msg: string = 'Conflict'): IActionResult;
+UnprocessableEntity(const Msg: string = 'Unprocessable entity'): IActionResult;
+InternalServerError(const Msg: string = 'Internal server error'): IActionResult;
 ```
+
+An action may also return a plain `string`, which is sent as `text/plain`.
 
 ---
 
 ## TDafHttpServer
 
 ```pascal
-TDafHttpServer = class
-  constructor Create(WebModuleClass: TComponentClass;
-                     Config: IConfiguration;
-                     LoggerFactory: ILoggerFactory);
-  property Port   : Integer;
-  property Active : Boolean;  // read-only
+TDafHttpServer = class(TInterfacedObject, IDafHttpServer)
+  constructor Create(const WebModuleClass: TComponentClass;
+                     const Config: IConfiguration;
+                     const LoggerFactory: ILoggerFactory = nil);
   procedure Start;
   procedure Stop;
-  // Events: OnBeforeDispatch, OnAfterDispatch, OnException
+  function CanBindPort: Boolean; overload;
+  function CanBindPort(const APort: Integer): Boolean; overload;
+  property Port      : Word;
+  property Active    : Boolean;      // read-only
+  property SessionID : string;       // read-only
+  // Events: OnStarting, OnStarted, OnStopping, OnStopped, OnError, OnDestroy
 end;
 ```
+
+`Create` reads the port from `Config['Port']`. `Start` refuses to bind a port already in use: it fires `OnError` with a message naming the port and aborts, rather than letting a socket error escape from inside the server. `CanBindPort` answers the same question ahead of time, and releases whatever it bound.
 
 ### Minimal setup
 
 ```pascal
+uses Daf.HttpServer;
+
 var Srv := TDafHttpServer.Create(TMyWebModule, AppConfig, LogFactory);
 Srv.Port := 8080;
 Srv.Start;
 ```
 
-### With Hosting (recommended)
+### With Hosting
 
 ```pascal
 // In ConfigureServices:
@@ -184,23 +208,24 @@ Services.AddSingleton<IDafHttpServer>(
                 P.GetService<ILoggerFactory>);
   end);
 
-// In hosted service:
+// In a hosted service:
 FServer.Port := 8080;
 FServer.Start;
 ```
+
+The server is not an `IHostedService` yet — see the note in the [README](../README.md).
 
 ---
 
 ## DI integration
 
-Controllers are resolved from the DI container on each request. Register them as transient:
+Each request gets its own scope, and the controller is built inside it from `IServiceProvider`, called, and freed once the response is written. Anything scoped therefore lives and dies with the request.
+
+The controller class itself does **not** need registering: it is constructed by `TActivatorUtilities`, which picks the constructor whose parameters the container can satisfy. What must be registered is what the controller asks for.
 
 ```pascal
-Services.AddTransient<TUserController>;
-Services.AddTransient<TOrdersController>;
+Services.AddScoped<IUserService, TUserService>;
 ```
-
-The routing dispatcher will resolve the matching controller from `IServiceProvider`, inject its dependencies, call the action, and dispose the controller after the response is sent.
 
 ---
 
@@ -223,7 +248,7 @@ procedure TJsonResult<T>.Execute(Response: TWebResponse);
 begin
   Response.StatusCode   := FStatus;
   Response.ContentType  := 'application/json; charset=utf-8';
-  Response.Content      := TJsonSerializer.Serialize<T>(FData);
+  Response.Content      := TJson.ObjectToJsonString(FData);
 end;
 ```
 

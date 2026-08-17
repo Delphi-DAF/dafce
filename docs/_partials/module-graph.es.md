@@ -2,7 +2,7 @@
 
 Leído del `requires` de cada `.dpk`, así que no puede desviarse de los paquetes. Las flechas se leen *requiere*.
 
-**20 paquetes**, **25 aristas reales** entre ellos, **20** más declaradas pero ya implicadas por otro camino, **0** ciclos.
+**21 paquetes**, **28 aristas reales** entre ellos, **20** más declaradas pero ya implicadas por otro camino, **0** ciclos.
 
 ```{mermaid}
 graph TD
@@ -26,7 +26,11 @@ graph TD
   SQLCuteInMemory[SQLCute.InMemory]
   SQLCuteSpecification[SQLCute.Specification]
   Specification[Specification]
+  Web[Web]
   RTIndy[("IndyCore · IndyProtocols · IndySystem")]
+  RTRESTComponents[("RESTComponents")]
+  RTinet[("inet")]
+  RTinetstn[("inetstn")]
   Application --> Hosting
   Configuration --> ConfigurationAbstractions
   ConfigurationAbstractions --> Commons
@@ -52,15 +56,22 @@ graph TD
   SQLCuteSpecification --> SQLCuteInMemory
   SQLCuteSpecification --> Specification
   Specification --> Commons
+  Web --> ConfigurationAbstractions
+  Web --> DependencyInjectionAbstractions
+  Web --> LoggingAbstractions
   MiniSpec --> RTIndy
   NNlog -->|IndyCore · IndySystem| RTIndy
+  Web --> RTIndy
+  Web --> RTRESTComponents
+  Web --> RTinet
+  Web --> RTinetstn
   classDef abs stroke-dasharray:4 3;
   class ConfigurationAbstractions,DependencyInjectionAbstractions,HostingAbstractions,LoggingAbstractions,MediatRAbstractions,SQLCuteAbstractions abs;
   classDef rt stroke-dasharray:2 2,stroke-width:2px;
-  class RTIndy rt;
+  class RTIndy,RTRESTComponents,RTinet,RTinetstn rt;
 ```
 
-Dibujado como reducción transitiva: solo las aristas que no llegan ya por otro camino. `rtl` no se dibuja porque lo requieren los 20 paquetes; los de Indy van agrupados en un nodo por familia, con los nombres reales en la etiqueta.
+Dibujado como reducción transitiva: solo las aristas que no llegan ya por otro camino. `rtl` no se dibuja porque lo requieren los 21 paquetes; los de los runtimes ajenos van en un nodo por familia —Indy, RESTComponents, inet y inetstn— con los nombres reales en la etiqueta.
 
 El borde de puntos marca un paquete de contrato (`.Abstractions`); los nodos redondeados a trazos son runtimes ajenos.
 
@@ -88,5 +99,6 @@ Instalables solos, sin depender de ningún otro paquete de DAF: `Commons`, `Mini
 | `SQLCute.InMemory` | `rtl` |
 | `SQLCute.Specification` | `rtl` |
 | `Specification` | `rtl` |
+| `Web` | `IndyCore` · `IndyProtocols` · `IndySystem` · `RESTComponents` · `inet` · `inetstn` · `rtl` |
 
-18 de 20 no piden más que `rtl`.
+18 de 21 no piden más que `rtl`.

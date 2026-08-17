@@ -35,6 +35,16 @@ FAMILIES = (("FireDAC", "FireDAC"), ("Indy", "Indy"))
 ALWAYS = {"rtl"}
 
 
+def listing(items, lang: str) -> str:
+    """A, B and C — because joining four families with "and" three times reads like
+    a machine wrote it, which is exactly what happened the first time."""
+    items = list(items)
+    if len(items) < 2:
+        return "".join(items)
+    joiner = " and " if lang == "en" else " y "
+    return ", ".join(items[:-1]) + joiner + items[-1]
+
+
 def read_graph() -> dict[str, list[str]]:
     graph = {}
     for dpk in sorted(ROOT.glob("src/*/*.dpk")):
@@ -127,8 +137,8 @@ STRINGS = {
               "declared but already implied by another path, **{cycles}** cycles.",
         reduced="Drawn as a transitive reduction: only the edges that do not already arrive by "
                 "another path. `rtl` is left out because all {pkgs} packages require it; the "
-                "{families} packages are grouped one node per family, with the real names in the "
-                "label.",
+                "third-party runtimes are drawn one node per family — {families} — with the real "
+                "names in the label.",
         legend="Dotted border marks a contract package (`.Abstractions`); the dashed rounded nodes "
                "are third-party runtimes.",
         rt_head=("Package", "Runtime packages it pulls in"),
@@ -142,8 +152,8 @@ STRINGS = {
               "declaradas pero ya implicadas por otro camino, **{cycles}** ciclos.",
         reduced="Dibujado como reducción transitiva: solo las aristas que no llegan ya por otro "
                 "camino. `rtl` no se dibuja porque lo requieren los {pkgs} paquetes; los de "
-                "{families} van agrupados en un nodo por familia, con los nombres reales en la "
-                "etiqueta.",
+                "los runtimes ajenos van en un nodo por familia —{families}— con los nombres "
+                "reales en la etiqueta.",
         legend="El borde de puntos marca un paquete de contrato (`.Abstractions`); los nodos "
                "redondeados a trazos son runtimes ajenos.",
         rt_head=("Paquete", "Runtimes que arrastra"),
@@ -216,8 +226,8 @@ def render(graph, lang):
         lines.append("  class " + ",".join(f"RT{f}" for f in sorted(rt_nodes)) + " rt;")
     lines += ["```", ""]
 
-    lines += [s["reduced"].format(pkgs=len(graph), families=" and ".join(families)
-                                 if lang == "en" else " y ".join(families)), "", s["legend"], ""]
+    lines += [s["reduced"].format(pkgs=len(graph), families=listing(families, lang)),
+              "", s["legend"], ""]
     if roots:
         lines += [s["roots"].format(roots=", ".join(f"`{short(r)}`" for r in roots)), ""]
 
@@ -254,7 +264,11 @@ def main():
                 stale.append(target.relative_to(ROOT))
         else:
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(content, encoding="utf-8")
+            # CRLF because .gitattributes says `*.md text eol=crlf`, and a generator is
+            # exactly the kind of writer that never consults .editorconfig. Git
+            # normalizes on the way in, so the drift leaves no diff and shows up only in
+            # `git ls-files --eol` — which is how these partials went unnoticed once.
+            target.write_text(content, encoding="utf-8", newline="\r\n")
             print(f"wrote {target.relative_to(ROOT)}")
     if check and stale:
         print("The generated dependency graph is out of date:", file=sys.stderr)
