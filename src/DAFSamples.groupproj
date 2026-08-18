@@ -1,4 +1,4 @@
-<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
     <PropertyGroup>
         <ProjectGuid>{763F15D5-4337-4E6A-A248-E9B8CBDBFA3E}</ProjectGuid>
     </PropertyGroup>
@@ -10,6 +10,9 @@
             <Dependencies/>
         </Projects>
         <Projects Include="Application\samples\ConsoleSample\ConsoleSample.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="Hosting\samples\PackageInit\PackageInit.dproj">
             <Dependencies/>
         </Projects>
         <Projects Include="Application\samples\HostedService\HostedService.dproj">
@@ -73,6 +76,15 @@
     </Target>
     <Target Name="ConsoleSample:Make">
         <MSBuild Projects="Application\samples\ConsoleSample\ConsoleSample.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="PackageInit">
+        <MSBuild Projects="Hosting\samples\PackageInit\PackageInit.dproj"/>
+    </Target>
+    <Target Name="PackageInit:Clean">
+        <MSBuild Projects="Hosting\samples\PackageInit\PackageInit.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="PackageInit:Make">
+        <MSBuild Projects="Hosting\samples\PackageInit\PackageInit.dproj" Targets="Make"/>
     </Target>
     <Target Name="HostedService">
         <MSBuild Projects="Application\samples\HostedService\HostedService.dproj"/>
@@ -156,13 +168,13 @@
         <MSBuild Projects="SQLCute.Specification\samples\CatalogServiceSample\CatalogServiceSample.dproj" Targets="Make"/>
     </Target>
     <Target Name="Build">
-        <CallTarget Targets="ConfigExample;MediatRSample;ConsoleSample;HostedService;PingProcess;CalculatorSpecs;MasterMind_Specs;TicTacToeApp;SQLCuteSample;InMemoryQuerySample;InMemoryJoinSample;CatalogServiceSample"/>
+        <CallTarget Targets="ConfigExample;MediatRSample;ConsoleSample;HostedService;PackageInit;PingProcess;CalculatorSpecs;MasterMind_Specs;TicTacToeApp;SQLCuteSample;InMemoryQuerySample;InMemoryJoinSample;CatalogServiceSample"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="ConfigExample:Clean;MediatRSample:Clean;ConsoleSample:Clean;HostedService:Clean;PingProcess:Clean;CalculatorSpecs:Clean;MasterMind_Specs:Clean;TicTacToeApp:Clean;SQLCuteSample:Clean;InMemoryQuerySample:Clean;InMemoryJoinSample:Clean;CatalogServiceSample:Clean"/>
+        <CallTarget Targets="ConfigExample:Clean;MediatRSample:Clean;ConsoleSample:Clean;HostedService:Clean;PackageInit:Clean;PingProcess:Clean;CalculatorSpecs:Clean;MasterMind_Specs:Clean;TicTacToeApp:Clean;SQLCuteSample:Clean;InMemoryQuerySample:Clean;InMemoryJoinSample:Clean;CatalogServiceSample:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="ConfigExample:Make;MediatRSample:Make;ConsoleSample:Make;HostedService:Make;PingProcess:Make;CalculatorSpecs:Make;MasterMind_Specs:Make;TicTacToeApp:Make;SQLCuteSample:Make;InMemoryQuerySample:Make;InMemoryJoinSample:Make;CatalogServiceSample:Make"/>
+        <CallTarget Targets="ConfigExample:Make;MediatRSample:Make;ConsoleSample:Make;HostedService:Make;PackageInit:Make;PingProcess:Make;CalculatorSpecs:Make;MasterMind_Specs:Make;TicTacToeApp:Make;SQLCuteSample:Make;InMemoryQuerySample:Make;InMemoryJoinSample:Make;CatalogServiceSample:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>
