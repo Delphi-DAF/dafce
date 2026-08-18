@@ -98,6 +98,11 @@
         </DelphiCompile>
         <DCCReference Include="DependencyInjection.Feat.pas"/>
         <DCCReference Include="DependencyInjection.Steps.pas"/>
+        <DCCReference Include="Doubles.Feat.pas"/>
+        <DCCReference Include="Composition.Feat.pas"/>
+        <DCCReference Include="Decoration.Feat.pas"/>
+        <DCCReference Include="Modules.Feat.pas"/>
+        <DCCReference Include="Validation.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>

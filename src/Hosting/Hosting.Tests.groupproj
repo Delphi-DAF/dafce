@@ -1,0 +1,36 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{3A9BBD4B-EFF2-4531-918B-597E28369176}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="test\HostingSpecs.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="HostingSpecs">
+        <MSBuild Projects="test\HostingSpecs.dproj"/>
+    </Target>
+    <Target Name="HostingSpecs:Clean">
+        <MSBuild Projects="test\HostingSpecs.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="HostingSpecs:Make">
+        <MSBuild Projects="test\HostingSpecs.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="HostingSpecs"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="HostingSpecs:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="HostingSpecs:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>
