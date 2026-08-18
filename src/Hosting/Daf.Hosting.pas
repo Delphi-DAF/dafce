@@ -56,8 +56,10 @@ type
     [Weak]
     FContainerAccess: IContainerAccess;
     FHostedServices: TList<IHostedService>;
-    class var FStopped: Boolean;
-    class var FReleased: Boolean;
+    // Estado de este host, no del proceso: con class var, dos hosts en un mismo proceso
+    // se pisaban el "ya parado" el uno al otro.
+    FStopped: Boolean;
+    FReleased: Boolean;
     procedure SetServiceProvider(const Services: IServiceProvider);
   public
     constructor Create;
@@ -86,7 +88,9 @@ type
 
   THostBuilder = class(TSingleton<THostBuilder>, IHostBuilder)
   private
-    class var FHostBuilt: Boolean;
+    // "Build ya se llamo" es de este builder, no del proceso: como class var, un proceso
+    // solo podia construir un host en toda su vida, y un arnes de specs construye varios.
+    FHostBuilt: Boolean;
     FConfigureHostConfigActions: TList< TConfigureHostConfigAction>;
     FConfigureServicesActions: TList<TConfigureServicesAction>;
     FConfigureAppConfigActions: TList<TConfigureAppConfigAction>;
@@ -291,6 +295,12 @@ end;
 procedure THost.Start;
 begin
   try
+    // Fase 2 del arranque, en orden: primero las tareas de inicializacion, porque un
+    // servicio alojado puede depender del estado que preparan; despues los servicios
+    // alojados; y solo entonces se declara arrancada la aplicacion. Si una tarea lanza,
+    // la excepcion sale de aqui y no se arranca nada.
+    for var StartupTask in GetServices.GetServices<IStartupTask> do
+      StartupTask.Run;
     for var HostedService in FHostedServices do
       HostedService.Start;
     var Lifetime := GetServices.GetRequiredService<IHostApplicationLifetime>;

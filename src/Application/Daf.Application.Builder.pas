@@ -105,7 +105,11 @@ end;
 procedure TDafApplicationBuilder.DoConfigureServices(Context: IHostBuilderContext; Services: IServiceCollection);
 begin
   inherited;
+  // El descubrimiento sigue siendo el comportamiento por defecto de una TDafApplication
+  // hasta 2.0; el aviso es para quien lo escriba en su propio arranque, no para DAF.
+{$WARN SYMBOL_DEPRECATED OFF}
   AppModules.Add(Services, _T.PackageOf(FAppClass));
+{$WARN SYMBOL_DEPRECATED ON}
 end;
 
 function TDafApplicationBuilder.AppClass: TDafApplicationClass;

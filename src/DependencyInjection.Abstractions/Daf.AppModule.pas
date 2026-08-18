@@ -5,10 +5,10 @@ uses
   DAF.Extensions.DependencyInjection;
 
 type
-  IAppModule = interface(IInvokable)
-    ['{3FA56942-21D1-4B08-ABD4-F4F82F48F36C}']
-    procedure AddServices(const ServiceCollection: IServiceCollection);
-  end;
+  // IAppModule se declara en Daf.Extensions.DependencyInjection, porque AddModule<T> es un
+  // metodo del record IServiceCollection y no puede depender de esta unit. El alias mantiene
+  // valido el `uses Daf.AppModule` que ya escribieron los consumidores: es el mismo tipo.
+  IAppModule = Daf.Extensions.DependencyInjection.IAppModule;
 
 implementation
 

@@ -61,6 +61,22 @@ type
     procedure Stop;
   end;
 
+  /// <summary>
+  /// Codigo que se ejecuta una vez al arrancar, con el proveedor ya construido, y que no
+  /// tiene ciclo de vida: no hay nada que parar, y por eso no hay Stop.
+  /// </summary>
+  /// <remarks>
+  /// Divergencia deliberada de Microsoft.Extensions.*, que no trae este contrato. Su
+  /// consecuencia conocida es que se usa IHostedService como inicializador, con un StopAsync
+  /// vacio que miente sobre lo que el objeto es. DAF clona .NET por sus decisiones, no por
+  /// sus huecos. La regla en una frase: si tiene algo que parar es IHostedService; si solo
+  /// se ejecuta una vez, IStartupTask.
+  /// </remarks>
+  IStartupTask = interface(IInvokable)
+    ['{6F864468-A26C-4AEA-988D-C2E279A1DCF4}']
+    procedure Run;
+  end;
+
   TConfigureHostConfigAction = TProc<IConfigurationBuilder>;
   TConfigureAppConfigAction = TProc<IHostBuilderContext, IConfigurationBuilder>;
   TConfigureServicesAction = TProc<IHostBuilderContext, IServiceCollection>;
@@ -111,15 +127,42 @@ type
   IServiceCollectionHelper = record helper for IServiceCollection
   public
     procedure AddHostedService<T:IHostedService>;
+    procedure AddStartupTask<T:IStartupTask>;
+  end;
+
+  // Por si el helper anterior queda ensombrecido: en Delphi solo hay un record helper
+  // visible por tipo, y quien haga uses de dos units que extiendan IServiceCollection
+  // solo vera uno.
+  Hosting = class
+  public
+    class procedure AddHostedService(const ServiceCollection: IServiceCollection; const TImpl: TClass);
+    class procedure AddStartupTask(const ServiceCollection: IServiceCollection; const TImpl: TClass);
   end;
 
 
 implementation
-uses System.StrUtils;
+uses System.StrUtils, System.TypInfo;
 
 procedure IServiceCollectionHelper.AddHostedService<T>;
 begin
   AddSingleton<IHostedService, T>;
+end;
+
+procedure IServiceCollectionHelper.AddStartupTask<T>;
+begin
+  AddSingleton<IStartupTask, T>;
+end;
+
+{ Hosting }
+
+class procedure Hosting.AddHostedService(const ServiceCollection: IServiceCollection; const TImpl: TClass);
+begin
+  ServiceCollection.AddSingleton(TypeInfo(IHostedService), TImpl);
+end;
+
+class procedure Hosting.AddStartupTask(const ServiceCollection: IServiceCollection; const TImpl: TClass);
+begin
+  ServiceCollection.AddSingleton(TypeInfo(IStartupTask), TImpl);
 end;
 
 { TEnvironmentNameHelper }

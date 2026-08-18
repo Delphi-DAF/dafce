@@ -16,12 +16,14 @@ type
   TAppModuleServiceCollection = record helper for IServiceCollection
   public
     procedure AddModules(Package: TRttiPackage);
+      deprecated 'Aplica cada modulo por su nombre: Services.AddModule<TMiModulo>';
   end;
 
     // In case of previous helper goes shadowed
   AppModules = class
   public
     class procedure Add(ServiceCollection: IServiceCollection; Package: TRttiPackage);
+      deprecated 'Aplica cada modulo por su nombre: Services.AddModule<TMiModulo>';
   end;
 
 implementation
@@ -39,13 +41,13 @@ begin
 end;
 
 { TAppModuleServiceCollection }
-var Visited: TArray<string>;
+
 procedure TAppModuleServiceCollection.AddModules(Package: TRttiPackage);
 begin
-  if TArray.Contains(Visited, Package.Name) then Exit;
-  var More: TArray<string> := [Package.Name];
-  Visited := TArray.Concat<string>([Visited, More]);
   var ServiceCollection := Self;
+  // La contabilidad de paquetes ya recorridos vive en la coleccion, no en una global de
+  // unit: dos hosts construidos en el mismo proceso deben registrar lo mismo.
+  if not ServiceCollection.TryMarkVisited('AppModules', Package.Name) then Exit;
   Package.DiscoverImpl<IAppModule>(False,True,
     procedure(RIntf: TRttiInterfaceType; AClass: TRttiInstanceType)
     begin
@@ -60,7 +62,9 @@ end;
 
 class procedure AppModules.Add(ServiceCollection: IServiceCollection; Package: TRttiPackage);
 begin
+{$WARN SYMBOL_DEPRECATED OFF}
   ServiceCollection.AddModules(Package);
+{$WARN SYMBOL_DEPRECATED ON}
 end;
 
 end.

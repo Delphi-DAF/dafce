@@ -12,6 +12,7 @@ uses
 type
   IServiceProviderImpl = interface;
   IServiceScope = interface;
+  IAppModule = interface;
 
   EServiceProviderError = class(Exception)
   end;
@@ -56,8 +57,24 @@ type
     class function From(const ServiceType: PTypeInfo; const Implementor: IInterface): TServiceFactory;overload;
   end;
 
+  // Envuelve el servicio que produce el registro previo. Es Scrutor: en .NET esto no
+  // esta en el framework, lo trae una libreria encima de IServiceCollection.
+  TServiceDecorator<ServiceType: IInterface> = reference to function(const Inner: ServiceType;
+    const Provider: IServiceProvider): ServiceType;
+  TServiceDecorator = TServiceDecorator<IInterface>;
+
   TServiceLifeTime = (Singleton, Scoped, Transient);
   TServiceIdentity = string;
+
+  // Calcado de ServiceProviderOptions de .NET. Ambas comprobaciones son opt-in: una
+  // validacion que bloquea un arranque que funcionaba cuesta mas de lo que ahorra.
+  TServiceProviderOptions = record
+  public
+    ValidateOnBuild: Boolean;
+    ValidateScopes: Boolean;
+    constructor Create(const AValidateOnBuild, AValidateScopes: Boolean);
+    class function None: TServiceProviderOptions; static;
+  end;
 
   IContainerAccess = interface(IInvokable)
     ['{606B658C-C5EB-48D6-B447-D9A19CBB31F5}']
@@ -69,12 +86,17 @@ type
     FFactory: TServiceFactory;
     FLifeTime: TServiceLifeTime;
     FTypeInfo: PTypeInfo;
+    FImplementationClass: TClass;
   public
-    constructor Create(const Factory: TServiceFactory; const LifeTime: TServiceLifeTime; const TypeInfo: PTypeInfo);
+    constructor Create(const Factory: TServiceFactory; const LifeTime: TServiceLifeTime; const TypeInfo: PTypeInfo;
+      const ImplementationClass: TClass = nil);
     function ServiceName: string;
     property Factory: TServiceFactory read FFactory;
     property LifeTime: TServiceLifeTime read FLifeTime;
     property TypeInfo: PTypeInfo read FTypeInfo;
+    // Clase de implementacion si el registro se hizo por clase; nil si se hizo por factory.
+    // Es lo unico que la validacion del grafo puede inspeccionar: una lambda es opaca.
+    property ImplementationClass: TClass read FImplementationClass;
   end;
   TServiceDescriptors = TList<TServiceDescriptor>;
 
@@ -92,10 +114,18 @@ type
   IServiceCollectionImpl = interface(IInvokable)
     ['{C767E76F-F5AE-438D-9725-B624E704127B}']
     function GetCount: Integer;
-    function Add(const ServiceType: PTypeInfo; const LifeTime: TServiceLifeTime; const ServiceFactory: TServiceFactory): IServiceCollectionImpl; overload;
+    procedure CheckNotFrozen;
+    function Add(const ServiceType: PTypeInfo; const LifeTime: TServiceLifeTime; const ServiceFactory: TServiceFactory;
+      const ImplClass: TClass = nil): IServiceCollectionImpl; overload;
     function Contains(const ServiceType: PTypeInfo): Boolean;
-    function BuildServiceProvider: IServiceProviderImpl;
+    function BuildServiceProvider: IServiceProviderImpl; overload;
+    function BuildServiceProvider(const Options: TServiceProviderOptions): IServiceProviderImpl; overload;
     function GetDescriptors(ServiceType: PTypeInfo): TServiceDescriptors;
+    function SetDescriptors(const ServiceType: PTypeInfo; const NewDescriptors: TArray<TServiceDescriptor>): IServiceCollectionImpl;
+    function RemoveAll(const ServiceType: PTypeInfo): IServiceCollectionImpl;
+    // Contabilidad de "esto ya se proceso", por coleccion y no por proceso: componer
+    // dos veces en un proceso tiene que dar el mismo resultado.
+    function TryMarkVisited(const Category, Key: string): Boolean;
   end;
 
   IServiceScope = interface(IInvokable)
@@ -112,13 +142,23 @@ type
   strict private
     FImplementor: IServiceCollectionImpl;
     function GetCount: Integer;
+  private
+    function AddDescriptor(const LifeTime: TServiceLifeTime; const ServiceType: PTypeInfo;
+      const ServiceFactory: TServiceFactory; const ImplClass: TClass): IServiceCollection;
+    function CanTryAdd(const ServiceType: PTypeInfo): Boolean;
   public
     class operator Implicit(const Implementor: IServiceCollectionImpl): IServiceCollection;
     class operator Implicit(const ServiceCollection: IServiceCollection): IServiceCollectionImpl;
-    function BuildServiceProvider: IServiceProvider;
+    function BuildServiceProvider: IServiceProvider; overload;
+    function BuildServiceProvider(const Options: TServiceProviderOptions): IServiceProvider; overload;
 
     function Contains<ServiceType: IInterface>: Boolean;overload;
     function Contains(const ServiceType: PTypeInfo): Boolean;overload;
+
+    // Solo lectura: es una copia, no la lista viva que posee la coleccion. Habilita
+    // escribir composicion propia (TryAdd, Replace, Decorate) desde fuera de DAF.
+    function Descriptors(const ServiceType: PTypeInfo): TArray<TServiceDescriptor>; overload;
+    function Descriptors<ServiceType: IInterface>: TArray<TServiceDescriptor>; overload;
 
     function Add(const LifeTime: TServiceLifeTime; const ServiceType: PTypeInfo; const Factory: TServiceFactory): IServiceCollection; overload;
     function Add<ServiceType: IInterface>(const LifeTime: TServiceLifeTime; const Factory: TServiceFactory<ServiceType>)
@@ -142,7 +182,55 @@ type
     function AddScoped(const ServiceType: PTypeInfo; const TImpl: TClass): IServiceCollection;overload;
     function AddScoped<ServiceType: IInterface>(const Factory: TServiceFactory<ServiceType>): IServiceCollection; overload;
     function AddScoped<ServiceType: IInterface; TImpl: ServiceType>: IServiceCollection; overload;
+
+    // TryAdd*: registra solo si nadie registro ya ese tipo de servicio. Es el contrato
+    // "la libreria pone el default, la aplicacion manda" de ServiceCollectionDescriptorExtensions.
+    function TryAddSingleton(const ServiceType: PTypeInfo; const Factory: TServiceFactory): IServiceCollection; overload;
+    function TryAddSingleton(const ServiceType: PTypeInfo; const TImpl: TClass): IServiceCollection; overload;
+    function TryAddSingleton(const ServiceType: PTypeInfo; const Implementor: IInterface): IServiceCollection; overload;
+    function TryAddSingleton<ServiceType: IInterface>(const Factory: TServiceFactory<ServiceType>): IServiceCollection; overload;
+    function TryAddSingleton<ServiceType: IInterface>(const Implementor: ServiceType): IServiceCollection; overload;
+    function TryAddSingleton<ServiceType: IInterface; TImpl: ServiceType>: IServiceCollection; overload;
+
+    function TryAddScoped(const ServiceType: PTypeInfo; const Factory: TServiceFactory): IServiceCollection; overload;
+    function TryAddScoped(const ServiceType: PTypeInfo; const TImpl: TClass): IServiceCollection; overload;
+    function TryAddScoped<ServiceType: IInterface>(const Factory: TServiceFactory<ServiceType>): IServiceCollection; overload;
+    function TryAddScoped<ServiceType: IInterface; TImpl: ServiceType>: IServiceCollection; overload;
+
+    function TryAddTransient(const ServiceType: PTypeInfo; const Factory: TServiceFactory): IServiceCollection; overload;
+    function TryAddTransient(const ServiceType: PTypeInfo; const TImpl: TClass): IServiceCollection; overload;
+    function TryAddTransient<ServiceType: IInterface>(const Factory: TServiceFactory<ServiceType>): IServiceCollection; overload;
+    function TryAddTransient<ServiceType: IInterface; TImpl: ServiceType>: IServiceCollection; overload;
+
+    // Replace quita los registros previos del tipo y anade el nuevo; RemoveAll solo quita.
+    function Replace(const LifeTime: TServiceLifeTime; const ServiceType: PTypeInfo; const Factory: TServiceFactory): IServiceCollection; overload;
+    function Replace(const LifeTime: TServiceLifeTime; const ServiceType: PTypeInfo; const TImpl: TClass): IServiceCollection; overload;
+    function Replace<ServiceType: IInterface>(const LifeTime: TServiceLifeTime; const Factory: TServiceFactory<ServiceType>): IServiceCollection; overload;
+    function Replace<ServiceType: IInterface; TImpl: ServiceType>(const LifeTime: TServiceLifeTime): IServiceCollection; overload;
+
+    function RemoveAll(const ServiceType: PTypeInfo): IServiceCollection; overload;
+    function RemoveAll<ServiceType: IInterface>: IServiceCollection; overload;
+
+    // Envuelve los registros existentes del tipo conservando su ciclo de vida. Para envolver
+    // comportamiento (logging, cache, reintentos): los efectos laterales de arranque son IStartupTask.
+    function Decorate(const ServiceType: PTypeInfo; const Decorator: TServiceDecorator): IServiceCollection; overload;
+    function Decorate<ServiceType: IInterface>(const Decorator: TServiceDecorator<ServiceType>): IServiceCollection; overload;
+
+    // Aplica un modulo en el acto, no de forma diferida: la composicion es una sola
+    // secuencia legible, y un TryAdd escrito despues de un modulo se ejecuta despues.
+    function AddModule<T: class, IAppModule, constructor>: IServiceCollection; overload;
+    function AddModule(const Module: IAppModule): IServiceCollection; overload;
+
+    function TryMarkVisited(const Category, Key: string): Boolean;
     property Count: Integer read GetCount;
+  end;
+
+  // El modulo no es invencion de DAF: es Autofac.Module, IWindsorInstaller de Castle Windsor,
+  // Registry de StructureMap. Vive aqui, y no en su propia unit, porque AddModule<T> es un
+  // metodo del record y no puede depender de una unit que a su vez depende de esta.
+  IAppModule = interface(IInvokable)
+    ['{3FA56942-21D1-4B08-ABD4-F4F82F48F36C}']
+    procedure AddServices(const ServiceCollection: IServiceCollection);
   end;
 
   TLazy<T: IInvokable> = class(TVirtualInterface)
@@ -194,14 +282,28 @@ uses
   Daf.Activator,
   Daf.DependencyInjection.ActivatorUtilities;
 
+{ TServiceProviderOptions }
+
+constructor TServiceProviderOptions.Create(const AValidateOnBuild, AValidateScopes: Boolean);
+begin
+  ValidateOnBuild := AValidateOnBuild;
+  ValidateScopes := AValidateScopes;
+end;
+
+class function TServiceProviderOptions.None: TServiceProviderOptions;
+begin
+  Result := Default(TServiceProviderOptions);
+end;
+
 { TServiceDescriptor }
 
 constructor TServiceDescriptor.Create(const Factory: TServiceFactory; const LifeTime: TServiceLifeTime;
-  const TypeInfo: PTypeInfo);
+  const TypeInfo: PTypeInfo; const ImplementationClass: TClass);
 begin
   FFactory := Factory;
   FLifeTime := LifeTime;
   FTypeInfo := TypeInfo;
+  FImplementationClass := ImplementationClass;
  end;
 
 
@@ -355,6 +457,22 @@ begin
             end;
 end;
 
+// Funcion aparte, y no un closure dentro del bucle de Decorate: Delphi captura la
+// variable, no su valor, asi que un closure creado dentro del bucle veria el ultimo
+// descriptor. Los parametros de esta funcion si son un marco por llamada.
+function DecoratedFactory(const ServiceType: PTypeInfo; const Inner: TServiceFactory;
+  const Decorator: TServiceDecorator): TServiceFactory;
+begin
+  Result := function(Provider: IServiceProvider): IInterface
+            begin
+              var Original: IInterface;
+              if not Supports(Inner(Provider), ServiceType.TypeData.GUID, Original) then
+                raise EServiceProviderError.CreateFmt('Cannot decorate %s: the registered factory did not produce it',
+                  [_T.NameOf(ServiceType)]);
+              Result := Decorator(Original, Provider);
+            end;
+end;
+
 { IServiceCollection }
 
 class operator IServiceCollection.Implicit(const Implementor: IServiceCollectionImpl): IServiceCollection;
@@ -377,19 +495,31 @@ begin
   Result := FImplementor.BuildServiceProvider;
 end;
 
+function IServiceCollection.BuildServiceProvider(const Options: TServiceProviderOptions): IServiceProvider;
+begin
+  Result := FImplementor.BuildServiceProvider(Options);
+end;
+
+function IServiceCollection.AddDescriptor(const LifeTime: TServiceLifeTime; const ServiceType: PTypeInfo;
+  const ServiceFactory: TServiceFactory; const ImplClass: TClass): IServiceCollection;
+begin
+  FImplementor.Add(ServiceType, LifeTime, ServiceFactory, ImplClass);
+  Result := Self;
+end;
+
 function IServiceCollection.AddScoped(const ServiceType: PTypeInfo; const TImpl: TClass): IServiceCollection;
 begin
-  Result := AddScoped(ServiceType, Factory.From(ServiceType, Timpl));
+  Result := AddDescriptor(Scoped, ServiceType, Factory.From(ServiceType, Timpl), TImpl);
 end;
 
 function IServiceCollection.AddSingleton(const ServiceType: PTypeInfo; const TImpl: TClass): IServiceCollection;
 begin
-  Result := AddSingleton(ServiceType, Factory.From(ServiceType, Timpl));
+  Result := AddDescriptor(Singleton, ServiceType, Factory.From(ServiceType, Timpl), TImpl);
 end;
 
 function IServiceCollection.AddTransient(const ServiceType: PTypeInfo; const TImpl: TClass): IServiceCollection;
 begin
-  Result := AddTransient(ServiceType, Factory.From(ServiceType, Timpl));
+  Result := AddDescriptor(Transient, ServiceType, Factory.From(ServiceType, Timpl), TImpl);
 end;
 
 function IServiceCollection.AddSingleton(const ServiceType: PTypeInfo; const Implementor: IInterface): IServiceCollection;
@@ -399,8 +529,7 @@ end;
 
 function IServiceCollection.Add(const LifeTime: TServiceLifeTime; const ServiceType: PTypeInfo; const Factory: TServiceFactory): IServiceCollection;
 begin
-  FImplementor.Add(ServiceType, LifeTime, Factory);
-  Result := Self;
+  Result := AddDescriptor(LifeTime, ServiceType, Factory, nil);
 end;
 
 function IServiceCollection.Add<ServiceType>(const LifeTime: TServiceLifeTime; const Factory: TServiceFactory<ServiceType>): IServiceCollection;
@@ -466,6 +595,199 @@ end;
 function IServiceCollection.Contains(const ServiceType: PTypeInfo): Boolean;
 begin
   Result := FImplementor.Contains(ServiceType)
+end;
+
+function IServiceCollection.Descriptors(const ServiceType: PTypeInfo): TArray<TServiceDescriptor>;
+begin
+  Result := nil;
+  if not FImplementor.Contains(ServiceType) then Exit;
+  // Copia: la lista viva la posee el diccionario interno (doOwnsValues), y repartirla
+  // dejaria mutar la coleccion sin pasar por CheckNotFrozen.
+  Result := FImplementor.GetDescriptors(ServiceType).ToArray;
+end;
+
+function IServiceCollection.Descriptors<ServiceType>: TArray<TServiceDescriptor>;
+begin
+  Result := Descriptors(TypeInfo(ServiceType));
+end;
+
+function IServiceCollection.CanTryAdd(const ServiceType: PTypeInfo): Boolean;
+begin
+  // Un TryAdd que no anade sigue siendo una modificacion intentada: si la coleccion ya
+  // esta congelada, quien llama tiene un error, no un no-op.
+  FImplementor.CheckNotFrozen;
+  Result := not FImplementor.Contains(ServiceType);
+end;
+
+function IServiceCollection.TryAddSingleton(const ServiceType: PTypeInfo; const Factory: TServiceFactory): IServiceCollection;
+begin
+  Result := Self;
+  if not CanTryAdd(ServiceType) then Exit;
+  Result := AddDescriptor(Singleton, ServiceType, Factory, nil);
+end;
+
+function IServiceCollection.TryAddSingleton(const ServiceType: PTypeInfo; const TImpl: TClass): IServiceCollection;
+begin
+  Result := Self;
+  if not CanTryAdd(ServiceType) then Exit;
+  Result := AddDescriptor(Singleton, ServiceType, Factory.From(ServiceType, TImpl), TImpl);
+end;
+
+function IServiceCollection.TryAddSingleton(const ServiceType: PTypeInfo; const Implementor: IInterface): IServiceCollection;
+begin
+  Result := Self;
+  if not CanTryAdd(ServiceType) then Exit;
+  Result := AddDescriptor(Singleton, ServiceType, Factory.From(ServiceType, Implementor), nil);
+end;
+
+function IServiceCollection.TryAddSingleton<ServiceType>(const Factory: TServiceFactory<ServiceType>): IServiceCollection;
+begin
+  Result := TryAddSingleton(TypeInfo(ServiceType), TServiceFactory(Factory));
+end;
+
+function IServiceCollection.TryAddSingleton<ServiceType>(const Implementor: ServiceType): IServiceCollection;
+begin
+  Result := TryAddSingleton(TypeInfo(ServiceType), IInterface(Implementor));
+end;
+
+function IServiceCollection.TryAddSingleton<ServiceType, TImpl>: IServiceCollection;
+begin
+  Result := TryAddSingleton(TypeInfo(ServiceType), PTypeInfo(TypeInfo(TImpl)).TypeData.ClassType);
+end;
+
+function IServiceCollection.TryAddScoped(const ServiceType: PTypeInfo; const Factory: TServiceFactory): IServiceCollection;
+begin
+  Result := Self;
+  if not CanTryAdd(ServiceType) then Exit;
+  Result := AddDescriptor(Scoped, ServiceType, Factory, nil);
+end;
+
+function IServiceCollection.TryAddScoped(const ServiceType: PTypeInfo; const TImpl: TClass): IServiceCollection;
+begin
+  Result := Self;
+  if not CanTryAdd(ServiceType) then Exit;
+  Result := AddDescriptor(Scoped, ServiceType, Factory.From(ServiceType, TImpl), TImpl);
+end;
+
+function IServiceCollection.TryAddScoped<ServiceType>(const Factory: TServiceFactory<ServiceType>): IServiceCollection;
+begin
+  Result := TryAddScoped(TypeInfo(ServiceType), TServiceFactory(Factory));
+end;
+
+function IServiceCollection.TryAddScoped<ServiceType, TImpl>: IServiceCollection;
+begin
+  Result := TryAddScoped(TypeInfo(ServiceType), PTypeInfo(TypeInfo(TImpl)).TypeData.ClassType);
+end;
+
+function IServiceCollection.TryAddTransient(const ServiceType: PTypeInfo; const Factory: TServiceFactory): IServiceCollection;
+begin
+  Result := Self;
+  if not CanTryAdd(ServiceType) then Exit;
+  Result := AddDescriptor(Transient, ServiceType, Factory, nil);
+end;
+
+function IServiceCollection.TryAddTransient(const ServiceType: PTypeInfo; const TImpl: TClass): IServiceCollection;
+begin
+  Result := Self;
+  if not CanTryAdd(ServiceType) then Exit;
+  Result := AddDescriptor(Transient, ServiceType, Factory.From(ServiceType, TImpl), TImpl);
+end;
+
+function IServiceCollection.TryAddTransient<ServiceType>(const Factory: TServiceFactory<ServiceType>): IServiceCollection;
+begin
+  Result := TryAddTransient(TypeInfo(ServiceType), TServiceFactory(Factory));
+end;
+
+function IServiceCollection.TryAddTransient<ServiceType, TImpl>: IServiceCollection;
+begin
+  Result := TryAddTransient(TypeInfo(ServiceType), PTypeInfo(TypeInfo(TImpl)).TypeData.ClassType);
+end;
+
+function IServiceCollection.Replace(const LifeTime: TServiceLifeTime; const ServiceType: PTypeInfo;
+  const Factory: TServiceFactory): IServiceCollection;
+begin
+  FImplementor.RemoveAll(ServiceType);
+  Result := AddDescriptor(LifeTime, ServiceType, Factory, nil);
+end;
+
+function IServiceCollection.Replace(const LifeTime: TServiceLifeTime; const ServiceType: PTypeInfo;
+  const TImpl: TClass): IServiceCollection;
+begin
+  FImplementor.RemoveAll(ServiceType);
+  Result := AddDescriptor(LifeTime, ServiceType, Factory.From(ServiceType, TImpl), TImpl);
+end;
+
+function IServiceCollection.Replace<ServiceType>(const LifeTime: TServiceLifeTime;
+  const Factory: TServiceFactory<ServiceType>): IServiceCollection;
+begin
+  Result := Replace(LifeTime, TypeInfo(ServiceType), TServiceFactory(Factory));
+end;
+
+function IServiceCollection.Replace<ServiceType, TImpl>(const LifeTime: TServiceLifeTime): IServiceCollection;
+begin
+  Result := Replace(LifeTime, TypeInfo(ServiceType), PTypeInfo(TypeInfo(TImpl)).TypeData.ClassType);
+end;
+
+function IServiceCollection.RemoveAll(const ServiceType: PTypeInfo): IServiceCollection;
+begin
+  FImplementor.RemoveAll(ServiceType);
+  Result := Self;
+end;
+
+function IServiceCollection.RemoveAll<ServiceType>: IServiceCollection;
+begin
+  Result := RemoveAll(TypeInfo(ServiceType));
+end;
+
+function IServiceCollection.Decorate(const ServiceType: PTypeInfo; const Decorator: TServiceDecorator): IServiceCollection;
+begin
+  FImplementor.CheckNotFrozen;
+  Result := Self;
+  var Current := Descriptors(ServiceType);
+  if Length(Current) = 0 then
+    raise EServiceProviderError.CreateFmt('Cannot decorate %s: nothing is registered for it', [_T.NameOf(ServiceType)]);
+
+  var Wrapped: TArray<TServiceDescriptor>;
+  SetLength(Wrapped, Length(Current));
+  for var Idx := 0 to High(Current) do
+    // El descriptor decorado pasa a ser un registro por factory: su implementacion ya no
+    // es una clase inspeccionable, y la validacion del grafo no debe fingir que lo es.
+    Wrapped[Idx] := TServiceDescriptor.Create(DecoratedFactory(ServiceType, Current[Idx].Factory, Decorator),
+      Current[Idx].LifeTime, ServiceType);
+
+  FImplementor.SetDescriptors(ServiceType, Wrapped);
+end;
+
+function IServiceCollection.Decorate<ServiceType>(const Decorator: TServiceDecorator<ServiceType>): IServiceCollection;
+begin
+  Result := Decorate(TypeInfo(ServiceType), TServiceDecorator(Decorator));
+end;
+
+function IServiceCollection.AddModule(const Module: IAppModule): IServiceCollection;
+begin
+  FImplementor.CheckNotFrozen;
+  Result := Self;
+  if Assigned(Module) then
+    Module.AddServices(Self);
+end;
+
+function IServiceCollection.AddModule<T>: IServiceCollection;
+begin
+  // La restriccion `constructor` llama al constructor propio de T y sin RTTI. El
+  // descubrimiento hacia MetaclassType.Create, que se lo saltaba en silencio.
+  var Instance := T.Create;
+  var Module: IAppModule;
+  if not Supports(Instance, IAppModule, Module) then
+  begin
+    Instance.Free;
+    raise EServiceProviderError.CreateFmt('%s does not support IAppModule', [T.ClassName]);
+  end;
+  Result := AddModule(Module);
+end;
+
+function IServiceCollection.TryMarkVisited(const Category, Key: string): Boolean;
+begin
+  Result := FImplementor.TryMarkVisited(Category, Key);
 end;
 
 { TDuckDecorator }

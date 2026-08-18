@@ -22,6 +22,13 @@ type
   public
     class function CanResolveArgs(const Provider: IServiceProvider; const Ctor: TRttiMethod): Boolean;overload;
     class function CanResolveArgs(const Provider: IServiceProvider; const Ctor: TRttiMethod; out Failed: TRttiParameter): Boolean;overload;
+    /// <summary>
+    /// Responde a la misma pregunta que CreateInstance se hace al construir: hay algun
+    /// constructor que el contenedor pueda satisfacer? Cuando no lo hay, devuelve el mejor
+    /// candidato y el primer parametro que nadie registra, para poder decirlo en el mensaje.
+    /// </summary>
+    class function TryFindConstructor(const Provider: IServiceProvider; const AClass: TClass; out Ctor: TRttiMethod;
+      out Failed: TRttiParameter): Boolean;
     class function CreateInstance(const Provider: IServiceProvider; const AClass: TClass): TObject; overload;
     class function CreateInstance<T: class>(const Provider: IServiceProvider): T; overload;
   end;
@@ -91,6 +98,35 @@ begin
     if Length(Ctors[idx].GetParameters) > Length(Best.GetParameters) then
       Best := Ctors[idx];
   Result := Best;
+end;
+
+class function TActivatorUtilities.TryFindConstructor(const Provider: IServiceProvider; const AClass: TClass;
+  out Ctor: TRttiMethod; out Failed: TRttiParameter): Boolean;
+begin
+  Failed := nil;
+  Ctor := nil;
+  // Candidatos: los constructores publicos del primer nivel de la jerarquia que declara
+  // alguno. Aqui NO se cae al constructor de un ancestro cuando ninguno de los propios se
+  // puede satisfacer, y esa es justo la diferencia con CreateInstance: una clase que pide
+  // una dependencia por constructor y acaba construida con TObject.Create queda a medias,
+  // y ese es el fallo que la validacion existe para ver.
+  var Declared := GetResolvableCtors(AClass);
+  if Length(Declared) = 0 then Exit(True);
+
+  // Que la clase declare mas de un constructor no es un fallo: basta con que alguno se
+  // pueda satisfacer, como hace el activador al elegir.
+  var Resolvable: TArray<TRttiMethod> := [];
+  for var Candidate in Declared do
+    if CanResolveArgs(Provider, Candidate) then
+      Resolvable := Resolvable + [Candidate];
+
+  Ctor := SelectBest(Resolvable);
+  Result := Ctor <> nil;
+  if Result then Exit;
+
+  Ctor := SelectBest(Declared);
+  if Ctor <> nil then
+    CanResolveArgs(Provider, Ctor, Failed);
 end;
 
 class function TActivatorUtilities.TryResolveArgs(Provider: IServiceProvider; Ctor: TRttiMethod; out Args: TArray<TValue>; out Failed: TRttiParameter): Boolean;

@@ -105,7 +105,14 @@ type
   TServiceCollection = class(TDIObject<TServiceCollection>, IServiceCollectionImpl)
   strict private
     FEntries: TDescriptorsDictionary;
+    // Estado de la coleccion, no del proceso: componer dos veces en un mismo proceso
+    // tiene que dar el mismo resultado, y con una global de unit no lo daba.
+    FVisited: TDictionary<string, Boolean>;
     FIsFrozen: Boolean;
+    function DescribeUnresolvable(const Descriptor: TServiceDescriptor; const Failed: TRttiParameter): string;
+    procedure CollectCapturedScopes(const Descriptor: TServiceDescriptor; const Ctor: TRttiMethod;
+      var Errors: TArray<string>);
+    procedure Validate(const Provider: IServiceProvider; const Options: TServiceProviderOptions);
   protected
     function CreateScopeFactory: IServiceScopeFactory;
   public
@@ -113,10 +120,15 @@ type
     destructor Destroy; override;
     procedure CheckNotFrozen;
     function GetDescriptors(ServiceType: PTypeInfo): TServiceDescriptors;
+    function SetDescriptors(const ServiceType: PTypeInfo; const NewDescriptors: TArray<TServiceDescriptor>): IServiceCollectionImpl;
+    function RemoveAll(const ServiceType: PTypeInfo): IServiceCollectionImpl;
+    function TryMarkVisited(const Category, Key: string): Boolean;
     function GetCount: Integer;
     function Add<ServiceType: IInterface>(const LifeTime: TServiceLifeTime; const Factory: TServiceFactory): IServiceCollectionImpl;overload;
-    function Add(const ServiceType: PTypeInfo; const LifeTime: TServiceLifeTime; const Factory: TServiceFactory): IServiceCollectionImpl;overload;
-    function BuildServiceProvider: IServiceProviderImpl;
+    function Add(const ServiceType: PTypeInfo; const LifeTime: TServiceLifeTime; const Factory: TServiceFactory;
+      const ImplClass: TClass = nil): IServiceCollectionImpl;overload;
+    function BuildServiceProvider: IServiceProviderImpl;overload;
+    function BuildServiceProvider(const Options: TServiceProviderOptions): IServiceProviderImpl;overload;
     function Contains<T: IInterface>: Boolean;overload;
     function Contains(const ServiceType: PTypeInfo): Boolean;overload;
     property Descriptors[ServiceType: PTypeInfo]: TServiceDescriptors read GetDescriptors;default;
@@ -132,7 +144,8 @@ implementation
 uses
   System.SysUtils,
   Daf.Types,
-  Daf.Rtti;
+  Daf.Rtti,
+  Daf.DependencyInjection.ActivatorUtilities;
 
 { TDIObject }
 
@@ -168,12 +181,22 @@ constructor TServiceCollection.Create;
 begin
   inherited Create;
   FEntries := TDescriptorsDictionary.Create([doOwnsValues]);
+  FVisited := TDictionary<string, Boolean>.Create;
 end;
 
 destructor TServiceCollection.Destroy;
 begin
+  FVisited.Free;
   FEntries.Free;
   inherited;
+end;
+
+function TServiceCollection.TryMarkVisited(const Category, Key: string): Boolean;
+begin
+  var Id := Category + '|' + Key;
+  Result := not FVisited.ContainsKey(Id);
+  if Result then
+    FVisited.Add(Id, True);
 end;
 
 function TServiceCollection.Contains<T>: Boolean;
@@ -199,12 +222,88 @@ end;
 
 function TServiceCollection.BuildServiceProvider: IServiceProviderImpl;
 begin
+  Result := BuildServiceProvider(TServiceProviderOptions.None);
+end;
+
+function TServiceCollection.BuildServiceProvider(const Options: TServiceProviderOptions): IServiceProviderImpl;
+begin
  if FIsFrozen then
     raise Exception.Create('BuildServiceProvider can only be called once per ServiceCollection.');
   var Factory := CreateScopeFactory;
   var Scope := Factory.CreateScope;
-  Result := Scope.ServiceProvider;
+  var Provider: IServiceProvider := Scope.ServiceProvider;
+  try
+    Validate(Provider, Options);
+  except
+    // Un grafo invalido no debe dejar atras un contenedor a medio montar.
+    (Factory as IContainerAccess).Shutdown;
+    raise;
+  end;
+  Result := Provider;
   FIsFrozen := True;
+end;
+
+procedure TServiceCollection.Validate(const Provider: IServiceProvider; const Options: TServiceProviderOptions);
+begin
+  if not (Options.ValidateOnBuild or Options.ValidateScopes) then Exit;
+
+  var Errors: TArray<string> := [];
+  for var Entry in FEntries do
+    for var Descriptor in Entry.Value do
+    begin
+      // Los registros por factory son opacos: validarlos exigiria ejecutar la lambda, y
+      // ejecutarla al construir tendria efectos. Se dice, y no se finge que se cubren.
+      if Descriptor.ImplementationClass = nil then Continue;
+
+      var Ctor: TRttiMethod;
+      var Failed: TRttiParameter;
+      if not TActivatorUtilities.TryFindConstructor(Provider, Descriptor.ImplementationClass, Ctor, Failed) then
+      begin
+        if Options.ValidateOnBuild then
+          Errors := Errors + [DescribeUnresolvable(Descriptor, Failed)];
+        Continue;
+      end;
+
+      if Options.ValidateScopes and (Descriptor.LifeTime = Singleton) and (Ctor <> nil) then
+        CollectCapturedScopes(Descriptor, Ctor, Errors);
+    end;
+
+  if Length(Errors) = 0 then Exit;
+  // Todos los fallos juntos: un arranque mal cableado suele tener varios, y descubrirlos
+  // de uno en uno cuesta un ciclo de compilacion por cada uno.
+  raise EServiceProviderError.Create('Service provider validation failed:' + sLineBreak +
+    string.Join(sLineBreak, Errors));
+end;
+
+function TServiceCollection.DescribeUnresolvable(const Descriptor: TServiceDescriptor;
+  const Failed: TRttiParameter): string;
+begin
+  if Failed = nil then
+    Exit(Format('%s: %s has no public constructor the container can call',
+      [Descriptor.ServiceName, Descriptor.ImplementationClass.ClassName]));
+
+  Result := Format('%s: %s needs %s for parameter "%s", and nothing registers it',
+    [Descriptor.ServiceName, Descriptor.ImplementationClass.ClassName, Failed.ParamType.QualifiedName, Failed.Name]);
+end;
+
+procedure TServiceCollection.CollectCapturedScopes(const Descriptor: TServiceDescriptor; const Ctor: TRttiMethod;
+  var Errors: TArray<string>);
+begin
+  for var Param in Ctor.GetParameters do
+  begin
+    if Param.ParamType = nil then Continue;
+    var PInfo := Param.ParamType.Handle;
+    if PInfo.Kind <> tkInterface then Continue;
+
+    var Dependencies: TServiceDescriptors;
+    if not FEntries.TryGetValue(PInfo, Dependencies) then Continue;
+    if Dependencies.Count = 0 then Continue;
+    // El ultimo descriptor es el que resuelve TryGet, asi que es su ciclo de vida el que cuenta.
+    if Dependencies.Last.LifeTime <> Scoped then Continue;
+
+    Errors := Errors + [Format('captured dependency: singleton %s (%s) depends on scoped %s, via parameter "%s"',
+      [Descriptor.ServiceName, Descriptor.ImplementationClass.ClassName, Dependencies.Last.ServiceName, Param.Name])];
+  end;
 end;
 
 function TServiceCollection.GetCount: Integer;
@@ -217,6 +316,28 @@ begin
   Result := FEntries[ServiceType];
 end;
 
+function TServiceCollection.SetDescriptors(const ServiceType: PTypeInfo;
+  const NewDescriptors: TArray<TServiceDescriptor>): IServiceCollectionImpl;
+begin
+  CheckNotFrozen;
+  Result := Self;
+  FEntries.Remove(ServiceType);
+  if Length(NewDescriptors) = 0 then Exit;
+
+  var List := TServiceDescriptors.Create;
+  FEntries.AddOrSetValue(ServiceType, List);
+  List.AddRange(NewDescriptors);
+end;
+
+function TServiceCollection.RemoveAll(const ServiceType: PTypeInfo): IServiceCollectionImpl;
+begin
+  CheckNotFrozen;
+  Result := Self;
+  // Se borra la entrada entera, no se vacia la lista: si quedara una clave con lista vacia,
+  // Contains seguiria diciendo que si y TryAdd no repondria el registro.
+  FEntries.Remove(ServiceType);
+end;
+
 function TServiceCollection.Add<ServiceType>(const LifeTime: TServiceLifeTime;
   const Factory: TServiceFactory): IServiceCollectionImpl;
 begin
@@ -224,7 +345,7 @@ begin
 end;
 
 function TServiceCollection.Add(const ServiceType: PTypeInfo; const LifeTime: TServiceLifeTime;
-  const Factory: TServiceFactory): IServiceCollectionImpl;
+  const Factory: TServiceFactory; const ImplClass: TClass): IServiceCollectionImpl;
 begin
   CheckNotFrozen;
 
@@ -238,7 +359,7 @@ begin
     Descriptors := TServiceDescriptors.Create;
     FEntries.AddOrSetValue(ServiceType, Descriptors);
   end;
-  var Descriptor := TServiceDescriptor.Create(Factory, LifeTime, ServiceType);
+  var Descriptor := TServiceDescriptor.Create(Factory, LifeTime, ServiceType, ImplClass);
   Descriptors.Add(Descriptor);
 end;
 

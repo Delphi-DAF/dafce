@@ -33,23 +33,20 @@ uses
 
 { TMediatRServiceCollection }
 
-var Visited: TArray<string>;
-var VisitedBehaviors: TArray<string>;
+// La contabilidad de paquetes ya escaneados es estado de la coleccion, no del proceso:
+// antes eran dos globales de unit, y dos colecciones vivas a la vez se contaminaban.
+// Lo que cambia es donde se anota; el escaneo (DiscoverImpl) sigue igual.
 procedure TMediatRServiceCollection.AddMediatR;
 begin
   if Contains<IMediatorImpl> then
   Exit;
-  Visited := nil;
-  VisitedBehaviors := nil;
   AddTransient<IMediatorImpl, TMediator>;
 end;
 
 procedure TMediatRServiceCollection.AddMediatRClasses(const Package: TRttiPackage);
 begin
-  if TArray.Contains(Visited, Package.Name) then Exit;
-  var More: TArray<string> := [Package.Name];
-  Visited := TArray.Concat<string>([Visited, More]);
   var ServiceCollection := Self;
+  if not ServiceCollection.TryMarkVisited('MediatRClasses', Package.Name) then Exit;
   Package.DiscoverImpl<IBaseHandler>(True,
     function(T: TRttiType): Boolean
     begin
@@ -63,10 +60,8 @@ end;
 
 procedure TMediatRServiceCollection.AddMediatRBehaviors(const Package: TRttiPackage);
 begin
-  if TArray.Contains(VisitedBehaviors, Package.Name) then Exit;
-  var More: TArray<string> := [Package.Name];
-  VisitedBehaviors := TArray.Concat<string>([VisitedBehaviors, More]);
   var ServiceCollection := Self;
+  if not ServiceCollection.TryMarkVisited('MediatRBehaviors', Package.Name) then Exit;
   // False: include classes that implement IPipelineBehavior directly (not only strict sub-interfaces).
   // Global behaviors (TOuterBehavior etc.) inherit IPipelineBehavior via TPipelineBehavior without
   // re-declaring it, so StrictExtensions=True would skip them.
