@@ -10,6 +10,14 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
 ### Added
 
+- **DependencyInjection**: `TryAddSingleton` / `TryAddScoped` / `TryAddTransient`, `Replace` y `RemoveAll` — el contrato «la librería pone el default, la aplicación manda», con la semántica de `ServiceCollectionDescriptorExtensions` de .NET. Sin ellos, una agrupación de librería solo podía pisar en silencio lo que el arranque hubiera configurado antes
+- **DependencyInjection**: `Descriptors` — los registros de un servicio, en sólo lectura. Es lo que hace escribible la composición propia: un tercero puede añadir sus operaciones sin tocar DAF
+- **DependencyInjection**: `Decorate<S>` — envuelve los registros existentes de un servicio conservando su ciclo de vida, sin conocer ni duplicar su factory. Es el `Decorate` de Scrutor, que en .NET tampoco está en el framework
+- **DependencyInjection**: `AddModule<T>` y `AddModule(Module)` — el módulo se aplica por llamada, en el orden escrito, y con su constructor propio. Dos sobrecargas, como el `RegisterModule` de Autofac: la genérica, y la de instancia, que es la única vía de pasarle configuración
+- **DependencyInjection**: `BuildServiceProvider(TServiceProviderOptions)` con `ValidateOnBuild` y `ValidateScopes`, ambos opt-in. Alcanzan a los registros por clase y reportan todos los fallos juntos; los registros por factory son opacos, y la documentación lo dice en vez de fingir que los cubre
+- **Hosting**: `IStartupTask` y `AddStartupTask<T>` — inicialización que corre una vez al arrancar, con el proveedor ya construido. `THost.Start` las ejecuta en orden de registro, antes de los `IHostedService` y antes de `ApplicationStarted`; si una falla, el arranque aborta. .NET no tiene este contrato, y el hueco se tapa allí usando `IHostedService` con un `Stop` vacío que miente sobre lo que el objeto es
+- **Hosting**: Sample `PackageInit` — un paquete que trae su propia inicialización, de modo que el ejecutable llama a su `AddXxx` y no menciona ni el tipo de la tarea ni lo que hace
+- **Docs**: Página nueva «Composición del arranque» (EN/ES) — las dos fases del arranque, las dos formas de agrupar registros, la tabla de equivalencias con .NET y las divergencias justificadas
 - **Daf.Linq**: Módulo nuevo — secuencias perezosas con conteo de referencias sobre `System.IEnumerable<T>`: `TQuery<T>` (la superficie de operadores), `IGrouping<TKey, T>` y `Linq.From<T>`. La secuencia **es** un `IEnumerable<T>`, no un tipo propio: este es el mundo de los closures, el equivalente de LINQ-to-Objects, y así se llama en .NET. El nombre `IQueryable<T>` queda **reservado** para lo que significa allí —un árbol componible que se difiere a un back-end—, que DAF todavía no tiene
 - **Daf.Linq**: Operadores `Where`/`Filter`, `Select`/`Map`, `Take`, `Skip`, `Zip`, `Distinct`, `OrderBy`, `GroupBy`
 - **Daf.Linq**: Terminales `IsEmpty`, `Any`, `FirstOrDefault`/`LastOrDefault`, `TryFirst`, `Single`, `SingleOrDefault`, `TrySingle`, `ToArray`, `ToList`, `ToSmartArray`
@@ -45,6 +53,10 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 - **Commons**: `TFilterSpec<T>` —el filtro por clausuras— pasa a su propia unidad, `Daf.FilterSpec`. La unidad `Daf.Expression` guardaba dos tipos sin relación y llevaba el nombre del que tiene un solo consumidor, además de nombrar el mundo de los árboles para una clausura
 - **Commons**: `TExpresion<T>` pasa a llamarse **`TDeferred<T>`** y se muda a `Daf.Types`, junto a su único consumidor. El nombre nuevo dice lo que hace —el valor se evalúa al leerlo, y en cada lectura— y deja de sugerir el `Expression<TDelegate>` de .NET, que es un árbol inspeccionable; tampoco es `Lazy<T>`, que memoiza. La firma no cambia y `TMacroExpression` sigue siendo el alias, así que quien use macros no toca nada
 
+### Deprecated
+
+- **DependencyInjection**: `AddModules(Package)`, el descubrimiento por RTTI de los `IAppModule`. Sigue funcionando; el sustituto es `AddModule<T>`, una llamada por módulo y en el orden que la aplicación quiera. En compilación nativa el descubrimiento no ahorraba la declaración: la escondía en un `uses` con comentario `// force-link:`
+
 ### Removed
 
 - **Commons**: `TBooleanExpresion`
@@ -52,6 +64,8 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
 ### Fixed
 
+- **DependencyInjection / MediatR**: Componer dos veces en un mismo proceso da el mismo resultado. La contabilidad de paquetes ya procesados era estado global de unit —una variable en `AddModules`, dos en el registro de MediatR—, así que la segunda colección compuesta en un proceso se saltaba lo ya visitado. Ahora es estado de la colección
+- **Hosting**: Un proceso puede construir más de un host. «Build already called» y el «ya parado» del host eran estado de clase en vez de estado de instancia, así que un arnés que monta y desmonta hosts solo podía montar el primero
 - **SQLCute**: `WhereIn` con un conjunto de valores **vacío** emitía `col IN ()`, sintácticamente inválido en casi cualquier motor, así que el fallo llegaba desde el servidor y lejos de la llamada que lo causó. Un conjunto vacío es la disyunción vacía, así que ahora `WhereIn` no casa ninguna fila y `WhereNotIn` casa todas — incluida aquella cuya columna es NULL, donde antes el carril en memoria respondía *desconocido* y descartaba la fila de ambos. Los dos back-ends dan ya la misma respuesta. Afecta también a `OrWhereIn`/`OrWhereNotIn` y a `IsIn([])` de la capa de expresiones
 - **Commons**: `TMacrosList.GetValueFromIndex` no asignaba `Result`; toda lectura de macro devolvía cadena vacía
 - **MiniSpec**: Un tipo genérico en la descripción de un step —`AsType<T>`, `TList<T>`— se leía como placeholder de Scenario Outline y el step fallaba con `T not found in World`, apuntando al World en lugar de al texto. Un placeholder nunca continúa una palabra, así que ahora solo se reconoce cuando no va pegado a un identificador; los `<Expected>` de un Outline siguen expandiendo igual, incluso tras coma o paréntesis. Un placeholder que no casa con ningún campo sigue siendo error, y el mensaje nombra las dos lecturas posibles

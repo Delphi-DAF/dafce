@@ -1,4 +1,4 @@
-# DependencyInjection
+﻿# DependencyInjection
 
 **🌍 Idioma: [English](README.md) | Español**
 
@@ -108,3 +108,4 @@ Consulta [DependencyInjection.Abstractions](../DependencyInjection.Abstractions/
 ## Documentación
 
 - 📖 [Guía de uso](docs/GUIDE.es.md) — tiempos de vida, scopes, Lazy, DuckDecorator, integración con Hosting
+- 📖 [Composición del arranque](docs/STARTUP-COMPOSITION.es.md) — módulos y funciones `AddXxx`, `TryAdd`/`Replace`/`Decorate`, `IStartupTask`, validación del grafo

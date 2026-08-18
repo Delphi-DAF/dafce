@@ -77,6 +77,8 @@ website:
           href: en/docs/getting-started.qmd
         - text: "Architecture"
           href: en/docs/architecture.qmd
+        - text: "Startup composition"
+          href: en/docs/startup-composition.qmd
 
     - id: modules
       title: "Modules"
@@ -188,6 +190,8 @@ website:
           href: es/docs/getting-started.qmd
         - text: "Arquitectura"
           href: es/docs/architecture.qmd
+        - text: "Composición del arranque"
+          href: es/docs/startup-composition.qmd
 
   page-footer:
     left: |

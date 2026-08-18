@@ -1,4 +1,4 @@
-# Hosting
+﻿# Hosting
 
 **🌍 Language: English | [Español](README.es.md)**
 
@@ -147,3 +147,4 @@ See [Application](../Application/README.md) for the full Application module docs
 ## Documentation
 
 - 📖 [Usage Guide](docs/GUIDE.md) — configuration pipeline, scoped services, hosted services, lifetime hooks
+- 📖 [Startup composition](../DependencyInjection/docs/STARTUP-COMPOSITION.md) — `IStartupTask` vs `IHostedService`, and the two phases of startup

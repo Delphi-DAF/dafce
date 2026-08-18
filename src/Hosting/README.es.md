@@ -1,4 +1,4 @@
-# Hosting
+﻿# Hosting
 
 **🌍 Idioma: [English](README.md) | Español**
 
@@ -147,3 +147,4 @@ Consulta [Application](../Application/README.es.md) para la documentación compl
 ## Documentación
 
 - 📖 [Guía de uso](docs/GUIDE.es.md) — pipeline de configuración, servicios scoped, hosted services, hooks de ciclo de vida
+- 📖 [Composición del arranque](../DependencyInjection/docs/STARTUP-COMPOSITION.es.md) — `IStartupTask` frente a `IHostedService`, y las dos fases del arranque
