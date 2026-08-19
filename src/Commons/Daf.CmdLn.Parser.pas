@@ -189,17 +189,15 @@ type
 implementation
 
 uses
-{$IFOPT D+}
-  Winapi.Windows,
-{$ENDIF}
   System.StrUtils,
   System.Variants,
+  Daf.Types,
   Daf.Arrays;
 
 procedure DebugMsg(const Text: string);
 begin
 {$IFOPT D+}
-  OutputDebugString(PChar(Text));
+  Debugger.Write(Text);
 {$ENDIF}
 end;
 

@@ -3,7 +3,6 @@
 interface
 
 uses
-  Winapi.Windows,
   System.SysUtils,
   System.Generics.Collections,
   Daf.Extensions.Configuration,
