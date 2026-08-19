@@ -4,7 +4,8 @@ interface
 
 uses
   Daf.Extensions.DependencyInjection,
-  Daf.Extensions.Hosting;
+  Daf.Extensions.Hosting,
+  DAF.Extensions.Logging;
 
 type
   /// Deja constancia del orden en que ocurren las cosas al arrancar, que es lo que estas
@@ -54,9 +55,15 @@ type
   end;
 
   TStartupWorld = class
+  strict private
+    // Hay escenarios que fallan a proposito, y desde que THost.Start informa de verdad ese fallo
+    // sale por la salida de error del arnes. Es el comportamiento que se quiere; aqui solo se
+    // aparta para que no se confunda con la salida de las specs.
+    FSavedSinks: TArray<IBootstrapSink>;
   public
     Host: IHost;
     Failure: string;
+    constructor Create;
     destructor Destroy; override;
     procedure BuildHost(const Configure: TConfigureServicesAction);
     procedure StartHost;
@@ -164,10 +171,20 @@ end;
 
 { TStartupWorld }
 
+constructor TStartupWorld.Create;
+begin
+  inherited Create;
+  FSavedSinks := BootstrapLog.Sinks;
+  BootstrapLog.ClearSinks;
+end;
+
 destructor TStartupWorld.Destroy;
 begin
   if Host <> nil then
     Host.Stop;
+  BootstrapLog.ClearSinks;
+  for var Sink in FSavedSinks do
+    BootstrapLog.AddSink(Sink);
   inherited;
 end;
 

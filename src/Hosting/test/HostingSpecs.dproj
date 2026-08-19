@@ -98,6 +98,7 @@
         </DelphiCompile>
         <DCCReference Include="StartupTasks.Feat.pas"/>
         <DCCReference Include="HostComposition.Feat.pas"/>
+        <DCCReference Include="StartupReporting.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>

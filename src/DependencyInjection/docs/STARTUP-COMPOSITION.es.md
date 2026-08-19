@@ -11,8 +11,9 @@
 3. [Gobernar un registro ajeno](#gobernar-un-registro-ajeno)
 4. [Decorar](#decorar)
 5. [Tareas de arranque](#tareas-de-arranque)
-6. [Validar el grafo](#validar-el-grafo)
-7. [.NET ↔ DAF](#net--daf)
+6. [Informar de un fallo de arranque](#informar-de-un-fallo-de-arranque)
+7. [Validar el grafo](#validar-el-grafo)
+8. [.NET ↔ DAF](#net--daf)
 
 ---
 
@@ -236,6 +237,130 @@ vez, es `IStartupTask`.**
 servicios alojados y de que la aplicación se declare arrancada, así que no sirve para
 preparar estado del que esos servicios dependan.
 
+## Informar de un fallo de arranque
+
+La misma frontera que separa las dos fases separa **quién informa de un fallo**, y conviene saber de
+qué lado se está: informar del lado equivocado significa o que no se entera nadie, o que se salta la
+configuración de logging que uno mismo escribió.
+
+```
+  THostBuilder.Build                          ── canal de arranque ──▶  salida de depuración
+  ├── InitializeHostConfiguration                                       del sistema
+  ├── InitializeHostingEnvironment                                      salida de error, si el
+  ├── InitializeHostBuilderContext                                      proceso tiene una
+  ├── InitializeAppConfiguration  ← appsettings.json se lee aquí        lo que hayas registrado
+  └── InitializeServiceProvider
+  ════════════════════ BuildServiceProvider ════════════════════
+  THost.Start / THost.Stop                    ── pipeline de ILogger ─▶  tus proveedores, tu
+                                                                         configuración
+```
+
+Antes de `BuildServiceProvider` no existe `IServiceProvider`, así que no hay `ILoggerFactory` y nada
+de lo registrado puede informar. Ese tramo lo cubre el **canal de arranque**: un `ILogger` disponible
+desde que arranca el proceso, sin inyección de dependencias y sin configuración. No lee configuración
+a propósito —que falle la lectura de la configuración es una de las cosas de las que tiene que
+informar, y leer un fichero para saber dónde decir que no se pudo leer el fichero es el mismo huevo y
+la misma gallina.
+
+En cuanto existe el proveedor toma el relevo el pipeline, con los proveedores y los niveles que
+configuraste. El canal de arranque se queda de **respaldo**: si `ILoggerFactory` no se puede
+resolver, el informe sale por él en vez de perderse. `THostBuilder.Build` se queda en el canal,
+porque ése es justo el tramo en el que el proveedor todavía no existe.
+
+**El canal de arranque no es el logger de la aplicación.** Seguir usándolo después de
+`BuildServiceProvider` es saltarse la configuración que escribiste. Este relevo de dos etapas es un
+patrón con nombre en .NET: el `CreateBootstrapLogger` de Serilog.
+
+### El fallo siempre se propaga, y eso es la mitad del informe
+
+`THostBuilder.Build` relanza después de informar, y no es un detalle de implementación. Cada
+plataforma tiene ya su forma de enseñar que un proceso no arrancó —un diálogo en una aplicación de
+escritorio, la salida de error y un código de retorno distinto de cero en una de consola— y en el
+escritorio ésa es la *única* que alcanza a quien tiene el programa delante. Un `.dpr` que se traga la
+excepción se lo quita.
+
+### Destinos
+
+DAF trae únicamente destinos **cuyo lugar de escritura no tiene que adivinar**:
+
+| Destino | Dónde escribe | Disponible cuando |
+|---|---|---|
+| `TDebugOutputBootstrapSink` | salida de depuración del sistema (`OutputDebugString`) | en Windows; **no** hace falta depurador |
+| `TStdErrBootstrapSink` | la salida de error del proceso | el proceso tiene handle de error |
+| `TPlatformLogBootstrapSink` | el servicio de log de la plataforma (`IFMXLoggingService`) | la plataforma registra ese servicio |
+| `TFileBootstrapSink` | el fichero que le digas | **no se registra por defecto** |
+
+Los dos primeros van registrados de serie. `TPlatformLogBootstrapSink` vive en su propia unit,
+`DAF.Extensions.Logging.PlatformSink`, para que FireMonkey no le llegue a quien no lo pidió; cubre
+macOS, iOS y Android, y se declara no disponible en Linux, donde no hay FireMonkey a quien preguntar.
+
+Un destino duradero necesita una ruta, y esa ruta la conoce la aplicación —dónde guarda sus datos— y
+no el framework. Así que DAF ofrece el mecanismo y no elige la ruta:
+
+```pascal
+BootstrapLog.AddSink(TFileBootstrapSink.Create(TPath.Combine(MiCarpetaDeDatos, 'startup.log')));
+```
+
+Es el reparto de .NET, que tampoco escribe ningún fichero de arranque por su cuenta ni inventa
+ninguna ruta.
+
+Un destino que no puede escribir **se declara no disponible** en vez de aceptar el informe y
+perderlo, y un destino que lanza se queda fuera sin llevarse por delante el arranque. Y si hace falta
+saber que no está escuchando nadie —el caso peor, y el que antes era indistinguible de haber
+informado—, lo responde `BootstrapLog.HasAvailableSink`.
+
+### Informar del arranque propio
+
+Una aplicación tiene tanto arranque propio como el framework: la ruta de su fichero de configuración,
+sus fuentes, su composición. Informa bajo **su propia categoría**:
+
+```pascal
+BootstrapLog.LoggerFor('Acme.Payroll').LogError('la carpeta de datos "%s" no es escribible', [Ruta]);
+```
+
+El canal mantiene el umbral en `Warning` y por encima: el arranque no es sitio para charla de
+depuración, y un canal que escribe siempre acaba ignorado.
+
+**¿Vienes de `DAFInternalLogger`?** Esa global ya no está. Era la única vía mientras la categoría
+del canal estuvo clavada a `DAF`; sin ese filtro pasó a ser una segunda puerta que etiqueta como DAF
+a quien no lo es. Sustitúyela por `BootstrapLog.LoggerFor(<tu categoría>)` — que es exactamente por
+donde salen ahora los informes del propio DAF, para que el framework no predique una API que él no
+usa.
+
+### Qué recibe cada forma de despliegue
+
+| Forma | Qué enseña el fallo |
+|---|---|
+| Escritorio (VCL o FMX, sin consola) | la propagación: la plataforma enseña su diálogo. Registra un destino de fichero si quieres un registro que sobreviva al «Aceptar» |
+| Consola | la salida de error, más un código de retorno distinto de cero |
+| Desatendido (envoltorio, programador de tareas) | la salida de error, que el envoltorio o el programador capturan; un destino de fichero para el registro duradero |
+
+El `.dpr` es donde se decide esto, antes de construir el host:
+
+```pascal
+program Payroll;
+
+uses
+  System.IOUtils, System.SysUtils, DAF.Extensions.Logging, Daf.Hosting;
+
+begin
+  // La aplicación sabe dónde viven sus datos; DAF no.
+  BootstrapLog.AddSink(TFileBootstrapSink.Create(TPath.Combine(CarpetaDeDatos, 'startup.log')));
+  try
+    var Host := THostBuilder.Create.ConfigureServices(AddPayroll).Build;
+    Host.Start;
+    Host.WaitForShutdown;
+  except
+    on E: Exception do
+    begin
+      BootstrapLog.LoggerFor('Payroll').LogCritical(E, 'la aplicación no pudo arrancar');
+      ExitCode := 1;   // consola y desatendido: el código de retorno es parte del informe
+      raise;           // escritorio: es lo que hace que la plataforma lo enseñe
+    end;
+  end;
+end.
+```
+
 ## Validar el grafo
 
 ```pascal
@@ -271,6 +396,8 @@ valida sin quejarse no dice que el grafo entero esté bien: dice que lo inspecci
 | métodos de extensión `services.AddXxx()` | `AddXxx(Services)` | Delphi no los tiene: **no encadena** |
 | módulos de Autofac / Windsor / StructureMap | `AddModule<T>` | Divergencia de capa: en la colección, no en el contenedor |
 | — | `IStartupTask` | Divergencia deliberada: .NET no tiene contrato para esto |
+| `CreateBootstrapLogger` de Serilog | `BootstrapLog` | El relevo de dos etapas, por su nombre conocido |
+| `Microsoft.Extensions.Logging.Debug` | `TDebugOutputBootstrapSink` | El mismo papel: la salida de depuración del sistema, sin configuración |
 
 ---
 

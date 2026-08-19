@@ -60,7 +60,7 @@ begin
         Logger.Log(Entry);
     except
       on E: EXception do
-        DafInternalLogger.LogError(E, '%s', [ClassName]);
+        BootstrapLog.LoggerFor(ClassName).LogError(E, 'a logger provider raised while writing an entry');
     end;
   finally
     TMonitor.Exit(FLock);

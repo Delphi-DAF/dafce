@@ -260,15 +260,97 @@ type
     procedure LogCritical(const EventId: TEventId; const Ex: Exception; const Msg: string; const Args: TArray<TValue> = nil); overload;
   end;
 
-var
-  DAFInternalLogger: ILogger;
+  // ================================================================================================
+  // Canal de arranque
+  //
+  // Hay una fase del arranque en la que no existe IServiceProvider: nada de lo registrado puede
+  // informar de un fallo todavia. Este canal cubre ese hueco y solo ese. No es un segundo framework
+  // de logging: sin niveles por categoria, sin layouts configurables, sin escritura asincrona. En
+  // cuanto existe el proveedor, informar es cosa del pipeline de ILogger.
+  //
+  // Y no se configura por fichero, a proposito: leer configuracion para saber donde informar de que
+  // fallo la lectura de la configuracion es el mismo huevo y la misma gallina.
+  // ================================================================================================
+
+  // Un destino del canal de arranque. Recibe una linea ya formada --nunca un TLogEntry--, asi que no
+  // puede inventarse su propio formato ni filtrar: no ve nada que se lo permita.
+  IBootstrapSink = interface(IInvokable)
+    ['{67D6ED65-6742-48D2-B7C6-CE61AB216872}']
+    // Si el destino puede escribir aqui y ahora. Un destino que no puede escribir se declara no
+    // disponible en vez de aceptar la linea y perderla en silencio.
+    function IsAvailable: Boolean;
+    procedure Write(const Line: string);
+  end;
+
+  // El canal: registro de destinos y reparto. Disponible desde initialization, sin DI y sin
+  // configuracion. Nunca lanza -- un canal cuya razon de ser es informar de un fallo no puede
+  // provocar un segundo fallo.
+  BootstrapLog = record
+    // Los destinos se pueden anadir y quitar desde initialization o desde el main, antes de
+    // construir el host. Anadir es aditivo: los informes de DAF siguen saliendo por los suyos.
+    class procedure AddSink(const Sink: IBootstrapSink); static;
+    class procedure RemoveSink(const Sink: IBootstrapSink); static;
+    class procedure ClearSinks; static;
+    class function Sinks: TArray<IBootstrapSink>; static;
+    // Los destinos que ahora mismo pueden escribir. Que este vacio es el caso peor --nadie va a
+    // enterarse de nada-- y hay que poder distinguirlo de haber informado.
+    class function AvailableSinks: TArray<IBootstrapSink>; static;
+    class function HasAvailableSink: Boolean; static;
+    // Reparte una linea ya formada a los destinos disponibles. No lanza pase lo que pase.
+    class procedure Write(const Line: string); static;
+    // El layout del canal, aplicado antes de repartir para que todos los destinos escriban lo mismo.
+    class function FormatLine(const Entry: TLogEntry): string; static;
+    // Un ILogger de arranque con la categoria de quien llama: la aplicacion informa de su propio
+    // arranque sin disfrazarse de DAF.
+    class function LoggerFor(const Category: string): ILogger; static;
+  end;
+
+  // Salida de depuracion del sistema. En Windows es OutputDebugString, que es del sistema y no del
+  // depurador: se captura tambien sin uno conectado. Fuera de Windows Debugger.Write no escribe, y
+  // el destino lo dice --ver DAF.Extensions.Logging.PlatformSink para el equivalente FireMonkey.
+  TDebugOutputBootstrapSink = class(TInterfacedObject, IBootstrapSink)
+  public
+    function IsAvailable: Boolean;
+    procedure Write(const Line: string);
+  end;
+
+  // Salida de error del proceso. Es lo que cubre el caso desatendido en la practica: un envoltorio
+  // o el programador de tareas la capturan. En una aplicacion sin consola no hay handle de error, y
+  // entonces el destino se declara no disponible en vez de lanzar al escribir.
+  TStdErrBootstrapSink = class(TInterfacedObject, IBootstrapSink)
+  public
+    function IsAvailable: Boolean;
+    procedure Write(const Line: string);
+  end;
+
+  // Destino duradero. NO se registra por defecto, y esa es la decision: una ruta duradera la conoce
+  // la aplicacion --donde guarda sus datos-- y no el framework. DAF ofrece el mecanismo; la ruta la
+  // pone quien despliega:
+  //
+  //   BootstrapLog.AddSink(TFileBootstrapSink.Create(TPath.Combine(MiCarpetaDeDatos, 'startup.log')));
+  TFileBootstrapSink = class(TInterfacedObject, IBootstrapSink)
+  private
+    FFileName: string;
+  public
+    constructor Create(const AFileName: string);
+    function IsAvailable: Boolean;
+    procedure Write(const Line: string);
+    property FileName: string read FFileName;
+  end;
+
 implementation
 uses
+{$IFDEF MSWINDOWS}
+  Winapi.Windows,
+{$ENDIF MSWINDOWS}
+  System.IOUtils,
   Daf.Types;
 
 type
-  // Internal DAF logger
-  TDAFInternalLogger = class(TInterfacedObject, ILogger)
+  // El logger del canal de arranque. No se expone: la unica via de obtener uno es
+  // BootstrapLog.LoggerFor, que toma la categoria de quien informa -- tambien cuando quien
+  // informa es DAF.
+  TBootstrapLogger = class(TInterfacedObject, ILogger)
   private
     FCategory: string;
   public
@@ -639,54 +721,246 @@ begin
 
 end;
 
-{ TDAFInternalLogger }
+{ Canal de arranque }
 
-constructor TDAFInternalLogger.Create(const Category: string);
+type
+  // El estado por destino que el reparto necesita. Un destino que lanzo se marca aqui y deja de
+  // intentarse: el canal no puede provocar un segundo fallo mientras informa del primero.
+  TBootstrapSinkEntry = record
+    Sink: IBootstrapSink;
+    Failed: Boolean;
+  end;
+
+var
+  BootstrapSinkList: TList<TBootstrapSinkEntry> = nil;
+  BootstrapSinkLock: TObject = nil;
+
+// El registro puede no existir todavia --o ya no existir-- si alguien informa desde la
+// initialization de una unit anterior o desde una finalization posterior. Ni un caso ni el otro
+// puede acabar en excepcion.
+function BootstrapSinksReady: Boolean;
+begin
+  Result := Assigned(BootstrapSinkList) and Assigned(BootstrapSinkLock);
+end;
+
+// Preguntar tambien puede lanzar, y preguntar no es informar: si el destino no sabe responder, se
+// le da por no disponible.
+function SinkIsAvailable(const Sink: IBootstrapSink): Boolean;
+begin
+  try
+    Result := Assigned(Sink) and Sink.IsAvailable;
+  except
+    Result := False;
+  end;
+end;
+
+class procedure BootstrapLog.AddSink(const Sink: IBootstrapSink);
+begin
+  if not Assigned(Sink) or not BootstrapSinksReady then Exit;
+  TMonitor.Enter(BootstrapSinkLock);
+  try
+    var Entry: TBootstrapSinkEntry;
+    Entry.Sink := Sink;
+    Entry.Failed := False;
+    BootstrapSinkList.Add(Entry);
+  finally
+    TMonitor.Exit(BootstrapSinkLock);
+  end;
+end;
+
+class procedure BootstrapLog.RemoveSink(const Sink: IBootstrapSink);
+begin
+  if not Assigned(Sink) or not BootstrapSinksReady then Exit;
+  TMonitor.Enter(BootstrapSinkLock);
+  try
+    for var I := BootstrapSinkList.Count - 1 downto 0 do
+      if BootstrapSinkList[I].Sink = Sink then
+        BootstrapSinkList.Delete(I);
+  finally
+    TMonitor.Exit(BootstrapSinkLock);
+  end;
+end;
+
+class procedure BootstrapLog.ClearSinks;
+begin
+  if not BootstrapSinksReady then Exit;
+  TMonitor.Enter(BootstrapSinkLock);
+  try
+    BootstrapSinkList.Clear;
+  finally
+    TMonitor.Exit(BootstrapSinkLock);
+  end;
+end;
+
+class function BootstrapLog.Sinks: TArray<IBootstrapSink>;
+begin
+  Result := nil;
+  if not BootstrapSinksReady then Exit;
+  TMonitor.Enter(BootstrapSinkLock);
+  try
+    SetLength(Result, BootstrapSinkList.Count);
+    for var I := 0 to BootstrapSinkList.Count - 1 do
+      Result[I] := BootstrapSinkList[I].Sink;
+  finally
+    TMonitor.Exit(BootstrapSinkLock);
+  end;
+end;
+
+class function BootstrapLog.AvailableSinks: TArray<IBootstrapSink>;
+begin
+  Result := nil;
+  if not BootstrapSinksReady then Exit;
+  TMonitor.Enter(BootstrapSinkLock);
+  try
+    for var I := 0 to BootstrapSinkList.Count - 1 do
+    begin
+      var Entry := BootstrapSinkList[I];
+      if not Entry.Failed and SinkIsAvailable(Entry.Sink) then
+        Result := Result + [Entry.Sink];
+    end;
+  finally
+    TMonitor.Exit(BootstrapSinkLock);
+  end;
+end;
+
+class function BootstrapLog.HasAvailableSink: Boolean;
+begin
+  Result := Length(AvailableSinks) > 0;
+end;
+
+class procedure BootstrapLog.Write(const Line: string);
+begin
+  if not BootstrapSinksReady then Exit;
+  TMonitor.Enter(BootstrapSinkLock);
+  try
+    for var I := 0 to BootstrapSinkList.Count - 1 do
+    begin
+      var Entry := BootstrapSinkList[I];
+      if Entry.Failed then Continue;
+      try
+        if SinkIsAvailable(Entry.Sink) then
+          Entry.Sink.Write(Line);
+      except
+        // Fichero bloqueado, disco lleno, permisos: se traga aqui y ese destino queda fuera. Los
+        // demas siguen escribiendo, que es de lo que se trataba.
+        Entry.Failed := True;
+        BootstrapSinkList[I] := Entry;
+      end;
+    end;
+  finally
+    TMonitor.Exit(BootstrapSinkLock);
+  end;
+end;
+
+class function BootstrapLog.FormatLine(const Entry: TLogEntry): string;
+begin
+  // layout '${timestamp} #${pid}:${thread} [${level}] ${category} | ${message} ${exception}'
+  var ExceptionStr := '';
+  if Assigned(Entry.Exception) then
+    ExceptionStr := Format(' Exception: %s', [Entry.Exception.Message]);
+  Result := Format('%s #%d:%d [%s] %s | %s%s',
+    [FormatDateTime('yyyy-mm-dd hh:nn:ss.zzz', Now), Debugger.CurrentProcessId, Debugger.CurrentThreadId,
+     Entry.Level.ToString, Entry.Category, Entry.Message, ExceptionStr]);
+end;
+
+class function BootstrapLog.LoggerFor(const Category: string): ILogger;
+begin
+  Result := TBootstrapLogger.Create(Category);
+end;
+
+{ TDebugOutputBootstrapSink }
+
+function TDebugOutputBootstrapSink.IsAvailable: Boolean;
+begin
+{$IFDEF MSWINDOWS}
+  Result := True;
+{$ELSE}
+  // Debugger.Write tiene las ramas POSIX vacias: fuera de Windows aceptar la linea seria perderla.
+  Result := False;
+{$ENDIF MSWINDOWS}
+end;
+
+procedure TDebugOutputBootstrapSink.Write(const Line: string);
+begin
+  Debugger.Write(Line);
+end;
+
+{ TStdErrBootstrapSink }
+
+function TStdErrBootstrapSink.IsAvailable: Boolean;
+begin
+{$IFDEF MSWINDOWS}
+  // La pregunta es del proceso, no de la plataforma: una aplicacion VCL sin consola no tiene handle
+  // de error, y escribir en ErrOutput ahi lanza.
+  var Handle := GetStdHandle(STD_ERROR_HANDLE);
+  Result := (Handle <> 0) and (Handle <> INVALID_HANDLE_VALUE);
+{$ELSE}
+  Result := True;
+{$ENDIF MSWINDOWS}
+end;
+
+procedure TStdErrBootstrapSink.Write(const Line: string);
+begin
+  Writeln(ErrOutput, Line);
+  Flush(ErrOutput);
+end;
+
+{ TFileBootstrapSink }
+
+constructor TFileBootstrapSink.Create(const AFileName: string);
+begin
+  inherited Create;
+  FFileName := AFileName;
+end;
+
+function TFileBootstrapSink.IsAvailable: Boolean;
+begin
+  // La carpeta la eligio quien construyo el destino. Si no esta, el destino lo dice en vez de
+  // crearla por su cuenta: DAF no inventa rutas.
+  Result := False;
+  if FFileName = '' then Exit;
+  try
+    Result := TDirectory.Exists(TPath.GetDirectoryName(TPath.GetFullPath(FFileName)));
+  except
+    Result := False;
+  end;
+end;
+
+procedure TFileBootstrapSink.Write(const Line: string);
+begin
+  TFile.AppendAllText(FFileName, Line + sLineBreak, TEncoding.UTF8);
+end;
+
+{ TBootstrapLogger }
+
+constructor TBootstrapLogger.Create(const Category: string);
 begin
   inherited Create;
   FCategory := Category;
 end;
 
-function TDAFInternalLogger.BeginScope(const Msg: string; const Args: TArray<TValue>; const ScopedProc: TProc = nil): ILogScopeVoid;
+function TBootstrapLogger.BeginScope(const Msg: string; const Args: TArray<TValue>; const ScopedProc: TProc = nil): ILogScopeVoid;
 begin
   Result := nil;
   if Assigned(ScopedProc) then ScopedProc;
 end;
 
-function TDAFInternalLogger.BeginScope(const Msg: string; const ScopedProc: TProc = nil): ILogScopeVoid;
+function TBootstrapLogger.BeginScope(const Msg: string; const ScopedProc: TProc = nil): ILogScopeVoid;
 begin
   Result := BeginScope(Msg, nil, ScopedProc);
 end;
 
-procedure TDAFInternalLogger.Log(const Entry: TLogEntry);
+procedure TBootstrapLogger.Log(const Entry: TLogEntry);
 begin
-  if (Entry.Level in [TLogLevel.Warning, TLogLevel.Error, TLogLevel.Critical]) and
-     (Entry.Category.StartsWith('DAF')) then
-  begin
-    // simulate layout '${timestamp} #${pid}:${thread} [${level}] ${category} | ${message} ${exception}';
-    var
-      Timestamp := FormatDateTime('yyyy-mm-dd hh:nn:ss.zzz', Now);
-    var
-      ProcessId := Debugger.CurrentProcessId;
-    var
-      ThreadId := Debugger.CurrentThreadId;
-    var
-      LevelStr := Entry.Level.ToString;
-    var
-      Category := Entry.Category;
-    var
-      Message := Entry.Message;
-    var
-      ExceptionStr: string;
-    if Assigned(Entry.Exception) then
-      ExceptionStr := Format(' Exception: %s', [Entry.Exception.Message])
-    else
-      ExceptionStr := '';
-    Debugger.Write('%s #%d:%d [%s] %s | %s%s', [Timestamp, ProcessId, ThreadId, LevelStr, Category, Message, ExceptionStr]);
-  end;
+  // Filtrar aqui; formatear y repartir, en el canal. El umbral se queda --el arranque no es sitio
+  // para charla de depuracion, y un canal que escribe siempre acaba ignorado--; el filtro por
+  // categoria se fue: era lo que cerraba el canal a la aplicacion, y no descartaba nada, porque la
+  // unica instancia que existia tenia la categoria fija a 'DAF'.
+  if not (Entry.Level in [TLogLevel.Warning, TLogLevel.Error, TLogLevel.Critical]) then Exit;
+  BootstrapLog.Write(BootstrapLog.FormatLine(Entry));
 end;
 
-procedure TDAFInternalLogger.Log(const Level: TLogLevel; const EventId: TEventId; const Ex: Exception; const Msg: string; const Args: TArray<TValue>);
+procedure TBootstrapLogger.Log(const Level: TLogLevel; const EventId: TEventId; const Ex: Exception; const Msg: string; const Args: TArray<TValue>);
 begin
   var Entry: TLogEntry;
   Entry.Level := Level;
@@ -698,118 +972,127 @@ begin
   Log(Entry);
 end;
 
-procedure TDAFInternalLogger.Log(const Level: TLogLevel; const EventId: TEventId; const Msg: string; const Args: TArray<TValue>);
+procedure TBootstrapLogger.Log(const Level: TLogLevel; const EventId: TEventId; const Msg: string; const Args: TArray<TValue>);
 begin
   Log(Level, EventId, nil, Msg, Args);
 end;
 
-procedure TDAFInternalLogger.Log(const Level: TLogLevel; const Ex: Exception; const Msg: string; const Args: TArray<TValue>);
+procedure TBootstrapLogger.Log(const Level: TLogLevel; const Ex: Exception; const Msg: string; const Args: TArray<TValue>);
 begin
   Log(Level, 0, Ex, Msg, Args);
 end;
 
-procedure TDAFInternalLogger.Log(const Level: TLogLevel; const Msg: string; const Args: TArray<TValue>);
+procedure TBootstrapLogger.Log(const Level: TLogLevel; const Msg: string; const Args: TArray<TValue>);
 begin
   Log(Level, 0, nil, Msg, Args);
 end;
 
-procedure TDAFInternalLogger.LogDebug(const EventId: TEventId; const Ex: Exception; const Msg: string; const Args: TArray<TValue>);
+procedure TBootstrapLogger.LogDebug(const EventId: TEventId; const Ex: Exception; const Msg: string; const Args: TArray<TValue>);
 begin
   Log(TLogLevel.Debug, EventId, Ex, Msg, Args);
 end;
-procedure TDAFInternalLogger.LogDebug(const EventId: TEventId; const Msg: string; const Args: TArray<TValue>);
+procedure TBootstrapLogger.LogDebug(const EventId: TEventId; const Msg: string; const Args: TArray<TValue>);
 begin
   Log(TLogLevel.Debug, EventId, Msg, Args);
 end;
-procedure TDAFInternalLogger.LogDebug(const Ex: Exception; const Msg: string; const Args: TArray<TValue>);
+procedure TBootstrapLogger.LogDebug(const Ex: Exception; const Msg: string; const Args: TArray<TValue>);
 begin
   Log(TLogLevel.Debug, Ex, Msg, Args);
 end;
-procedure TDAFInternalLogger.LogDebug(const Msg: string; const Args: TArray<TValue>);
+procedure TBootstrapLogger.LogDebug(const Msg: string; const Args: TArray<TValue>);
 begin
   Log(TLogLevel.Debug, Msg, Args);
 end;
-procedure TDAFInternalLogger.LogTrace(const Msg: string; const Args: TArray<TValue>);
+procedure TBootstrapLogger.LogTrace(const Msg: string; const Args: TArray<TValue>);
 begin
   Log(TLogLevel.Trace, Msg, Args);
 end;
-procedure TDAFInternalLogger.LogTrace(const EventId: TEventId; const Msg: string; const Args: TArray<TValue>);
+procedure TBootstrapLogger.LogTrace(const EventId: TEventId; const Msg: string; const Args: TArray<TValue>);
 begin
   Log(TLogLevel.Trace, EventId, Msg, Args);
 end;
-procedure TDAFInternalLogger.LogTrace(const Ex: Exception; const Msg: string; const Args: TArray<TValue>);
+procedure TBootstrapLogger.LogTrace(const Ex: Exception; const Msg: string; const Args: TArray<TValue>);
 begin
   Log(TLogLevel.Trace, Ex, Msg, Args);
 end;
-procedure TDAFInternalLogger.LogTrace(const EventId: TEventId; const Ex: Exception; const Msg: string; const Args: TArray<TValue>);
+procedure TBootstrapLogger.LogTrace(const EventId: TEventId; const Ex: Exception; const Msg: string; const Args: TArray<TValue>);
 begin
   Log(TLogLevel.Trace, EventId, Ex, Msg, Args);
 end;
-procedure TDAFInternalLogger.LogInformation(const Msg: string; const Args: TArray<TValue>);
+procedure TBootstrapLogger.LogInformation(const Msg: string; const Args: TArray<TValue>);
 begin
   Log(TLogLevel.Information, Msg, Args);
 end;
-procedure TDAFInternalLogger.LogInformation(const EventId: TEventId; const Msg: string; const Args: TArray<TValue>);
+procedure TBootstrapLogger.LogInformation(const EventId: TEventId; const Msg: string; const Args: TArray<TValue>);
 begin
   Log(TLogLevel.Information, EventId, Msg, Args);
 end;
-procedure TDAFInternalLogger.LogInformation(const Ex: Exception; const Msg: string; const Args: TArray<TValue>);
+procedure TBootstrapLogger.LogInformation(const Ex: Exception; const Msg: string; const Args: TArray<TValue>);
 begin
   Log(TLogLevel.Information, Ex, Msg, Args);
 end;
-procedure TDAFInternalLogger.LogInformation(const EventId: TEventId; const Ex: Exception; const Msg: string; const Args: TArray<TValue>);
+procedure TBootstrapLogger.LogInformation(const EventId: TEventId; const Ex: Exception; const Msg: string; const Args: TArray<TValue>);
 begin
   Log(TLogLevel.Information, EventId, Ex, Msg, Args);
 end;
-procedure TDAFInternalLogger.LogWarning(const Msg: string; const Args: TArray<TValue>);
+procedure TBootstrapLogger.LogWarning(const Msg: string; const Args: TArray<TValue>);
 begin
   Log(TLogLevel.Warning, Msg, Args);
 end;
-procedure TDAFInternalLogger.LogWarning(const EventId: TEventId; const Msg: string; const Args: TArray<TValue>);
+procedure TBootstrapLogger.LogWarning(const EventId: TEventId; const Msg: string; const Args: TArray<TValue>);
 begin
   Log(TLogLevel.Warning, EventId, Msg, Args);
 end;
-procedure TDAFInternalLogger.LogWarning(const Ex: Exception; const Msg: string; const Args: TArray<TValue>);
+procedure TBootstrapLogger.LogWarning(const Ex: Exception; const Msg: string; const Args: TArray<TValue>);
 begin
   Log(TLogLevel.Warning, Ex, Msg, Args);
 end;
-procedure TDAFInternalLogger.LogWarning(const EventId: TEventId; const Ex: Exception; const Msg: string; const Args: TArray<TValue>);
+procedure TBootstrapLogger.LogWarning(const EventId: TEventId; const Ex: Exception; const Msg: string; const Args: TArray<TValue>);
 begin
   Log(TLogLevel.Warning, EventId, Ex, Msg, Args);
 end;
-procedure TDAFInternalLogger.LogError(const Msg: string; const Args: TArray<TValue>);
+procedure TBootstrapLogger.LogError(const Msg: string; const Args: TArray<TValue>);
 begin
   Log(TLogLevel.Error, Msg, Args);
 end;
-procedure TDAFInternalLogger.LogError(const EventId: TEventId; const Msg: string; const Args: TArray<TValue>);
+procedure TBootstrapLogger.LogError(const EventId: TEventId; const Msg: string; const Args: TArray<TValue>);
 begin
   Log(TLogLevel.Error, EventId, Msg, Args);
 end;
-procedure TDAFInternalLogger.LogError(const Ex: Exception; const Msg: string = ''; const Args: TArray<TValue> = nil);
+procedure TBootstrapLogger.LogError(const Ex: Exception; const Msg: string = ''; const Args: TArray<TValue> = nil);
 begin
   Log(TLogLevel.Error, Ex, Msg, Args);
 end;
-procedure TDAFInternalLogger.LogError(const EventId: TEventId; const Ex: Exception; const Msg: string; const Args: TArray<TValue>);
+procedure TBootstrapLogger.LogError(const EventId: TEventId; const Ex: Exception; const Msg: string; const Args: TArray<TValue>);
 begin
   Log(TLogLevel.Error, EventId, Ex, Msg, Args);
 end;
-procedure TDAFInternalLogger.LogCritical(const Msg: string; const Args: TArray<TValue>);
+procedure TBootstrapLogger.LogCritical(const Msg: string; const Args: TArray<TValue>);
 begin
   Log(TLogLevel.Critical, Msg, Args);
 end;
-procedure TDAFInternalLogger.LogCritical(const EventId: TEventId; const Msg: string; const Args: TArray<TValue>);
+procedure TBootstrapLogger.LogCritical(const EventId: TEventId; const Msg: string; const Args: TArray<TValue>);
 begin
   Log(TLogLevel.Critical, EventId, Msg, Args);
 end;
-procedure TDAFInternalLogger.LogCritical(const Ex: Exception; const Msg: string; const Args: TArray<TValue>);
+procedure TBootstrapLogger.LogCritical(const Ex: Exception; const Msg: string; const Args: TArray<TValue>);
 begin
   Log(TLogLevel.Critical, Ex, Msg, Args);
 end;
-procedure TDAFInternalLogger.LogCritical(const EventId: TEventId; const Ex: Exception; const Msg: string; const Args: TArray<TValue>);
+procedure TBootstrapLogger.LogCritical(const EventId: TEventId; const Ex: Exception; const Msg: string; const Args: TArray<TValue>);
 begin
   Log(TLogLevel.Critical, EventId, Ex, Msg, Args);
 end;
 
 initialization
-  DAFInternalLogger := TDAFInternalLogger.Create('DAF');
+  BootstrapSinkLock := TObject.Create;
+  BootstrapSinkList := TList<TBootstrapSinkEntry>.Create;
+  // Los dos destinos que DAF trae: ninguno elige donde escribe. El duradero
+  // --TFileBootstrapSink-- no se registra aqui a proposito: su ruta la pone quien despliega.
+  BootstrapLog.AddSink(TDebugOutputBootstrapSink.Create);
+  BootstrapLog.AddSink(TStdErrBootstrapSink.Create);
+
+finalization
+  FreeAndNil(BootstrapSinkList);
+  FreeAndNil(BootstrapSinkLock);
 end.

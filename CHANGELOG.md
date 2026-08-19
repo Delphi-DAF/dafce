@@ -40,9 +40,18 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 - **Commons**: `Daf.Comparers` — comparadores conscientes de NULL para `TValue` y `TNullable<T>`
 - **Daf.Web**: Módulo nuevo en paquete — servidor HTTP ligero sobre Indy y WebBroker, controladores enrutados por atributos y construidos por el contenedor, y action results. Sus fuentes y su README ya se publicaban; lo que faltaba era el `.dpk` con el que instalarlo
 - **Daf.Web**: El paquete **no enlaza DataSnap ni DBX**. El `uses` del servidor era el de la plantilla *DataSnap WebBroker Application* y traía 59 unidades —gestores de sesión, transportes, lectores de metadatos, un escáner SQL— al servicio de un `TerminateThreads` que sin DataSnap no hacía nada y de una comprobación de puerto que ahora responde el propio servidor Indy. Quien lo instale se lleva un servidor HTTP, no una pila de remoting
+- **Logging**: Canal de arranque —un `ILogger` disponible desde que arranca el proceso, sin inyección de dependencias y sin configuración— con más de un destino y abierto a la aplicación. Cubre la fase anterior a `BuildServiceProvider`, donde no existe `IServiceProvider` y por tanto nada de lo registrado puede informar de un fallo. Es el hueco que en .NET tapa el `CreateBootstrapLogger` de Serilog
+- **Logging**: La aplicación informa de su propio arranque **bajo su categoría**, con `BootstrapLog.LoggerFor('MiApp')` — la única vía de pedir un logger de arranque, y la que usa también el propio DAF. Antes el canal exigía que la categoría empezara por `DAF`, así que un informe propio solo podía elegir entre disfrazarse o descartarse en silencio
+- **Logging**: Destinos que no dependen de que haya un depurador conectado: la salida de error del proceso —lo que captura un envoltorio o el programador de tareas— y la salida de depuración del sistema. Quien despliega añade el suyo con `BootstrapLog.AddSink`, antes de construir el host
+- **Logging**: `TFileBootstrapSink`, el destino duradero, **sin registrar**: recibe la ruta de quien lo construye. La aplicación sabe dónde guarda sus datos y el framework no, así que DAF ofrece el mecanismo y no elige la ruta — que es también lo que hace .NET
+- **Logging**: `TPlatformLogBootstrapSink` en `DAF.Extensions.Logging.PlatformSink` — la salida de depuración del sistema fuera de Windows, sobre `IFMXLoggingService`. Vive en su propia unit para que FireMonkey no le llegue a quien no lo pidió, y su disponibilidad la responde la plataforma, no un `{$IFDEF}` mantenido a mano
+- **Docs**: La página «Composición del arranque» (EN/ES) gana el relevo de dos etapas: quién informa antes de `BuildServiceProvider` y quién después, qué recibe cada forma de despliegue —escritorio, consola, desatendido— y el patrón del `.dpr`
 
 ### Changed
 
+- **Hosting**: `THost.Start` y `THost.Stop` informan por el pipeline de `ILogger` en vez de por el canal de arranque. Ahí el proveedor ya está construido, así que seguir en el canal era saltarse los proveedores y la configuración que el usuario escribió; el canal se queda de respaldo por si `ILoggerFactory` no se puede resolver. `THostBuilder.Build` sigue en el canal, que es donde tiene que estar
+- **Hosting / Logging**: Los informes de arranque de DAF salen bajo la categoría de la clase que informa —`THostBuilder`, `TCompositeLogger`— en vez de bajo `DAF` con el nombre de la clase metido en el mensaje. La categoría dice quién y el mensaje dice qué, igual a los dos lados del relevo
+- **Logging**: Un destino del canal de arranque que no puede escribir **se declara no disponible** en lugar de aceptar el informe y perderlo, y uno que lanza queda fuera sin llevarse por delante el arranque. Fuera de Windows la escritura a la salida de depuración no fallaba, no avisaba y no escribía: era un modo mudo que solo se descubría desplegando. `BootstrapLog.HasAvailableSink` distingue además el caso peor —que no esté escuchando nadie— de haber informado
 - **SQLCute**: `CompileWhere` y `CompileHaving` emiten paréntesis explícitos de precedencia
 - **Commons**: `TSmartArray<T>.Select` toma `TFunc<T, TTarget>` en lugar de `TDeferred<TMapper<T, TTarget>>`
 - **Daf.Linq**: `Where` / `Filter` toman `TFilterSpec<T>`
@@ -59,6 +68,7 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
 ### Removed
 
+- **Logging**: La global `DAFInternalLogger`. Era la única vía mientras la categoría del canal estuvo clavada a `DAF`; sin ese filtro es una segunda puerta que además etiqueta como DAF a quien no lo es. Se sustituye por `BootstrapLog.LoggerFor(<categoría>)`, que es por donde informa ahora también el propio DAF. Quien la llamara se lleva un error de compilación, no un cambio silencioso de comportamiento
 - **Commons**: `TBooleanExpresion`
 - **Commons**: La unidad `Daf.Expression`, disuelta en `Daf.FilterSpec` y `Daf.Types`
 

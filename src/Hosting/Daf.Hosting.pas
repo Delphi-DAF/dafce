@@ -157,6 +157,31 @@ uses
   Daf.Configuration.Chained,
   Daf.Configuration.Memory;
 
+// El relevo del arranque. Antes de BuildServiceProvider informa el canal de arranque, porque no hay
+// otra cosa; en cuanto el proveedor existe, informar es cosa del pipeline de ILogger, con los
+// proveedores y la configuracion que el usuario escribio -- seguir en el canal seria saltarsela.
+//
+// El canal se queda de respaldo y no de sustituido: que el proveedor exista no garantiza que se
+// pueda resolver un logger, y quedarse callado justo ahi seria reabrir el mismo agujero un paso mas
+// adelante.
+function ReportLogger(const Services: IServiceProviderImpl; const Category: string): ILogger;
+begin
+  Result := nil;
+  try
+    if Assigned(Services) then
+    begin
+      var Provider: IServiceProvider := Services;
+      var Factory := Provider.GetService<ILoggerFactory>;
+      if Assigned(Factory) then
+        Result := Factory.CreateLogger(Category);
+    end;
+  except
+    Result := nil;
+  end;
+  if not Assigned(Result) then
+    Result := BootstrapLog.LoggerFor(Category);
+end;
+
 
 {$IFOPT D+}
 { TSingleton<T> }
@@ -309,7 +334,7 @@ begin
   except
     on E: Exception do
     begin
-      DafInternalLogger.LogError(E, '%s', [ClassName]);
+      ReportLogger(FServices, ClassName).LogError(E, 'the application could not start');
       raise;
     end;
   end;
@@ -318,23 +343,34 @@ end;
 procedure THost.Stop;
 begin
   if FStopped then Exit;
+  // El logger se resuelve antes de empezar: a mitad de la parada el proveedor ya se ha soltado, y
+  // entonces no habria de donde sacarlo.
+  var Logger := ReportLogger(FServices, ClassName);
   TMonitor.Enter(Self);
   try
-    FStopped := True;
+    try
+      FStopped := True;
 
-    var Lifetime := GetServices.GetService<IHostApplicationLifetime>;
+      var Lifetime := GetServices.GetService<IHostApplicationLifetime>;
 
-    if Assigned(Lifetime) then
-      (Lifetime as THostApplicationLifetime).NotifyStopping;
+      if Assigned(Lifetime) then
+        (Lifetime as THostApplicationLifetime).NotifyStopping;
 
-    for var HostedService in FHostedServices do
-      HostedService.Stop;
-    FHostedServices.Clear;
+      for var HostedService in FHostedServices do
+        HostedService.Stop;
+      FHostedServices.Clear;
 
-    if Assigned(Lifetime) then
-      (Lifetime as THostApplicationLifetime).NotifyStopped;
-    FServices := nil;
-    FContainerAccess.Shutdown;
+      if Assigned(Lifetime) then
+        (Lifetime as THostApplicationLifetime).NotifyStopped;
+      FServices := nil;
+      FContainerAccess.Shutdown;
+    except
+      on E: Exception do
+      begin
+        Logger.LogError(E, 'the application could not stop cleanly');
+        raise;
+      end;
+    end;
   finally
     TMonitor.Exit(Self);
   end;
@@ -568,7 +604,14 @@ begin
   except
     on E: Exception do
     begin
-      DafInternalLogger.LogError(E, '%s', [ClassName]);
+      // Aqui se informa por el canal de arranque y no por el pipeline, y no es un descuido: este es
+      // justo el tramo en el que el proveedor todavia no existe. Y despues se relanza, porque la
+      // propagacion es la otra mitad del informe: es lo que hace que una aplicacion de escritorio
+      // --sin consola y sin depurador-- lo ensene por el mecanismo de su plataforma.
+      //
+      // Y se pide por la misma via que se le ofrece a la aplicacion: la categoria dice quien y el
+      // mensaje dice que, a los dos lados del relevo.
+      BootstrapLog.LoggerFor(ClassName).LogError(E, 'the host could not be built');
       raise;
     end;
   end;
