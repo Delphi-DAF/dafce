@@ -286,10 +286,10 @@ DAF only brings destinations **whose place it does not have to guess**:
 | `TPlatformLogBootstrapSink` | the platform's log service (`IFMXLoggingService`) | the platform registers that service |
 | `TFileBootstrapSink` | the file you name | **not registered by default** |
 
-The first two are registered for you. `TPlatformLogBootstrapSink` lives in its own unit,
-`DAF.Extensions.Logging.PlatformSink`, so that FireMonkey never reaches anyone who did not ask
-for it; it covers macOS, iOS and Android, and declares itself unavailable on Linux, where there
-is no FireMonkey to ask.
+The first two are registered for you. `TPlatformLogBootstrapSink` lives in the `Daf.FMX` package,
+in `Daf.FMX.BootstrapSink`, so that FireMonkey reaches only whoever references it; it covers
+macOS, iOS and Android, and declares itself unavailable on Linux, where there is no FireMonkey
+to ask.
 
 A durable destination needs a path, and that path is known by the application — where it keeps its
 data — not by the framework. So DAF ships the mechanism and does not choose the path:

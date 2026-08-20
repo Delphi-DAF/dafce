@@ -5,7 +5,7 @@ toc: false
 lang: es
 ---
 
-DAFce incluye **15 módulos** en paquetes independientes. Cada uno tiene su propio search path — añade solo los que necesites. Cuando un módulo porta un diseño de otra comunidad, la tabla dice cuál: nombrar el linaje es deliberado, porque portar lo ya probado vale más que reinventarlo.
+DAFce incluye **16 módulos** en paquetes independientes. Cada uno tiene su propio search path — añade solo los que necesites. Cuando un módulo porta un diseño de otra comunidad, la tabla dice cuál: nombrar el linaje es deliberado, porque portar lo ya probado vale más que reinventarlo.
 
 | Módulo | Paquete | Descripción |
 |--------|---------|-------------|
@@ -24,6 +24,7 @@ DAFce incluye **15 módulos** en paquetes independientes. Cada uno tiene su prop
 | [Linq](linq.qmd) | `Daf.Linq` | **LINQ-to-Objects**: secuencias perezosas sobre `IEnumerable<T>`, closures, sin SQL |
 | [Specification](specification.qmd) | `Daf.Specification` | **Patrón Specification** — filtro, orden y paginación sobre un árbol de predicados acotado a propósito, más estrecho que `System.Linq.Expressions` para que lo intraducible sea indecible |
 | [Web](web.qmd) | `Daf.Web` | Servidor HTTP ligero, enrutamiento por atributos y action results — y sin pila de remoting: no enlaza ni DataSnap ni DBX |
+| [FMX](fmx.qmd) | `Daf.FMX` | Lo que se apoya en FireMonkey, aislado para que ningún otro paquete lo enlace: hoy el destino de arranque que escribe por el servicio de log de la plataforma. Existe para que fuera de Windows el informe de arranque no se pierda en silencio — **no** es soporte de plataforma |
 
 Los módulos marcados con **Abstractions** incluyen también un paquete `Daf.X.Abstractions` con solo interfaces, para dependencias de compilación más limpias.
 

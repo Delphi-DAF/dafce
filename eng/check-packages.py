@@ -28,11 +28,13 @@ Invariants
    `requires` also drags the required package's `initialization`, and sometimes that
    is exactly the point.
 
-4. Some stacks are out of bounds for some packages. FORBIDDEN below names them by
-   unit prefix, per package. This is the one invariant here that no behaviour test
-   could ever stand in for: `Daf.Web` served its routes and bound its port perfectly
-   well while dragging DataSnap and DBX behind it, because what was wrong was the
-   dependency, and tests are blind to dependencies by construction.
+4. Some stacks are out of bounds. FORBIDDEN below names them by unit prefix, and
+   names who the rule is about: either the handful of packages it applies to, or
+   everyone except the handful licensed to link it. This is the one invariant here
+   that no behaviour test could ever stand in for: `Daf.Web` served its routes and
+   bound its port perfectly well while dragging DataSnap and DBX behind it, because
+   what was wrong was the dependency, and tests are blind to dependencies by
+   construction.
 """
 
 from __future__ import annotations
@@ -40,6 +42,7 @@ from __future__ import annotations
 import re
 import sys
 from pathlib import Path
+from typing import NamedTuple
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -54,20 +57,59 @@ INTENTIONAL = {
 # The floor. Kept as a set so the message can name what appeared.
 FLOOR = {"Daf.Commons": {"rtl"}}
 
-# Stacks a package must not link, by the prefix of the unit names that would bring
-# them. Keyed by package, because this is not a rule about DAF in general: what is
-# intolerable in a lightweight HTTP server is ordinary in a data module.
-#
+
+class Forbidden(NamedTuple):
+    """A stack that must not be linked, what would bring it, and who the rule is about.
+
+    Scope goes one of two ways, and exactly one of `only` / `everyone_but` is set:
+
+    `only` names the packages the rule applies to. That is the right shape when the
+    rule is about them and not about DAF in general: what is intolerable in a
+    lightweight HTTP server is ordinary in a data module.
+
+    `everyone_but` names the packages licensed to link it, and the rule covers all
+    the rest. That is the right shape when nobody should link a stack except the one
+    package built around it — and it is not the same as enumerating the other twenty,
+    because the enumeration says nothing about the twenty-first. Adding a package and
+    forgetting to list it there would not fail, it would *permit*, which is the worst
+    way for an invariant to break: silently, and in the direction of allowing.
+
+    A stack arrives by two routes and the rule checks both. `prefixes` catches the
+    implicit import — a unit named in a uses clause — which is how the DataSnap one
+    got in. `packages` catches the declared route: a `requires` entry links the stack
+    just as hard, and would sail past a check that only reads uses clauses. Leave
+    `packages` empty and only the import route is checked.
+    """
+
+    prefixes: tuple[str, ...]
+    reason: str
+    only: frozenset[str] = frozenset()
+    everyone_but: frozenset[str] = frozenset()
+    packages: frozenset[str] = frozenset()
+
+    def covers(self, pkg: str) -> bool:
+        return pkg in self.only if self.only else pkg not in self.everyone_but
+
+
 # Unlike the spec-vs-code check, this one is a gate rather than a report. "Does this
 # package link DataSnap" has no second reading that could make the answer acceptable.
-FORBIDDEN = {
-    "Daf.Web": (
-        ("datasnap.", "data.dbx"),
-        "a module whose purpose is to serve HTTP has no business carrying session "
-        "managers, data transports, metadata readers or an SQL scanner into a "
-        "consumer's application",
+FORBIDDEN = (
+    Forbidden(
+        prefixes=("datasnap.", "data.dbx"),
+        only=frozenset({"Daf.Web"}),
+        reason="a module whose purpose is to serve HTTP has no business carrying session "
+               "managers, data transports, metadata readers or an SQL scanner into a "
+               "consumer's application",
     ),
-}
+    Forbidden(
+        prefixes=("fmx.",),
+        packages=frozenset({"fmx"}),
+        everyone_but=frozenset({"Daf.FMX"}),
+        reason="FireMonkey is what Daf.FMX exists to isolate, and a VCL application has no "
+               "reason to carry it for using DAF's logging. The contract package is the "
+               "extreme case, since everyone uses it, but the rule is not its own",
+    ),
+)
 
 
 def parse():
@@ -164,12 +206,17 @@ def main():
     for pkg in sorted(requires):
         imports = imported_units(pkg, contains)
 
-        if pkg in FORBIDDEN:
-            prefixes, reason = FORBIDDEN[pkg]
-            for unit, imported in imports:
-                if imported.lower().startswith(prefixes):
+        for rule in FORBIDDEN:
+            if not rule.covers(pkg):
+                continue
+            for required in requires[pkg]:
+                if required.lower() in rule.packages:
                     breaches.append(
-                        f"{pkg} links {imported}, brought in by {unit}: {reason}.")
+                        f"{pkg} requires {required}: {rule.reason}.")
+            for unit, imported in imports:
+                if imported.lower().startswith(rule.prefixes):
+                    breaches.append(
+                        f"{pkg} links {imported}, brought in by {unit}: {rule.reason}.")
 
         declared = {fold(r) for r in requires[pkg] if is_daf(r)}
         used = direct_uses(pkg, imports, owner)

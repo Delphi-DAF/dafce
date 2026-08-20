@@ -5,7 +5,6 @@
 
 uses
   Daf.MiniSpec,
-  DAF.Extensions.Logging.PlatformSink in '..\..\Logging.Abstractions\DAF.Extensions.Logging.PlatformSink.pas',
   BootstrapChannel.Feat in 'BootstrapChannel.Feat.pas',
   BootstrapSinks.Feat in 'BootstrapSinks.Feat.pas';
 

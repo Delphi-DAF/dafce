@@ -307,7 +307,7 @@ type
 
   // Salida de depuracion del sistema. En Windows es OutputDebugString, que es del sistema y no del
   // depurador: se captura tambien sin uno conectado. Fuera de Windows Debugger.Write no escribe, y
-  // el destino lo dice --ver DAF.Extensions.Logging.PlatformSink para el equivalente FireMonkey.
+  // el destino lo dice --ver Daf.FMX.BootstrapSink para el equivalente FireMonkey.
   TDebugOutputBootstrapSink = class(TInterfacedObject, IBootstrapSink)
   public
     function IsAvailable: Boolean;

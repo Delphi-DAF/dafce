@@ -34,7 +34,7 @@ implementation
 
 uses
   System.IOUtils,
-  DAF.Extensions.Logging.PlatformSink,
+  Daf.FMX.BootstrapSink,
   Daf.MiniSpec;
 
 { TSinksWorld }

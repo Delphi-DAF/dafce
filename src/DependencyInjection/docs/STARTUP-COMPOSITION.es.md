@@ -290,9 +290,9 @@ DAF trae únicamente destinos **cuyo lugar de escritura no tiene que adivinar**:
 | `TPlatformLogBootstrapSink` | el servicio de log de la plataforma (`IFMXLoggingService`) | la plataforma registra ese servicio |
 | `TFileBootstrapSink` | el fichero que le digas | **no se registra por defecto** |
 
-Los dos primeros van registrados de serie. `TPlatformLogBootstrapSink` vive en su propia unit,
-`DAF.Extensions.Logging.PlatformSink`, para que FireMonkey no le llegue a quien no lo pidió; cubre
-macOS, iOS y Android, y se declara no disponible en Linux, donde no hay FireMonkey a quien preguntar.
+Los dos primeros van registrados de serie. `TPlatformLogBootstrapSink` vive en el paquete `Daf.FMX`,
+en `Daf.FMX.BootstrapSink`, para que FireMonkey le llegue solo a quien lo referencia; cubre macOS,
+iOS y Android, y se declara no disponible en Linux, donde no hay FireMonkey a quien preguntar.
 
 Un destino duradero necesita una ruta, y esa ruta la conoce la aplicación —dónde guarda sus datos— y
 no el framework. Así que DAF ofrece el mecanismo y no elige la ruta:

@@ -96,7 +96,6 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
-        <DCCReference Include="..\..\Logging.Abstractions\DAF.Extensions.Logging.PlatformSink.pas"/>
         <DCCReference Include="BootstrapChannel.Feat.pas"/>
         <DCCReference Include="BootstrapSinks.Feat.pas"/>
         <BuildConfiguration Include="Base">

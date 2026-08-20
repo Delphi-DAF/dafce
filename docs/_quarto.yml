@@ -31,6 +31,8 @@ website:
             href: en/modules/configuration.qmd
           - text: "Dependency Injection"
             href: en/modules/di.qmd
+          - text: "FMX"
+            href: en/modules/fmx.qmd
           - text: "Hosting"
             href: en/modules/hosting.qmd
           - text: "Logging"
@@ -130,6 +132,8 @@ website:
               href: en/modules/commons.qmd
             - text: "Web"
               href: en/modules/web.qmd
+            - text: "FMX"
+              href: en/modules/fmx.qmd
 
     - id: modules-es
       title: "Módulos"
@@ -181,6 +185,8 @@ website:
               href: es/modules/commons.qmd
             - text: "Web"
               href: es/modules/web.qmd
+            - text: "FMX"
+              href: es/modules/fmx.qmd
 
     - id: docs-es
       title: "Documentación"

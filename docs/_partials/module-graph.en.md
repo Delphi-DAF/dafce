@@ -2,7 +2,7 @@
 
 Read from the `requires` clause of every `.dpk`, so it cannot drift from the packages. Arrows read *requires*.
 
-**21 packages**, **28 real edges** between them, **20** more declared but already implied by another path, **0** cycles.
+**22 packages**, **29 real edges** between them, **20** more declared but already implied by another path, **0** cycles.
 
 ```{mermaid}
 graph TD
@@ -12,6 +12,7 @@ graph TD
   ConfigurationAbstractions[Configuration.Abstractions]
   DependencyInjection[DependencyInjection]
   DependencyInjectionAbstractions[DependencyInjection.Abstractions]
+  FMX[FMX]
   Hosting[Hosting]
   HostingAbstractions[Hosting.Abstractions]
   Linq[Linq]
@@ -29,6 +30,7 @@ graph TD
   Web[Web]
   RTIndy[("IndyCore · IndyProtocols · IndySystem")]
   RTRESTComponents[("RESTComponents")]
+  RTfmx[("fmx")]
   RTinet[("inet")]
   RTinetstn[("inetstn")]
   Application --> Hosting
@@ -36,6 +38,7 @@ graph TD
   ConfigurationAbstractions --> Commons
   DependencyInjection --> DependencyInjectionAbstractions
   DependencyInjectionAbstractions --> Commons
+  FMX --> LoggingAbstractions
   Hosting --> Configuration
   Hosting --> DependencyInjection
   Hosting --> HostingAbstractions
@@ -59,6 +62,7 @@ graph TD
   Web --> ConfigurationAbstractions
   Web --> DependencyInjectionAbstractions
   Web --> LoggingAbstractions
+  FMX --> RTfmx
   MiniSpec --> RTIndy
   NNlog -->|IndyCore · IndySystem| RTIndy
   Web --> RTIndy
@@ -68,10 +72,10 @@ graph TD
   classDef abs stroke-dasharray:4 3;
   class ConfigurationAbstractions,DependencyInjectionAbstractions,HostingAbstractions,LoggingAbstractions,MediatRAbstractions,SQLCuteAbstractions abs;
   classDef rt stroke-dasharray:2 2,stroke-width:2px;
-  class RTIndy,RTRESTComponents,RTinet,RTinetstn rt;
+  class RTIndy,RTRESTComponents,RTfmx,RTinet,RTinetstn rt;
 ```
 
-Drawn as a transitive reduction: only the edges that do not already arrive by another path. `rtl` is left out because all 21 packages require it; the third-party runtimes are drawn one node per family — Indy, RESTComponents, inet and inetstn — with the real names in the label.
+Drawn as a transitive reduction: only the edges that do not already arrive by another path. `rtl` is left out because all 22 packages require it; the third-party runtimes are drawn one node per family — Indy, RESTComponents, fmx, inet and inetstn — with the real names in the label.
 
 Dotted border marks a contract package (`.Abstractions`); the dashed rounded nodes are third-party runtimes.
 
@@ -85,6 +89,7 @@ Installable on their own, with no dependency on another DAF package: `Commons`, 
 | `Configuration.Abstractions` | `rtl` |
 | `DependencyInjection` | `rtl` |
 | `DependencyInjection.Abstractions` | `rtl` |
+| `FMX` | `fmx` · `rtl` |
 | `Hosting` | `rtl` |
 | `Hosting.Abstractions` | `rtl` |
 | `Linq` | `rtl` |
@@ -101,4 +106,4 @@ Installable on their own, with no dependency on another DAF package: `Commons`, 
 | `Specification` | `rtl` |
 | `Web` | `IndyCore` · `IndyProtocols` · `IndySystem` · `RESTComponents` · `inet` · `inetstn` · `rtl` |
 
-18 of 21 need nothing beyond `rtl`.
+18 of 22 need nothing beyond `rtl`.
