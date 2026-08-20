@@ -7,8 +7,8 @@ said so — and it keeps compiling when it declares things it never uses. Both
 directions drift silently, and both matter once the graph becomes a package
 manifest.
 
-    python3 tools/check-packages.py            # report and exit 1 on any breach
-    python3 tools/check-packages.py --list     # print the graph as it stands
+    python3 eng/check-packages.py            # report and exit 1 on any breach
+    python3 eng/check-packages.py --list     # print the graph as it stands
 
 Invariants
 ----------
