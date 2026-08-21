@@ -69,9 +69,15 @@ Interfaz fluida para configurar proveedores antes de que el host arranque (se us
 ```pascal
 ILoggingBuilder = interface
   procedure AddProvider(Provider: ILoggerProvider);
+  procedure AddNullProvider;
   function  Build: ILoggerFactory;
 end;
 ```
+
+`AddNullProvider` es la forma en que una aplicación dice que quiere que sus entradas se descarten.
+Componer sin ningún proveedor no es lo mismo: eso levanta `ELoggingCompositionError`, porque un
+pipeline sin destino es indistinguible de uno que funciona. Ver
+[Logging — Guía de uso](../Logging/docs/GUIDE.es.md#componer-sin-destino-es-un-error).
 
 ---
 
@@ -116,6 +122,35 @@ TLogEntry = record
   Message   : string;
 end;
 ```
+
+---
+
+## Qué vive aquí, y por qué
+
+Este es el paquete de contratos, y sin embargo también tiene clases concretas: `TNullLogger`,
+`TNullLoggerFactory`, `TNullLoggerProvider` y los destinos del canal de arranque
+(`TDebugOutputBootstrapSink`, `TStdErrBootstrapSink`, `TFileBootstrapSink`). Parece una contradicción,
+así que aquí queda escrita la regla que decide dónde va cada pieza de logging:
+
+> **Una frontera de paquete se gana aislando una dependencia que los demás no necesitan.**
+
+La regla responde en las dos direcciones, y los dos casos ya resueltos son el ejemplo:
+
+| Pieza | Dependencia que arrastra | Dónde vive |
+|-------|--------------------------|------------|
+| `TStdErrBootstrapSink`, `TDebugOutputBootstrapSink`, `TFileBootstrapSink` | nada más que la RTL | aquí, con el contrato |
+| `TPlatformLogBootstrapSink` | FireMonkey | `Daf.FMX` — paquete propio |
+| `TNullLogger`, `TNullLoggerFactory`, `TNullLoggerProvider` | nada | aquí, con el contrato |
+
+Un destino que no necesita más que la biblioteca estándar no se gana una frontera; uno que se apoya en
+un framework gráfico sí, y por eso el de FireMonkey tiene paquete propio. .NET pone `NullLogger` en
+`Microsoft.Extensions.Logging.Abstractions` por la misma razón: un default sin dependencias que todos
+necesitan.
+
+Y hay una segunda razón que solo aplica a los destinos del canal de arranque: **sacarlos a otro
+paquete los desregistraría por defecto.** Una aplicación que hoy obtiene la salida de error y la de
+depuración del sistema sin pedir nada se quedaría sin ningún destino salvo que añadiera una
+referencia — que es justo el caso peor que `BootstrapLog.HasAvailableSink` existe para hacer visible.
 
 ---
 

@@ -215,6 +215,14 @@ type
     function CreateLogger(const AType: PTypeInfo): ILogger; overload;
   end;
 
+  // Descartar a proposito, dicho en voz alta. Existe para que el descuido y la decision no se
+  // escriban igual: un pipeline sin proveedores es un error de composicion, y este es el proveedor
+  // con el que se declara que el silencio se queria.
+  TNullLoggerProvider = class(TInterfacedObject, ILoggerProvider)
+  public
+    function CreateLogger(const Category: string): ILogger;
+  end;
+
   TNullLogger = class(TInterfacedObject, ILogger)
   private
   public
@@ -536,6 +544,13 @@ end;
 function TNullLoggerFactory.CreateLogger(const AType: PTypeInfo): ILogger;
 begin
   Result := CreateLogger(AType.TypeData.UnitNameFld.ToString + '.' + AType.NameFld.ToString);
+end;
+
+{ TNullLoggerProvider }
+
+function TNullLoggerProvider.CreateLogger(const Category: string): ILogger;
+begin
+  Result := TNullLogger.Create;
 end;
 
 { TNullLogger }

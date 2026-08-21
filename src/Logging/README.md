@@ -83,6 +83,11 @@ var Factory := Provider.GetRequiredService<ILoggerFactory>;
 var Logger  := Factory.CreateLogger<TMyService>;
 ```
 
+`AddLogging` with no provider raises `ELoggingCompositionError`: a pipeline with no destination accepts
+every entry and drops it, and that is indistinguishable from one that works. If you want the entries
+dropped, say so with `Builder.AddNullProvider`. See
+[Composing with no destination is an error](docs/GUIDE.md#composing-with-no-destination-is-an-error).
+
 ---
 
 ## Documentation

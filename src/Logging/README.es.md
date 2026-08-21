@@ -83,6 +83,11 @@ var Factory := Provider.GetRequiredService<ILoggerFactory>;
 var Logger  := Factory.CreateLogger<TMyService>;
 ```
 
+`AddLogging` sin proveedores levanta `ELoggingCompositionError`: un pipeline sin destino acepta todas
+las entradas y las descarta, y eso es indistinguible de uno que funciona. Si lo que quieres es que se
+descarten, dilo con `Builder.AddNullProvider`. Ver
+[Componer sin destino es un error](docs/GUIDE.es.md#componer-sin-destino-es-un-error).
+
 ---
 
 ## Documentación

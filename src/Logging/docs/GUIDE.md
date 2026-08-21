@@ -166,6 +166,18 @@ end;
 | Provider | Unit | Description |
 |----------|------|-------------|
 | `TNNLogProvider` | `DAF.NNLog` | Rule-based targets (file, console, …) |
+| `TNullLoggerProvider` | `DAF.Extensions.Logging` | Drops every entry — how to ask for silence on purpose |
+
+**There is no `Daf.Logging.Console` and no `Daf.Logging.Debug`, and there will not be.** NNLog already
+brings `Console`, `Debug`, `File_` and `UDP`, with filtering rules and layouts. A `Daf.Logging.Debug`
+would be the same destination without either of those two things — useful only to someone who wanted
+less.
+
+The analogy with `Microsoft.Extensions.Logging.Debug` does not survive the trip. That package exists
+because it is the zero-configuration default of the .NET generic host, not because it competes with
+NLog. DAF has no such default, and the gap that seemed to justify one — a startup failure reaching
+nobody — is already covered by the bootstrap channel, which writes to the error output and the system
+debug output without being configured.
 
 ### Adding a provider
 
@@ -191,6 +203,45 @@ AddLogging(Services,
 `AddLogging` registers:
 - `ILoggerFactory` as singleton
 - Internally calls `Builder.Build` to wire providers before the host starts
+
+### Composing with no destination is an error
+
+A pipeline with no provider accepts every entry and drops it, which is indistinguishable from one that
+works — until someone debugs an incident reading records that were never written. So `AddLogging`
+refuses it:
+
+```pascal
+AddLogging(Services,
+  procedure(Builder: ILoggingBuilder)
+  begin
+    // the AddProvider that is not there
+  end);
+// ELoggingCompositionError
+```
+
+The check runs **once, where the pipeline is composed** — inside `IHostBuilder.Build`, before a single
+hosted service exists and before the first entry. Never on the write path: an error raised there would
+show up far from the mistake and once per entry, which is how a warning becomes wallpaper.
+
+Silence on purpose is still fine. It just has to be said:
+
+```pascal
+AddLogging(Services,
+  procedure(Builder: ILoggingBuilder)
+  begin
+    Builder.AddNullProvider;
+  end);
+```
+
+| What you write | What you get |
+|----------------|--------------|
+| No `AddLogging` at all | No `ILoggerFactory` in the container. Startup reports still come out through the bootstrap channel |
+| `AddLogging` with `AddNullProvider` | A factory that drops every entry — declared silence |
+| `AddLogging` with no provider | `ELoggingCompositionError` while the host is being built |
+
+The middle row is the one you want when your own code resolves `ILoggerFactory` or takes an injected
+`ILogger`: without `AddLogging` there is no factory to inject. If your application simply does not log,
+not calling `AddLogging` is the cheaper route and there is nothing to declare.
 
 Resolve in services:
 

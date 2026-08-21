@@ -28,6 +28,7 @@ type
     constructor Create;
     destructor Destroy; override;
     procedure AddProvider(const Provider: ILoggerProvider);
+    function HasProviders: Boolean;
     function CreateLogger(const Category: string): ILogger; overload;
     function CreateLogger(const AClass: TClass): ILogger; overload;
     function CreateLogger(const AType: PTypeInfo): ILogger; overload;
@@ -84,6 +85,11 @@ end;
 procedure TMultiProviderLoggerFactory.AddProvider(const Provider: ILoggerProvider);
 begin
   FProviders.Add(Provider);
+end;
+
+function TMultiProviderLoggerFactory.HasProviders: Boolean;
+begin
+  Result := FProviders.Count > 0;
 end;
 
 function TMultiProviderLoggerFactory.CreateLogger(const Category: string): ILogger;

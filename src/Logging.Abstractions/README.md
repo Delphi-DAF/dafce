@@ -69,9 +69,15 @@ Fluent interface for configuring providers before the host starts (used inside `
 ```pascal
 ILoggingBuilder = interface
   procedure AddProvider(Provider: ILoggerProvider);
+  procedure AddNullProvider;
   function  Build: ILoggerFactory;
 end;
 ```
+
+`AddNullProvider` is how an application says it wants its entries dropped. Composing with no provider
+at all is not the same thing — that raises `ELoggingCompositionError`, because a pipeline with no
+destination is indistinguishable from one that works. See
+[Logging — Usage Guide](../Logging/docs/GUIDE.md#composing-with-no-destination-is-an-error).
 
 ---
 
@@ -116,6 +122,36 @@ TLogEntry = record
   Message   : string;
 end;
 ```
+
+---
+
+## What lives here, and why
+
+This is the contracts package, and yet it also holds concrete classes: `TNullLogger`,
+`TNullLoggerFactory`, `TNullLoggerProvider`, and the bootstrap channel destinations
+(`TDebugOutputBootstrapSink`, `TStdErrBootstrapSink`, `TFileBootstrapSink`). That looks like a
+contradiction, so here is the rule that decides where each piece of logging goes:
+
+> **A package boundary is earned by isolating a dependency the others do not need.**
+
+The rule answers in both directions, and the two cases already settled are the examples:
+
+| Piece | Dependency it drags in | Where it lives |
+|-------|------------------------|----------------|
+| `TStdErrBootstrapSink`, `TDebugOutputBootstrapSink`, `TFileBootstrapSink` | nothing beyond the RTL | here, with the contract |
+| `TPlatformLogBootstrapSink` | FireMonkey | `Daf.FMX` — a package of its own |
+| `TNullLogger`, `TNullLoggerFactory`, `TNullLoggerProvider` | nothing | here, with the contract |
+
+A destination that needs nothing but the standard library earns no boundary; one that leans on a
+graphical framework does, which is why the FireMonkey sink has a package of its own. .NET puts
+`NullLogger` in `Microsoft.Extensions.Logging.Abstractions` for the same reason: a default with no
+dependencies that everyone needs.
+
+There is a second reason that applies only to the bootstrap destinations: **moving them to another
+package would deregister them by default.** An application that today gets the error output and the
+system debug output without asking for anything would end up with no destination at all unless it
+added a reference — which is exactly the worst case `BootstrapLog.HasAvailableSink` exists to make
+visible.
 
 ---
 
