@@ -2,10 +2,20 @@
 #
 # Este fichero obliga a los EDITORES y a nadie más. Un fichero escrito por un
 # script o por un agente —que no abre editor— no lo consulta, y cada vez se
-# escribe más repo por esa vía. La red de seguridad real es .gitattributes, que
-# declara lo mismo y git sí aplica al indexar. Auditar con:
+# escribe más repo por esa vía.
 #
-#   git ls-files --eol | awk '($2=="w/lf" && /eol=crlf/) || ($2=="w/crlf" && /eol=lf/)'
+# ⚠️ .gitattributes NO respalda lo de aquí abajo: declara el final de línea y la
+# binariedad, y se acabó. De todo lo que este fichero pide, git solo aplica esa
+# una al indexar — charset, BOM, sangrado, salto final, espacios al final y ancho
+# de línea no tienen ahí equivalente ni lo pueden tener. Auditar:
+#
+#   # el final de línea, lo único con red. w/mixed importa: un fichero con finales
+#   # mezclados no es ni w/lf ni w/crlf, así que se escapa si solo buscas esos dos.
+#   git ls-files --eol \
+#     | awk '($2=="w/lf" && /eol=crlf/) || ($2=="w/crlf" && /eol=lf/) || ($2=="w/mixed")'
+#
+#   # todo lo demás — desde el repo meta, y cubre los tres repos a la vez
+#   python3 eng/check-editorconfig.py --summary
 #
 # Las dos ediciones comparten este fichero: mantenerlo igual en DAFce y DAFpro.
 

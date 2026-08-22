@@ -18,6 +18,7 @@ C++ files
 *.pas        text eol=crlf
 *.dpk        text eol=crlf
 *.dpr        text eol=crlf
+*.inc        text eol=crlf
 *.bpr        text eol=crlf
 *.drc        text eol=crlf
 *.bpg        text eol=crlf
@@ -72,6 +73,7 @@ C++ files
 *.json      text eol=lf
 *.xml       text eol=crlf
 *.ini       text eol=crlf
+*.js        text eol=crlf
 
 ########################################################
 # Tooling — cada uno en la convención de su ecosistema
