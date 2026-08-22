@@ -7,15 +7,14 @@
 # ⚠️ .gitattributes NO respalda lo de aquí abajo: declara el final de línea y la
 # binariedad, y se acabó. De todo lo que este fichero pide, git solo aplica esa
 # una al indexar — charset, BOM, sangrado, salto final, espacios al final y ancho
-# de línea no tienen ahí equivalente ni lo pueden tener. Auditar:
+# de línea no tienen ahí equivalente ni lo pueden tener. El final de línea, que es
+# lo único con red, se audita así:
 #
-#   # el final de línea, lo único con red. w/mixed importa: un fichero con finales
-#   # mezclados no es ni w/lf ni w/crlf, así que se escapa si solo buscas esos dos.
 #   git ls-files --eol \
 #     | awk '($2=="w/lf" && /eol=crlf/) || ($2=="w/crlf" && /eol=lf/) || ($2=="w/mixed")'
 #
-#   # todo lo demás — desde el repo meta, y cubre los tres repos a la vez
-#   python3 eng/check-editorconfig.py --summary
+# w/mixed importa: un fichero con finales mezclados no es ni w/lf ni w/crlf, así que
+# se escapa de un chequeo que solo busque esos dos.
 #
 # Las dos ediciones comparten este fichero: mantenerlo igual en DAFce y DAFpro.
 
