@@ -25,7 +25,7 @@ root = true
 # siempre, no solo cuando el fichero tiene caracteres no ASCII. Sin BOM el
 # fichero se lee como ANSI y cualquier no-ASCII se corrompe en silencio, sin
 # que el compilador diga nada — por eso hay una auditoría de BOM en las notas.
-[*.{pas,dpr,dpk,inc}]
+[*.{pas,dpr,dpk}]
 charset = utf-8-bom
 end_of_line = crlf
 indent_style = space
@@ -53,7 +53,7 @@ end_of_line = crlf
 max_line_length = off
 trim_trailing_whitespace = false
 
-[*.{js,ini}]
+[*.ini]
 charset = utf-8
 end_of_line = crlf
 indent_style = space
@@ -82,5 +82,20 @@ charset = utf-8
 end_of_line = lf
 indent_style = space
 indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# .js va aquí y no con .ini, donde estaba por arrastre del grupo: .ini es formato
+# de Windows y el CRLF es suyo, JavaScript no. El lenguaje acepta los dos —ECMA-262
+# admite LF, CR y CRLF—, así que no hay estándar que obligue; lo que hay es una
+# convención unánime: Prettier pasó su endOfLine de auto a lf en la 2.0, y la regla
+# linebreak-style de ESLint trae "unix" por defecto. Y Prettier CEDE ante este
+# fichero, así que lo que se declare aquí es lo que acaba mandando.
+[*.js]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+max_line_length = 132
 insert_final_newline = true
 trim_trailing_whitespace = true
