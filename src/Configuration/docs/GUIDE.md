@@ -25,13 +25,21 @@
 ```pascal
 uses
   Daf.Configuration.Builder,
+  Daf.Configuration.Json,
+  Daf.Configuration.Env,
   Daf.Extensions.Configuration;
 
-var Config: IConfiguration := TConfigurationBuilder.Create
-  .AddJsonFile('appsettings.json')
-  .AddEnvironmentVariables
-  .Build;
+var Builder: IConfigurationBuilder := TConfigurationBuilder.Create;
+
+JsonConfig.AddFile(Builder, 'appsettings.json');
+Builder.Add(TEnvironmentVariablesConfigurationSource.Create);
+
+var Config: IConfiguration := Builder.Build;
 ```
+
+⚠️ **Hold the builder in an `IConfigurationBuilder` variable.** `TConfigurationBuilder` is reference
+counted, so chaining straight off `TConfigurationBuilder.Create` leaves nobody owning it and the
+builder leaks.
 
 `TConfigurationBuilder.Build` returns an `IConfigurationRoot`, which is also an `IConfiguration`.
 
@@ -94,9 +102,8 @@ Db.Path         // 'Database'
 ```pascal
 uses Daf.Configuration.Json;
 
-Builder
-  .AddJsonFile('appsettings.json')                         // required
-  .AddJsonFile('appsettings.Development.json', {optional:} True) // optional
+JsonConfig.AddFile(Builder, 'appsettings.json');                          // required
+JsonConfig.AddFile(Builder, 'appsettings.Development.json', [csoOptional]);
 ```
 
 Supports nested objects and arrays. Keys are flattened with `:`.
@@ -108,7 +115,7 @@ Supports nested objects and arrays. Keys are flattened with `:`.
 ```pascal
 uses Daf.Configuration.Ini;
 
-Builder.AddIniFile('config.ini');
+IniConfig.AddFile(Builder, 'config.ini');
 ```
 
 INI format:
@@ -127,9 +134,14 @@ Accessed as `Config['Database:Host']`.
 ```pascal
 uses Daf.Configuration.Env;
 
-Builder.AddEnvironmentVariables;                      // all variables
-Builder.AddEnvironmentVariables('MYAPP_');            // filtered by prefix (prefix stripped)
+Builder.Add(TEnvironmentVariablesConfigurationSource.Create);           // all variables
+Builder.Add(TEnvironmentVariablesConfigurationSource.Create('MYAPP_'));  // by prefix (prefix stripped)
 ```
+
+`Daf.Configuration.Env` also declares `AddEnvironmentVariables` as a class helper on
+`TConfigurationBuilder`. It only applies when the builder is held as the **class**, not as
+`IConfigurationBuilder` — and holding it as the class is what leaks it, so prefer the source form
+above.
 
 With prefix `MYAPP_`, the variable `MYAPP_DATABASE__HOST` becomes `Database:Host` (double `__` → `:`).
 
@@ -142,10 +154,11 @@ Useful for tests or bootstrapping:
 ```pascal
 uses Daf.Configuration.Memory;
 
-Builder.AddInMemoryCollection([
-  TPair<string,string>.Create('Database:Host', 'localhost'),
-  TPair<string,string>.Create('Database:Port', '5432')
-]);
+var Data := TDictionary<string, string>.Create;   // the source takes ownership
+Data.Add('Database:Host', 'localhost');
+Data.Add('Database:Port', '5432');
+
+MemoryConfig.AddCollection(Builder, Data);
 ```
 
 ---
@@ -158,10 +171,12 @@ Wrap an existing `IConfiguration` as a source in a new builder:
 uses Daf.Configuration.Chained;
 
 var HostConfig: IConfiguration := ...; // from ConfigureHostConfiguration
-var AppBuilder := TConfigurationBuilder.Create
-  .AddConfiguration(HostConfig)   // chain previous config
-  .AddJsonFile('appsettings.json')
-  .Build;
+var AppBuilder: IConfigurationBuilder := TConfigurationBuilder.Create;
+
+AppBuilder.Add(TChainedConfigurationSource.Create(HostConfig));  // chain previous config
+JsonConfig.AddFile(AppBuilder, 'appsettings.json');
+
+var Config := AppBuilder.Build;
 ```
 
 This is how `THostBuilder` shares host-level settings into the app configuration pipeline.
@@ -173,10 +188,10 @@ This is how `THostBuilder` shares host-level settings into the app configuration
 Providers are applied **in registration order**. A value from a later provider overrides the same key from an earlier one:
 
 ```pascal
-Builder
-  .AddJsonFile('appsettings.json')           // base values
-  .AddJsonFile('appsettings.Development.json', True)  // environment overrides
-  .AddEnvironmentVariables;                  // OS overrides everything
+JsonConfig.AddFile(Builder, 'appsettings.json');                            // base values
+JsonConfig.AddFile(Builder, 'appsettings.Development.json', [csoOptional]); // environment overrides
+Builder.Add(TEnvironmentVariablesConfigurationSource.Create);               // OS overrides those
+CommandLineConfig.AddArgs(Builder);                                         // and the command line wins
 ```
 
 To reload all providers (e.g., after a file change):

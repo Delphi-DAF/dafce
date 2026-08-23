@@ -28,10 +28,12 @@ uses
   Daf.Configuration.Env,
   Daf.Extensions.Configuration;
 
-var Config := TConfigurationBuilder.Create
-  .AddJsonFile('appsettings.json')
-  .AddEnvironmentVariables
-  .Build;
+var Builder: IConfigurationBuilder := TConfigurationBuilder.Create;
+
+JsonConfig.AddFile(Builder, 'appsettings.json');
+Builder.Add(TEnvironmentVariablesConfigurationSource.Create);
+
+var Config := Builder.Build;
 
 // Read a value
 var ConnStr := Config['Database:ConnectionString'];
@@ -157,10 +159,10 @@ THostBuilder.Create
   .ConfigureAppConfiguration(procedure(Ctx: IHostBuilderContext;
                                        Builder: IConfigurationBuilder)
   begin
-    Builder
-      .AddJsonFile('appsettings.json')
-      .AddJsonFile('appsettings.' + string(Ctx.Environment.EnvironmentName) + '.json', True)
-      .AddEnvironmentVariables;
+    JsonConfig.AddFile(Builder, 'appsettings.json');
+    JsonConfig.AddFile(Builder,
+      'appsettings.' + string(Ctx.Environment.EnvironmentName) + '.json', [csoOptional]);
+    Builder.Add(TEnvironmentVariablesConfigurationSource.Create);
   end)
   .ConfigureServices(procedure(Ctx: IHostBuilderContext; Services: IServiceCollection)
   begin

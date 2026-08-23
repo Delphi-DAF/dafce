@@ -25,13 +25,21 @@
 ```pascal
 uses
   Daf.Configuration.Builder,
+  Daf.Configuration.Json,
+  Daf.Configuration.Env,
   Daf.Extensions.Configuration;
 
-var Config: IConfiguration := TConfigurationBuilder.Create
-  .AddJsonFile('appsettings.json')
-  .AddEnvironmentVariables
-  .Build;
+var Builder: IConfigurationBuilder := TConfigurationBuilder.Create;
+
+JsonConfig.AddFile(Builder, 'appsettings.json');
+Builder.Add(TEnvironmentVariablesConfigurationSource.Create);
+
+var Config: IConfiguration := Builder.Build;
 ```
+
+⚠️ **Sostén el builder en una variable `IConfigurationBuilder`.** `TConfigurationBuilder` lleva conteo
+de referencias, así que encadenar directamente sobre `TConfigurationBuilder.Create` deja el builder sin
+dueño y se pierde.
 
 `TConfigurationBuilder.Build` devuelve un `IConfigurationRoot`, que también implementa `IConfiguration`.
 
@@ -94,9 +102,8 @@ Db.Path         // 'Database'
 ```pascal
 uses Daf.Configuration.Json;
 
-Builder
-  .AddJsonFile('appsettings.json')                              // requerido
-  .AddJsonFile('appsettings.Development.json', {optional:} True) // opcional
+JsonConfig.AddFile(Builder, 'appsettings.json');                           // requerido
+JsonConfig.AddFile(Builder, 'appsettings.Development.json', [csoOptional]); // opcional
 ```
 
 Soporta objetos anidados y arrays. Las claves se aplanan con `:`.
@@ -108,7 +115,7 @@ Soporta objetos anidados y arrays. Las claves se aplanan con `:`.
 ```pascal
 uses Daf.Configuration.Ini;
 
-Builder.AddIniFile('config.ini');
+IniConfig.AddFile(Builder, 'config.ini');
 ```
 
 Formato INI:
@@ -127,9 +134,14 @@ Se accede como `Config['Database:Host']`.
 ```pascal
 uses Daf.Configuration.Env;
 
-Builder.AddEnvironmentVariables;               // todas las variables
-Builder.AddEnvironmentVariables('MYAPP_');     // filtradas por prefijo (el prefijo se elimina)
+Builder.Add(TEnvironmentVariablesConfigurationSource.Create);           // todas las variables
+Builder.Add(TEnvironmentVariablesConfigurationSource.Create('MYAPP_'));  // por prefijo (se elimina)
 ```
+
+`Daf.Configuration.Env` declara además `AddEnvironmentVariables` como class helper de
+`TConfigurationBuilder`. Solo aplica si el builder se sostiene como **clase**, no como
+`IConfigurationBuilder` — y sostenerlo como clase es justo lo que lo pierde, así que usa la forma de
+arriba.
 
 Con el prefijo `MYAPP_`, la variable `MYAPP_DATABASE__HOST` se convierte en `Database:Host` (doble `__` → `:`).
 
@@ -142,10 +154,11 @@ Con el prefijo `MYAPP_`, la variable `MYAPP_DATABASE__HOST` se convierte en `Dat
 ```pascal
 uses Daf.Configuration.Memory;
 
-Builder.AddInMemoryCollection([
-  TPair<string,string>.Create('Database:Host', 'localhost'),
-  TPair<string,string>.Create('Database:Port', '5432')
-]);
+var Data := TDictionary<string, string>.Create;   // la fuente se queda con la propiedad
+Data.Add('Database:Host', 'localhost');
+Data.Add('Database:Port', '5432');
+
+MemoryConfig.AddCollection(Builder, Data);
 ```
 
 ---
@@ -158,10 +171,12 @@ Envuelve un `IConfiguration` existente como fuente en un nuevo builder:
 uses Daf.Configuration.Chained;
 
 var HostConfig: IConfiguration := ...; // de ConfigureHostConfiguration
-var AppBuilder := TConfigurationBuilder.Create
-  .AddConfiguration(HostConfig)   // encadenar config previa
-  .AddJsonFile('appsettings.json')
-  .Build;
+var AppBuilder: IConfigurationBuilder := TConfigurationBuilder.Create;
+
+AppBuilder.Add(TChainedConfigurationSource.Create(HostConfig));  // encadenar config previa
+JsonConfig.AddFile(AppBuilder, 'appsettings.json');
+
+var Config := AppBuilder.Build;
 ```
 
 Así es como `THostBuilder` comparte los ajustes del host con el pipeline de configuración de la app.
@@ -173,10 +188,10 @@ Así es como `THostBuilder` comparte los ajustes del host con el pipeline de con
 Los proveedores se aplican **en orden de registro**. Un valor de un proveedor posterior sobreescribe la misma clave de uno anterior:
 
 ```pascal
-Builder
-  .AddJsonFile('appsettings.json')                         // valores base
-  .AddJsonFile('appsettings.Development.json', True)       // sobreescrituras de entorno
-  .AddEnvironmentVariables;                                // el SO sobreescribe todo
+JsonConfig.AddFile(Builder, 'appsettings.json');                            // valores base
+JsonConfig.AddFile(Builder, 'appsettings.Development.json', [csoOptional]); // entorno
+Builder.Add(TEnvironmentVariablesConfigurationSource.Create);               // el SO sobreescribe
+CommandLineConfig.AddArgs(Builder);                                         // y la línea de comandos gana
 ```
 
 Para recargar todos los proveedores (p. ej., tras un cambio de fichero):

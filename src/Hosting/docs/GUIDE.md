@@ -70,7 +70,7 @@ Bootstrap-level settings — applied before the environment is known:
 ```pascal
 .ConfigureHostConfiguration(procedure(Builder: IConfigurationBuilder)
 begin
-  Builder.AddEnvironmentVariables; // reads DAF_APP_ENV, DAF_APP_NAME, etc.
+  Builder.Add(TEnvironmentVariablesConfigurationSource.Create); // reads DAF_APP_ENV, DAF_APP_NAME, etc.
 end)
 ```
 
@@ -82,10 +82,9 @@ Full app settings — runs after the environment is resolved:
 .ConfigureAppConfiguration(procedure(Context: IHostBuilderContext;
                                      Builder: IConfigurationBuilder)
 begin
-  Builder
-    .AddJsonFile('appsettings.json')
-    .AddJsonFile('appsettings.' + string(Context.Environment.EnvironmentName) + '.json',
-      {optional:} True);
+  JsonConfig.AddFile(Builder, 'appsettings.json');
+  JsonConfig.AddFile(Builder,
+    'appsettings.' + string(Context.Environment.EnvironmentName) + '.json', [csoOptional]);
 end)
 ```
 

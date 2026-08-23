@@ -51,7 +51,7 @@ TDafApplication
   .ConfigureAppConfiguration(
     procedure(Ctx: IHostBuilderContext; Cfg: IConfigurationBuilder)
     begin
-      Cfg.AddJsonFile('appsettings.json');
+      JsonConfig.AddFile(Cfg, 'appsettings.json');
     end)
   .ConfigureServices(
     procedure(Ctx: IHostBuilderContext; Services: IServiceCollection)

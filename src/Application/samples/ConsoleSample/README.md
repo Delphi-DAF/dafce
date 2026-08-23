@@ -72,7 +72,7 @@ var Host := THostBuilder.Create
   .ConfigureAppConfiguration(
     procedure(Config: IConfigurationBuilder)
     begin
-      Config.AddJsonFile('appsettings.json');
+      JsonConfig.AddFile(Config, 'appsettings.json');
     end)
   .ConfigureServices(
     procedure(Services: IServiceCollection)
