@@ -98,8 +98,6 @@
         </DelphiCompile>
         <DCCReference Include="Activator.Feat.pas"/>
         <DCCReference Include="Activator.Steps.pas"/>
-        <DCCReference Include="CmdLnParser.Feat.pas"/>
-        <DCCReference Include="CmdLnParser.Steps.pas"/>
         <DCCReference Include="Nullable.Feat.pas"/>
         <DCCReference Include="Enumerable.Feat.pas"/>
         <DCCReference Include="Comparers.Feat.pas"/>

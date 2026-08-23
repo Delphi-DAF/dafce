@@ -9,11 +9,12 @@
 1. [Daf.MemUtils — Smart pointers](#dafmemutils--smart-pointers)
 2. [Daf.Threading — Cancellation tokens and shutdown](#dafthreading--cancellation-tokens-and-shutdown)
 3. [Daf.Enumerable](#dafenumerable)
-4. [Daf.SystemProcess](#dafsystemprocess)
-5. [Daf.CmdLn.Parser](#dafcmdlnparser)
-6. [Daf.Rtti](#dafrtti)
-7. [Daf.Activator](#dafactivator)
-8. [Daf.Arrays](#dafarrays)
+4. [Daf.Rtti](#dafrtti)
+5. [Daf.Activator](#dafactivator)
+6. [Daf.Arrays](#dafarrays)
+
+`Daf.SystemProcess` and `Daf.CmdLn.Parser` used to be documented here. They now live in packages of
+their own — see [SystemProcess](../../SystemProcess/README.md) and [CmdLn](../../CmdLn/README.md).
 
 ---
 
@@ -136,106 +137,6 @@ if List.TryFind(
     begin Result := (I as IMyService).Name = 'target'; end,
     Found) then
   Found.Execute;
-```
-
----
-
-## Daf.SystemProcess
-
-Run external processes asynchronously with event callbacks.
-
-```pascal
-uses Daf.SystemProcess;
-
-var Proc := TSystemProcess.Builder
-  .Command('git')
-  .CmdArgs(['log', '--oneline', '-10'])
-  .WorkingDir('C:\MyRepo')
-  .Timeout(30000)               // ms, INFINITE = 0
-  .KillAfterTimeout(True)
-  .HideWindow(True)
-  .OnStdOut(procedure(Line: string) begin WriteLn(Line); end)
-  .OnStdErr(procedure(Line: string) begin WriteLn('ERR: ', Line); end)
-  .OnCompleted(procedure(R: TProcessResult)
-    begin
-      WriteLn('Exit=', R.ExitCode, ' duration=', R.Duration.TotalMilliseconds, 'ms');
-    end)
-  .OnFailed(procedure(R: TProcessResult)
-    begin
-      WriteLn('Failed: ', R.LastError);
-    end)
-  .Build;
-
-// Synchronous
-var Result := Proc.Execute;
-
-// Or asynchronous
-var Future := Proc.ExecuteAsync;
-```
-
-### TProcessResult
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `Status` | `TStatus` | `Completed`, `Failed`, `Timeout`, `Canceled`, `Killed` |
-| `ExitCode` | `DWORD` | Process exit code |
-| `Duration` | `TTimeSpan` | Wall-clock execution time |
-| `LastError` | `string` | Error description (failed/killed cases) |
-| `Succeeded` | `function: Boolean` | `Status = Completed` and `ExitCode = 0` |
-
-### Integration with TShutdownHook
-
-```pascal
-TShutdownHook.OnShutdownRequested := procedure
-begin
-  Proc.Kill;
-end;
-```
-
----
-
-## Daf.CmdLn.Parser
-
-Builds a typed argument grammar with `TCmdLnParserBuilder`, then parses the command line into `ICmdLParams`.
-
-```pascal
-uses Daf.CmdLn.Parser;
-
-// 1. Define the grammar
-var Parser := TCmdLnParserBuilder.Create
-  .Arg<string>('file')      // named string argument
-  .Arg<Integer>('port')     // named integer argument
-  .Arg<Boolean>('verbose')  // boolean flag
-  .Build;                   // returns ICmdLnParser
-
-// 2. Parse the actual command line
-var Params := Parser.Parse(GetCommandLine);
-
-// 3. Read values (ICmdLParams.Item[] is the default property)
-var FilePath  := Params['file'].AsString;
-var Port      := Params['port'].AsInteger;
-var IsVerbose := Params['verbose'].AsBoolean;
-```
-
-### Subcommands
-
-```pascal
-var Parser := TCmdLnParserBuilder.Create
-  .Command('build')
-    .Arg<string>('output')
-  .EndCommand
-  .Command('run')
-    .Arg<Boolean>('watch')
-  .EndCommand
-  .Build;
-
-var Params := Parser.Parse(GetCommandLine);
-var Cmd := Params.Command;   // 'build' or 'run'
-if Cmd = 'build' then
-begin
-  var Section := Params.GetSection('build');
-  var OutDir  := Section['output'].AsString;
-end;
 ```
 
 ---

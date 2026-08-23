@@ -38,10 +38,8 @@ contains
   Daf.Activator in 'Daf.Activator.pas',
   Daf.FilterSpec in 'Daf.FilterSpec.pas',
   Daf.Rtti in 'Daf.Rtti.pas',
-  Daf.CmdLn.Parser in 'Daf.CmdLn.Parser.pas',
   Daf.Arrays in 'Daf.Arrays.pas',
   Daf.Enumerable in 'Daf.Enumerable.pas',
-  Daf.Threading in 'Daf.Threading.pas',
-  Daf.SystemProcess in 'Daf.SystemProcess.pas';
+  Daf.Threading in 'Daf.Threading.pas';
 
 end.

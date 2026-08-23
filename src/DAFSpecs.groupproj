@@ -9,6 +9,9 @@
         <Projects Include="Commons\test\CommonsSpecs.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="CmdLn\test\CmdLnSpecs.dproj">
+            <Dependencies/>
+        </Projects>
         <Projects Include="Configuration\test\ConfigurationSpecs.dproj">
             <Dependencies/>
         </Projects>
@@ -67,6 +70,15 @@
     </Target>
     <Target Name="CommonsSpecs:Make">
         <MSBuild Projects="Commons\test\CommonsSpecs.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="CmdLnSpecs">
+        <MSBuild Projects="CmdLn\test\CmdLnSpecs.dproj"/>
+    </Target>
+    <Target Name="CmdLnSpecs:Clean">
+        <MSBuild Projects="CmdLn\test\CmdLnSpecs.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="CmdLnSpecs:Make">
+        <MSBuild Projects="CmdLn\test\CmdLnSpecs.dproj" Targets="Make"/>
     </Target>
     <Target Name="ConfigurationSpecs">
         <MSBuild Projects="Configuration\test\ConfigurationSpecs.dproj"/>
@@ -168,13 +180,13 @@
         <MSBuild Projects="web\test\WebSpecs.dproj" Targets="Make"/>
     </Target>
     <Target Name="Build">
-        <CallTarget Targets="MiniSpecSpecs;CommonsSpecs;ConfigurationSpecs;DISpecs;MediatRSpecs;SQLCuteSpecs;LinqSpecs;SQLCuteInMemorySpecs;SpecificationSpecs;SQLCuteSpecificationSpecs;LoggingSpecs;HostingSpecs;WebSpecs"/>
+        <CallTarget Targets="MiniSpecSpecs;CommonsSpecs;CmdLnSpecs;ConfigurationSpecs;DISpecs;MediatRSpecs;SQLCuteSpecs;LinqSpecs;SQLCuteInMemorySpecs;SpecificationSpecs;SQLCuteSpecificationSpecs;LoggingSpecs;HostingSpecs;WebSpecs"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="MiniSpecSpecs:Clean;CommonsSpecs:Clean;ConfigurationSpecs:Clean;DISpecs:Clean;MediatRSpecs:Clean;SQLCuteSpecs:Clean;LinqSpecs:Clean;SQLCuteInMemorySpecs:Clean;SpecificationSpecs:Clean;SQLCuteSpecificationSpecs:Clean;LoggingSpecs:Clean;HostingSpecs:Clean;WebSpecs:Clean"/>
+        <CallTarget Targets="MiniSpecSpecs:Clean;CommonsSpecs:Clean;CmdLnSpecs:Clean;ConfigurationSpecs:Clean;DISpecs:Clean;MediatRSpecs:Clean;SQLCuteSpecs:Clean;LinqSpecs:Clean;SQLCuteInMemorySpecs:Clean;SpecificationSpecs:Clean;SQLCuteSpecificationSpecs:Clean;LoggingSpecs:Clean;HostingSpecs:Clean;WebSpecs:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="MiniSpecSpecs:Make;CommonsSpecs:Make;ConfigurationSpecs:Make;DISpecs:Make;MediatRSpecs:Make;SQLCuteSpecs:Make;LinqSpecs:Make;SQLCuteInMemorySpecs:Make;SpecificationSpecs:Make;SQLCuteSpecificationSpecs:Make;LoggingSpecs:Make;HostingSpecs:Make;WebSpecs:Make"/>
+        <CallTarget Targets="MiniSpecSpecs:Make;CommonsSpecs:Make;CmdLnSpecs:Make;ConfigurationSpecs:Make;DISpecs:Make;MediatRSpecs:Make;SQLCuteSpecs:Make;LinqSpecs:Make;SQLCuteInMemorySpecs:Make;SpecificationSpecs:Make;SQLCuteSpecificationSpecs:Make;LoggingSpecs:Make;HostingSpecs:Make;WebSpecs:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

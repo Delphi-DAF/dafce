@@ -18,7 +18,7 @@
         <Projects Include="Application\samples\HostedService\HostedService.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="Commons\samples\PingProcess\PingProcess.dproj">
+        <Projects Include="SystemProcess\samples\PingProcess\PingProcess.dproj">
             <Dependencies/>
         </Projects>
         <Projects Include="MiniSpec\samples\CalculatorSpecs\CalculatorSpecs.dproj">
@@ -96,13 +96,13 @@
         <MSBuild Projects="Application\samples\HostedService\HostedService.dproj" Targets="Make"/>
     </Target>
     <Target Name="PingProcess">
-        <MSBuild Projects="Commons\samples\PingProcess\PingProcess.dproj"/>
+        <MSBuild Projects="SystemProcess\samples\PingProcess\PingProcess.dproj"/>
     </Target>
     <Target Name="PingProcess:Clean">
-        <MSBuild Projects="Commons\samples\PingProcess\PingProcess.dproj" Targets="Clean"/>
+        <MSBuild Projects="SystemProcess\samples\PingProcess\PingProcess.dproj" Targets="Clean"/>
     </Target>
     <Target Name="PingProcess:Make">
-        <MSBuild Projects="Commons\samples\PingProcess\PingProcess.dproj" Targets="Make"/>
+        <MSBuild Projects="SystemProcess\samples\PingProcess\PingProcess.dproj" Targets="Make"/>
     </Target>
     <Target Name="CalculatorSpecs">
         <MSBuild Projects="MiniSpec\samples\CalculatorSpecs\CalculatorSpecs.dproj"/>

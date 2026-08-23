@@ -115,11 +115,9 @@
         <DCCReference Include="Daf.Activator.pas"/>
         <DCCReference Include="Daf.FilterSpec.pas"/>
         <DCCReference Include="Daf.Rtti.pas"/>
-        <DCCReference Include="Daf.CmdLn.Parser.pas"/>
         <DCCReference Include="Daf.Arrays.pas"/>
         <DCCReference Include="Daf.Enumerable.pas"/>
         <DCCReference Include="Daf.Threading.pas"/>
-        <DCCReference Include="Daf.SystemProcess.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\source.optset</DependentOn>

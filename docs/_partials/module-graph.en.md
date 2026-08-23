@@ -2,11 +2,12 @@
 
 Read from the `requires` clause of every `.dpk`, so it cannot drift from the packages. Arrows read *requires*.
 
-**22 packages**, **29 real edges** between them, **20** more declared but already implied by another path, **0** cycles.
+**24 packages**, **31 real edges** between them, **20** more declared but already implied by another path, **0** cycles.
 
 ```{mermaid}
 graph TD
   Application[Application]
+  CmdLn[CmdLn]
   Commons[Commons]
   Configuration[Configuration]
   ConfigurationAbstractions[Configuration.Abstractions]
@@ -27,6 +28,7 @@ graph TD
   SQLCuteInMemory[SQLCute.InMemory]
   SQLCuteSpecification[SQLCute.Specification]
   Specification[Specification]
+  SystemProcess[SystemProcess]
   Web[Web]
   RTIndy[("IndyCore · IndyProtocols · IndySystem")]
   RTRESTComponents[("RESTComponents")]
@@ -34,6 +36,7 @@ graph TD
   RTinet[("inet")]
   RTinetstn[("inetstn")]
   Application --> Hosting
+  CmdLn --> Commons
   Configuration --> ConfigurationAbstractions
   ConfigurationAbstractions --> Commons
   DependencyInjection --> DependencyInjectionAbstractions
@@ -59,6 +62,7 @@ graph TD
   SQLCuteSpecification --> SQLCuteInMemory
   SQLCuteSpecification --> Specification
   Specification --> Commons
+  SystemProcess --> Commons
   Web --> ConfigurationAbstractions
   Web --> DependencyInjectionAbstractions
   Web --> LoggingAbstractions
@@ -75,7 +79,7 @@ graph TD
   class RTIndy,RTRESTComponents,RTfmx,RTinet,RTinetstn rt;
 ```
 
-Drawn as a transitive reduction: only the edges that do not already arrive by another path. `rtl` is left out because all 22 packages require it; the third-party runtimes are drawn one node per family — Indy, RESTComponents, fmx, inet and inetstn — with the real names in the label.
+Drawn as a transitive reduction: only the edges that do not already arrive by another path. `rtl` is left out because all 24 packages require it; the third-party runtimes are drawn one node per family — Indy, RESTComponents, fmx, inet and inetstn — with the real names in the label.
 
 Dotted border marks a contract package (`.Abstractions`); the dashed rounded nodes are third-party runtimes.
 
@@ -84,6 +88,7 @@ Installable on their own, with no dependency on another DAF package: `Commons`, 
 | Package | Runtime packages it pulls in |
 |---|---|
 | `Application` | `rtl` |
+| `CmdLn` | `rtl` |
 | `Commons` | `rtl` |
 | `Configuration` | `rtl` |
 | `Configuration.Abstractions` | `rtl` |
@@ -104,6 +109,7 @@ Installable on their own, with no dependency on another DAF package: `Commons`, 
 | `SQLCute.InMemory` | `rtl` |
 | `SQLCute.Specification` | `rtl` |
 | `Specification` | `rtl` |
+| `SystemProcess` | `rtl` |
 | `Web` | `IndyCore` · `IndyProtocols` · `IndySystem` · `RESTComponents` · `inet` · `inetstn` · `rtl` |
 
-18 of 22 need nothing beyond `rtl`.
+20 of 24 need nothing beyond `rtl`.
