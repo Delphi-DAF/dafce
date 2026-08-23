@@ -5,7 +5,9 @@
 uses
   Daf.MiniSpec,
   Configuration.Feat in 'Configuration.Feat.pas',
-  Configuration.Steps in 'Configuration.Steps.pas';
+  Configuration.Steps in 'Configuration.Steps.pas',
+  CommandLine.Feat in 'CommandLine.Feat.pas',
+  CommandLine.Steps in 'CommandLine.Steps.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

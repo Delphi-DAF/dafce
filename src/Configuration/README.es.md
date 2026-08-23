@@ -51,7 +51,80 @@ var Host := DbSection['Host'];
 | Fichero INI | `Daf.Configuration.Ini` | Formato clásico `[Sección]\nClave=Valor` |
 | Variables de entorno | `Daf.Configuration.Env` | Variables del SO, opcionalmente filtradas por prefijo |
 | En memoria | `Daf.Configuration.Memory` | Diccionario de pares `string → string` |
+| Línea de comandos | `Daf.Configuration.CommandLine` | Argumentos del proceso, con la sintaxis de .NET y alias cortos |
 | Encadenado | `Daf.Configuration.Chained` | Envuelve un `IConfiguration` existente como fuente |
+
+Los cuatro primeros son el juego de .NET: `Json`, `Ini`, `EnvironmentVariables` y `CommandLine`
+de `Microsoft.Extensions.Configuration`. **La precedencia es el orden en que los añades: gana la
+última fuente.** Ningún proveedor se arroga una precedencia propia.
+
+---
+
+## La línea de comandos
+
+La fuente de mayor precedencia, y la que no necesita ningún fichero: permite anular cualquier ajuste
+al invocar el ejecutable.
+
+```pascal
+uses
+  Daf.Configuration.Builder,
+  Daf.Configuration.Json,
+  Daf.Configuration.CommandLine,
+  Daf.Extensions.Configuration;
+
+var Builder: IConfigurationBuilder := TConfigurationBuilder.Create;
+
+JsonConfig.AddFile(Builder, 'appsettings.json');
+CommandLineConfig.AddArgs(Builder);   // añadida última, así que anula al fichero
+
+var Config := Builder.Build;
+```
+
+`AddArgs` sin argumentos lee los que recibió este proceso. La sobrecarga que toma un array explícito
+es lo que hace verificable la fuente — un proceso no puede falsear su propio `ParamStr`:
+
+```pascal
+CommandLineConfig.AddArgs(Builder, ['--Logging:LogLevel:Default=Debug']);
+```
+
+### Formas admitidas
+
+| Forma | Ejemplo |
+|---|---|
+| `clave=valor` | `Logging:LogLevel:Default=Debug` |
+| `--clave=valor` | `--Logging:LogLevel:Default=Debug` |
+| `--clave valor` | `--Logging:LogLevel:Default Debug` |
+| `/clave=valor` | `/Logging:LogLevel:Default=Debug` |
+| `/clave valor` | `/Logging:LogLevel:Default Debug` |
+| `-alias valor` | solo si el alias está declarado |
+
+Las claves no distinguen mayúsculas, una clave repetida se queda con su último valor, y `clave=` sin
+nada detrás del igual es una clave cuyo valor es la cadena vacía. Las claves anidadas usan el mismo
+separador que las demás fuentes, así que un valor puesto aquí y uno leído de `appsettings.json`
+aterrizan en la misma clave.
+
+### Alias cortos
+
+Un alias hace corresponder un modificador corto con una clave larga. Debe empezar por uno o dos
+guiones, y declarar el mismo alias dos veces es un error de composición — se avisa al montar la
+fuente, no al ejecutar el proceso.
+
+```pascal
+CommandLineConfig.AddArgs(Builder, ['-v', 'Debug'],
+  [TSwitchMapping.Create('-v', 'Logging:LogLevel:Default')]);
+```
+
+⚠️ **Una diferencia deliberada con .NET.** Allí, un modificador de un solo guion sin alias declarado
+y con signo igual —`-x=1`— lanza una `FormatException`. Aquí se ignora, como cualquier otro argumento
+que no nombra una clave: leer la línea de comandos no debería poder impedir que una aplicación
+arranque por un guion de más.
+
+### No confundir con `Daf.CmdLn`
+
+Escribir una *aplicación* de línea de comandos —comandos, subcomandos, opciones tipadas, ayuda
+generada— es otro trabajo, y le corresponde a [`Daf.CmdLn`](../CmdLn/README.es.md). Los dos no
+comparten motor, igual que `Microsoft.Extensions.Configuration.CommandLine` no usa
+`System.CommandLine`.
 
 ---
 

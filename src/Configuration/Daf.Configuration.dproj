@@ -119,6 +119,7 @@
         <DCCReference Include="Daf.Configuration.Json.pas"/>
         <DCCReference Include="Daf.Configuration.Ini.pas"/>
         <DCCReference Include="Daf.Configuration.Env.pas"/>
+        <DCCReference Include="Daf.Configuration.CommandLine.pas"/>
         <DCCReference Include="Daf.Configuration.ConfigurationRoot.pas"/>
         <DCCReference Include="Daf.Configuration.Chained.pas"/>
         <BuildConfiguration Include="Base">

@@ -40,6 +40,7 @@ contains
   Daf.Configuration.Json in 'Daf.Configuration.Json.pas',
   Daf.Configuration.Ini in 'Daf.Configuration.Ini.pas',
   Daf.Configuration.Env in 'Daf.Configuration.Env.pas',
+  Daf.Configuration.CommandLine in 'Daf.Configuration.CommandLine.pas',
   Daf.Configuration.ConfigurationRoot in 'Daf.Configuration.ConfigurationRoot.pas',
   Daf.Configuration.Chained in 'Daf.Configuration.Chained.pas';
 
