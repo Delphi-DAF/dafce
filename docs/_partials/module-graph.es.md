@@ -2,7 +2,7 @@
 
 Leído del `requires` de cada `.dpk`, así que no puede desviarse de los paquetes. Las flechas se leen *requiere*.
 
-**24 paquetes**, **31 aristas reales** entre ellos, **20** más declaradas pero ya implicadas por otro camino, **0** ciclos.
+**24 paquetes**, **31 aristas reales** entre ellos, **19** más declaradas pero ya implicadas por otro camino, **0** ciclos.
 
 ```{mermaid}
 graph TD

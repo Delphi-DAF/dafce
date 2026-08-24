@@ -81,6 +81,8 @@ website:
           href: en/docs/architecture.qmd
         - text: "Startup composition"
           href: en/docs/startup-composition.qmd
+        - text: "Migrating to 2.0"
+          href: en/docs/migration-2.0.qmd
 
     - id: modules
       title: "Modules"
@@ -198,6 +200,8 @@ website:
           href: es/docs/architecture.qmd
         - text: "Composición del arranque"
           href: es/docs/startup-composition.qmd
+        - text: "Migrar a 2.0"
+          href: es/docs/migration-2.0.qmd
 
   page-footer:
     left: |

@@ -30,7 +30,6 @@
 
 requires
   rtl,
-  Daf.Commons,
   Daf.Configuration.Abstractions,
   Daf.DependencyInjection.Abstractions,
   Daf.DependencyInjection,

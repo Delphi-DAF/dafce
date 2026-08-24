@@ -102,6 +102,7 @@
         <DCCReference Include="Composition.Feat.pas"/>
         <DCCReference Include="Decoration.Feat.pas"/>
         <DCCReference Include="Modules.Feat.pas"/>
+        <DCCReference Include="RestrictedRtti.Feat.pas"/>
         <DCCReference Include="Validation.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

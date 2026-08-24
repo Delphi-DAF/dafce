@@ -8,6 +8,8 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
 ## [Unreleased]
 
+Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` en español).
+
 ### Added
 
 - **Configuration**: `Daf.Configuration.CommandLine` — el cuarto proveedor, y el que cierra la paridad con `Microsoft.Extensions.Configuration`: los argumentos del proceso leídos como claves, con la sintaxis que ya conoce quien viene de .NET (`clave=valor`, `--clave=valor`, `--clave valor`, `/clave=valor`, `/clave valor`, y alias corto declarado). Es la fuente que permite anular cualquier ajuste al invocar el ejecutable sin tocar un fichero; sin ella, una aplicación que lo quisiera tenía que leerse `ParamStr` y enlazarlo a mano. La precedencia la sigue decidiendo el orden de composición: gana la última fuente añadida. Una divergencia deliberada de .NET, dicha en el README: allí un modificador de un solo guion sin alias y con signo igual —`-x=1`— lanza `FormatException`; aquí se ignora, como cualquier otro argumento que no nombra una clave
@@ -72,17 +74,17 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 ### Deprecated
 
 - **CmdLn**: `Daf.CmdLn.Parser` queda **congelado**: sigue funcionando y sus specs pasan, pero no va a recibir funcionalidad nueva. Lo va a sustituir un porting de `System.CommandLine` —la librería que usa el propio `dotnet` CLI— y se retirará cuando el sustituto cubra su terreno. El motivo es la forma del API, no una carencia suelta: allí el objeto que declaras **es** la llave con la que lees el valor, mientras aquí se nombra el argumento dos veces en texto y nadie comprueba que coincidan. Su README enumera lo que falta y dos limitaciones conocidas del motor de tipos: no admite números negativos, y acepta `--port 80xyz` como `80`
-- **DependencyInjection**: `AddModules(Package)`, el descubrimiento por RTTI de los `IAppModule`. Sigue funcionando; el sustituto es `AddModule<T>`, una llamada por módulo y en el orden que la aplicación quiera. En compilación nativa el descubrimiento no ahorraba la declaración: la escondía en un `uses` con comentario `// force-link:`
 
 ### Removed
 
+- **DependencyInjection**: `AddModules(Package)`, el descubrimiento por RTTI de los `IAppModule`. El sustituto es `AddModule<T>`, una llamada por módulo y en el orden que la aplicación quiera. En compilación nativa el descubrimiento no ahorraba la declaración: la escondía en un `uses` con comentario `// force-link:`, y a cambio dejaba el arranque **ciego en silencio** ante una RTTI recortada y ponía el orden de registro en manos de la reflexión. `IAppModule`, `TAppModule` y el cuerpo de cada módulo no cambian: migrar es cambiar quién llama. Una `TDafApplication` **ya no registra módulos por su cuenta** — los suyos se declaran donde se compongan los servicios. El diff de ejemplo, en `MIGRATION-2.0.md`
 - **Logging**: La global `DAFInternalLogger`. Era la única vía mientras la categoría del canal estuvo clavada a `DAF`; sin ese filtro es una segunda puerta que además etiqueta como DAF a quien no lo es. Se sustituye por `BootstrapLog.LoggerFor(<categoría>)`, que es por donde informa ahora también el propio DAF. Quien la llamara se lleva un error de compilación, no un cambio silencioso de comportamiento
 - **Commons**: `TBooleanExpresion`
 - **Commons**: La unidad `Daf.Expression`, disuelta en `Daf.FilterSpec` y `Daf.Types`
 
 ### Fixed
 
-- **DependencyInjection / MediatR**: Componer dos veces en un mismo proceso da el mismo resultado. La contabilidad de paquetes ya procesados era estado global de unit —una variable en `AddModules`, dos en el registro de MediatR—, así que la segunda colección compuesta en un proceso se saltaba lo ya visitado. Ahora es estado de la colección
+- **MediatR**: Componer dos veces en un mismo proceso da el mismo resultado. La contabilidad de paquetes ya escaneados era estado global de unit —dos variables en el registro de MediatR—, así que la segunda colección compuesta en un proceso se saltaba lo ya visitado. Ahora es estado de la colección
 - **Hosting**: Un proceso puede construir más de un host. «Build already called» y el «ya parado» del host eran estado de clase en vez de estado de instancia, así que un arnés que monta y desmonta hosts solo podía montar el primero
 - **SQLCute**: `WhereIn` con un conjunto de valores **vacío** emitía `col IN ()`, sintácticamente inválido en casi cualquier motor, así que el fallo llegaba desde el servidor y lejos de la llamada que lo causó. Un conjunto vacío es la disyunción vacía, así que ahora `WhereIn` no casa ninguna fila y `WhereNotIn` casa todas — incluida aquella cuya columna es NULL, donde antes el carril en memoria respondía *desconocido* y descartaba la fila de ambos. Los dos back-ends dan ya la misma respuesta. Afecta también a `OrWhereIn`/`OrWhereNotIn` y a `IsIn([])` de la capa de expresiones
 - **Commons**: `TMacrosList.GetValueFromIndex` no asignaba `Result`; toda lectura de macro devolvía cadena vacía

@@ -11,6 +11,7 @@ uses
   Composition.Feat in 'Composition.Feat.pas',
   Decoration.Feat in 'Decoration.Feat.pas',
   Modules.Feat in 'Modules.Feat.pas',
+  RestrictedRtti.Feat in 'RestrictedRtti.Feat.pas',
   Validation.Feat in 'Validation.Feat.pas';
 
 begin

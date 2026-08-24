@@ -8,8 +8,8 @@ uses
   Doubles.Feat;
 
 type
-  /// Los modulos se declaran en la interface para que la RTTI y el linker los vean: la
-  /// spec de reproducibilidad usa el descubrimiento, que es lo que tenia el estado global.
+  /// Los modulos se declaran en la interface para que el linker no los descarte: un tipo
+  /// que solo aparece en implementation y no se referencia se elimina como codigo muerto.
   TFirstModule = class(TAppModule)
   public
     procedure AddServices(const ServiceCollection: IServiceCollection); override;
@@ -21,7 +21,7 @@ type
   end;
 
   /// Su constructor propio deja una marca. Si se instanciara con TObject.Create —lo que
-  /// hace el descubrimiento por RTTI— la marca vendria vacia y la spec lo veria.
+  /// hacia el descubrimiento por RTTI, retirado en 2.0— la marca vendria vacia.
   TOwnCtorModule = class(TAppModule)
   strict private
     FMark: string;
@@ -311,15 +311,19 @@ Feature Explicit startup composition @di @composition @modules
 
 .Rule('Composing twice in one process gives the same result')
 
-  .Scenario('Two collections composed separately register the same thing')
-    .When('the discovery is applied to two fresh collections in the same process',
+  // Aqui vivian tres escenarios sobre el descubrimiento, que era quien tenia estado de
+  // paquete visitado. Retirado en 2.0, ese modo de fallo solo existe donde queda escaneo,
+  // y alli esta probado: MediatR/test/Reproducibility.Feat.pas. Queda este, que no es
+  // tautologico -- AddModule<T> crea una instancia por llamada, y compartirla entre
+  // colecciones seria justo el fallo que se afirma que no ocurre.
+  .Scenario('Two collections composed with AddModule register the same thing')
+    .When('the same module is applied to two fresh collections in the same process',
       procedure(W: TFooWorld)
       begin
-        var Package := _T.PackageOf<TFirstModule>;
         var First: IServiceCollection := TServiceCollection.Create;
         var Second: IServiceCollection := TServiceCollection.Create;
-        AppModules.Add(First, Package);
-        AppModules.Add(Second, Package);
+        First.AddModule<TFirstModule>;
+        Second.AddModule<TFirstModule>;
         W.Names := [IntToStr(Length(First.Descriptors<IFoo>)), IntToStr(Length(Second.Descriptors<IFoo>))];
       end)
     .&Then('the second one has the same descriptors as the first',
@@ -329,36 +333,17 @@ Feature Explicit startup composition @di @composition @modules
         Expect(StrToInt(W.Names[0])).ToBeGreaterThan(0);
       end)
 
-  .Scenario('Two live collections do not contaminate each other')
-    .When('two collections are composed interleaved in the same process',
-      procedure(W: TFooWorld)
-      begin
-        var Package := _T.PackageOf<TFirstModule>;
-        var First: IServiceCollection := TServiceCollection.Create;
-        var Second: IServiceCollection := TServiceCollection.Create;
-        AppModules.Add(First, Package);
-        AppModules.Add(Second, Package);
-        AppModules.Add(First, Package);
-        AppModules.Add(Second, Package);
-        W.Names := [IntToStr(Length(First.Descriptors<IFoo>)), IntToStr(Length(Second.Descriptors<IFoo>))];
-      end)
-    .&Then('both end up with the same content, as if each had been composed alone',
-      procedure(W: TFooWorld)
-      begin
-        Expect(W.Names[1]).ToEqual(W.Names[0]);
-      end)
-
   .Scenario('One spec does not contaminate the next')
-    .Given('a collection composed by discovery in a previous scenario',
+    .Given('a collection composed in a previous scenario',
       procedure(W: TFooWorld)
       begin
-        AppModules.Add(W.Services, _T.PackageOf<TFirstModule>);
+        W.Services.AddModule<TFirstModule>;
       end)
     .When('a new collection is composed the same way',
       procedure(W: TFooWorld)
       begin
         var Other: IServiceCollection := TServiceCollection.Create;
-        AppModules.Add(Other, _T.PackageOf<TFirstModule>);
+        Other.AddModule<TFirstModule>;
         W.Names := [IntToStr(Length(W.Services.Descriptors<IFoo>)), IntToStr(Length(Other.Descriptors<IFoo>))];
       end)
     .&Then('each one sees exactly the services it registered',

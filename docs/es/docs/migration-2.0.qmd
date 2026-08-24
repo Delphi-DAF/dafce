@@ -1,0 +1,7 @@
+---
+title: "Migrar a DAF 2.0"
+sidebar: docs-es
+lang: es
+---
+
+{{< include ../../../MIGRATION-2.0.es.md >}}

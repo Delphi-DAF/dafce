@@ -9,8 +9,7 @@ uses
   Daf.Extensions.DependencyInjection,
   Daf.Extensions.Configuration,
   Daf.Hosting,
-  Daf.Application.Version,
-  Daf.AppModule.DependencyInjection;
+  Daf.Application.Version;
 
 type
   IDafApplication = interface(IInvokable)
@@ -41,8 +40,6 @@ type
   strict private
     FAppClass: TDafApplicationClass;
   private
-  protected
-    procedure DoConfigureServices(Context: IHostBuilderContext; Services: IServiceCollection);override;
   public
     function AppClass: TDafApplicationClass;inline;
     constructor Create(const AppClass: TDafApplicationClass);
@@ -89,7 +86,6 @@ type
 
 implementation
 uses
-  Daf.Rtti,
   Daf.DependencyInjection;
 
 
@@ -101,16 +97,6 @@ begin
   FAppClass := AppClass;
 end;
 
-
-procedure TDafApplicationBuilder.DoConfigureServices(Context: IHostBuilderContext; Services: IServiceCollection);
-begin
-  inherited;
-  // El descubrimiento sigue siendo el comportamiento por defecto de una TDafApplication
-  // hasta 2.0; el aviso es para quien lo escriba en su propio arranque, no para DAF.
-{$WARN SYMBOL_DEPRECATED OFF}
-  AppModules.Add(Services, _T.PackageOf(FAppClass));
-{$WARN SYMBOL_DEPRECATED ON}
-end;
 
 function TDafApplicationBuilder.AppClass: TDafApplicationClass;
 begin
