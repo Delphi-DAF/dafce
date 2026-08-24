@@ -19,6 +19,7 @@ type
     Builder: IConfigurationBuilder;
     Config: IConfigurationRoot;
     BoundObj: TMyConfig;
+    Path: string;
     constructor Create;
     destructor Destroy; override;
   end;
@@ -125,6 +126,30 @@ Feature Configuration @configuration
       begin
         Section := W.Config.GetSection('app');
         Expect(Section.HasChildren).ToBeTrue;
+      end)
+
+.Rule('TConfigurationPath')
+
+  // Not one ':' written by hand in this scenario: the key is composed with Combine and
+  // taken apart with GetSectionKey/GetParentPath. The day the declared delimiter and the
+  // one those functions use stop being the same, this is what turns red -- the alternative
+  // is producing keys that do not match, in silence.
+  .Scenario('Compose and decompose a key with the declared delimiter')
+    .Given('a path composed from two segments',
+      procedure(W: TConfigWorld)
+      begin
+        W.Path := TConfigurationPath.Combine(['parent', 'child']);
+      end)
+    .When('I take the path apart').NoAction
+    .&Then('the section key is the last segment',
+      procedure(W: TConfigWorld)
+      begin
+        Expect(TConfigurationPath.GetSectionKey(W.Path)).ToEqual('child');
+      end)
+    .&And('the parent path is everything before it',
+      procedure(W: TConfigWorld)
+      begin
+        Expect(TConfigurationPath.GetParentPath(W.Path)).ToEqual('parent');
       end)
 
 .Rule('ConfigurationBinder')

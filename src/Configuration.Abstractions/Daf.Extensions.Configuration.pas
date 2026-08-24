@@ -215,7 +215,7 @@ begin
     Exit(Path);
 
   var
-  lastDelimiterIndex := Path.LastIndexOf(':');
+  lastDelimiterIndex := Path.LastIndexOf(KeyDelimiter);
 
   if lastDelimiterIndex < 0 then
     Exit(Path);
@@ -227,7 +227,7 @@ begin
   if Path.IsEmpty then
     Exit('');
   var
-  lastDelimiterIndex := Path.LastIndexOf(':');
+  lastDelimiterIndex := Path.LastIndexOf(KeyDelimiter);
 
   if lastDelimiterIndex < 0 then
     Exit('');
