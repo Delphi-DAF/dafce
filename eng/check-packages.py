@@ -9,6 +9,7 @@ manifest.
 
     python3 eng/check-packages.py            # report and exit 1 on any breach
     python3 eng/check-packages.py --list     # print the graph as it stands
+    python3 eng/check-packages.py --loose    # units that no package distributes
 
 Invariants
 ----------
@@ -170,10 +171,43 @@ def direct_uses(pkg, imports, owner):
     return used
 
 
+def loose_units(contains):
+    """Framework units that no .dpk contains, so no package distributes them.
+
+    A loose unit is not a build failure: it compiles the day somebody names it by
+    path, and it is absent from the build otherwise -- it does not break, it
+    *disappears*. Since a package is the unit of installation, a source file that
+    belongs to no package is a file nobody can install. Tests and samples are out of
+    scope: they are compiled by their own projects, not distributed.
+
+    The parse this needs is the same one the invariants above already do, which is why
+    it lives here rather than as a shell one-liner somebody keeps in a notebook.
+    """
+    packaged = {u.lower() for units in contains.values() for u in units}
+    loose = []
+    for pas in sorted((ROOT / "src").rglob("*.pas")):
+        parts = {p.lower() for p in pas.relative_to(ROOT / "src").parts[:-1]}
+        if parts & {"test", "tests", "samples"}:
+            continue
+        if pas.stem.lower() not in packaged:
+            loose.append(pas.relative_to(ROOT).as_posix())
+    return len(packaged), loose
+
+
 def main():
     requires, contains, owner = parse()
     canon = {p.lower(): p for p in requires}
     fold = lambda name: canon.get(name.lower(), name)
+
+    if "--loose" in sys.argv:
+        packaged, loose = loose_units(contains)
+        if loose:
+            print(f"{len(loose)} unit(s) in no .dpk:", file=sys.stderr)
+            for u in loose:
+                print(f"  - {u}", file=sys.stderr)
+            return 1
+        print(f"every framework unit is packaged ({packaged} units across {len(requires)} packages)")
+        return 0
 
     if "--list" in sys.argv:
         for pkg in sorted(requires):
