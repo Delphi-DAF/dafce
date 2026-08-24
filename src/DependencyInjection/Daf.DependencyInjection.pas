@@ -66,7 +66,8 @@ type
     function GetOrCreate(const Descriptor: TServiceDescriptor; const Provider: IServiceProvider): IInterface;overload;
   end;
 
-  TServiceScope = class(TDIObject<TServiceScope>, IServiceScope, IServiceProviderImpl, IServiceResolver)
+  TServiceScope = class(TDIObject<TServiceScope>, IServiceScope, IServiceProviderImpl, IServiceResolver,
+    IContainerAccess)
   private
     [Weak]
     FScopeFactory: TServiceScopeFactory;
@@ -88,10 +89,15 @@ type
     function GetSingletonsScope: IServiceResolver;
     procedure AddServiceInstance(const Descriptor: TServiceDescriptor; const Service: IInterface);
     function CanResolve(const ServiceType: PTypeInfo): Boolean;
+    procedure CheckNotShutDown(const ServiceType: PTypeInfo);
     procedure CollectGarbage;
   protected
     property IsSingletonsScope: Boolean read FIsSingletonsScope;
     property ScopeFactory: TServiceScopeFactory read FScopeFactory;
+    // Clausula de resolucion porque Shutdown ya esta cogido en esta clase y significa otra cosa:
+    // el de abajo recoge la basura de ESTE ambito, y este de aqui cierra el contenedor entero.
+    procedure IContainerAccess.Shutdown = ShutdownContainer;
+    procedure ShutdownContainer;
   public
     constructor Create(const Factory: TServiceScopeFactory; const SingletonsScope: Boolean = False);
     destructor Destroy; override;
@@ -403,7 +409,10 @@ begin
     RemoveFromSingletonScope;
   var Scopes := FScopes.ToArray;
   FSCopes.Clear;
-  for var idx := High(Scopes) to Low(Scopes) do
+  // downto, no to: ascendente iba de High a Low, asi que corria UNA vez con un solo ambito y
+  // NINGUNA con dos o mas -- que es cuando de verdad hacia falta. Cerrar en orden inverso al de
+  // creacion es ademas el orden correcto.
+  for var idx := High(Scopes) downto Low(Scopes) do
     begin
        TServiceScope(Scopes[idx]).Shutdown;
     Scopes[idx] := nil;
@@ -516,6 +525,14 @@ begin
   FServiceInstances.Clear;
 end;
 
+procedure TServiceScope.ShutdownContainer;
+begin
+  // El ambito alcanza la fabrica por FScopeFactory, que es [Weak]: la ve sin poseerla. Esta es
+  // la costura por la que IServiceProvider.ShutDown llega al contenedor sin resolver nada.
+  if FScopeFactory <> nil then
+    FScopeFactory.Shutdown;
+end;
+
 procedure TServiceScope.Shutdown;
 begin
   if FShutDonwnDone then Exit;
@@ -535,6 +552,9 @@ end;
 
 function TServiceScope.TryGetDescriptors(const ServiceType: PTypeInfo; out Descriptors: TServiceDescriptors): Boolean;
 begin
+  // El embudo por el que pasan TryGet y TryGetAll, y por tanto toda resolucion. La guarda vive
+  // aqui y no en las firmas publicas del record: alli habria que escribirla ocho veces.
+  CheckNotShutDown(ServiceType);
   Descriptors := nil;
   Result := CanResolve(ServiceType);
   if not Result then
@@ -570,7 +590,19 @@ end;
 
 function TServiceScope.CreateScope: IServiceScope;
 begin
+  // Un contenedor cerrado que repartiera ambitos estaria repoblando el arbol que se acaba de
+  // desmontar, y quien lo recibiera solo lo descubriria al resolver.
+  CheckNotShutDown(TypeInfo(IServiceScope));
   Result := FScopeFactory.CreateScope;
+end;
+
+procedure TServiceScope.CheckNotShutDown(const ServiceType: PTypeInfo);
+begin
+  if not FShutDonwnDone then Exit;
+  // El mensaje nombra lo que se pidio: sin depurador comodo, un "esta cerrado" a secas obliga
+  // a adivinar quien preguntaba.
+  raise EContainerShutDownError.CreateFmt('Cannot resolve %s: the container has been shut down',
+    [_T.NameOf(ServiceType)]);
 end;
 
 procedure TServiceScope.BeginCreateSingleton(const Descriptor: TServiceDescriptor);

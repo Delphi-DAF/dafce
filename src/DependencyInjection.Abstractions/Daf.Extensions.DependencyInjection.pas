@@ -17,6 +17,13 @@ type
   EServiceProviderError = class(Exception)
   end;
 
+  // Pedirle algo a un contenedor ya cerrado. Deriva de EServiceProviderError para no romper a
+  // quien ya captura el padre, y es un tipo propio porque el llamante necesita separar "esto no
+  // esta registrado" -- que se arregla en la composicion -- de "esto ya esta cerrado", que se
+  // arregla en el ciclo de vida. Es el ObjectDisposedException de .NET.
+  EContainerShutDownError = class(EServiceProviderError)
+  end;
+
   // Interfaces don't support generic overload, so we model our desired interface using a record
   // that will delegate behavior in a true interface that implementor classes will support
   IServiceProvider = record
@@ -431,9 +438,14 @@ end;
 
 procedure IServiceProvider.ShutDown;
 begin
-  var Container := GetRequiredService<IServiceScopeFactory> as IContainerAccess;
-  Container.ShutDown;
-  Container._Release;
+  // Se llega al contenedor por QueryInterface, NO resolviendo. Resolver era la dependencia que
+  // rompia el cierre repetido: IServiceScopeFactory se registra como singleton, y el primer
+  // cierre desmonta el ambito de singletons, asi que el segundo pedia un servicio a algo que ya
+  // no podia servirlo. Supports no consulta descriptores ni toca ese ambito, con lo que la
+  // guarda de idempotencia del contenedor queda por fin alcanzable.
+  var Container: IContainerAccess;
+  if Supports(FImplementor, IContainerAccess, Container) then
+    Container.ShutDown;
 end;
 
 { Factory }

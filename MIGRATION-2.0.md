@@ -98,6 +98,31 @@ there is one line less in `requires`.
 - Startup reports go out under the category of the class reporting, through the `ILogger` pipeline.
   That is not API, it is output: if you filtered on the `DAF` category, revisit the filter.
 
+### 6. A closed container no longer answers
+
+- **Resolving from a closed container raises `EContainerShutDownError`**, and the message names the
+  service that was asked for. It used to do two different things and neither was that: an
+  `EAccessViolation` if the service was a Singleton, and serving it silently if it was Scoped — an
+  instance nobody was going to collect. `EContainerShutDownError` derives from
+  `EServiceProviderError`, so whoever already catches the parent still catches it.
+- **Creating a scope from a closed container fails the same way**, instead of handing out a scope
+  that cannot resolve.
+- **Closing twice no longer breaks.** If your code closed in two places — the application's explicit
+  shutdown and the teardown of whoever owns the provider — and you avoided the second one with a
+  flag, that flag is no longer needed.
+
+The only thing to revisit is the last resolution before the shutdown:
+
+```pascal
+// Before: worked by accident if the service was Scoped
+Provider.ShutDown;
+var Report := Provider.GetRequiredService<IReport>;   // now: EContainerShutDownError
+
+// Now: resolve while the container is still alive
+var Report := Provider.GetRequiredService<IReport>;
+Provider.ShutDown;
+```
+
 ## How to do it
 
 1. Compile. Whatever is missing comes out as a compiler error, not as odd behaviour at run time.

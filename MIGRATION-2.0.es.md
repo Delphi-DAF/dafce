@@ -99,6 +99,31 @@ ahí, así que hay una línea menos en los `requires`.
 - Los informes de arranque salen bajo la categoría de la clase que informa y por el pipeline de
   `ILogger`. No es API, es salida: si filtrabas por la categoría `DAF`, revisa el filtro.
 
+### 6. El contenedor cerrado ya no responde
+
+- **Resolver de un contenedor cerrado lanza `EContainerShutDownError`**, y el mensaje nombra el
+  servicio pedido. Antes hacía dos cosas distintas y ninguna era esa: un `EAccessViolation` si el
+  servicio era Singleton, y servirlo en silencio si era Scoped —una instancia que ya nadie iba a
+  recoger—. `EContainerShutDownError` deriva de `EServiceProviderError`, así que quien ya capture
+  el padre sigue capturándolo.
+- **Crear un ámbito desde un contenedor cerrado falla igual**, en vez de entregar un ámbito que no
+  puede resolver.
+- **Cerrar dos veces ya no rompe.** Si tu código cerraba en dos sitios —el cierre explícito de la
+  aplicación y el desmontaje de quien posee el proveedor— y evitabas el segundo con una bandera,
+  esa bandera ya no hace falta.
+
+Lo único que hay que revisar es la última resolución antes del cierre:
+
+```pascal
+// Antes: funcionaba por accidente si el servicio era Scoped
+Provider.ShutDown;
+var Report := Provider.GetRequiredService<IReport>;   // ahora: EContainerShutDownError
+
+// Ahora: resuelve mientras el contenedor está vivo
+var Report := Provider.GetRequiredService<IReport>;
+Provider.ShutDown;
+```
+
 ## Cómo hacerlo
 
 1. Compila. Lo que falte sale como error del compilador, no como comportamiento raro en

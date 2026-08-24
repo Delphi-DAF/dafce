@@ -13,7 +13,8 @@ uses
   Modules.Feat in 'Modules.Feat.pas',
   RestrictedRtti.Feat in 'RestrictedRtti.Feat.pas',
   Validation.Feat in 'Validation.Feat.pas',
-  GarbageCollection.Feat in 'GarbageCollection.Feat.pas';
+  GarbageCollection.Feat in 'GarbageCollection.Feat.pas',
+  ContainerShutdown.Feat in 'ContainerShutdown.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;
