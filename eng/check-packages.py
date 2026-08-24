@@ -110,6 +110,21 @@ FORBIDDEN = (
                "reason to carry it for using DAF's logging. The contract package is the "
                "extreme case, since everyone uses it, but the rule is not its own",
     ),
+    # Not a dependency-isolation boundary: both packages require only rtl and Daf.Commons, so
+    # neither drags anything the other lacks. The boundary is the guardrail itself, and `only`
+    # rather than `everyone_but` because the rule is about this one package -- Daf.Linq is public,
+    # and the back-end that runs a query over loaded collections requires it by design.
+    Forbidden(
+        prefixes=("daf.linq",),
+        packages=frozenset({"daf.linq"}),
+        only=frozenset({"Daf.Specification"}),
+        reason="a closure never translates, and Daf.Specification bounds its predicate tree on "
+               "purpose so that what cannot be translated is unrepresentable. Linked together, a "
+               "closure reaches where a tree is expected and nothing fails: it is evaluated in "
+               "memory, over a different row set than the caller asked for. That is the silent "
+               "fallback EF Core withdrew in 3.0, so this is a boundary and not a preference -- "
+               "remove the dependency, not the rule",
+    ),
 )
 
 
