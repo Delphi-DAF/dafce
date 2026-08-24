@@ -104,6 +104,7 @@
         <DCCReference Include="Modules.Feat.pas"/>
         <DCCReference Include="RestrictedRtti.Feat.pas"/>
         <DCCReference Include="Validation.Feat.pas"/>
+        <DCCReference Include="GarbageCollection.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>
