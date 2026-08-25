@@ -9,6 +9,7 @@ uses
   Syntax.Feat in 'Syntax.Feat.pas',
   Tokens.Feat in 'Tokens.Feat.pas',
   Help.Feat in 'Help.Feat.pas',
+  Types.Feat in 'Types.Feat.pas',
   Values.Feat in 'Values.Feat.pas';
 
 begin

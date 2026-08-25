@@ -26,13 +26,21 @@ type
     DefaultedOpt: IOption<string>;
     OwnVersionRoot: IRootCommand;
     OwnVersionOpt: IOption<Boolean>;
+    // A hidden option next to one that is not, which is the only way to tell "not
+    // listed" from "nothing was listed".
+    HiddenRoot: IRootCommand;
+    DiagOpt: IOption<Integer>;
+    PlainOpt: IOption<string>;
     Parsed: ICommandLineParseResult;
     Rendered: string;
     RenderedAgain: string;
+    Listed: string;
+    ReadDiag: Integer;
     procedure BuildGrammar;
     procedure BuildOwnHelpGrammar;
     procedure BuildVersionGrammar;
     procedure BuildOwnVersionGrammar;
+    procedure BuildHiddenGrammar;
   end;
 
 implementation
@@ -74,6 +82,15 @@ begin
   OwnVersionOpt := CommandLine.Option<Boolean>('--version', 'The version this application wants');
   OwnVersionRoot := CommandLine.Root('owntool', 'Brings its own version').WithVersion('9.9.9');
   OwnVersionRoot.Add(OwnVersionOpt);
+end;
+
+procedure THelpWorld.BuildHiddenGrammar;
+begin
+  // Hidden touches the help and nothing else: it is declared, parsed and read the same.
+  DiagOpt := CommandLine.Option<Integer>('--diag').Describe('Diagnostics level').Hidden;
+  PlainOpt := CommandLine.Option<string>('--name').Describe('What to call it');
+  HiddenRoot := CommandLine.Root('mytool', 'A tool with something not advertised');
+  HiddenRoot.Add([DiagOpt, PlainOpt]);
 end;
 
 initialization
@@ -315,6 +332,75 @@ Feature Command line help @commandline @help
         Expect(W.Parsed.WasProvided(W.OwnVersionOpt)).ToBeTrue;
         Expect(W.OwnVersionOpt.ValueIn(W.Parsed)).ToBeTrue;
         Expect(W.Parsed.Succeeded).ToBeTrue;
+      end)
+
+.Rule('a hidden symbol does not appear in the help')
+
+  .Scenario('A hidden option is not listed')
+    .Given('a command with one option declared hidden and another that is not',
+      procedure(W: THelpWorld)
+      begin
+        W.BuildHiddenGrammar;
+      end)
+    .When('the help of that command is asked for',
+      procedure(W: THelpWorld)
+      begin
+        W.Rendered := W.HiddenRoot.HelpText;
+        // Named rather than asserted as a boolean, so a failure says WHICH one showed up.
+        W.Listed := 'neither';
+        if W.Rendered.Contains('--diag') then
+          W.Listed := '--diag';
+      end)
+    .&Then('the one that is not hidden appears and the hidden one does not',
+      procedure(W: THelpWorld)
+      begin
+        Expect(W.Rendered).ToContain('--name');
+        Expect(W.Listed).ToEqual('neither');
+      end)
+
+  .Scenario('A hidden option still works')
+    .Given('a command with an option declared hidden',
+      procedure(W: THelpWorld)
+      begin
+        W.BuildHiddenGrammar;
+      end)
+    .When('an invocation that passes it is parsed',
+      procedure(W: THelpWorld)
+      begin
+        W.Parsed := W.HiddenRoot.Parse(['--diag', '3']);
+        W.ReadDiag := W.DiagOpt.ValueIn(W.Parsed);
+      end)
+    .&Then('its value is read as usual',
+      procedure(W: THelpWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('');
+        Expect(W.ReadDiag).ToEqual(3);
+      end)
+
+  .Scenario('A hidden option is named when it fails')
+    .Given('a command with a hidden option of integer type',
+      procedure(W: THelpWorld)
+      begin
+        W.BuildHiddenGrammar;
+      end)
+    .When('the invocation passes it something that is not an integer',
+      procedure(W: THelpWorld)
+      begin
+        W.Parsed := W.HiddenRoot.Parse(['--diag', 'loud']);
+      end)
+    .&Then('the parse fails naming that option',
+      procedure(W: THelpWorld)
+      begin
+        // Hiding it from the help is not hiding it from whoever already uses it: an
+        // error that will not say what failed turns a mistake into a riddle (design D5).
+        Expect(W.Parsed.Succeeded).ToBeFalse;
+        // The message has to be the CONVERSION's, naming the option. Asserting only
+        // that '--diag' appears would also be satisfied by "unknown option --diag",
+        // which is what a hidden option would produce if hiding reached the parser --
+        // a green that coincides with the failure it is meant to catch.
+        Expect(W.Parsed.ErrorText).ToContain('not a valid integer');
+        Expect(W.Parsed.ErrorText).ToContain('--diag');
+        Expect(W.Parsed.ErrorText).ToContain('loud');
       end);
 
 end.

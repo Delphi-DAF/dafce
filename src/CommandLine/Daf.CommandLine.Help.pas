@@ -90,10 +90,35 @@ var
 begin
   Result := Command.FullPath;
   for Argument in Command.Arguments do
-    Result := Result + ' ' + ArgumentLabel(Argument);
+    if not Argument.IsHidden then
+      Result := Result + ' ' + ArgumentLabel(Argument);
   if Length(Command.Subcommands) > 0 then
     Result := Result + ' <command>';
   Result := Result + ' [options]';
+end;
+
+// How many of each the help is going to list. Written twice, and it has to be: a
+// TArray<IArgument> is not assignable to an array of ISymbol -- Delphi has no
+// covariance for dynamic arrays -- and a standalone generic function is not allowed
+// either. One loop each beats building a converted array to save six lines.
+function VisibleArguments(const Command: ICommand): Integer;
+var
+  Argument: IArgument;
+begin
+  Result := 0;
+  for Argument in Command.Arguments do
+    if not Argument.IsHidden then
+      Inc(Result);
+end;
+
+function VisibleSubcommands(const Command: ICommand): Integer;
+var
+  Subcommand: ICommand;
+begin
+  Result := 0;
+  for Subcommand in Command.Subcommands do
+    if not Subcommand.IsHidden then
+      Inc(Result);
 end;
 
 function DeclaresOwnHelp(const Command: ICommand): Boolean;
@@ -139,26 +164,32 @@ begin
     Lines.Add('Usage:');
     Lines.Add('  ' + UsageLine(Command));
 
-    if Length(Command.Arguments) > 0 then
+    // Hidden is filtered HERE and nowhere else (design D5). The heading is only written
+    // when something is going to follow it: a section listing nothing reads as a bug in
+    // the tool rather than as a symbol somebody chose not to advertise.
+    if VisibleArguments(Command) > 0 then
     begin
       Lines.Add('');
       Lines.Add('Arguments:');
       for Argument in Command.Arguments do
-        Lines.Add(Padded(ArgumentLabel(Argument), Annotated(Argument, Argument.Arity.DemandsValue and not Argument.HasDefault)));
+        if not Argument.IsHidden then
+          Lines.Add(Padded(ArgumentLabel(Argument), Annotated(Argument, Argument.Arity.DemandsValue and not Argument.HasDefault)));
     end;
 
-    if Length(Command.Subcommands) > 0 then
+    if VisibleSubcommands(Command) > 0 then
     begin
       Lines.Add('');
       Lines.Add('Commands:');
       for Subcommand in Command.Subcommands do
-        Lines.Add(Padded(CommandLabel(Subcommand), Subcommand.Description));
+        if not Subcommand.IsHidden then
+          Lines.Add(Padded(CommandLabel(Subcommand), Subcommand.Description));
     end;
 
     Lines.Add('');
     Lines.Add('Options:');
     for Option in Command.Options do
-      Lines.Add(Padded(OptionLabel(Option), Annotated(Option, Option.IsRequired and not Option.HasDefault)));
+      if not Option.IsHidden then
+        Lines.Add(Padded(OptionLabel(Option), Annotated(Option, Option.IsRequired and not Option.HasDefault)));
     // Listed because they answer, not because anybody declared them. When the
     // application declared its own, the loop above already printed that one.
     if not DeclaresOwnHelp(Command) then

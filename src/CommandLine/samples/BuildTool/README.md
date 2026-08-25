@@ -3,14 +3,15 @@
 Declares a command tree two levels deep and reads its values back through the objects that declared
 it. It is the smallest thing that shows every piece of [`Daf.CommandLine`](../../README.md) at once:
 subcommands, a command alias, a positional argument, a recursive option, defaults, generated help,
-a value the engine refuses rather than guesses, and the several ways the same invocation may be
-written.
+a value the engine refuses rather than guesses, a type of its own with the conversion that reads it,
+and the several ways the same invocation may be written.
 
 ```
 buildtool                        --verbose, -v   recursive: every leaf inherits it
 |
 +-- build   (alias: b)                           only groups: not invocable itself
 |   +-- native <target>          --out           default bin\out.exe
+|   |                            --min-sdk       a type of this program's own
 |   +-- web    <target>          --minify, -m
 |
 +-- serve                        --port          default 8080
@@ -68,14 +69,21 @@ Everything lives in one class, `TBuildTool`, and each part answers a different q
   goes straight into arithmetic with no conversion. Reading either into the other's type is a
   **compile** error, not a run-time surprise.
 
+- **`--min-sdk` is a type the engine knows nothing about, and it took one place to admit it.** The
+  conversion is passed where the option is declared, so it travels with the option and nothing in DAF
+  changed. Its refusal comes out through `Errors` like any other invalid invocation, with the message
+  the conversion itself wrote — a type a third party adds fails as well as one of serie.
+
 - **`Run` answers help before judging anything.** Asking how a tool works is an outcome, not a
   mistake, so it is never reported as a parse error.
 
-## The two invocations that fail on purpose
+## The invocations that fail on purpose
 
 | Invocation | What it shows |
 |---|---|
 | `buildtool build` | A command that only groups is not an invocation of its own — the error names the subcommands it expected |
 | `buildtool serve --port 80xyz` | The engine refuses the whole token, naming the option and the text, instead of quietly meaning `80` |
+| `buildtool serve --level shouting` | The enumerated type refuses what is not one of its values, and lists the ones it has |
+| `buildtool build native app.dpr --min-sdk 11.4` | The conversion declared with the option refuses it, with its own message |
 
 And `--help` is never declared anywhere, yet answers.

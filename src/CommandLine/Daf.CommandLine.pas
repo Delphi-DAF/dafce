@@ -29,6 +29,51 @@ uses
 type
   ECommandLine = class(Exception);
 
+  /// <summary>
+  ///   A conversion declared by whoever uses the module: turns the raw text of one
+  ///   token into <c>T</c>, or refuses it with a message of its own.
+  /// </summary>
+  /// <remarks>
+  ///   It is what makes the type engine extensible without touching DAF: a type it does
+  ///   not know stops being a wall and becomes a line of the application.
+  ///
+  ///   It is declared ON THE SYMBOL and not in a registry of types, deliberately: a
+  ///   registry would make it process-wide configuration, so two libraries declaring a
+  ///   conversion for the same type would fight over it -- and the one that started last
+  ///   would win, in silence (design D2). On the symbol, its reach is exactly where it
+  ///   was written.
+  /// </remarks>
+  TCommandLineParser<T> = reference to function(const Raw: string; out Value: T; out Error: string): Boolean;
+
+  /// <summary>
+  ///   A validation declared by whoever uses the module: receives the already converted
+  ///   value and may refuse it with a message of its own.
+  /// </summary>
+  /// <remarks>
+  ///   It runs INSIDE the parse, so its refusal comes out through <c>Errors</c> like any
+  ///   other invocation error (design D3). Validating afterwards moves the failure to
+  ///   where it can no longer be reported next to the rest, and the tool ends up with two
+  ///   ways of saying that an invocation was wrong -- which is the same displacement the
+  ///   parked module made with the help text.
+  ///
+  ///   A validation should be a pure question about the value.
+  ///   <c>AcceptExistingOnly</c> is the conscious exception: it asks the file system.
+  /// </remarks>
+  TCommandLineValidator<T> = reference to function(const Value: T; out Error: string): Boolean;
+
+  /// <summary>
+  ///   The type-erased shapes the engine stores. An application writes the two typed
+  ///   forms above; a symbol keeps these, so one conversion and one list of validations
+  ///   serve every declared type.
+  /// </summary>
+  /// <remarks>
+  ///   They are declared here, and not in <c>implementation</c>, because the generic
+  ///   classes below name them and a parameterized method may not name a type local to
+  ///   the implementation section (E2506).
+  /// </remarks>
+  TUntypedParser = reference to function(const Raw: string; out Value: TValue; out Error: string): Boolean;
+  TUntypedValidator = reference to function(const Value: TValue; out Error: string): Boolean;
+
   ICommandLineParseResult = interface;
 
   /// <summary>How many values a symbol admits: a minimum and a maximum.</summary>
@@ -78,6 +123,19 @@ type
     ///   case-sensitive by POSIX convention. See design D7 for the reason.
     /// </summary>
     function Matches(const Token: string): Boolean;
+    /// <summary>True when the help does not list it. It changes NOTHING else.</summary>
+    /// <remarks>
+    ///   It is what a diagnostic option, one in transition, or one only an internal script
+    ///   uses needs: to exist without being put in front of everybody who asks how the
+    ///   tool works. Today the alternatives are not declaring it -- and then it does not
+    ///   work -- or declaring it and accepting that it shows: two bad ones.
+    ///
+    ///   Hiding is the HELP's business and nothing else (design D5). A hidden symbol that
+    ///   gets an invalid value fails the same way and is named in the error: hiding it
+    ///   from the help is not hiding it from whoever is already using it, and an error
+    ///   that will not say what failed turns a mistake into a riddle.
+    /// </remarks>
+    function IsHidden: Boolean;
   end;
 
   /// <summary>A symbol that carries a value, and therefore a declared type.</summary>
@@ -158,6 +216,8 @@ type
     ///   chained -- the same caveat as <c>Describe</c>.
     /// </remarks>
     function AllowUnmatchedTokens: ICommand;
+    /// <summary>Keeps it out of the help of its parent. See <c>ISymbol.IsHidden</c>.</summary>
+    function Hidden: ICommand;
     /// <summary>
     ///   The help text, rendered from the grammar every time it is asked for. Nothing
     ///   composed is stored anywhere, so it cannot drift from what the program accepts
@@ -221,7 +281,25 @@ type
     function ValueIn(const Parsed: ICommandLineParseResult): T;
     /// <summary>Every value the invocation carried, for an arity that admits many.</summary>
     function ValuesIn(const Parsed: ICommandLineParseResult): TArray<T>;
-    function WithDefault(const Value: T): IOption<T>;
+    function WithDefault(const Value: T): IOption<T>; overload;
+    /// <summary>Declares the default as a CALCULATION, run only if it is needed.</summary>
+    /// <remarks>
+    ///   A default that depends on the surroundings -- a temporary directory, today's
+    ///   date, an environment variable -- cannot be written as a constant in the
+    ///   declaration of the grammar, which runs before there is anything to know. Without
+    ///   this the application leaves the default empty and fills it in after reading, and
+    ///   then the help shows a default that is not the one the program uses.
+    ///
+    ///   The calculation runs ONLY when the invocation did not carry the symbol, and at
+    ///   most once: it may open a file or read the environment, and paying for that twice
+    ///   is a cost nobody asked for.
+    ///
+    ///   <c>Text</c> is what the help shows, because the help does NOT run the
+    ///   calculation -- it has no way of knowing whether this one has effects, and
+    ///   showing no default beats inventing one or paying for a side effect to paint a
+    ///   line. With no text, no default is shown.
+    /// </remarks>
+    function WithDefault(const Factory: TFunc<T>; const Text: string = ''): IOption<T>; overload;
     function WithAlias(const Alias: string): IOption<T>;
     function WithArity(const Value: TArity): IOption<T>;
     function Describe(const Text: string): IOption<T>;
@@ -231,6 +309,24 @@ type
     function Required: IOption<T>;
     /// <summary>Restricts it to a declared set of values, listed when one is refused.</summary>
     function AcceptOnly(const Values: array of string): IOption<T>;
+    /// <summary>Keeps it out of the help. See <c>ISymbol.IsHidden</c>.</summary>
+    function Hidden: IOption<T>;
+    /// <summary>Adds a validation of its own, which runs inside the parse.</summary>
+    /// <remarks>
+    ///   Several can be declared, and they run in the order they were declared. The
+    ///   first refusal is the error reported for that value.
+    /// </remarks>
+    function Validate(const Validation: TCommandLineValidator<T>): IOption<T>;
+    /// <summary>Accepts only a path that exists, file or directory.</summary>
+    /// <remarks>
+    ///   It is written over <c>Validate</c>'s own hook and not over a mechanism of its
+    ///   own -- if the validations of serie needed one, the hook would not be doing its
+    ///   job. It ASKS THE FILE SYSTEM, which is the conscious exception to a validation
+    ///   being a pure question about the value.
+    /// </remarks>
+    function AcceptExistingOnly: IOption<T>;
+    /// <summary>Accepts only a legal file name, separators included in what is refused.</summary>
+    function AcceptLegalFileNamesOnly: IOption<T>;
     /// <summary>Lets one mention of the name be followed by several values.</summary>
     /// <remarks>
     ///   Opt-in, and it could not be anything else (design D4): were every option with
@@ -245,10 +341,15 @@ type
   IArgument<T> = interface(IArgument)
     function ValueIn(const Parsed: ICommandLineParseResult): T;
     function ValuesIn(const Parsed: ICommandLineParseResult): TArray<T>;
-    function WithDefault(const Value: T): IArgument<T>;
+    function WithDefault(const Value: T): IArgument<T>; overload;
+    function WithDefault(const Factory: TFunc<T>; const Text: string = ''): IArgument<T>; overload;
     function WithArity(const Value: TArity): IArgument<T>;
     function Describe(const Text: string): IArgument<T>;
     function AcceptOnly(const Values: array of string): IArgument<T>;
+    function Validate(const Validation: TCommandLineValidator<T>): IArgument<T>;
+    function AcceptExistingOnly: IArgument<T>;
+    function AcceptLegalFileNamesOnly: IArgument<T>;
+    function Hidden: IArgument<T>;
   end;
 
   // The classes below are declared here rather than in the implementation section on
@@ -262,6 +363,7 @@ type
     FName: string;
     FAliases: TArray<string>;
     FDescription: string;
+    FHidden: Boolean;
   public
     constructor Create(const AName: string);
     function AsObject: TObject;
@@ -269,19 +371,35 @@ type
     function Aliases: TArray<string>;
     function Description: string;
     function Matches(const Token: string): Boolean;
+    function IsHidden: Boolean;
     procedure AddAlias(const Alias: string);
     procedure SetDescription(const Text: string);
+    procedure Hide;
   end;
 
   TValuedSymbol = class(TSymbol, IValued)
   protected
     FTypeInfo: PTypeInfo;
+    /// <summary>
+    ///   The type ONE token converts into. It is the declared type, except for a
+    ///   collection, where it is the element: a collection is a symbol that takes many
+    ///   values, and each of them is converted on its own.
+    /// </summary>
+    FElementTypeInfo: PTypeInfo;
     FArity: TArity;
     FAccepted: TArray<string>;
     FHasDefault: Boolean;
     FDefaultText: string;
+    FParser: TUntypedParser;
+    FValidators: TArray<TUntypedValidator>;
+    /// <summary>Converts one token, through the declared conversion when there is one.</summary>
+    function Convert(const Raw: string; out Value: TValue; out Error: string): Boolean;
+    /// <summary>True when the declared type takes many values rather than one.</summary>
+    function IsCollection: Boolean;
+    /// <summary>Refuses at DECLARATION a path validation on something that is not one.</summary>
+    procedure DemandPathType(const What: string);
   public
-    constructor Create(const AName: string; ATypeInfo: PTypeInfo);
+    constructor Create(const AName: string; ATypeInfo: PTypeInfo; const AParser: TUntypedParser);
     function TryAccept(const Raw: string; out Error: string): Boolean;
     function IsFlag: Boolean;
     function TypeName: string;
@@ -292,42 +410,74 @@ type
     procedure SetArity(const Value: TArity);
     procedure SetAccepted(const Values: array of string);
     procedure SetDefaultText(const Text: string);
+    procedure AddValidator(const Validator: TUntypedValidator);
+    // The two validations of serie, written over the hook above and nothing else.
+    procedure DemandExistingPath;
+    procedure DemandLegalFileName;
   end;
 
-  TOption<T> = class(TValuedSymbol, IOption, IOption<T>)
+  /// <summary>What an option and an argument share once <c>T</c> is known.</summary>
+  /// <remarks>
+  ///   It exists so that every mechanism that needs <c>T</c> -- the declared conversion,
+  ///   the validations, the default -- is written once instead of once per kind of
+  ///   symbol. Two copies of it would be two places for the next mechanism to be
+  ///   forgotten in.
+  /// </remarks>
+  TValuedSymbol<T> = class(TValuedSymbol)
+  protected
+    FDefaultValue: T;
+    FDefaultFactory: TFunc<T>;
+    /// <summary>True once <c>FDefaultValue</c> holds the default, computed or written.</summary>
+    FDefaultKnown: Boolean;
+    function DefaultOf: T;
+    function ReadValue(const Parsed: ICommandLineParseResult): T;
+    function ReadValues(const Parsed: ICommandLineParseResult): TArray<T>;
+    procedure SetDefaultValue(const Value: T);
+    procedure SetDefaultFactory(const Factory: TFunc<T>; const Text: string);
+    procedure AddTypedValidator(const Validation: TCommandLineValidator<T>);
+  public
+    constructor Create(const AName: string; const AParser: TCommandLineParser<T>);
+  end;
+
+  TOption<T> = class(TValuedSymbol<T>, IOption, IOption<T>)
   private
     FRecursive: Boolean;
     FRequiredFlag: Boolean;
     FMultiplePerToken: Boolean;
-    FDefaultValue: T;
   public
-    constructor Create(const AName: string);
     function IsRecursive: Boolean;
     function IsRequired: Boolean;
     function AllowsMultipleArgumentsPerToken: Boolean;
     function AllowMultipleArgumentsPerToken: IOption<T>;
     function ValueIn(const Parsed: ICommandLineParseResult): T;
     function ValuesIn(const Parsed: ICommandLineParseResult): TArray<T>;
-    function WithDefault(const Value: T): IOption<T>;
+    function WithDefault(const Value: T): IOption<T>; overload;
+    function WithDefault(const Factory: TFunc<T>; const Text: string = ''): IOption<T>; overload;
     function WithAlias(const Alias: string): IOption<T>;
     function WithArity(const Value: TArity): IOption<T>;
     function Describe(const Text: string): IOption<T>;
     function Recursive: IOption<T>;
     function Required: IOption<T>;
     function AcceptOnly(const Values: array of string): IOption<T>;
+    function Validate(const Validation: TCommandLineValidator<T>): IOption<T>;
+    function AcceptExistingOnly: IOption<T>;
+    function AcceptLegalFileNamesOnly: IOption<T>;
+    function Hidden: IOption<T>;
   end;
 
-  TArgument<T> = class(TValuedSymbol, IArgument, IArgument<T>)
-  private
-    FDefaultValue: T;
+  TArgument<T> = class(TValuedSymbol<T>, IArgument, IArgument<T>)
   public
-    constructor Create(const AName: string);
     function ValueIn(const Parsed: ICommandLineParseResult): T;
     function ValuesIn(const Parsed: ICommandLineParseResult): TArray<T>;
-    function WithDefault(const Value: T): IArgument<T>;
+    function WithDefault(const Value: T): IArgument<T>; overload;
+    function WithDefault(const Factory: TFunc<T>; const Text: string = ''): IArgument<T>; overload;
     function WithArity(const Value: TArity): IArgument<T>;
     function Describe(const Text: string): IArgument<T>;
     function AcceptOnly(const Values: array of string): IArgument<T>;
+    function Validate(const Validation: TCommandLineValidator<T>): IArgument<T>;
+    function AcceptExistingOnly: IArgument<T>;
+    function AcceptLegalFileNamesOnly: IArgument<T>;
+    function Hidden: IArgument<T>;
   end;
 
   /// <summary>Where a grammar starts. The facade, in the shape Daf.Linq uses.</summary>
@@ -339,8 +489,19 @@ type
   /// </remarks>
   CommandLine = record
   public
-    class function Option<T>(const Name: string; const Description: string = ''): IOption<T>; static;
-    class function Argument<T>(const Name: string; const Description: string = ''): IArgument<T>; static;
+    class function Option<T>(const Name: string; const Description: string = ''): IOption<T>; overload; static;
+    /// <summary>Declares an option together with the conversion that reads its type.</summary>
+    /// <remarks>
+    ///   The conversion is taken HERE, at declaration, and not set afterwards: a symbol
+    ///   that always knows how to convert its type is a symbol whose declaration can be
+    ///   refused on the spot when it does not (design D2). It also serves a type the
+    ///   engine already knows, for reading it some other way.
+    /// </remarks>
+    class function Option<T>(const Name: string; const Parser: TCommandLineParser<T>;
+      const Description: string = ''): IOption<T>; overload; static;
+    class function Argument<T>(const Name: string; const Description: string = ''): IArgument<T>; overload; static;
+    class function Argument<T>(const Name: string; const Parser: TCommandLineParser<T>;
+      const Description: string = ''): IArgument<T>; overload; static;
     class function Command(const Name: string; const Description: string = ''): ICommand; static;
     class function Root(const Name: string; const Description: string = ''): IRootCommand; static;
   end;
@@ -363,6 +524,14 @@ implementation
 uses
   Daf.CommandLine.Values,
   Daf.CommandLine.Help;
+
+const
+  /// <summary>
+  ///   What Windows does not admit in a file NAME. The separators are in the list on
+  ///   purpose: this validates a name and not a path, which is the same split .NET makes
+  ///   between the characters a name cannot carry and the ones a whole path cannot.
+  /// </summary>
+  IllegalInFileName: TSysCharSet = ['<', '>', ':', '"', '/', '\', '|', '?', '*'];
 
 type
   TBinding = record
@@ -426,6 +595,7 @@ type
     function FullPath: string;
     function TreatsUnmatchedTokensAsErrors: Boolean;
     function AllowUnmatchedTokens: ICommand;
+    function Hidden: ICommand;
     function HelpText: string;
     procedure SetPathPrefix(const Value: string);
   end;
@@ -573,25 +743,55 @@ begin
   FAliases := FAliases + [Alias];
 end;
 
+function TSymbol.IsHidden: Boolean;
+begin
+  Result := FHidden;
+end;
+
 procedure TSymbol.SetDescription(const Text: string);
 begin
   FDescription := Text;
 end;
 
+procedure TSymbol.Hide;
+begin
+  FHidden := True;
+end;
+
 { TValuedSymbol }
 
-constructor TValuedSymbol.Create(const AName: string; ATypeInfo: PTypeInfo);
+constructor TValuedSymbol.Create(const AName: string; ATypeInfo: PTypeInfo; const AParser: TUntypedParser);
 begin
   inherited Create(AName);
   FTypeInfo := ATypeInfo;
-  if not TCommandLineValue.Handles(FTypeInfo) then
-    raise ECommandLine.CreateFmt('Symbol "%s" is declared with a type the command line cannot convert: %s',
-      [AName, TCommandLineValue.TypeName(FTypeInfo)]);
+  FElementTypeInfo := TCommandLineValue.ElementTypeOf(ATypeInfo);
+  FParser := AParser;
+  if Assigned(AParser) and IsCollection then
+    // A conversion of its own converts ONE token, and for a collection that token is an
+    // element -- which T cannot name, because Delphi has no way of saying "the element
+    // of T" in an interface. Refused here rather than never run.
+    raise ECommandLine.CreateFmt('Symbol "%s" is a collection, and a conversion of its own converts one ' +
+      'value: declare it on the element type instead', [AName]);
+  // The check stays at DECLARATION, which is where it is worth something, and that is
+  // why the conversion is taken at declaration too: a symbol either knows how to convert
+  // its type or it is refused on the spot. What changed is that "the engine does not know
+  // this type" is no longer the end of the conversation (design D2).
+  if not Assigned(FParser) and not TCommandLineValue.Handles(FTypeInfo) then
+    raise ECommandLine.CreateFmt('Symbol "%s" is declared with a type the command line cannot convert: %s. ' +
+      'Declare a conversion of its own for it', [AName, TCommandLineValue.TypeName(FTypeInfo)]);
   // Derived from the type, so the ordinary case is never written by hand (design D6).
-  if IsFlag then
+  // A collection says "many" by being one, which is how .NET derives it too.
+  if IsCollection then
+    FArity := TArity.ZeroOrMore
+  else if IsFlag then
     FArity := TArity.ZeroOrOne
   else
     FArity := TArity.ExactlyOne;
+end;
+
+function TValuedSymbol.IsCollection: Boolean;
+begin
+  Result := TCommandLineValue.IsCollection(FTypeInfo);
 end;
 
 function TValuedSymbol.TryAccept(const Raw: string; out Error: string): Boolean;
@@ -599,6 +799,7 @@ var
   Parsed: TValue;
   Allowed: TArray<string>;
   Candidate: string;
+  Check: TUntypedValidator;
 begin
   Error := '';
   Allowed := AcceptedValues;
@@ -620,7 +821,38 @@ begin
     end;
   end;
 
-  Result := TCommandLineValue.TryParse(FTypeInfo, Raw, Parsed);
+  if not Convert(Raw, Parsed, Error) then
+    Exit(False);
+
+  // Validation runs HERE, inside the parse, and its refusal goes out through the same
+  // Errors as everything else. Validating afterwards would move the failure to where it
+  // is no longer an invocation error, and whoever invoked the tool would get two lists
+  // instead of one (design D3).
+  for Check in FValidators do
+    if not Check(Parsed, Error) then
+    begin
+      if Error = '' then
+        Error := Format('"%s" is not a valid value for %s', [Raw, Name]);
+      Exit(False);
+    end;
+
+  Result := True;
+end;
+
+function TValuedSymbol.Convert(const Raw: string; out Value: TValue; out Error: string): Boolean;
+begin
+  Error := '';
+  Value := TValue.Empty;
+  if Assigned(FParser) then
+  begin
+    Result := FParser(Raw, Value, Error);
+    if not Result and (Error = '') then
+      // A conversion of its own that refuses without saying why leaves the caller where
+      // the parked module left them: a refusal with nothing to act on.
+      Error := Format('"%s" is not a valid %s for %s', [Raw, TypeName, Name]);
+    Exit;
+  end;
+  Result := TCommandLineValue.TryParse(FElementTypeInfo, Raw, Value);
   if not Result then
     // Names both the symbol and the text received: "80xyz" is not a valid integer
     // for --port. Refusing without saying what was refused is barely better than
@@ -681,13 +913,209 @@ begin
   FDefaultText := Text;
 end;
 
-{ TOption<T> }
-
-constructor TOption<T>.Create(const AName: string);
+procedure TValuedSymbol.AddValidator(const Validator: TUntypedValidator);
 begin
-  inherited Create(AName, TypeInfo(T));
-  FDefaultValue := Default (T);
+  if not Assigned(Validator) then
+    // A validation that was declared and is not there would never run and never say so,
+    // which is the shape of defect this whole module exists to remove.
+    raise ECommandLine.CreateFmt('A validation declared on "%s" is not assigned', [Name]);
+  // Appended by index and not as [Validator]: inside an array literal Delphi reads a
+  // reference-to-function as a CALL of it, and answers E2035 about parameters nobody
+  // was passing.
+  SetLength(FValidators, Length(FValidators) + 1);
+  FValidators[High(FValidators)] := Validator;
 end;
+
+procedure TValuedSymbol.DemandPathType(const What: string);
+begin
+  // Here a path is a string: what FileInfo and DirectoryInfo contributed in .NET was the
+  // validation, and the validation is what gets ported (design D1).
+  // Through the element, so a collection of paths validates each one of them.
+  if FElementTypeInfo <> System.TypeInfo(string) then
+    raise ECommandLine.CreateFmt('%s applies to a path, and "%s" is declared as %s', [What, Name, TypeName]);
+end;
+
+procedure TValuedSymbol.DemandExistingPath;
+var
+  Who: string;
+begin
+  DemandPathType('AcceptExistingOnly');
+  // The NAME is captured, not Self. A closure kept on the object that captures the
+  // object is a cycle, and a cycle between counted references is a leak the compiler
+  // never mentions.
+  Who := Name;
+  AddValidator(
+    function(const Value: TValue; out Error: string): Boolean
+    begin
+      Error := '';
+      Result := FileExists(Value.AsString) or DirectoryExists(Value.AsString);
+      if not Result then
+        Error := Format('"%s" does not exist, and %s only accepts a path that does', [Value.AsString, Who]);
+    end);
+end;
+
+procedure TValuedSymbol.DemandLegalFileName;
+var
+  Who: string;
+begin
+  DemandPathType('AcceptLegalFileNamesOnly');
+  Who := Name;
+  AddValidator(
+    function(const Value: TValue; out Error: string): Boolean
+    var
+      Raw: string;
+      Ch: Char;
+    begin
+      Error := '';
+      Raw := Value.AsString;
+      // Empty is not a file name either, and the loop below would let it through.
+      Result := Raw <> '';
+      for Ch in Raw do
+        if CharInSet(Ch, IllegalInFileName) or (Ch < ' ') then
+        begin
+          Result := False;
+          Break;
+        end;
+      if not Result then
+        Error := Format('"%s" is not a legal file name, and %s accepts only one that is', [Raw, Who]);
+    end);
+end;
+
+{ TValuedSymbol<T> }
+
+constructor TValuedSymbol<T>.Create(const AName: string; const AParser: TCommandLineParser<T>);
+var
+  Untyped: TUntypedParser;
+begin
+  Untyped := nil;
+  if Assigned(AParser) then
+    // The typed conversion the application wrote, boxed once, here. Everything below the
+    // symbol works on TValue, so one conversion and one list of validations serve every
+    // declared type instead of one of each per type.
+    Untyped :=
+      function(const Raw: string; out Value: TValue; out Error: string): Boolean
+      var
+        Converted: T;
+      begin
+        Converted := Default (T);
+        Result := AParser(Raw, Converted, Error);
+        if Result then
+          Value := TValue.From<T>(Converted);
+      end;
+  inherited Create(AName, TypeInfo(T), Untyped);
+  FDefaultValue := Default (T);
+  FDefaultKnown := True;
+end;
+
+function TValuedSymbol<T>.DefaultOf: T;
+begin
+  // Run here and nowhere else: this is the one place reached only when the invocation
+  // did not carry the symbol. And run at most once, because a calculation that reads the
+  // environment or opens a file should not be paid for twice (design D4).
+  if not FDefaultKnown then
+  begin
+    FDefaultValue := FDefaultFactory();
+    FDefaultKnown := True;
+  end;
+  Result := FDefaultValue;
+end;
+
+function TValuedSymbol<T>.ReadValue(const Parsed: ICommandLineParseResult): T;
+var
+  Raw: TNullable<string>;
+  Raws: TArray<string>;
+  Elements: TArray<TValue>;
+  Converted: TValue;
+  Error: string;
+  I: Integer;
+begin
+  if Parsed = nil then
+    Exit(DefaultOf);
+
+  // A collection holds ONE value, and that value is every token it was given. The array
+  // is built through RTTI because T is the array type and the element type is only known
+  // to the engine: TValue.FromArray is what bridges the two.
+  if IsCollection then
+  begin
+    Raws := Parsed.RawValuesOf(Self);
+    if Length(Raws) = 0 then
+      Exit(DefaultOf);
+    SetLength(Elements, Length(Raws));
+    for I := 0 to High(Raws) do
+      if not Convert(Raws[I], Elements[I], Error) then
+        raise ECommandLine.Create(Error);
+    Exit(TValue.FromArray(FTypeInfo, Elements).AsType<T>);
+  end;
+
+  Raw := Parsed.RawOf(Self);
+  if Raw.IsNull then
+    Exit(DefaultOf);
+  if not Convert(Raw.Value, Converted, Error) then
+    raise ECommandLine.Create(Error);
+  Result := Converted.AsType<T>;
+end;
+
+function TValuedSymbol<T>.ReadValues(const Parsed: ICommandLineParseResult): TArray<T>;
+var
+  Raw: string;
+  Converted: TValue;
+  Error: string;
+begin
+  Result := nil;
+  if Parsed = nil then
+    Exit;
+  // One value of the declared type, and for a collection that one value is the array.
+  if IsCollection then
+  begin
+    if Length(Parsed.RawValuesOf(Self)) > 0 then
+      Result := [ReadValue(Parsed)];
+    Exit;
+  end;
+  for Raw in Parsed.RawValuesOf(Self) do
+    if Convert(Raw, Converted, Error) then
+      Result := Result + [Converted.AsType<T>];
+end;
+
+procedure TValuedSymbol<T>.SetDefaultValue(const Value: T);
+begin
+  FDefaultValue := Value;
+  FDefaultFactory := nil;
+  FDefaultKnown := True;
+  SetDefaultText(TValue.From<T>(Value).ToString);
+end;
+
+procedure TValuedSymbol<T>.SetDefaultFactory(const Factory: TFunc<T>; const Text: string);
+begin
+  if not Assigned(Factory) then
+    raise ECommandLine.CreateFmt('The computed default of "%s" is not assigned', [Name]);
+  FDefaultFactory := Factory;
+  FDefaultKnown := False;
+  // HasDefault is what satisfies "required", and it is set even with no text to show:
+  // the value exists, it is just not known yet. SetDefaultText('') leaves the help
+  // showing no default rather than a false one.
+  SetDefaultText(Text);
+end;
+
+procedure TValuedSymbol<T>.AddTypedValidator(const Validation: TCommandLineValidator<T>);
+begin
+  if not Assigned(Validation) then
+    raise ECommandLine.CreateFmt('A validation declared on "%s" is not assigned', [Name]);
+  if IsCollection then
+    // Same reason as the conversion: a validation receives the value of one token, and T
+    // here is the array. Refused where it is declared rather than silently never run.
+    // The two of serie do not have the problem -- they are written over the value the
+    // engine boxes, so they run per element.
+    raise ECommandLine.CreateFmt('A validation of its own cannot be declared on "%s", which is a collection: ' +
+      'it would receive one value and the declared type is the whole collection', [Name]);
+  AddValidator(
+    function(const Value: TValue; out Error: string): Boolean
+    begin
+      Error := '';
+      Result := Validation(Value.AsType<T>, Error);
+    end);
+end;
+
+{ TOption<T> }
 
 function TOption<T>.IsRecursive: Boolean;
 begin
@@ -711,37 +1139,24 @@ begin
 end;
 
 function TOption<T>.ValueIn(const Parsed: ICommandLineParseResult): T;
-var
-  Raw: TNullable<string>;
-  Converted: TValue;
 begin
-  if Parsed = nil then
-    Exit(FDefaultValue);
-  Raw := Parsed.RawOf(Self);
-  if Raw.IsNull then
-    Exit(FDefaultValue);
-  if not TCommandLineValue.TryParse(FTypeInfo, Raw.Value, Converted) then
-    raise ECommandLine.CreateFmt('"%s" is not a valid %s for %s', [Raw.Value, TypeName, Name]);
-  Result := Converted.AsType<T>;
+  Result := ReadValue(Parsed);
 end;
 
 function TOption<T>.ValuesIn(const Parsed: ICommandLineParseResult): TArray<T>;
-var
-  Raw: string;
-  Converted: TValue;
 begin
-  Result := nil;
-  if Parsed = nil then
-    Exit;
-  for Raw in Parsed.RawValuesOf(Self) do
-    if TCommandLineValue.TryParse(FTypeInfo, Raw, Converted) then
-      Result := Result + [Converted.AsType<T>];
+  Result := ReadValues(Parsed);
 end;
 
 function TOption<T>.WithDefault(const Value: T): IOption<T>;
 begin
-  FDefaultValue := Value;
-  SetDefaultText(TValue.From<T>(Value).ToString);
+  SetDefaultValue(Value);
+  Result := Self;
+end;
+
+function TOption<T>.WithDefault(const Factory: TFunc<T>; const Text: string): IOption<T>;
+begin
+  SetDefaultFactory(Factory, Text);
   Result := Self;
 end;
 
@@ -781,46 +1196,51 @@ begin
   Result := Self;
 end;
 
-{ TArgument<T> }
-
-constructor TArgument<T>.Create(const AName: string);
+function TOption<T>.Validate(const Validation: TCommandLineValidator<T>): IOption<T>;
 begin
-  inherited Create(AName, TypeInfo(T));
-  FDefaultValue := Default (T);
+  AddTypedValidator(Validation);
+  Result := Self;
 end;
 
-function TArgument<T>.ValueIn(const Parsed: ICommandLineParseResult): T;
-var
-  Raw: TNullable<string>;
-  Converted: TValue;
+function TOption<T>.AcceptExistingOnly: IOption<T>;
 begin
-  if Parsed = nil then
-    Exit(FDefaultValue);
-  Raw := Parsed.RawOf(Self);
-  if Raw.IsNull then
-    Exit(FDefaultValue);
-  if not TCommandLineValue.TryParse(FTypeInfo, Raw.Value, Converted) then
-    raise ECommandLine.CreateFmt('"%s" is not a valid %s for %s', [Raw.Value, TypeName, Name]);
-  Result := Converted.AsType<T>;
+  DemandExistingPath;
+  Result := Self;
+end;
+
+function TOption<T>.AcceptLegalFileNamesOnly: IOption<T>;
+begin
+  DemandLegalFileName;
+  Result := Self;
+end;
+
+function TOption<T>.Hidden: IOption<T>;
+begin
+  Hide;
+  Result := Self;
+end;
+
+{ TArgument<T> }
+
+function TArgument<T>.ValueIn(const Parsed: ICommandLineParseResult): T;
+begin
+  Result := ReadValue(Parsed);
 end;
 
 function TArgument<T>.ValuesIn(const Parsed: ICommandLineParseResult): TArray<T>;
-var
-  Raw: string;
-  Converted: TValue;
 begin
-  Result := nil;
-  if Parsed = nil then
-    Exit;
-  for Raw in Parsed.RawValuesOf(Self) do
-    if TCommandLineValue.TryParse(FTypeInfo, Raw, Converted) then
-      Result := Result + [Converted.AsType<T>];
+  Result := ReadValues(Parsed);
 end;
 
 function TArgument<T>.WithDefault(const Value: T): IArgument<T>;
 begin
-  FDefaultValue := Value;
-  SetDefaultText(TValue.From<T>(Value).ToString);
+  SetDefaultValue(Value);
+  Result := Self;
+end;
+
+function TArgument<T>.WithDefault(const Factory: TFunc<T>; const Text: string): IArgument<T>;
+begin
+  SetDefaultFactory(Factory, Text);
   Result := Self;
 end;
 
@@ -839,6 +1259,30 @@ end;
 function TArgument<T>.AcceptOnly(const Values: array of string): IArgument<T>;
 begin
   SetAccepted(Values);
+  Result := Self;
+end;
+
+function TArgument<T>.Validate(const Validation: TCommandLineValidator<T>): IArgument<T>;
+begin
+  AddTypedValidator(Validation);
+  Result := Self;
+end;
+
+function TArgument<T>.AcceptExistingOnly: IArgument<T>;
+begin
+  DemandExistingPath;
+  Result := Self;
+end;
+
+function TArgument<T>.AcceptLegalFileNamesOnly: IArgument<T>;
+begin
+  DemandLegalFileName;
+  Result := Self;
+end;
+
+function TArgument<T>.Hidden: IArgument<T>;
+begin
+  Hide;
   Result := Self;
 end;
 
@@ -1060,6 +1504,12 @@ end;
 function TCommand.AllowUnmatchedTokens: ICommand;
 begin
   FAllowUnmatched := True;
+  Result := Self;
+end;
+
+function TCommand.Hidden: ICommand;
+begin
+  Hide;
   Result := Self;
 end;
 
@@ -1448,7 +1898,17 @@ class function CommandLine.Option<T>(const Name: string; const Description: stri
 var
   Created: TOption<T>;
 begin
-  Created := TOption<T>.Create(Name);
+  Created := TOption<T>.Create(Name, nil);
+  Created.SetDescription(Description);
+  Result := Created;
+end;
+
+class function CommandLine.Option<T>(const Name: string; const Parser: TCommandLineParser<T>;
+  const Description: string): IOption<T>;
+var
+  Created: TOption<T>;
+begin
+  Created := TOption<T>.Create(Name, Parser);
   Created.SetDescription(Description);
   Result := Created;
 end;
@@ -1457,7 +1917,17 @@ class function CommandLine.Argument<T>(const Name: string; const Description: st
 var
   Created: TArgument<T>;
 begin
-  Created := TArgument<T>.Create(Name);
+  Created := TArgument<T>.Create(Name, nil);
+  Created.SetDescription(Description);
+  Result := Created;
+end;
+
+class function CommandLine.Argument<T>(const Name: string; const Parser: TCommandLineParser<T>;
+  const Description: string): IArgument<T>;
+var
+  Created: TArgument<T>;
+begin
+  Created := TArgument<T>.Create(Name, Parser);
   Created.SetDescription(Description);
   Result := Created;
 end;

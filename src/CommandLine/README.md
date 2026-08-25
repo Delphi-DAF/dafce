@@ -132,16 +132,156 @@ obligatory or not, and arity cannot say which.
 A conversion consumes the **whole** token or fails. `--port 80xyz` is refused, naming the option and
 the text received, rather than becoming `80`; and `-5` is a value, not an unknown option.
 
-Types: `string`, `Integer`, `Boolean`, `Double` and **enumerated types**. An enumerated type names its
-own accepted values, so they appear in the help and in the error without anybody writing them twice —
-and they are matched without regard to case, as in .NET. `.AcceptOnly([...])` is the same closure for
-a type that does not express it.
+### The types of serie, and what each one translates
+
+The list is **translated** from .NET's rather than copied: copying it would port names instead of
+capabilities. What a command line needs is numbers of the widths people use, dates, identifiers and
+paths.
+
+| `System.CommandLine` | Here | Why |
+|---|---|---|
+| `int`, `long`, `short`, `byte` and unsigned | `Integer`, `Int64` | the two that cover the real use; another width enters when somebody asks for it twice |
+| `float`, `double`, `decimal` | `Double` | `Currency` would be the exact decimal, and no case has asked for it |
+| `bool` | `Boolean` | it is the flag: naming it is enough |
+| enums | enumerated types | the type names its own values, matched without regard to case |
+| `DateTime`, `DateTimeOffset`, `DateOnly`, `TimeOnly` | `TDateTime` | Delphi has **one**, so "date only" and "time only" are not declarable. Read as ISO 8601 and nothing else — divergence 3 below |
+| `Guid` | `TGUID` | direct, and the braces are optional |
+| `FileInfo`, `DirectoryInfo`, `FileSystemInfo` | `string` + `AcceptExistingOnly` | here a path is text; what those types contributed was the validation, and the validation is what gets ported |
+| arrays and lists | `TArray<T>` | a declared collection derives `ZeroOrMore`, as in .NET |
+
+An enumerated type names its own accepted values, so they appear in the help and in the error without
+anybody writing them twice — and they are matched without regard to case, as in .NET.
+`.AcceptOnly([...])` is the same closure for a type that does not express it.
 
 A `Boolean` option is a flag: naming it is enough, and `--flag false`, `--flag=false` and
 `--flag true` all work.
 
+A **collection** is one value made of the tokens it was given, so reading it answers the whole array:
+
+```pascal
+FilesOpt := CommandLine.Option<TArray<string>>('--files', 'Files to compile');
+// tool --files a.pas --files b.pas   ->  FilesOpt.ValueIn(Parsed) = ['a.pas', 'b.pas']
+```
+
+Its arity comes out of the type, so `ZeroOrMore` is not written by hand. Repeating the name is what
+fills it; `.AllowMultipleArgumentsPerToken` also allows `--files a.pas b.pas`.
+
 `--` ends the options: everything after it is a value, dashes and all. Without it a positional whose
 value is `--verbose` could not be passed at all.
+
+---
+
+## A type the engine does not know, and a validation it cannot express
+
+Two hooks, both declared **on the symbol** and nowhere else.
+
+### A conversion of its own
+
+Passed where the symbol is declared, because a symbol either knows how to convert its type or its
+declaration is refused on the spot:
+
+```pascal
+MinOpt := CommandLine.Option<TSemVer>('--min',
+  function(const Raw: string; out Value: TSemVer; out Error: string): Boolean
+  begin
+    Error := '';
+    Result := TSemVer.TryParse(Raw, Value);
+    if not Result then
+      Error := Format('"%s" is not a version: write it as major.minor.patch', [Raw]);
+  end,
+  'Lowest version accepted');
+```
+
+The refusal comes out through `ParseResult.Errors` like any other, so a type a third party added fails
+as well as one of serie. It also serves a type the engine already knows, for reading it some other way
+— hexadecimal into an `Integer`, say.
+
+**On the symbol and not in a registry of types**, deliberately: a registry makes it process-wide
+configuration, so two libraries declaring a conversion for the same type fight over it and the one
+that started last wins, in silence. On the symbol, its reach is exactly where it was written.
+
+The limit **moved but did not disappear**: a type the engine does not cover and for which no
+conversion is declared is still refused **at the declaration**, which is where whoever writes the
+grammar can act on it.
+
+### Validations
+
+A validation receives the value **already converted** and may refuse it. It runs **inside** the parse:
+
+```pascal
+CountOpt := CommandLine.Option<Integer>('--count', 'How many to make')
+  .Validate(
+  function(const Value: Integer; out Error: string): Boolean
+  begin
+    Result := Value > 0;
+    if not Result then
+      Error := Format('--count has to be greater than zero, and %d is not', [Value]);
+  end);
+```
+
+Inside, and not afterwards, for one reason: validating outside moves the failure to where it is no
+longer an invocation error, and the tool ends up reporting some failures one way and others another —
+whoever invoked it sees two lists instead of one.
+
+Several can be declared; the first refusal is the error for that value. A validation should be a pure
+question about the value.
+
+Two come as standard, written over that same hook rather than over a mechanism of their own:
+
+| | What it asks |
+|---|---|
+| `.AcceptExistingOnly` | the path exists, file or directory. ⚠️ **It asks the file system** — the conscious exception to a validation being pure, so parsing stops being free |
+| `.AcceptLegalFileNamesOnly` | it is a legal file name; the separators are refused too, because a name is not a path |
+
+Both apply to a path, which here is a `string` — including a `TArray<string>`, where they run per
+element. Declaring either on something that is not a path is refused at the declaration.
+
+⚠️ **A conversion or a validation of its own cannot be declared on a collection.** Both receive the
+value of **one** token, and for a collection that value is an element — which `T` cannot name, because
+Delphi has no way of saying "the element of `T`" in an interface. It is refused where it is declared
+rather than never run. Declare it on the element type, in a symbol of its own.
+
+---
+
+## A default value that is a calculation
+
+`WithDefault(Value)` takes a constant, evaluated when the grammar is declared. There is a computed
+form, evaluated **only if the invocation did not carry the symbol**:
+
+```pascal
+OutOpt := CommandLine.Option<string>('--out', 'Where to write')
+  .WithDefault(
+  function: string
+  begin
+    Result := TPath.GetTempPath;
+  end, 'a temporary directory');
+```
+
+A default that depends on the surroundings cannot be written as a constant in a grammar that runs
+before there is anything to know. Without this, the application leaves the default empty and fills it
+in after reading — and then the help shows a default the program does not use.
+
+The calculation runs at most once, and **the help does not run it**: it shows the text declared beside
+it, and no default at all when there is none. A calculation may open a file or read the environment,
+and the help has no way of knowing whether this one does; showing nothing beats inventing a value or
+paying for a side effect to paint a line.
+
+---
+
+## A symbol that does not appear in the help
+
+```pascal
+DiagOpt := CommandLine.Option<Integer>('--diag', 'Diagnostics level').Hidden;
+```
+
+It is what a diagnostic option, one in transition, or one only an internal script uses needs: to exist
+without being put in front of everybody who asks how the tool works. The alternatives were not
+declaring it — and then it does not work — or declaring it and accepting that it shows.
+
+Hiding is the **help's** business and nothing else. A hidden symbol is declared, parsed and read the
+same, and when it gets an invalid value the error **names it**: hiding it from the help is not hiding
+it from whoever is already using it, and an error that will not say what failed turns a mistake into a
+riddle.
 
 ---
 
@@ -288,14 +428,23 @@ that distinguished `--Out` from `--out` would surprise its own audience. The acc
 aliases differing only in case are the same alias, and a CLI where the case *is* the meaning — `git
 clean -x` against `-X` — cannot be expressed. Declare two options for that.
 
+**3 · A date is read as ISO 8601, and in no other way.** .NET's `DateTime` also takes the local
+convention. Here `--since 2026-08-25` works and `--since 25/08/2026` is refused, naming the option
+and the text. The cause: `01/02/2026` denotes two different days depending on who reads it, and a
+command line is not locale-dependent prose — it is what a script wrote down. The accepted cost:
+somebody typing by hand has to write the date the way the machine reads it. And since Delphi has a
+single date type, "only a date" and "only a time" are not declarable; whoever needs that bounds it
+with a validation.
+
 ---
 
 ## What is not here (yet)
 
 Nothing below changes the shape of the API, so all of it is additive:
 
-- **Types and validation** — the rest of what .NET binds (`Int64`, `DateTime`, `Guid`, `FileInfo`,
-  arrays), custom validators, custom parsers, and defaults computed by a lambda.
+- **The widths nobody has asked for yet** — `short`, `byte`, unsigned, and `Currency` as the
+  exact decimal. A type enters when somebody asks for it twice; until then a conversion of its own
+  covers it in one line.
 
 **There is no invocation, and that one is a decision rather than a gap.** `SetAction` / `Invoke` —
 dispatching to the leaf and running a handler — are deliberately out: that turns the library into the

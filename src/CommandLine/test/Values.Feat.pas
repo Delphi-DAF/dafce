@@ -31,6 +31,14 @@ type
     LevelOpt: IOption<TVerbosity>;
     ModeOpt: IOption<string>;
 
+    Checked: IRootCommand;
+    CountOpt: IOption<Integer>;
+    InputOpt: IOption<string>;
+
+    Computed: IRootCommand;
+    OutOpt: IOption<string>;
+    SeedOpt: IOption<Integer>;
+
     Escaped: IRootCommand;
     MsgArg: IArgument<string>;
     VerboseOpt: IOption<Boolean>;
@@ -42,10 +50,17 @@ type
     ReadFallback: string;
     ReadLevel: TVerbosity;
     ReadMsg: string;
+    ReadCount: Integer;
+    ReadInput: string;
+    ReadOut: string;
+    HelpText: string;
+    SeedDefault: string;
     procedure BuildArity;
     procedure BuildRequiredOptions;
     procedure BuildRequiredArgument;
     procedure BuildBounded;
+    procedure BuildChecked;
+    procedure BuildComputed;
     procedure BuildEscaped;
   end;
 
@@ -54,6 +69,12 @@ implementation
 uses
   System.SysUtils,
   Daf.MiniSpec;
+
+var
+  // How many times a computed default has run. A counter of the unit and not a field
+  // of the world: what has to be observed is that the calculation did NOT run, and a
+  // counter the closure reaches without capturing the world is the plainest way to.
+  DefaultRuns: Integer;
 
 { TValuesWorld }
 
@@ -88,6 +109,49 @@ begin
   ModeOpt := CommandLine.Option<string>('--mode', 'How to run').AcceptOnly(['fast', 'safe']);
   Bounded := CommandLine.Root('tool', 'A tool');
   Bounded.Add([LevelOpt, ModeOpt]);
+end;
+
+procedure TValuesWorld.BuildChecked;
+begin
+  // A validation runs INSIDE the parse, so a value the type admits and the application
+  // does not is an invocation error like any other (design D3).
+  CountOpt := CommandLine.Option<Integer>('--count', 'How many to make')
+    .Validate(
+    function(const Value: Integer; out Error: string): Boolean
+    begin
+      Result := Value > 0;
+      if not Result then
+        Error := Format('--count has to be greater than zero, and %d is not', [Value]);
+    end);
+  // Written over that same hook, not over a mechanism of its own. It does touch disk,
+  // which is the conscious exception to a validation being a pure question.
+  InputOpt := CommandLine.Option<string>('--in', 'Where to read from').AcceptExistingOnly;
+  Checked := CommandLine.Root('tool', 'A tool');
+  Checked.Add([CountOpt, InputOpt]);
+end;
+
+procedure TValuesWorld.BuildComputed;
+begin
+  DefaultRuns := 0;
+  // A default that depends on the surroundings cannot be written as a constant in the
+  // grammar, which runs before there is anything to know (design D4). The text next to
+  // it is what the help shows, because the help does NOT run the calculation.
+  OutOpt := CommandLine.Option<string>('--out', 'Where to write')
+    .WithDefault(
+    function: string
+    begin
+      Inc(DefaultRuns);
+      Result := 'computed-place';
+    end, 'the current directory');
+  SeedOpt := CommandLine.Option<Integer>('--seed', 'Starting point')
+    .WithDefault(
+    function: Integer
+    begin
+      Inc(DefaultRuns);
+      Result := 7;
+    end);
+  Computed := CommandLine.Root('tool', 'A tool');
+  Computed.Add([OutOpt, SeedOpt]);
 end;
 
 procedure TValuesWorld.BuildEscaped;
@@ -315,6 +379,160 @@ Feature Command line values @commandline @values
         Expect(W.Parsed.ErrorText).ToContain('turbo');
         Expect(W.Parsed.ErrorText).ToContain('fast');
         Expect(W.Parsed.ErrorText).ToContain('safe');
+      end)
+
+  .Scenario('A validation of its own that the type does not express')
+    .Given('an integer option with a validation demanding a value above zero',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildChecked;
+      end)
+    .When('the invocation passes a value the type admits and the validation does not',
+      procedure(W: TValuesWorld)
+      begin
+        // Two failures in one invocation, on purpose: one from the validation and one
+        // from the grammar. If they came out by different routes, only one would show.
+        W.Parsed := W.Checked.Parse(['--count', '-3', '--nope']);
+      end)
+    .&Then('the parse fails with the message the validation wrote',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Parsed.Succeeded).ToBeFalse;
+        Expect(W.Parsed.ErrorText).ToContain('greater than zero');
+      end)
+    .&And('it arrives by the same route as the rest of the invocation errors',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(Length(W.Parsed.Errors)).ToEqual(2);
+        Expect(W.Parsed.ErrorText).ToContain('--nope');
+      end)
+
+  .Scenario('A validation of its own that accepts the value')
+    .Given('an integer option with a validation demanding a value above zero',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildChecked;
+      end)
+    .When('the invocation passes a value the validation accepts',
+      procedure(W: TValuesWorld)
+      begin
+        W.Parsed := W.Checked.Parse(['--count', '3']);
+        W.ReadCount := W.CountOpt.ValueIn(W.Parsed);
+      end)
+    .&Then('the parse succeeds and the value is read',
+      procedure(W: TValuesWorld)
+      begin
+        // The control the refusing scenario needs: a validation that refused everything
+        // would leave that one green too.
+        Expect(W.Parsed.ErrorText).ToEqual('');
+        Expect(W.ReadCount).ToEqual(3);
+      end)
+
+  .Scenario('A path that has to exist')
+    .Given('a path option declared to accept only what exists',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildChecked;
+      end)
+    .When('the invocation passes a path that does not exist',
+      procedure(W: TValuesWorld)
+      begin
+        W.Parsed := W.Checked.Parse(['--in', 'no-such-file-anywhere.txt']);
+      end)
+    .&Then('the parse fails naming the option and the path',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Parsed.Succeeded).ToBeFalse;
+        Expect(W.Parsed.ErrorText).ToContain('--in');
+        Expect(W.Parsed.ErrorText).ToContain('no-such-file-anywhere.txt');
+      end)
+
+  .Scenario('A path that does exist')
+    .Given('a path option declared to accept only what exists',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildChecked;
+      end)
+    .When('the invocation passes a path that exists',
+      procedure(W: TValuesWorld)
+      begin
+        // The running executable, which exists by definition.
+        W.Parsed := W.Checked.Parse(['--in', ParamStr(0)]);
+        W.ReadInput := W.InputOpt.ValueIn(W.Parsed);
+      end)
+    .&Then('the parse succeeds and the path is read',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('');
+        Expect(W.ReadInput).ToEqual(ParamStr(0));
+      end)
+
+.Rule('a default value can be a calculation instead of a constant')
+
+  .Scenario('A computed default value')
+    .Given('an option whose default value is declared as a calculation',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildComputed;
+      end)
+    .When('an invocation that does not name it is parsed and read',
+      procedure(W: TValuesWorld)
+      begin
+        W.Parsed := W.Computed.Parse([]);
+        W.ReadOut := W.OutOpt.ValueIn(W.Parsed);
+      end)
+    .&Then('the value read is the one the calculation produced',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('');
+        Expect(W.ReadOut).ToEqual('computed-place');
+        Expect(DefaultRuns).ToEqual(1);
+      end)
+
+  .Scenario('The calculation does not run when the invocation brings the value')
+    .Given('an option whose default value is declared as a calculation',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildComputed;
+      end)
+    .When('an invocation that does name it is parsed and read',
+      procedure(W: TValuesWorld)
+      begin
+        W.Parsed := W.Computed.Parse(['--out', 'given']);
+        W.ReadOut := W.OutOpt.ValueIn(W.Parsed);
+      end)
+    .&Then('the value read is the invocation''s and the calculation never ran',
+      procedure(W: TValuesWorld)
+      begin
+        // The part that matters: a default that opens a file or reads the environment
+        // must not be paid for when nobody is going to use it.
+        Expect(W.ReadOut).ToEqual('given');
+        Expect(DefaultRuns).ToEqual(0);
+      end)
+
+  .Scenario('The help shows the text declared with the calculation, and does not run it')
+    .Given('an option with a computed default and a text declared beside it',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildComputed;
+      end)
+    .When('the help is asked for',
+      procedure(W: TValuesWorld)
+      begin
+        W.HelpText := W.Computed.HelpText;
+        // A calculation may have effects, and the help has no way of knowing whether
+        // this one does. So it shows the declared text, and nothing at all when there is
+        // none: no default line beats an invented one.
+        W.SeedDefault := 'not shown';
+        if W.HelpText.Contains('[default: 7]') then
+          W.SeedDefault := 'shown';
+      end)
+    .&Then('the declared text appears, the one with no text shows none, and nothing ran',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.HelpText).ToContain('[default: the current directory]');
+        Expect(W.SeedDefault).ToEqual('not shown');
+        Expect(DefaultRuns).ToEqual(0);
       end)
 
 .Rule('-- ends the options')

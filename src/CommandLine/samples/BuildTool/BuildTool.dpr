@@ -10,6 +10,7 @@
       |
       +-- build   (alias: b)                        only groups: not invocable itself
       |   +-- native <target>          --out        default bin\out.exe
+      |   |                            --min-sdk    a type of this program's own
       |   +-- web    <target>          --minify
       |
       +-- serve                        --port       default 8080
@@ -42,6 +43,18 @@ type
   /// <summary>An enumerated type already names its own values, so nobody repeats them.</summary>
   TVerbosity = (Quiet, Normal, Detailed);
 
+  /// <summary>
+  ///   A type the engine knows nothing about. It is here to show the way out: the
+  ///   conversion travels with the option, so nothing in DAF had to change to admit it.
+  /// </summary>
+  TSemVer = record
+    Major: Integer;
+    Minor: Integer;
+    Patch: Integer;
+    class function TryParse(const Raw: string; out Value: TSemVer): Boolean; static;
+    function ToString: string;
+  end;
+
   /// <summary>What to do once an invocation has reached a leaf.</summary>
   TLeafHandler = reference to procedure(const Parsed: ICommandLineParseResult);
 
@@ -67,6 +80,7 @@ type
     FMinify: IOption<Boolean>;
     FPort: IOption<Integer>;
     FLevel: IOption<TVerbosity>;
+    FMinSdk: IOption<TSemVer>;
     FTarget: IArgument<string>;
     // The module parses and hands back the leaf; DISPATCHING is the application's
     // job, on purpose -- invocation is an explicit non-goal, because a library that
@@ -87,6 +101,20 @@ type
     /// <summary>Walks a fixed set of invocations, including the ones that fail.</summary>
     procedure Demonstrate;
   end;
+
+class function TSemVer.TryParse(const Raw: string; out Value: TSemVer): Boolean;
+var
+  Parts: TArray<string>;
+begin
+  Parts := Raw.Split(['.']);
+  Result := (Length(Parts) = 3) and TryStrToInt(Parts[0], Value.Major) and
+    TryStrToInt(Parts[1], Value.Minor) and TryStrToInt(Parts[2], Value.Patch);
+end;
+
+function TSemVer.ToString: string;
+begin
+  Result := Format('%d.%d.%d', [Major, Minor, Patch]);
+end;
 
 constructor TBuildTool.Create;
 begin
@@ -110,6 +138,18 @@ begin
   // Nothing here lists the accepted values: the enumerated type does it, both in the
   // help and in the error when one is refused.
   FLevel := CommandLine.Option<TVerbosity>('--level', 'How much to say').WithDefault(TVerbosity.Normal);
+  // A type the engine does not know, made usable in ONE place. The conversion is passed
+  // where the option is declared, because a symbol either knows how to convert its type
+  // or its declaration is refused there and then.
+  FMinSdk := CommandLine.Option<TSemVer>('--min-sdk',
+    function(const Raw: string; out Value: TSemVer; out Error: string): Boolean
+    begin
+      Error := '';
+      Result := TSemVer.TryParse(Raw, Value);
+      if not Result then
+        Error := Format('"%s" is not a version: write it as major.minor.patch', [Raw]);
+    end,
+    'Lowest SDK this build targets');
   FTarget := CommandLine.Argument<string>('target', 'The project to build');
 
   // Everything below is Add, and no two calls add the same KIND of thing. Worth
@@ -118,7 +158,7 @@ begin
 
   // A LEAF: a positional argument plus its own options. The same FTarget object
   // serves both leaves -- only the leaf actually reached ever binds a value to it.
-  FNative := CommandLine.Command('native', 'Build a native binary').Add([FTarget, FOut]);
+  FNative := CommandLine.Command('native', 'Build a native binary').Add([FTarget, FOut, FMinSdk]);
   FWeb := CommandLine.Command('web', 'Build for the browser').Add([FTarget, FMinify]);
   FServe := CommandLine.Command('serve', 'Serve what was built').Add([FPort, FLevel]);
 
@@ -182,6 +222,10 @@ procedure TBuildTool.ReportNative(const Parsed: ICommandLineParseResult);
 begin
   // A string, statically. Reading it into an Integer would not compile.
   Writeln('  out     : ', FOut.ValueIn(Parsed));
+  // And a type of this program's own, read as that type: no TValue, no cast, no name
+  // written twice. What the declared conversion produced is what comes back.
+  if Parsed.WasProvided(FMinSdk) then
+    Writeln('  min-sdk : ', FMinSdk.ValueIn(Parsed).ToString);
 end;
 
 procedure TBuildTool.ReportWeb(const Parsed: ICommandLineParseResult);
@@ -247,6 +291,11 @@ begin
   Run(['build', 'native']);
   // The enumerated type refuses what is not one of its values, and says which are.
   Run(['serve', '--level', 'shouting']);
+  // A type of this program's own, read through the conversion declared beside it.
+  Run(['build', 'native', 'app.dpr', '--min-sdk', '11.4.2']);
+  // And refused by that same conversion, with the message the conversion wrote. The
+  // refusal comes out through Errors, like every other invalid invocation.
+  Run(['build', 'native', 'app.dpr', '--min-sdk', '11.4']);
   // The same invocation, written the three other ways the grammar admits. None of them
   // says anything the forms above do not: that is the point of admitting them.
   Run(['serve', '--port:9090']);
