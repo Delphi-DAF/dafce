@@ -22,25 +22,52 @@ Alternatively, add the `src/[Module]/` paths you need directly to your project's
 
 ## Your first DAF application
 
-The minimal entry point uses the **Hosting** + **DependencyInjection** modules:
+This is the `QuickStart` sample, verbatim — it is the file the compiler reads, and a check
+compares the two, so what you copy from here is what builds:
+
+<!-- quickstart: src/Application/samples/QuickStart/QuickStart.dpr -->
 
 ```pascal
-program MyApp;
+program QuickStart;
+
+{$APPTYPE CONSOLE}
+{$STRONGLINKTYPES ON}
 
 uses
-  Daf.Application.Builder;
+  System.SysUtils,
+  Daf.Extensions.DependencyInjection,
+  Daf.Extensions.Hosting,
+  Daf.Application.Builder,
+  QuickStart.Greeter in 'QuickStart.Greeter.pas';
 
 begin
-  TDafApplicationBuilder
-    .Create
-    .ConfigureServices(procedure(Services: IServiceCollection)
+  var Builder := TDafApplication.CreateHostBuilder;
+
+  Builder.ConfigureServices(
+    procedure(Context: IHostBuilderContext; Services: IServiceCollection)
     begin
-      Services.AddSingleton<IMyService, TMyServiceImpl>;
-    end)
-    .Build
-    .Run;
+      Services.AddSingleton<IGreeter, TGreeter>;
+    end);
+
+  Builder.Build.Run(
+    procedure(Services: IServiceProvider)
+    begin
+      Writeln(Services.GetRequiredService<IGreeter>.Greet);
+    end);
 end.
 ```
+
+Two things about the shape, both of them easy to get wrong:
+
+- The builder is held in a variable of its **own class**, not chained. `ConfigureServices` and
+  friends return an `IHostBuilder`, whose `Build` gives you an `IHost` — the plain host, not the
+  application. `TDafApplicationBuilder.Build` is the one that returns an `IDafApplication`.
+- The service lives in its own unit. A type declared in the `.dpr` is not in the `interface`
+  section of any unit, and resolving it fails at run time with `ENonPublicType`.
+
+There is a second, lower-level entry point — `THostBuilder` from the **Hosting** module — for when
+you want the host without the application layer around it. The
+[Application guide](../modules/application-guide.qmd) says what each one gives you.
 
 ## Module map
 

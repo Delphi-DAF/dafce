@@ -11,30 +11,50 @@ Top-level entry point for DAFce applications. `TDafApplication` wraps the generi
 
 ## Quick Start
 
+This is the [`QuickStart` sample](samples/QuickStart/), verbatim. `eng/check-quickstart-snippet.py`
+compares the two, so what you copy from here is what the compiler reads:
+
+<!-- quickstart: src/Application/samples/QuickStart/QuickStart.dpr -->
+
 ```pascal
-program MyApp;
+program QuickStart;
+
+{$APPTYPE CONSOLE}
+{$STRONGLINKTYPES ON}
 
 uses
-  Daf.Application.Builder;
+  System.SysUtils,
+  Daf.Extensions.DependencyInjection,
+  Daf.Extensions.Hosting,
+  Daf.Application.Builder,
+  QuickStart.Greeter in 'QuickStart.Greeter.pas';
 
 begin
-  TDafApplication
-    .CreateHostBuilder(ParamStr(0))
-    .ConfigureServices(
-      procedure(Services: IServiceCollection)
-      begin
-        Services.AddTransient<IMyService, TMyService>;
-      end)
-    .Build
-    .Run;
+  var Builder := TDafApplication.CreateHostBuilder;
+
+  Builder.ConfigureServices(
+    procedure(Context: IHostBuilderContext; Services: IServiceCollection)
+    begin
+      Services.AddSingleton<IGreeter, TGreeter>;
+    end);
+
+  Builder.Build.Run(
+    procedure(Services: IServiceProvider)
+    begin
+      Writeln(Services.GetRequiredService<IGreeter>.Greet);
+    end);
 end.
 ```
+
+The builder is held in a variable of its **own class**, not chained: `ConfigureServices` returns an
+`IHostBuilder`, whose `Build` gives an `IHost` rather than the application.
 
 ---
 
 ## Subclass pattern
 
-Override `Execute` to write imperative startup logic:
+Override `Execute` to write imperative startup logic. `CreateHostBuilder` takes the class it is
+called on, so calling it on your own class is what makes `Build` instantiate it:
 
 ```pascal
 type
@@ -45,16 +65,23 @@ type
 
 procedure TMyApp.Execute;
 begin
-  Logger.LogInformation('App running, version {V}', [VersionInfo.Tag]);
-  // … long-running work or RunAsync
+  // Services, Configuration and Environment are the application's own properties.
+  // There is no inherited Logger: resolve one.
+  var Logger := Services.GetRequiredService<ILoggerFactory>.CreateLogger('MyApp');
+  Logger.LogInformation('running version {V}', [VersionInfo.Tag]);
 end;
+
+// TMyApp, not TDafApplication: that is what picks the class Build creates.
+var Builder := TMyApp.CreateHostBuilder;
+Builder.Build.Run;
 ```
 
 ---
 
 ## Version information
 
-Each application carries a `TVersionInfo` record populated at compile time:
+`VersionInfo` comes from a `[Version]` attribute on the application class, read by RTTI —
+without that attribute the record is empty:
 
 ```pascal
 var V := TDafApplication.App.VersionInfo;

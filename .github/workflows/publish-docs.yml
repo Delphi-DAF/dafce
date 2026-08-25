@@ -11,6 +11,9 @@ on:
       # The dependency graph is generated from the requires clauses, so a package
       # rewiring changes the site without any docs/ file being touched.
       - 'src/**/*.dpk'
+      # The quick-start block is a verbatim copy of this sample, so the sample changing
+      # makes the site stale without any document being edited.
+      - 'src/Application/samples/QuickStart/**'
   workflow_dispatch:
 
 permissions:
@@ -33,6 +36,9 @@ jobs:
       # packages: a stale diagram still renders, so nothing else would catch it.
       - name: Check the dependency graph is up to date
         run: python3 docs/_gen/module-graph.py --check
+
+      - name: Check the documented startup is the compiled one
+        run: python3 eng/check-quickstart-snippet.py
 
       - name: Setup Quarto
         uses: quarto-dev/quarto-actions/setup@v2

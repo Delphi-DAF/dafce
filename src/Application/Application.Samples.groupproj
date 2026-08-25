@@ -3,10 +3,10 @@
         <ProjectGuid>{F6789012-CDEF-1234-5678-90ABCDEF1234}</ProjectGuid>
     </PropertyGroup>
     <ItemGroup>
-        <Projects Include="samples\ConsoleSample\ConsoleSample.dproj">
+        <Projects Include="samples\HostedService\HostedService.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="samples\HostedService\HostedService.dproj">
+        <Projects Include="samples\QuickStart\QuickStart.dproj">
             <Dependencies/>
         </Projects>
     </ItemGroup>
@@ -17,15 +17,6 @@
             <Default.Personality/>
         </BorlandProject>
     </ProjectExtensions>
-    <Target Name="ConsoleSample">
-        <MSBuild Projects="samples\ConsoleSample\ConsoleSample.dproj"/>
-    </Target>
-    <Target Name="ConsoleSample:Clean">
-        <MSBuild Projects="samples\ConsoleSample\ConsoleSample.dproj" Targets="Clean"/>
-    </Target>
-    <Target Name="ConsoleSample:Make">
-        <MSBuild Projects="samples\ConsoleSample\ConsoleSample.dproj" Targets="Make"/>
-    </Target>
     <Target Name="HostedService">
         <MSBuild Projects="samples\HostedService\HostedService.dproj"/>
     </Target>
@@ -35,14 +26,23 @@
     <Target Name="HostedService:Make">
         <MSBuild Projects="samples\HostedService\HostedService.dproj" Targets="Make"/>
     </Target>
+    <Target Name="QuickStart">
+        <MSBuild Projects="samples\QuickStart\QuickStart.dproj"/>
+    </Target>
+    <Target Name="QuickStart:Clean">
+        <MSBuild Projects="samples\QuickStart\QuickStart.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="QuickStart:Make">
+        <MSBuild Projects="samples\QuickStart\QuickStart.dproj" Targets="Make"/>
+    </Target>
     <Target Name="Build">
-        <CallTarget Targets="ConsoleSample;HostedService"/>
+        <CallTarget Targets="HostedService;QuickStart"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="ConsoleSample:Clean;HostedService:Clean"/>
+        <CallTarget Targets="HostedService:Clean;QuickStart:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="ConsoleSample:Make;HostedService:Make"/>
+        <CallTarget Targets="HostedService:Make;QuickStart:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

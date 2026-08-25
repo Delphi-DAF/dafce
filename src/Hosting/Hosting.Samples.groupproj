@@ -6,6 +6,9 @@
         <Projects Include="samples\PackageInit\PackageInit.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="samples\ConsoleSample\ConsoleSample.dproj">
+            <Dependencies/>
+        </Projects>
     </ItemGroup>
     <ProjectExtensions>
         <Borland.Personality>Default.Personality.12</Borland.Personality>
@@ -23,14 +26,23 @@
     <Target Name="PackageInit:Make">
         <MSBuild Projects="samples\PackageInit\PackageInit.dproj" Targets="Make"/>
     </Target>
+    <Target Name="ConsoleSample">
+        <MSBuild Projects="samples\ConsoleSample\ConsoleSample.dproj"/>
+    </Target>
+    <Target Name="ConsoleSample:Clean">
+        <MSBuild Projects="samples\ConsoleSample\ConsoleSample.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="ConsoleSample:Make">
+        <MSBuild Projects="samples\ConsoleSample\ConsoleSample.dproj" Targets="Make"/>
+    </Target>
     <Target Name="Build">
-        <CallTarget Targets="PackageInit"/>
+        <CallTarget Targets="PackageInit;ConsoleSample"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="PackageInit:Clean"/>
+        <CallTarget Targets="PackageInit:Clean;ConsoleSample:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="PackageInit:Make"/>
+        <CallTarget Targets="PackageInit:Make;ConsoleSample:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

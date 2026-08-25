@@ -1,0 +1,38 @@
+name: Doc snippets
+
+# The startup snippet in the docs was wrong for months, in four spellings, two of which did not
+# compile -- including the one on the public getting-started page. Nothing caught it because a
+# fenced block is read by no compiler: "the docs describe an API that does not exist" and "the docs
+# are fine" printed the same green. This gates the one thing that closes the gap -- the block being
+# a verbatim copy of a file that is built.
+#
+# Triggers on the sources too, not only the documents: the usual way this breaks is the sample
+# changing while the document stays as it was, and that touches no .md at all.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'docs/**'
+      - '**/*.md'
+      - '**/*.qmd'
+      - 'eng/check-quickstart-snippet.py'
+      - '.github/workflows/docs-snippets.yml'
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'docs/**'
+      - '**/*.md'
+      - '**/*.qmd'
+      - 'eng/check-quickstart-snippet.py'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check the documented startup is the compiled one
+        run: python3 eng/check-quickstart-snippet.py

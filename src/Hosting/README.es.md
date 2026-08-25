@@ -124,20 +124,24 @@ Lifetime.StopApplication;
 
 ## Usando TDafApplication (módulo Application)
 
-Para apps de consola, el módulo `Application` ofrece un wrapper de más alto nivel:
+Para un programa con línea principal, el módulo `Application` envuelve este pipeline y añade `Run`,
+metadatos de versión y un acceso global. Fíjate en que el builder se sostiene en una variable **de
+su propia clase**: `ConfigureServices` devuelve un `IHostBuilder`, cuyo `Build` da un `IHost`, y un
+`IHost` no tiene `Run` — encadenarlo todo en cascada no compila.
 
 ```pascal
-uses DAF.Application.Builder;
+uses Daf.Application.Builder;
 
-TDafApplication.CreateHostBuilder
-  .ConfigureServices(procedure(Context: IHostBuilderContext;
-                               Services: IServiceCollection)
+var Builder := TDafApplication.CreateHostBuilder;
+
+Builder.ConfigureServices(
+  procedure(Context: IHostBuilderContext; Services: IServiceCollection)
   begin
     Services.AddSingleton<IMyService, TMyService>;
     Services.AddHostedService<TMyWorker>;
-  end)
-  .Build
-  .Run;
+  end);
+
+Builder.Build.Run(True);
 ```
 
 Consulta [Application](../Application/README.es.md) para la documentación completa del módulo Application.

@@ -124,20 +124,24 @@ Lifetime.StopApplication;
 
 ## Using TDafApplication (Application module)
 
-For console apps, the `Application` module provides a higher-level wrapper:
+For a program with a main line, the `Application` module wraps this pipeline and adds `Run`,
+version metadata and a global accessor. Note that the builder is held in a variable **of its own
+class**: `ConfigureServices` returns an `IHostBuilder`, whose `Build` gives an `IHost`, and an
+`IHost` has no `Run` — chaining the whole thing fluently does not compile.
 
 ```pascal
-uses DAF.Application.Builder;
+uses Daf.Application.Builder;
 
-TDafApplication.CreateHostBuilder
-  .ConfigureServices(procedure(Context: IHostBuilderContext;
-                               Services: IServiceCollection)
+var Builder := TDafApplication.CreateHostBuilder;
+
+Builder.ConfigureServices(
+  procedure(Context: IHostBuilderContext; Services: IServiceCollection)
   begin
     Services.AddSingleton<IMyService, TMyService>;
     Services.AddHostedService<TMyWorker>;
-  end)
-  .Build
-  .Run;
+  end);
+
+Builder.Build.Run(True);
 ```
 
 See [Application](../Application/README.md) for the full Application module docs.
