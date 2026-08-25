@@ -142,7 +142,8 @@ fechas, identificadores y rutas.
 | `System.CommandLine` | Aquí | Por qué |
 |---|---|---|
 | `int`, `long`, `short`, `byte` y sin signo | `Integer`, `Int64` | los dos que cubren el uso real; otro ancho entra cuando alguien lo pida dos veces |
-| `float`, `double`, `decimal` | `Double` | `Currency` sería el decimal exacto, y no hay ningún caso que lo pida |
+| `float`, `double` | `Double` | un flotante binario, que es lo que son una proporción o un umbral |
+| `decimal` | `Currency` | el decimal exacto: un importe escrito con hasta cuatro decimales vuelve con esos cuatro, y no redondea por su cuenta |
 | `bool` | `Boolean` | es el flag: basta con nombrarlo |
 | enums | tipos enumerados | el tipo nombra sus valores, y se comparan sin distinguir mayúsculas |
 | `DateTime`, `DateTimeOffset`, `DateOnly`, `TimeOnly` | `TDateTime` | Delphi tiene **uno**, así que «solo fecha» y «solo hora» no son declarables. Se lee en ISO 8601 y en nada más — divergencia 3, más abajo |
@@ -444,9 +445,8 @@ fecha, «solo fecha» y «solo hora» no son declarables; quien lo necesite lo a
 
 Nada de lo de abajo cambia la forma del API, así que todo es aditivo:
 
-- **Los anchos que nadie ha pedido todavía** — `short`, `byte`, sin signo, y `Currency` como el
-  decimal exacto. Un tipo entra cuando alguien lo pide dos veces; hasta entonces una conversión
-  propia lo cubre en una línea.
+- **Los anchos que nadie ha pedido todavía** — `short`, `byte` y los sin signo. Un tipo entra cuando
+  alguien lo pide; hasta entonces una conversión propia lo cubre en una línea.
 
 **No hay invocación, y esa sí es una decisión y no un hueco.** `SetAction` / `Invoke` —despachar a la
 hoja y ejecutar su handler— quedan fuera a propósito: eso convierte la librería en el runner de la

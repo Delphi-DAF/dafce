@@ -28,6 +28,7 @@ type
     SinceOpt: IOption<TDateTime>;
     IdOpt: IOption<TGUID>;
     BytesOpt: IOption<Int64>;
+    PriceOpt: IOption<Currency>;
 
     Many: IRootCommand;
     FilesOpt: IOption<TArray<string>>;
@@ -37,6 +38,7 @@ type
     ReadSince: TDateTime;
     ReadId: TGUID;
     ReadBytes: Int64;
+    ReadPrice: Currency;
     ReadFiles: TArray<string>;
     procedure BuildOwnType;
     procedure BuildWideTypes;
@@ -56,8 +58,9 @@ begin
   SinceOpt := CommandLine.Option<TDateTime>('--since', 'Oldest date considered');
   IdOpt := CommandLine.Option<TGUID>('--id', 'Which run');
   BytesOpt := CommandLine.Option<Int64>('--bytes', 'How many bytes at most');
+  PriceOpt := CommandLine.Option<Currency>('--price', 'What it costs');
   Wide := CommandLine.Root('tool', 'A tool');
-  Wide.Add([SinceOpt, IdOpt, BytesOpt]);
+  Wide.Add([SinceOpt, IdOpt, BytesOpt, PriceOpt]);
 end;
 
 procedure TTypesWorld.BuildCollection;
@@ -253,6 +256,47 @@ Feature Command line types @commandline @types
       begin
         Expect(W.Parsed.ErrorText).ToEqual('');
         Expect(IntToStr(W.ReadBytes)).ToEqual('5000000000');
+      end)
+
+  .Scenario('An exact decimal amount')
+    .Given('an option declared with the exact decimal type',
+      procedure(W: TTypesWorld)
+      begin
+        W.BuildWideTypes;
+      end)
+    .When('the invocation passes an amount with four decimals',
+      procedure(W: TTypesWorld)
+      begin
+        W.Parsed := W.Wide.Parse(['--price', '1234.5678']);
+        W.ReadPrice := W.PriceOpt.ValueIn(W.Parsed);
+      end)
+    .&Then('every decimal comes back, with no rounding of its own',
+      procedure(W: TTypesWorld)
+      begin
+        // Rendered rather than compared to a literal: an assertion that printed nothing
+        // would not say WHICH digit was lost, and losing one is the whole point of using
+        // the exact decimal instead of a binary float.
+        Expect(W.Parsed.ErrorText).ToEqual('');
+        Expect(CurrToStrF(W.ReadPrice, ffFixed, 4, TFormatSettings.Invariant)).ToEqual('1234.5678');
+      end)
+
+  .Scenario('An amount that is not one')
+    .Given('an option declared with the exact decimal type',
+      procedure(W: TTypesWorld)
+      begin
+        W.BuildWideTypes;
+      end)
+    .When('the invocation passes something that is not an amount',
+      procedure(W: TTypesWorld)
+      begin
+        W.Parsed := W.Wide.Parse(['--price', '12.34.56']);
+      end)
+    .&Then('the parse fails naming the option and the text received',
+      procedure(W: TTypesWorld)
+      begin
+        Expect(W.Parsed.Succeeded).ToBeFalse;
+        Expect(W.Parsed.ErrorText).ToContain('--price');
+        Expect(W.Parsed.ErrorText).ToContain('12.34.56');
       end)
 
 .Rule('a type with neither support nor a conversion is refused where it is declared')

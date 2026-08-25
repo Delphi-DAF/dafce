@@ -141,7 +141,8 @@ paths.
 | `System.CommandLine` | Here | Why |
 |---|---|---|
 | `int`, `long`, `short`, `byte` and unsigned | `Integer`, `Int64` | the two that cover the real use; another width enters when somebody asks for it twice |
-| `float`, `double`, `decimal` | `Double` | `Currency` would be the exact decimal, and no case has asked for it |
+| `float`, `double` | `Double` | a binary float, which is what a ratio or a threshold is |
+| `decimal` | `Currency` | the exact decimal: an amount written with up to four decimals comes back with those four, and does not round on its own |
 | `bool` | `Boolean` | it is the flag: naming it is enough |
 | enums | enumerated types | the type names its own values, matched without regard to case |
 | `DateTime`, `DateTimeOffset`, `DateOnly`, `TimeOnly` | `TDateTime` | Delphi has **one**, so "date only" and "time only" are not declarable. Read as ISO 8601 and nothing else — divergence 3 below |
@@ -442,9 +443,8 @@ with a validation.
 
 Nothing below changes the shape of the API, so all of it is additive:
 
-- **The widths nobody has asked for yet** — `short`, `byte`, unsigned, and `Currency` as the
-  exact decimal. A type enters when somebody asks for it twice; until then a conversion of its own
-  covers it in one line.
+- **The widths nobody has asked for yet** — `short`, `byte` and the unsigned ones. A type enters when
+  somebody asks for it; until then a conversion of its own covers it in one line.
 
 **There is no invocation, and that one is a decision rather than a gap.** `SetAction` / `Invoke` —
 dispatching to the leaf and running a handler — are deliberately out: that turns the library into the

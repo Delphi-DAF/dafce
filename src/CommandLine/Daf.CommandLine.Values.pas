@@ -125,8 +125,9 @@ begin
   // their own, and TDateTime covers what interested them -- a declared divergence.
   Result := (TypeInf = System.TypeInfo(string)) or (TypeInf = System.TypeInfo(Integer)) or
     (TypeInf = System.TypeInfo(Int64)) or (TypeInf = System.TypeInfo(Boolean)) or
-    (TypeInf = System.TypeInfo(Double)) or (TypeInf = System.TypeInfo(TDateTime)) or
-    (TypeInf = System.TypeInfo(TGUID)) or IsEnum(TypeInf) or IsCollection(TypeInf);
+    (TypeInf = System.TypeInfo(Double)) or (TypeInf = System.TypeInfo(Currency)) or
+    (TypeInf = System.TypeInfo(TDateTime)) or (TypeInf = System.TypeInfo(TGUID)) or
+    IsEnum(TypeInf) or IsCollection(TypeInf);
 end;
 
 class function TCommandLineValue.AcceptedValuesOf(TypeInf: PTypeInfo): TArray<string>;
@@ -157,6 +158,10 @@ begin
     Result := 'boolean'
   else if TypeInf = System.TypeInfo(Double) then
     Result := 'number'
+  else if TypeInf = System.TypeInfo(Currency) then
+    // .NET calls it decimal, and so does the help: what tells it from 'number' is that
+    // it does not round on its own, which is the only reason to choose it.
+    Result := 'decimal'
   else if TypeInf = System.TypeInfo(TDateTime) then
     Result := 'date'
   else if TypeInf = System.TypeInfo(TGUID) then
@@ -206,6 +211,7 @@ var
   IntValue: Integer;
   BigValue: Int64;
   FloatValue: Double;
+  CurrValue: Currency;
   DateValue: TDateTime;
   GuidValue: TGUID;
   Data: PTypeData;
@@ -260,6 +266,17 @@ begin
     if not TryStrToFloat(Raw, FloatValue, InvariantSettings) then
       Exit(False);
     Value := TValue.From<Double>(FloatValue);
+    Exit(True);
+  end;
+
+  if TypeInf = System.TypeInfo(Currency) then
+  begin
+    // The exact decimal: a scaled 64-bit integer, so an amount written with up to four
+    // decimals comes back with those four and no binary rounding of its own. That is the
+    // whole reason to declare it instead of Double.
+    if not TryStrToCurr(Raw, CurrValue, InvariantSettings) then
+      Exit(False);
+    Value := TValue.From<Currency>(CurrValue);
     Exit(True);
   end;
 
