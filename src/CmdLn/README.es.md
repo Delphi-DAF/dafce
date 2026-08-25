@@ -12,9 +12,10 @@ sale de esa declaración en vez de recorrer `ParamStr` a mano.
 
 ## ⚠️ Este módulo está congelado
 
-`Daf.CmdLn` funciona y sus specs pasan, pero **no va a recibir funcionalidad nueva**. Está previsto
-sustituirlo por un porting de `System.CommandLine` de .NET —la librería que usa el propio `dotnet`
-CLI— y retirarlo cuando el sustituto cubra su terreno.
+`Daf.CmdLn` funciona y sus specs pasan, pero **no va a recibir funcionalidad nueva**. Su sustituto
+ya existe y se llama [`Daf.CommandLine`](../CommandLine/README.es.md): un porting de
+`System.CommandLine` de .NET, la librería que usa el propio `dotnet` CLI. **Empieza por ahí**; este
+módulo se retira en el próximo major.
 
 El motivo es la forma del API, no una carencia concreta. En `System.CommandLine` el objeto que
 declaras **es** la llave con la que lees el valor, así que un nombre nunca se escribe dos veces.
@@ -23,7 +24,7 @@ errata devuelve un valor vacío, no un error. Cambiar eso tocaría el corazón d
 gramática, así que se sustituye en vez de ampliarse.
 
 Tampoco están, ni se van a añadir aquí: ayuda generada, argumentos posicionales, opciones heredadas
-por los subcomandos y alias de comando.
+por los subcomandos y alias de comando. `Daf.CommandLine` tiene las cuatro.
 
 **Limitaciones conocidas**, que se quedan por el mismo motivo:
 
@@ -31,7 +32,11 @@ por los subcomandos y alias de comando.
   un número negativo**.
 - Los patrones se anclan al principio pero no al final, así que `--port 80xyz` se acepta como `80`.
 
-Si vas a empezar una aplicación de línea de comandos nueva, tenlo en cuenta antes de adoptarlo.
+Las dos están resueltas en `Daf.CommandLine`, que no hereda este motor.
+
+Si vas a empezar una aplicación de línea de comandos nueva, usa
+[`Daf.CommandLine`](../CommandLine/README.es.md). No hay capa de adaptación ni migración automática
+entre los dos: son APIs distintas a propósito.
 
 ---
 

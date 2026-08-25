@@ -12,9 +12,10 @@ invocation against that declaration instead of walking `ParamStr` by hand.
 
 ## ⚠️ This module is feature-frozen
 
-`Daf.CmdLn` still works and its specs pass, but **no new features will be added to it**. It is
-scheduled to be replaced by a port of .NET's `System.CommandLine` — the library the `dotnet` CLI
-itself uses — and retired once the replacement covers its ground.
+`Daf.CmdLn` still works and its specs pass, but **no new features will be added to it**. Its
+replacement exists and is named [`Daf.CommandLine`](../CommandLine/README.md) — a port of .NET's
+`System.CommandLine`, the library the `dotnet` CLI itself uses. **Start there instead**; this module
+is retired in the next major.
 
 The reason is the shape of the API rather than any missing piece. In `System.CommandLine` the option
 object you declare *is* the key you read the value with, so a name is never spelled twice. Here you
@@ -23,14 +24,18 @@ a typo yields an empty value, not an error. Retrofitting that would touch the co
 is consumed, so it is being replaced rather than extended.
 
 Also missing, and not planned here: generated help, positional arguments, options inherited by
-subcommands, and command aliases.
+subcommands, and command aliases. `Daf.CommandLine` has all four.
 
 **Known limitations**, left as they are for the same reason:
 
 - Integer and float arguments match unsigned patterns, so a **negative number cannot be passed**.
 - Patterns are anchored at the start but not at the end, so `--port 80xyz` is accepted as `80`.
 
-If you are starting a new command-line application, weigh this before adopting the module.
+Both are fixed in `Daf.CommandLine`, which does not inherit this engine.
+
+If you are starting a new command-line application, use
+[`Daf.CommandLine`](../CommandLine/README.md). There is no adapter and no automatic migration between
+the two: they are different APIs on purpose.
 
 ---
 
