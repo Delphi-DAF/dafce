@@ -2,12 +2,13 @@
 
 Read from the `requires` clause of every `.dpk`, so it cannot drift from the packages. Arrows read *requires*.
 
-**24 packages**, **31 real edges** between them, **19** more declared but already implied by another path, **0** cycles.
+**25 packages**, **32 real edges** between them, **19** more declared but already implied by another path, **0** cycles.
 
 ```{mermaid}
 graph TD
   Application[Application]
   CmdLn[CmdLn]
+  CommandLine[CommandLine]
   Commons[Commons]
   Configuration[Configuration]
   ConfigurationAbstractions[Configuration.Abstractions]
@@ -37,6 +38,7 @@ graph TD
   RTinetstn[("inetstn")]
   Application --> Hosting
   CmdLn --> Commons
+  CommandLine --> Commons
   Configuration --> ConfigurationAbstractions
   ConfigurationAbstractions --> Commons
   DependencyInjection --> DependencyInjectionAbstractions
@@ -79,7 +81,7 @@ graph TD
   class RTIndy,RTRESTComponents,RTfmx,RTinet,RTinetstn rt;
 ```
 
-Drawn as a transitive reduction: only the edges that do not already arrive by another path. `rtl` is left out because all 24 packages require it; the third-party runtimes are drawn one node per family — Indy, RESTComponents, fmx, inet and inetstn — with the real names in the label.
+Drawn as a transitive reduction: only the edges that do not already arrive by another path. `rtl` is left out because all 25 packages require it; the third-party runtimes are drawn one node per family — Indy, RESTComponents, fmx, inet and inetstn — with the real names in the label.
 
 Dotted border marks a contract package (`.Abstractions`); the dashed rounded nodes are third-party runtimes.
 
@@ -89,6 +91,7 @@ Installable on their own, with no dependency on another DAF package: `Commons`, 
 |---|---|
 | `Application` | `rtl` |
 | `CmdLn` | `rtl` |
+| `CommandLine` | `rtl` |
 | `Commons` | `rtl` |
 | `Configuration` | `rtl` |
 | `Configuration.Abstractions` | `rtl` |
@@ -112,4 +115,4 @@ Installable on their own, with no dependency on another DAF package: `Commons`, 
 | `SystemProcess` | `rtl` |
 | `Web` | `IndyCore` · `IndyProtocols` · `IndySystem` · `RESTComponents` · `inet` · `inetstn` · `rtl` |
 
-20 of 24 need nothing beyond `rtl`.
+21 of 25 need nothing beyond `rtl`.

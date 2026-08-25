@@ -2,12 +2,13 @@
 
 Leído del `requires` de cada `.dpk`, así que no puede desviarse de los paquetes. Las flechas se leen *requiere*.
 
-**24 paquetes**, **31 aristas reales** entre ellos, **19** más declaradas pero ya implicadas por otro camino, **0** ciclos.
+**25 paquetes**, **32 aristas reales** entre ellos, **19** más declaradas pero ya implicadas por otro camino, **0** ciclos.
 
 ```{mermaid}
 graph TD
   Application[Application]
   CmdLn[CmdLn]
+  CommandLine[CommandLine]
   Commons[Commons]
   Configuration[Configuration]
   ConfigurationAbstractions[Configuration.Abstractions]
@@ -37,6 +38,7 @@ graph TD
   RTinetstn[("inetstn")]
   Application --> Hosting
   CmdLn --> Commons
+  CommandLine --> Commons
   Configuration --> ConfigurationAbstractions
   ConfigurationAbstractions --> Commons
   DependencyInjection --> DependencyInjectionAbstractions
@@ -79,7 +81,7 @@ graph TD
   class RTIndy,RTRESTComponents,RTfmx,RTinet,RTinetstn rt;
 ```
 
-Dibujado como reducción transitiva: solo las aristas que no llegan ya por otro camino. `rtl` no se dibuja porque lo requieren los 24 paquetes; los de los runtimes ajenos van en un nodo por familia —Indy, RESTComponents, fmx, inet y inetstn— con los nombres reales en la etiqueta.
+Dibujado como reducción transitiva: solo las aristas que no llegan ya por otro camino. `rtl` no se dibuja porque lo requieren los 25 paquetes; los de los runtimes ajenos van en un nodo por familia —Indy, RESTComponents, fmx, inet y inetstn— con los nombres reales en la etiqueta.
 
 El borde de puntos marca un paquete de contrato (`.Abstractions`); los nodos redondeados a trazos son runtimes ajenos.
 
@@ -89,6 +91,7 @@ Instalables solos, sin depender de ningún otro paquete de DAF: `Commons`, `Mini
 |---|---|
 | `Application` | `rtl` |
 | `CmdLn` | `rtl` |
+| `CommandLine` | `rtl` |
 | `Commons` | `rtl` |
 | `Configuration` | `rtl` |
 | `Configuration.Abstractions` | `rtl` |
@@ -112,4 +115,4 @@ Instalables solos, sin depender de ningún otro paquete de DAF: `Commons`, `Mini
 | `SystemProcess` | `rtl` |
 | `Web` | `IndyCore` · `IndyProtocols` · `IndySystem` · `RESTComponents` · `inet` · `inetstn` · `rtl` |
 
-20 de 24 no piden más que `rtl`.
+21 de 25 no piden más que `rtl`.
