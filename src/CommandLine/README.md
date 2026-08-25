@@ -462,9 +462,9 @@ value from `appsettings.json` — is a different job and belongs to
 [`Daf.Configuration.CommandLine`](../Configuration/README.md), the same way
 `Microsoft.Extensions.Configuration.CommandLine` does not use `System.CommandLine`.
 
-[`Daf.CmdLn`](../CmdLn/README.md) is the earlier, feature-frozen module this one replaces. There is
-no adapter between them and no automatic migration: they are different APIs on purpose, and a layer
-joining them would preserve precisely what is being replaced.
+`Daf.CmdLn` was the earlier module this one replaces. It was withdrawn in 2.0.0, with no adapter and
+no unit alias: they are different APIs on purpose, and a layer joining them would preserve precisely
+what was being replaced. `MIGRATION-2.0.md` has the two declarations side by side.
 
 ---
 

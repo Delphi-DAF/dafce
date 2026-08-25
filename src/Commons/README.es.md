@@ -65,13 +65,15 @@ Lo decide una pregunta: **¿esto extiende la biblioteca estándar, o es una util
 paquetes pisan éste, así que lo que una aplicación *usa* —en vez de lo que al lenguaje le *falta*—
 va en otro sitio; si no, quien quiere un puntero inteligente acaba enlazando un lanzador de procesos.
 
-Dos units salieron por esa regla. Ni sus nombres ni los de sus tipos han cambiado: basta añadir una
-referencia al paquete nuevo y las cláusulas `uses` existentes siguen compilando.
+Dos units salieron por esa regla. `Daf.SystemProcess` conserva los nombres de su unit y de sus
+tipos, así que basta añadir una referencia al paquete nuevo para que las cláusulas `uses`
+existentes sigan compilando. `Daf.CmdLn.Parser` salió también, y desde entonces se ha
+**retirado**: la línea de comandos es [`Daf.CommandLine`](../CommandLine/README.es.md), el porting
+de `System.CommandLine` de .NET.
 
 | Se mudó a | Qué hace |
 |---|---|
 | [`Daf.SystemProcess`](../SystemProcess/README.es.md) | `TSystemProcess` — runner de procesos externos asíncrono |
-| [`Daf.CmdLn`](../CmdLn/README.es.md) | `Daf.CmdLn.Parser` — gramática de línea de comandos |
 
 ---
 

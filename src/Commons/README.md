@@ -66,13 +66,14 @@ package stands on this one, so anything that is *used by* an application rather 
 the language belongs elsewhere — otherwise whoever wants a smart pointer ends up linking a process
 launcher too.
 
-Two units moved out under that rule. Their unit and type names did not change; add a reference to
-the new package and existing `uses` clauses keep compiling.
+Two units moved out under that rule. `Daf.SystemProcess` kept its unit and type names, so adding a
+reference to the new package is enough for existing `uses` clauses to keep compiling.
+`Daf.CmdLn.Parser` went out too and has since been **withdrawn**: the command line is
+[`Daf.CommandLine`](../CommandLine/README.md), a port of .NET's `System.CommandLine`.
 
 | Moved to | What it does |
 |---|---|
 | [`Daf.SystemProcess`](../SystemProcess/README.md) | `TSystemProcess` — async external process runner |
-| [`Daf.CmdLn`](../CmdLn/README.md) | `Daf.CmdLn.Parser` — command-line grammar |
 
 ---
 

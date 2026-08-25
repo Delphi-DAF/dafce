@@ -463,9 +463,10 @@ un valor de `appsettings.json`— es otro trabajo y pertenece a
 [`Daf.Configuration.CommandLine`](../Configuration/README.es.md), igual que
 `Microsoft.Extensions.Configuration.CommandLine` no usa `System.CommandLine`.
 
-[`Daf.CmdLn`](../CmdLn/README.es.md) es el módulo anterior, congelado, al que este sustituye. No hay
-capa de adaptación ni migración automática: son APIs distintas a propósito, y una capa que las uniera
-conservaría precisamente lo que se está sustituyendo.
+`Daf.CmdLn` era el módulo anterior al que este sustituye. Se retiró en 2.0.0, y no hay
+capa de adaptación ni alias de unidad: son APIs distintas a propósito, y una capa que las uniera
+conservaría precisamente lo que se estaba sustituyendo. `MIGRATION-2.0.es.md` lleva las dos
+declaraciones enfrentadas.
 
 ---
 

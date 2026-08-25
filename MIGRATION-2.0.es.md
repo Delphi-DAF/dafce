@@ -59,10 +59,106 @@ paquete propio, y hay que añadirlo a los `requires` del paquete que lo use:
 
 | Lo que usabas | Ahora vive en |
 |---|---|
-| `Daf.CmdLn.Parser` | paquete `Daf.CmdLn` |
+| `Daf.CmdLn.Parser` | a ningún sitio: retirado — ver la sección siguiente |
 | `Daf.SystemProcess` | paquete `Daf.SystemProcess` |
 
-### 3. Tipos de `Daf.Commons` renombrados o mudados
+### 3. `Daf.CmdLn.Parser` ya no está
+
+La unit que 1.6.0 traía dentro de `Daf.Commons` **ya no se distribuye**. Su sustituto es
+`Daf.CommandLine`, el porting de
+[`System.CommandLine`](https://learn.microsoft.com/dotnet/standard/commandline) de .NET
+—la librería sobre la que está construido el propio `dotnet` CLI—. **No hay adaptador ni alias de
+unidad**: son APIs distintas a propósito, y una capa que las uniera conservaría justo lo que se está
+sustituyendo.
+
+La misma gramática, declarada de las dos formas:
+
+```pascal
+// antes
+uses Daf.CmdLn.Parser;
+
+var Parser := TCmdLnParserBuilder.Create
+  .Arg<string>('file')
+  .Arg<Integer>('port')
+  .Arg<Boolean>('verbose')
+  .Build;
+
+var Params := Parser.Parse(GetCommandLine);
+if Params = nil then Exit;                    // nil era todo el parte de una invocación mala
+
+var FilePath  := Params['file'].AsString;     // 'file' escrito por segunda vez, sin comprobar
+var Port      := Params['port'].AsInteger;    // y el tipo elegido otra vez, en ejecución
+var IsVerbose := Params['verbose'].AsBoolean;
+```
+
+```pascal
+// ahora
+uses Daf.CommandLine;
+
+var FileOpt    := CommandLine.Option<string>('--file', 'Fichero a compilar');
+var PortOpt    := CommandLine.Option<Integer>('--port', 'Puerto en el que escuchar');
+var VerboseOpt := CommandLine.Option<Boolean>('--verbose', 'Contar más');
+
+var Root := CommandLine.Root('mytool', 'Una herramienta');
+Root.Add([FileOpt, PortOpt, VerboseOpt]);
+
+var Parsed := Root.Parse;                     // sin argumento: lee ParamStr
+if not Parsed.Succeeded then
+begin
+  Writeln(Parsed.ErrorText);                  // nombra la opción y el texto que recibió
+  Exit;
+end;
+
+var FilePath  := FileOpt.ValueIn(Parsed);     // un string, estáticamente
+var Port      := PortOpt.ValueIn(Parsed);     // un Integer, estáticamente
+var IsVerbose := VerboseOpt.ValueIn(Parsed);
+```
+
+**Dónde desaparece el nombre repetido.** A la izquierda, `'file'` se escribe una vez al declarar y
+otra al leer, y nadie comprueba que coincidan: una errata devuelve valor vacío, no un error. A la
+derecha el objeto de la opción **es** la llave, así que el nombre existe una sola vez y pedir uno que
+no se declaró no es representable. Leer un `IOption<Integer>` en un `string` es error **de
+compilación**, donde `AsInteger` era una decisión que se volvía a tomar en cada lectura.
+
+La parte mecánica, término a término:
+
+| `Daf.CmdLn` | `Daf.CommandLine` |
+|---|---|
+| `TCmdLnParserBuilder.Create` … `.Build` | `CommandLine.Root(nombre, descripción)` |
+| `.Arg<T>('name')` | `CommandLine.Option<T>('--name', descripción)`, añadida con `Root.Add` — los guiones se escriben ahora |
+| `.Arg<string>('output\|o')` | `CommandLine.Option<string>('--output', …).WithAlias('-o')` |
+| `A.Default(V)` | `.WithDefault(V)`, y una forma calculada para el que haya que averiguar |
+| `A.Required(True)` | `.Required` |
+| `A.Help('…')` | la descripción, segundo parámetro de `Option<T>` — y esta sí **se ve**: la ayuda se genera |
+| `.Command('build')` … `.EndCommand` | `CommandLine.Command('build', descripción)`, colgada con `Parent.Add(Child)` |
+| `Params['x'].AsString` / `.AsInteger` / `.AsBoolean` | `XOpt.ValueIn(Parsed)`, tipado por la propia opción |
+| `Params.GetSection('build')['output']` | `OutputOpt.ValueIn(Parsed)`: no hay sección que navegar |
+| `Params.Command = 'build'` | `Parsed.Command`, un `ICommand` — compáralo con el objeto que declaraste |
+| `Parser.Parse(…) = nil` | `Parsed.Succeeded` en falso, con `Parsed.Errors` y `Parsed.ErrorText` |
+
+**Lo que no pasa igual.** Se dice porque una migración que solo enseña la mitad fácil deja al lector
+creyendo que ya está:
+
+- **`Parse` ya no toma la línea de comandos como cadena.** `Parse` lee `ParamStr`, y `Parse(Args)`
+  toma un `TArray<string>`. Quien le pasaba una cadena construida a mano —normalmente un test— pasa
+  el array.
+- **El orden dejó de importar, así que hay invocaciones que antes fallaban y ahora valen.** En
+  `Daf.CmdLn` los argumentos de un comando se consumían *antes* de su subcomando, y
+  `app build -o dir --flag` no parseaba. Una opción `Recursive` se lee desde la hoja, y esa
+  invocación ahora sí parsea. Nada que funcionara deja de funcionar; un test que afirmaba el fallo,
+  sí.
+- **Dos limitaciones del motor de tipos viejo ya no están, y su resultado cambió.** No se podía
+  pasar un número negativo, y `--port 80xyz` se aceptaba como `80`. Ahora `-5` es un valor, y
+  `80xyz` se rechaza nombrando la opción. Si algo se apoyaba en ese truncado, recibe un error donde
+  antes recibía un número.
+- **No hay invocación.** Ninguno de los dos despacha a un handler: `Daf.CommandLine` parsea y
+  devuelve valores tipados, y qué hacer con ellos sigue siendo decisión de la aplicación.
+
+`Daf.Configuration.CommandLine` no se toca. Leer la línea de comandos como **fuente de
+configuración** —`--Logging:LogLevel=Debug` pisando `appsettings.json`— es otro trabajo y no
+comparte motor con ninguno de los dos módulos.
+
+### 4. Tipos de `Daf.Commons` renombrados o mudados
 
 | Antes | Ahora |
 |---|---|
@@ -75,7 +171,7 @@ paquete propio, y hay que añadirlo a los `requires` del paquete que lo use:
 `Daf.Linq.Where` / `Filter` toman `TFilterSpec<T>`, el tipo que ya vivía en Commons: `Daf.Linq` no
 introduce un vocabulario de filtrado propio, evalúa el que ya estaba nombrado.
 
-### 4. Módulos de consulta renombrados
+### 5. Módulos de consulta renombrados
 
 | Antes | Ahora |
 |---|---|
@@ -87,7 +183,7 @@ Los nombres nuevos dicen el patrón que implementan. `Daf.SQLCute.Compilers` des
 paquete: sus seis compiladores de dialecto viven en `Daf.SQLCute`, junto al ANSI que ya estaba
 ahí, así que hay una línea menos en los `requires`.
 
-### 5. Logging: el modo mudo ya no existe
+### 6. Logging: el modo mudo ya no existe
 
 - **`DAFInternalLogger` retirada.** Era la única vía mientras la categoría del canal estuvo
   clavada a `DAF`; sin ese filtro es una segunda puerta que además etiqueta como DAF a quien no
@@ -99,7 +195,7 @@ ahí, así que hay una línea menos en los `requires`.
 - Los informes de arranque salen bajo la categoría de la clase que informa y por el pipeline de
   `ILogger`. No es API, es salida: si filtrabas por la categoría `DAF`, revisa el filtro.
 
-### 6. El contenedor cerrado ya no responde
+### 7. El contenedor cerrado ya no responde
 
 - **Resolver de un contenedor cerrado lanza `EContainerShutDownError`**, y el mensaje nombra el
   servicio pedido. Antes hacía dos cosas distintas y ninguna era esa: un `EAccessViolation` si el
@@ -129,8 +225,9 @@ Provider.ShutDown;
 1. Compila. Lo que falte sale como error del compilador, no como comportamiento raro en
    ejecución.
 2. Sustituye cada `AddModules` por una llamada por módulo, y quita los `uses` de force-link.
-3. Añade a los `requires` los paquetes nuevos que necesites (`Daf.CmdLn`, `Daf.SystemProcess`) y
-   quita `Daf.SQLCute.Compilers`.
+3. Añade a los `requires` los paquetes nuevos que necesites —`Daf.SystemProcess`, y
+   `Daf.CommandLine` si parseabas una línea de comandos— y quita `Daf.CmdLn` y
+   `Daf.SQLCute.Compilers`.
 4. Renombra los tipos y unidades de las tablas de arriba.
 5. Vuelve a compilar y pasa tus tests. `ValidateOnBuild` ayuda a confirmar que la composición
    registra lo mismo que antes.

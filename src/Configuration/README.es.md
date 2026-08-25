@@ -121,11 +121,11 @@ y con signo igual —`-x=1`— lanza una `FormatException`. Aquí se ignora, com
 que no nombra una clave: leer la línea de comandos no debería poder impedir que una aplicación
 arranque por un guion de más.
 
-### No confundir con `Daf.CmdLn`
+### No confundir con `Daf.CommandLine`
 
 Escribir una *aplicación* de línea de comandos —comandos, subcomandos, opciones tipadas, ayuda
-generada— es otro trabajo, y le corresponde a [`Daf.CmdLn`](../CmdLn/README.es.md). Los dos no
-comparten motor, igual que `Microsoft.Extensions.Configuration.CommandLine` no usa
+generada— es otro trabajo, y le corresponde a [`Daf.CommandLine`](../CommandLine/README.es.md). Los
+dos no comparten motor, igual que `Microsoft.Extensions.Configuration.CommandLine` no usa
 `System.CommandLine`.
 
 ---

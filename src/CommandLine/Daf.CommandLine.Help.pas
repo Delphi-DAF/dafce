@@ -9,7 +9,7 @@
   stale the moment somebody adds an option and forgets it -- and the mismatch breaks
   nothing, it only lies to whoever asked.
 
-  The parked Daf.CmdLn did store a help string per argument, and nothing ever read it.
+  The withdrawn Daf.CmdLn did store a help string per argument, and nothing ever read it.
   Declared, and never reaching any output.
 }
 

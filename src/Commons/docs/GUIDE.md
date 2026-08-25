@@ -13,8 +13,9 @@
 5. [Daf.Activator](#dafactivator)
 6. [Daf.Arrays](#dafarrays)
 
-`Daf.SystemProcess` and `Daf.CmdLn.Parser` used to be documented here. They now live in packages of
-their own — see [SystemProcess](../../SystemProcess/README.md) and [CmdLn](../../CmdLn/README.md).
+`Daf.SystemProcess` and `Daf.CmdLn.Parser` used to be documented here. The first lives in a package
+of its own — see [SystemProcess](../../SystemProcess/README.md); the second has been withdrawn, and
+the command line is [`Daf.CommandLine`](../../CommandLine/README.md).
 
 ---
 

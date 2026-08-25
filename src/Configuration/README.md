@@ -120,11 +120,12 @@ equals sign — `-x=1` — raises a `FormatException`. Here it is ignored, like 
 names no key: reading the command line should not be able to stop an application from starting
 because of one extra dash.
 
-### Not to be confused with `Daf.CmdLn`
+### Not to be confused with `Daf.CommandLine`
 
 Writing a command-line *application* — commands, subcommands, typed options, generated help — is a
-different job, and it belongs to [`Daf.CmdLn`](../CmdLn/README.md). The two share no engine, the same
-way `Microsoft.Extensions.Configuration.CommandLine` does not use `System.CommandLine`.
+different job, and it belongs to [`Daf.CommandLine`](../CommandLine/README.md). The two share no
+engine, the same way `Microsoft.Extensions.Configuration.CommandLine` does not use
+`System.CommandLine`.
 
 ---
 
