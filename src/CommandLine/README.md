@@ -82,6 +82,8 @@ initializer.
 | Required | `.Required` on an option; an argument is required by its arity |
 | Arity | `.WithArity(TArity.ZeroOrMore)` and the other four |
 | Bounded values | an enumerated `T`, or `.AcceptOnly(['fast', 'safe'])` |
+| Several values per mention | `.AllowMultipleArgumentsPerToken` — `--items a b c` without repeating the name |
+| Collecting what is not ours | `Command.AllowUnmatchedTokens`, read back as `UnmatchedTokens` |
 | Version | `.WithVersion('1.0.0')` on the root |
 
 ---
@@ -113,7 +115,8 @@ written by hand: a `Boolean` admits none or one, anything else demands exactly o
 
 It buys three things that look unrelated:
 
-- **Several values.** A maximum above one is what lets `--file a.pas --file b.pas` mean both.
+- **Several values.** A maximum above one is what lets `--file a.pas --file b.pas` mean both — and,
+  with `.AllowMultipleArgumentsPerToken`, `--file a.pas b.pas` as well.
 - **Required, at the argument end.** A minimum of one *is* required; there is no second concept.
 - **No silent last-wins.** With a maximum of one, repeating the option is an **error**. Quietly
   keeping the last value is a value the parser chose on its own — the same sin as reading `80xyz`
@@ -142,6 +145,93 @@ value is `--verbose` could not be passed at all.
 
 ---
 
+## How an invocation can be written
+
+The same invocation, written the way whoever is typing it already writes them. None of these forms
+says anything the others do not: they exist so a tool built with this needs no README section
+explaining why its own syntax is the exception.
+
+| Form | Example | Same as |
+|------|---------|---------|
+| Value after a space | `--out bin\app.exe` | — |
+| Value after `=` | `--out=bin\app.exe` | `--out bin\app.exe` |
+| Value after `:` | `--out:bin\app.exe` | `--out bin\app.exe` |
+| One-character alias glued to its value | `-obin\app.exe` | `-o bin\app.exe` |
+| Bundled one-character options | `-fdx` | `-f -d -x` |
+| Bundle followed by a value | `-fdo bin\app.exe` | `-f -d -o bin\app.exe` |
+| Windows prefix | `/out bin\app.exe` | `--out bin\app.exe` |
+| Response file | `@build.rsp` | the tokens its lines carry |
+
+Every one of them is bounded the same way: **each fires only when the token does not already name
+something declared**. `-fdx` becomes three because `f`, `d` and `x` are declared aliases; were there
+an option called `-fdx`, that is what the token would stay. And a group with a letter nobody declared
+is refused **whole**, naming the letter — taking the ones that exist and keeping quiet about the one
+that does not would leave you believing you asked for something you did not.
+
+### ⚠️ What admitting them takes away
+
+A form admitted is a token that used to mean one thing and now means another. Three, concretely:
+
+- **`-abc` may stop being an option called `-abc`.** Where `a`, `b` and `c` are declared
+  one-character aliases, it is now three options.
+- **A positional value starting with `/` may be read as an option** — but only when what follows the
+  slash names a declared one. `/tmp/app.dpr` is still a value; `/out` is not, if `--out` exists.
+- **A positional value starting with `@` is read as a response file**, and one naming a file that is
+  not there is a parse error rather than a token.
+
+`--` gives all three back: everything behind it is a value, at signs, slashes and dashes included.
+There is no switch to turn a form off, and none is needed — a grammar that has to take one of those
+values as written has `--`.
+
+### Response files
+
+`@file.rsp` puts the file's lines in as tokens, where the `@` was. It exists for two concrete
+reasons: a command line that does not fit the console's limit, and a long invocation that repeats.
+
+```
+# what this invocation is for -- a line starting with # contributes nothing
+build
+native
+app.dpr
+--out
+bin\app.exe
+@common.rsp
+```
+
+One line, one token: nothing is split on spaces, no variable is expanded and no path is resolved
+against anything — the less it does, the less there is to explain about where a token came from. A
+file may name another; the nesting is bounded, and one that names itself fails saying so instead of
+hanging.
+
+### Several values behind one name
+
+```pascal
+var ItemsOpt := CommandLine.Option<string>('--items', 'Several at once')
+  .WithArity(TArity.ZeroOrMore).AllowMultipleArgumentsPerToken;
+```
+
+`--items a b c` then means all three. It is **opt-in, and could not be anything else**: were every
+option with room for many values greedy by default, a positional written behind one would stop being
+a positional. The right default depends on the grammar and only whoever wrote it knows — .NET calls
+it the same thing, for the same reason.
+
+### A command that wraps another
+
+```pascal
+var Sudo := CommandLine.Root('sudo', 'Runs something as somebody else');
+Sudo.Add(UserOpt);
+Sudo.AllowUnmatchedTokens;   // a statement, not a link in a chain: it answers ICommand
+
+var Parsed := Sudo.Parse(['-u', 'admin', 'apt', 'update']);
+var Rest   := Parsed.UnmatchedTokens;   // ['apt', 'update']
+```
+
+Without it — and that is still the default — a token matching nothing is a parse error. For anything
+that wraps nobody an unrecognised token is a typo, and swallowing it in silence is the worse of the
+two failures.
+
+---
+
 ## Help, `--help` and `--version`
 
 Help is rendered by walking the grammar, every time it is asked for. No composed text is stored
@@ -161,7 +251,7 @@ Commands:
   serve                 Serve what was built
 
 Options:
-  --verbose             Say more about what is happening
+  --verbose, -v         Say more about what is happening
   --help, -h            Show help and usage information
   --version             Show version information
 ```
@@ -206,8 +296,6 @@ Nothing below changes the shape of the API, so all of it is additive:
 
 - **Types and validation** — the rest of what .NET binds (`Int64`, `DateTime`, `Guid`, `FileInfo`,
   arrays), custom validators, custom parsers, and defaults computed by a lambda.
-- **Syntax conveniences** — bundling `-fdx`, the `:` delimiter, the `/opt` prefix, `-vquiet` without
-  a delimiter, and response files `@file.rsp`.
 
 **There is no invocation, and that one is a decision rather than a gap.** `SetAction` / `Invoke` —
 dispatching to the leaf and running a handler — are deliberately out: that turns the library into the

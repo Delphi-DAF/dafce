@@ -102,6 +102,7 @@
         <DCCReference Include="rtl.dcp"/>
         <DCCReference Include="Daf.Commons.dcp"/>
         <DCCReference Include="Daf.CommandLine.pas"/>
+        <DCCReference Include="Daf.CommandLine.Tokens.pas"/>
         <DCCReference Include="Daf.CommandLine.Values.pas"/>
         <DCCReference Include="Daf.CommandLine.Help.pas"/>
         <BuildConfiguration Include="Base">

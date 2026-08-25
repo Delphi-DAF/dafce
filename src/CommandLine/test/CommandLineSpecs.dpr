@@ -6,6 +6,8 @@
 uses
   Daf.MiniSpec,
   Grammar.Feat in 'Grammar.Feat.pas',
+  Syntax.Feat in 'Syntax.Feat.pas',
+  Tokens.Feat in 'Tokens.Feat.pas',
   Help.Feat in 'Help.Feat.pas',
   Values.Feat in 'Values.Feat.pas';
 

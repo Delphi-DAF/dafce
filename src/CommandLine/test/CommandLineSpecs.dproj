@@ -98,6 +98,8 @@
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
         <DCCReference Include="Grammar.Feat.pas"/>
+        <DCCReference Include="Syntax.Feat.pas"/>
+        <DCCReference Include="Tokens.Feat.pas"/>
         <DCCReference Include="Help.Feat.pas"/>
         <DCCReference Include="Values.Feat.pas"/>
         <BuildConfiguration Include="Base">

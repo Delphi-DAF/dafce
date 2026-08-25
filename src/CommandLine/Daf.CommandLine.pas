@@ -23,6 +23,7 @@ uses
   System.SysUtils,
   System.TypInfo,
   System.Rtti,
+  Daf.CommandLine.Tokens,
   Daf.Nullable;
 
 type
@@ -109,6 +110,12 @@ type
     /// <summary>True when every descendant of the declaring command also offers it.</summary>
     function IsRecursive: Boolean;
     /// <summary>
+    ///   True when one mention of the name may be followed by several values:
+    ///   <c>--items a b c</c>. Off unless declared, and it cannot be otherwise -- see
+    ///   <c>AllowMultipleArgumentsPerToken</c>.
+    /// </summary>
+    function AllowsMultipleArgumentsPerToken: Boolean;
+    /// <summary>
     ///   True when the invocation has to carry it. Separate from arity, as in .NET: an
     ///   option that takes one value may be obligatory or not, and arity cannot say.
     /// </summary>
@@ -137,6 +144,20 @@ type
     function Subcommands: TArray<ICommand>;
     /// <summary>How this command is invoked, e.g. <c>mytool build</c>.</summary>
     function FullPath: string;
+    /// <summary>True when a token matching nothing is a parse error, which is the default.</summary>
+    function TreatsUnmatchedTokensAsErrors: Boolean;
+    /// <summary>Makes this command collect what it does not recognise instead of failing.</summary>
+    /// <remarks>
+    ///   It is what a WRAPPER needs -- <c>sudo -u admin apt update</c> reads its own and
+    ///   hands the rest to another program. The mark belongs to the command because it
+    ///   says what that command IS (design D5); the default stays as it was, because for
+    ///   anything that wraps nobody an unrecognised token is a typo, and swallowing it in
+    ///   silence is the worse of the two failures.
+    ///
+    ///   It answers <c>ICommand</c>, so on a root it is called as a statement rather than
+    ///   chained -- the same caveat as <c>Describe</c>.
+    /// </remarks>
+    function AllowUnmatchedTokens: ICommand;
     /// <summary>
     ///   The help text, rendered from the grammar every time it is asked for. Nothing
     ///   composed is stored anywhere, so it cannot drift from what the program accepts
@@ -181,6 +202,11 @@ type
     function RawOf(const Symbol: ISymbol): TNullable<string>;
     /// <summary>Every raw value bound to a symbol, for an arity that admits many.</summary>
     function RawValuesOf(const Symbol: ISymbol): TArray<string>;
+    /// <summary>
+    ///   The tokens the grammar did not claim. Always empty unless the command reached
+    ///   declared it collects them, because otherwise they are errors instead.
+    /// </summary>
+    function UnmatchedTokens: TArray<string>;
   end;
 
   /// <summary>An option whose value is read back with the very object declared here.</summary>
@@ -205,6 +231,14 @@ type
     function Required: IOption<T>;
     /// <summary>Restricts it to a declared set of values, listed when one is refused.</summary>
     function AcceptOnly(const Values: array of string): IOption<T>;
+    /// <summary>Lets one mention of the name be followed by several values.</summary>
+    /// <remarks>
+    ///   Opt-in, and it could not be anything else (design D4): were every option with
+    ///   room for many values greedy by default, a positional written behind one would
+    ///   stop being a positional. The right default depends on the grammar, and only
+    ///   whoever wrote it knows. .NET calls it the same thing, for the same reason.
+    /// </remarks>
+    function AllowMultipleArgumentsPerToken: IOption<T>;
   end;
 
   /// <summary>An argument identified by its place, not by a name behind dashes.</summary>
@@ -264,11 +298,14 @@ type
   private
     FRecursive: Boolean;
     FRequiredFlag: Boolean;
+    FMultiplePerToken: Boolean;
     FDefaultValue: T;
   public
     constructor Create(const AName: string);
     function IsRecursive: Boolean;
     function IsRequired: Boolean;
+    function AllowsMultipleArgumentsPerToken: Boolean;
+    function AllowMultipleArgumentsPerToken: IOption<T>;
     function ValueIn(const Parsed: ICommandLineParseResult): T;
     function ValuesIn(const Parsed: ICommandLineParseResult): TArray<T>;
     function WithDefault(const Value: T): IOption<T>;
@@ -314,7 +351,12 @@ const
   /// <summary>The version token the ROOT answers to unless it declares its own.</summary>
   VersionToken = '--version';
   /// <summary>Everything after this token is a value, dashes and all. POSIX.</summary>
-  EndOfOptions = '--';
+  /// <remarks>
+  ///   It is declared where the token shapes live and republished here, because this is
+  ///   the unit its callers use and a second literal spelling of it is a second place to
+  ///   change.
+  /// </remarks>
+  EndOfOptions = Daf.CommandLine.Tokens.EndOfOptions;
 
 implementation
 
@@ -333,6 +375,7 @@ type
     FCommand: ICommand;
     FErrors: TArray<string>;
     FBindings: TArray<TBinding>;
+    FUnmatched: TArray<string>;
     FHelpRequested: Boolean;
     FHelpText: string;
     FVersionRequested: Boolean;
@@ -350,8 +393,10 @@ type
     function WasProvided(const Symbol: ISymbol): Boolean;
     function RawOf(const Symbol: ISymbol): TNullable<string>;
     function RawValuesOf(const Symbol: ISymbol): TArray<string>;
+    function UnmatchedTokens: TArray<string>;
     procedure Bind(const Symbol: ISymbol; const Raw: string);
     procedure AddError(const Text: string);
+    procedure AddUnmatched(const Token: string);
     procedure SetCommand(const Value: ICommand);
     procedure RequestHelp(const ForCommand: ICommand);
     procedure RequestVersion(const ForCommand: ICommand; const Version: string);
@@ -362,6 +407,7 @@ type
     FOptions: TArray<IOption>;
     FArguments: TArray<IArgument>;
     FSubcommands: TArray<ICommand>;
+    FAllowUnmatched: Boolean;
     // The path is kept as text, set by the parent when the child is added. A child
     // does NOT hold a reference to its parent: that would be a cycle between counted
     // interfaces, and a cycle is a leak the compiler never mentions.
@@ -378,6 +424,8 @@ type
     function Arguments: TArray<IArgument>;
     function Subcommands: TArray<ICommand>;
     function FullPath: string;
+    function TreatsUnmatchedTokensAsErrors: Boolean;
+    function AllowUnmatchedTokens: ICommand;
     function HelpText: string;
     procedure SetPathPrefix(const Value: string);
   end;
@@ -390,6 +438,24 @@ type
     function Parse: ICommandLineParseResult; overload;
     function WithVersion(const Version: string): IRootCommand;
     function VersionText: string;
+  end;
+
+  /// <summary>The grammar in scope, answering the three questions the rewriting asks.</summary>
+  /// <remarks>
+  ///   It is mutable and reused as the walk descends, because which options are
+  ///   declared depends on the command reached: `mytool build native -fdx` can only be
+  ///   split once `native` is where we are.
+  /// </remarks>
+  TScopeKnowledge = class(TInterfacedObject, IKnownTokens)
+  private
+    FCurrent: ICommand;
+    FAvailable: TArray<IOption>;
+    FAtRoot: Boolean;
+  public
+    procedure Enter(const Command: ICommand; const Available: TArray<IOption>; AtRoot: Boolean);
+    function Knows(const Token: string): Boolean;
+    function KnowsShort(const Letter: Char): Boolean;
+    function ShortTakesValue(const Letter: Char): Boolean;
   end;
 
 { TArity }
@@ -633,6 +699,17 @@ begin
   Result := FRequiredFlag;
 end;
 
+function TOption<T>.AllowsMultipleArgumentsPerToken: Boolean;
+begin
+  Result := FMultiplePerToken;
+end;
+
+function TOption<T>.AllowMultipleArgumentsPerToken: IOption<T>;
+begin
+  FMultiplePerToken := True;
+  Result := Self;
+end;
+
 function TOption<T>.ValueIn(const Parsed: ICommandLineParseResult): T;
 var
   Raw: TNullable<string>;
@@ -860,9 +937,19 @@ begin
   FBindings := FBindings + [Entry];
 end;
 
+function TParseResult.UnmatchedTokens: TArray<string>;
+begin
+  Result := FUnmatched;
+end;
+
 procedure TParseResult.AddError(const Text: string);
 begin
   FErrors := FErrors + [Text];
+end;
+
+procedure TParseResult.AddUnmatched(const Token: string);
+begin
+  FUnmatched := FUnmatched + [Token];
 end;
 
 procedure TParseResult.SetCommand(const Value: ICommand);
@@ -963,6 +1050,17 @@ begin
     Result := Name
   else
     Result := FPathPrefix + ' ' + Name;
+end;
+
+function TCommand.TreatsUnmatchedTokensAsErrors: Boolean;
+begin
+  Result := not FAllowUnmatched;
+end;
+
+function TCommand.AllowUnmatchedTokens: ICommand;
+begin
+  FAllowUnmatched := True;
+  Result := Self;
 end;
 
 function TCommand.HelpText: string;
@@ -1088,30 +1186,36 @@ begin
   Result := SameText(Token, VersionToken);
 end;
 
-// A token starting with a dash is an option -- unless it is a negative number, and
-// then it is a value. Without this, an Integer argument could never be given -5,
-// which is one of the two defects this module exists not to inherit.
-function LooksLikeOption(const Token: string): Boolean;
+{ TScopeKnowledge }
+
+procedure TScopeKnowledge.Enter(const Command: ICommand; const Available: TArray<IOption>; AtRoot: Boolean);
 begin
-  Result := (Length(Token) >= 2) and (Token[1] = '-') and not CharInSet(Token[2], ['0' .. '9', '.']);
+  FCurrent := Command;
+  FAvailable := Available;
+  FAtRoot := AtRoot;
 end;
 
-procedure SplitToken(const Token: string; out OptionName, InlineValue: string; out HasInline: Boolean);
-var
-  P: Integer;
+function TScopeKnowledge.Knows(const Token: string): Boolean;
 begin
-  P := Token.IndexOf('=');
-  HasInline := P > 0;
-  if HasInline then
-  begin
-    OptionName := Token.Substring(0, P);
-    InlineValue := Token.Substring(P + 1);
-  end
-  else
-  begin
-    OptionName := Token;
-    InlineValue := '';
-  end;
+  // The two built-in tokens count as declared. Otherwise `/help` would not reach the
+  // help and `-h` could be swallowed into a bundle, which is the kind of hole a
+  // rewriting opens by only ever looking at what the application declared.
+  Result := (FindOption(FCurrent, FAvailable, Token) <> nil) or IsHelpToken(Token) or
+    (FAtRoot and IsVersionToken(Token));
+end;
+
+function TScopeKnowledge.KnowsShort(const Letter: Char): Boolean;
+begin
+  Result := Knows(ShortPrefix + Letter);
+end;
+
+function TScopeKnowledge.ShortTakesValue(const Letter: Char): Boolean;
+var
+  Option: IOption;
+begin
+  Option := FindOption(FCurrent, FAvailable, ShortPrefix + Letter);
+  // A built-in answers nil and is a flag: asking for help takes no value.
+  Result := (Option <> nil) and not Option.IsFlag;
 end;
 
 function TRootCommand.Parse(const Args: TArray<string>): ICommandLineParseResult;
@@ -1121,11 +1225,15 @@ var
   Available: TArray<IOption>;
   Index: Integer;
   Positional: Integer;
-  Token, OptionName, InlineValue, Raw, Error: string;
+  Token, OptionName, InlineValue, Raw, Error, Next: string;
   HasInline, OptionsEnded: Boolean;
   Option: IOption;
   Argument: IArgument;
   Subcommand: ICommand;
+  Scope: TScopeKnowledge;
+  Known: IKnownTokens;
+  Tokens, Expansion: TArray<string>;
+  Step: TTokenRewrite;
 begin
   Outcome := TParseResult.Create;
   Result := Outcome;
@@ -1135,9 +1243,19 @@ begin
   Positional := 0;
   OptionsEnded := False;
 
-  while Index < Length(Args) do
+  Scope := TScopeKnowledge.Create;
+  Known := Scope;
+  Scope.Enter(Current, Available, True);
+
+  // Response files are resolved before anything else is decided about any token,
+  // because all they do is contribute tokens and nothing else (design D1, D6).
+  Tokens := TResponseFiles.Expand(Args, Expansion);
+  for Error in Expansion do
+    Outcome.AddError(Error);
+
+  while Index < Length(Tokens) do
   begin
-    Token := Args[Index];
+    Token := Tokens[Index];
 
     // POSIX: `--` ends the options. Everything after it is a value, dashes and all,
     // which is the only way to pass a positional whose value looks like an option.
@@ -1148,7 +1266,27 @@ begin
       Continue;
     end;
 
-    SplitToken(Token, OptionName, InlineValue, HasInline);
+    // Before anything else is decided about this token, it is put in the canonical form
+    // the rest of this loop already understands (design D1). The rewriting is asked
+    // HERE, and not once over the whole array, because it needs to know what is
+    // declared and that depends on the command reached.
+    if not OptionsEnded then
+    begin
+      Step := TTokenNormalizer.Rewrite(Token, Known);
+      if Step.Error <> '' then
+      begin
+        Outcome.AddError(Step.Error);
+        Inc(Index);
+        Continue;
+      end;
+      if Step.Changed then
+      begin
+        Tokens := TTokenNormalizer.Splice(Tokens, Index, Step.Tokens);
+        Continue;
+      end;
+    end;
+
+    TTokenNormalizer.SplitToken(Token, OptionName, InlineValue, HasInline);
 
     if not OptionsEnded then
     begin
@@ -1172,12 +1310,18 @@ begin
       end;
     end;
 
-    if not OptionsEnded and LooksLikeOption(Token) then
+    if not OptionsEnded and TTokenNormalizer.LooksLikeOption(Token) then
     begin
       Option := FindOption(Current, Available, OptionName);
       if Option = nil then
       begin
-        Outcome.AddError(Format('Unknown option "%s" for %s', [OptionName, Current.FullPath]));
+        // A wrapper hands on what is not its own; anything else refuses it, which is
+        // still the default (design D5). The token goes on WHOLE, value and all, so
+        // whoever receives it gets what was written.
+        if Current.TreatsUnmatchedTokensAsErrors then
+          Outcome.AddError(Format('Unknown option "%s" for %s', [OptionName, Current.FullPath]))
+        else
+          Outcome.AddUnmatched(Token);
         Inc(Index);
         Continue;
       end;
@@ -1189,7 +1333,7 @@ begin
       begin
         Outcome.AddError(Format('Option "%s" was given more than once, and it takes %s',
           [Option.Name, Option.Arity.Describe]));
-        if not HasInline and not Option.IsFlag and (Index + 1 < Length(Args)) then
+        if not HasInline and not Option.IsFlag and (Index + 1 < Length(Tokens)) then
           Inc(Index);
         Inc(Index);
         Continue;
@@ -1202,17 +1346,17 @@ begin
         // A flag may carry its value explicitly -- `--minify false` -- because its
         // arity admits none or one. Only a boolean literal counts as that value;
         // anything else is somebody else's token.
-        if (Index + 1 < Length(Args)) and TCommandLineValue.IsBooleanLiteral(Args[Index + 1]) then
+        if (Index + 1 < Length(Tokens)) and TCommandLineValue.IsBooleanLiteral(Tokens[Index + 1]) then
         begin
           Inc(Index);
-          Raw := Args[Index];
+          Raw := Tokens[Index];
         end
         else
           Raw := 'true';
       end
       else
       begin
-        if Index + 1 >= Length(Args) then
+        if Index + 1 >= Length(Tokens) then
         begin
           Outcome.AddError(Format('Option "%s" requires a %s value', [Option.Name, Option.TypeName]));
           Inc(Index);
@@ -1220,13 +1364,31 @@ begin
         end;
         Inc(Index);
         // Taken unconditionally, dash or no dash: this is what lets --port -5 through.
-        Raw := Args[Index];
+        Raw := Tokens[Index];
       end;
 
       if Option.TryAccept(Raw, Error) then
         Outcome.Bind(Option, Raw)
       else
         Outcome.AddError(Error);
+
+      // One mention of the name, several values -- but only for an option that asked
+      // for it (design D4). Taking them stops at the next token that looks like an
+      // option, at `--`, and at the maximum the arity declared, so what is swallowed is
+      // bounded by what was declared rather than by where the invocation happens to end.
+      if Option.AllowsMultipleArgumentsPerToken and Option.Arity.AllowsMany then
+        while (Index + 1 < Length(Tokens)) and (Length(Outcome.RawValuesOf(Option)) < Option.Arity.Max) do
+        begin
+          Next := Tokens[Index + 1];
+          if (Next = EndOfOptions) or TTokenNormalizer.LooksLikeOption(Next) then
+            Break;
+          Inc(Index);
+          if Option.TryAccept(Next, Error) then
+            Outcome.Bind(Option, Next)
+          else
+            Outcome.AddError(Error);
+        end;
+
       Inc(Index);
       Continue;
     end;
@@ -1238,6 +1400,7 @@ begin
       begin
         Current := Subcommand;
         Available := Available + RecursiveOptionsOf(Current);
+        Scope.Enter(Current, Available, False);
         Positional := 0;
         Inc(Index);
         Continue;
@@ -1255,8 +1418,10 @@ begin
       if not Argument.Arity.AllowsMany then
         Inc(Positional);
     end
+    else if Current.TreatsUnmatchedTokensAsErrors then
+      Outcome.AddError(Format('Unexpected argument "%s" for %s', [Token, Current.FullPath]))
     else
-      Outcome.AddError(Format('Unexpected argument "%s" for %s', [Token, Current.FullPath]));
+      Outcome.AddUnmatched(Token);
     Inc(Index);
   end;
 

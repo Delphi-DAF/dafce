@@ -82,6 +82,8 @@ Root.Add([VerboseOpt, Build]);
 | Requerido | `.Required` en una opción; un argumento lo es por su aridad |
 | Aridad | `.WithArity(TArity.ZeroOrMore)` y las otras cuatro |
 | Valores acotados | una `T` enumerada, o `.AcceptOnly(['fast', 'safe'])` |
+| Varios valores por mención | `.AllowMultipleArgumentsPerToken` — `--items a b c` sin repetir el nombre |
+| Recoger lo ajeno | `Comando.AllowUnmatchedTokens`, leído en `UnmatchedTokens` |
 | Versión | `.WithVersion('1.0.0')` en la raíz |
 
 ---
@@ -114,7 +116,7 @@ escribirlo: un `Boolean` admite cero o uno, cualquier otro tipo exige exactament
 Compra tres cosas que parecían independientes:
 
 - **Varios valores.** Un máximo mayor que uno es lo que hace que `--file a.pas --file b.pas` valga
-  por los dos.
+  por los dos — y, con `.AllowMultipleArgumentsPerToken`, también `--file a.pas b.pas`.
 - **Requerido, en los argumentos.** Un mínimo de uno **es** requerido; no hace falta un segundo
   concepto.
 - **Se acaba el último-gana silencioso.** Con máximo uno, repetir la opción es un **error**. Quedarse
@@ -144,6 +146,95 @@ posicional cuyo valor sea `--verbose` no se podría pasar.
 
 ---
 
+## Cómo se puede escribir una invocación
+
+La misma invocación, escrita como ya la escribe quien la teclea. Ninguna de estas formas dice nada
+que no digan las otras: existen para que una herramienta hecha con esto no necesite una sección del
+README explicando por qué su sintaxis es la excepción.
+
+| Forma | Ejemplo | Equivale a |
+|-------|---------|------------|
+| Valor tras un espacio | `--out bin\app.exe` | — |
+| Valor tras `=` | `--out=bin\app.exe` | `--out bin\app.exe` |
+| Valor tras `:` | `--out:bin\app.exe` | `--out bin\app.exe` |
+| Alias de un carácter pegado a su valor | `-obin\app.exe` | `-o bin\app.exe` |
+| Opciones de un carácter agrupadas | `-fdx` | `-f -d -x` |
+| Grupo seguido de un valor | `-fdo bin\app.exe` | `-f -d -o bin\app.exe` |
+| Prefijo de Windows | `/out bin\app.exe` | `--out bin\app.exe` |
+| Fichero de respuesta | `@build.rsp` | los tokens que traen sus líneas |
+
+Todas están acotadas igual: **cada una actúa solo cuando el token no nombra ya algo declarado**.
+`-fdx` se parte en tres porque `f`, `d` y `x` son alias declarados; si existiera una opción llamada
+`-fdx`, eso es lo que el token seguiría siendo. Y un grupo con una letra que nadie declaró se rechaza
+**entero**, nombrando la letra — aceptar las que sí y callar la que no te dejaría creyendo que
+pediste algo que no pediste.
+
+### ⚠️ Qué quita admitirlas
+
+Una forma admitida es un token que significaba una cosa y pasa a significar otra. Tres, concretas:
+
+- **`-abc` puede dejar de ser una opción llamada `-abc`.** Donde `a`, `b` y `c` sean alias declarados
+  de un carácter, ahora son tres opciones.
+- **Un valor posicional que empiece por `/` puede leerse como opción** — pero solo cuando lo que
+  sigue a la barra nombra una declarada. `/tmp/app.dpr` sigue siendo un valor; `/out` no, si existe
+  `--out`.
+- **Un valor posicional que empiece por `@` se lee como fichero de respuesta**, y si nombra un
+  fichero que no está es un error de parseo y no un token.
+
+`--` devuelve las tres: todo lo que venga detrás es valor, arrobas, barras y guiones incluidos. No
+hay interruptor para apagar una forma, ni hace falta — una gramática que tenga que recibir uno de
+esos valores tal cual tiene `--`.
+
+### Ficheros de respuesta
+
+`@fichero.rsp` mete las líneas del fichero como tokens, donde estaba el `@`. Existe por dos razones
+concretas: una línea de comandos que no cabe en el límite de la consola, y una invocación larga que
+se repite.
+
+```
+# para qué es esta invocación -- una línea que empieza por # no aporta nada
+build
+native
+app.dpr
+--out
+bin\app.exe
+@common.rsp
+```
+
+Una línea, un token: no se parte por espacios, no se expande ninguna variable y no se resuelve
+ninguna ruta contra nada — cuanto menos haga, menos hay que explicar sobre de dónde salió un token.
+Un fichero puede nombrar a otro; el anidamiento está acotado, y uno que se nombra a sí mismo falla
+diciéndolo en vez de colgarse.
+
+### Varios valores tras un solo nombre
+
+```pascal
+var ItemsOpt := CommandLine.Option<string>('--items', 'Varios de una vez')
+  .WithArity(TArity.ZeroOrMore).AllowMultipleArgumentsPerToken;
+```
+
+`--items a b c` pasa a valer por los tres. Es **opt-in, y no podía ser otra cosa**: si toda opción
+con sitio para varios valores fuera glotona por defecto, un posicional escrito detrás de una dejaría
+de ser posicional. El default correcto depende de la gramática y solo lo sabe quien la escribió — en
+.NET se llama igual, por lo mismo.
+
+### Un comando que envuelve a otro
+
+```pascal
+var Sudo := CommandLine.Root('sudo', 'Ejecuta algo como otro');
+Sudo.Add(UserOpt);
+Sudo.AllowUnmatchedTokens;   // sentencia, no eslabón de una cadena: devuelve ICommand
+
+var Parsed := Sudo.Parse(['-u', 'admin', 'apt', 'update']);
+var Resto  := Parsed.UnmatchedTokens;   // ['apt', 'update']
+```
+
+Sin eso —y sigue siendo el defecto— un token que no casa con nada es un error de parseo. Para todo lo
+que no envuelve a nadie, un token sin reconocer es una errata, y tragárselo en silencio es el peor de
+los dos fallos.
+
+---
+
 ## La ayuda, `--help` y `--version`
 
 La ayuda se genera recorriendo la gramática cada vez que se pide. No se guarda texto compuesto en
@@ -163,7 +254,7 @@ Commands:
   serve                 Serve what was built
 
 Options:
-  --verbose             Say more about what is happening
+  --verbose, -v         Say more about what is happening
   --help, -h            Show help and usage information
   --version             Show version information
 ```
@@ -208,8 +299,6 @@ Nada de lo de abajo cambia la forma del API, así que todo es aditivo:
 
 - **Tipos y validación** — el resto de lo que .NET enlaza (`Int64`, `DateTime`, `Guid`, `FileInfo`,
   arrays), validadores propios, parsers propios y defaults calculados por lambda.
-- **Conveniencias de sintaxis** — agrupar `-fdx`, el delimitador `:`, el prefijo `/opt`, `-vquiet`
-  sin delimitador y los ficheros de respuesta `@fichero.rsp`.
 
 **No hay invocación, y esa sí es una decisión y no un hueco.** `SetAction` / `Invoke` —despachar a la
 hoja y ejecutar su handler— quedan fuera a propósito: eso convierte la librería en el runner de la

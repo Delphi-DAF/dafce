@@ -99,9 +99,13 @@ procedure TBuildTool.DeclareGrammar;
 begin
   // Each symbol carries its description here, and nowhere else: the help is rendered
   // from these, so there is no second place that could disagree with them.
-  FVerbose := CommandLine.Option<Boolean>('--verbose', 'Say more about what is happening').Recursive;
+  // The one-character aliases are what make `-vm` a bundle: a group is only split when
+  // every letter of it names a declared option, so declaring them is what admits the
+  // form. Nothing else changes -- `--verbose` still works spelled out.
+  FVerbose := CommandLine.Option<Boolean>('--verbose', 'Say more about what is happening')
+    .WithAlias('-v').Recursive;
   FOut := CommandLine.Option<string>('--out', 'Where the binary goes').WithDefault('bin\out.exe');
-  FMinify := CommandLine.Option<Boolean>('--minify', 'Shrink the produced assets');
+  FMinify := CommandLine.Option<Boolean>('--minify', 'Shrink the produced assets').WithAlias('-m');
   FPort := CommandLine.Option<Integer>('--port', 'Port to listen on').WithDefault(8080);
   // Nothing here lists the accepted values: the enumerated type does it, both in the
   // help and in the error when one is refused.
@@ -243,6 +247,12 @@ begin
   Run(['build', 'native']);
   // The enumerated type refuses what is not one of its values, and says which are.
   Run(['serve', '--level', 'shouting']);
+  // The same invocation, written the three other ways the grammar admits. None of them
+  // says anything the forms above do not: that is the point of admitting them.
+  Run(['serve', '--port:9090']);
+  Run(['serve', '/port', '80']);
+  // A bundle: -v and -m are declared one-character aliases, so this is `-v -m`.
+  Run(['b', 'web', 'site.dpr', '-vm']);
   // Neither --help nor --version was declared anywhere. Both answer.
   Run(['--version']);
   Run(['--help']);

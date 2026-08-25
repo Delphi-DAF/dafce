@@ -3,16 +3,17 @@
 Declares a command tree two levels deep and reads its values back through the objects that declared
 it. It is the smallest thing that shows every piece of [`Daf.CommandLine`](../../README.md) at once:
 subcommands, a command alias, a positional argument, a recursive option, defaults, generated help,
-and a value the engine refuses rather than guesses.
+a value the engine refuses rather than guesses, and the several ways the same invocation may be
+written.
 
 ```
-buildtool                        --verbose    recursive: every leaf inherits it
+buildtool                        --verbose, -v   recursive: every leaf inherits it
 |
-+-- build   (alias: b)                        only groups: not invocable itself
-|   +-- native <target>          --out        default bin\out.exe
-|   +-- web    <target>          --minify
++-- build   (alias: b)                           only groups: not invocable itself
+|   +-- native <target>          --out           default bin\out.exe
+|   +-- web    <target>          --minify, -m
 |
-+-- serve                        --port       default 8080
++-- serve                        --port          default 8080
 ```
 
 `native`, `web` and `serve` are the leaves. `build` only groups, so `buildtool build` is an
@@ -20,7 +21,7 @@ buildtool                        --verbose    recursive: every leaf inherits it
 
 ## Running it
 
-With no arguments it walks a set of invocations, including the two that fail:
+With no arguments it walks a set of invocations, including the four that fail:
 
 ```
 out\samples\bin\Win32\BuildTool.exe
@@ -34,6 +35,10 @@ BuildTool.exe build native app.dpr --out bin\app.exe --verbose
 BuildTool.exe b web site.dpr --minify
 BuildTool.exe serve --port 8080
 ```
+
+The last three of the walkthrough are the **same** invocations written differently — `serve
+--port:9090`, `serve /port 80` and `b web site.dpr -vm`. The one-character aliases in the grammar are
+what admit the bundle: a group is only split when every letter of it names a declared option.
 
 ## What to look at
 
