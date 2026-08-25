@@ -6,7 +6,8 @@
 uses
   Daf.MiniSpec,
   Doubles.Feat in 'Doubles.Feat.pas',
-  Startup.Feat in 'Startup.Feat.pas';
+  Startup.Feat in 'Startup.Feat.pas',
+  Version.Feat in 'Version.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

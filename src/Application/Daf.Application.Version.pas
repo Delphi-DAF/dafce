@@ -22,7 +22,7 @@ type
     function CompiledPlatform: string;inline;
     function CompiledDebug: Boolean;inline;
     function CompiledArchBits: Integer;inline;
-    procedure ParseSemVer(const Tag: string);
+    procedure ParseSemVer(const SemVerTag: string);
   public
     class function GetFrom(const AClass: TClass): TVersionInfo;static;
     constructor Create(SemVerTag: string; AppName: string; Company: string);
@@ -58,6 +58,10 @@ uses
 
 class function TVersionInfo.GetFrom(const AClass: TClass): TVersionInfo;
 begin
+  // Una clase sin atributo devuelve un record vacio, y eso tiene que ser contrato y no
+  // suerte: sin esto, Result se queda con lo que hubiera en la memoria del destino, y sus
+  // campos numericos solo salen a cero cuando el destino venia limpio.
+  Result := Default(TVersionInfo);
   var
     RC := TRttiContext.Create;
   try
@@ -74,7 +78,7 @@ end;
 
 constructor TVersionInfo.Create(SemVerTag, AppName, Company: string);
 begin
-  FTag := Tag;
+  FTag := SemVerTag;
   FApplicationName := AppName;
   FCompany := Company;
   ParseSemVer(SemVerTag);
@@ -119,7 +123,7 @@ begin
 {$ENDIF}
 end;
 
-procedure TVersionInfo.ParseSemVer(const Tag: string);
+procedure TVersionInfo.ParseSemVer(const SemVerTag: string);
 const
   SemverRegEx =
 '^(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)(?:-(?P<prerelease>(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+(?P<buildmetadata>[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$';
@@ -132,7 +136,7 @@ begin
   //  https://semver.org/
   // usar la regex mencionada en la pagina para extraer los valores
   RegEx := TRegEx.Create(SemverRegEx, [roIgnoreCase]);
-  Match := RegEx.Match(Tag);
+  Match := RegEx.Match(SemVerTag);
   if Match.Success then
   begin
     Group := Match.Groups.Item['major'];
