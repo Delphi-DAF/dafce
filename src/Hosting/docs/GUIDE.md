@@ -285,15 +285,29 @@ begin
 end;
 ```
 
-Load all modules in `ConfigureServices`:
+Load the modules in `ConfigureServices`, one `AddModule<T>` per module:
 
 ```pascal
-.ConfigureServices(procedure(Context: IHostBuilderContext;
-                              Services: IServiceCollection)
-begin
-  TInfraModule.Create.AddServices(Services);
-  TDomainModule.Create.AddServices(Services);
-end)
+Builder.ConfigureServices(
+  procedure(Context: IHostBuilderContext; Services: IServiceCollection)
+  begin
+    Services
+      .AddModule<TInfraModule>
+      .AddModule<TDomainModule>;
+  end);
 ```
 
-When using `TDafApplication` (Application module), modules that implement `IAppModule` are automatically discovered and loaded — see [Application](../../Application/docs/GUIDE.md).
+`AddModule<T>` instantiates the module, calls its `AddServices` on the spot, and owns its
+lifetime. Do not call `TInfraModule.Create.AddServices(Services)` by hand: the module is an
+`IInterfacedObject` created with a reference count of zero, so nobody frees it.
+
+When a module needs configuration, construct it yourself and pass the instance:
+`Services.AddModule(TInfraModule.Create(...))`. Handing it over as an `IAppModule` is what
+gives it an owner, and it is the only way to pass a module any configuration.
+
+**There is no automatic discovery.** `AddModules(Package)`, the RTTI scan for `IAppModule`, was
+removed: it hid the declaration in a `uses` clause, left startup silently blind to a trimmed
+RTTI, and put the registration order in the hands of reflection. A `TDafApplication` registers no
+module on its own either — its modules are declared wherever the services are composed, exactly
+as above. See [Startup composition](../../DependencyInjection/docs/STARTUP-COMPOSITION.md) for
+the two phases and the ordering rules.

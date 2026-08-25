@@ -285,15 +285,29 @@ begin
 end;
 ```
 
-Carga todos los módulos en `ConfigureServices`:
+Carga los módulos en `ConfigureServices`, un `AddModule<T>` por módulo:
 
 ```pascal
-.ConfigureServices(procedure(Context: IHostBuilderContext;
-                              Services: IServiceCollection)
-begin
-  TInfraModule.Create.AddServices(Services);
-  TDomainModule.Create.AddServices(Services);
-end)
+Builder.ConfigureServices(
+  procedure(Context: IHostBuilderContext; Services: IServiceCollection)
+  begin
+    Services
+      .AddModule<TInfraModule>
+      .AddModule<TDomainModule>;
+  end);
 ```
 
-Con `TDafApplication` (módulo Application), los módulos que implementan `IAppModule` se descubren y cargan automáticamente — consulta [Application](../../Application/docs/GUIDE.es.md).
+`AddModule<T>` instancia el módulo, llama a su `AddServices` en el sitio y se hace cargo de su
+vida. No llames a `TInfraModule.Create.AddServices(Services)` a mano: el módulo es un
+`TInterfacedObject` creado con contador de referencias a cero, así que nadie lo libera.
+
+Cuando un módulo necesita configuración, constrúyelo tú y pasa la instancia:
+`Services.AddModule(TInfraModule.Create(...))`. Entregarlo como `IAppModule` es lo que le da un
+dueño, y es la única vía de pasarle configuración.
+
+**No hay descubrimiento automático.** `AddModules(Package)`, el escaneo por RTTI de los
+`IAppModule`, se retiró: escondía la declaración en un `uses`, dejaba el arranque ciego en
+silencio ante una RTTI recortada y ponía el orden de registro en manos de la reflexión. Una
+`TDafApplication` tampoco registra módulos por su cuenta — los suyos se declaran donde se
+compongan los servicios, igual que arriba. Las dos fases y las reglas de orden, en
+[Composición del arranque](../../DependencyInjection/docs/STARTUP-COMPOSITION.es.md).
