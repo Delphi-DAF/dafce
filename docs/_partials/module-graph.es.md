@@ -2,11 +2,12 @@
 
 Leído del `requires` de cada `.dpk`, así que no puede desviarse de los paquetes. Las flechas se leen *requiere*.
 
-**24 paquetes**, **31 aristas reales** entre ellos, **19** más declaradas pero ya implicadas por otro camino, **0** ciclos.
+**26 paquetes**, **34 aristas reales** entre ellos, **39** más declaradas pero ya implicadas por otro camino, **0** ciclos.
 
 ```{mermaid}
 graph TD
   Application[Application]
+  Cli[Cli]
   CommandLine[CommandLine]
   Commons[Commons]
   Configuration[Configuration]
@@ -29,25 +30,31 @@ graph TD
   SQLCuteSpecification[SQLCute.Specification]
   Specification[Specification]
   SystemProcess[SystemProcess]
+  VCL[VCL]
   Web[Web]
   RTIndy[("IndyCore · IndyProtocols · IndySystem")]
   RTRESTComponents[("RESTComponents")]
   RTfmx[("fmx")]
   RTinet[("inet")]
   RTinetstn[("inetstn")]
+  RTvcl[("vcl")]
   Application --> Hosting
+  Cli --> CommandLine
+  Cli --> Hosting
   CommandLine --> Commons
   Configuration --> ConfigurationAbstractions
+  Configuration --> LoggingAbstractions
   ConfigurationAbstractions --> Commons
   DependencyInjection --> DependencyInjectionAbstractions
   DependencyInjectionAbstractions --> Commons
-  FMX --> LoggingAbstractions
+  FMX --> Hosting
   Hosting --> Configuration
   Hosting --> DependencyInjection
   Hosting --> HostingAbstractions
-  Hosting --> LoggingAbstractions
+  Hosting --> Logging
   HostingAbstractions --> ConfigurationAbstractions
   HostingAbstractions --> DependencyInjectionAbstractions
+  HostingAbstractions --> LoggingAbstractions
   Linq --> Commons
   Logging --> DependencyInjectionAbstractions
   Logging --> LoggingAbstractions
@@ -63,12 +70,12 @@ graph TD
   SQLCuteSpecification --> Specification
   Specification --> Commons
   SystemProcess --> Commons
-  Web --> ConfigurationAbstractions
-  Web --> DependencyInjectionAbstractions
-  Web --> LoggingAbstractions
+  VCL --> Hosting
+  Web --> Hosting
   FMX --> RTfmx
   MiniSpec --> RTIndy
   NNlog -->|IndyCore · IndySystem| RTIndy
+  VCL --> RTvcl
   Web --> RTIndy
   Web --> RTRESTComponents
   Web --> RTinet
@@ -76,10 +83,10 @@ graph TD
   classDef abs stroke-dasharray:4 3;
   class ConfigurationAbstractions,DependencyInjectionAbstractions,HostingAbstractions,LoggingAbstractions,MediatRAbstractions,SQLCuteAbstractions abs;
   classDef rt stroke-dasharray:2 2,stroke-width:2px;
-  class RTIndy,RTRESTComponents,RTfmx,RTinet,RTinetstn rt;
+  class RTIndy,RTRESTComponents,RTfmx,RTinet,RTinetstn,RTvcl rt;
 ```
 
-Dibujado como reducción transitiva: solo las aristas que no llegan ya por otro camino. `rtl` no se dibuja porque lo requieren los 24 paquetes; los de los runtimes ajenos van en un nodo por familia —Indy, RESTComponents, fmx, inet y inetstn— con los nombres reales en la etiqueta.
+Dibujado como reducción transitiva: solo las aristas que no llegan ya por otro camino. `rtl` no se dibuja porque lo requieren los 26 paquetes; los de los runtimes ajenos van en un nodo por familia —Indy, RESTComponents, fmx, inet, inetstn y vcl— con los nombres reales en la etiqueta.
 
 El borde de puntos marca un paquete de contrato (`.Abstractions`); los nodos redondeados a trazos son runtimes ajenos.
 
@@ -88,6 +95,7 @@ Instalables solos, sin depender de ningún otro paquete de DAF: `Commons`, `Mini
 | Paquete | Runtimes que arrastra |
 |---|---|
 | `Application` | `rtl` |
+| `Cli` | `rtl` |
 | `CommandLine` | `rtl` |
 | `Commons` | `rtl` |
 | `Configuration` | `rtl` |
@@ -110,6 +118,7 @@ Instalables solos, sin depender de ningún otro paquete de DAF: `Commons`, `Mini
 | `SQLCute.Specification` | `rtl` |
 | `Specification` | `rtl` |
 | `SystemProcess` | `rtl` |
+| `VCL` | `rtl` · `vcl` |
 | `Web` | `IndyCore` · `IndyProtocols` · `IndySystem` · `RESTComponents` · `inet` · `inetstn` · `rtl` |
 
-20 de 24 no piden más que `rtl`.
+21 de 26 no piden más que `rtl`.

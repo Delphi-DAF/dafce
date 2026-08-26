@@ -220,6 +220,72 @@ var Report := Provider.GetRequiredService<IReport>;
 Provider.ShutDown;
 ```
 
+### 8. La familia de aplicaciones, y un solo estilo de builder
+
+Es el frente más grande de 2.0 para cualquier cosa que tuviera un `.dpr`.
+
+- **`IHostBuilder` se retira, y con él el estilo diferido.** Registrar por callbacks de
+  `ConfigureServices` / `ConfigureAppConfiguration` / `ConfigureHostConfiguration` deja de existir.
+  Queda un estilo, el inmediato: el builder es utilizable en cuanto se crea, y lo que registras
+  ocurre donde está escrito.
+
+  ```pascal
+  // Antes
+  var Builder: IHostBuilder := THostBuilder.Create;
+  Builder.ConfigureServices(
+    procedure(Context: IHostBuilderContext; Services: IServiceCollection)
+    begin
+      Services.AddSingleton<IMyService, TMyService>;
+    end);
+  var Host := Builder.Build;
+
+  // Ahora
+  var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
+  B.Services.AddSingleton<IMyService, TMyService>;
+  ExitCode := B.Build.Run;
+  ```
+
+  La maquinaria sobrevive entera — `THostBuilder` baja a detalle de implementación. Lo que cambia es
+  quién la llama y cuándo.
+
+- **Tu punto de entrada es ahora tu variante.** `TCliApplication` (`Daf.Cli`), `TWebApplication`
+  (`Daf.Web`), `TVclApplication` (`Daf.VCL`) y `TFmxApplication` (`Daf.FMX`). Comparten `Services`,
+  `Configuration`, `Environment`, `Logging` y `Properties` por `IHostApplicationBuilder`.
+
+- **`TDafApplication` y `TDafApplicationBuilder` quedan deprecados**, no borrados: siguen
+  compilando. `TDafApplication.VersionRequested` **sí** se retira — la gramática contesta
+  `--version` por `ICommandLineParseResult.VersionRequested`. Y `TDafApplication.App` pasa a ser
+  `DafApp`, que existe **solo en VCL y FMX**: en CLI y en Web no hay global de aplicación a
+  propósito.
+
+- **`Daf.Application.Version` se muda a `Daf.Commons`**, sin tocar. Añade `Daf.Commons` a
+  `requires` si usabas `TVersionInfo` y no lo tenías ya.
+
+- **`ILoggingBuilder` se muda a `Daf.Logging.Abstractions`**, donde .NET lo tiene. Componer logging
+  deja de exigir el paquete de implementación. Y el builder lo expone como propiedad viva — el
+  pipeline solo se compone **si la tocas**, así que una aplicación que nunca configura logging
+  sigue arrancando.
+
+- **El entorno pasa a derivarse de la configuración de host.** Las tres claves conservan su nombre
+  (`DAF_APP_ENV`, `DAF_APP_NAME`, `DAF_CONTENT_ROOT`), así que lo que fijaras por variable de
+  entorno sigue funcionando — y ahora además funciona `--DAF_APP_ENV=Development`, que antes no
+  había forma de escribir.
+
+- **`IConfiguration` gana dos miembros**, para poder distinguir una clave ausente de una cuyo valor
+  es vacío. Esto rompe a los **implementadores** de la interfaz, no a quien la llama: el indexador
+  sigue devolviendo `string`, y toda expresión existente por él sigue compilando.
+
+  ```pascal
+  if Config.Exists('Features:Beta') then ;                   // presencia
+  var Read := Config.Find('Features:Beta');                  // presencia Y valor, una sola lectura
+  if Read.HasValue and (Read.Value = 'on') then ;
+  var Value := Config['Features:Beta'];                      // '' si no está Y si está vacía
+  ```
+
+- **Un fallo leyendo un fichero de configuración se informa al añadir la fuente**, y ya no dentro de
+  `Build` — porque es cuando el fichero se abre ahora. Sigue saliendo por el canal de arranque y
+  sigue propagando; lo que cambia es qué categoría lo firma.
+
 ## Cómo hacerlo
 
 1. Compila. Lo que falte sale como error del compilador, no como comportamiento raro en

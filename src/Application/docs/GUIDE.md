@@ -6,7 +6,7 @@
 
 ## Table of Contents
 
-1. [Two ways to start, and which one to pick](#two-ways-to-start-and-which-one-to-pick)
+1. [Which entry point is yours](#which-entry-point-is-yours)
 2. [What this layer is, in .NET terms](#what-this-layer-is-in-net-terms)
 3. [Quick start](#quick-start)
 4. [TDafApplicationBuilder](#tdafapplicationbuilder)
@@ -20,38 +20,59 @@
 
 ---
 
-## Two ways to start, and which one to pick
+## Which entry point is yours
 
-There are two entry points that work, and they are not rivals — they sit at different levels:
+There is **one** per application variant, and picking is a matter of what kind of application you
+are writing — not which of two layers to use:
 
-| | `THostBuilder` (Hosting) | `TDafApplication.CreateHostBuilder` (Application) |
+| Your application | Entry point | Lives in | `Build` returns |
+|---|---|---|---|
+| Console / CLI tool | `TCliApplication.CreateBuilder(Args)` | `Daf.Cli` | `ICliApplication` |
+| Web | `TWebApplication.CreateBuilder(Args)` | `Daf.Web` | `IWebApplication` |
+| Desktop, VCL | `TVclApplication.CreateBuilder` | `Daf.VCL` | `IVclApplication` |
+| Desktop, FireMonkey | `TFmxApplication.CreateBuilder` | `Daf.FMX` | `IFmxApplication` |
+
+All four share `Services`, `Configuration`, `Environment`, `Logging` and `Properties`, written the
+same way. **That shared contract — `IHostApplicationBuilder` — is what makes them a family rather
+than four similar things**, and it is what lets a package contribute startup registrations without
+knowing which variant will consume it.
+
+They split in two by **who owns the loop**: in CLI and Web, DAF owns the process and `Run` starts,
+works and stops, so the `.dpr` ends when `Run` ends. In VCL and FMX the message loop already exists
+and belongs to `Vcl.Forms.Application` / `FMX.Forms.Application`; the variant creates the main form
+and delegates. Two lifecycle contracts, not four variations of one.
+
+### What was retired, and where it went
+
+| Was | Is now |
+|---|---|
+| `THostBuilder.Create.ConfigureServices(...)` | `B.Services.…` on any variant's builder — the deferred style is gone; there is one style, the immediate one |
+| `IHostBuilder` | `IHostApplicationBuilder`, the family's shared contract. `THostBuilder` survives whole as **implementation detail** |
+| `TDafApplication.CreateHostBuilder` | the `CreateBuilder` of your variant, from the table above |
+| `TDafApplication` / `TDafApplicationBuilder` | **deprecated**, still compiling in 2.0. Their replacement is the variant |
+| `TDafApplication.VersionRequested` | `ICommandLineParseResult.VersionRequested` — the grammar answers `--version`, and the hand-written check is gone rather than moved |
+| `TDafApplication.App` | `DafApp`, **only in VCL and FMX**. CLI and Web have no global on purpose |
+| `Daf.Application.Version` | moved to `Daf.Commons`, unchanged — all four variants reach it without the deprecated package |
+
+### What the application layer adds over the host
+
+The host gives you the container, the configuration, the hosted services and the startup tasks. On
+top of that, the variants add **the edge around `Run`** — which is the part every `.dpr` used to
+write by hand:
+
+| What | Where | Which variants |
 |---|---|---|
-| Lives in | `Daf.Hosting` | `Daf.Application.Builder` |
-| `Build` returns | `IHost` | `IDafApplication` |
-| You get | services, configuration, hosted services, startup tasks | all of that, plus what the next rows add |
-| Run the main line | you write `Start` / `WaitForShutdown` / `Stop` yourself | `Run`, `Run(Exec)`, or an overridden `Execute` |
-| Version metadata | — | `VersionInfo`, from a `[Version]` attribute on your class |
-| Reachable from anywhere | — | `TDafApplication.App` |
-| A class of your own to hang startup logic on | — | subclass `TDafApplication`, override `Execute` |
+| Deciding whether the process starts at all | `SingleInstance(Id)` | CLI |
+| The policy for what escapes, and the exit code | `OnUnhandled(Policy)` | CLI |
+| The work, and its exit code | `OnExecute` / a registered `ICliHandler` | CLI |
+| `--version`, `--help`, invalid invocation | `RootCommand`, answered by the parse | CLI |
+| The HTTP server, wired to DI and the host | `Web.AddHttpServer` + `MapControllers` | Web |
+| Creating the main form and handing over the loop | `Run(TFormClass)` | VCL, FMX |
+| A global for the code the platform builds itself | `DafApp` | VCL, FMX |
 
-**Start with the application layer.** It is the one that has a place to put your startup code, and
-it gives you the host anyway — `App.Host`. Drop to `THostBuilder` when you want the pipeline
-without a main line around it: a package's own composition, a test harness, a plugin hosted inside
-somebody else's program. `Hosting/samples/ConsoleSample` is the host on its own;
-`samples/QuickStart` and `samples/HostedService` are the application layer.
-
-What the application layer is **not**: `IDafApplication` re-declares the surface of `IHost`
-(`Start`, `Stop`, `WaitForShutdown`, `Services`) but it does not descend from it. An application
-**has** a host, it is not one, so it cannot be passed where an `IHost` is expected — use
-`App.Host` there. A spec in `src/Application/test/` pins exactly this, because the previous
-version of this guide claimed the opposite.
-
-> **This split is being redesigned.** A family of application types — console, service, desktop,
-> web — is planned, and it may retire `IHostBuilder` and deprecate `TDafApplication`. What is
-> written here describes what exists today; it is not a verdict on which of the two survives, so
-> do not read the recommendation above as permanent.
-
----
+Two members of the .NET family are **not** ported, and they are declared rather than discovered:
+`Metrics`, because DAF has no equivalent piece to point at, and `ConfigureContainer<T>`, because a
+Delphi interface admits no generic methods — it is not rejected, it is unrepresentable.
 
 ## What this layer is, in .NET terms
 
@@ -129,6 +150,10 @@ Two shapes worth naming, because both are easy to get wrong:
   `ENonPublicType`.
 
 ---
+
+> **From here on, this guide documents the deprecated route.** `TDafApplication` and
+> `TDafApplicationBuilder` still compile in 2.0, so what follows is still true — but it is not the
+> recommendation. Your entry point is in the table above.
 
 ## TDafApplicationBuilder
 

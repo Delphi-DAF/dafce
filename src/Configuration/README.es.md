@@ -41,7 +41,26 @@ var ConnStr := Config['Database:ConnectionString'];
 // Leer una sección
 var DbSection := Config.GetSection('Database');
 var Host := DbSection['Host'];
+
+// Distinguir una clave ausente de una cuyo valor es vacío -- el indexador da '' para las dos
+if Config.Exists('Database:Password') then ;          // la presencia, y nada más
+var Read := Config.Find('Database:Password');         // presencia Y valor, una sola lectura
 ```
+
+---
+
+## Ausente no es vacío
+
+Dos miembros que .NET no tiene, y la razón es que **allí la distinción la lleva la anulabilidad**:
+el indexador es `string? this[key]`, `null` para ausente y `''` para presente y vacía. Una cadena
+de Delphi no puede ser nula, así que lo que allí hace el `?` aquí necesita un miembro propio —
+`Exists` para la presencia, `Find` para presencia y valor en una sola lectura.
+
+El indexador sigue devolviendo `string` a propósito. Un retorno anulable convierte de forma
+implícita y esa conversión se aplica en la comparación, así que `C['ausente'] = ''` y
+`C['vacía'] = ''` seguirían dando las dos `True` — escondería el defecto tras un tipo que promete
+arreglarlo. [La guía](docs/GUIDE.es.md#distinguir-una-clave-ausente-de-una-vacía) tiene la medida.
+
 
 ---
 

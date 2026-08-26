@@ -41,7 +41,26 @@ var ConnStr := Config['Database:ConnectionString'];
 // Read a section
 var DbSection := Config.GetSection('Database');
 var Host := DbSection['Host'];
+
+// Tell an absent key from one whose value is empty -- the indexer gives '' for both
+if Config.Exists('Database:Password') then ;          // presence, and nothing else
+var Read := Config.Find('Database:Password');         // presence AND value, one lookup
 ```
+
+---
+
+## Absent is not empty
+
+Two members that .NET does not have, and the reason is that **there the distinction is carried by
+nullability**: the indexer is `string? this[key]`, `null` for absent and `''` for present-but-empty.
+A Delphi string cannot be nil, so what the `?` does there needs a member of its own here — `Exists`
+for the presence, `Find` for presence and value in a single lookup.
+
+The indexer deliberately still returns a `string`. A nullable return converts implicitly and that
+conversion applies in the comparison, so `C['absent'] = ''` and `C['empty'] = ''` would both stay
+`True` — it would hide the defect behind a type that promises to fix it. [The guide](docs/GUIDE.md#telling-an-absent-key-from-an-empty-one)
+has the measurement.
+
 
 ---
 
