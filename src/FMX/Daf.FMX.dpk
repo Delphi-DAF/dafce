@@ -31,9 +31,17 @@
 requires
   rtl,
   fmx,
-  Daf.Logging.Abstractions;
+  Daf.Logging.Abstractions,
+  // La variante FMX de la familia vive AQUI y no en un paquete propio: el invariante de
+  // este modulo --ningun otro paquete de DAF enlaza FireMonkey-- no admite un segundo que
+  // lo haga.
+  Daf.Hosting.Abstractions,
+  Daf.Hosting,
+  Daf.DependencyInjection.Abstractions,
+  Daf.Configuration.Abstractions;
 
 contains
-  Daf.FMX.BootstrapSink in 'Daf.FMX.BootstrapSink.pas';
+  Daf.FMX.BootstrapSink in 'Daf.FMX.BootstrapSink.pas',
+  Daf.FMX.Application in 'Daf.FMX.Application.pas';
 
 end.

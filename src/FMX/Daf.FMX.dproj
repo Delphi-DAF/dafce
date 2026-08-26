@@ -99,7 +99,12 @@
         <DCCReference Include="rtl.dcp"/>
         <DCCReference Include="fmx.dcp"/>
         <DCCReference Include="Daf.Logging.Abstractions.dcp"/>
+        <DCCReference Include="Daf.Hosting.Abstractions.dcp"/>
+        <DCCReference Include="Daf.Hosting.dcp"/>
+        <DCCReference Include="Daf.DependencyInjection.Abstractions.dcp"/>
+        <DCCReference Include="Daf.Configuration.Abstractions.dcp"/>
         <DCCReference Include="Daf.FMX.BootstrapSink.pas"/>
+        <DCCReference Include="Daf.FMX.Application.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\source.optset</DependentOn>
