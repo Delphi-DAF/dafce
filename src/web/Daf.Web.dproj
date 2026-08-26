@@ -121,6 +121,7 @@
         <DCCReference Include="Daf.Hosting.Abstractions.dcp"/>
         <DCCReference Include="Daf.Hosting.dcp"/>
         <DCCReference Include="Daf.Configuration.dcp"/>
+        <DCCReference Include="Daf.Commons.dcp"/>
         <DCCReference Include="Daf.Extensions.HttpServer.pas"/>
         <DCCReference Include="Daf.HttpServer.pas"/>
         <DCCReference Include="Daf.Web.Router.pas"/>

@@ -48,7 +48,10 @@ requires
   // manager que siembra antes de entregarlo.
   Daf.Hosting.Abstractions,
   Daf.Hosting,
-  Daf.Configuration;
+  Daf.Configuration,
+  // Llegaba de rebote por Daf.Hosting. Declarado, porque de rebote deja de llegar el dia que
+  // esa ruta cambie -- y entonces el fallo no se parece a su causa.
+  Daf.Commons;
 
 contains
   Daf.Extensions.HttpServer in 'Daf.Extensions.HttpServer.pas',
