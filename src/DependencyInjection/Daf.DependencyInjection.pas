@@ -73,7 +73,10 @@ type
     FScopeFactory: TServiceScopeFactory;
     [Weak]
     FServiceCollection: IServiceCollectionImpl;
-    FServiceInstances : TOrderedDictionary<string, IInterface>;
+    // Ordenado a proposito, y sigue siendolo: CollectGarbage lo recorre de atras hacia
+    // delante para liberar en orden inverso al de creacion. Lo que cambio aqui es la
+    // clave, no la estructura.
+    FServiceInstances : TOrderedDictionary<TServiceIdentity, IInterface>;
     FCreatingSingletons: TStack<TServiceDescriptor>;
     FIsSingletonsScope: Boolean;
     FShutDonwnDone: Boolean;
@@ -289,7 +292,10 @@ begin
       [Descriptor.ServiceName, Descriptor.ImplementationClass.ClassName]));
 
   Result := Format('%s: %s needs %s for parameter "%s", and nothing registers it',
-    [Descriptor.ServiceName, Descriptor.ImplementationClass.ClassName, Failed.ParamType.QualifiedName, Failed.Name]);
+    // El tipo del parametro tampoco tiene por que ser nombrable: QualifiedName aqui abortaba
+    // la validacion con un error de visibilidad en lugar de decir que falta el registro.
+    [Descriptor.ServiceName, Descriptor.ImplementationClass.ClassName,
+     ServiceTypeName(Failed.ParamType.Handle), Failed.Name]);
 end;
 
 procedure TServiceCollection.CollectCapturedScopes(const Descriptor: TServiceDescriptor; const Ctor: TRttiMethod;
@@ -442,7 +448,7 @@ constructor TServiceScope.Create(const Factory: TServiceScopeFactory; const Sing
 begin
   inherited Create;
   FScopeFactory := Factory;
-  FServiceInstances := TOrderedDictionary<string, IInterface>.Create;
+  FServiceInstances := TOrderedDictionary<TServiceIdentity, IInterface>.Create;
   FIsSingletonsScope := SingletonsScope;
   FCreatingSingletons := TStack<TServiceDescriptor>.Create;
   FServiceCollection := Factory.ServiceCollection;
@@ -481,7 +487,10 @@ end;
 
 function TServiceScope.GetServiceIdentity(Descriptor: TServiceDescriptor): TServiceIdentity;
 begin
-  Result := Descriptor.ServiceName;
+  // El registro, no su tipo. Con el nombre del tipo el ambito no podia guardar mas de una
+  // instancia por tipo de servicio, asi que el segundo registro se declaraba, se contaba y
+  // no se construia nunca.
+  Result := Descriptor.Identity;
 end;
 
 function TServiceScope.GetSingletonsScope: IServiceResolver;

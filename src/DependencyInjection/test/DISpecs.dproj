@@ -106,6 +106,7 @@
         <DCCReference Include="Validation.Feat.pas"/>
         <DCCReference Include="GarbageCollection.Feat.pas"/>
         <DCCReference Include="ContainerShutdown.Feat.pas"/>
+        <DCCReference Include="ServiceIdentity.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>

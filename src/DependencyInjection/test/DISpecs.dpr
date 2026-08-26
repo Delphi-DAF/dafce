@@ -14,7 +14,8 @@ uses
   RestrictedRtti.Feat in 'RestrictedRtti.Feat.pas',
   Validation.Feat in 'Validation.Feat.pas',
   GarbageCollection.Feat in 'GarbageCollection.Feat.pas',
-  ContainerShutdown.Feat in 'ContainerShutdown.Feat.pas';
+  ContainerShutdown.Feat in 'ContainerShutdown.Feat.pas',
+  ServiceIdentity.Feat in 'ServiceIdentity.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

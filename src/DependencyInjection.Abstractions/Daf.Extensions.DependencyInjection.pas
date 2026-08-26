@@ -71,7 +71,10 @@ type
   TServiceDecorator = TServiceDecorator<IInterface>;
 
   TServiceLifeTime = (Singleton, Scoped, Transient);
-  TServiceIdentity = string;
+  // Lo que hace que dos resoluciones devuelvan la misma instancia. Es un numero por
+  // REGISTRO, no un nombre de tipo: dos registros del mismo tipo de servicio son dos
+  // instancias, que es lo que hace util pedirlos todos.
+  TServiceIdentity = Integer;
 
   // Calcado de ServiceProviderOptions de .NET. Ambas comprobaciones son opt-in: una
   // validacion que bloquea un arranque que funcionaba cuesta mas de lo que ahorra.
@@ -94,10 +97,18 @@ type
     FLifeTime: TServiceLifeTime;
     FTypeInfo: PTypeInfo;
     FImplementationClass: TClass;
+    FIdentity: TServiceIdentity;
   public
     constructor Create(const Factory: TServiceFactory; const LifeTime: TServiceLifeTime; const TypeInfo: PTypeInfo;
       const ImplementationClass: TClass = nil);
+    // Nombre legible del tipo de servicio, y para nada mas que un mensaje de error.
+    // No decide nada y no lanza: ver la implementacion.
     function ServiceName: string;
+    // Que registro es este. Se asigna al construirse y viaja con las copias, porque
+    // Descriptors reparte copias y todas tienen que seguir siendo el mismo registro.
+    // Es unico dentro del proceso; no es estable entre ejecuciones ni es una clave de
+    // servicio con nombre, asi que no sirve para buscar nada.
+    property Identity: TServiceIdentity read FIdentity;
     property Factory: TServiceFactory read FFactory;
     property LifeTime: TServiceLifeTime read FLifeTime;
     property TypeInfo: PTypeInfo read FTypeInfo;
@@ -281,6 +292,11 @@ type
     constructor Create(const DecoratedType: PTypeInfo; Decorated: IInvokable = nil);
   end;
 
+// Nombre de un tipo de servicio PARA UN MENSAJE DE ERROR, y por eso no puede lanzar. Se
+// compone dentro de la ruta de error, donde una excepcion no es un fallo mas: sustituye el
+// que se estaba contando y el original se pierde.
+function ServiceTypeName(const ServiceType: PTypeInfo): string;
+
 implementation
 
 uses
@@ -288,6 +304,13 @@ uses
   Daf.MemUtils,
   Daf.Activator,
   Daf.DependencyInjection.ActivatorUtilities;
+
+var
+  // Contador de proceso, y aqui si vale: la identidad de un registro solo tiene que ser
+  // UNICA, no reproducible entre ejecuciones ni entre colecciones -- al reves que la
+  // contabilidad de "esto ya se proceso", que por eso vive en la coleccion. Empieza en 1
+  // para que el 0 de un TServiceDescriptor sin construir no se confunda con un registro.
+  GLastServiceIdentity: Integer = 0;
 
 { TServiceProviderOptions }
 
@@ -311,18 +334,43 @@ begin
   FLifeTime := LifeTime;
   FTypeInfo := TypeInfo;
   FImplementationClass := ImplementationClass;
+  FIdentity := AtomicIncrement(GLastServiceIdentity);
  end;
 
 
-function TServiceDescriptor.ServiceName: string;
+function ServiceTypeName(const ServiceType: PTypeInfo): string;
 begin
+  // Se llega aqui porque algo ya iba mal, asi que el nombre cualificado se INTENTA, no se
+  // exige: el simple queda puesto de entrada y solo lo sustituye el cualificado si sale.
+  Result := string(ServiceType.Name);
   var RC := TRttiContext.Create;
   try
-    var RType := RC.GetType(TypeInfo);
-    Result :=   RType.QualifiedName;
+    try
+      var RType := RC.GetType(ServiceType);
+      if RType <> nil then
+      begin
+        // QualifiedName lanza ENonPublicType si el tipo no esta declarado en la interface de
+        // una unit -- el caso de una instanciacion cerrada que solo vive dentro del cuerpo de
+        // un metodo. Name si funciona sobre ese mismo tipo.
+        // A una variable local y NO a Result: Delphi pasa Result como parametro oculto por
+        // referencia, y una funcion que lanza ya lo ha vaciado antes de hacerlo. Escribiendo
+        // directamente en Result, el nombre simple de arriba desaparece y el mensaje de error
+        // acaba sin nombrar el servicio -- medido, y con la excepcion capturada igualmente.
+        var Qualified := RType.QualifiedName;
+        Result := Qualified;
+      end;
+    except
+      // Se queda el nombre simple, que ya esta puesto. Tragarse la excepcion es el punto:
+      // nombrar un servicio para un mensaje no puede abortar.
+    end;
   finally
     RC.Free;
   end;
+end;
+
+function TServiceDescriptor.ServiceName: string;
+begin
+  Result := ServiceTypeName(FTypeInfo);
 end;
 
 { IServiceProvider }
