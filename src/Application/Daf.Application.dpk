@@ -30,6 +30,9 @@
 
 requires
   rtl,
+  // Por TVersionInfo, que se mudo aqui: es un record de 196 lineas que solo usa
+  // System.SysUtils, y con TDafApplication deprecado no tiene por que vivir en su paquete.
+  Daf.Commons,
   Daf.Configuration.Abstractions,
   Daf.DependencyInjection.Abstractions,
   Daf.DependencyInjection,
@@ -37,8 +40,7 @@ requires
   Daf.Hosting;
 
 contains
-  Daf.Application.Builder in 'Daf.Application.Builder.pas',
-  Daf.Application.Version in 'Daf.Application.Version.pas';
+  Daf.Application.Builder in 'Daf.Application.Builder.pas';
 
 end.
 

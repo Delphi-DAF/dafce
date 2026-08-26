@@ -113,11 +113,11 @@
         </DelphiCompile>
         <DCCReference Include="rtl.dcp"/>
         <DCCReference Include="Daf.Commons.dcp"/>
+        <DCCReference Include="Daf.Commons.dcp"/>
         <DCCReference Include="Daf.Configuration.dcp"/>
         <DCCReference Include="Daf.DependencyInjection.Abstractions.dcp"/>
         <DCCReference Include="Daf.Hosting.dcp"/>
         <DCCReference Include="Daf.Application.Builder.pas"/>
-        <DCCReference Include="Daf.Application.Version.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\source.optset</DependentOn>

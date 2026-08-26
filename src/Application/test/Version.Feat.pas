@@ -1,5 +1,15 @@
 ﻿unit Version.Feat;
 
+// ⚠️ Esta suite cubre la via DEPRECADA. TDafApplication y TDafApplicationBuilder siguen
+// compilando en 2.0 --deprecados, no borrados-- y mientras se entreguen, esto es lo unico que
+// los ejercita: quitarlo dejaria sin cobertura codigo que se sigue enviando.
+//
+// El relevo es la familia de aplicaciones, y cada variante tiene sus propios specs:
+//   consola     TCliApplication     src/Cli/test/CliVariant.Feat.pas
+//   web         TWebApplication     src/web/test/WebVariant.Feat.pas
+//   escritorio  TVclApplication     src/VCL/test/VclVariant.Feat.pas
+//               TFmxApplication     src/FMX/test/FmxVariant.Feat.pas
+
 // Las clases con atributo viven en la seccion interface a proposito: lo que se ejerce aqui es una
 // lectura por RTTI, y un tipo que el enlazador no considere alcanzable deja el atributo fuera.
 

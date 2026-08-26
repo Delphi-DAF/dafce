@@ -36,6 +36,7 @@ type
   TDafApplication = class;
   TDafApplicationClass = class of TDafApplication;
   TDafApplicationBuilderClass = class of TDafApplicationBuilder;
+  /// <summary>Deprecado. El relevo es la variante de la familia que corresponda.</summary>
   TDafApplicationBuilder = class(THostBuilder)
   strict private
     FAppClass: TDafApplicationClass;
@@ -47,6 +48,16 @@ type
   end;
 
   {$M+}
+  /// <summary>
+  /// Deprecado. Lo sustituye la familia de aplicaciones: <c>TCliApplication</c> para consola,
+  /// <c>TWebApplication</c> para web, <c>TVclApplication</c> y <c>TFmxApplication</c> para
+  /// escritorio.
+  /// </summary>
+  /// <remarks>
+  ///   Su comprobacion de <c>--version</c> escrita a mano NO se muda: la resuelve el resultado de
+  ///   parseo de la gramatica --<c>ICommandLineParseResult.VersionRequested</c>--, que ya sabia
+  ///   hacerlo mientras esta clase lo repetia al lado.
+  /// </remarks>
   TDafApplication = class(TInterfacedObject, IDafApplication)
   strict private
     FHost: IHost;
@@ -64,7 +75,6 @@ type
     procedure Execute;virtual;
   public
     class function VersionInfo: TVersionInfo;virtual;
-    class function VersionRequested: Boolean;virtual;
     class function CreateHostBuilder: TDafApplicationBuilder;overload;
     class function CreateHostBuilder<T: TDafApplicationBuilder>: T;overload;
     class function App: TDafApplication;inline;
@@ -115,11 +125,6 @@ begin
 end;
 
 { TDafApplication }
-
-class function TDafApplication.VersionRequested: Boolean;
-begin
-  Result := (ParamCount > 0) and (ParamStr(1) = '--version');
-end;
 
 class function TDafApplication.VersionInfo: TVersionInfo;
 begin

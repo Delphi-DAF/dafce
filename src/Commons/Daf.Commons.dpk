@@ -34,6 +34,9 @@ contains
   Daf.MemUtils in 'Daf.MemUtils.pas',
   Daf.Types in 'Daf.Types.pas',
   Daf.Nullable in 'Daf.Nullable.pas',
+  // Mudado desde Daf.Application sin tocar una coma: solo usa System.SysUtils, y aqui lo
+  // alcanzan las cuatro variantes sin requerir el paquete de aplicacion deprecado.
+  Daf.Application.Version in 'Daf.Application.Version.pas',
   Daf.Comparers in 'Daf.Comparers.pas',
   Daf.Activator in 'Daf.Activator.pas',
   Daf.FilterSpec in 'Daf.FilterSpec.pas',

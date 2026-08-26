@@ -7,7 +7,9 @@ uses
   Winapi.Windows,
   Vcl.Forms, Vcl.Controls, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.Graphics,
   TicTacToe.ViewPort,
-  TicTacToe.ViewModel;
+  TicTacToe.ViewModel,
+  Daf.DependencyInjection.ActivatorUtilities,
+  Daf.VCL.Application;
 
 type
   /// <summary>
@@ -89,7 +91,10 @@ begin
   FHoverRow := -1;
   FHoverCol := -1;
   DoubleBuffered := True;
-  FViewModel := TGameViewModel.Create;
+  // Por el contenedor y no con Create: el formulario lo construye la plataforma, asi que no
+  // hay nadie que le inyecte nada -- DafApp es la via de salida para justo este caso, y
+  // ActivatorUtilities resuelve por el proveedor lo que el ViewModel llegue a necesitar.
+  FViewModel := TActivatorUtilities.CreateInstance<TGameViewModel>(DafApp.Services);
   FViewModel.ViewPort := Self;
   BuildUI;
   Refresh;

@@ -111,6 +111,7 @@
         <DCCReference Include="Daf.MemUtils.pas"/>
         <DCCReference Include="Daf.Types.pas"/>
         <DCCReference Include="Daf.Nullable.pas"/>
+        <DCCReference Include="Daf.Application.Version.pas"/>
         <DCCReference Include="Daf.Comparers.pas"/>
         <DCCReference Include="Daf.Activator.pas"/>
         <DCCReference Include="Daf.FilterSpec.pas"/>
