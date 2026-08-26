@@ -95,24 +95,26 @@ program QuickStart;
 uses
   System.SysUtils,
   Daf.Extensions.DependencyInjection,
-  Daf.Extensions.Hosting,
-  Daf.Application.Builder,
+  Daf.CommandLine,
+  Daf.Configuration.CommandLine,
+  Daf.Cli,
   QuickStart.Greeter in 'QuickStart.Greeter.pas';
 
+// Lo mas corto que se puede escribir con la familia: una variante, sus registros donde estan
+// escritos, y el codigo de salida que devuelve el trabajo.
 begin
-  var Builder := TDafApplication.CreateHostBuilder;
+  var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
 
-  Builder.ConfigureServices(
-    procedure(Context: IHostBuilderContext; Services: IServiceCollection)
-    begin
-      Services.AddSingleton<IGreeter, TGreeter>;
-    end);
+  B.Services.AddSingleton<IGreeter, TGreeter>;
 
-  Builder.Build.Run(
-    procedure(Services: IServiceProvider)
+  B.OnExecute(
+    function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
     begin
       Writeln(Services.GetRequiredService<IGreeter>.Greet);
+      Result := TCliExit.Ok;
     end);
+
+  ExitCode := B.Build.Run;
 end.
 ```
 

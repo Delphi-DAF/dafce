@@ -6,30 +6,29 @@
 uses
   System.SysUtils,
   Daf.Extensions.DependencyInjection,
-  Daf.Extensions.Hosting,
-  Daf.Hosting,
+  Daf.CommandLine,
+  Daf.Configuration.CommandLine,
+  Daf.Cli,
   LegacyEngine in 'LegacyEngine.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;
   try
-    var Builder: IHostBuilder := THostBuilder.Create;
-    Builder.ConfigureServices(
-      procedure(Context: IHostBuilderContext; Services: IServiceCollection)
+    var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
+
+    // El arranque no nombra la tarea de inicializacion del paquete, ni sabe que existe.
+    // Llamar a esta funcion, ademas, enlaza su unit: no hace falta un uses de force-link.
+    AddLegacyEngine(B.Services);
+
+    B.OnExecute(
+      function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
       begin
-        // El arranque no nombra la tarea de inicializacion del paquete, ni sabe que existe.
-        // Llamar a esta funcion, ademas, enlaza su unit: no hace falta un uses de force-link.
-        AddLegacyEngine(Services);
+        // Si la tarea de arranque no hubiera corrido, esto lanzaria.
+        Writeln(TLegacyEngine.Evaluate('2+2'));
+        Result := TCliExit.Ok;
       end);
 
-    var Host := Builder.Build;
-    Host.Start;
-    try
-      // Si la tarea de arranque no hubiera corrido, esto lanzaria.
-      Writeln(TLegacyEngine.Evaluate('2+2'));
-    finally
-      Host.Stop;
-    end;
+    ExitCode := B.Build.Run;
   except
     on E: Exception do
     begin

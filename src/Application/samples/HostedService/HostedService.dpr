@@ -7,48 +7,41 @@ uses
   System.IOUtils,
   Daf.Extensions.Logging,
   Daf.Logging.Provider,
-  Daf.Logging.Builder,
-  Daf.Extensions.Hosting,
   Daf.NNLog.Loader,
   Daf.NNLog.Targets.Console,
   Daf.NNLog.Targets.File_,
   Daf.NNLog.Targets.UDP,
   Daf.Extensions.DependencyInjection,
+  // Por AddHostedService, que es metodo del record helper que declara esta unit.
+  Daf.Extensions.Hosting,
   Daf.Extensions.Configuration,
   Daf.Configuration.Json,
-  Daf.Application.Builder,
+  Daf.CommandLine,
+  Daf.Configuration.CommandLine,
+  Daf.Cli,
   HostedWorker in 'HostedWorker.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;
   try
-    var Builder := TDafApplication.CreateHostBuilder;
-    Builder.ConfigureAppConfiguration(procedure(Context: IHostBuilderContext; Builder: IConfigurationBuilder)
-      begin
-        var Env := Context.Environment;
-        var JsonFilePath := TPath.Combine(Env.BinPath, Env.ApplicationName, 'appsettings.json');
-        JsonConfig.AddFile(Builder, JsonFilePath);
-      end);
+    var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
 
-    Builder.ConfigureServices(procedure(Context: IHostBuilderContext; Services: IServiceCollection)
-      begin
-        AddLogging(Services, procedure(Builder: ILoggingBuilder)
-          begin
-            Builder.AddProvider(TNNLogLoader.BuildProvider(Context, 'Logging:NLog'));
-          end);
+    // El entorno YA responde: no hace falta un callback para poder leerlo. Esta es la linea
+    // que antes costaba un ConfigureAppConfiguration entero.
+    var JsonFilePath := TPath.Combine(B.Environment.BinPath, B.Environment.ApplicationName, 'appsettings.json');
+    JsonConfig.AddFile(B.Configuration, JsonFilePath);
 
-        Services.AddHostedService<THostedWorker>;
-        end);
+    // Y la configuracion tambien: el proveedor de log se compone leyendo lo que se acaba de anadir.
+    B.Logging.AddProvider(TNNLogLoader.BuildProvider(B.Environment, B.Configuration.GetSection('Logging:NLog')));
 
-    var App := Builder.Build;
+    B.Services.AddHostedService<THostedWorker>;
 
-    App.Run(True);
+    ExitCode := B.Build.Run;
   except
-    on E: exception do
+    on E: Exception do
     begin
-      Write(E.message);
+      Write(E.Message);
       ReadLn;
     end;
   end;
 end.
-
