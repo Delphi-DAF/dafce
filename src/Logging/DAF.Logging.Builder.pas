@@ -32,7 +32,12 @@ type
     function Build: ILoggerFactory;
   end;
 
-procedure AddLogging(const Services: IServiceCollection; const Add: TProc<ILoggingBuilder>);
+procedure AddLogging(const Services: IServiceCollection; const Add: TProc<ILoggingBuilder>); overload;
+// Para quien ya sostiene el componedor y lo ha ido llenando a lo largo del arranque --el estilo
+// inmediato-- en vez de llenarlo dentro de un callback. La comprobacion de "hubo algun
+// proveedor" y su mensaje viven aqui una sola vez, que es lo que evita tener dos redacciones
+// del mismo error segun por donde se entre.
+procedure AddLogging(const Services: IServiceCollection; const Builder: TLoggingBuilder); overload;
 
 implementation
 
@@ -73,15 +78,20 @@ begin
   Builder := TLoggingBuilder.Create;
   Configure := Builder;
   Add(Configure);
+  AddLogging(Services, Builder);
+end;
+
+procedure AddLogging(const Services: IServiceCollection; const Builder: TLoggingBuilder);
+begin
   // Se comprueba una sola vez, aqui, al acabar de componer. Ni al escribir --lo enseñaria lejos del
   // descuido y una vez por entrada, que es como un aviso se convierte en decorado-- ni por cada
-  // logger creado. Y al componer todavia hay a quien decirselo: esto corre dentro de
-  // IHostBuilder.Build, que informa por el canal de arranque y relanza.
+  // logger creado. Y al componer todavia hay a quien decirselo: esto corre dentro de Build,
+  // que informa por el canal de arranque y relanza.
   if not Builder.HasProviders then
     raise ELoggingCompositionError.Create('AddLogging was given no providers: the pipeline would ' +
       'accept every entry and discard it. Register a provider, or if the silence is deliberate say ' +
       'so with Builder.AddNullProvider.');
-  Services.AddSingleton<ILoggerFactory>(Configure.Build);
+  Services.AddSingleton<ILoggerFactory>((Builder as ILoggingBuilder).Build);
 end;
 
 end.

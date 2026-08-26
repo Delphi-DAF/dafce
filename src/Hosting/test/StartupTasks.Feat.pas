@@ -3,6 +3,7 @@
 interface
 
 uses
+  System.SysUtils,
   Daf.Extensions.DependencyInjection,
   Daf.Extensions.Hosting,
   DAF.Extensions.Logging;
@@ -65,7 +66,7 @@ type
     Failure: string;
     constructor Create;
     destructor Destroy; override;
-    procedure BuildHost(const Configure: TConfigureServicesAction);
+    procedure BuildHost(const Configure: TProc<IServiceCollection>);
     procedure StartHost;
     function StartedNotified: Boolean;
   end;
@@ -77,7 +78,6 @@ function AddGreeting(const Services: IServiceCollection): IServiceCollection;
 implementation
 
 uses
-  System.SysUtils,
   System.StrUtils,
   Daf.MiniSpec,
   Daf.Hosting;
@@ -188,10 +188,11 @@ begin
   inherited;
 end;
 
-procedure TStartupWorld.BuildHost(const Configure: TConfigureServicesAction);
+procedure TStartupWorld.BuildHost(const Configure: TProc<IServiceCollection>);
 begin
-  var Builder: IHostBuilder := THostBuilder.Create;
-  Builder.ConfigureServices(Configure);
+  var Builder := THostBuilder.Create;
+  var Owner: IHostApplicationBuilder := Builder;
+  Configure(Builder.Services);
   Host := Builder.Build;
 end;
 
@@ -230,7 +231,7 @@ Feature Startup tasks @hosting @startup
       begin
         TTrace.Reset;
         W.BuildHost(
-          procedure(Context: IHostBuilderContext; Services: IServiceCollection)
+          procedure(Services: IServiceCollection)
           begin
             Services.AddStartupTask<TSeedingTask>;
           end);
@@ -249,7 +250,7 @@ Feature Startup tasks @hosting @startup
       begin
         TTrace.Reset;
         W.BuildHost(
-          procedure(Context: IHostBuilderContext; Services: IServiceCollection)
+          procedure(Services: IServiceCollection)
           begin
             Services.AddSingleton<ISeed, TSeed>;
             Services.AddStartupTask<TDependentTask>;
@@ -271,7 +272,7 @@ Feature Startup tasks @hosting @startup
       begin
         TTrace.Reset;
         W.BuildHost(
-          procedure(Context: IHostBuilderContext; Services: IServiceCollection)
+          procedure(Services: IServiceCollection)
           begin
             Services.AddHostedService<TConsumerService>;
             Services.AddStartupTask<TSeedingTask>;
@@ -295,7 +296,7 @@ Feature Startup tasks @hosting @startup
       begin
         TTrace.Reset;
         W.BuildHost(
-          procedure(Context: IHostBuilderContext; Services: IServiceCollection)
+          procedure(Services: IServiceCollection)
           begin
             Services.AddStartupTask<TFailingTask>;
             Services.AddHostedService<TConsumerService>;
@@ -330,7 +331,7 @@ Feature Startup tasks @hosting @startup
       begin
         TTrace.Reset;
         W.BuildHost(
-          procedure(Context: IHostBuilderContext; Services: IServiceCollection)
+          procedure(Services: IServiceCollection)
           begin
             AddGreeting(Services);
           end);

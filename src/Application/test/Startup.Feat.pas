@@ -59,11 +59,9 @@ end;
 function BuildApp(const AppClass: TDafApplicationClass): IDafApplication;
 begin
   var Builder := AppClass.CreateHostBuilder;
-  Builder.ConfigureServices(
-    procedure(Context: IHostBuilderContext; Services: IServiceCollection)
-    begin
-      Services.AddSingleton<IGreeter, TGreeter>;
-    end);
+  // Estilo inmediato: el registro ocurre donde esta escrito, sin callback que alguien dispare
+  // mas tarde.
+  Builder.Services.AddSingleton<IGreeter, TGreeter>;
   Result := Builder.Build;
 end;
 

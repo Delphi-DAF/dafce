@@ -10,6 +10,7 @@ uses
   System.Rtti,
   Daf.Threading,
   DAF.Extensions.DependencyInjection,
+  DAF.Extensions.Logging,
   Daf.Extensions.Configuration;
 
 type
@@ -77,17 +78,54 @@ type
     procedure Run;
   end;
 
-  TConfigureHostConfigAction = TProc<IConfigurationBuilder>;
-  TConfigureAppConfigAction = TProc<IHostBuilderContext, IConfigurationBuilder>;
   TConfigureServicesAction = TProc<IHostBuilderContext, IServiceCollection>;
-  IHostBuilder = interface(IInvokable)
-    ['{3F62FA6D-9AC8-4C7A-8886-DFAFAC3AD663}']
+
+  /// <summary>
+  /// El contrato que comparten los miembros de la familia de aplicaciones --CLI, Web, VCL y
+  /// FMX--, y lo que hace que sean una familia y no cuatro cosas parecidas.
+  /// </summary>
+  /// <remarks>
+  ///   <para>
+  ///   Es el estilo <b>inmediato</b>: todo lo que declara es una propiedad ya viva al volver
+  ///   del constructor, asi que lo registrado ocurre donde esta escrito. El estilo diferido
+  ///   --acumular acciones en listas y dispararlas cuando decida el builder-- no convive con
+  ///   este: dos formas de expresar lo mismo es el defecto, no la comodidad.
+  ///   </para>
+  ///   <para>
+  ///   <b>Build no esta aqui, y no es un olvido:</b> cada variante devuelve su propia clase de
+  ///   aplicacion, y una interfaz de Delphi no admite retorno covariante. Es tambien lo que
+  ///   hace .NET, donde IHostApplicationBuilder tampoco lo declara.
+  ///   </para>
+  ///   <para>
+  ///   <b>Dos miembros del linaje no se portan, y quedan declarados como divergencia:</b>
+  ///   Metrics, porque no hay pieza equivalente en DAF a la que apuntar; y
+  ///   ConfigureContainer, porque es un metodo generico y una interfaz de Delphi no los
+  ///   admite --no es que se descarte, es que no es expresable--.
+  ///   </para>
+  /// </remarks>
+  IHostApplicationBuilder = interface(IInvokable)
+    ['{8D8B3E08-3CC9-402A-86C3-188FE0682B08}']
+    function GetServices: IServiceCollection;
+    function GetConfiguration: IConfigurationManager;
+    function GetEnvironment: IHostEnvironment;
+    function GetLogging: ILoggingBuilder;
     function GetProperties: TDictionary<string, TValue>;
-    function ConfigureHostConfiguration(const ConfigAction: TProc<IConfigurationBuilder>): IHostBuilder;
-    function ConfigureAppConfiguration(const ConfigAction: TConfigureAppConfigAction): IHostBuilder;
-    function ConfigureServices(const ConfigAction: TProc<IHostBuilderContext, IServiceCollection>): IHostBuilder;
-    function UseProperty(const Key: string; const Value: TValue): IHostBuilder;
-    function Build: IHost;
+
+    /// <summary>Los registros de servicio de la aplicacion.</summary>
+    property Services: IServiceCollection read GetServices;
+    /// <summary>
+    /// Constructor y lectura a la vez: lo anadido se lee acto seguido, que es lo que permite
+    /// elegir una fuente a partir de lo ya configurado sin un callback diferido.
+    /// </summary>
+    property Configuration: IConfigurationManager read GetConfiguration;
+    /// <summary>Ya resuelto, y derivado de la configuracion de host.</summary>
+    property Environment: IHostEnvironment read GetEnvironment;
+    /// <summary>
+    /// Solo se compone si alguien la toca: componer sin proveedores es un error, asi que
+    /// tocarla por sistema rompeia toda aplicacion que no configure logging.
+    /// </summary>
+    property Logging: ILoggingBuilder read GetLogging;
+    /// <summary>Datos que comparten entre si las piezas que componen el arranque.</summary>
     property Properties: TDictionary<string, TValue> read GetProperties;
   end;
 

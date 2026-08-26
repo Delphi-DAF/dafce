@@ -32,6 +32,9 @@ requires
   rtl,
   Daf.Commons,
   Daf.DependencyInjection.Abstractions,
+  // Por ILoggingBuilder, que el contrato de la familia expone como propiedad. Vive en el
+  // paquete de contratos de logging justamente para que esto no sea requerir un concreto.
+  Daf.Logging.Abstractions,
   Daf.Configuration.Abstractions;
 
 contains

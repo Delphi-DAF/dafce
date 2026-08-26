@@ -27,7 +27,9 @@ implementation
 
 uses
   System.SysUtils,
+  Winapi.Windows,
   Daf.MiniSpec,
+  Daf.Extensions.Logging,
   Daf.Extensions.DependencyInjection,
   Daf.Extensions.Hosting,
   Daf.Hosting;
@@ -66,21 +68,15 @@ Feature Several startups in one process @hosting @builder-style
     .Given('one builder that is not going to be released',
       procedure(W: TOverlapWorld)
       begin
-        var First: IHostBuilder := THostBuilder.Create;
-        First.ConfigureServices(
-          procedure(Context: IHostBuilderContext; Services: IServiceCollection)
-          begin
-            Services.AddSingleton<IMarker>(TMarker.Create('first') as IMarker);
-          end);
+        var First := THostBuilder.Create;
+        var FirstOwner: IHostApplicationBuilder := First;
+        First.Services.AddSingleton<IMarker>(TMarker.Create('first') as IMarker);
 
         // Created while the first one is still held: two builders, two environments and two
         // builder contexts alive at the same time.
-        var Second: IHostBuilder := THostBuilder.Create;
-        Second.ConfigureServices(
-          procedure(Context: IHostBuilderContext; Services: IServiceCollection)
-          begin
-            Services.AddSingleton<IMarker>(TMarker.Create('second') as IMarker);
-          end);
+        var Second := THostBuilder.Create;
+        var SecondOwner: IHostApplicationBuilder := Second;
+        Second.Services.AddSingleton<IMarker>(TMarker.Create('second') as IMarker);
 
         // Both hosts alive at the same time, not one after the other. Stop is what releases
         // the container -- and with it the host -- so both are stopped in the finally; a host
@@ -111,13 +107,9 @@ Feature Several startups in one process @hosting @builder-style
         W.Report := '';
         for var I := 1 to 3 do
         begin
-          var Builder: IHostBuilder := THostBuilder.Create;
-          var Tag := 'h' + I.ToString;
-          Builder.ConfigureServices(
-            procedure(Context: IHostBuilderContext; Services: IServiceCollection)
-            begin
-              Services.AddSingleton<IMarker>(TMarker.Create(Tag) as IMarker);
-            end);
+          var Builder := THostBuilder.Create;
+          var Owner: IHostApplicationBuilder := Builder;
+          Builder.Services.AddSingleton<IMarker>(TMarker.Create('h' + I.ToString) as IMarker);
           var Host := Builder.Build;
           Host.Start;
           try
@@ -132,6 +124,134 @@ Feature Several startups in one process @hosting @builder-style
       procedure(W: TOverlapWorld)
       begin
         Expect(W.Report).ToEqual('h1h2h3');
+      end)
+
+.Rule('El entorno sale de la configuracion de host')
+
+  // Hoy no habia forma de fijar el entorno por linea de comandos: THostEnvironment leia las tres
+  // variables del proceso por su cuenta y la configuracion no participaba. Y es lo primero que se
+  // prueba en cuanto el builder recibe argumentos.
+  .Scenario('El entorno se fija por linea de comandos')
+    .Given('un builder al que se le pasa el entorno como argumento',
+      procedure(W: TOverlapWorld)
+      begin
+        var Builder := THostBuilder.Create(['--DAF_APP_ENV=Development']);
+        var Owner: IHostApplicationBuilder := Builder;
+        W.Report := Builder.Environment.EnvironmentName;
+      end)
+    .When('se lee su entorno').NoAction
+    .&Then('responde con ese valor',
+      procedure(W: TOverlapWorld)
+      begin
+        Expect(W.Report).ToEqual('Development');
+      end)
+
+  .Scenario('La variable de entorno de siempre sigue valiendo')
+    .Given('el entorno puesto en la variable de entorno, y ningun argumento',
+      procedure(W: TOverlapWorld)
+      begin
+        // Nombre en una variable: PChar sobre una constante verdadera da E2036, y el error sale
+        // lejos de la causa.
+        var VarName: string := TDafEnvVars.APP_ENV;
+        Winapi.Windows.SetEnvironmentVariable(PChar(VarName), 'Staging');
+        try
+          var Builder := THostBuilder.Create;
+          var Owner: IHostApplicationBuilder := Builder;
+          W.Report := Builder.Environment.EnvironmentName;
+        finally
+          Winapi.Windows.SetEnvironmentVariable(PChar(VarName), nil);
+        end;
+      end)
+    .When('se lee su entorno').NoAction
+    .&Then('responde con ese valor',
+      procedure(W: TOverlapWorld)
+      begin
+        Expect(W.Report).ToEqual('Staging');
+      end)
+
+  // El modo de fallo que menos avisa: el valor por defecto es indistinguible del argumento
+  // ignorado, asi que un escenario que solo comprobara "responde algo" pasaria con el entorno sin
+  // implementar.
+  .Scenario('Un argumento ignorado no se confunde con el valor por defecto')
+    .Given('el entorno fijado a un valor distinto del predeterminado',
+      procedure(W: TOverlapWorld)
+      begin
+        var Builder := THostBuilder.Create(['--DAF_APP_ENV=Testing']);
+        var Owner: IHostApplicationBuilder := Builder;
+        W.Report := Builder.Environment.EnvironmentName + '/' +
+          BoolToStr(Builder.Environment.IsProduction, True);
+      end)
+    .When('se lee su entorno').NoAction
+    .&Then('no es el predeterminado',
+      procedure(W: TOverlapWorld)
+      begin
+        Expect(W.Report).ToEqual('Testing/False');
+      end)
+
+  .Scenario('El nombre de aplicacion y la raiz de contenido tambien salen de ahi')
+    .Given('los dos fijados por argumento',
+      procedure(W: TOverlapWorld)
+      begin
+        var Builder := THostBuilder.Create(['--DAF_APP_NAME=mytool']);
+        var Owner: IHostApplicationBuilder := Builder;
+        W.Report := Builder.Environment.ApplicationName;
+      end)
+    .When('se leen').NoAction
+    .&Then('responden con lo que se les paso',
+      procedure(W: TOverlapWorld)
+      begin
+        Expect(W.Report).ToEqual('mytool');
+      end)
+
+.Rule('Componer logging solo si se pidio')
+
+  // AddLogging levanta el error de composicion cuando nadie anadio un proveedor, asi que llamarlo
+  // por sistema romperia toda aplicacion que no configure logging -- que hoy son casi todas.
+  .Scenario('Una aplicacion que nunca toca Logging construye y arranca')
+    .Given('un builder al que nadie le pide la propiedad Logging',
+      procedure(W: TOverlapWorld)
+      begin
+        var Builder := THostBuilder.Create;
+        var Owner: IHostApplicationBuilder := Builder;
+        Builder.Services.AddSingleton<IMarker>(TMarker.Create('quiet') as IMarker);
+        var Host := Builder.Build;
+        Host.Start;
+        try
+          W.Report := Host.Services.GetService<IMarker>.Name;
+        finally
+          Host.Stop;
+        end;
+      end)
+    .When('se construye y se arranca').NoAction
+    .&Then('llega hasta el final sin que nada levante un error de composicion',
+      procedure(W: TOverlapWorld)
+      begin
+        Expect(W.Report).ToEqual('quiet');
+      end)
+
+  .Scenario('Quien si la toca obtiene su pipeline')
+    .Given('un builder al que se le anade un proveedor de logging',
+      procedure(W: TOverlapWorld)
+      begin
+        var Builder := THostBuilder.Create;
+        var Owner: IHostApplicationBuilder := Builder;
+        Builder.Logging.AddNullProvider;
+        var Host := Builder.Build;
+        Host.Start;
+        try
+          // Assigned pide una variable, no el resultado de una llamada: sobre la llamada da
+          // E2036 y el error aparece en la linea siguiente, lejos de la causa.
+          var Factory: ILoggerFactory := Host.Services.GetService<ILoggerFactory>;
+          W.Report := BoolToStr(Assigned(Factory), True);
+        finally
+          Host.Stop;
+        end;
+      end)
+    .When('se construye y se arranca').NoAction
+    .&Then('la factoria de loggers esta registrada',
+      procedure(W: TOverlapWorld)
+      begin
+        Expect(W.Report).ToEqual('True');
       end);
 
 end.

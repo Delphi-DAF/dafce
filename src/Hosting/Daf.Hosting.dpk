@@ -36,7 +36,11 @@ requires
   Daf.DependencyInjection,
   Daf.Configuration,
   Daf.Commons,
-  Daf.Logging.Abstractions;
+  Daf.Logging.Abstractions,
+  // Por TLoggingBuilder y AddLogging: el componedor sostiene el builder de logging y compone
+  // el pipeline en Build. Es la misma arista que Microsoft.Extensions.Hosting tiene sobre
+  // Microsoft.Extensions.Logging.
+  Daf.Logging;
 
 contains
   Daf.Hosting in 'Daf.Hosting.pas';

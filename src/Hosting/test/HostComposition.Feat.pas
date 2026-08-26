@@ -25,15 +25,12 @@ function BuildStartAndStop(out Trace: string): Integer;
 begin
   TTrace.Reset;
   var Registered := 0;
-  var Builder: IHostBuilder := THostBuilder.Create;
-  Builder.ConfigureServices(
-    procedure(Context: IHostBuilderContext; Services: IServiceCollection)
-    begin
-      Services.AddSingleton<ISeed, TSeed>;
-      Services.AddStartupTask<TSeedingTask>;
-      Services.AddHostedService<TConsumerService>;
-      Registered := Services.Count;
-    end);
+  var Builder := THostBuilder.Create;
+  var Owner: IHostApplicationBuilder := Builder;
+  Builder.Services.AddSingleton<ISeed, TSeed>;
+  Builder.Services.AddStartupTask<TSeedingTask>;
+  Builder.Services.AddHostedService<TConsumerService>;
+  Registered := Builder.Services.Count;
 
   var Host := Builder.Build;
   Host.Start;

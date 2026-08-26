@@ -93,11 +93,14 @@ end;
 function SpecServiceProvider: IServiceProvider;
 begin
   var Services: IServiceCollection := TServiceCollection.Create;
-  Services.AddSingleton<IHostEnvironment>(THostEnvironment.Create as IHostEnvironment);
   // TConfigurationBuilder es contado por referencia: encadenar sobre el Create deja el objeto
   // sin dueno y se pierde. Se sostiene en una variable de interfaz a proposito.
   var ConfigBuilder: IConfigurationBuilder := TConfigurationBuilder.Create;
-  Services.AddSingleton<IConfiguration>(ConfigBuilder.Build as IConfiguration);
+  var Config: IConfiguration := ConfigBuilder.Build as IConfiguration;
+  // El entorno SALE de la configuracion de host, asi que hay que darsela: ya no lee las tres
+  // variables del proceso por su cuenta.
+  Services.AddSingleton<IHostEnvironment>(THostEnvironment.Create(Config) as IHostEnvironment);
+  Services.AddSingleton<IConfiguration>(Config);
   Result := Services.BuildServiceProvider;
 end;
 

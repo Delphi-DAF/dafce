@@ -50,7 +50,9 @@ type
 implementation
 
 uses
+  System.SysUtils,
   System.Generics.Defaults,
+  Daf.Extensions.Logging,
   Daf.Enumerable;
 
 { TConfigurationManager }
@@ -86,9 +88,23 @@ begin
   // re-open every file already added -- and, worse, throw away everything written through
   // SetItem, because those values live in the providers that the rebuild replaces. No
   // error, no exception, and a read afterwards returns what an absent key would.
-  var Provider := Source.Build(Self);
-  Provider.Load;
-  FProviderList.Add(Provider);
+  try
+    var Provider := Source.Build(Self);
+    Provider.Load;
+    FProviderList.Add(Provider);
+  except
+    on E: Exception do
+    begin
+      // Este es el punto donde se ABRE el fichero, y con el estilo inmediato eso pasa aqui y no
+      // dentro de Build: la fuente se carga cuando se anade. El informe tiene que estar donde
+      // ocurre el fallo, no donde ocurria antes -- en una aplicacion de escritorio, sin consola
+      // y sin depurador, el canal de arranque es lo unico que queda entre el fallo y el silencio.
+      //
+      // Y despues se relanza: la propagacion es la otra mitad del informe.
+      BootstrapLog.LoggerFor(ClassName).LogError(E, 'a configuration source could not be added');
+      raise;
+    end;
+  end;
 end;
 
 function TConfigurationManager.Build: IConfigurationRoot;

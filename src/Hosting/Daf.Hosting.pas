@@ -9,6 +9,9 @@ uses
   Daf.Threading,
   Daf.Extensions.Hosting,
   Daf.Extensions.Configuration,
+  Daf.Extensions.Logging,
+  // TLoggingBuilder es campo del componedor, asi que la unit concreta hace falta ya aqui.
+  DAF.Logging.Builder,
   Daf.Extensions.DependencyInjection;
 
 type
@@ -43,7 +46,14 @@ type
     function GetBinPath: string;
     function GetEnvVar(VarName: string): string;
   public
-    constructor Create;
+    /// <summary>
+    /// El entorno SALE de la configuracion de host, como en el linaje. Antes leia las tres
+    /// variables del proceso por su cuenta y la configuracion no participaba, asi que no habia
+    /// forma de fijar el entorno por linea de comandos -- que es lo primero que se prueba en
+    /// cuanto el builder recibe argumentos, y lo que menos avisa cuando no funciona: el valor
+    /// por defecto es indistinguible del argumento ignorado.
+    /// </summary>
+    constructor Create(const HostConfiguration: IConfiguration);
     function IsDevelopment: Boolean;
     function IsStaging: Boolean;
     function IsProduction: Boolean;
@@ -91,43 +101,66 @@ type
     property Configuration: IConfiguration read GetConfiguration write SetConfiguration;
   end;
 
-  THostBuilder = class(TSingleton<THostBuilder>, IHostBuilder)
+  /// <summary>
+  /// El componedor generico de la familia, en estilo inmediato: al volver del constructor sus
+  /// propiedades ya estan vivas, y lo registrado ocurre donde esta escrito.
+  /// </summary>
+  /// <remarks>
+  ///   Baja a detalle de implementacion: la maquinaria de construccion es la misma --las cinco
+  ///   Initialize*, las dos fases y el informe por el canal de arranque--, lo que cambia es
+  ///   quien la llama y cuando. Tres Initialize* suben al constructor; las dos que dependen de
+  ///   lo que el usuario anada despues se quedan en Build.
+  /// </remarks>
+  THostBuilder = class(TSingleton<THostBuilder>, IHostApplicationBuilder)
   private
     // "Build ya se llamo" es de este builder, no del proceso: como class var, un proceso
     // solo podia construir un host en toda su vida, y un arnes de specs construye varios.
     FHostBuilt: Boolean;
-    FConfigureHostConfigActions: TList< TConfigureHostConfigAction>;
-    FConfigureServicesActions: TList<TConfigureServicesAction>;
-    FConfigureAppConfigActions: TList<TConfigureAppConfigAction>;
+    FArgs: TArray<string>;
     FEnvironment: IHostEnvironment;
     FHostBuilderContext: IHostBuilderContext;
-    FHostConfiguration: IConfiguration;
-    FAppConfiguration: IConfiguration;
+    // UNA sola configuracion, y nace prepoblada. Antes eran dos objetos y dos fases, unidos por
+    // el proveedor encadenado; el estilo inmediato no une nada porque no hay dos que unir.
+    FConfiguration: IConfigurationManager;
     FServices: IServiceCollection;
     FAppServices: IServiceProvider;
+    FLogging: ILoggingBuilder;
+    // La misma instancia que FLogging, por su clase: HasProviders no esta en la interfaz a
+    // proposito --lo pregunta quien acaba de componer, no el consumidor--.
+    FLoggingImpl: TLoggingBuilder;
+    // Componer logging sin proveedores es un error, asi que solo se compone si alguien toco la
+    // propiedad. Llamar a AddLogging por sistema romperia toda aplicacion que no lo configure.
+    FLoggingTouched: Boolean;
     function GetProperties: TDictionary<string, TValue>;
+    function GetServices: IServiceCollection;
+    function GetConfiguration: IConfigurationManager;
+    function GetEnvironment: IHostEnvironment;
+    function GetLogging: ILoggingBuilder;
     procedure InitializeHostConfiguration;
     procedure InitializeHostingEnvironment;
     procedure InitializeHostBuilderContext;
     procedure InitializeAppConfiguration;
     procedure InitializeServiceProvider;
-  protected
-    procedure InternalConfigureServices;
-    procedure InternalHostConfiguration(const ConfigBuilder: IConfigurationBuilder);
-    procedure InternalAppConfiguration(ConfigBuilder: IConfigurationBuilder);
-
-    procedure DoConfigureServices(Context: IHostBuilderContext; Services: IServiceCollection);virtual;
-    procedure DoConfigureAppConfiguration(Context: IHostBuilderContext; Builder: IConfigurationBuilder);virtual;
-    procedure DoConfigureHostConfiguration(Builder: IConfigurationBuilder);virtual;
   public
-    constructor Create;
+    /// <param name="Args">
+    ///   Los argumentos del proceso, que entran como fuente de configuracion. Una variante que
+    ///   declare gramatica de linea de comandos NO debe pasarlos aqui: serian dos lecturas del
+    ///   mismo argv con reglas distintas, y discrepan por construccion.
+    /// </param>
+    /// <param name="Configuration">
+    ///   Un manager ya sembrado, para que una variante pueda aportar sus fuentes ANTES de que
+    ///   el entorno se derive de el. Si no se da ninguno, se fabrica.
+    /// </param>
+    constructor Create(const Args: TArray<string> = nil;
+      const Configuration: IConfigurationManager = nil);
     destructor Destroy;override;
-    function ConfigureServices(const Action: TConfigureServicesAction): IHostBuilder;
-    function ConfigureAppConfiguration(const Action: TConfigureAppConfigAction): IHostBuilder;
-    function ConfigureHostConfiguration(const ConfigAction:TConfigureHostConfigAction): IHostBuilder;
-    function AddHostedService<T: class, IHostedService>: IHostBuilder;
-    function UseProperty(const Key: string; const Value: TValue): IHostBuilder;
+    function AddHostedService<T: class, IHostedService>: IHostApplicationBuilder;
+    function UseProperty(const Key: string; const Value: TValue): IHostApplicationBuilder;
     function Build: IHost;
+    property Services: IServiceCollection read GetServices;
+    property Configuration: IConfigurationManager read GetConfiguration;
+    property Environment: IHostEnvironment read GetEnvironment;
+    property Logging: ILoggingBuilder read GetLogging;
     property Properties: TDictionary<string, TValue> read GetProperties;
   end;
 
@@ -156,11 +189,13 @@ uses
   System.IOUtils,
   System.SyncObjs,
   System.Types,
-  Daf.Extensions.Logging,
   Daf.DependencyInjection,
-  Daf.Configuration.Builder,
-  Daf.Configuration.Chained,
-  Daf.Configuration.Memory;
+  // Daf.Configuration.Chained ya no aparece: unir la configuracion de host con la de
+  // aplicacion era su unico llamador de framework, y con una sola configuracion no hay dos que
+  // unir. La pieza sigue publica y con spec propio -- lo que se va es este llamador.
+  Daf.Configuration.Manager,
+  Daf.Configuration.Env,
+  Daf.Configuration.CommandLine;
 
 // El relevo del arranque. Antes de BuildServiceProvider informa el canal de arranque, porque no hay
 // otra cosa; en cuanto el proveedor existe, informar es cosa del pipeline de ILogger, con los
@@ -206,17 +241,22 @@ end;
 
 { THostEnvironment }
 
-constructor THostEnvironment.Create;
+constructor THostEnvironment.Create(const HostConfiguration: IConfiguration);
 begin
-  TEnvironmentName.TryParse(GetEnvironmentVariable(TDafEnvVars.APP_ENV), FEnvironmentName);
+  Assert(Assigned(HostConfiguration), 'THostEnvironment needs the host configuration to derive from');
+
+  // Las tres claves conservan el nombre que ya tenian, asi que la variable de entorno de
+  // siempre sigue valiendo -- entra por el proveedor de entorno, que las publica sin quitarles
+  // el prefijo-- y gana ademas la forma --DAF_APP_ENV=Development.
+  TEnvironmentName.TryParse(HostConfiguration[TDafEnvVars.APP_ENV], FEnvironmentName);
   if EnvironmentName.IsEmpty then
     EnvironmentName := TEnvironments.Production;
 
-  ApplicationName := GetEnvironmentVariable(TDafEnvVars.APP_NAME);
+  ApplicationName := HostConfiguration[TDafEnvVars.APP_NAME];
   if ApplicationName.IsEmpty then
     ApplicationName := TPath.GetFileNameWithoutExtension(ParamStr(0));
 
-  ContentRootPath := GetEnvironmentVariable(TDafEnvVars.CONTENT_ROOT);
+  ContentRootPath := HostConfiguration[TDafEnvVars.CONTENT_ROOT];
   if ContentRootPath.IsEmpty then
     ContentRootPath := TPath.GetAppPath;
   ContentRootPath := IncludeTrailingPathDelimiter(ContentRootPath);
@@ -425,19 +465,28 @@ end;
 
 {THostBuilder}
 
-constructor THostBuilder.Create;
+constructor THostBuilder.Create(const Args: TArray<string>; const Configuration: IConfigurationManager);
 begin
-  inherited;
-  FConfigureHostConfigActions := TList<TConfigureHostConfigAction>.Create;
-  FConfigureServicesActions := TList<TConfigureServicesAction>.Create;
-  FConfigureAppConfigActions := TList<TConfigureAppConfigAction>.Create;
+  inherited Create;
+  FArgs := Args;
+  FConfiguration := Configuration;
+
+  // Las tres que no dependen de lo que el usuario anada despues suben aqui: al volver, la
+  // configuracion y el entorno YA responden. Es lo que distingue al estilo inmediato, y lo que
+  // permite leer el entorno para decidir que fuente anadir sin ningun callback.
+  InitializeHostConfiguration;
+  InitializeHostingEnvironment;
+  InitializeHostBuilderContext;
+
+  // Vivos desde ya, que es lo que el estilo inmediato promete: Services y Logging responden al
+  // volver del constructor, sin haber construido nada.
+  FServices := TServiceCollection.Create;
+  FLoggingImpl := TLoggingBuilder.Create;
+  FLogging := FLoggingImpl;
 end;
 
 destructor THostBuilder.Destroy;
 begin
-  FConfigureHostConfigActions.Free;
-  FConfigureServicesActions.Free;
-  FConfigureAppConfigActions.Free;
   inherited;
 end;
 
@@ -446,130 +495,95 @@ begin
   Result := FHostBuilderContext.Properties
 end;
 
-function THostBuilder.AddHostedService<T>: IHostBuilder;
+function THostBuilder.GetServices: IServiceCollection;
+begin
+  Result := FServices;
+end;
+
+function THostBuilder.GetConfiguration: IConfigurationManager;
+begin
+  Result := FConfiguration;
+end;
+
+function THostBuilder.GetEnvironment: IHostEnvironment;
+begin
+  Result := FEnvironment;
+end;
+
+function THostBuilder.GetLogging: ILoggingBuilder;
+begin
+  // Pedirla ES tocarla: no hay otra razon para pedir el componedor de logging que anadirle
+  // algo. Lo que se evita es llamar a AddLogging cuando nadie lo pidio, que levantaria el error
+  // de composicion en toda aplicacion que no configure logging.
+  FLoggingTouched := True;
+  Result := FLogging;
+end;
+
+function THostBuilder.UseProperty(const Key: string; const Value: TValue): IHostApplicationBuilder;
+begin
+  Properties.AddOrSetValue(Key, Value);
+  Result := Self;
+end;
+
+function THostBuilder.AddHostedService<T>: IHostApplicationBuilder;
 begin
   Assert(Supports(T, IHostedService));
   Result := Self;
-  ConfigureServices(
-    procedure(Builder: IHostBuilderContext; Services: IServiceCollection)
-    begin
-      Services.AddSingleton<IHostedService, T>;
-    end);
-end;
-
-procedure THostBuilder.InitializeHostingEnvironment;
-begin
-  FEnvironment := THostEnvironment.Create;
-end;
-
-procedure THostBuilder.InitializeHostBuilderContext;
-begin
-  FHostBuilderContext := THostBuilderContext.Create(FEnvironment, FHostConfiguration);
-end;
-
-function THostBuilder.ConfigureHostConfiguration(const ConfigAction: TConfigureHostConfigAction): IHostBuilder;
-begin
-  FConfigureHostConfigActions.Add(ConfigAction);
-  Result := Self;
-end;
-
-procedure THostBuilder.InternalHostConfiguration(const ConfigBuilder: IConfigurationBuilder);
-begin
-   ConfigureHostConfiguration( procedure(Builder: IConfigurationBuilder)
-     begin
-      DoConfigureHostConfiguration(Builder);
-     end
-  );
- for var Action in FConfigureHostConfigActions do
-    Action(ConfigBuilder);
-end;
-
-procedure THostBuilder.DoConfigureHostConfiguration(Builder: IConfigurationBuilder);
-begin
-
+  FServices.AddSingleton<IHostedService, T>;
 end;
 
 procedure THostBuilder.InitializeHostConfiguration;
 begin
-  var ConfigBuilder: IConfigurationBuilder := TConfigurationBuilder.Create;
+  // D9: una variante aporta sus fuentes SEMBRANDO el manager y entregandolo, no encadenando una
+  // segunda configuracion. Si el componedor generico lo fabricase siempre y acto seguido
+  // derivase el entorno de el, lo que la variante anadiera despues llegaria tarde.
+  if not Assigned(FConfiguration) then
+    FConfiguration := TConfigurationManager.Create;
 
-  MemoryConfig.AddCollection(ConfigBuilder);
+  // El orden es el del linaje, y decide quien gana: primero el entorno del proceso, despues los
+  // argumentos. Sin quitar el prefijo, para que DAF_APP_ENV se lea con ese mismo nombre venga
+  // de donde venga.
+  FConfiguration.Add(TEnvironmentVariablesConfigurationSource.Create('DAF_', True, False));
 
-  InternalHostConfiguration(ConfigBuilder);
-
-  FHostConfiguration := ConfigBuilder.Build;
+  // Una variante con gramatica propia no pasa argumentos por aqui: serian dos lecturas del
+  // mismo argv que discrepan sin dar error, y una de las dos es falsa.
+  if Length(FArgs) > 0 then
+    CommandLineConfig.AddArgs(FConfiguration, FArgs);
 end;
 
-function THostBuilder.ConfigureAppConfiguration(const Action: TConfigureAppConfigAction): IHostBuilder;
+procedure THostBuilder.InitializeHostingEnvironment;
 begin
-  FConfigureAppConfigActions.Add(Action);
-  Result := Self;
+  FEnvironment := THostEnvironment.Create(FConfiguration as IConfiguration);
 end;
 
-procedure THostBuilder.InternalAppConfiguration(ConfigBuilder: IConfigurationBuilder);
+procedure THostBuilder.InitializeHostBuilderContext;
 begin
-  ConfigureAppConfiguration( procedure(Context: IHostBuilderContext; Builder: IConfigurationBuilder)
-     begin
-      DoConfigureAppConfiguration(Context, Builder);
-     end
-  );
-
-  for var Action in FConfigureAppConfigActions do
-    Action(FHostBuilderContext, ConfigBuilder);
-end;
-
-procedure THostBuilder.DoConfigureAppConfiguration(Context: IHostBuilderContext; Builder: IConfigurationBuilder);
-begin
-
+  FHostBuilderContext := THostBuilderContext.Create(FEnvironment, FConfiguration as IConfiguration);
 end;
 
 procedure THostBuilder.InitializeAppConfiguration;
 begin
-  var ConfigBuilder: IConfigurationBuilder := TConfigurationBuilder.Create;
-
-  AddChainedConfiguration(ConfigBuilder, FHostConfiguration);
-
-  InternalAppConfiguration(ConfigBuilder);
-
-  FAppConfiguration := ConfigBuilder.Build();
-  THostBuilderContext(FHostBuilderContext).Configuration := FAppConfiguration;
-end;
-
-
-function THostBuilder.ConfigureServices(const Action: TConfigureServicesAction): IHostBuilder;
-begin
-  FConfigureServicesActions.Add(Action);
-  Result := Self;
-end;
-
-procedure THostBuilder.InternalConfigureServices;
-begin
-  ConfigureServices( procedure(Context: IHostBuilderContext; Services: IServiceCollection)
-     begin
-      DoConfigureServices(Context, Services);
-     end
-  );
-
-  for var Action in FConfigureServicesActions do
-    Action(FHostBuilderContext, FServices);
-end;
-
-procedure THostBuilder.DoConfigureServices(Context: IHostBuilderContext;  Services: IServiceCollection);
-begin
+  // Queda una fase, no un objeto: la configuracion es la misma de siempre, y este es el momento
+  // en que lo que el usuario anadio entre el constructor y Build pasa a ser lo definitivo para
+  // el contexto. Antes aqui se construia una segunda configuracion y se encadenaba la de host.
+  THostBuilderContext(FHostBuilderContext).Configuration := FConfiguration as IConfiguration;
 end;
 
 procedure THostBuilder.InitializeServiceProvider;
 begin
-  FServices := TServiceCollection.Create;
-  // Se inyecta un placeholder de host, para que este disponible en ConfigureServices
-  // ya que en ConfigureServices no se debe solicitar servicios, solo registrar.
+  // Se inyecta un placeholder de host, para que este disponible en el arranque
+  // ya que al registrar no se deben solicitar servicios, solo registrar.
   FServices.AddSingleton<IHost, THost>;
   FServices.AddSingleton<IHostEnvironment>(FEnvironment);
   FServices.AddSingleton<IHostBuilderContext>(FHostBuilderContext);
-  FServices.AddSingleton<IConfiguration>(FAppConfiguration);
+  FServices.AddSingleton<IConfiguration>(FConfiguration as IConfiguration);
   FServices.AddSingleton<IHostApplicationLifetime, THostApplicationLifetime>;
 
-  InternalConfigureServices;
+  // Solo si alguien pidio la propiedad. AddLogging levanta el error de composicion cuando no se
+  // le anadio ningun proveedor, asi que llamarlo por sistema romperia toda aplicacion que no
+  // configure logging -- que hoy son todas menos las que lo hacen a proposito.
+  if FLoggingTouched then
+    AddLogging(FServices, FLoggingImpl);
 
   FAppServices := FServices.BuildServiceProvider;
 end;
@@ -578,12 +592,9 @@ function THostBuilder.Build: IHost;
 begin
   try
     if (FHostBuilt) then
-      raise Exception.Create('IHostBuilder.Build already called');
+      raise Exception.Create('Build already called');
     FHostBuilt := True;
     try
-      InitializeHostConfiguration;
-      InitializeHostingEnvironment;
-      InitializeHostBuilderContext;
       InitializeAppConfiguration;
       InitializeServiceProvider;
 
@@ -596,15 +607,15 @@ begin
       Result := Host;
 
     finally
+      // Lo que rompe los ciclos de refcount, y tiene que sobrevivir a la mudanza: el host
+      // sostiene el proveedor y el proveedor construyo el host.
       FEnvironment := nil;
       FHostBuilderContext := nil;
-      FHostConfiguration := nil;
-      FAppConfiguration := nil;
-      FServices := nil;
+      FConfiguration := nil;
+      FLogging := nil;
+      FLoggingImpl := nil;
+      FServices := Default(IServiceCollection);
       FAppServices := nil;
-      FreeAndNil(FConfigureHostConfigActions);
-      FreeAndNil(FConfigureServicesActions);
-      FreeAndNil(FConfigureAppConfigActions);
     end;
   except
     on E: Exception do
@@ -620,12 +631,6 @@ begin
       raise;
     end;
   end;
-end;
-
-function THostBuilder.UseProperty(const Key: string; const Value: TValue): IHostBuilder;
-begin
-  FHostBuilderContext.Properties.AddOrSetValue(Key, Value);
-  Result := Self;
 end;
 
 { THostApplicationLifetime }

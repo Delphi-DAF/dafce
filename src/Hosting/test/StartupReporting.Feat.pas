@@ -134,13 +134,16 @@ begin
   TFile.WriteAllText(ConfigFile, '{ this is not json');
   var FileName := ConfigFile;
 
-  var Builder: IHostBuilder := THostBuilder.Create;
-  Builder.ConfigureAppConfiguration(
-    procedure(Context: IHostBuilderContext; ConfigBuilder: IConfigurationBuilder)
-    begin
-      JsonConfig.AddFile(ConfigBuilder, FileName);
-    end);
+  // THostBuilder es maquinaria, no entrada publica: se sostiene por el contrato comun --que es
+  // quien lo refcuenta-- y Build se llama por la clase. Un usuario nunca escribe esto: escribe
+  // la variante de su tipo de aplicacion.
+  var Builder := THostBuilder.Create;
+  var Owner: IHostApplicationBuilder := Builder;
   try
+    // El fichero se abre AQUI, al anadir la fuente, y ya no dentro de Build: en el estilo
+    // inmediato la fuente se carga cuando se anade. El try envuelve la composicion entera
+    // porque el fallo se ha mudado con ella.
+    JsonConfig.AddFile(Builder.Configuration, FileName);
     Host := Builder.Build;
   except
     on E: Exception do Failure := E.Message;
@@ -149,18 +152,12 @@ end;
 
 procedure TReportingWorld.BuildWithFailingStartup(const WithLogging: Boolean);
 begin
-  var Builder: IHostBuilder := THostBuilder.Create;
-  Builder.ConfigureServices(
-    procedure(Context: IHostBuilderContext; Services: IServiceCollection)
-    begin
-      if WithLogging then
-        AddLogging(Services,
-          procedure(LoggingBuilder: ILoggingBuilder)
-          begin
-            LoggingBuilder.AddProvider(TProbeLoggerProvider.Create);
-          end);
-      Services.AddStartupTask<TFailingTask>;
-    end);
+  var Builder := THostBuilder.Create;
+  var Owner: IHostApplicationBuilder := Builder;
+  if WithLogging then
+    // Pedir la propiedad ES tocarla, y solo entonces se compone el pipeline en Build.
+    Builder.Logging.AddProvider(TProbeLoggerProvider.Create);
+  Builder.Services.AddStartupTask<TFailingTask>;
   Host := Builder.Build;
 end;
 
@@ -194,7 +191,7 @@ Feature The startup report changes hands when the provider exists @hosting @boot
       begin
         W.BuildWithBrokenConfig;
       end)
-    .&Then('the exception reaches whoever asked for the host',
+    .&Then('the exception reaches whoever composed the configuration',
       procedure(W: TReportingWorld)
       begin
         Expect(W.Failure).ToContain('Cannot parse json');
@@ -214,8 +211,10 @@ Feature The startup report changes hands when the provider exists @hosting @boot
       begin
         // La categoria dice quien y el mensaje dice que, igual que al otro lado del relevo: no hay
         // atajo global con la categoria del framework ya clavada.
-        Expect(TProbe.Bootstrap).ToContain('] THostBuilder |');
-        Expect(TProbe.Bootstrap).ToContain('the host could not be built');
+        // Y quien informa ya no es el componedor del host sino quien abre el fichero, porque ahi
+        // es donde ocurre: en el estilo inmediato una fuente se carga al anadirla, no al construir.
+        Expect(TProbe.Bootstrap).ToContain('] TConfigurationManager |');
+        Expect(TProbe.Bootstrap).ToContain('a configuration source could not be added');
       end)
 
 .Rule('Once the provider is built, the pipeline reports')

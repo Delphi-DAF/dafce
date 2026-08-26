@@ -31,6 +31,9 @@
 requires
   rtl,
   Daf.Commons,
+  // Por BootstrapLog: anadir una fuente es donde se abre el fichero, asi que es donde tiene
+  // que informarse el fallo. Solo contratos -- el canal vive en el paquete .Abstractions.
+  Daf.Logging.Abstractions,
   Daf.Configuration.Abstractions;
 
 contains
