@@ -5,6 +5,7 @@ interface
 uses
   System.SysUtils,
   System.Generics.Collections,
+  Daf.Nullable,
   Daf.Extensions.Configuration;
 
 type
@@ -26,6 +27,10 @@ type
     ///     an empty <see cref="IConfigurationSection"/> will be returned.
     /// </remarks>
     function GetSection(const Key: string): IConfigurationSection;
+    /// <summary>Presence of a child Key, answered against this section's own Path.</summary>
+    function Exists(const Key: string): Boolean;
+    /// <summary>Presence and Value of a child Key, answered against this section's own Path.</summary>
+    function Find(const Key: string): TNullable<string>;
     function GetKey: string;
     function GetValue: string;
     procedure SetValue(const Value: string);
@@ -44,6 +49,7 @@ type
     procedure NotifyChanged;
     class procedure SetConfiguration(const Providers: IEnumerable<IConfigurationProvider>; const Key: string; Value: string);
     class function GetConfiguration(const Providers: IEnumerable<IConfigurationProvider>; const Key: string): string;
+    class function FindConfiguration(const Providers: IEnumerable<IConfigurationProvider>; const Key: string): TNullable<string>;
     function InternalGetChildKeys(const Prefix: string): TArray<string>;
     function GetChildrenImplementation(const Path: string): IEnumerable<IConfigurationSection>;
     /// <summary>
@@ -57,6 +63,8 @@ type
     constructor Create(const Providers: TList<IConfigurationProvider>);
     function GetItem(const Key: string): string;
     procedure SetItem(const Key, Value: string);
+    function Exists(const Key: string): Boolean;
+    function Find(const Key: string): TNullable<string>;
     function GetSection(const Key: string): IConfigurationSection;
     function GetProviders: IEnumerable<IConfigurationProvider>;
     function GetChildren: IEnumerable<IConfigurationSection>;
@@ -107,6 +115,16 @@ end;
 function TConfigurationSection.GetItem(const Key: string): string;
 begin
   Result := FRoot[TConfigurationPath.Combine([Path, Key])];
+end;
+
+function TConfigurationSection.Exists(const Key: string): Boolean;
+begin
+  Result := FRoot.Exists(TConfigurationPath.Combine([Path, Key]));
+end;
+
+function TConfigurationSection.Find(const Key: string): TNullable<string>;
+begin
+  Result := FRoot.Find(TConfigurationPath.Combine([Path, Key]));
 end;
 
 procedure TConfigurationSection.SetItem(const Key, Value: string);
@@ -173,6 +191,32 @@ begin
   var Temp: string;
   for var Provider in Providers do
     if Provider.TryGet(key, Temp) then Result := Temp;
+end;
+
+class function TConfigurationRoot.FindConfiguration(const Providers: IEnumerable<IConfigurationProvider>; const Key: string): TNullable<string>;
+begin
+  // Same traversal as GetConfiguration: walking forward and keeping the last hit is
+  // walking backwards and taking the first one, so the winning provider is the same.
+  Result := TNullable<string>.Null;
+  if not Assigned(Providers) then Exit;
+
+  var Temp: string;
+  for var Provider in Providers do
+    if Provider.TryGet(Key, Temp) then
+      Result := TNullable<string>.From(Temp);
+end;
+
+function TConfigurationRoot.Find(const Key: string): TNullable<string>;
+begin
+  Result := FindConfiguration(FProviders, Key);
+end;
+
+function TConfigurationRoot.Exists(const Key: string): Boolean;
+begin
+  // .NET's IConfigurationSection.Exists(): a value of its own OR children. A section
+  // that only groups has no value, and answering that it is not there while its
+  // children are being read is a false answer about the shape of the document.
+  Result := FindConfiguration(FProviders, Key).HasValue or (Length(InternalGetChildKeys(Key)) > 0);
 end;
 
 class procedure TConfigurationRoot.SetConfiguration(const Providers: IEnumerable<IConfigurationProvider>; const Key: string; Value: string);

@@ -14,14 +14,9 @@ type
   // al escribir-- sino un error de composicion, y se levanta donde se comete.
   ELoggingCompositionError = class(Exception);
 
-  ILoggingBuilder = interface(IInvokable)
-    ['{F989B61A-8A02-4C1C-AF3D-DA94CF097B1C}']
-    procedure AddProvider(const Provider: ILoggerProvider);
-    // Descartar a proposito. Sin esto, componer sin proveedores es indistinguible de olvidarse el
-    // AddProvider, y lo segundo se paga meses despues buscando unos registros que nunca existieron.
-    procedure AddNullProvider;
-    function Build: ILoggerFactory;
-  end;
+  // ILoggingBuilder vive en Daf.Logging.Abstractions, que es donde .NET lo tiene y lo que permite
+  // que el contrato de la familia de aplicaciones lo exponga sin que un .Abstractions requiera
+  // una implementacion. Aqui se queda quien lo implementa y quien lo consume.
 
   TLoggingBuilder = class(TInterfacedObject, ILoggingBuilder)
   private

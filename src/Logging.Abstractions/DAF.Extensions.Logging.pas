@@ -208,6 +208,23 @@ type
     function CreateLogger(const Category: string): ILogger;
   end;
 
+  // Aqui y no en el paquete concreto, que es donde .NET lo tiene
+  // (Microsoft.Extensions.Logging.Abstractions). Sus dos dependencias --ILoggerProvider e
+  // ILoggerFactory-- ya estaban declaradas justo encima, asi que la mudanza sale gratis; lo que
+  // la obliga es que el contrato comun de la familia de aplicaciones expone Logging, y un
+  // paquete .Abstractions no puede requerir uno concreto: es la invariante que el verificador
+  // de paquetes falla, y esa si es compuerta de CI.
+  // La implementacion --TLoggingBuilder--, el error de composicion y AddLogging se quedan en
+  // Daf.Logging: lo que sube es el contrato, no la fontaneria.
+  ILoggingBuilder = interface(IInvokable)
+    ['{F989B61A-8A02-4C1C-AF3D-DA94CF097B1C}']
+    procedure AddProvider(const Provider: ILoggerProvider);
+    // Descartar a proposito. Sin esto, componer sin proveedores es indistinguible de olvidarse el
+    // AddProvider, y lo segundo se paga meses despues buscando unos registros que nunca existieron.
+    procedure AddNullProvider;
+    function Build: ILoggerFactory;
+  end;
+
   TNullLoggerFactory = class(TInterfacedObject, ILoggerFactory)
   public
     function CreateLogger(const Category: string): ILogger; overload;

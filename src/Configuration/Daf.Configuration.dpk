@@ -42,6 +42,7 @@ contains
   Daf.Configuration.Env in 'Daf.Configuration.Env.pas',
   Daf.Configuration.CommandLine in 'Daf.Configuration.CommandLine.pas',
   Daf.Configuration.ConfigurationRoot in 'Daf.Configuration.ConfigurationRoot.pas',
-  Daf.Configuration.Chained in 'Daf.Configuration.Chained.pas';
+  Daf.Configuration.Chained in 'Daf.Configuration.Chained.pas',
+  Daf.Configuration.Manager in 'Daf.Configuration.Manager.pas';
 
 end.

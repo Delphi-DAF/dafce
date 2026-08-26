@@ -122,6 +122,7 @@
         <DCCReference Include="Daf.Configuration.CommandLine.pas"/>
         <DCCReference Include="Daf.Configuration.ConfigurationRoot.pas"/>
         <DCCReference Include="Daf.Configuration.Chained.pas"/>
+        <DCCReference Include="Daf.Configuration.Manager.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\source.optset</DependentOn>

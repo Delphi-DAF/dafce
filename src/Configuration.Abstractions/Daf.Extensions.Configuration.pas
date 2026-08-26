@@ -4,7 +4,8 @@ interface
 uses
   System.Generics.Collections,
   System.SysUtils,
-  System.Rtti;
+  System.Rtti,
+  Daf.Nullable;
 
 type
 
@@ -103,6 +104,40 @@ type
     function GetItem(const Key: string): string;
     procedure SetItem(const Key: string; const Value: string);
     function GetChildren: IEnumerable<IConfigurationSection>;
+
+    /// <summary>
+    /// Whether the Key is present, no matter whether its Value is the empty string.
+    /// </summary>
+    /// <remarks>
+    ///   Literal parity with .NET's <c>IConfigurationSection.Exists()</c>, section
+    ///   semantics included: a section exists when it has a Value of its own <b>or</b>
+    ///   has keys underneath. A section that only groups — the one holding
+    ///   <c>Logging:Level</c> and its siblings — has no Value, and answering that it
+    ///   does not exist while its children are being read is a false answer.
+    /// </remarks>
+    function Exists(const Key: string): Boolean;
+
+    /// <summary>
+    /// Reads the Key reporting absence: presence and Value in a single lookup.
+    /// </summary>
+    /// <remarks>
+    ///   This is what carries what .NET expresses with the <c>?</c> of
+    ///   <c>string? this[string key]</c>, which a Delphi string cannot: it needs a
+    ///   member of its own. Naming it is what keeps the distinction from being lost —
+    ///   the presence can only be read by asking the type for it.
+    /// </remarks>
+    function Find(const Key: string): TNullable<string>;
+
+    /// <summary>
+    /// The Value for the Key, or the empty string when the Key is absent.
+    /// </summary>
+    /// <remarks>
+    ///   Returns a plain string <b>on purpose</b>, and it is measured: a nullable
+    ///   return converts implicitly, and that conversion is applied in the comparison,
+    ///   so <c>C['absent'] = ''</c> and <c>C['empty'] = ''</c> both stay True. It would
+    ///   not fix the defect, it would hide it behind a type that promises to fix it.
+    ///   Use <see cref="Exists"/> or <see cref="Find"/> to tell the two apart.
+    /// </remarks>
     property Item[const Key: string]: string read GetItem write SetItem; default;
   end;
 
@@ -141,6 +176,35 @@ type
     /// Gets or sets the section Value.
     /// </summary>
     property Value: string read GetValue write SetValue;
+  end;
+
+  /// <summary>
+  /// Configuration that is a builder and a reader at the same time: whatever is added is
+  /// readable straight away, with nothing built in between.
+  /// </summary>
+  /// <remarks>
+  ///   In .NET this is <c>IConfigurationManager : IConfigurationBuilder, IConfiguration</c>.
+  ///   <b>Delphi admits one parent per interface</b>, so the six members of
+  ///   <see cref="IConfiguration"/> are redeclared here instead of inherited.
+  ///   <para>
+  ///   <see cref="IConfigurationBuilder"/> is the parent, and the choice is not arbitrary:
+  ///   the calls a <b>user</b> writes at startup are the facade ones —
+  ///   <c>JsonConfig.AddFile(B.Configuration, ...)</c> and its five siblings — and with this
+  ///   parent they compile without a cast. Handing the configuration to the container is one
+  ///   internal line of the framework, and an <c>as IConfiguration</c> there bothers nobody.
+  ///   The implementation carries all three contracts on a single object, so that cast
+  ///   resolves through QueryInterface at no cost in design.
+  ///   </para>
+  /// </remarks>
+  IConfigurationManager = interface(IConfigurationBuilder)
+    ['{69B0B5A8-45B8-4200-B614-77950F15C11A}']
+    function GetSection(const Key: string): IConfigurationSection;
+    function GetItem(const Key: string): string;
+    procedure SetItem(const Key: string; const Value: string);
+    function GetChildren: IEnumerable<IConfigurationSection>;
+    function Exists(const Key: string): Boolean;
+    function Find(const Key: string): TNullable<string>;
+    property Item[const Key: string]: string read GetItem write SetItem; default;
   end;
 
   /// <summary>

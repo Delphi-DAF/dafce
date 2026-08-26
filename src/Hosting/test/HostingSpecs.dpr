@@ -7,7 +7,8 @@ uses
   Daf.MiniSpec,
   StartupTasks.Feat in 'StartupTasks.Feat.pas',
   HostComposition.Feat in 'HostComposition.Feat.pas',
-  StartupReporting.Feat in 'StartupReporting.Feat.pas';
+  StartupReporting.Feat in 'StartupReporting.Feat.pas',
+  BuilderStyle.Feat in 'BuilderStyle.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

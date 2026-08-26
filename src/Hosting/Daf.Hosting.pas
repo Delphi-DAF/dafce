@@ -15,9 +15,14 @@ type
   TSingleton<T: class> = class(TInterfacedObject)
   {$IFOPT D+}
   strict private
-    class var FInstance: T;
+    // Estado de esta instancia, no del proceso -- mismo motivo que FStopped y FHostBuilt. Con
+    // class var, dos entornos, dos contextos o dos builders vivos a la vez en un mismo proceso
+    // se pisaban el uno al otro, y la asercion pasaba de no dispararse nunca a dispararse
+    // siempre. Con el estilo inmediato eso deja de ser el caso raro: lo que antes nacia y moria
+    // dentro de Build ahora vive todo el rato, y un arnes de specs construye varios a la vez.
+    FInstance: T;
   public
-    class property Instance: T read FInstance;
+    property Instance: T read FInstance;
     procedure AfterConstruction; override;
     procedure BeforeDestruction; override;
   {$ENDIF}

@@ -80,8 +80,13 @@ end;
 
 function TChainedConfigurationProvider.TryGet(const Key: string; out Value: string): Boolean;
 begin
- Value := FConfiguration[Key];
- Result := not Value.IsEmpty;
+  // Asked, not inferred. Inferring presence from the value not being empty made a chained
+  // key whose value IS the empty string disappear on the way through: the source answered
+  // that it did not have it, and whoever composed got what an absent key would give. Both
+  // read as the empty string afterwards, so there was no way to notice from outside.
+  var Found := FConfiguration.Find(Key);
+  Value := Found.GetValueOrDefault('');
+  Result := Found.HasValue;
 end;
 
 function TChainedConfigurationProvider.GetChildKeys(const EarlierKeys: IEnumerable<string>; const ParentPath: string): IEnumerable<string>;
