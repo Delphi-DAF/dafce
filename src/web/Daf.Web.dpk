@@ -43,7 +43,12 @@ requires
   RESTComponents,
   Daf.DependencyInjection.Abstractions,
   Daf.Configuration.Abstractions,
-  Daf.Logging.Abstractions;
+  Daf.Logging.Abstractions,
+  // La variante Web de la familia vive aqui, con la maquinaria comun del arranque y el
+  // manager que siembra antes de entregarlo.
+  Daf.Hosting.Abstractions,
+  Daf.Hosting,
+  Daf.Configuration;
 
 contains
   Daf.Extensions.HttpServer in 'Daf.Extensions.HttpServer.pas',
@@ -51,6 +56,7 @@ contains
   Daf.Web.Router in 'Daf.Web.Router.pas',
   Daf.Web.Controller in 'Daf.Web.Controller.pas' {WebController: TDataModule},
   Daf.Web.Render in 'Daf.Web.Render.pas',
-  Daf.Web.ActionResult in 'Daf.Web.ActionResult.pas';
+  Daf.Web.ActionResult in 'Daf.Web.ActionResult.pas',
+  Daf.Web.Application in 'Daf.Web.Application.pas';
 
 end.

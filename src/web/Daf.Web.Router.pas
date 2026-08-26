@@ -61,7 +61,13 @@ type
     ['{D8CA562E-1B44-4AB2-8DE0-DEBDBF27FB7A}']
     procedure SetRootDirectory(const Value: string);
     function GetRootDirectory: string;
-    procedure UseDispatcher(WebDispatcher: TWebDispatcher);
+    /// <summary>Engancha el enrutado al BeforeDispatch de quien despacha.</summary>
+    /// <remarks>
+    ///   Toma el tipo BASE y no TWebDispatcher porque lo unico que necesita --BeforeDispatch--
+    ///   esta ahi, y un TWebModule NO es un TWebDispatcher: los dos descienden de este. Con el
+    ///   tipo estrecho, el modulo web que crea WebBroker no cabia por la puerta.
+    /// </remarks>
+    procedure UseDispatcher(WebDispatcher: TCustomWebDispatcher);
     property RootDirectory: string read GetRootDirectory write SetRootDirectory;
   end;
 
@@ -80,7 +86,7 @@ type
   public
     constructor Create(const ScopeFactory: IServiceScopeFactory; const LoggerFactory: ILoggerFactory = nil); reintroduce;
     destructor Destroy; override;
-    procedure UseDispatcher(WebDispatcher: TWebDispatcher);
+    procedure UseDispatcher(WebDispatcher: TCustomWebDispatcher);
     procedure DiscoverControllers;
     procedure WebDispatch(Sender: TObject; Request: TWebRequest; Response: TWebResponse; var Handled: Boolean);
     property RootDirectory: string read GetRootDirectory write SetRootDirectory;
@@ -532,9 +538,16 @@ begin
   FRootDirectory := Value;
 end;
 
-procedure TWebRouter.UseDispatcher(WebDispatcher: TWebDispatcher);
+type
+  // BeforeDispatch es protected en TCustomWebDispatcher y solo se publica en los
+  // descendientes. La clase de acceso es el modo estandar de llegar a un protected del que
+  // se hereda igualmente, y evita estrechar el parametro a un tipo por el que el modulo web
+  // de WebBroker no pasa.
+  TDispatcherAccess = class(TCustomWebDispatcher);
+
+procedure TWebRouter.UseDispatcher(WebDispatcher: TCustomWebDispatcher);
 begin
-  WebDispatcher.BeforeDispatch := WebDispatch;
+  TDispatcherAccess(WebDispatcher).BeforeDispatch := WebDispatch;
 end;
 
 procedure TWebRouter.WebDispatch(Sender: TObject; Request: TWebRequest; Response: TWebResponse; var Handled: Boolean);

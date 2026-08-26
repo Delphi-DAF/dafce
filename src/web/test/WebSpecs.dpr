@@ -24,7 +24,9 @@ uses
   Doubles.Feat in 'Doubles.Feat.pas',
   Routing.Feat in 'Routing.Feat.pas',
   ActionResults.Feat in 'ActionResults.Feat.pas',
-  Server.Feat in 'Server.Feat.pas';
+  Server.Feat in 'Server.Feat.pas',
+  Daf.Web.Application,
+  WebVariant.Feat in 'WebVariant.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

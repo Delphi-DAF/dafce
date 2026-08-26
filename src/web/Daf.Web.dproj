@@ -118,6 +118,9 @@
         <DCCReference Include="Daf.DependencyInjection.Abstractions.dcp"/>
         <DCCReference Include="Daf.Configuration.Abstractions.dcp"/>
         <DCCReference Include="Daf.Logging.Abstractions.dcp"/>
+        <DCCReference Include="Daf.Hosting.Abstractions.dcp"/>
+        <DCCReference Include="Daf.Hosting.dcp"/>
+        <DCCReference Include="Daf.Configuration.dcp"/>
         <DCCReference Include="Daf.Extensions.HttpServer.pas"/>
         <DCCReference Include="Daf.HttpServer.pas"/>
         <DCCReference Include="Daf.Web.Router.pas"/>
@@ -127,6 +130,7 @@
         </DCCReference>
         <DCCReference Include="Daf.Web.Render.pas"/>
         <DCCReference Include="Daf.Web.ActionResult.pas"/>
+        <DCCReference Include="Daf.Web.Application.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\source.optset</DependentOn>

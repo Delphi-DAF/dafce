@@ -115,7 +115,12 @@ end;
 
 procedure TConfigurationProvider.&Set(const Key: string; const value: string);
 begin
-  Data[Key] := value;
+  // AddOrSetValue y no Data[Key] := : el setter de TDictionary EXIGE que la clave ya exista
+  // y levanta 'Item not found' si no. Escribir una clave nueva es lo normal en una
+  // configuracion --y lo unico que hace SetItem--, asi que con el indexador este proveedor
+  // solo sabia sobrescribir. No se veia porque la configuracion de host no llevaba ningun
+  // proveedor de estos hasta que el entorno paso a derivarse de ella.
+  Data.AddOrSetValue(Key, value);
 end;
 
 destructor TConfigurationProvider.Destroy;
