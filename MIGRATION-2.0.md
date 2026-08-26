@@ -163,11 +163,20 @@ no engine with either module.
 | `TFilterSpec<T>`, in `Daf.Expression` | same class, in `Daf.FilterSpec` |
 | unit `Daf.Expression` | dissolved into `Daf.FilterSpec` and `Daf.Types` |
 | `TBooleanExpresion` | removed |
+| `TGenericRTTI.GetGenericArguments(TRttiType)` | **`_T.GenericArgs(PTypeInfo)`**, in `Daf.Rtti` — returns type information rather than reflected types, and counts an argument that is itself generic as one |
+| `TGenericRTTI.MakeGenericType` | removed with no replacement — see below |
 | `TSmartArray<T>.Select(TDeferred<TMapper<T, TTarget>>)` | `Select(TFunc<T, TTarget>)` |
 
 `Daf.Linq.Where` / `Filter` take `TFilterSpec<T>`, the type that already lived in Commons:
 `Daf.Linq` does not introduce a filtering vocabulary of its own, it evaluates the one already
 named.
+
+`MakeGenericType` has no replacement because it promised something Delphi does not do: build a
+generic instantiation at run time. It failed with an access violation even in the case it was
+written for. If you were calling it to obtain a closed generic the compiler never saw, there is
+nothing to migrate to — but if what you actually needed was one registration serving every closure
+of a contract, that is now
+[registering a generic contract once](src/DependencyInjection.Abstractions/README.md#registering-a-generic-contract-once).
 
 ### 5. Query modules renamed
 

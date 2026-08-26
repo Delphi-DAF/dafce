@@ -50,6 +50,42 @@ Ayuda genérica: `Factory.CreateLogger<TMyClass>` — usa el nombre de la clase 
 
 ---
 
+### ILogger&lt;T&gt;
+
+El registrador que un servicio pide nombrándose a sí mismo. No añade ningún método a `ILogger`; lo
+que añade es que su **categoría ya es la de quien lo pidió**:
+
+```pascal
+type
+  TPayrollService = class(TInterfacedObject, IPayroll)
+  strict private
+    FLog: ILogger<TPayrollService>;
+  public
+    constructor Create(const Log: ILogger<TPayrollService>);
+  end;
+
+procedure TPayrollService.Run;
+begin
+  FLog.LogInformation('la nómina se ejecutó');   // sale bajo Payroll.TPayrollService
+end;
+```
+
+No hay nada registrado para ese servicio, ni lo habrá para el siguiente. `AddLogging` pone **un**
+registro, con su argumento de tipo sin fijar, que sirve a todos los cierres — la misma forma que en
+.NET se escribe `services.AddSingleton(typeof(ILogger<>), typeof(Logger<>))`. Qué es eso y qué
+cuesta está en
+[registrar un contrato genérico una sola vez](../DependencyInjection.Abstractions/README.es.md#registrar-un-contrato-genérico-una-sola-vez).
+
+Lo que se gana es que la categoría no pueda quedarse atrás. Escrita a mano aparece **dos veces** —el
+nombre de la clase y la cadena que la nombra— sin que nada compruebe que coinciden; y cuando la
+clase se renombra, la cadena se queda. Aquí sale de la clase, así que el renombrado se la lleva
+consigo y la composición no se toca.
+
+El ciclo de vida es por tipo cerrado: `ILogger<TPayroll>` e `ILogger<TInvoicing>` son dos
+registradores, y pedir dos veces cualquiera de los dos devuelve el mismo.
+
+---
+
 ### ILoggerProvider
 
 Produce instancias de `ILogger` para un destino de salida específico.

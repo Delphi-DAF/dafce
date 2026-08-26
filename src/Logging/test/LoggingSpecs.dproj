@@ -99,6 +99,7 @@
         <DCCReference Include="BootstrapChannel.Feat.pas"/>
         <DCCReference Include="BootstrapSinks.Feat.pas"/>
         <DCCReference Include="PipelineComposition.Feat.pas"/>
+        <DCCReference Include="TypedLogger.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>

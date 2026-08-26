@@ -114,6 +114,7 @@
         <DCCReference Include="Daf.Commons.dcp"/>
         <DCCReference Include="Daf.Extensions.DependencyInjection.pas"/>
         <DCCReference Include="Daf.DependencyInjection.ActivatorUtilities.pas"/>
+        <DCCReference Include="Daf.DependencyInjection.OpenGenerics.pas"/>
         <DCCReference Include="Daf.AppModule.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

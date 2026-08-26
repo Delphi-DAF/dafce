@@ -62,6 +62,12 @@ type
   public
     class function From(const ServiceType: PTypeInfo; const TImpl: TClass): TServiceFactory;overload;
     class function From(const ServiceType: PTypeInfo; const Implementor: IInterface): TServiceFactory;overload;
+    /// <summary>
+    ///   La fabrica de un registro sin fijar, ya atada a un cierre concreto. No se puede crear
+    ///   al registrar --entonces todavia no se sabe que cierres van a pedirse-- sino al
+    ///   emparejar, que es cuando el tipo cerrado esta delante.
+    /// </summary>
+    class function FromOpen(const OpenType, ClosedType: PTypeInfo; const TImpl: TClass): TServiceFactory;
   end;
 
   // Envuelve el servicio que produce el registro previo. Es Scrutor: en .NET esto no
@@ -71,10 +77,23 @@ type
   TServiceDecorator = TServiceDecorator<IInterface>;
 
   TServiceLifeTime = (Singleton, Scoped, Transient);
-  // Lo que hace que dos resoluciones devuelvan la misma instancia. Es un numero por
-  // REGISTRO, no un nombre de tipo: dos registros del mismo tipo de servicio son dos
+
+  // Lo que hace que dos resoluciones devuelvan la misma instancia, y son DOS ejes porque
+  // hacen falta los dos.
+  //
+  // El REGISTRO, y no el nombre del tipo: dos registros del mismo tipo de servicio son dos
   // instancias, que es lo que hace util pedirlos todos.
-  TServiceIdentity = Integer;
+  //
+  // Y el TIPO CERRADO, para un registro que dejo sus argumentos genericos sin fijar: ese es
+  // UN SOLO registro para todos sus cierres, asi que con el primer eje a secas todos
+  // compartirian objeto. Y el fallo se lee como el acierto -- hay instancia, responde, y
+  // trae los datos de otro cierre. Vale nil en un registro corriente.
+  TServiceIdentity = record
+    Registration: NativeInt;
+    ClosedType: PTypeInfo;
+    class operator Equal(const A, B: TServiceIdentity): Boolean;
+    class operator NotEqual(const A, B: TServiceIdentity): Boolean;
+  end;
 
   // Calcado de ServiceProviderOptions de .NET. Ambas comprobaciones son opt-in: una
   // validacion que bloquea un arranque que funcionaba cuesta mas de lo que ahorra.
@@ -104,6 +123,14 @@ type
     // Nombre legible del tipo de servicio, y para nada mas que un mensaje de error.
     // No decide nada y no lanza: ver la implementacion.
     function ServiceName: string;
+    /// <summary>
+    ///   Este mismo registro, atado al cierre que se acaba de pedir. Es lo que convierte UN
+    ///   registro sin fijar en un registro por tipo cerrado: identidad propia --y con ella
+    ///   ciclo de vida propio-- y una fabrica que sabe para que cierre construye.
+    /// </summary>
+    function ForClosedType(const AClosedType: PTypeInfo): TServiceDescriptor;
+    // El cierre por el que se alcanzo este registro, o nil si se alcanzo directamente.
+    function ClosedType: PTypeInfo;
     // Que registro es este. Se asigna al construirse y viaja con las copias, porque
     // Descriptors reparte copias y todas tienen que seguir siendo el mismo registro.
     // Es unico dentro del proceso; no es estable entre ejecuciones ni es una clave de
@@ -141,6 +168,10 @@ type
     function GetDescriptors(ServiceType: PTypeInfo): TServiceDescriptors;
     function SetDescriptors(const ServiceType: PTypeInfo; const NewDescriptors: TArray<TServiceDescriptor>): IServiceCollectionImpl;
     function RemoveAll(const ServiceType: PTypeInfo): IServiceCollectionImpl;
+    // El registro sin fijar que puede servir a este cierre, si lo hay. Se pregunta al FALLAR
+    // la busqueda directa y nunca antes: un registro concreto para un cierre tiene que seguir
+    // mandando sobre el registro sin fijar.
+    function TryFindOpenGeneric(const ClosedType: PTypeInfo; out OpenType: PTypeInfo): Boolean;
     // Contabilidad de "esto ya se proceso", por coleccion y no por proceso: componer
     // dos veces en un proceso tiene que dar el mismo resultado.
     function TryMarkVisited(const Category, Key: string): Boolean;
@@ -303,7 +334,8 @@ uses
   Daf.Rtti,
   Daf.MemUtils,
   Daf.Activator,
-  Daf.DependencyInjection.ActivatorUtilities;
+  Daf.DependencyInjection.ActivatorUtilities,
+  Daf.DependencyInjection.OpenGenerics;
 
 var
   // Contador de proceso, y aqui si vale: la identidad de un registro solo tiene que ser
@@ -325,6 +357,18 @@ begin
   Result := Default(TServiceProviderOptions);
 end;
 
+{ TServiceIdentity }
+
+class operator TServiceIdentity.Equal(const A, B: TServiceIdentity): Boolean;
+begin
+  Result := (A.Registration = B.Registration) and (A.ClosedType = B.ClosedType);
+end;
+
+class operator TServiceIdentity.NotEqual(const A, B: TServiceIdentity): Boolean;
+begin
+  Result := not (A = B);
+end;
+
 { TServiceDescriptor }
 
 constructor TServiceDescriptor.Create(const Factory: TServiceFactory; const LifeTime: TServiceLifeTime;
@@ -334,8 +378,31 @@ begin
   FLifeTime := LifeTime;
   FTypeInfo := TypeInfo;
   FImplementationClass := ImplementationClass;
-  FIdentity := AtomicIncrement(GLastServiceIdentity);
+  FIdentity.Registration := AtomicIncrement(GLastServiceIdentity);
+  FIdentity.ClosedType := nil;
  end;
+
+function TServiceDescriptor.ClosedType: PTypeInfo;
+begin
+  Result := FIdentity.ClosedType;
+end;
+
+function TServiceDescriptor.ForClosedType(const AClosedType: PTypeInfo): TServiceDescriptor;
+begin
+  Result := Self;
+  // El registro sigue siendo el mismo -- Registration no cambia -- y lo que se le anade es el
+  // eje que le faltaba. Dos cierres del mismo registro son dos identidades, y por tanto dos
+  // instancias; el mismo cierre dos veces es una.
+  Result.FIdentity.ClosedType := AClosedType;
+  // Una fabrica registrada a mano no puede saber para que cierre construye, asi que se queda
+  // como esta: lo que se reemplaza es la fabrica por clase, que si puede.
+  // El nombre de unit delante no sobra: dentro de este record, Factory es su propia propiedad
+  // --la fabrica de ESTE registro-- y tapa la clase del mismo nombre. Sin cualificar, esto
+  // compila como una llamada a la propiedad y falla por numero de parametros.
+  if FImplementationClass <> nil then
+    Result.FFactory := Daf.Extensions.DependencyInjection.Factory.FromOpen(
+      FTypeInfo, AClosedType, FImplementationClass);
+end;
 
 
 function ServiceTypeName(const ServiceType: PTypeInfo): string;
@@ -501,10 +568,34 @@ end;
 class function Factory.From(const ServiceType: PTypeInfo; const TImpl: TClass): TServiceFactory;
 begin
   Assert(Supports(TImpl, _T.GUID(ServiceType)), TImpl.Classname + 'no supports ' + _T.NameOf(ServiceType));
+  // Un registro que deja sus argumentos sin fijar promete algo que la implementacion tiene que
+  // poder cumplir, y si no puede eso es un error de composicion: se dice AQUI, al registrar, y
+  // no cuando alguien resuelva un cierre en otro punto del programa. Es un Assert lo de arriba
+  // y una excepcion lo de abajo a proposito -- aquello comprueba al programador, esto describe
+  // un registro imposible, y tiene que seguir hablando en release.
+  if TOpenGeneric.IsOpen(ServiceType) then
+    TOpenGeneric.CheckImplementation(ServiceType, TImpl);
   Result := function(Provider: IServiceProvider): IInterface
             begin
               var Aux := TActivatorUtilities.CreateInstance(Provider, TImpl);
               Supports(Aux, _T.GUID(ServiceType), Result);
+            end;
+end;
+
+class function Factory.FromOpen(const OpenType, ClosedType: PTypeInfo; const TImpl: TClass): TServiceFactory;
+begin
+  Result := function(Provider: IServiceProvider): IInterface
+            begin
+              var Aux := TOpenGeneric.Activate(Provider, TImpl, OpenType, ClosedType);
+              // El GUID declarado lo comparten TODAS las instanciaciones de una familia, asi
+              // que la unica clase compilada -- la del marcador -- satisface tambien el cierre.
+              // Que eso sea seguro es lo que Activate acaba de comprobar metodo a metodo.
+              if not Supports(Aux, _T.GUID(ClosedType), Result) then
+              begin
+                Aux.Free;
+                raise EServiceProviderError.CreateFmt('%s does not implement %s',
+                  [TImpl.ClassName, ServiceTypeName(ClosedType)]);
+              end;
             end;
 end;
 

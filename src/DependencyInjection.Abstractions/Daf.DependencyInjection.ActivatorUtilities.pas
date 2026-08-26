@@ -3,6 +3,7 @@
 interface
 
 uses
+  System.SysUtils,
   System.Rtti,
   System.TypInfo,
   System.Classes,
@@ -30,13 +31,19 @@ type
     class function TryFindConstructor(const Provider: IServiceProvider; const AClass: TClass; out Ctor: TRttiMethod;
       out Failed: TRttiParameter): Boolean;
     class function CreateInstance(const Provider: IServiceProvider; const AClass: TClass): TObject; overload;
+    /// <summary>
+    ///   Igual, pero con un hueco entre reservar la instancia y correr su constructor. Existe
+    ///   porque hay cosas que la implementacion no puede saber por si misma y que tiene que
+    ///   ver YA CONSTRUYENDOSE: en el constructor es donde se decide casi todo.
+    /// </summary>
+    class function CreateInstance(const Provider: IServiceProvider; const AClass: TClass;
+      const Initialize: TProc<TObject>): TObject; overload;
     class function CreateInstance<T: class>(const Provider: IServiceProvider): T; overload;
   end;
 
 implementation
 
 uses
-  System.SysUtils,
   Daf.Types;
 
 var RC: TRttiContext;
@@ -154,6 +161,12 @@ end;
 
 class function TActivatorUtilities.CreateInstance(const Provider: IServiceProvider; const AClass: TClass): TObject;
 begin
+  Result := CreateInstance(Provider, AClass, nil);
+end;
+
+class function TActivatorUtilities.CreateInstance(const Provider: IServiceProvider; const AClass: TClass;
+  const Initialize: TProc<TObject>): TObject;
+begin
   var Ctor := SelectBest(GetResolvableCtors(AClass, Provider));
   if Ctor = nil then
     raise EArgumentException.CreateFmt('Cannot find resolvable constructor for %s', [AClass.ClassName]);
@@ -162,7 +175,25 @@ begin
   var Failed: TRttiParameter;
   if not TryResolveArgs(Provider, Ctor, Args, Failed) then
     raise EArgumentException.CreateFmt('Cannot resolve argument %s for %s', [Failed.Name, AClass.ClassName]);
-  Result := Ctor.Invoke(AClass, Args).AsObject
+
+  // En dos tiempos, y no el Ctor.Invoke(AClass, Args) de una linea que habia antes. Invocar
+  // sobre la METACLASE construye el objeto dentro de la llamada, asi que no hay instancia que
+  // preparar antes de que corra el constructor -- y ademas reasigna. Con NewInstance la hay.
+  // Invocar sobre la INSTANCIA no reasigna, y el conteo de referencias queda igual que en la
+  // secuencia que genera el compilador: NewInstance deja el contador a uno y AfterConstruction
+  // lo baja.
+  Result := AClass.NewInstance;
+  try
+    if Assigned(Initialize) then
+      Initialize(Result);
+    Ctor.Invoke(TValue.From<TObject>(Result), Args);
+    Result.AfterConstruction;
+  except
+    // En la forma asignadora es el compilador quien libera la instancia si el constructor
+    // lanza. Aqui no hay quien lo haga.
+    Result.Free;
+    raise;
+  end;
 end;
 
 class function TActivatorUtilities.CreateInstance<T>(const Provider: IServiceProvider): T;

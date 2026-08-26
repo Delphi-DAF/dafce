@@ -80,7 +80,7 @@ type
     FCreatingSingletons: TStack<TServiceDescriptor>;
     FIsSingletonsScope: Boolean;
     FShutDonwnDone: Boolean;
-    function GetServiceIdentity(Descriptor: TServiceDescriptor): TServiceIdentity;
+    function GetServiceIdentity(const Descriptor: TServiceDescriptor): TServiceIdentity;
     function CreateInstance(const Descriptor: TServiceDescriptor; const Provider: IServiceProvider): IInterface;
     function GetOrCreate(const Descriptor: TServiceDescriptor; const Provider: IServiceProvider): IInterface;overload;
     procedure BeginCreateSingleton(const Descriptor: TServiceDescriptor);
@@ -88,7 +88,10 @@ type
     function GetImplementor(const Descriptor: TServiceDescriptor): IInterface;
     function TryGet(const ServiceType: PTypeInfo; out Service): Boolean;
     function TryGetAll(const ServiceType: PTypeInfo; out Services: IInterfaceList): Boolean;
-    function TryGetDescriptors(const ServiceType: PTypeInfo; out Descriptors: TServiceDescriptors): Boolean;
+    function TryGetDescriptors(const ServiceType: PTypeInfo; out Descriptors: TServiceDescriptors;
+      out MatchedOpen: Boolean): Boolean;
+    function DescriptorFor(const ServiceType: PTypeInfo; const Descriptor: TServiceDescriptor;
+      const MatchedOpen: Boolean): TServiceDescriptor;
     function GetSingletonsScope: IServiceResolver;
     procedure AddServiceInstance(const Descriptor: TServiceDescriptor; const Service: IInterface);
     function CanResolve(const ServiceType: PTypeInfo): Boolean;
@@ -117,6 +120,11 @@ type
     // Estado de la coleccion, no del proceso: componer dos veces en un mismo proceso
     // tiene que dar el mismo resultado, y con una global de unit no lo daba.
     FVisited: TDictionary<string, Boolean>;
+    // Que registro sin fijar sirve a cada cierre, incluido el "ninguno" -- por eso guarda nil
+    // en vez de no guardar nada. Sin esto, cada resolucion de un cierre no registrado
+    // recorreria todas las claves de la coleccion. Se vacia en cuanto la coleccion cambia:
+    // un "ninguno" cacheado antes de un registro posterior seria una respuesta caducada.
+    FOpenMatches: TDictionary<PTypeInfo, PTypeInfo>;
     FIsFrozen: Boolean;
     function DescribeUnresolvable(const Descriptor: TServiceDescriptor; const Failed: TRttiParameter): string;
     procedure CollectCapturedScopes(const Descriptor: TServiceDescriptor; const Ctor: TRttiMethod;
@@ -131,6 +139,7 @@ type
     function GetDescriptors(ServiceType: PTypeInfo): TServiceDescriptors;
     function SetDescriptors(const ServiceType: PTypeInfo; const NewDescriptors: TArray<TServiceDescriptor>): IServiceCollectionImpl;
     function RemoveAll(const ServiceType: PTypeInfo): IServiceCollectionImpl;
+    function TryFindOpenGeneric(const ClosedType: PTypeInfo; out OpenType: PTypeInfo): Boolean;
     function TryMarkVisited(const Category, Key: string): Boolean;
     function GetCount: Integer;
     function Add<ServiceType: IInterface>(const LifeTime: TServiceLifeTime; const Factory: TServiceFactory): IServiceCollectionImpl;overload;
@@ -152,9 +161,11 @@ implementation
 
 uses
   System.SysUtils,
+  System.Generics.Defaults,
   Daf.Types,
   Daf.Rtti,
-  Daf.DependencyInjection.ActivatorUtilities;
+  Daf.DependencyInjection.ActivatorUtilities,
+  Daf.DependencyInjection.OpenGenerics;
 
 { TDIObject }
 
@@ -191,13 +202,35 @@ begin
   inherited Create;
   FEntries := TDescriptorsDictionary.Create([doOwnsValues]);
   FVisited := TDictionary<string, Boolean>.Create;
+  FOpenMatches := TDictionary<PTypeInfo, PTypeInfo>.Create;
 end;
 
 destructor TServiceCollection.Destroy;
 begin
+  FOpenMatches.Free;
   FVisited.Free;
   FEntries.Free;
   inherited;
+end;
+
+function TServiceCollection.TryFindOpenGeneric(const ClosedType: PTypeInfo; out OpenType: PTypeInfo): Boolean;
+begin
+  OpenType := nil;
+  if (ClosedType = nil) or not _T.IsGeneric(ClosedType) then Exit(False);
+  if FOpenMatches.TryGetValue(ClosedType, OpenType) then Exit(OpenType <> nil);
+
+  // Un registro sin fijar no se empareja consigo mismo: IX<_> es un tipo cerrado legitimo y
+  // se resuelve por la via directa, como cualquier otro.
+  if not TOpenGeneric.IsOpen(ClosedType) then
+    for var Entry in FEntries do
+      if TOpenGeneric.IsOpen(Entry.Key) and TOpenGeneric.SameForm(Entry.Key, ClosedType) then
+      begin
+        OpenType := Entry.Key;
+        Break;
+      end;
+
+  FOpenMatches.AddOrSetValue(ClosedType, OpenType);
+  Result := OpenType <> nil;
 end;
 
 function TServiceCollection.TryMarkVisited(const Category, Key: string): Boolean;
@@ -333,6 +366,7 @@ function TServiceCollection.SetDescriptors(const ServiceType: PTypeInfo;
 begin
   CheckNotFrozen;
   Result := Self;
+  FOpenMatches.Clear;
   FEntries.Remove(ServiceType);
   if Length(NewDescriptors) = 0 then Exit;
 
@@ -345,6 +379,7 @@ function TServiceCollection.RemoveAll(const ServiceType: PTypeInfo): IServiceCol
 begin
   CheckNotFrozen;
   Result := Self;
+  FOpenMatches.Clear;
   // Se borra la entrada entera, no se vacia la lista: si quedara una clave con lista vacia,
   // Contains seguiria diciendo que si y TryAdd no repondria el registro.
   FEntries.Remove(ServiceType);
@@ -363,6 +398,7 @@ begin
 
   Assert(Assigned(Factory), 'ServiceFactory can''t be empty');
   Result := Self;
+  FOpenMatches.Clear;
   var
     Descriptors: TServiceDescriptors;
 
@@ -448,7 +484,19 @@ constructor TServiceScope.Create(const Factory: TServiceScopeFactory; const Sing
 begin
   inherited Create;
   FScopeFactory := Factory;
-  FServiceInstances := TOrderedDictionary<TServiceIdentity, IInterface>.Create;
+  // Comparador explicito y no el binario por defecto: TServiceIdentity tiene dos campos de
+  // tamanos distintos, asi que en 64 bits lleva relleno, y el relleno de un record sin
+  // inicializar no vale como parte de una clave.
+  FServiceInstances := TOrderedDictionary<TServiceIdentity, IInterface>.Create(
+    TEqualityComparer<TServiceIdentity>.Construct(
+      function(const A, B: TServiceIdentity): Boolean
+      begin
+        Result := A = B;
+      end,
+      function(const Value: TServiceIdentity): Integer
+      begin
+        Result := Integer(Value.Registration) xor Integer(NativeInt(Value.ClosedType));
+      end));
   FIsSingletonsScope := SingletonsScope;
   FCreatingSingletons := TStack<TServiceDescriptor>.Create;
   FServiceCollection := Factory.ServiceCollection;
@@ -485,11 +533,12 @@ begin
     raise Exception.CreateFmt('% don''t implements %s', [TObject(Intf).QualifiedClassName, Descriptor.ServiceName]);
 end;
 
-function TServiceScope.GetServiceIdentity(Descriptor: TServiceDescriptor): TServiceIdentity;
+function TServiceScope.GetServiceIdentity(const Descriptor: TServiceDescriptor): TServiceIdentity;
 begin
-  // El registro, no su tipo. Con el nombre del tipo el ambito no podia guardar mas de una
-  // instancia por tipo de servicio, asi que el segundo registro se declaraba, se contaba y
-  // no se construia nunca.
+  // El registro y, cuando se llego a el emparejando, tambien el tipo cerrado. Con el nombre
+  // del tipo el ambito no podia guardar mas de una instancia por tipo de servicio; con el
+  // registro a secas, un registro sin fijar --que es UNO para todos sus cierres-- serviria
+  // una sola instancia a todos ellos. Los dos ejes vienen ya puestos en la identidad.
   Result := Descriptor.Identity;
 end;
 
@@ -557,18 +606,46 @@ end;
 function TServiceScope.CanResolve(const ServiceType: PTypeInfo): Boolean;
 begin
   Result := ServiceCollection.Contains(ServiceType);
+  if Result then Exit;
+  // Y esto no es un adorno: TActivatorUtilities pregunta aqui ANTES de elegir constructor. Si
+  // el emparejamiento sin fijar no se reflejase, el constructor que pide un cierre no se
+  // elegiria, la clase se construiria con el de TObject y quedaria a medias -- en verde y sin
+  // excepcion, que es el peor sitio donde dejar esto sin contestar.
+  var OpenType: PTypeInfo;
+  Result := ServiceCollection.TryFindOpenGeneric(ServiceType, OpenType);
 end;
 
-function TServiceScope.TryGetDescriptors(const ServiceType: PTypeInfo; out Descriptors: TServiceDescriptors): Boolean;
+function TServiceScope.TryGetDescriptors(const ServiceType: PTypeInfo; out Descriptors: TServiceDescriptors;
+  out MatchedOpen: Boolean): Boolean;
 begin
   // El embudo por el que pasan TryGet y TryGetAll, y por tanto toda resolucion. La guarda vive
   // aqui y no en las firmas publicas del record: alli habria que escribirla ocho veces.
   CheckNotShutDown(ServiceType);
   Descriptors := nil;
-  Result := CanResolve(ServiceType);
-  if not Result then
-    Exit;
-  Descriptors := ServiceCollection.GetDescriptors(ServiceType);
+  MatchedOpen := False;
+
+  if ServiceCollection.Contains(ServiceType) then
+  begin
+    Descriptors := ServiceCollection.GetDescriptors(ServiceType);
+    Exit(True);
+  end;
+
+  // El emparejamiento entra al FALLAR la busqueda directa, y ese orden ES el requisito: un
+  // registro concreto para un cierre gana al registro sin fijar.
+  var OpenType: PTypeInfo;
+  Result := ServiceCollection.TryFindOpenGeneric(ServiceType, OpenType);
+  if not Result then Exit;
+  MatchedOpen := True;
+  Descriptors := ServiceCollection.GetDescriptors(OpenType);
+end;
+
+function TServiceScope.DescriptorFor(const ServiceType: PTypeInfo; const Descriptor: TServiceDescriptor;
+  const MatchedOpen: Boolean): TServiceDescriptor;
+begin
+  if MatchedOpen then
+    Result := Descriptor.ForClosedType(ServiceType)
+  else
+    Result := Descriptor;
 end;
 
 function TServiceScope.TryGet(const ServiceType: PTypeInfo; out Service): Boolean;
@@ -576,11 +653,12 @@ begin
   Pointer(Service) := nil;
   var
     Descriptors: TServiceDescriptors;
-  Result := TryGetDescriptors(ServiceType, Descriptors);
+  var MatchedOpen: Boolean;
+  Result := TryGetDescriptors(ServiceType, Descriptors, MatchedOpen);
   if not Result then
     Exit;
   var
-  Descriptor := ServiceCollection.GetDescriptors(ServiceType).Last;
+  Descriptor := DescriptorFor(ServiceType, Descriptors.Last, MatchedOpen);
   IInterface(Service) := GetImplementor(Descriptor);
 end;
 
@@ -589,12 +667,13 @@ begin
   Services := TInterfaceList<IInterface>.Create;
 
   var Descriptors: TServiceDescriptors;
-  Result := TryGetDescriptors(ServiceType, Descriptors);
+  var MatchedOpen: Boolean;
+  Result := TryGetDescriptors(ServiceType, Descriptors, MatchedOpen);
   if not Result then
     Exit;
 
   for var Descriptor in Descriptors do
-    Services.Add(GetImplementor(Descriptor));
+    Services.Add(GetImplementor(DescriptorFor(ServiceType, Descriptor, MatchedOpen)));
 end;
 
 function TServiceScope.CreateScope: IServiceScope;

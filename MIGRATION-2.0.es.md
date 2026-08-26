@@ -166,10 +166,19 @@ comparte motor con ninguno de los dos módulos.
 | `TFilterSpec<T>`, en `Daf.Expression` | misma clase, en `Daf.FilterSpec` |
 | unidad `Daf.Expression` | disuelta en `Daf.FilterSpec` y `Daf.Types` |
 | `TBooleanExpresion` | retirado |
+| `TGenericRTTI.GetGenericArguments(TRttiType)` | **`_T.GenericArgs(PTypeInfo)`**, en `Daf.Rtti` — devuelve información de tipo en vez de tipos reflejados, y cuenta como uno un argumento que a su vez es genérico |
+| `TGenericRTTI.MakeGenericType` | retirado sin sustituto — ver abajo |
 | `TSmartArray<T>.Select(TDeferred<TMapper<T, TTarget>>)` | `Select(TFunc<T, TTarget>)` |
 
 `Daf.Linq.Where` / `Filter` toman `TFilterSpec<T>`, el tipo que ya vivía en Commons: `Daf.Linq` no
 introduce un vocabulario de filtrado propio, evalúa el que ya estaba nombrado.
+
+`MakeGenericType` no tiene sustituto porque prometía algo que Delphi no hace: fabricar una
+instanciación genérica en ejecución. Fallaba con violación de acceso incluso en el caso para el que
+se escribió. Si la llamabas para obtener un genérico cerrado que el compilador nunca vio, no hay a
+dónde migrar — pero si lo que necesitabas en realidad era un registro que sirviera a todos los
+cierres de un contrato, eso es ahora
+[registrar un contrato genérico una sola vez](src/DependencyInjection.Abstractions/README.es.md#registrar-un-contrato-genérico-una-sola-vez).
 
 ### 5. Módulos de consulta renombrados
 

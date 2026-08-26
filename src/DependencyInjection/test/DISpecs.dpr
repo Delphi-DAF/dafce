@@ -15,7 +15,8 @@ uses
   Validation.Feat in 'Validation.Feat.pas',
   GarbageCollection.Feat in 'GarbageCollection.Feat.pas',
   ContainerShutdown.Feat in 'ContainerShutdown.Feat.pas',
-  ServiceIdentity.Feat in 'ServiceIdentity.Feat.pas';
+  ServiceIdentity.Feat in 'ServiceIdentity.Feat.pas',
+  OpenGenerics.Feat in 'OpenGenerics.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

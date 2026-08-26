@@ -2,7 +2,7 @@
 
 Read from the `requires` clause of every `.dpk`, so it cannot drift from the packages. Arrows read *requires*.
 
-**26 packages**, **34 real edges** between them, **39** more declared but already implied by another path, **0** cycles.
+**26 packages**, **34 real edges** between them, **40** more declared but already implied by another path, **0** cycles.
 
 ```{mermaid}
 graph TD

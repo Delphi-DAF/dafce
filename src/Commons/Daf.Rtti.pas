@@ -33,6 +33,21 @@ type
     class function ElementType<T>: PTypeInfo;overload; static;inline;
     class function ElementType(ATypeInfo: PTypeInfo): PTypeInfo;overload;static;
 
+    /// <summary>Un tipo generico CERRADO -- el unico que existe en el binario -- se reconoce
+    /// por su nombre: Delphi no emite nada mas sobre su condicion de generico.</summary>
+    class function IsGeneric(PInfo: PTypeInfo): Boolean;static;
+    /// <summary>El nombre hasta el primer &lt;, o cadena vacia si no es generico. Es lo que dos
+    /// instanciaciones de la misma familia comparten, y por si solo NO las distingue de otra
+    /// familia del mismo nombre y distinta aridad: eso lo dice GenericArgs.</summary>
+    class function GenericName(PInfo: PTypeInfo): string;static;
+    /// <summary>Los argumentos de una instanciacion cerrada, uno por argumento declarado.
+    /// Extiende lo que da la RTL, que no expone ninguno: hay que trocear el nombre, y trocearlo
+    /// RESPETANDO EL ANIDAMIENTO, porque un argumento que a su vez es generico trae sus propias
+    /// comas. Una posicion queda a nil cuando el argumento no esta registrado en la RTTI; la
+    /// LONGITUD es la aridad real en todo caso, que es lo que hace falta para emparejar.</summary>
+    class function GenericArgs<T>: TArray<PTypeInfo>;overload; static;inline;
+    class function GenericArgs(PInfo: PTypeInfo): TArray<PTypeInfo>;overload;static;
+
     class function PackageOf<T>: TRttiPackage;overload;static;inline;
     class function PackageOf(PInfo: PTypeInfo): TRttiPackage; overload; static;inline;
     class function PackageOf(AClass: TClass): TRttiPackage; overload; static;inline;
@@ -82,18 +97,24 @@ type
   public
   end;
 
-  // Representa un marcador para un argumento genérico abierto
+  /// <summary>
+  ///   Marcador para un argumento generico sin fijar. <c>IX&lt;_&gt;</c> es una instanciacion
+  ///   cerrada legitima con su propio tipo, y eso es lo que permite registrar un contrato
+  ///   generico una sola vez para todos sus cierres.
+  /// </summary>
+  /// <remarks>
+  ///   El constructor protesta a proposito. Dentro de una implementacion registrada sin fijar
+  ///   sus argumentos, <c>T</c> ES este marcador, asi que <c>T.Create</c> construiria un <c>_</c>
+  ///   y seguiria adelante: el unico fallo mudo del mecanismo. Aqui aborta explicando, y el mismo
+  ///   codigo generico instanciado sobre un cierre real sigue construyendo lo suyo.
+  /// </remarks>
   _ = class
+  public
+    constructor Create;
   end;
 
   TEnum = record
     class function ToString<T>(Value: T): string;static;inline;
-  end;
-
-  TGenericRTTI = class
-  public
-    class function GetGenericArguments(AType: TRttiType): TArray<TRttiType>;
-    class function MakeGenericType(GenericType: TRttiType; const TypeArgs: array of TRttiType): TRttiType;
   end;
 
   TPropInjector = class
@@ -119,7 +140,6 @@ function CoerceForAssign(const Target: TRttiType; const Source: TValue; out Res:
 implementation
 
 uses
-  System.StrUtils,
   Daf.Types;
 
 function TryGetMethod(const Instance: TObject; const MethodName: string; out Method: TMethod): Boolean;
@@ -331,6 +351,85 @@ begin
     Exit(nil)
   else
     Exit(ref^);
+end;
+
+class function _T.IsGeneric(PInfo: PTypeInfo): Boolean;
+begin
+  Result := (PInfo <> nil) and (Pos('<', string(PInfo.Name)) > 0);
+end;
+
+class function _T.GenericName(PInfo: PTypeInfo): string;
+begin
+  Result := '';
+  if PInfo = nil then Exit;
+  var Name := string(PInfo.Name);
+  var Opening := Pos('<', Name);
+  if Opening = 0 then Exit;
+  Result := Copy(Name, 1, Opening - 1);
+end;
+
+class function _T.GenericArgs<T>: TArray<PTypeInfo>;
+begin
+  Result := _T.GenericArgs(TypeInfo(T));
+end;
+
+class function _T.GenericArgs(PInfo: PTypeInfo): TArray<PTypeInfo>;
+begin
+  Result := nil;
+  if PInfo = nil then Exit;
+
+  // Troceo por PROFUNDIDAD, no por comas. Un argumento que a su vez es generico trae las
+  // suyas -- IPair<TDictionary<string,Integer>,TAlpha> tiene dos argumentos y tres comas--,
+  // y contarlas a lo bruto da una aridad equivocada y con ella un emparejamiento equivocado.
+  var Name := string(PInfo.Name);
+  var Depth := 0;
+  var Current := '';
+  var Names: TArray<string> := nil;
+  var Closed := False;
+  for var Idx := 1 to Length(Name) do
+  begin
+    var C := Name[Idx];
+    if C = '<' then
+    begin
+      Inc(Depth);
+      if Depth = 1 then Continue;   // la apertura del nivel 1 no forma parte de ningun argumento
+    end
+    else if C = '>' then
+    begin
+      Dec(Depth);
+      if Depth = 0 then
+      begin
+        Names := Names + [Current.Trim];
+        Closed := True;
+        Break;
+      end;
+    end
+    else if (C = ',') and (Depth = 1) then
+    begin
+      Names := Names + [Current.Trim];
+      Current := '';
+      Continue;
+    end;
+    if Depth >= 1 then
+      Current := Current + C;
+  end;
+  if not Closed then Exit;
+
+  // El nombre de una instanciacion cerrada YA trae sus argumentos cualificados, asi que
+  // FindType basta. Se lee Name y no QualifiedName a proposito: QualifiedName lanza para un
+  // tipo que no esta declarado en la interface de una unit, y aqui eso no es un error.
+  SetLength(Result, Length(Names));
+  var RC := TRttiContext.Create;
+  try
+    for var Idx := 0 to High(Names) do
+    begin
+      var RType := RC.FindType(Names[Idx]);
+      if RType <> nil then
+        Result[Idx] := RType.Handle;
+    end;
+  finally
+    RC.Free;
+  end;
 end;
 
 class function _T.HasProperty(T: TClass;const PropName:string): Boolean;
@@ -576,71 +675,23 @@ begin
   Result := not (IsObject or IsCollection or IsDictionary or IsArray);
 end;
 
+{ _ }
+
+constructor _.Create;
+begin
+  inherited Create;
+  raise EInvalidOpException.Create(
+    '_ is the placeholder for an unbound generic argument, not a type to build. This is a ' +
+    'T.Create inside an implementation registered with its type arguments left open, where T ' +
+    'IS the placeholder: read the concrete class out of the _ClosedArgs field the container ' +
+    'fills, and build that one.');
+end;
+
 { TEnum }
 
 class function TEnum.ToString<T>(Value: T): string;
 begin
   Result := TRttiEnumerationType.GetName<T>(Value);
-end;
-
-{ TGenericRTTI }
-
-class function TGenericRTTI.GetGenericArguments(AType: TRttiType): TArray<TRttiType>;
-var
-  Ctx: TRttiContext;
-  QualifiedName: string;
-  ArgList: TArray<string>;
-  ArgType: TRttiType;
-  I: Integer;
-begin
-  Ctx := TRttiContext.Create;
-  QualifiedName := AType.QualifiedName;
-
-  // Buscar apertura de genéricos
-  if not ContainsText(QualifiedName, '<') then
-    Exit(nil);
-
-  QualifiedName := Copy(QualifiedName, Pos('<', QualifiedName) + 1, MaxInt);
-  QualifiedName := Copy(QualifiedName, 1, Pos('>', QualifiedName) - 1);
-
-  ArgList := QualifiedName.Split([',']);
-  SetLength(Result, Length(ArgList));
-
-  for I := 0 to High(ArgList) do
-  begin
-    ArgType := Ctx.FindType(Trim(ArgList[I]));
-    if not Assigned(ArgType) then
-      raise Exception.CreateFmt('Tipo genérico no encontrado: %s', [ArgList[I]]);
-    Result[I] := ArgType;
-  end;
-end;
-
-class function TGenericRTTI.MakeGenericType(GenericType: TRttiType; const TypeArgs: array of TRttiType): TRttiType;
-var
-  Ctx: TRttiContext;
-  TI: PTypeInfo;
-  Name: string;
-  I: Integer;
-  QualifiedName: string;
-begin
-  // Construir el nombre calificado como TMiClase<T1, T2>
-  Name := GenericType.Name;
-  QualifiedName := Name + '<';
-  for I := Low(TypeArgs) to High(TypeArgs) do
-  begin
-    QualifiedName := QualifiedName + TypeArgs[I].QualifiedName;
-    if I < High(TypeArgs) then
-      QualifiedName := QualifiedName + ', ';
-  end;
-  QualifiedName := QualifiedName + '>';
-
-  // Buscar el tipo construido en el contexto actual
-  Ctx := TRttiContext.Create;
-  TI := Ctx.FindType(QualifiedName).Handle;
-  if not Assigned(TI) then
-    raise Exception.CreateFmt('No se pudo construir tipo genérico: %s', [QualifiedName]);
-
-  Result := Ctx.GetType(TI);
 end;
 
 class procedure TPropInjector.AssignTo<TTarget, TSource>(const Source: TSource; const Target: TTarget);

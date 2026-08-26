@@ -101,6 +101,7 @@
         <DCCReference Include="Nullable.Feat.pas"/>
         <DCCReference Include="Enumerable.Feat.pas"/>
         <DCCReference Include="Comparers.Feat.pas"/>
+        <DCCReference Include="Rtti.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>

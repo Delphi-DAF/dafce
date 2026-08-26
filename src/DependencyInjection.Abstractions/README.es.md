@@ -16,6 +16,7 @@ Contratos principales (interfaces y tipos) del sistema de Inyección de Dependen
 | `Daf.Extensions.DependencyInjection` | `IServiceCollection`, `IServiceProvider`, `IServiceScope`, tiempos de vida, `Factory`, `TDuckDecorator<T>`, `Lazy` |
 | `Daf.AppModule` | `IAppModule` — patrón de registro por módulo |
 | `Daf.DependencyInjection.ActivatorUtilities` | Helpers para construir objetos mediante RTTI con argumentos resueltos por DI |
+| `Daf.DependencyInjection.OpenGenerics` | Emparejamiento, comprobaciones y activación de los registros que dejan sus argumentos de tipo sin fijar |
 
 ---
 
@@ -89,6 +90,104 @@ Clase base para envolver un servicio con lógica pre/post-llamada sin herencia. 
 ```pascal
 Result := Lazy.From<IHeavy>(Provider, function(P): IHeavy begin Result := THeavy.Create end);
 ```
+
+---
+
+## Registrar un contrato genérico una sola vez
+
+Un contrato genérico se puede registrar **sin fijar sus argumentos de tipo**, y ese único registro
+sirve a todos sus cierres:
+
+```pascal
+Services.AddSingleton<IRepo<_>, TRepo<_>>;
+
+// no hay nada más registrado, y estos dos resuelven
+var Users  := Provider.GetRequiredService<IRepo<TUser>>;
+var Orders := Provider.GetRequiredService<IRepo<TOrder>>;
+```
+
+`_` es el marcador que declara `Daf.Rtti`. `IRepo<_>` es una instanciación cerrada corriente con
+su propio tipo, así que registrarla no necesita nada nuevo — lo que el contenedor aprende es a
+**emparejar** al resolver. De ahí salen tres reglas:
+
+- el ciclo de vida cuenta **por tipo cerrado**: un singleton sin fijar es una instancia por cierre,
+  no una en total
+- un registro escrito para un cierre concreto gana siempre al registro sin fijar
+- el nombre y la aridad identifican el contrato, así que uno del mismo nombre y otra aridad no
+  empareja
+
+### `_ClosedArgs`, o cómo se entera la implementación de cuál es su cierre
+
+Delphi cierra los genéricos al compilar. Dentro de una implementación registrada sin fijar, `T`
+**es** el marcador: `TypeInfo(T)` y `T.Create` no sirven de nada ahí — el constructor del marcador
+lo dice en voz alta en vez de construir uno en silencio. Todo lo que la implementación necesite del
+tipo de verdad le llega por un campo de nombre fijo que el contenedor rellena **antes de que corra
+el constructor**, que es donde un servicio decide casi todo lo que es:
+
+```pascal
+type
+  TRepoArgs = record
+    T1: TEntityClass;                     // la cota, expresada por el tipo del campo
+  end;
+
+  TRepo<T: class> = class(TInterfacedObject, IRepo<T>)
+  public
+    _ClosedArgs: TRepoArgs;
+    constructor Create;
+  end;
+
+constructor TRepo<T>.Create;
+begin
+  inherited Create;
+  FTable := _ClosedArgs.T1.ClassName;     // TUser, TOrder, ...
+end;
+```
+
+Seis cosas que saber de ese campo, y cada una es una forma de equivocarse:
+
+- **Se lee, y no se asigna nunca.** El prefijo `_` significa «esto lo opera otro», como en
+  `_AddRef` — aquí con la flecha al revés: lo declaras tú, lo escribe el contenedor. Leerlo es
+  gratis y es para lo que está.
+- **Liga la posición; el nombre solo documenta.** Delphi no emite nada sobre los nombres de los
+  parámetros de un genérico, así que el contenedor ata los campos del record a los argumentos de
+  tipo **por orden de declaración**. Un record con los campos al revés compila y hace lo contrario.
+- **El tipo del campo es la cota.** `class of TEntity` dice «solo entidades», y un cierre que no la
+  satisface se rechaza nombrando el argumento y la cota que incumple.
+- **`TClass` significa sin cota — y también sin despacho.** `UnTClass.Create` llama a
+  `TObject.Create` y nunca al constructor propio de la clase, ni siquiera declarándolo `virtual`,
+  porque `TClass` es `class of TObject` y `TObject.Create` no lo es. Devuelve un objeto de la clase
+  correcta con los campos a cero, que se lee como un acierto. Tipa cada campo tan estrecho como
+  puedas; donde de verdad no haya cota, construye con `TActivator.CreateInstance`.
+- **El record va fuera de la clase.** Dentro, `T1` ya es el parámetro genérico:
+  `E2004 Identifier redeclared`.
+- **Cuidado con dónde cae el campo dentro de la clase.** En Delphi un bloque `class var` sigue
+  abierto hasta el siguiente especificador de visibilidad, así que un campo escrito detrás es
+  también un class var — que la RTTI no ve y que comparten todos los cierres. Registrar una
+  implementación así falla diciendo que no hay dónde escribir.
+
+### Para qué sirve esto, y para qué no
+
+Sirve para **reenviadores y contenedores agnósticos del tipo**. `ILogger<T>` es el caso canónico:
+sostiene el registrador de verdad y su única relación con el argumento es usar su nombre como
+categoría. No sirve para nada que necesite el tipo *como tipo* más allá de lo que `_ClosedArgs`
+puede darle.
+
+La prueba se hace con un dedo. **Tapa cada `T` del cuerpo** de la implementación: si el código
+sigue en pie, es registrable sin fijar. Si algo necesitaba que `T` fuera `T` — un `T.Create`, un
+`TypeInfo(T)`, una variable de tipo `T` con un valor de verdad dentro —, no lo es.
+
+Y tres límites, dichos aquí en vez de dejados para que alguien tropiece con ellos:
+
+- **Todos los argumentos o ninguno.** `IFoo<TConocido, _>`, fijando unos y dejando otros sin fijar,
+  no está soportado.
+- **El argumento tiene que viajar como referencia.** Un contrato donde `T` aparezca en una posición
+  cuya representación dependa de `T` —devuelto por valor, un record, un entero— no se puede servir
+  por esta vía. El contenedor **compara los dos contratos método a método y lo rechaza**, nombrando
+  el método: entrar en ese emparejamiento corrompería la pila en vez de fallar.
+- **El emparejamiento es por nombre y aridad, no por identidad.** Dos familias genéricas del mismo
+  nombre simple y la misma aridad, declaradas en units distintas, emparejan. Lo que queda debajo no
+  es la nada —esa misma comparación método a método rechaza el emparejamiento nombrando el primer
+  método que no encaja— pero es una red, no una comprobación de identidad.
 
 ---
 

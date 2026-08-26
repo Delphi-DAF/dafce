@@ -363,6 +363,14 @@ type
     property FileName: string read FFileName;
   end;
 
+/// <summary>
+///   La categoria de un tipo: su unit y su nombre. Vive aqui, en una sola funcion, porque es
+///   la regla que decide bajo que nombre aparece lo que escribe un servicio -- y la escribian
+///   por su cuenta las dos factorias y, en cuanto ILogger&lt;T&gt; resucito, tambien el
+///   reenviador. Tres copias de una regla es tres redacciones de la misma categoria.
+/// </summary>
+function LogCategoryOf(const AType: PTypeInfo): string;
+
 implementation
 uses
 {$IFDEF MSWINDOWS}
@@ -452,6 +460,11 @@ begin
     if TryParse(Source, Level) then
       Result := Result + [Level];
   end;
+end;
+
+function LogCategoryOf(const AType: PTypeInfo): string;
+begin
+  Result := AType.TypeData.UnitNameFld.ToString + '.' + AType.NameFld.ToString;
 end;
 
 function TLogLevelHelper.ToString: string;
@@ -560,7 +573,7 @@ end;
 
 function TNullLoggerFactory.CreateLogger(const AType: PTypeInfo): ILogger;
 begin
-  Result := CreateLogger(AType.TypeData.UnitNameFld.ToString + '.' + AType.NameFld.ToString);
+  Result := CreateLogger(LogCategoryOf(AType));
 end;
 
 { TNullLoggerProvider }

@@ -7,7 +7,8 @@ uses
   Daf.MiniSpec,
   BootstrapChannel.Feat in 'BootstrapChannel.Feat.pas',
   BootstrapSinks.Feat in 'BootstrapSinks.Feat.pas',
-  PipelineComposition.Feat in 'PipelineComposition.Feat.pas';
+  PipelineComposition.Feat in 'PipelineComposition.Feat.pas',
+  TypedLogger.Feat in 'TypedLogger.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

@@ -111,7 +111,7 @@ end;
 
 function TMultiProviderLoggerFactory.CreateLogger(const AType: PTypeInfo): ILogger;
 begin
-  Result := CreateLogger(AType.TypeData.UnitNameFld.ToString + '.' +  AType.NameFld.ToString);
+  Result := CreateLogger(LogCategoryOf(AType));
 end;
 
 function TMultiProviderLoggerFactory.CreateLogger<T>: ILogger;

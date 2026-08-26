@@ -50,6 +50,42 @@ Generic helper: `Factory.CreateLogger<TMyClass>` — uses the class name as cate
 
 ---
 
+### ILogger&lt;T&gt;
+
+The logger a service asks for by naming itself. It adds no methods to `ILogger`; what it adds is
+that its **category is already the category of whoever asked for it**:
+
+```pascal
+type
+  TPayrollService = class(TInterfacedObject, IPayroll)
+  strict private
+    FLog: ILogger<TPayrollService>;
+  public
+    constructor Create(const Log: ILogger<TPayrollService>);
+  end;
+
+procedure TPayrollService.Run;
+begin
+  FLog.LogInformation('the payroll ran');   // comes out under Payroll.TPayrollService
+end;
+```
+
+Nothing is registered for that service, and nothing is registered for the next one either.
+`AddLogging` puts in **one** registration, with its type argument left open, that serves every
+closure — the same shape .NET writes as `services.AddSingleton(typeof(ILogger<>), typeof(Logger<>))`.
+See [registering a generic contract once](../DependencyInjection.Abstractions/README.md#registering-a-generic-contract-once)
+for what that is and what it costs.
+
+What it buys is that the category cannot drift. Written by hand it appears **twice** — the name of
+the class, and the string that names it — with nothing checking that the two agree; and when the
+class is renamed, the string stays behind. Here it is derived from the class, so renaming carries
+it along and the composition is not touched.
+
+The lifetime is per closed type: `ILogger<TPayroll>` and `ILogger<TInvoicing>` are two loggers, and
+asking twice for either one gives the same one back.
+
+---
+
 ### ILoggerProvider
 
 Produce `ILogger` instances for a specific output destination.

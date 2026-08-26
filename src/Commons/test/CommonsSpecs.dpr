@@ -10,7 +10,8 @@ uses
   Enumerable.Feat in 'Enumerable.Feat.pas',
   Comparers.Feat in 'Comparers.Feat.pas',
   Arrays.Feat in 'Arrays.Feat.pas',
-  Macros.Feat in 'Macros.Feat.pas';
+  Macros.Feat in 'Macros.Feat.pas',
+  Rtti.Feat in 'Rtti.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

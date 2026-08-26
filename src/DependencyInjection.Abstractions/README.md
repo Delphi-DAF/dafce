@@ -16,6 +16,7 @@ Core contracts (interfaces and types) for the DAF Dependency Injection system. T
 | `Daf.Extensions.DependencyInjection` | `IServiceCollection`, `IServiceProvider`, `IServiceScope`, lifetimes, `Factory`, `TDuckDecorator<T>`, `Lazy` |
 | `Daf.AppModule` | `IAppModule` — module registration pattern |
 | `Daf.DependencyInjection.ActivatorUtilities` | Helpers to construct objects via RTTI with DI-resolved arguments |
+| `Daf.DependencyInjection.OpenGenerics` | Matching, checking and activation for registrations whose type arguments are left open |
 
 ---
 
@@ -89,6 +90,103 @@ Base class for wrapping a service with pre/post-call logic without inheritance. 
 ```pascal
 Result := Lazy.From<IHeavy>(Provider, function(P): IHeavy begin Result := THeavy.Create end);
 ```
+
+---
+
+## Registering a generic contract once
+
+A generic contract can be registered **with its type arguments left open**, and that one
+registration serves every closure of it:
+
+```pascal
+Services.AddSingleton<IRepo<_>, TRepo<_>>;
+
+// nothing else is registered, and both of these resolve
+var Users  := Provider.GetRequiredService<IRepo<TUser>>;
+var Orders := Provider.GetRequiredService<IRepo<TOrder>>;
+```
+
+`_` is the placeholder declared in `Daf.Rtti`. `IRepo<_>` is an ordinary closed instantiation
+with a type of its own, so registering it needs nothing new — what the container learns is to
+**match** when it resolves. Three rules follow:
+
+- the lifetime counts **per closed type**: an open singleton is one instance per closure, not one
+  in total
+- a registration written for a concrete closure always wins over the open one
+- name and arity identify the contract, so one of the same name and a different arity does not match
+
+### `_ClosedArgs`, or how the implementation learns its closure
+
+Delphi closes generics at compile time. Inside an implementation registered open, `T` **is** the
+placeholder: `TypeInfo(T)` and `T.Create` are of no use there — the placeholder's constructor says
+so out loud instead of quietly building one. Everything the implementation needs about the real
+type arrives through a field of a fixed name that the container fills **before the constructor
+runs**, because that is where a service decides most of what it is:
+
+```pascal
+type
+  TRepoArgs = record
+    T1: TEntityClass;                     // the bound, expressed by the field's type
+  end;
+
+  TRepo<T: class> = class(TInterfacedObject, IRepo<T>)
+  public
+    _ClosedArgs: TRepoArgs;
+    constructor Create;
+  end;
+
+constructor TRepo<T>.Create;
+begin
+  inherited Create;
+  FTable := _ClosedArgs.T1.ClassName;     // TUser, TOrder, ...
+end;
+```
+
+Six things to know about that field, and every one of them is a way to get it wrong:
+
+- **It is read, and never assigned.** The `_` prefix means "somebody else operates this", as in
+  `_AddRef` — here with the arrow the other way round: you declare it, the container writes it.
+  Reading it is free and is what it is for.
+- **Position binds; the name only documents.** Delphi emits nothing about the names of a generic's
+  parameters, so the container binds the record's fields to the type arguments **in declaration
+  order**. A record with its fields the other way round compiles and does the opposite.
+- **The field's type is the bound.** `class of TEntity` says "only entities", and a closure that
+  does not satisfy it is refused naming the argument and the bound it fails to meet.
+- **`TClass` means no bound — and also no dispatch.** `SomeTClass.Create` calls `TObject.Create`
+  and never the class's own constructor, not even a virtual one, because `TClass` is
+  `class of TObject` and `TObject.Create` is not virtual. It hands back an object of the right
+  class with its fields at zero, which reads like success. Type each field as narrowly as you can;
+  where there really is no bound, build with `TActivator.CreateInstance`.
+- **The record goes outside the class.** Inside it, `T1` is already the generic parameter:
+  `E2004 Identifier redeclared`.
+- **Mind where the field sits in the class.** In Delphi a `class var` block stays open until the
+  next visibility specifier, so a field written after one is a class var too — invisible to RTTI,
+  and shared by every closure. Registering such an implementation fails saying there is nowhere to
+  write.
+
+### What this is for, and what it is not
+
+It serves **forwarders and containers that are agnostic about the type**. `ILogger<T>` is the
+canonical case: it holds the real logger and its only relationship with the argument is using its
+name as the category. It does not serve anything that needs the type *as a type* beyond what
+`_ClosedArgs` can hand over.
+
+The test takes a finger. **Cover every `T` in the body** of the implementation: if the code still
+stands, it is registrable with its arguments left open. If something needed `T` to be `T` — a
+`T.Create`, a `TypeInfo(T)`, a variable of type `T` holding a real value — it is not.
+
+And three limits, said here rather than left to be tripped over:
+
+- **All the arguments or none.** `IFoo<TKnown, _>`, fixing some and leaving others open, is not
+  supported.
+- **The argument has to travel as a reference.** A contract where `T` appears in a position whose
+  representation depends on `T` — returned by value, a record, an integer — cannot be served this
+  way. The container **compares the two contracts method by method and refuses**, naming the
+  method: entering such a match would corrupt the stack rather than fail.
+- **Matching is by name and arity, not by identity.** Two generic families with the same simple
+  name and the same arity, declared in different units, match. What sits underneath is not nothing
+  — that same method-by-method check refuses the match, naming the first method that does not fit
+  — but it is a net, not a check of identity.
 
 ---
 

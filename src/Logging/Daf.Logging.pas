@@ -4,6 +4,7 @@ interface
 uses
   System.SysUtils,
   System.Rtti,
+  System.TypInfo,
   System.Generics.Collections,
   Daf.Extensions.Logging;
 
@@ -88,6 +89,37 @@ type
     procedure LogCritical(const Ex: Exception; const Msg: string; const Args: TArray<TValue> = nil); overload;
     procedure LogCritical(const EventId: TEventId; const Ex: Exception; const Msg: string;
       const Args: TArray<TValue> = nil); overload;
+  end;
+
+  /// <summary>
+  ///   Por donde el contenedor le dice a TTypedLogger de quien es el registrador que esta
+  ///   construyendo. Va fuera de la clase porque dentro T1 seria el parametro generico.
+  ///   TClass y no una cota mas estrecha: cualquier clase puede querer su propio registrador.
+  /// </summary>
+  TTypedLoggerArgs = record
+    T1: TClass;
+  end;
+
+  /// <summary>
+  ///   El registrador que lleva la categoria de quien lo pide. Es un reenviador puro: no
+  ///   escribe nada, sostiene el registrador de verdad y le pasa la entrada ya compuesta.
+  /// </summary>
+  /// <remarks>
+  ///   Su unica relacion con el argumento de tipo es usar su NOMBRE como categoria, y ahi
+  ///   esta el detalle que hay que leer despacio: registrado con los argumentos sin fijar, T
+  ///   ES el marcador dentro de esta clase, asi que TypeInfo(T) no sirve de nada. El tipo de
+  ///   verdad llega en _ClosedArgs, que el contenedor escribe ANTES de que corra este
+  ///   constructor -- y tiene que ser antes, porque un registrador elige su categoria al
+  ///   construirse.
+  ///   _ClosedArgs se lee y no se asigna nunca.
+  /// </remarks>
+  TTypedLogger<T: class> = class(TLogger, ILogger<T>)
+  strict private
+    FInner: ILogger;
+  public
+    _ClosedArgs: TTypedLoggerArgs;
+    constructor Create(const Factory: ILoggerFactory);
+    procedure Log(const Entry: TLogEntry); override;
   end;
 
 implementation
@@ -237,6 +269,28 @@ begin
   end
   else
     Result := Scope;
+end;
+
+{ TTypedLogger<T> }
+
+constructor TTypedLogger<T>.Create(const Factory: ILoggerFactory);
+begin
+  if _ClosedArgs.T1 = nil then
+    raise EInvalidOpException.Create('TTypedLogger has no closed type to take its category from. It is ' +
+      'built by the container out of an open registration, which is what fills _ClosedArgs; ' +
+      'constructing one by hand skips that.');
+  // La categoria sale del tipo que el contenedor escribio, no del parametro generico. Y sale de
+  // la misma regla que usa la factoria, que es lo que garantiza que un registrador tipado y uno
+  // pedido por tipo a mano escriben bajo el mismo nombre.
+  inherited Create(LogCategoryOf(_ClosedArgs.T1.ClassInfo));
+  FInner := Factory.CreateLogger(_ClosedArgs.T1.ClassInfo);
+end;
+
+procedure TTypedLogger<T>.Log(const Entry: TLogEntry);
+begin
+  // La entrada llega ya compuesta por TLogger, con la categoria de este registrador dentro.
+  // Aqui no se decide nada: se pasa.
+  FInner.Log(Entry);
 end;
 
 procedure TLogger.LogTrace(const EventId: TEventId; const Ex: Exception; const Msg: string; const Args: TArray<TValue> = nil);
