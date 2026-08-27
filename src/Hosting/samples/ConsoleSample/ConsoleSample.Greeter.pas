@@ -2,6 +2,10 @@
 
 interface
 
+uses
+  Daf.Extensions.Options,
+  ConsoleSample.AppSettings;
+
 type
   // los servicios inyectados deben tener GUID (para identifcar su tipo) y RTTI
   // Para que tengan RTTI, basta extender IInvokable, o activarla en el tipo
@@ -17,8 +21,14 @@ type
     FVersion: string;
     FMessage: string;
   public
-    // Como alternativa se puede requerir directamente IConfiguration
-    constructor Create(const ATitle, AVersion, AMessage: string);
+    // Pide sus ajustes por constructor, como cualquier otra dependencia: aqui no aparece de
+    // donde salen sus valores. Lo decide quien compone, y por eso este servicio no nombra
+    // ninguna seccion de configuracion ni libera nada.
+    //
+    // Y COPIA lo que necesita en vez de guardarse el objeto: Value devuelve un objeto crudo
+    // cuyo dueno es la opcion, asi que quedarselo y soltar la opcion dejaria un puntero
+    // colgando. La otra forma correcta es sostener la IOptions<T> en un campo.
+    constructor Create(const Options: IOptions<TAppSettings>);
     procedure Greet;
   end;
 
@@ -71,11 +81,12 @@ uses
 
 { TGreeter }
 
-constructor TGreeter.Create(const ATitle, AVersion, AMessage: string);
+constructor TGreeter.Create(const Options: IOptions<TAppSettings>);
 begin
-  FTitle := ATitle;
-  FVersion := AVersion;
-  FMessage := AMessage;
+  var Settings := Options.Value;
+  FTitle := Settings.Title;
+  FVersion := Settings.Version;
+  FMessage := Settings.Message;
 end;
 
 procedure TGreeter.Greet;

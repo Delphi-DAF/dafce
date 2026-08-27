@@ -12,7 +12,7 @@ uses
   Daf.Extensions.DependencyInjection,
   Daf.DependencyInjection.ActivatorUtilities,
   Daf.Configuration.Builder,
-  Daf.Configuration.Binder,
+  Daf.Options.Configuration,
   Daf.Configuration.Json,
   Daf.CommandLine,
   Daf.Configuration.CommandLine,
@@ -34,14 +34,12 @@ begin
   TShutdownHook.PresCtlCMsg := 'Pulse ctl-c para salir';
 
   B.Services.AddTransient<IWrapperImpl, TWrapper>;
-  B.Services.AddSingleton<IGreeter>(
-    function(Services: IServiceProvider): IGreeter
-    begin
-      var Config := Services.GetRequiredService<IConfiguration>;
-      var Settings := TConfigurationBinder.Bind<TAppSettings>(Config);
-      Result := TGreeter.Create(Settings.Title, Settings.Version, Settings.Message);
-      Settings.Free;
-    end);
+  // Los ajustes se declaran una vez, y el contenedor los construye, los posee y los libera.
+  // El servicio los pide por constructor como cualquier otra dependencia: ni lambda, ni
+  // Free. El `as IConfiguration` es porque el gestor de configuracion es a la vez lector y
+  // constructor, y Delphi solo admite un padre por interfaz.
+  ConfigOptions.Bind<TAppSettings>(B.Services, B.Configuration as IConfiguration);
+  B.Services.AddSingleton<IGreeter, TGreeter>;
 
   B.OnExecute(
     function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
