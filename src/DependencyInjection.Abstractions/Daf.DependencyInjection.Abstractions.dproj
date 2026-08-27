@@ -116,6 +116,8 @@
         <DCCReference Include="Daf.DependencyInjection.ActivatorUtilities.pas"/>
         <DCCReference Include="Daf.DependencyInjection.OpenGenerics.pas"/>
         <DCCReference Include="Daf.AppModule.pas"/>
+        <DCCReference Include="Daf.Extensions.Options.pas"/>
+        <DCCReference Include="Daf.Options.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\source.optset</DependentOn>

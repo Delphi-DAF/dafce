@@ -14,6 +14,8 @@ Core contracts (interfaces and types) for the DAF Dependency Injection system. T
 | Unit | Contents |
 |------|----------|
 | `Daf.Extensions.DependencyInjection` | `IServiceCollection`, `IServiceProvider`, `IServiceScope`, lifetimes, `Factory`, `TDuckDecorator<T>`, `Lazy` |
+| `Daf.Extensions.Options` | `IOptions<T>`, `TOptionsValidator<T>`, `EOptionsValidationError` — the options pattern contract |
+| `Daf.Options` | `TOptions<T>` and `AppOptions` — settings registered with code |
 | `Daf.AppModule` | `IAppModule` — module registration pattern |
 | `Daf.DependencyInjection.ActivatorUtilities` | Helpers to construct objects via RTTI with DI-resolved arguments |
 | `Daf.DependencyInjection.OpenGenerics` | Matching, checking and activation for registrations whose type arguments are left open |
@@ -90,6 +92,107 @@ Base class for wrapping a service with pre/post-call logic without inheritance. 
 ```pascal
 Result := Lazy.From<IHeavy>(Provider, function(P): IHeavy begin Result := THeavy.Create end);
 ```
+
+---
+
+## Settings a service asks for by constructor
+
+A service declares in its constructor the settings it needs; the container builds them, owns them
+and frees them. Nobody writes a `Free`:
+
+```pascal
+uses Daf.Options;
+
+AppOptions.Configure<TCacheSettings>(Services,
+  procedure(S: TCacheSettings)
+  begin
+    S.Host := 'localhost';
+    S.MaxItems := 500;
+  end);
+
+Services.AddSingleton<ICache, TCache>;
+```
+
+```pascal
+constructor TCache.Create(const Options: IOptions<TCacheSettings>);
+begin
+  inherited Create;
+  FHost := Options.Value.Host;
+  FMaxItems := Options.Value.MaxItems;
+end;
+```
+
+`AppOptions.Configure` fills the settings **with code** — no file, no environment variable, nothing
+to read. Values computed at startup, or written by a test, come in through the same door as values
+read from a file, and the service that receives them cannot tell where they came from. Filling them
+from a configuration section is `ConfigOptions.Bind`, in
+[`Configuration`](../Configuration/README.md).
+
+The value is built on **first use** rather than when it is registered, and built **once**: composing
+is not starting up, so settings the run never gets to use read nothing and validate nothing; and the
+value is a mutable object, so two reads that returned different objects would make writing to it
+mean different things depending on who asked.
+
+### The value has an owner, and this is where it bites
+
+`Value` hands back a **raw object**, and its owner is the option. Delphi has no garbage collector,
+so a consumer that keeps the object and lets go of the option is left with a dangling pointer — a
+hazard that does not exist where this pattern is ported from, which is exactly why it is said here
+and not in a footnote.
+
+Two correct ways to consume it, and no third:
+
+```pascal
+// hold the option in a field, and read Value whenever it is needed
+FOptions := Options;
+
+// or copy what you need in the constructor, which is what most services want
+FHost := Options.Value.Host;
+```
+
+### Validation runs when the value is built, and names the setting
+
+```pascal
+AppOptions.Configure<TCacheSettings>(Services,
+  procedure(S: TCacheSettings)
+  begin
+    S.MaxItems := Cfg.MaxItems;
+  end,
+  function(const S: TCacheSettings; out Error: string): Boolean
+  begin
+    Result := S.MaxItems > 0;
+    if not Result then
+      Error := Format('MaxItems must be greater than zero, and it is %d', [S.MaxItems]);
+  end);
+```
+
+It runs once, when the value is built, and a failure raises `EOptionsValidationError` **naming the
+setting**. The name is the requirement, not decoration: a `MaxItems` at zero that aborted saying
+"invalid configuration" would send whoever reads it back through the whole file, which is the work
+this pattern exists to remove.
+
+### What nobody registered is not invented
+
+Asking for settings nobody registered **fails naming the type**. This diverges from the framework
+being ported, and it is written down as a divergence because whoever comes from there expects the
+opposite: in .NET a single open registration serves every settings type at once, so asking for one
+nobody configured hands back a freshly built object with everything at zero and says nothing.
+
+The cause of the divergence is that this registration shape does not exist here — Delphi closes
+generics at compile time, so a type the compiler never instantiated cannot be built afterwards — but
+the outcome is the better one: a missing setting and a setting at zero stop being indistinguishable.
+
+The same reasoning has a corollary worth saying in the same words: **`IOptions<TSection>` is not
+derived from a parent settings class that has a property of that type.** .NET does not do it either.
+The section is registered against its own path, and if both are registered, the parent's nested
+object and the section's are **two distinct instances**.
+
+### Settings with object members free what is theirs
+
+A settings class with members of object type **frees them itself**. Options frees the root object
+and nothing else. This is not a new burden — it is the rule the only nested settings class in the
+repository already follows — but this is where it is written down. See
+[Configuration's guide](../Configuration/docs/GUIDE.md), where the binder builds those members.
 
 ---
 

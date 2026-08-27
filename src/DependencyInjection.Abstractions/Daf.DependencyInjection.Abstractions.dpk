@@ -36,6 +36,8 @@ contains
   Daf.Extensions.DependencyInjection in 'Daf.Extensions.DependencyInjection.pas',
   Daf.DependencyInjection.ActivatorUtilities in 'Daf.DependencyInjection.ActivatorUtilities.pas',
   Daf.DependencyInjection.OpenGenerics in 'Daf.DependencyInjection.OpenGenerics.pas',
-  Daf.AppModule in 'Daf.AppModule.pas';
+  Daf.AppModule in 'Daf.AppModule.pas',
+  Daf.Extensions.Options in 'Daf.Extensions.Options.pas',
+  Daf.Options in 'Daf.Options.pas';
 
 end.

@@ -17,7 +17,8 @@ uses
   ContainerShutdown.Feat in 'ContainerShutdown.Feat.pas',
   ServiceIdentity.Feat in 'ServiceIdentity.Feat.pas',
   RequestedType.Feat in 'RequestedType.Feat.pas',
-  OpenGenerics.Feat in 'OpenGenerics.Feat.pas';
+  OpenGenerics.Feat in 'OpenGenerics.Feat.pas',
+  Options.Feat in 'Options.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

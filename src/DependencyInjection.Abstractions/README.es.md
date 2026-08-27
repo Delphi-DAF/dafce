@@ -14,6 +14,8 @@ Contratos principales (interfaces y tipos) del sistema de Inyección de Dependen
 | Unidad | Contenido |
 |--------|-----------|
 | `Daf.Extensions.DependencyInjection` | `IServiceCollection`, `IServiceProvider`, `IServiceScope`, tiempos de vida, `Factory`, `TDuckDecorator<T>`, `Lazy` |
+| `Daf.Extensions.Options` | `IOptions<T>`, `TOptionsValidator<T>`, `EOptionsValidationError` — el contrato del patrón de opciones |
+| `Daf.Options` | `TOptions<T>` y `AppOptions` — ajustes registrados con código |
 | `Daf.AppModule` | `IAppModule` — patrón de registro por módulo |
 | `Daf.DependencyInjection.ActivatorUtilities` | Helpers para construir objetos mediante RTTI con argumentos resueltos por DI |
 | `Daf.DependencyInjection.OpenGenerics` | Emparejamiento, comprobaciones y activación de los registros que dejan sus argumentos de tipo sin fijar |
@@ -90,6 +92,107 @@ Clase base para envolver un servicio con lógica pre/post-llamada sin herencia. 
 ```pascal
 Result := Lazy.From<IHeavy>(Provider, function(P): IHeavy begin Result := THeavy.Create end);
 ```
+
+---
+
+## Ajustes que un servicio pide por constructor
+
+Un servicio declara en su constructor los ajustes que necesita; el contenedor los construye, es su
+dueño y los libera. Nadie escribe un `Free`:
+
+```pascal
+uses Daf.Options;
+
+AppOptions.Configure<TCacheSettings>(Services,
+  procedure(S: TCacheSettings)
+  begin
+    S.Host := 'localhost';
+    S.MaxItems := 500;
+  end);
+
+Services.AddSingleton<ICache, TCache>;
+```
+
+```pascal
+constructor TCache.Create(const Options: IOptions<TCacheSettings>);
+begin
+  inherited Create;
+  FHost := Options.Value.Host;
+  FMaxItems := Options.Value.MaxItems;
+end;
+```
+
+`AppOptions.Configure` rellena los ajustes **con código** — sin fichero, sin variable de entorno,
+sin nada que leer. Unos valores calculados en el arranque, o escritos por una prueba, entran por la
+misma puerta que los que vienen de un fichero, y el servicio que los recibe no distingue de dónde
+salen. Llenarlos desde una sección de configuración es `ConfigOptions.Bind`, en
+[`Configuration`](../Configuration/README.es.md).
+
+El valor se construye en el **primer uso**, no al registrarse, y **una sola vez**: componer no es
+arrancar, así que unos ajustes que la ejecución no llega a usar no leen ni validan nada; y el valor
+es un objeto mutable, así que dos lecturas que devolvieran objetos distintos harían que escribir en
+él significara cosas distintas según quién preguntara.
+
+### El valor tiene dueño, y aquí es donde muerde
+
+`Value` devuelve un objeto **crudo**, y su dueño es la opción. Delphi no tiene recolector, así que
+quien se guarde el objeto y suelte la opción se queda con un puntero colgando — un riesgo que no
+existe allí de donde se porta esto, y por eso se dice aquí y no en una nota al pie.
+
+Dos formas correctas de consumirlo, y no hay una tercera:
+
+```pascal
+// sostener la opción en un campo, y leer Value cuando haga falta
+FOptions := Options;
+
+// o copiar lo que se necesite en el constructor, que es lo que quiere casi todo servicio
+FHost := Options.Value.Host;
+```
+
+### La validación corre al construir el valor, y nombra el ajuste
+
+```pascal
+AppOptions.Configure<TCacheSettings>(Services,
+  procedure(S: TCacheSettings)
+  begin
+    S.MaxItems := Cfg.MaxItems;
+  end,
+  function(const S: TCacheSettings; out Error: string): Boolean
+  begin
+    Result := S.MaxItems > 0;
+    if not Result then
+      Error := Format('MaxItems must be greater than zero, and it is %d', [S.MaxItems]);
+  end);
+```
+
+Corre una vez, al construirse el valor, y un fallo levanta `EOptionsValidationError` **nombrando el
+ajuste**. El nombre es el requisito, no un adorno: un `MaxItems` a cero que abortara diciendo
+«configuración inválida» obligaría a quien lo lee a repasarse el fichero entero, que es el trabajo
+que este patrón viene a quitar.
+
+### Lo que nadie registró no se inventa
+
+Pedir unos ajustes que nadie registró **falla nombrando el tipo**. Es una divergencia con el
+original que se porta, y va escrita como divergencia porque quien viene de ahí espera lo contrario:
+en .NET un único registro sin fijar sirve a todos los tipos de ajustes a la vez, así que pedir unos
+que nadie configuró devuelve un objeto recién construido con todo a cero, sin decir nada.
+
+La causa de la divergencia es que aquí esa forma de registrar no existe —los genéricos de Delphi se
+cierran al compilar, y un tipo que el compilador no instanció no se puede construir después—, pero
+el resultado es el bueno: un ajuste ausente y un ajuste a cero dejan de ser indistinguibles.
+
+El mismo razonamiento tiene un corolario que conviene decir con las mismas palabras:
+**`IOptions<TSeccion>` no se deriva de una clase de ajustes padre que tenga una propiedad de ese
+tipo.** .NET tampoco lo hace. La sección se registra contra su propia ruta, y si se registran las
+dos, el objeto anidado del padre y el de la sección son **dos instancias distintas**.
+
+### Unos ajustes con miembros objeto liberan lo suyo
+
+Una clase de ajustes con miembros de tipo objeto **los libera ella**. La opción libera el objeto
+raíz y nada más. No es una carga nueva —es la regla que ya cumple la única clase de ajustes anidados
+que hay en el repositorio—, pero este es el sitio donde está escrita. Ver la
+[guía de Configuration](../Configuration/docs/GUIDE.es.md), que es donde el enlazador construye esos
+miembros.
 
 ---
 
