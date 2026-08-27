@@ -74,9 +74,18 @@ type
     /// <summary>Que entregar la implementacion del registro sin fijar para este cierre sea
     /// seguro. Una vez por par y cacheado: recorrer los metodos de dos interfaces en cada
     /// resolucion seria pagar por llamada, que es justo lo que este diseno evita.</summary>
+    /// <remarks>
+    ///   Se llama al EMPAREJAR, no al construir, y por eso no esta dentro de Activate: que un
+    ///   emparejamiento sea seguro es una propiedad del par contrato-abierto/cierre, y no
+    ///   depende de si el objeto lo fabrica una clase o una factory escrita a mano. Puesta en
+    ///   la ruta por clase dejaba fuera la otra mitad de las entradas -- medido: por factory el
+    ///   cierre inseguro se entregaba y devolvia un cero.
+    /// </remarks>
     class procedure CheckMatch(const OpenType, ClosedType: PTypeInfo); static;
 
-    /// <summary>Comprueba, rellena y construye, en ese orden.</summary>
+    /// <summary>Lee los tipos del cierre, comprueba las cotas, rellena y construye, en ese
+    /// orden. La seguridad del emparejamiento ya la ha comprobado CheckMatch antes de
+    /// llegar aqui.</summary>
     class function Activate(const Provider: IServiceProvider; const AClass: TClass;
       const OpenType, ClosedType: PTypeInfo): TObject; static;
   end;
@@ -282,11 +291,7 @@ end;
 class function TOpenGeneric.Activate(const Provider: IServiceProvider; const AClass: TClass;
   const OpenType, ClosedType: PTypeInfo): TObject;
 begin
-  // 1. Que la entrega sea segura. Antes que nada, porque lo que hay al otro lado de un
-  //    emparejamiento invalido no es una excepcion: es la pila corrompida.
-  CheckMatch(OpenType, ClosedType);
-
-  // 2. Los tipos del cierre, y que cumplan la cota que la implementacion declara. La cota se
+  // Los tipos del cierre, y que cumplan la cota que la implementacion declara. La cota se
   //    lee del TIPO DEL CAMPO: "class of TEntity" dice "solo entidades", TClass dice "lo que
   //    sea". Delphi no emite nada sobre las restricciones de un generico, asi que en el
   //    camino sin fijar manda el record.
@@ -315,7 +320,7 @@ begin
     Classes[Idx] := ArgClass;
   end;
 
-  // 3. Rellenar ANTES de que corra el constructor, que es donde se decide casi todo: un
+  // Rellenar ANTES de que corra el constructor, que es donde se decide casi todo: un
   //    registrador elige su categoria al construirse, no despues.
   Result := TActivatorUtilities.CreateInstance(Provider, AClass,
     procedure(Instance: TObject)

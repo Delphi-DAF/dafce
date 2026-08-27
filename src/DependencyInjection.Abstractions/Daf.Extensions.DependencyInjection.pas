@@ -63,11 +63,20 @@ type
     class function From(const ServiceType: PTypeInfo; const TImpl: TClass): TServiceFactory;overload;
     class function From(const ServiceType: PTypeInfo; const Implementor: IInterface): TServiceFactory;overload;
     /// <summary>
-    ///   La fabrica de un registro sin fijar, ya atada a un cierre concreto. No se puede crear
-    ///   al registrar --entonces todavia no se sabe que cierres van a pedirse-- sino al
-    ///   emparejar, que es cuando el tipo cerrado esta delante.
+    ///   La fabrica POR DEFECTO de un registro sin fijar hecho por clase, ya atada a un cierre
+    ///   concreto. No se puede crear al registrar --entonces todavia no se sabe que cierres van
+    ///   a pedirse-- sino al emparejar, que es cuando el tipo cerrado esta delante.
     /// </summary>
     class function FromOpen(const OpenType, ClosedType: PTypeInfo; const TImpl: TClass): TServiceFactory;
+    /// <summary>
+    ///   Cualquier fabrica alcanzada por emparejamiento, con la comprobacion de que entregar lo
+    ///   que produce para ese cierre es seguro. Envuelve por igual la fabrica por defecto que
+    ///   calcula un registro por clase y una escrita a mano: registrar por clase es la forma
+    ///   abreviada de registrar por factory, asi que una comprobacion que solo cubra la primera
+    ///   deja pasar la mitad de los casos.
+    /// </summary>
+    class function ForClosedType(const OpenType, ClosedType: PTypeInfo;
+      const Inner: TServiceFactory): TServiceFactory;
   end;
 
   // Envuelve el servicio que produce el registro previo. Es Scrutor: en .NET esto no
@@ -394,14 +403,21 @@ begin
   // eje que le faltaba. Dos cierres del mismo registro son dos identidades, y por tanto dos
   // instancias; el mismo cierre dos veces es una.
   Result.FIdentity.ClosedType := AClosedType;
-  // Una fabrica registrada a mano no puede saber para que cierre construye, asi que se queda
-  // como esta: lo que se reemplaza es la fabrica por clase, que si puede.
-  // El nombre de unit delante no sobra: dentro de este record, Factory es su propia propiedad
-  // --la fabrica de ESTE registro-- y tapa la clase del mismo nombre. Sin cualificar, esto
-  // compila como una llamada a la propiedad y falla por numero de parametros.
+  // Una fabrica escrita a mano no puede saber para que cierre construye, asi que se queda como
+  // esta; lo que se reemplaza es la fabrica POR DEFECTO que calculo el registro por clase, que
+  // si puede -- ahi es donde entra el relleno de _ClosedArgs.
+  // El tipo de Inner va escrito y no inferido: `var Inner := FFactory` sobre una referencia a
+  // funcion la LLAMA en vez de copiarla, y el error que sale es E2035 por numero de parametros.
+  var Inner: TServiceFactory := FFactory;
+  // Y el nombre de unit delante tampoco sobra: dentro de este record, Factory es su propia
+  // propiedad --la fabrica de ESTE registro-- y tapa la clase del mismo nombre.
   if FImplementationClass <> nil then
-    Result.FFactory := Daf.Extensions.DependencyInjection.Factory.FromOpen(
+    Inner := Daf.Extensions.DependencyInjection.Factory.FromOpen(
       FTypeInfo, AClosedType, FImplementationClass);
+  // Y la comprobacion del emparejamiento, sobre la que haya de las dos: es una propiedad del
+  // par contrato-abierto/cierre, no de quien fabrique el objeto.
+  Result.FFactory := Daf.Extensions.DependencyInjection.Factory.ForClosedType(
+    FTypeInfo, AClosedType, Inner);
 end;
 
 
@@ -579,6 +595,16 @@ begin
             begin
               var Aux := TActivatorUtilities.CreateInstance(Provider, TImpl);
               Supports(Aux, _T.GUID(ServiceType), Result);
+            end;
+end;
+
+class function Factory.ForClosedType(const OpenType, ClosedType: PTypeInfo;
+  const Inner: TServiceFactory): TServiceFactory;
+begin
+  Result := function(Provider: IServiceProvider): IInterface
+            begin
+              TOpenGeneric.CheckMatch(OpenType, ClosedType);
+              Result := Inner(Provider);
             end;
 end;
 

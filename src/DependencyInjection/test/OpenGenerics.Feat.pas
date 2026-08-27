@@ -533,6 +533,79 @@ Feature One registration for every closure of a generic contract @di @generics @
         Expect(W.Outcome).ToContain('Value');
       end)
 
+  .Scenario('And it is refused the same way when the registration was made with a factory')
+    // El registro por clase es la forma abreviada del registro por factory: AddSingleton con una
+    // clase calcula una factory por defecto y guarda la clase para que la validacion del grafo
+    // tenga algo que mirar. Asi que lo que decide si un emparejamiento es seguro no puede
+    // depender de por cual de las dos se haya entrado -- es una propiedad del PAR contrato
+    // abierto/cierre, no de quien construya el objeto.
+    .Given('an open registration made with a factory instead of a class',
+      procedure(W: TOpenWorld)
+      begin
+        W.Services.AddSingleton<IValued<_>>(
+          function(P: IServiceProvider): IValued<_>
+          begin
+            Result := TValued<_>.Create;
+          end);
+      end)
+    .When('a closure whose argument is not a reference is asked for',
+      procedure(W: TOpenWorld)
+      begin
+        W.Build;
+        W.Attempt(
+          procedure
+          begin
+            W.Told := IntToStr(W.Provider.GetRequiredService<IValued<Integer>>.Value);
+          end)
+      end)
+    .&Then('it is refused rather than handed over',
+      procedure(W: TOpenWorld)
+      begin
+        // Medido antes de que esto existiera: se entregaba y devolvia 0, sin excepcion. Un
+        // cero que sale de leer un puntero nil como entero es el fallo mudo entero, en una
+        // sola cifra que parece un resultado.
+        Expect(W.Outcome).ToContain('same call shape');
+      end)
+    .&And('and the message names the method, exactly as by the other route',
+      procedure(W: TOpenWorld)
+      begin
+        Expect(W.Outcome).ToContain('Value');
+      end)
+
+  .Scenario('And a factory registration serves the safe closure, as the other route does')
+    // El control de la de arriba, por la misma razon que el de la ruta por clase: sin el,
+    // rechazar TODO emparejamiento hecho por factory la pasaria.
+    .Given('an open registration made with a factory',
+      procedure(W: TOpenWorld)
+      begin
+        W.Services.AddSingleton<IValued<_>>(
+          function(P: IServiceProvider): IValued<_>
+          begin
+            Result := TValued<_>.Create;
+          end);
+      end)
+    .When('a closure whose argument is a class is asked for',
+      procedure(W: TOpenWorld)
+      begin
+        W.Build;
+        W.Attempt(
+          procedure
+          begin
+            if W.Provider.GetRequiredService<IValued<TAlphaSettings>> <> nil then
+              W.Told := 'served';
+          end)
+      end)
+    .&Then('it is served',
+      procedure(W: TOpenWorld)
+      begin
+        Expect(W.Told).ToEqual('served');
+      end)
+    .&And('and nothing was raised on the way',
+      procedure(W: TOpenWorld)
+      begin
+        Expect(W.Outcome).ToEqual(SinFallo);
+      end)
+
   .Scenario('A contract whose arguments travel by reference is accepted')
     // Sin este caso la escena de arriba pasaria con un contenedor que rechazara TODO
     // emparejamiento, que es peor que no comprobar nada.
