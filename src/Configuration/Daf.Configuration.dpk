@@ -34,7 +34,11 @@ requires
   // Por BootstrapLog: anadir una fuente es donde se abre el fichero, asi que es donde tiene
   // que informarse el fallo. Solo contratos -- el canal vive en el paquete .Abstractions.
   Daf.Logging.Abstractions,
-  Daf.Configuration.Abstractions;
+  Daf.Configuration.Abstractions,
+  // Por ConfigOptions: registrar unos ajustes leidos de una seccion es un registro en el
+  // contenedor. Solo contratos -- el contenedor concreto vive en el paquete de al lado, y
+  // esta costura no necesita nada de el.
+  Daf.DependencyInjection.Abstractions;
 
 contains
   Daf.Configuration.Builder in 'Daf.Configuration.Builder.pas',
@@ -46,6 +50,7 @@ contains
   Daf.Configuration.CommandLine in 'Daf.Configuration.CommandLine.pas',
   Daf.Configuration.ConfigurationRoot in 'Daf.Configuration.ConfigurationRoot.pas',
   Daf.Configuration.Chained in 'Daf.Configuration.Chained.pas',
-  Daf.Configuration.Manager in 'Daf.Configuration.Manager.pas';
+  Daf.Configuration.Manager in 'Daf.Configuration.Manager.pas',
+  Daf.Options.Configuration in 'Daf.Options.Configuration.pas';
 
 end.

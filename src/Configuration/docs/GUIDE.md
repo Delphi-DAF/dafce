@@ -275,6 +275,51 @@ WriteLn(Opts.MaxPoolSize);  // 0 if not present in config
 
 Type conversion from `string` is handled automatically for `Integer`, `Boolean`, `Double`, and `string`.
 
+### The settings class frees its object members
+
+A member of object type is **built** by the binder, recursively — that is what makes it useful to
+nest a section inside another — and whoever builds it does not keep it. So the rule is: **the
+settings class frees what is its own.**
+
+```pascal
+type
+  TDbSection = class
+  public
+    Server: string;
+    Port: Integer;
+  end;
+
+  TAppConfig = class
+  public
+    Name: string;
+    Db: TDbSection;
+    destructor Destroy; override;   // <- and this is not optional
+  end;
+
+destructor TAppConfig.Destroy;
+begin
+  Db.Free;
+  inherited;
+end;
+```
+
+Without that destructor the nested object leaks, silently and whoever owns the root. It is the rule
+the framework's own nested settings class already follows; what was missing was the place where it
+is written down.
+
+Two more things measured about nested binding, worth knowing before being surprised by them:
+
+- binding the same section separately gives an **independent instance**, not the one nested inside
+  the parent — the same as in .NET
+- the binder **reuses** a member object that the class already built in its constructor, rather than
+  replacing it, so building it there and freeing it in the destructor is the shape that works
+
+### Handing the section over as settings with an owner
+
+Inside a container, the caller does not have to own the object at all: `ConfigOptions.Bind` gives
+the container the job of building it, owning it and freeing it, and the service asks for its
+settings by constructor. See [the module README](../README.md).
+
 ---
 
 ## Custom Providers

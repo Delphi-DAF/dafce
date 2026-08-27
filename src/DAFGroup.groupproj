@@ -28,7 +28,7 @@
             <Dependencies>DependencyInjection.Abstractions\Daf.DependencyInjection.Abstractions.dproj</Dependencies>
         </Projects>
         <Projects Include="Configuration\Daf.Configuration.dproj">
-            <Dependencies>Commons\Daf.Commons.dproj;Configuration.Abstractions\Daf.Configuration.Abstractions.dproj;Logging.Abstractions\Daf.Logging.Abstractions.dproj</Dependencies>
+            <Dependencies>Commons\Daf.Commons.dproj;Configuration.Abstractions\Daf.Configuration.Abstractions.dproj;Logging.Abstractions\Daf.Logging.Abstractions.dproj;DependencyInjection.Abstractions\Daf.DependencyInjection.Abstractions.dproj</Dependencies>
         </Projects>
         <Projects Include="Logging\Daf.Logging.dproj">
             <Dependencies>DependencyInjection.Abstractions\Daf.DependencyInjection.Abstractions.dproj;Logging.Abstractions\Daf.Logging.Abstractions.dproj</Dependencies>
@@ -161,13 +161,13 @@
     <Target Name="Daf_DependencyInjection:Make" DependsOnTargets="Daf.DependencyInjection.Abstractions:Make">
         <MSBuild Projects="DependencyInjection\Daf.DependencyInjection.dproj" Targets="Make"/>
     </Target>
-    <Target Name="Daf_Configuration" DependsOnTargets="Daf.Commons;Daf.Configuration.Abstractions">
+    <Target Name="Daf_Configuration" DependsOnTargets="Daf.Commons;Daf.Configuration.Abstractions;Daf.DependencyInjection.Abstractions">
         <MSBuild Projects="Configuration\Daf.Configuration.dproj"/>
     </Target>
-    <Target Name="Daf_Configuration:Clean" DependsOnTargets="Daf.Commons:Clean;Daf.Configuration.Abstractions:Clean">
+    <Target Name="Daf_Configuration:Clean" DependsOnTargets="Daf.Commons:Clean;Daf.Configuration.Abstractions:Clean;Daf.DependencyInjection.Abstractions:Clean">
         <MSBuild Projects="Configuration\Daf.Configuration.dproj" Targets="Clean"/>
     </Target>
-    <Target Name="Daf_Configuration:Make" DependsOnTargets="Daf.Commons:Make;Daf.Configuration.Abstractions:Make">
+    <Target Name="Daf_Configuration:Make" DependsOnTargets="Daf.Commons:Make;Daf.Configuration.Abstractions:Make;Daf.DependencyInjection.Abstractions:Make">
         <MSBuild Projects="Configuration\Daf.Configuration.dproj" Targets="Make"/>
     </Target>
     <Target Name="Daf_Hosting" DependsOnTargets="Daf.Hosting.Abstractions;Daf.DependencyInjection;Daf.Configuration">

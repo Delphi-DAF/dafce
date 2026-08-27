@@ -170,6 +170,50 @@ TConfigurationBinder.Bind(Config.GetSection('Database'), Opts);
 
 ---
 
+## Settings with an owner
+
+`TConfigurationBinder` builds the object and hands it over: the caller owns it, and the caller frees
+it. That is still true, and it is the right thing for a utility, a script, or a startup step running
+before there is a container.
+
+Inside a container it is not. `ConfigOptions.Bind` declares that some settings are filled from a
+section, and from then on the container builds them, owns them and frees them:
+
+```pascal
+uses Daf.Options.Configuration;
+
+ConfigOptions.Bind<TAppSettings>(Services, Config);                       // the root
+ConfigOptions.Bind<TDbSettings>(Services, Config, 'Database', boFields);  // a section
+
+Services.AddSingleton<IGreeter, TGreeter>;
+```
+
+```pascal
+constructor TGreeter.Create(const Options: IOptions<TAppSettings>);
+begin
+  inherited Create;
+  FTitle := Options.Value.Title;
+end;
+```
+
+The service **never names its section**: it asks for its settings by constructor and startup decides
+where they come from. Changing the section is one line at the composition site and no change at all
+in the service.
+
+The contract of `IOptions<T>` — ownership, the dangling-pointer trap, lazy construction, validation,
+and what happens with settings nobody registered — is in
+[`DependencyInjection.Abstractions`](../DependencyInjection.Abstractions/README.md).
+
+### A photograph, not a mirror
+
+The section is read **once**, when the value is built, and changing the configuration afterwards
+does **not** change it. This is said out loud because it is the opposite of what people expect from
+having seen the pattern elsewhere: without change notification in the providers, re-reading on every
+access would give two reads of the same object two different answers and nobody a way to know when
+it changed. A view that follows live configuration is a separate piece, and it does not exist yet.
+
+---
+
 ## Integration with Hosting
 
 When using `Hosting`, configure sources in `ConfigureAppConfiguration`:

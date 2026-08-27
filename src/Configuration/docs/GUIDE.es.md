@@ -275,6 +275,51 @@ WriteLn(Opts.MaxPoolSize);  // 0 si no está en la config
 
 La conversión de tipos desde `string` se gestiona automáticamente para `Integer`, `Boolean`, `Double` y `string`.
 
+### La clase de ajustes libera sus miembros objeto
+
+Un miembro de tipo objeto lo **construye** el enlazador, recursivamente —eso es lo que hace útil
+anidar una sección dentro de otra— y quien lo construye no se queda con él. Así que la regla es: **la
+clase de ajustes libera lo suyo.**
+
+```pascal
+type
+  TDbSection = class
+  public
+    Server: string;
+    Port: Integer;
+  end;
+
+  TAppConfig = class
+  public
+    Name: string;
+    Db: TDbSection;
+    destructor Destroy; override;   // <- y esto no es opcional
+  end;
+
+destructor TAppConfig.Destroy;
+begin
+  Db.Free;
+  inherited;
+end;
+```
+
+Sin ese destructor el objeto anidado se fuga, en silencio y a cuenta de quien posea la raíz. Es la
+regla que ya cumple la única clase de ajustes anidados del framework; lo que faltaba era el sitio
+donde está escrita.
+
+Dos cosas más, medidas, sobre el enlace de anidados, y conviene saberlas antes de tropezar con ellas:
+
+- enlazar la misma sección por separado da una **instancia independiente**, no la que está anidada
+  dentro del padre — igual que en .NET
+- el enlazador **reutiliza** el objeto miembro que la clase ya construyó en su constructor, en vez de
+  sustituirlo, así que construirlo ahí y liberarlo en el destructor es la forma que funciona
+
+### Entregar la sección como unos ajustes con dueño
+
+Dentro de un contenedor, quien llama no tiene por qué ser dueño del objeto: `ConfigOptions.Bind` le
+da al contenedor el trabajo de construirlo, poseerlo y liberarlo, y el servicio pide sus ajustes por
+constructor. Ver [el README del módulo](../README.es.md).
+
 ---
 
 ## Proveedores personalizados

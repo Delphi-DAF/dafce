@@ -113,6 +113,7 @@
         <DCCReference Include="rtl.dcp"/>
         <DCCReference Include="Daf.Commons.dcp"/>
         <DCCReference Include="Daf.Configuration.Abstractions.dcp"/>
+        <DCCReference Include="Daf.DependencyInjection.Abstractions.dcp"/>
         <DCCReference Include="Daf.Configuration.Builder.pas"/>
         <DCCReference Include="Daf.Configuration.ConfigurationProvider.pas"/>
         <DCCReference Include="Daf.Configuration.Memory.pas"/>
@@ -123,6 +124,7 @@
         <DCCReference Include="Daf.Configuration.ConfigurationRoot.pas"/>
         <DCCReference Include="Daf.Configuration.Chained.pas"/>
         <DCCReference Include="Daf.Configuration.Manager.pas"/>
+        <DCCReference Include="Daf.Options.Configuration.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\source.optset</DependentOn>

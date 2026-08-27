@@ -171,6 +171,49 @@ TConfigurationBinder.Bind(Config.GetSection('Database'), Opts);
 
 ---
 
+## Ajustes con dueño
+
+`TConfigurationBinder` construye el objeto y lo entrega: es de quien llama, y quien llama lo libera.
+Eso sigue siendo así, y es lo correcto para una utilidad, un script o un paso de arranque anterior a
+que haya contenedor.
+
+Dentro de un contenedor no lo es. `ConfigOptions.Bind` declara que unos ajustes se llenan desde una
+sección, y a partir de ahí el contenedor los construye, es su dueño y los libera:
+
+```pascal
+uses Daf.Options.Configuration;
+
+ConfigOptions.Bind<TAppSettings>(Services, Config);                       // la raíz
+ConfigOptions.Bind<TDbSettings>(Services, Config, 'Database', boFields);  // una sección
+
+Services.AddSingleton<IGreeter, TGreeter>;
+```
+
+```pascal
+constructor TGreeter.Create(const Options: IOptions<TAppSettings>);
+begin
+  inherited Create;
+  FTitle := Options.Value.Title;
+end;
+```
+
+El servicio **no nombra su sección**: pide sus ajustes por constructor y el arranque decide de dónde
+salen. Cambiar de sección es una línea en el sitio de composición y ningún cambio en el servicio.
+
+El contrato de `IOptions<T>` —la propiedad del objeto, la trampa del puntero colgando, la
+construcción perezosa, la validación y qué pasa con unos ajustes que nadie registró— está en
+[`DependencyInjection.Abstractions`](../DependencyInjection.Abstractions/README.es.md).
+
+### Una foto, no un espejo
+
+La sección se lee **una sola vez**, al construirse el valor, y cambiar la configuración después
+**no** lo cambia. Se dice en voz alta porque es lo contrario de lo que espera quien ha visto el
+patrón en otro sitio: sin notificación de cambio en los proveedores, releer en cada acceso daría a
+dos lecturas del mismo objeto dos respuestas distintas y a nadie forma de saber cuándo cambió. La
+vista que sigue a la configuración viva es otra pieza, y todavía no existe.
+
+---
+
 ## Integración con Hosting
 
 Con `Hosting`, configura las fuentes en `ConfigureAppConfiguration`:

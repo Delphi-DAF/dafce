@@ -103,6 +103,7 @@
         <DCCReference Include="KeyPresence.Feat.pas"/>
         <DCCReference Include="ConfigManager.Feat.pas"/>
         <DCCReference Include="ChainedConfig.Feat.pas"/>
+        <DCCReference Include="OptionsBinding.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>
