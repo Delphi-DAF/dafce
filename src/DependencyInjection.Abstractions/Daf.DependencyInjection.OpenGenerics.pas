@@ -18,7 +18,8 @@
 
   El precio esta escrito en el README: dentro de TX<_>, T ES el marcador. Lo que la
   implementacion necesite del tipo real le llega por el campo _ClosedArgs, que el contenedor
-  rellena ANTES de que corra el constructor.
+  rellena ANTES de que corra el constructor. Declararlo es de quien implementa: la que no
+  necesita nada del cierre no lo declara y no paga nada por ello.
 }
 
 interface
@@ -32,9 +33,10 @@ uses
 type
   /// <summary>
   ///   Un registro sin fijar que no se va a poder cumplir. Se levanta en dos momentos, y la
-  ///   diferencia importa: al REGISTRAR cuando la implementacion no puede recibir los tipos
-  ///   del cierre --eso es un error de composicion y se dice al componer--, y al RESOLVER
-  ///   cuando el cierre concreto no encaja con lo que el registro puede servir.
+  ///   diferencia importa: al REGISTRAR cuando la implementacion declara donde recibir los
+  ///   tipos del cierre de una forma que el contenedor no puede rellenar --eso es un error de
+  ///   composicion y se dice al componer--, y al RESOLVER cuando el cierre concreto no encaja
+  ///   con lo que el registro puede servir.
   /// </summary>
   EOpenGenericError = class(EServiceProviderError)
   end;
@@ -48,8 +50,10 @@ type
       const A, B: PTypeInfo): string; static;
   public
     /// <summary>El campo de nombre fijo por el que la implementacion recibe los tipos del
-    /// cierre. Lo declara quien implementa y lo escribe el contenedor: se lee libremente y
-    /// no se asigna nunca.</summary>
+    /// cierre. Lo declara quien implementa --y solo si le hace falta-- y lo escribe el
+    /// contenedor: se lee libremente y no se asigna nunca. Su visibilidad da igual: las
+    /// directivas RTTI por defecto acotan a public/published los metodos y las propiedades,
+    /// no los campos.</summary>
     const ClosedArgs = '_ClosedArgs';
 
     /// <summary>Un tipo de servicio que deja sus argumentos sin fijar, o sea que alguno de
@@ -67,8 +71,10 @@ type
 
     /// <summary>Que la implementacion pueda cumplir lo que el registro promete. Se llama AL
     /// REGISTRAR: un registro imposible es un error de composicion, y sin esto el fallo seria
-    /// mudo y tardio -- el contenedor no tendria donde escribir, la implementacion leeria un
-    /// hueco vacio y reventaria al usarlo, lejos del registro que lo causo.</summary>
+    /// mudo y tardio -- el contenedor no podria rellenar lo que la implementacion declaro, ella
+    /// leeria un hueco vacio y reventaria al usarlo, lejos del registro que lo causo.
+    /// No exige que el campo exista: la implementacion que no necesita nada del cierre no
+    /// declara nada, y no hay hueco vacio que prevenir.</summary>
     class procedure CheckImplementation(const OpenType: PTypeInfo; const AClass: TClass); static;
 
     /// <summary>Que entregar la implementacion del registro sin fijar para este cierre sea
@@ -84,8 +90,9 @@ type
     class procedure CheckMatch(const OpenType, ClosedType: PTypeInfo); static;
 
     /// <summary>Lee los tipos del cierre, comprueba las cotas, rellena y construye, en ese
-    /// orden. La seguridad del emparejamiento ya la ha comprobado CheckMatch antes de
-    /// llegar aqui.</summary>
+    /// orden -- y las tres primeras cosas solo cuando la implementacion declaro donde
+    /// recibirlos. La seguridad del emparejamiento ya la ha comprobado CheckMatch antes de
+    /// llegar aqui, y esa no depende de lo que la implementacion declare.</summary>
     class function Activate(const Provider: IServiceProvider; const AClass: TClass;
       const OpenType, ClosedType: PTypeInfo): TObject; static;
   end;
@@ -151,14 +158,16 @@ begin
   // Campo de INSTANCIA, y no un class var: la RTTI no expone los class var, y aunque los
   // expusiera TX<_> es una sola clase, asi que todos los cierres compartirian el valor y el
   // segundo pisaria al primero.
+  // La visibilidad no entra aqui, y no por descuido: las directivas RTTI por defecto acotan a
+  // public/published los metodos y las propiedades, para los CAMPOS incluyen las cuatro. Asi
+  // que GetField lo encuentra tambien en strict private.
   Holder := RT.GetField(ClosedArgs);
   if Holder = nil then Exit;
-  if not (Holder.FieldType is TRttiRecordType) then
-  begin
-    Holder := nil;
-    Exit;
-  end;
-  Result := Holder.FieldType.GetFields;
+  // Holder sale puesto aunque el campo no sea un record, que es lo que permite a quien llama
+  // distinguir "no lo declara" de "lo declara y no se puede rellenar". Las dos cosas daban nil
+  // antes, y por eso no se podia dejar pasar la primera sin dejar pasar la segunda.
+  if Holder.FieldType is TRttiRecordType then
+    Result := Holder.FieldType.GetFields;
 end;
 
 class procedure TOpenGeneric.CheckImplementation(const OpenType: PTypeInfo; const AClass: TClass);
@@ -166,12 +175,23 @@ begin
   var Holder: TRttiField;
   var Fields := ArgFields(AClass, Holder);
 
-  if Holder = nil then
+  // No declararla no es un error: equivale a declararla con una posicion por argumento y todas
+  // de tipo TClass -- nada que rellenar y ninguna cota que comprobar. Lo que sigue siendo un
+  // error de composicion es declararla de una forma que no se pueda rellenar.
+  if Holder = nil then Exit;
+
+  if not (Holder.FieldType is TRttiRecordType) then
+  begin
+    var What := 'of a type the RTTI does not describe';
+    if Holder.FieldType <> nil then
+      What := string(Holder.FieldType.Name);
     raise EOpenGenericError.CreateFmt(
-      'Cannot register %s for the open service %s: the container has nowhere to write the closed ' +
-      'type arguments. Declare a public instance field %s whose type is a record with one ' +
-      'class-reference field per type argument, and read it -- never assign it.',
-      [AClass.ClassName, _T.NameOf(OpenType), ClosedArgs]);
+      'Cannot register %s for the open service %s: %s is %s, and it has to be a record with one ' +
+      'class-reference field per type argument -- that record is where the container writes the ' +
+      'closed type arguments. An implementation that needs nothing from the closure does not ' +
+      'declare %s at all.',
+      [AClass.ClassName, _T.NameOf(OpenType), ClosedArgs, What, ClosedArgs]);
+  end;
 
   var Arity := Length(_T.GenericArgs(OpenType));
   if Length(Fields) <> Arity then
@@ -297,6 +317,14 @@ begin
   //    camino sin fijar manda el record.
   var Holder: TRttiField;
   var Fields := ArgFields(AClass, Holder);
+
+  // Sin via de escape no hay cotas que verificar ni nada que rellenar, y eso NO es dejar de
+  // comprobar: es que no hay nada que comprobar. Lo que protege la entrega aqui es la
+  // compatibilidad de las firmas, que ya ha mirado CheckMatch y no depende de lo que la
+  // implementacion declare.
+  if Length(Fields) = 0 then
+    Exit(TActivatorUtilities.CreateInstance(Provider, AClass));
+
   var Args := _T.GenericArgs(ClosedType);
   var Classes: TArray<TClass>;
   SetLength(Classes, Length(Fields));

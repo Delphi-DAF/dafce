@@ -130,8 +130,9 @@ type
   end;
 
   TRepo<T: class> = class(TInterfacedObject, IRepo<T>)
-  public
+  private
     _ClosedArgs: TRepoArgs;
+  public
     constructor Create;
   end;
 
@@ -142,7 +143,14 @@ begin
 end;
 ```
 
-Six things to know about that field, and every one of them is a way to get it wrong:
+**Declaring it is optional.** An implementation that needs nothing from the closure — a null
+implementation, a container that only holds — does not declare the field and pays nothing for it.
+Not declaring it is exactly the same as declaring one position per type argument and typing every
+one of them `TClass`: nothing to fill, and no bound to check. Note what that does *not* say — the
+argument does not lose its real class, the closure still names it. What is missing is the
+restriction.
+
+Seven things to know about that field, and every one of them is a way to get it wrong:
 
 - **It is read, and never assigned.** The `_` prefix means "somebody else operates this", as in
   `_AddRef` — here with the arrow the other way round: you declare it, the container writes it.
@@ -159,10 +167,16 @@ Six things to know about that field, and every one of them is a way to get it wr
   where there really is no bound, build with `TActivator.CreateInstance`.
 - **The record goes outside the class.** Inside it, `T1` is already the generic parameter:
   `E2004 Identifier redeclared`.
+- **Its visibility is yours to choose, and `private` is the one to choose.** The container writes
+  it and the class itself reads it; nobody outside has anything to do with it, so putting it on the
+  surface of the type widens it for nothing. The default RTTI settings bound **methods and
+  properties** to public and published — for **fields** they include all four visibilities — so the
+  container finds it in the most restrictive one there is.
 - **Mind where the field sits in the class.** In Delphi a `class var` block stays open until the
   next visibility specifier, so a field written after one is a class var too — invisible to RTTI,
-  and shared by every closure. Registering such an implementation fails saying there is nowhere to
-  write.
+  and shared by every closure. This is Delphi, not DAF, and it no longer fails the registration:
+  now that declaring the field is optional, the container sees no field at all, writes nothing, and
+  `_ClosedArgs` reads `nil` in the constructor. Put a visibility specifier between the two.
 
 ### What this is for, and what it is not
 
@@ -182,7 +196,11 @@ And three limits, said here rather than left to be tripped over:
 - **The argument has to travel as a reference.** A contract where `T` appears in a position whose
   representation depends on `T` — returned by value, a record, an integer — cannot be served this
   way. The container **compares the two contracts method by method and refuses**, naming the
-  method: entering such a match would corrupt the stack rather than fail.
+  method: entering such a match would corrupt the stack rather than fail. It refuses whatever the
+  implementation declares, `_ClosedArgs` or not — what makes a match safe is a property of the two
+  contracts. To know in advance, run the finger test on the **contract** rather than on the
+  implementation's body: read the signatures, and if `T` appears anywhere other than as an object,
+  an interface or a class reference, the contract is not registrable with its arguments left open.
 - **Matching is by name and arity, not by identity.** Two generic families with the same simple
   name and the same arity, declared in different units, match. What sits underneath is not nothing
   — that same method-by-method check refuses the match, naming the first method that does not fit

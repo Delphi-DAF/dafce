@@ -116,8 +116,12 @@ type
   TTypedLogger<T: class> = class(TLogger, ILogger<T>)
   strict private
     FInner: ILogger;
-  public
+  private
+    // Privado, no publico: lo escribe el contenedor por RTTI y lo lee esta clase, y las
+    // directivas RTTI por defecto acotan a public/published los metodos y las propiedades, no
+    // los campos. Ponerlo en la superficie del tipo seria ensancharla a cambio de nada.
     _ClosedArgs: TTypedLoggerArgs;
+  public
     constructor Create(const Factory: ILoggerFactory);
     procedure Log(const Entry: TLogEntry); override;
   end;

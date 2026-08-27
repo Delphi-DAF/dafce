@@ -131,8 +131,9 @@ type
   end;
 
   TRepo<T: class> = class(TInterfacedObject, IRepo<T>)
-  public
+  private
     _ClosedArgs: TRepoArgs;
+  public
     constructor Create;
   end;
 
@@ -143,7 +144,13 @@ begin
 end;
 ```
 
-Seis cosas que saber de ese campo, y cada una es una forma de equivocarse:
+**Declararlo es opcional.** Una implementación que no necesita nada del cierre —una implementación
+nula, un contenedor que solo guarda— no declara el campo y no paga nada por ello. No declararlo es
+exactamente igual que declararlo con una posición por argumento de tipo y todas de tipo `TClass`:
+nada que rellenar, y ninguna cota que comprobar. Y fíjate en lo que eso *no* dice — el argumento no
+pierde su clase real, el cierre la sigue nombrando. Lo que falta es la restricción.
+
+Siete cosas que saber de ese campo, y cada una es una forma de equivocarse:
 
 - **Se lee, y no se asigna nunca.** El prefijo `_` significa «esto lo opera otro», como en
   `_AddRef` — aquí con la flecha al revés: lo declaras tú, lo escribe el contenedor. Leerlo es
@@ -160,10 +167,17 @@ Seis cosas que saber de ese campo, y cada una es una forma de equivocarse:
   puedas; donde de verdad no haya cota, construye con `TActivator.CreateInstance`.
 - **El record va fuera de la clase.** Dentro, `T1` ya es el parámetro genérico:
   `E2004 Identifier redeclared`.
+- **La visibilidad la eliges tú, y `private` es la que hay que elegir.** Lo escribe el contenedor y
+  lo lee la propia clase; nadie de fuera tiene nada que hacer con él, así que ponerlo en la
+  superficie del tipo es ensancharla a cambio de nada. Las directivas RTTI por defecto acotan a
+  public y published los **métodos y las propiedades** —para los **campos** incluyen las cuatro
+  visibilidades—, así que el contenedor lo encuentra en la más restrictiva que hay.
 - **Cuidado con dónde cae el campo dentro de la clase.** En Delphi un bloque `class var` sigue
   abierto hasta el siguiente especificador de visibilidad, así que un campo escrito detrás es
-  también un class var — que la RTTI no ve y que comparten todos los cierres. Registrar una
-  implementación así falla diciendo que no hay dónde escribir.
+  también un class var — que la RTTI no ve y que comparten todos los cierres. Esto es Delphi, no
+  DAF, y ya no falla al registrar: ahora que declarar el campo es opcional, el contenedor no ve
+  campo ninguno, no escribe nada, y `_ClosedArgs` sale a `nil` en el constructor. Pon un
+  especificador de visibilidad entre los dos.
 
 ### Para qué sirve esto, y para qué no
 
@@ -183,7 +197,12 @@ Y tres límites, dichos aquí en vez de dejados para que alguien tropiece con el
 - **El argumento tiene que viajar como referencia.** Un contrato donde `T` aparezca en una posición
   cuya representación dependa de `T` —devuelto por valor, un record, un entero— no se puede servir
   por esta vía. El contenedor **compara los dos contratos método a método y lo rechaza**, nombrando
-  el método: entrar en ese emparejamiento corrompería la pila en vez de fallar.
+  el método: entrar en ese emparejamiento corrompería la pila en vez de fallar. Lo rechaza sea lo
+  que sea lo que declare la implementación, con `_ClosedArgs` o sin él — que un emparejamiento sea
+  seguro es una propiedad de los dos contratos. Para saberlo de antemano, hazle la prueba del dedo
+  al **contrato** en vez de al cuerpo de la implementación: lee las firmas, y si `T` aparece en
+  algún sitio que no sea un objeto, una interfaz o una referencia de clase, el contrato no es
+  registrable sin fijar.
 - **El emparejamiento es por nombre y aridad, no por identidad.** Dos familias genéricas del mismo
   nombre simple y la misma aridad, declaradas en units distintas, emparejan. Lo que queda debajo no
   es la nada —esa misma comparación método a método rechaza el emparejamiento nombrando el primer

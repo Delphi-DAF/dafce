@@ -91,18 +91,29 @@ type
     T1: TClass;
   end;
 
+  /// <summary>
+  ///   Una posicion que no puede recibir una clase. El tipo del campo ES la cota, asi que un
+  ///   campo que no es una referencia de clase no dice nada que el contenedor pueda cumplir.
+  /// </summary>
+  TLooseArgs = record
+    T1: string;
+  end;
+
   TBox<T: class> = class(TInterfacedObject, IBox<T>)
   strict private
     FTag: string;
     FSerial: Integer;
-  public
-    // Publico porque el contenedor lo escribe por RTTI, y la RTTI solo ve los campos publicos.
+  private
+    // Privado porque es lo que la documentacion recomienda, y se puede: las directivas RTTI por
+    // defecto acotan a public/published los METODOS y las propiedades, no los campos. Lo escribe
+    // el contenedor y lo lee esta clase, asi que no tiene por que estar en la superficie del tipo.
     // Se lee todo lo que haga falta; lo que no se hace nunca es asignarlo.
-    // Y va ANTES del class var de abajo, no despues: en Delphi un bloque class var sigue
-    // abierto hasta el siguiente especificador de visibilidad, asi que un campo escrito detras
-    // es tambien un class var -- que la RTTI no expone y que todos los cierres compartirian.
-    // Medido aqui mismo: escrito debajo, el registro falla diciendo que no hay donde escribir.
+    // Y el especificador de visibilidad que viene detras no es decorado: en Delphi un bloque
+    // class var sigue abierto hasta el siguiente, asi que un campo escrito tras el class var de
+    // abajo seria tambien un class var -- que la RTTI no expone y que todos los cierres
+    // compartirian. Medido: escrito ahi, el contenedor no ve campo y no rellena nada.
     _ClosedArgs: TBoxArgs;
+  public
     // Compartido por todos los cierres a proposito, y no es un descuido: TBox<_> es UNA sola
     // clase. Sirve para contar construcciones, que es lo unico para lo que un valor comun vale.
     class var Built: Integer;
@@ -124,8 +135,53 @@ type
     function Value: T;
   end;
 
-  /// <summary>Sin _ClosedArgs: no hay donde escribir, y eso es un registro imposible.</summary>
+  /// <summary>
+  ///   El mismo contrato por valor, con una implementacion que no declara ninguna cota. Es el
+  ///   control de "sin cotas declaradas cualquier cierre vale": lo que sigue de pie cuando no
+  ///   hay cotas es la compatibilidad de las firmas, que no depende de lo que la implementacion
+  ///   declare.
+  /// </summary>
+  TBlindValued<T> = class(TInterfacedObject, IValued<T>)
+  public
+    function Value: T;
+  end;
+
+  /// <summary>
+  ///   Sin _ClosedArgs a proposito: no necesita nada del cierre, asi que no declara donde
+  ///   recibirlo. Numera sus instancias para que se pueda afirmar sobre QUE trae cada una --
+  ///   "el registro se acepto" lo pasaria tambien un contenedor que sirviera la misma instancia
+  ///   a los dos cierres, o que construyera esta clase con el constructor de TObject.
+  /// </summary>
   TBlindBox<T: class> = class(TInterfacedObject, IBox<T>)
+  strict private
+    FSerial: Integer;
+  public
+    class var Built: Integer;
+    constructor Create;
+    function Held: T;
+    function Tag: string;
+    function Serial: Integer;
+  end;
+
+  /// <summary>
+  ///   Declara la via de escape en la visibilidad mas restrictiva que hay. Esta para afirmar lo
+  ///   que hoy solo esta medido: el contenedor la encuentra igual, porque las directivas RTTI
+  ///   por defecto acotan los metodos y las propiedades, no los campos. Sin este caso, el dia
+  ///   que alguien estreche esas directivas esto se rompe en silencio.
+  /// </summary>
+  TSealedBox<T: class> = class(TInterfacedObject, IBox<T>)
+  strict private
+    _ClosedArgs: TBoxArgs;
+  public
+    function Held: T;
+    function Tag: string;
+    function Serial: Integer;
+  end;
+
+  /// <summary>Una posicion que no es referencia de clase: declarada, y sin poder cumplirse.</summary>
+  TLooseBox<T: class> = class(TInterfacedObject, IBox<T>)
+  private
+    _ClosedArgs: TLooseArgs;
   public
     function Held: T;
     function Tag: string;
@@ -232,7 +288,21 @@ begin
   Result := Default(T);
 end;
 
+{ TBlindValued<T> }
+
+function TBlindValued<T>.Value: T;
+begin
+  Result := Default(T);
+end;
+
 { TBlindBox<T> }
+
+constructor TBlindBox<T>.Create;
+begin
+  inherited Create;
+  Inc(Built);
+  FSerial := Built;
+end;
 
 function TBlindBox<T>.Held: T;
 begin
@@ -241,12 +311,52 @@ end;
 
 function TBlindBox<T>.Serial: Integer;
 begin
-  Result := 0;
+  Result := FSerial;
 end;
 
 function TBlindBox<T>.Tag: string;
 begin
   Result := 'blind';
+end;
+
+{ TSealedBox<T> }
+
+function TSealedBox<T>.Held: T;
+begin
+  Result := nil;
+end;
+
+function TSealedBox<T>.Serial: Integer;
+begin
+  Result := 0;
+end;
+
+function TSealedBox<T>.Tag: string;
+begin
+  // El centinela es lo que hace util este caso: si el contenedor no hubiera encontrado un campo
+  // en strict private, aqui saldria eso y no el nombre de la clase del cierre.
+  if _ClosedArgs.T1 = nil then
+    Result := '<sin cierre>'
+  else
+    Result := _ClosedArgs.T1.ClassName;
+end;
+
+{ TLooseBox<T> }
+
+function TLooseBox<T>.Held: T;
+begin
+  Result := nil;
+end;
+
+function TLooseBox<T>.Serial: Integer;
+begin
+  Result := 0;
+end;
+
+function TLooseBox<T>.Tag: string;
+begin
+  // No se llega nunca: el registro falla antes. Lee el campo para que no parezca un adorno.
+  Result := 'loose' + _ClosedArgs.T1;
 end;
 
 { TWideBox<T> }
@@ -305,6 +415,7 @@ constructor TOpenWorld.Create;
 begin
   inherited;
   TBox<_>.Built := 0;
+  TBlindBox<_>.Built := 0;
   Told := '';
   Outcome := '<sin intentar>';
   Services := TServiceCollection.Create;
@@ -662,8 +773,8 @@ Feature One registration for every closure of a generic contract @di @generics @
         Expect(W.Told).ToEqual('TAlphaSettings|TBetaSettings');
       end)
 
-  .Scenario('An implementation with nowhere to receive them is refused when it is registered')
-    .When('an implementation that does not expose the field is registered open',
+  .Scenario('An implementation that needs nothing from the closure does not declare it')
+    .Given('an open registration whose implementation does not declare where to receive them',
       procedure(W: TOpenWorld)
       begin
         W.Attempt(
@@ -672,19 +783,79 @@ Feature One registration for every closure of a generic contract @di @generics @
             W.Services.AddSingleton<IBox<_>, TBlindBox<_>>;
           end)
       end)
-    .&Then('the registration itself fails, instead of leaving it for the first resolution',
+    .When('a closure is resolved',
       procedure(W: TOpenWorld)
       begin
-        Expect(W.Outcome).ToContain('nowhere to write');
+        W.Build;
+        var Box := W.Provider.GetRequiredService<IBox<TAlphaSettings>>;
+        W.Told := Format('%s#%d', [Box.Tag, Box.Serial]);
       end)
-    .&And('and the message names the implementation and what it is missing',
+    .&Then('it resolves, and what arrives was built by its own constructor',
       procedure(W: TOpenWorld)
       begin
-        Expect(W.Outcome).ToContain('TBlindBox');
-        Expect(W.Outcome).ToContain('_ClosedArgs');
+        // Sobre lo que DEVUELVE, y no sobre que el registro no lanzara: registrar sin lanzar lo
+        // hace tambien un contenedor que se olvido de emparejar. Y el numero es lo que separa
+        // "se construyo" de "se construyo con el constructor de TObject", que dejaria un cero.
+        Expect(W.Told).ToEqual('blind#1');
+      end)
+    .&And('and nothing was raised when it was registered',
+      procedure(W: TOpenWorld)
+      begin
+        Expect(W.Outcome).ToEqual(SinFallo);
       end)
 
-  .Scenario('And so is one whose field count does not match the contract')
+  .Scenario('And that one registration serves two closures, each with an instance of its own')
+    // El control del anterior: aceptar el registro no dice nada de que funcione igual que los
+    // demas. Un contenedor que sirviera la instancia del primer cierre al segundo pasaria aquel.
+    .Given('the same registration, of an implementation that declares nothing',
+      procedure(W: TOpenWorld)
+      begin
+        W.Services.AddSingleton<IBox<_>, TBlindBox<_>>;
+      end)
+    .When('two different closures are resolved and both kept alive',
+      procedure(W: TOpenWorld)
+      begin
+        W.Build;
+        var Alpha := W.Provider.GetRequiredService<IBox<TAlphaSettings>>;
+        var Beta := W.Provider.GetRequiredService<IBox<TBetaSettings>>;
+        W.Told := Format('%d|%d', [Alpha.Serial, Beta.Serial]);
+        W.Same := Alpha = IBox<TAlphaSettings>(Pointer(Beta));
+      end)
+    .&Then('each closure got one of its own',
+      procedure(W: TOpenWorld)
+      begin
+        Expect(W.Told).ToEqual('1|2');
+      end)
+    .&And('and they are not the same object',
+      procedure(W: TOpenWorld)
+      begin
+        Expect(W.Same).ToBeFalse;
+      end)
+
+  .Scenario('The visibility of the escape hatch changes nothing')
+    .Given('an open registration whose implementation declares it in the most restrictive visibility there is',
+      procedure(W: TOpenWorld)
+      begin
+        W.Services.AddSingleton<IBox<_>, TSealedBox<_>>;
+      end)
+    .When('a closure is resolved',
+      procedure(W: TOpenWorld)
+      begin
+        W.Build;
+        W.Attempt(procedure begin W.Told := W.Provider.GetRequiredService<IBox<TAlphaSettings>>.Tag; end)
+      end)
+    .&Then('the container found it and filled it just the same',
+      procedure(W: TOpenWorld)
+      begin
+        // Sin encontrarla, el campo sale a nil y Tag contesta el centinela: la afirmacion no se
+        // puede cumplir por accidente.
+        Expect(W.Told).ToEqual('TAlphaSettings');
+        Expect(W.Outcome).ToEqual(SinFallo);
+      end)
+
+.Rule('A declared escape hatch that cannot be filled is refused when it is registered')
+
+  .Scenario('One whose field count does not match the contract')
     .When('an implementation with two fields is registered for a contract of one argument',
       procedure(W: TOpenWorld)
       begin
@@ -703,6 +874,28 @@ Feature One registration for every closure of a generic contract @di @generics @
       procedure(W: TOpenWorld)
       begin
         Expect(W.Outcome).ToContain('TWideBox');
+      end)
+
+  .Scenario('And one whose position cannot receive a class')
+    .When('an implementation one of whose fields is not a class reference is registered open',
+      procedure(W: TOpenWorld)
+      begin
+        W.Attempt(
+          procedure
+          begin
+            W.Services.AddSingleton<IBox<_>, TLooseBox<_>>;
+          end)
+      end)
+    .&Then('the registration fails: the type of the field IS the bound, and that one is not a bound',
+      procedure(W: TOpenWorld)
+      begin
+        Expect(W.Outcome).ToContain('has to be a class reference');
+      end)
+    .&And('and the message names the implementation and the position',
+      procedure(W: TOpenWorld)
+      begin
+        Expect(W.Outcome).ToContain('TLooseBox');
+        Expect(W.Outcome).ToContain('T1');
       end)
 
 .Rule('The bounds the implementation declares are checked when a closure is resolved')
@@ -747,6 +940,55 @@ Feature One registration for every closure of a generic contract @di @generics @
       procedure(W: TOpenWorld)
       begin
         Expect(W.Outcome).ToContain('TSettings');
+      end)
+
+  .Scenario('Without any bound declared, every closure goes')
+    .Given('an open registration whose implementation declares no bounds at all',
+      procedure(W: TOpenWorld)
+      begin
+        W.Services.AddSingleton<IBox<_>, TBlindBox<_>>;
+      end)
+    .When('a closure is resolved whose argument the other implementations would refuse',
+      procedure(W: TOpenWorld)
+      begin
+        W.Build;
+        W.Attempt(procedure begin W.Told := W.Provider.GetRequiredService<IBox<TStranger>>.Tag; end)
+      end)
+    .&Then('it resolves: there is nothing to check, which is not the same as not checking',
+      procedure(W: TOpenWorld)
+      begin
+        Expect(W.Told).ToEqual('blind');
+        Expect(W.Outcome).ToEqual(SinFallo);
+      end)
+
+  .Scenario('And a contract whose argument travels by value is still refused against it')
+    // El control del anterior, y el que impide leer "sin cotas no se comprueba nada": lo que
+    // sigue de pie es la compatibilidad de las firmas, que no depende de lo que la
+    // implementacion declare y por tanto no se va con las cotas.
+    .Given('an open registration of a by-value contract whose implementation declares no bounds',
+      procedure(W: TOpenWorld)
+      begin
+        W.Services.AddSingleton<IValued<_>, TBlindValued<_>>;
+      end)
+    .When('a closure whose argument is not a reference is asked for',
+      procedure(W: TOpenWorld)
+      begin
+        W.Build;
+        W.Attempt(
+          procedure
+          begin
+            W.Told := IntToStr(W.Provider.GetRequiredService<IValued<Integer>>.Value);
+          end)
+      end)
+    .&Then('it is refused rather than handed over',
+      procedure(W: TOpenWorld)
+      begin
+        Expect(W.Outcome).ToContain('same call shape');
+      end)
+    .&And('and the message names the method, exactly as with an implementation that has bounds',
+      procedure(W: TOpenWorld)
+      begin
+        Expect(W.Outcome).ToContain('Value');
       end)
 
 .Rule('The lifetime of an open registration counts per closed type')
