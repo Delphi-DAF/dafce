@@ -22,6 +22,19 @@ type
     procedure Greet;
   end;
 
+  {
+    LO QUE ESTE TRIO DEMUESTRA, que no se ve solo mirandolo:
+
+    un parametro de constructor puede ser un RECORD que nadie registro en el contenedor, si el
+    record declara una conversion implicita desde una interfaz que si esta registrada. Aqui
+    TWrapperAccessor pide un IWrapper --el record--, nadie registra IWrapper, y el contenedor lo
+    construye resolviendo IWrapperImpl y aplicando IWrapper.Implicit.
+
+    De ahi sale el resto del diseno, que sin esto parece decoracion: los operadores Equal y
+    NotEqual contra Pointer existen para poder escribir `Wrapper <> nil` sobre un record que se
+    comporta como una referencia de interfaz. Es el mismo patron con el que DAF envuelve su propio
+    IServiceProvider.
+  }
   IWrapperImpl = interface(IInvokable)
     function Alive: Boolean;
   end;
@@ -46,7 +59,6 @@ type
   private
     FWrapper: IWrapper;
   public
-    // Como alternativa se puede requerir directamente IConfiguration
     constructor Create(Wrapper: IWrapper);
     function ChecWrapperAccess: Boolean;
     property Wrapper: IWrapper read FWrapper;
