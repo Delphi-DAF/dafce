@@ -144,7 +144,7 @@ type
     function GetCount: Integer;
     function Add<ServiceType: IInterface>(const LifeTime: TServiceLifeTime; const Factory: TServiceFactory): IServiceCollectionImpl;overload;
     function Add(const ServiceType: PTypeInfo; const LifeTime: TServiceLifeTime; const Factory: TServiceFactory;
-      const ImplClass: TClass = nil): IServiceCollectionImpl;overload;
+      const ImplClass: TClass = nil; const RequestedFactory: TServiceFactoryEx = nil): IServiceCollectionImpl;overload;
     function BuildServiceProvider: IServiceProviderImpl;overload;
     function BuildServiceProvider(const Options: TServiceProviderOptions): IServiceProviderImpl;overload;
     function Contains<T: IInterface>: Boolean;overload;
@@ -392,7 +392,7 @@ begin
 end;
 
 function TServiceCollection.Add(const ServiceType: PTypeInfo; const LifeTime: TServiceLifeTime;
-  const Factory: TServiceFactory; const ImplClass: TClass): IServiceCollectionImpl;
+  const Factory: TServiceFactory; const ImplClass: TClass; const RequestedFactory: TServiceFactoryEx): IServiceCollectionImpl;
 begin
   CheckNotFrozen;
 
@@ -407,7 +407,7 @@ begin
     Descriptors := TServiceDescriptors.Create;
     FEntries.AddOrSetValue(ServiceType, Descriptors);
   end;
-  var Descriptor := TServiceDescriptor.Create(Factory, LifeTime, ServiceType, ImplClass);
+  var Descriptor := TServiceDescriptor.Create(Factory, LifeTime, ServiceType, ImplClass, RequestedFactory);
   Descriptors.Add(Descriptor);
 end;
 

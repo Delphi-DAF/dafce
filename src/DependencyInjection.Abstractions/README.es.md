@@ -208,6 +208,46 @@ Y tres límites, dichos aquí en vez de dejados para que alguien tropiece con el
   es la nada —esa misma comparación método a método rechaza el emparejamiento nombrando el primer
   método que no encaja— pero es una red, no una comprobación de identidad.
 
+### Una factoría escrita a mano puede enterarse de qué le piden
+
+La ruta por clase de arriba rellena `_ClosedArgs` antes de que corra el constructor, así que una
+implementación registrada sin fijar conoce su cierre. Una **factoría escrita a mano** registrada sin
+fijar no tenía nada parecido: recibía solo el proveedor, así que una única factoría atendía todos los
+cierres y devolvía el mismo objeto a todos -- un `ILogger<TFacturas>` escribiendo bajo la categoría
+de otro cierre, sin que nada se quejara.
+
+Un segundo tipo de factoría recibe, además del proveedor, el tipo que se está resolviendo:
+
+```pascal
+Services.AddSingleton<IRepo<_>>(
+  function(P: IServiceProvider; RequestedType: PTypeInfo): IRepo<_>
+  begin
+    Result := TRepo.Create(RequestedType);   // el cierre concreto IRepo<TUser>, IRepo<TOrder>, ...
+  end);
+```
+
+La sobrecarga se elige por cuántos parámetros declara la lambda -- una factoría de un parámetro sigue
+siendo de un parámetro, y no cambia nada más. `AddScoped`, `AddTransient` y los tres `TryAdd*` tienen
+la misma sobrecarga.
+
+**Es el tipo que se *pide*, no el cierre.** Para un registro sin fijar es el tipo cerrado que se
+resuelve (`IRepo<TUser>`); para un registro corriente es el tipo del propio servicio (`IRepo`). El
+dato significa lo mismo en los dos -- «esto es lo que se está resolviendo» -- así que una única
+factoría registrada para varios contratos también puede distinguirlos.
+
+**Por qué un segundo tipo y no un parámetro opcional del primero.** Ampliar `TServiceFactory` con un
+segundo parámetro *opcional* parece aditivo y es lo contrario. Un valor por defecto sirve al *sitio
+de llamada*, no a la compatibilidad de asignación: un tipo procedural exige una lista de parámetros
+idéntica, así que una lambda de un parámetro asignada al tipo de dos no compila --
+`E2010 Incompatible types`--. Eso dejaría sin compilar toda factoría ya escrita, en DAF y en
+cualquier consumidor. La sobrecarga --que parece el cambio mayor-- es la que no rompe nada, y el
+compilador la elige por la aridad de la lambda.
+
+**Una factoría que no pregunta no es un caso especial.** La forma corta es la que usa casi todo
+registro, y la mayoría no tienen nada que preguntar. Una que toma solo el proveedor se registra y
+resuelve exactamente igual que antes; registrada sin fijar, sigue sirviendo el mismo objeto a todos
+los cierres -- ya no porque *no pueda* conocer el cierre, sino porque no lo pidió.
+
 ---
 
 ## Dependencias

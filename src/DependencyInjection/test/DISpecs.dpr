@@ -16,6 +16,7 @@ uses
   GarbageCollection.Feat in 'GarbageCollection.Feat.pas',
   ContainerShutdown.Feat in 'ContainerShutdown.Feat.pas',
   ServiceIdentity.Feat in 'ServiceIdentity.Feat.pas',
+  RequestedType.Feat in 'RequestedType.Feat.pas',
   OpenGenerics.Feat in 'OpenGenerics.Feat.pas';
 
 begin

@@ -206,6 +206,46 @@ And three limits, said here rather than left to be tripped over:
   — that same method-by-method check refuses the match, naming the first method that does not fit
   — but it is a net, not a check of identity.
 
+### A hand-written factory can be told what it is being asked for
+
+The class route above fills `_ClosedArgs` before the constructor runs, so an implementation
+registered open knows its closure. A **hand-written factory** registered open had nothing of the
+sort: it received only the provider, so one factory served every closure and returned the same
+object to all of them -- an `ILogger<TInvoices>` writing under another closure's category, with
+nothing to complain about.
+
+A second factory shape receives the type being resolved as well as the provider:
+
+```pascal
+Services.AddSingleton<IRepo<_>>(
+  function(P: IServiceProvider; RequestedType: PTypeInfo): IRepo<_>
+  begin
+    Result := TRepo.Create(RequestedType);   // the closed IRepo<TUser>, IRepo<TOrder>, ...
+  end);
+```
+
+The overload is chosen by how many parameters the lambda declares -- a one-parameter factory is
+still a one-parameter factory, and nothing else changes. `AddScoped`, `AddTransient` and the three
+`TryAdd*` have the same overload.
+
+**It is the type being *asked for*, not the closure.** For an open registration it is the closed
+type resolved (`IRepo<TUser>`); for an ordinary registration it is the service type itself
+(`IRepo`). The datum means the same in both -- "this is what is being resolved" -- so a single
+factory registered for several contracts can also tell them apart.
+
+**Why a second type and not an optional parameter of the first.** Widening `TServiceFactory` with a
+second, *optional* parameter looks additive and is the opposite. A default value serves the *call
+site*, not assignment compatibility: a procedural type demands an identical parameter list, so a
+one-parameter lambda assigned to the two-parameter type fails to compile with
+`E2010 Incompatible types`. That would break every factory already written, in DAF and in every
+consumer. The overload -- which looks like the larger change -- is the one that breaks nothing, and
+the compiler picks it by the lambda's arity.
+
+**A factory that does not ask is not a special case.** The short form is what almost every
+registration uses, and most have nothing to ask. One that takes only the provider registers and
+resolves exactly as before; registered open, it still serves the same object to every closure -- no
+longer because it *cannot* know the closure, but because it did not ask for it.
+
 ---
 
 ## Dependency

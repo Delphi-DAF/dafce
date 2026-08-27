@@ -58,6 +58,14 @@ type
 
   TServiceFactory<ServiceType: IInterface> = reference to function(Provider: IServiceProvider): ServiceType;
   TServiceFactory = TServiceFactory<IInterface>;
+  // La misma factoria, pero enterada de que se le esta pidiendo: recibe, ademas del proveedor, el
+  // tipo concreto que se resuelve -- el cierre en un registro sin fijar, el tipo del servicio en
+  // uno corriente. Es un tipo APARTE y no un parametro opcional del de arriba: un valor por defecto
+  // sirve al sitio de llamada, no a la compatibilidad de asignacion, y una lambda de un parametro
+  // asignada a una de dos da E2010. Asi que la via es una sobrecarga, no un parametro mas.
+  TServiceFactoryEx<ServiceType: IInterface> = reference to function(Provider: IServiceProvider;
+    RequestedType: PTypeInfo): ServiceType;
+  TServiceFactoryEx = TServiceFactoryEx<IInterface>;
   Factory = class
   public
     class function From(const ServiceType: PTypeInfo; const TImpl: TClass): TServiceFactory;overload;
@@ -77,6 +85,14 @@ type
     /// </summary>
     class function ForClosedType(const OpenType, ClosedType: PTypeInfo;
       const Inner: TServiceFactory): TServiceFactory;
+    /// <summary>
+    ///   Baja una factoria consciente del tipo pedido a una de un solo parametro, capturando el
+    ///   tipo que se le entregara. Es la UNICA forma de que una consciente llegue a llamarse: nunca
+    ///   se invoca directa, siempre envuelta asi. Se llama con el tipo del servicio al registrar uno
+    ///   corriente (D4), y con el cierre al cerrar un registro sin fijar (D3).
+    /// </summary>
+    class function ForRequestedType(const RequestedType: PTypeInfo;
+      const Aware: TServiceFactoryEx): TServiceFactory;
   end;
 
   // Envuelve el servicio que produce el registro previo. Es Scrutor: en .NET esto no
@@ -126,9 +142,12 @@ type
     FTypeInfo: PTypeInfo;
     FImplementationClass: TClass;
     FIdentity: TServiceIdentity;
+    // La factoria consciente del tipo pedido, si el registro se hizo con una; nil si no.
+    // Es lo que ForClosedType necesita para volver a bajarla con el cierre concreto (D3).
+    FRequestedFactory: TServiceFactoryEx;
   public
     constructor Create(const Factory: TServiceFactory; const LifeTime: TServiceLifeTime; const TypeInfo: PTypeInfo;
-      const ImplementationClass: TClass = nil);
+      const ImplementationClass: TClass = nil; const RequestedFactory: TServiceFactoryEx = nil);
     // Nombre legible del tipo de servicio, y para nada mas que un mensaje de error.
     // No decide nada y no lanza: ver la implementacion.
     function ServiceName: string;
@@ -170,7 +189,7 @@ type
     function GetCount: Integer;
     procedure CheckNotFrozen;
     function Add(const ServiceType: PTypeInfo; const LifeTime: TServiceLifeTime; const ServiceFactory: TServiceFactory;
-      const ImplClass: TClass = nil): IServiceCollectionImpl; overload;
+      const ImplClass: TClass = nil; const RequestedFactory: TServiceFactoryEx = nil): IServiceCollectionImpl; overload;
     function Contains(const ServiceType: PTypeInfo): Boolean;
     function BuildServiceProvider: IServiceProviderImpl; overload;
     function BuildServiceProvider(const Options: TServiceProviderOptions): IServiceProviderImpl; overload;
@@ -202,7 +221,10 @@ type
     function GetCount: Integer;
   private
     function AddDescriptor(const LifeTime: TServiceLifeTime; const ServiceType: PTypeInfo;
-      const ServiceFactory: TServiceFactory; const ImplClass: TClass): IServiceCollection;
+      const ServiceFactory: TServiceFactory; const ImplClass: TClass;
+      const RequestedFactory: TServiceFactoryEx = nil): IServiceCollection;
+    function AddAwareDescriptor(const LifeTime: TServiceLifeTime; const ServiceType: PTypeInfo;
+      const Aware: TServiceFactoryEx): IServiceCollection;
     function CanTryAdd(const ServiceType: PTypeInfo): Boolean;
   public
     class operator Implicit(const Implementor: IServiceCollectionImpl): IServiceCollection;
@@ -221,9 +243,12 @@ type
     function Add(const LifeTime: TServiceLifeTime; const ServiceType: PTypeInfo; const Factory: TServiceFactory): IServiceCollection; overload;
     function Add<ServiceType: IInterface>(const LifeTime: TServiceLifeTime; const Factory: TServiceFactory<ServiceType>)
       : IServiceCollection; overload;
+    function Add<ServiceType: IInterface>(const LifeTime: TServiceLifeTime;
+      const Factory: TServiceFactoryEx<ServiceType>): IServiceCollection; overload;
 
     function AddSingleton(const ServiceType: PTypeInfo; const Factory: TServiceFactory): IServiceCollection; overload;
     function AddSingleton<ServiceType: IInterface>(const Factory: TServiceFactory<ServiceType>): IServiceCollection; overload;
+    function AddSingleton<ServiceType: IInterface>(const Factory: TServiceFactoryEx<ServiceType>): IServiceCollection; overload;
 
     function AddSingleton(const ServiceType: PTypeInfo; const TImpl: TClass): IServiceCollection;overload;
     function AddSingleton<ServiceType: IInterface; TImpl: ServiceType>: IServiceCollection; overload;
@@ -234,11 +259,13 @@ type
     function AddTransient(const ServiceType: PTypeInfo; const Factory: TServiceFactory): IServiceCollection; overload;
     function AddTransient(const ServiceType: PTypeInfo; const TImpl: TClass): IServiceCollection;overload;
     function AddTransient<ServiceType: IInterface>(const Factory: TServiceFactory<ServiceType>): IServiceCollection; overload;
+    function AddTransient<ServiceType: IInterface>(const Factory: TServiceFactoryEx<ServiceType>): IServiceCollection; overload;
     function AddTransient<ServiceType: IInterface; TImpl: ServiceType>: IServiceCollection; overload;
 
     function AddScoped(const ServiceType: PTypeInfo; const Factory: TServiceFactory): IServiceCollection; overload;
     function AddScoped(const ServiceType: PTypeInfo; const TImpl: TClass): IServiceCollection;overload;
     function AddScoped<ServiceType: IInterface>(const Factory: TServiceFactory<ServiceType>): IServiceCollection; overload;
+    function AddScoped<ServiceType: IInterface>(const Factory: TServiceFactoryEx<ServiceType>): IServiceCollection; overload;
     function AddScoped<ServiceType: IInterface; TImpl: ServiceType>: IServiceCollection; overload;
 
     // TryAdd*: registra solo si nadie registro ya ese tipo de servicio. Es el contrato
@@ -247,17 +274,20 @@ type
     function TryAddSingleton(const ServiceType: PTypeInfo; const TImpl: TClass): IServiceCollection; overload;
     function TryAddSingleton(const ServiceType: PTypeInfo; const Implementor: IInterface): IServiceCollection; overload;
     function TryAddSingleton<ServiceType: IInterface>(const Factory: TServiceFactory<ServiceType>): IServiceCollection; overload;
+    function TryAddSingleton<ServiceType: IInterface>(const Factory: TServiceFactoryEx<ServiceType>): IServiceCollection; overload;
     function TryAddSingleton<ServiceType: IInterface>(const Implementor: ServiceType): IServiceCollection; overload;
     function TryAddSingleton<ServiceType: IInterface; TImpl: ServiceType>: IServiceCollection; overload;
 
     function TryAddScoped(const ServiceType: PTypeInfo; const Factory: TServiceFactory): IServiceCollection; overload;
     function TryAddScoped(const ServiceType: PTypeInfo; const TImpl: TClass): IServiceCollection; overload;
     function TryAddScoped<ServiceType: IInterface>(const Factory: TServiceFactory<ServiceType>): IServiceCollection; overload;
+    function TryAddScoped<ServiceType: IInterface>(const Factory: TServiceFactoryEx<ServiceType>): IServiceCollection; overload;
     function TryAddScoped<ServiceType: IInterface; TImpl: ServiceType>: IServiceCollection; overload;
 
     function TryAddTransient(const ServiceType: PTypeInfo; const Factory: TServiceFactory): IServiceCollection; overload;
     function TryAddTransient(const ServiceType: PTypeInfo; const TImpl: TClass): IServiceCollection; overload;
     function TryAddTransient<ServiceType: IInterface>(const Factory: TServiceFactory<ServiceType>): IServiceCollection; overload;
+    function TryAddTransient<ServiceType: IInterface>(const Factory: TServiceFactoryEx<ServiceType>): IServiceCollection; overload;
     function TryAddTransient<ServiceType: IInterface; TImpl: ServiceType>: IServiceCollection; overload;
 
     // Replace quita los registros previos del tipo y anade el nuevo; RemoveAll solo quita.
@@ -381,7 +411,7 @@ end;
 { TServiceDescriptor }
 
 constructor TServiceDescriptor.Create(const Factory: TServiceFactory; const LifeTime: TServiceLifeTime;
-  const TypeInfo: PTypeInfo; const ImplementationClass: TClass);
+  const TypeInfo: PTypeInfo; const ImplementationClass: TClass; const RequestedFactory: TServiceFactoryEx);
 begin
   FFactory := Factory;
   FLifeTime := LifeTime;
@@ -389,6 +419,7 @@ begin
   FImplementationClass := ImplementationClass;
   FIdentity.Registration := AtomicIncrement(GLastServiceIdentity);
   FIdentity.ClosedType := nil;
+  FRequestedFactory := RequestedFactory;
  end;
 
 function TServiceDescriptor.ClosedType: PTypeInfo;
@@ -413,7 +444,13 @@ begin
   // propiedad --la fabrica de ESTE registro-- y tapa la clase del mismo nombre.
   if FImplementationClass <> nil then
     Inner := Daf.Extensions.DependencyInjection.Factory.FromOpen(
-      FTypeInfo, AClosedType, FImplementationClass);
+      FTypeInfo, AClosedType, FImplementationClass)
+  else if Assigned(FRequestedFactory) then
+    // D3: una factoria consciente se baja aqui, el unico punto que conoce el cierre, a una de las
+    // de siempre que le pasa ESE cierre como tipo pedido. FFactory llevaba la bajada con el tipo del
+    // registro (el abierto); esta la sustituye con el cierre concreto. Es un brazo mas de la
+    // bifurcacion que ya estaba aqui, no un if en el camino de resolucion.
+    Inner := Daf.Extensions.DependencyInjection.Factory.ForRequestedType(AClosedType, FRequestedFactory);
   // Y la comprobacion del emparejamiento, sobre la que haya de las dos: es una propiedad del
   // par contrato-abierto/cierre, no de quien fabrique el objeto.
   Result.FFactory := Daf.Extensions.DependencyInjection.Factory.ForClosedType(
@@ -608,6 +645,15 @@ begin
             end;
 end;
 
+class function Factory.ForRequestedType(const RequestedType: PTypeInfo;
+  const Aware: TServiceFactoryEx): TServiceFactory;
+begin
+  Result := function(Provider: IServiceProvider): IInterface
+            begin
+              Result := Aware(Provider, RequestedType);
+            end;
+end;
+
 class function Factory.FromOpen(const OpenType, ClosedType: PTypeInfo; const TImpl: TClass): TServiceFactory;
 begin
   Result := function(Provider: IServiceProvider): IInterface
@@ -678,10 +724,62 @@ begin
 end;
 
 function IServiceCollection.AddDescriptor(const LifeTime: TServiceLifeTime; const ServiceType: PTypeInfo;
-  const ServiceFactory: TServiceFactory; const ImplClass: TClass): IServiceCollection;
+  const ServiceFactory: TServiceFactory; const ImplClass: TClass;
+  const RequestedFactory: TServiceFactoryEx): IServiceCollection;
 begin
-  FImplementor.Add(ServiceType, LifeTime, ServiceFactory, ImplClass);
+  FImplementor.Add(ServiceType, LifeTime, ServiceFactory, ImplClass, RequestedFactory);
   Result := Self;
+end;
+
+function IServiceCollection.AddAwareDescriptor(const LifeTime: TServiceLifeTime; const ServiceType: PTypeInfo;
+  const Aware: TServiceFactoryEx): IServiceCollection;
+begin
+  // D4: la factoria consciente se baja AQUI, con el tipo del servicio ya conocido, a una de un solo
+  // parametro; y se guarda aparte para que ForClosedType pueda volver a bajarla con el cierre (D3).
+  // Asi hay una sola forma de que una consciente llegue a llamarse: envuelta, nunca directa.
+  Result := AddDescriptor(LifeTime, ServiceType, Factory.ForRequestedType(ServiceType, Aware), nil, Aware);
+end;
+
+function IServiceCollection.Add<ServiceType>(const LifeTime: TServiceLifeTime;
+  const Factory: TServiceFactoryEx<ServiceType>): IServiceCollection;
+begin
+  Result := AddAwareDescriptor(LifeTime, TypeInfo(ServiceType), TServiceFactoryEx(Factory));
+end;
+
+function IServiceCollection.AddSingleton<ServiceType>(const Factory: TServiceFactoryEx<ServiceType>): IServiceCollection;
+begin
+  Result := Add<ServiceType>(Singleton, Factory);
+end;
+
+function IServiceCollection.AddScoped<ServiceType>(const Factory: TServiceFactoryEx<ServiceType>): IServiceCollection;
+begin
+  Result := Add<ServiceType>(Scoped, Factory);
+end;
+
+function IServiceCollection.AddTransient<ServiceType>(const Factory: TServiceFactoryEx<ServiceType>): IServiceCollection;
+begin
+  Result := Add<ServiceType>(Transient, Factory);
+end;
+
+function IServiceCollection.TryAddSingleton<ServiceType>(const Factory: TServiceFactoryEx<ServiceType>): IServiceCollection;
+begin
+  Result := Self;
+  if not CanTryAdd(TypeInfo(ServiceType)) then Exit;
+  Result := AddAwareDescriptor(Singleton, TypeInfo(ServiceType), TServiceFactoryEx(Factory));
+end;
+
+function IServiceCollection.TryAddScoped<ServiceType>(const Factory: TServiceFactoryEx<ServiceType>): IServiceCollection;
+begin
+  Result := Self;
+  if not CanTryAdd(TypeInfo(ServiceType)) then Exit;
+  Result := AddAwareDescriptor(Scoped, TypeInfo(ServiceType), TServiceFactoryEx(Factory));
+end;
+
+function IServiceCollection.TryAddTransient<ServiceType>(const Factory: TServiceFactoryEx<ServiceType>): IServiceCollection;
+begin
+  Result := Self;
+  if not CanTryAdd(TypeInfo(ServiceType)) then Exit;
+  Result := AddAwareDescriptor(Transient, TypeInfo(ServiceType), TServiceFactoryEx(Factory));
 end;
 
 function IServiceCollection.AddScoped(const ServiceType: PTypeInfo; const TImpl: TClass): IServiceCollection;
