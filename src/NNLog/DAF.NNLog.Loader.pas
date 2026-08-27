@@ -23,6 +23,12 @@ type
     class function Load(const Config: IConfiguration): TNNLogConfiguration;
     class function BuildProvider(const Context: IHostBuilderContext; const ConfigKey: string): ILoggerProvider;overload;
     class function BuildProvider(const Environment: IHostEnvironment; const Config: IConfiguration): ILoggerProvider;overload;
+    /// <summary>
+    ///   El proveedor a partir de unos ajustes YA MONTADOS, vengan de donde vengan: leidos de
+    ///   una seccion o escritos con codigo en el arranque. El objeto sigue siendo de quien lo
+    ///   trajo -- este metodo no lo libera.
+    /// </summary>
+    class function BuildProvider(const Environment: IHostEnvironment; const Config: TNNLogConfiguration): ILoggerProvider;overload;
   end;
 
 implementation
@@ -144,39 +150,46 @@ end;
 
 class function TNNLogLoader.BuildProvider(const Environment: IHostEnvironment; const Config: IConfiguration): ILoggerProvider;
 begin
-  TLogLayoutEngine.RegisterLayoutRenderers(Environment);
-  var Rules: TArray<TLogRule>;
+  // Load CONSTRUYE el objeto y lo entrega a quien llama, que aqui es este metodo: por eso lo
+  // libera. La sobrecarga a la que delega no lo hace, porque alli el objeto es de quien lo trajo.
   var NLogConfig := Load(Config);
   try
-    var TargetMap := TDictionary<string, TTarget>.Create;
-    try
-      try
-        for var TgtCfg in NLogConfig.Targets do
-          TargetMap.Add(TgtCfg.Key, BuildTarget(TgtCfg.Value));
-
-        SetLength(Rules, Length(NLogConfig.Rules));
-        var idx := 0;
-        for var RuleCfg in NLogConfig.Rules do
-        begin
-          Rules[idx] := BuildRule(TargetMap, RuleCfg, idx);
-          Inc(idx);
-        end;
-        Result := TNNLogProvider.Create(TargetMap.Values.ToArray, Rules);
-      except
-        // Composicion fallida (p. ej. un patron imposible): lo ya construido no tiene todavia
-        // proveedor que lo posea, asi que se libera aqui para no fugarlo.
-        for var R in Rules do
-          if Assigned(R) then
-            R.Free;
-        for var T in TargetMap.Values do
-          T.Free;
-        raise;
-      end;
-    finally
-      TargetMap.Free;
-    end;
+    Result := BuildProvider(Environment, NLogConfig);
   finally
     NLogConfig.Free;
+  end;
+end;
+
+class function TNNLogLoader.BuildProvider(const Environment: IHostEnvironment; const Config: TNNLogConfiguration): ILoggerProvider;
+begin
+  TLogLayoutEngine.RegisterLayoutRenderers(Environment);
+  var Rules: TArray<TLogRule>;
+  var TargetMap := TDictionary<string, TTarget>.Create;
+  try
+    try
+      for var TgtCfg in Config.Targets do
+        TargetMap.Add(TgtCfg.Key, BuildTarget(TgtCfg.Value));
+
+      SetLength(Rules, Length(Config.Rules));
+      var idx := 0;
+      for var RuleCfg in Config.Rules do
+      begin
+        Rules[idx] := BuildRule(TargetMap, RuleCfg, idx);
+        Inc(idx);
+      end;
+      Result := TNNLogProvider.Create(TargetMap.Values.ToArray, Rules);
+    except
+      // Composicion fallida (p. ej. un patron imposible): lo ya construido no tiene todavia
+      // proveedor que lo posea, asi que se libera aqui para no fugarlo.
+      for var R in Rules do
+        if Assigned(R) then
+          R.Free;
+      for var T in TargetMap.Values do
+        T.Free;
+      raise;
+    end;
+  finally
+    TargetMap.Free;
   end;
 end;
 

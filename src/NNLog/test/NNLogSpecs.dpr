@@ -6,7 +6,8 @@
 uses
   Daf.MiniSpec,
   DAF.NNLog.Targets.Probe in 'DAF.NNLog.Targets.Probe.pas',
-  RuleSelection.Feat in 'RuleSelection.Feat.pas';
+  RuleSelection.Feat in 'RuleSelection.Feat.pas',
+  CodeConfig.Feat in 'CodeConfig.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;
