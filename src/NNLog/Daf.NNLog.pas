@@ -7,6 +7,7 @@ uses
   System.TypInfo,
   System.IOUtils,
   System.Generics.Collections,
+  System.RegularExpressions,
   Daf.Extensions.Logging,
   Daf.Logging,
   DAF.Logging.Provider,
@@ -38,11 +39,14 @@ type
     FMaxLevel: TLogLevel;
     FLevels: TArray<TLogLevel>;
     FWriteTo: TArray<TTarget>;
+    FMatchAll: Boolean;
+    FNameRegex: TRegEx;
+    procedure SetName(const Value: string);
     function NameMatch(const Category: string): Boolean;
   public
     function Matches(const Category: string; const Level: TLogLevel): Boolean;
     procedure Log(const LogEntry: TLogEntry);
-    property Name: string read FName write FName;
+    property Name: string read FName write SetName;
     property MinLevel: TLogLevel read FMinLevel write FMinLevel;
     property MaxLevel: TLogLevel read FMaxLevel write FMaxLevel;
     property Levels: TArray<TLogLevel> read FLevels write FLevels;
@@ -83,17 +87,34 @@ begin
     Target.Write(LogEntry);
 end;
 
+procedure TLogRule.SetName(const Value: string);
+begin
+  FName := Value;
+  FMatchAll := (Value = '') or (Value = '*');
+  if FMatchAll then
+    Exit;
+  // Un regex anclado a la categoria COMPLETA: sin ancla, IsMatch busca dentro y un patron
+  // corto se aplicaria a todo lo que lo contenga. La caja la decide el patron con (?i); por
+  // defecto distingue mayusculas.
+  FNameRegex := TRegEx.Create('\A(?:' + Value + ')\z');
+  // TRegEx compila de forma perezosa; se fuerza aqui para que un patron imposible falle al
+  // construir la regla --y por tanto al cargar la configuracion--, no en el primer registro.
+  FNameRegex.IsMatch('');
+end;
+
 function TLogRule.NameMatch(const Category: string): Boolean;
 begin
-  if Name = '*' then Exit(True);
-  Result := True;
+  if FMatchAll then
+    Exit(True);
+  Result := FNameRegex.IsMatch(Category);
 end;
 
 function TLogRule.Matches(const Category: string; const Level: TLogLevel): Boolean;
 begin
+  // La categoria ya se emparejo al construir el logger (D3, TNNLogLogger.Create); aqui solo
+  // quedan las comprobaciones de nivel, que es lo que se paga por linea.
   Result := (Level >= MinLevel) and (Level <= MaxLevel) and
-    ((Length(Levels) = 0) or TArray.Contains<TLogLevel>(Levels, Level)) and
-    NameMatch(Category);
+    ((Length(Levels) = 0) or TArray.Contains<TLogLevel>(Levels, Level));
 end;
 
 { TNNLogLogger }
@@ -101,7 +122,12 @@ end;
 constructor TNNLogLogger.Create(const Category: string; const Rules: TArray<TLogRule>);
 begin
   inherited Create(Category);
-  FRules := Rules;
+  // La categoria se empareja UNA vez, aqui, no una por linea: el logger se queda solo con las
+  // reglas que le aplican (D3). En el camino caliente no queda ni un regex.
+  FRules := nil;
+  for var Rule in Rules do
+    if Rule.NameMatch(Category) then
+      FRules := FRules + [Rule];
 end;
 
 procedure TNNLogLogger.Log(const LogEntry: TLogEntry);

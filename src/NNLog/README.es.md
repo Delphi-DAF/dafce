@@ -52,6 +52,30 @@ Layout por defecto: `${timestamp} #${pid}:${thread} [${level}] ${category} | ${m
 
 ---
 
+## Reglas
+
+Una regla elige a qué loggers se aplica por **categoría**, mediante su `name`:
+
+- `*` —y un `name` **ausente o vacío**— empareja **todas** las categorías.
+- Cualquier otro valor es una **expresión regular**, anclada a la categoría **completa**: el patrón
+  tiene que emparejar la categoría entera, así que `Daf` nombra una categoría, no todas las que la
+  contienen.
+- La caja (mayúsculas/minúsculas) la decide el propio patrón, con un `(?i)` en línea; por defecto
+  distingue mayúsculas.
+
+Es una **divergencia deliberada de NLog**, donde `name` es un glob de dos comodines (`*` y `?`). Un
+regex es estrictamente más expresivo, ya viene en la RTL, y lleva la decisión de la caja al patrón en
+vez de esconderla en el código. `Daf.*` sigue funcionando (`.*` y `*` coinciden ahí); un comodín `?`
+hay que escribirlo como `.`.
+
+Un `name` que no sea una expresión regular válida es un **error de composición**: la configuración
+falla al cargar, nombrando la regla y el patrón, en vez de dejar el fallo para el primer registro.
+
+Una regla está **activa salvo que su configuración diga lo contrario**: `enabled` vale `true` por
+defecto, y solo el literal `false` la desactiva — la semántica que documenta NLog.
+
+---
+
 ## Integración con DI / Hosting
 
 ```pascal

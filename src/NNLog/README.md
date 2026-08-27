@@ -52,6 +52,28 @@ Default layout: `${timestamp} #${pid}:${thread} [${level}] ${category} | ${messa
 
 ---
 
+## Rules
+
+A rule selects which loggers it applies to by **category**, through its `name`:
+
+- `*` — and an **absent or empty** `name` — matches **every** category.
+- Any other value is a **regular expression**, anchored to the **whole** category: the pattern must
+  match the category in full, so `Daf` names one category, not every category that contains it.
+- The pattern decides case-sensitivity itself, with an inline `(?i)`; by default it is case-sensitive.
+
+This is a **deliberate divergence from NLog**, where `name` is a glob of two wildcards (`*` and `?`).
+A regex is strictly more expressive, it already ships in the RTL, and it moves the case decision into
+the pattern instead of hiding it in code. `Daf.*` keeps working (`.*` and `*` coincide there); a `?`
+wildcard must be written as `.`.
+
+A `name` that is not a valid regular expression is a **composition error**: the configuration fails to
+load, naming the rule and the pattern, instead of leaving the failure for the first log entry.
+
+A rule is **active unless its configuration says otherwise**: `enabled` defaults to `true`, and only
+the literal `false` disables it — the semantics NLog documents.
+
+---
+
 ## Integration with DI / Hosting
 
 ```pascal

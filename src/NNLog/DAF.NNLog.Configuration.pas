@@ -25,7 +25,7 @@ type
   TLogRuleConfig = class
   public
     Name: string;
-    Enabled: Boolean;
+    Enabled: string;
     MinLevel: string;
     Levels: string; // comma separate  list
     MaxLevel: string;

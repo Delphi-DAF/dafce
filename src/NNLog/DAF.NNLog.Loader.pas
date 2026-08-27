@@ -16,7 +16,7 @@ uses
 type
   TNNLogLoader = class
   private
-    class function BuildRule(const TargetMap: TDictionary<string, TTarget>; const RuleCfg: TLogRuleConfig): TLogRule; static;
+    class function BuildRule(const TargetMap: TDictionary<string, TTarget>; const RuleCfg: TLogRuleConfig; const Index: Integer): TLogRule; static;
     class function BuildTarget(const TargetCfg: TTargetConfig): TTarget; static;
     class function ParseWriteTo(const TargetMap: TDictionary<string, TTarget>; const WriteTo: string): TArray<TTarget>; static;
   public
@@ -31,6 +31,8 @@ uses
   System.Classes,
   System.IOUtils,
   System.Rtti,
+  System.RegularExpressions,
+  System.RegularExpressionsCore,
   System.SysUtils,
   System.TypInfo;
 
@@ -80,16 +82,32 @@ begin
   end;
 end;
 
-class function TNNLogLoader.BuildRule(const TargetMap: TDictionary<string, TTarget>; const RuleCfg: TLogRuleConfig): TLogRule;
+class function TNNLogLoader.BuildRule(const TargetMap: TDictionary<string, TTarget>; const RuleCfg: TLogRuleConfig; const Index: Integer): TLogRule;
 begin
   Result := TLogRule.Create;
-  Result.Name := RuleCfg.Name;
-  Result.Enabled := RuleCfg.Enabled;
-  Result.MinLevel := TLogLevel.Parse(RuleCfg.MinLevel, Low(TLogLEvel));
-  Result.Levels :=  TLogLevel.ParseList(RuleCfg.Levels);
-  Result.MaxLevel := TLogLevel.Parse(RuleCfg.MaxLevel, Pred(High(TLogLevel)));
-  Result.WriteTo :=  ParseWriteTo(TargetMap, RuleCfg.WriteTo);
-  Result.IsFinal := RuleCfg.IsFinal;
+  try
+    // enabled se resuelve como sus tres vecinos (minLevel, maxLevel, levels): una cadena que
+    // se interpreta con su defecto. El defecto es ACTIVADA --lo que dice NLog y la cabecera
+    // del modulo--: solo el literal `false` la desactiva (D1).
+    Result.Enabled := not SameText(Trim(RuleCfg.Enabled), 'false');
+    Result.MinLevel := TLogLevel.Parse(RuleCfg.MinLevel, Low(TLogLEvel));
+    Result.Levels :=  TLogLevel.ParseList(RuleCfg.Levels);
+    Result.MaxLevel := TLogLevel.Parse(RuleCfg.MaxLevel, Pred(High(TLogLevel)));
+    Result.WriteTo :=  ParseWriteTo(TargetMap, RuleCfg.WriteTo);
+    Result.IsFinal := RuleCfg.IsFinal;
+    // El patron se compila al asignar Name. Un patron que no se puede interpretar es un error
+    // de composicion y se dice al cargar, nombrando la regla y el patron (D4).
+    try
+      Result.Name := RuleCfg.Name;
+    except
+      on E: ERegularExpressionError do
+        raise Exception.CreateFmt('DAF.NNLog Error: rule #%d has an invalid category pattern "%s": %s',
+          [Index, RuleCfg.Name, E.Message]);
+    end;
+  except
+    Result.Free;
+    raise;
+  end;
 end;
 
 procedure Dump(Title: string; const Config: IConfiguration; const Indent: string = '');
@@ -132,17 +150,28 @@ begin
   try
     var TargetMap := TDictionary<string, TTarget>.Create;
     try
-      for var TgtCfg in NLogConfig.Targets do
-        TargetMap.Add(TgtCfg.Key, BuildTarget(TgtCfg.Value));
+      try
+        for var TgtCfg in NLogConfig.Targets do
+          TargetMap.Add(TgtCfg.Key, BuildTarget(TgtCfg.Value));
 
-      SetLength(Rules, Length(NLogConfig.Rules));
-      var idx := 0;
-      for var RuleCfg in NLogConfig.Rules do
-      begin
-        Rules[idx] := BuildRule(TargetMap, RuleCfg);
-        Inc(idx);
+        SetLength(Rules, Length(NLogConfig.Rules));
+        var idx := 0;
+        for var RuleCfg in NLogConfig.Rules do
+        begin
+          Rules[idx] := BuildRule(TargetMap, RuleCfg, idx);
+          Inc(idx);
+        end;
+        Result := TNNLogProvider.Create(TargetMap.Values.ToArray, Rules);
+      except
+        // Composicion fallida (p. ej. un patron imposible): lo ya construido no tiene todavia
+        // proveedor que lo posea, asi que se libera aqui para no fugarlo.
+        for var R in Rules do
+          if Assigned(R) then
+            R.Free;
+        for var T in TargetMap.Values do
+          T.Free;
+        raise;
       end;
-      Result := TNNLogProvider.Create(TargetMap.Values.ToArray, Rules);
     finally
       TargetMap.Free;
     end;
