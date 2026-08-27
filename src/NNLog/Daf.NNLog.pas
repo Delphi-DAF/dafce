@@ -61,6 +61,7 @@ type
     FRules: TArray<TLogRule>;
   public
     constructor Create(const Category: string; const Rules: TArray<TLogRule>);
+    function IsEnabled(const Level: TLogLevel): Boolean; override;
     procedure Log(const LogEntry: TLogEntry); override;
   end;
 
@@ -128,6 +129,17 @@ begin
   for var Rule in Rules do
     if Rule.NameMatch(Category) then
       FRules := FRules + [Rule];
+end;
+
+function TNNLogLogger.IsEnabled(const Level: TLogLevel): Boolean;
+begin
+  // EXACTAMENTE el mismo predicado que la escritura de abajo (D3): las reglas ya estan filtradas por
+  // categoria en Create, asi que aqui solo queda "hay alguna regla activa que acepte este nivel".
+  // Si usara un predicado propio podria cerrarse sobre una linea que la escritura si aceptaria.
+  for var Rule in FRules do
+    if Rule.Enabled and Rule.Matches(Category, Level) then
+      Exit(True);
+  Result := False;
 end;
 
 procedure TNNLogLogger.Log(const LogEntry: TLogEntry);

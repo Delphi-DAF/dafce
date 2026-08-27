@@ -8,7 +8,9 @@ uses
   BootstrapChannel.Feat in 'BootstrapChannel.Feat.pas',
   BootstrapSinks.Feat in 'BootstrapSinks.Feat.pas',
   PipelineComposition.Feat in 'PipelineComposition.Feat.pas',
-  TypedLogger.Feat in 'TypedLogger.Feat.pas';
+  TypedLogger.Feat in 'TypedLogger.Feat.pas',
+  EntryCost.Feat in 'EntryCost.Feat.pas',
+  TemplateAnalysis.Feat in 'TemplateAnalysis.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

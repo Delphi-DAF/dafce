@@ -203,6 +203,21 @@ ahí, así que hay una línea menos en los `requires`.
   va a decir.
 - Los informes de arranque salen bajo la categoría de la clase que informa y por el pipeline de
   `ILogger`. No es API, es salida: si filtrabas por la categoría `DAF`, revisa el filtro.
+- **`ILogger` gana `IsEnabled(Level)`, y esta sí rompe en compilación.** Un registrador contesta ahora
+  si una entrada de ese nivel llegaría a algún destino, de modo que quien llama puede saltarse la
+  construcción de argumentos que cuestan más que la propia línea —un volcado de estado, una consulta—.
+  Un descendiente de `TLogger` hereda un defecto que contesta `True`, así que un proveedor de logging
+  escrito fuera de DAF sigue compilando sin tocarlo; solo un tipo que implemente `ILogger` **a mano**
+  tiene que añadirlo. Contesta `True` si dudas — perder una línea por no saber es peor que componer una
+  de más:
+
+  ```pascal
+  // añadir a cualquier implementador de ILogger escrito a mano
+  function TMiLogger.IsEnabled(const Level: TLogLevel): Boolean;
+  begin
+    Result := True;  // o tu propia prueba de nivel, la misma que aplique tu Log
+  end;
+  ```
 
 ### 7. El contenedor cerrado ya no responde
 

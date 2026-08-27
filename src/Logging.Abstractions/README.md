@@ -17,6 +17,8 @@ ILogger = interface
   procedure Log(Level: TLogLevel; const Msg: string; const Args: array of const); overload;
   procedure Log(Level: TLogLevel; E: Exception; const Msg: string; const Args: array of const); overload;
 
+  function IsEnabled(Level: TLogLevel): Boolean;
+
   procedure LogTrace      (const Msg: string; const Args: array of const); overload;
   procedure LogDebug      (const Msg: string; const Args: array of const); overload;
   procedure LogInformation(const Msg: string; const Args: array of const); overload;
@@ -30,6 +32,20 @@ ILogger = interface
                       ScopedProc: TProc): ILogScopeVoid; overload;
 end;
 ```
+
+`IsEnabled(Level)` answers whether an entry of that level would reach any destination. Ask it before
+building arguments that cost more than the line itself — a state dump, a query, a walk — because in
+Delphi the arguments are evaluated at the call, so `LogDebug(Dump)` pays for `Dump` even with Debug
+off:
+
+```pascal
+if Log.IsEnabled(TLogLevel.Debug) then
+  Log.LogDebug('state = {State}', [ExpensiveDump]);
+```
+
+A composite answers yes if **any** destination would write; a destination that cannot say answers yes,
+because dropping a line by not knowing is worse than composing one too many. This is
+`Microsoft.Extensions.Logging`'s `ILogger.IsEnabled`.
 
 ---
 

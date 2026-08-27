@@ -17,6 +17,8 @@ ILogger = interface
   procedure Log(Level: TLogLevel; const Msg: string; const Args: array of const); overload;
   procedure Log(Level: TLogLevel; E: Exception; const Msg: string; const Args: array of const); overload;
 
+  function IsEnabled(Level: TLogLevel): Boolean;
+
   procedure LogTrace      (const Msg: string; const Args: array of const); overload;
   procedure LogDebug      (const Msg: string; const Args: array of const); overload;
   procedure LogInformation(const Msg: string; const Args: array of const); overload;
@@ -30,6 +32,20 @@ ILogger = interface
                       ScopedProc: TProc): ILogScopeVoid; overload;
 end;
 ```
+
+`IsEnabled(Level)` contesta si una entrada de ese nivel llegaría a algún destino. Pregúntalo antes de
+construir argumentos que cuesten más que la propia línea —un volcado de estado, una consulta, un
+recorrido—, porque en Delphi los argumentos se evalúan en la llamada, así que `LogDebug(Volcado)` paga
+`Volcado` aunque Debug esté apagado:
+
+```pascal
+if Log.IsEnabled(TLogLevel.Debug) then
+  Log.LogDebug('state = {State}', [VolcadoCaro]);
+```
+
+Un compuesto contesta que sí si **algún** destino escribiría; un destino que no sabe contesta que sí,
+porque perder una línea por no saber es peor que componer una de más. Es el `ILogger.IsEnabled` de
+`Microsoft.Extensions.Logging`.
 
 ---
 

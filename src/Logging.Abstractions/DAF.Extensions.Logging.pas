@@ -43,7 +43,9 @@ type
     FArgs: TArray<TValue>;
     FKeyValuePairs: TArray<TPair<string, TValue>>;
     FIsStructured: Boolean;
-    procedure ExtractKeyValuePairs;
+    FExtracted: Boolean;
+    procedure EnsureExtracted;
+    function GetKeyValuePairs: TArray<TPair<string, TValue>>;
   private
     function GetFormatter: TFormatter;
     class function StructuredFormat(State: TLogState; Ex: Exception): string; static;
@@ -53,7 +55,7 @@ type
     constructor Create(const Template: string; const Args: TArray<TValue> = nil);
     property Template: string read FTemplate;
     property Arguments: TArray<TValue> read FArgs;
-    property KeyValuePairs: TArray < TPair < string, TValue >> read FKeyValuePairs;
+    property KeyValuePairs: TArray < TPair < string, TValue >> read GetKeyValuePairs;
     property Formatter: TFormatter read GetFormatter;
     function TryGetValue(const Key: string; out Value: TValue): Boolean;
   end;
@@ -90,6 +92,11 @@ type
   end;
 
   ILogger = interface(IInvokable)
+    // La forma de .NET: contesta si una entrada de ese nivel llegaria a algun destino, para que el
+    // consumidor pueda saltarse la construccion de sus argumentos --que puede costar mas que la
+    // propia linea-- cuando la respuesta es que no. BREAKING: rompe a quien implemente ILogger sin
+    // heredar de TLogger.
+    function IsEnabled(const Level: TLogLevel): Boolean;
     function BeginScope(const Msg: string; const Args: TArray<TValue>; const ScopedProc: TProc = nil): ILogScopeVoid;overload;
     function BeginScope(const Msg: string; const ScopedProc: TProc = nil): ILogScopeVoid;overload;
     procedure Log(const Entry: TLogEntry); overload;
@@ -243,6 +250,7 @@ type
   TNullLogger = class(TInterfacedObject, ILogger)
   private
   public
+    function IsEnabled(const Level: TLogLevel): Boolean;
     function BeginScope(const Msg: string; const Args: TArray<TValue>; const ScopedProc: TProc = nil): ILogScopeVoid;overload;
     function BeginScope(const Msg: string; const ScopedProc: TProc = nil): ILogScopeVoid;overload;
     procedure Log(const Entry: TLogEntry); overload;
@@ -380,6 +388,93 @@ uses
   Daf.Types;
 
 type
+  // La cache de plantilla -> nombres. Las plantillas son literales del codigo, asi que el conjunto
+  // de plantillas distintas de un programa es pequeno y cerrado (D4): el regex corre una vez por
+  // plantilla en toda la vida del proceso, no una por linea ni una por hilo. Se cachea el RESULTADO
+  // del analisis, no el TRegEx: un threadvar con un tipo gestionado dentro no se finaliza al morir
+  // el hilo, y cada hilo que aparece y se va dejaria el suyo.
+  TTemplateNamesCache = class
+  strict private
+    FMap: TDictionary<string, TArray<string>>;
+    FLock: TObject;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    function NamesOf(const Template: string): TArray<string>;
+  end;
+
+const
+  // Techo de la cache. Una plantilla construida en tiempo de ejecucion es ya un antipatron del
+  // logging estructurado --el mensaje deja de ser agrupable--; pasado el techo se analiza sin
+  // cachear, en vez de dejar crecer la cache sin limite.
+  TemplateCacheLimit = 1024;
+
+var
+  GTemplateNames: TTemplateNamesCache = nil;
+
+// El analisis en si: los nombres que declara una plantilla, en orden. La clase de caracteres no
+// cambia (\w sin UCP es ASCII), asi que ninguna plantilla cambia de significado respecto a antes.
+function ParseTemplateNames(const Template: string): TArray<string>;
+begin
+  var Matches := TRegEx.Matches(Template, '\{(\w+)\}');
+  SetLength(Result, Matches.Count);
+  var I := 0;
+  for var Match in Matches do
+  begin
+    Result[I] := Match.Groups[1].Value;
+    Inc(I);
+  end;
+end;
+
+{ TTemplateNamesCache }
+
+constructor TTemplateNamesCache.Create;
+begin
+  inherited Create;
+  FMap := TDictionary<string, TArray<string>>.Create;
+  FLock := TObject.Create;
+end;
+
+destructor TTemplateNamesCache.Destroy;
+begin
+  FMap.Free;
+  FLock.Free;
+  inherited;
+end;
+
+function TTemplateNamesCache.NamesOf(const Template: string): TArray<string>;
+begin
+  TMonitor.Enter(FLock);
+  try
+    if FMap.TryGetValue(Template, Result) then Exit;
+  finally
+    TMonitor.Exit(FLock);
+  end;
+  // El regex --lo caro-- corre FUERA del cerrojo: sostenerlo mientras se compila serializaria todo
+  // el logging. Dos hilos que lleguen a la vez con la misma plantilla la analizan los dos una vez;
+  // el resultado es el mismo y el segundo pisa al primero sin dano.
+  Result := ParseTemplateNames(Template);
+  TMonitor.Enter(FLock);
+  try
+    if FMap.Count < TemplateCacheLimit then
+      FMap.AddOrSetValue(Template, Result);
+  finally
+    TMonitor.Exit(FLock);
+  end;
+end;
+
+// El registro puede no existir todavia si alguien informa desde la initialization de una unit
+// anterior --el canal de arranque lo hace--: en ese hueco se analiza sin cachear en vez de lanzar.
+function TemplateNames(const Template: string): TArray<string>;
+begin
+  if Assigned(GTemplateNames) then
+    Result := GTemplateNames.NamesOf(Template)
+  else
+    Result := ParseTemplateNames(Template);
+end;
+
+
+type
   // El logger del canal de arranque. No se expone: la unica via de obtener uno es
   // BootstrapLog.LoggerFor, que toma la categoria de quien informa -- tambien cuando quien
   // informa es DAF.
@@ -388,6 +483,7 @@ type
     FCategory: string;
   public
     constructor Create(const Category: string);
+    function IsEnabled(const Level: TLogLevel): Boolean;
     function BeginScope(const Msg: string; const Args: TArray<TValue>; const ScopedProc: TProc = nil): ILogScopeVoid; overload;
     function BeginScope(const Msg: string; const ScopedProc: TProc = nil): ILogScopeVoid; overload;
     procedure Log(const Entry: TLogEntry); overload;
@@ -481,24 +577,33 @@ begin
   FTemplate := Template;
   FArgs := Args;
   FIsStructured := FTemplate.Contains('{');
-  ExtractKeyValuePairs;
+  FExtracted := False;
+  FKeyValuePairs := nil;
+  // El analisis de la plantilla ya NO corre aqui: se aplaza al primer lector (GetKeyValuePairs), asi
+  // una linea que ningun destino acepta nunca lo paga. El TRegEx era el 97% del coste por linea.
 end;
 
-procedure TLogState.ExtractKeyValuePairs;
+// Memoizado por instancia: se calcula una vez, al primer lector, y se guarda. Si esta memoizacion
+// se rompe --que una segunda lectura devuelva vacio-- el spec de equivalencia tiene que caer.
+procedure TLogState.EnsureExtracted;
 begin
-  var
-  Matches := TRegEx.Matches(FTemplate, '\{(\w+)\}');
-  SetLength(FKeyValuePairs, Matches.Count);
-  var
-  I := 0;
-  for var Match in Matches do
-  begin
+  if FExtracted then Exit;
+  FExtracted := True;
+  var Names := TemplateNames(FTemplate);
+  SetLength(FKeyValuePairs, Length(Names));
+  var I := 0;
+  for var Name in Names do
     if I <= High(FArgs) then
     begin
-      FKeyValuePairs[I] := TPair<string, TValue>.Create(Match.Groups[1].Value, FArgs[I]);
+      FKeyValuePairs[I] := TPair<string, TValue>.Create(Name, FArgs[I]);
       Inc(I);
     end;
-  end;
+end;
+
+function TLogState.GetKeyValuePairs: TArray<TPair<string, TValue>>;
+begin
+  EnsureExtracted;
+  Result := FKeyValuePairs;
 end;
 
 function TLogState.GetFormatter: TLogState.TFormatter;
@@ -537,6 +642,7 @@ function TLogState.TryGetValue(const Key: string; out Value: TValue): Boolean;
 var
   Pair: TPair<string, TValue>;
 begin
+  EnsureExtracted;
   for Pair in FKeyValuePairs do
     if SameText(Pair.Key, Key) then
     begin
@@ -584,6 +690,13 @@ begin
 end;
 
 { TNullLogger }
+
+function TNullLogger.IsEnabled(const Level: TLogLevel): Boolean;
+begin
+  // El silencio declarado: quien pide este logger no quiere que se componga nada. Contesta que no,
+  // y asi la puerta de TCompositeLogger se cierra sin construir la entrada (D6).
+  Result := False;
+end;
 
 function TNullLogger.BeginScope(const Msg: string;
   const ScopedProc: TProc): ILogScopeVoid;
@@ -978,6 +1091,13 @@ end;
 
 { TBootstrapLogger }
 
+function TBootstrapLogger.IsEnabled(const Level: TLogLevel): Boolean;
+begin
+  // El canal de arranque es el backstop cuando aun no hay pipeline: contesta que si para no
+  // descartar nunca por no saber. El umbral (Warning y por encima) lo aplica su propio Log.
+  Result := True;
+end;
+
 constructor TBootstrapLogger.Create(const Category: string);
 begin
   inherited Create;
@@ -1130,6 +1250,7 @@ begin
 end;
 
 initialization
+  GTemplateNames := TTemplateNamesCache.Create;
   BootstrapSinkLock := TObject.Create;
   BootstrapSinkList := TList<TBootstrapSinkEntry>.Create;
   // Los dos destinos que DAF trae: ninguno elige donde escribe. El duradero
@@ -1140,4 +1261,5 @@ initialization
 finalization
   FreeAndNil(BootstrapSinkList);
   FreeAndNil(BootstrapSinkLock);
+  FreeAndNil(GTemplateNames);
 end.

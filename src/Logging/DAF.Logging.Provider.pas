@@ -18,6 +18,7 @@ type
   public
     constructor Create(const Category: string; const Loggers: TArray<ILogger>);
     destructor Destroy;override;
+    function IsEnabled(const Level: TLogLevel): Boolean; override;
     procedure Log(const Entry: TLogEntry);override;
   end;
 
@@ -50,6 +51,17 @@ destructor TCompositeLogger.Destroy;
 begin
   FLock.Free;
   inherited;
+end;
+
+function TCompositeLogger.IsEnabled(const Level: TLogLevel): Boolean;
+begin
+  // Si si ALGUNO de sus destinos escribiria (D3). Un destino que no sabe contestar contesta que si
+  // por su cuenta --su IsEnabled devuelve True--, asi que "no se" cuenta como "si" sin un caso
+  // especial aqui: perder una linea por no saber es peor que componer una de mas.
+  for var Logger in FLoggers do
+    if Logger.IsEnabled(Level) then
+      Exit(True);
+  Result := False;
 end;
 
 procedure TCompositeLogger.Log(const Entry: TLogEntry);

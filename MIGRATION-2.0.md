@@ -200,6 +200,20 @@ there is one line less in `requires`.
   is what will tell you.
 - Startup reports go out under the category of the class reporting, through the `ILogger` pipeline.
   That is not API, it is output: if you filtered on the `DAF` category, revisit the filter.
+- **`ILogger` gained `IsEnabled(Level)`, and this one breaks at compile time.** A logger now answers
+  whether an entry of a given level would reach any destination, so a caller can skip building
+  arguments that cost more than the line itself — a state dump, a query. A `TLogger`
+  descendant inherits a default that answers `True`, so a logging provider written outside DAF keeps
+  compiling untouched; only a type that implements `ILogger` **by hand** has to add it. Answer
+  `True` if in doubt — dropping a line by not knowing is worse than composing one too many:
+
+  ```pascal
+  // add to any hand-written ILogger implementer
+  function TMyLogger.IsEnabled(const Level: TLogLevel): Boolean;
+  begin
+    Result := True;  // or your own level test, matching what Log actually writes
+  end;
+  ```
 
 ### 7. A closed container no longer answers
 
