@@ -222,7 +222,7 @@ type
   // paquete .Abstractions no puede requerir uno concreto: es la invariante que el verificador
   // de paquetes falla, y esa si es compuerta de CI.
   // La implementacion --TLoggingBuilder--, el error de composicion y AddLogging se quedan en
-  // Daf.Logging: lo que sube es el contrato, no la fontaneria.
+  // Daf.Logging
   ILoggingBuilder = interface(IInvokable)
     ['{F989B61A-8A02-4C1C-AF3D-DA94CF097B1C}']
     procedure AddProvider(const Provider: ILoggerProvider);
@@ -373,9 +373,7 @@ type
 
 /// <summary>
 ///   La categoria de un tipo: su unit y su nombre. Vive aqui, en una sola funcion, porque es
-///   la regla que decide bajo que nombre aparece lo que escribe un servicio -- y la escribian
-///   por su cuenta las dos factorias y, en cuanto ILogger&lt;T&gt; resucito, tambien el
-///   reenviador. Tres copias de una regla es tres redacciones de la misma categoria.
+///   la regla que decide bajo que nombre aparece lo que escribe un servicio
 /// </summary>
 function LogCategoryOf(const AType: PTypeInfo): string;
 
@@ -413,7 +411,7 @@ var
   GTemplateNames: TTemplateNamesCache = nil;
 
 // El analisis en si: los nombres que declara una plantilla, en orden. La clase de caracteres no
-// cambia (\w sin UCP es ASCII), asi que ninguna plantilla cambia de significado respecto a antes.
+// cambia (\w sin UCP es ASCII)
 function ParseTemplateNames(const Template: string): TArray<string>;
 begin
   var Matches := TRegEx.Matches(Template, '\{(\w+)\}');
@@ -579,8 +577,8 @@ begin
   FIsStructured := FTemplate.Contains('{');
   FExtracted := False;
   FKeyValuePairs := nil;
-  // El analisis de la plantilla ya NO corre aqui: se aplaza al primer lector (GetKeyValuePairs), asi
-  // una linea que ningun destino acepta nunca lo paga. El TRegEx era el 97% del coste por linea.
+  // El analisis de la plantilla se aplaza al primer lector (GetKeyValuePairs), asi
+  // una linea que ningun destino acepta nunca lo paga.
 end;
 
 // Memoizado por instancia: se calcula una vez, al primer lector, y se guarda. Si esta memoizacion
@@ -1118,9 +1116,7 @@ end;
 procedure TBootstrapLogger.Log(const Entry: TLogEntry);
 begin
   // Filtrar aqui; formatear y repartir, en el canal. El umbral se queda --el arranque no es sitio
-  // para charla de depuracion, y un canal que escribe siempre acaba ignorado--; el filtro por
-  // categoria se fue: era lo que cerraba el canal a la aplicacion, y no descartaba nada, porque la
-  // unica instancia que existia tenia la categoria fija a 'DAF'.
+  // para charla de depuracion, y un canal que escribe siempre acaba ignorado--
   if not (Entry.Level in [TLogLevel.Warning, TLogLevel.Error, TLogLevel.Critical]) then Exit;
   BootstrapLog.Write(BootstrapLog.FormatLine(Entry));
 end;
