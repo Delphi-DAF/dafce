@@ -3,7 +3,7 @@
 {$SCOPEDENUMS ON}
 
 {
-  Shared WHERE-tree normalizer (Decision 13). Turns a flat WHERE clause list —
+  Shared WHERE-tree normalizer. Turns a flat WHERE clause list —
   where each clause carries a Connector (AND/OR) joining it with the previous —
   into a precedence-correct boolean tree, applying SQL operator precedence:
   consecutive AND runs are grouped, then those groups are OR-ed. Nested groups
