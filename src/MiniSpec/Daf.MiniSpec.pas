@@ -243,7 +243,6 @@ begin
     NewSuite.BeforeHooks.Add(Hook);
   for var Hook in OldSuite.AfterHooks do
     NewSuite.AfterHooks.Add(Hook);
-  // Reemplazar suite
   FSuite := NewSuite;
 end;
 

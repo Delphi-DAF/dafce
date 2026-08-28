@@ -37,5 +37,4 @@ begin
       end)
     .Run;
 
-  //Assert(SuiteAfterHookCalled, 'Suite After hook was not called');
 end.
