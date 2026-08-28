@@ -140,9 +140,8 @@ begin
   var Builder := THostBuilder.Create;
   var Owner: IHostApplicationBuilder := Builder;
   try
-    // El fichero se abre AQUI, al anadir la fuente, y ya no dentro de Build: en el estilo
-    // inmediato la fuente se carga cuando se anade. El try envuelve la composicion entera
-    // porque el fallo se ha mudado con ella.
+    // El fichero se abre AQUI, al anadir la fuente: en el estilo
+    // inmediato la fuente se carga cuando se anade.
     JsonConfig.AddFile(Builder.Configuration, FileName);
     Host := Builder.Build;
   except
@@ -211,8 +210,6 @@ Feature The startup report changes hands when the provider exists @hosting @boot
       begin
         // La categoria dice quien y el mensaje dice que, igual que al otro lado del relevo: no hay
         // atajo global con la categoria del framework ya clavada.
-        // Y quien informa ya no es el componedor del host sino quien abre el fichero, porque ahi
-        // es donde ocurre: en el estilo inmediato una fuente se carga al anadirla, no al construir.
         Expect(TProbe.Bootstrap).ToContain('] TConfigurationManager |');
         Expect(TProbe.Bootstrap).ToContain('a configuration source could not be added');
       end)
