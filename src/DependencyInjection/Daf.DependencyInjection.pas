@@ -73,9 +73,8 @@ type
     FScopeFactory: TServiceScopeFactory;
     [Weak]
     FServiceCollection: IServiceCollectionImpl;
-    // Ordenado a proposito, y sigue siendolo: CollectGarbage lo recorre de atras hacia
-    // delante para liberar en orden inverso al de creacion. Lo que cambio aqui es la
-    // clave, no la estructura.
+    // Ordenado a proposito: CollectGarbage lo recorre de atras hacia
+    // delante para liberar en orden inverso al de creacion.
     FServiceInstances : TOrderedDictionary<TServiceIdentity, IInterface>;
     FCreatingSingletons: TStack<TServiceDescriptor>;
     FIsSingletonsScope: Boolean;
@@ -557,13 +556,9 @@ begin
     begin
       // ValueList[idx] hands back the IInterface BY VALUE, so the compiler emits an
       // _AddRef for the temporary AND the matching _Release when that temporary dies.
-      // Calling _Release on it was therefore one release the scope never took: every
-      // entry visited lost a count it never gained, and the Clear below then dropped
-      // the one the scope did hold -- so a service referenced once by the scope was
-      // released twice and destroyed while its caller was still using it.
       // Reading into a local and restoring the count keeps the read balanced. The
       // threshold does not move: with the local alive the count is dictionary + local
-      // = 2, and _Release leaves it at 1, exactly as before. The local also keeps the
+      // = 2, and _Release leaves it at 1. The local also keeps the
       // entry alive across the Delete below, so the last reference can no longer drop
       // while the dictionary is still holding it.
       var Svc: IInterface := FServiceInstances.ValueList[idx];
