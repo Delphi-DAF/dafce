@@ -139,7 +139,6 @@ end;
 
 class function TNNLogLoader.Load(const Config: IConfiguration): TNNLogConfiguration;
 begin
-//  Dump('NNlog config', Config);
   Result := TConfigurationBinder.Bind<TNNLogConfiguration>(Config, '', boFields);
 end;
 
