@@ -626,7 +626,7 @@ begin
   Result := FSources.ContainsKey(LowerCase(Name));
 end;
 
-{ multi-source engine (Phase 3A: FROM + JOINs) }
+{ multi-source engine: FROM + JOINs }
 
 // Fail-fast on the multi-source features not yet handled by this lane.
 procedure EnsureMultiSupported(const Clauses: TArray<TAbstractClause>);
@@ -1070,7 +1070,7 @@ begin
     end).AsEnumerable;
 end;
 
-{ set operations (Phase 3C) — row equality by output columns, NULLs equal }
+{ set operations — row equality by output columns, NULLs equal }
 
 function DedupRows(const Rows: TArray<IRow>; const Cmp: IEqualityComparer<IRow>): TArray<IRow>;
 begin

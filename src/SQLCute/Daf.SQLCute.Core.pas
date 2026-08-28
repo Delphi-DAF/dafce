@@ -99,7 +99,7 @@ type
     function Clone: IQuery;
     function Compile(const Compiler: IQueryCompiler): TSQLResult;
     function Clauses: TArray<TAbstractClause>;
-    // IQuery — Phase 2
+    // IQuery
     function Join(const Table, Col1, Col2: string; const Op: string = '='): IQuery; overload;
     function Join(const Table, Condition: string): IQuery; overload;
     function Join(const Table: string; const Callback: TQueryBuilderCallback): IQuery; overload;

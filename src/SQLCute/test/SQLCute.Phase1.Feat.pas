@@ -1,7 +1,7 @@
 ﻿unit SQLCute.Phase1.Feat;
 
 {
-  TQuery: Fase 1 — Set operations (IntersectAll, ExceptAll, CombineRaw),
+  TQuery: Set operations (IntersectAll, ExceptAll, CombineRaw),
           paginación (ForPage, Take, Skip) y JOIN con operador personalizado.
 }
 

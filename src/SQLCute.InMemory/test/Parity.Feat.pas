@@ -1,7 +1,7 @@
 ﻿unit Parity.Feat;
 
 {
-  Phase 4 — the symmetry harness. One shared query set is pushed through every
+  The symmetry harness. One shared query set is pushed through every
   back-end over one seeded dataset, and every lane must agree:
 
     * SQL lane          — TAnsiSqlCompiler.Compile: the query must compile to

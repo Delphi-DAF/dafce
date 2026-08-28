@@ -1,7 +1,7 @@
 ﻿unit Projection.Feat;
 
 {
-  Phase 2 — row model + typed projection. Exercises IRow / TRttiRow / TDictRow
+  Row model + typed projection. Exercises IRow / TRttiRow / TDictRow
   and qualified-name resolution; the SELECT projection lanes (preserve T vs
   IEnumerable<IRow> vs materialize into a result class); and NULL -> TNullable
   materialization (three-valued NULL surfacing in the output).

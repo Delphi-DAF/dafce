@@ -1,7 +1,7 @@
 ﻿unit Context.Feat;
 
 {
-  Phase 3A — the general multi-source lane. A per-call IQueryContext maps table
+  The general multi-source lane. A per-call IQueryContext maps table
   names to sources; the compiler resolves FROM / JOIN against it and combines
   sides into TJoinRow composites (qualified names). Covers name mapping, INNER
   and LEFT joins on a column condition, and fail-fast on an unmapped name.
