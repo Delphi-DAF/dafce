@@ -444,7 +444,7 @@ function ParseWhereOp(const Op: string): TWhereOp;
 implementation
 
 uses
-  System.StrUtils;   // IndexText
+  System.StrUtils;
 
 { TSQLResult }
 
@@ -467,18 +467,6 @@ begin
 end;
 
 { ParseWhereOp }
-
-// La tabla de operadores, en dos constantes que se leen como clave-valor. Los VALORES van
-// primero y las claves declaran su rango como Low(..)..High(..) de aquellos: asi un descuadre
-// de longitud lo caza el COMPILADOR --E2072, nombrando las dos cifras-- en vez de quedar para
-// un range check en ejecucion. Medido antes de escribirlo.
-//
-// Lo que el compilador NO puede ver es el emparejamiento: dos tablas de la misma longitud mal
-// alineadas compilan y devuelven el operador equivocado en silencio. Eso lo vigila
-// SQLCute.Operators.Feat, que fija las once entradas una a una.
-//
-// El rango arranca en 0 a proposito: IndexText devuelve un indice 0-based del array abierto,
-// asi que con otro limite inferior habria que escribir WhereOpValues[Low(..) + I].
 const
   WhereOpValues: array[0..10] of TWhereOp = (
     TWhereOp.Equal, TWhereOp.NotEqual, TWhereOp.NotEqual, TWhereOp.Less, TWhereOp.LessOrEqual,
@@ -490,8 +478,6 @@ const
 
 function ParseWhereOp(const Op: string): TWhereOp;
 begin
-  // IndexText no distingue mayusculas, que es lo que hacia SameText para los operadores de
-  // palabra; a los simbolicos les da igual, porque no tienen caso.
   var I := IndexText(Trim(Op), WhereOpNames);
   if I < 0 then
     raise EArgumentException.CreateFmt('Unknown SQL operator: "%s"', [Op]);
