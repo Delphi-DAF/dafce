@@ -3,10 +3,6 @@
 {
   La costura entre el patron de opciones y la configuracion.
 
-  Las dos piezas ya existian: el lector de configuracion sabe convertir una seccion en un objeto,
-  y el contenedor sabe gestionar vidas. Unirlas era, hasta ahora, trabajo de cada aplicacion,
-  escrito dentro de una lambda que acababa en Free y repetido en cada servicio.
-
   Vive en el modulo de configuracion --y no junto al contrato-- porque es la mitad del patron que
   SI conoce de donde salen los valores. Es la separacion que en .NET marcan
   Microsoft.Extensions.Options y ...Options.ConfigurationExtensions, aqui sin paquete nuevo: lo

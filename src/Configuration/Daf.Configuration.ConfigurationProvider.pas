@@ -10,7 +10,6 @@ uses
 type
   TConfigurationProvider = class(TInterfacedObject, IConfigurationProvider)
   private
-    //_reloadToken: TConfigurationReloadToken;
     FData: TDictionary<string, string>;
   class function Segment(const Key: string; const PrefixLength: Integer): string;
   public
@@ -79,7 +78,6 @@ uses
 constructor TConfigurationProvider.Create;
 begin
   inherited;
-  //_reloadToken := TConfigurationReloadToken.Create;
   FData := TDictionary<string, string>.Create(TIStringComparer.Ordinal);
 end;
 

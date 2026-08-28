@@ -9,8 +9,7 @@
   convierte bien un entero.
 
   Y hay un escenario que afirma lo contrario de lo que espera quien viene de .NET: el valor es una
-  FOTO. Cambiar la configuracion despues de haberlo leido no lo cambia. Eso no se puede dejar sin
-  decir, asi que va escrito con su control de que la configuracion cambio de verdad.
+  FOTO. Cambiar la configuracion despues de haberlo leido no lo cambia.
 }
 
 interface

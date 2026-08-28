@@ -30,7 +30,6 @@ type
     constructor Create(const Source: TChainedConfigurationSource);
     function TryGet(const Key: string; out Value: string): Boolean;
     function GetChildKeys(const EarlierKeys: IEnumerable<string>; const ParentPath: string): IEnumerable<string>;
-    //function GetReloadToken: IChangeToken;
     procedure Load;
     procedure &Set(const Key, Value: string);
     property Configuration: IConfiguration read FConfiguration;
