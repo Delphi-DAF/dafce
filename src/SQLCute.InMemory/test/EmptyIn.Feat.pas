@@ -7,7 +7,7 @@
 
   The discriminator in every scenario below is the row whose column is NULL. A
   rule that reads the column answers Unknown for that row and drops it from IN
-  and from NOT IN alike, which is exactly how the two back-ends used to disagree.
+  and from NOT IN alike.
   The group the builder substitutes — (col IS NULL AND col IS NOT NULL) — is made
   of the only two predicates in the model that never answer Unknown, so the NULL
   row is decided like any other.

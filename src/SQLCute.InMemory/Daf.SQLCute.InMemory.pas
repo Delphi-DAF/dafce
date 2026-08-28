@@ -19,8 +19,7 @@
 
   Depends on Daf.Linq (the sequence engine), Daf.SQLCute (the AST), the shared
   non-generic core (Daf.SQLCute.InMemory.Compiler) and the row model
-  (Daf.SQLCute.InMemory.Rows), plus Commons (Daf.Comparers). The IQueryContext,
-  TJoinRow and set/aggregate machinery arrive in Phase 3.
+  (Daf.SQLCute.InMemory.Rows), plus Commons (Daf.Comparers).
 }
 
 interface
