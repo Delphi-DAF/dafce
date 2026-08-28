@@ -76,8 +76,8 @@ type
 const
   /// <summary>
   ///   The model's comparison operators mapped onto SQLCute's. This table is the
-  ///   entire price of the model keeping its own enum (Decision 6) — and it is a
-  ///   table, not a traversal, so Principle 3 has nothing to object to.
+  ///   entire price of the model keeping its own enum — and it is a
+  ///   table, not a traversal.
   /// </summary>
   /// <remarks>
   ///   Three operators collapse onto <c>Like</c> because that is genuinely what
