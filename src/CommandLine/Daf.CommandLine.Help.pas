@@ -8,9 +8,6 @@
   as text is documentation NEXT TO the code instead of derived FROM it, so it goes
   stale the moment somebody adds an option and forgets it -- and the mismatch breaks
   nothing, it only lies to whoever asked.
-
-  The withdrawn Daf.CmdLn did store a help string per argument, and nothing ever read it.
-  Declared, and never reaching any output.
 }
 
 interface

@@ -198,7 +198,7 @@ Feature Command line tokenizing @commandline @tokens
     .&Then('it stays the single token it was written as',
       procedure(W: TTokensWorld)
       begin
-        // This is the escape hatch every form this change adds relies on: whatever a
+        // This is the escape hatch: whatever a
         // new reading takes away, `--` gives back.
         Expect(W.Report).ToEqual('[-- -fdx]');
       end)

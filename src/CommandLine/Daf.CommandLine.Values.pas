@@ -3,12 +3,6 @@
 {
   The value engine.
 
-  It is written from scratch rather than carried over from Daf.CmdLn, and the two
-  measured defects of that one say why. There an Integer was described by the regular
-  expression \d+ and the match was anchored only at the start, so -5 could not be
-  passed at all and --port 80xyz was accepted as the value 80: a number invented out
-  of an invalid invocation, which is worse than refusing it.
-
   Here a conversion consumes the WHOLE token or fails. Nothing is anchored by hand,
   because nothing is matched by pattern: TryStrToInt and TryStrToFloat already answer
   "does this entire string denote one value", which is the question that was being

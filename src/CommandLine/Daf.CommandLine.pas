@@ -6,8 +6,8 @@
 
   The one divergence that shows in every call is how a value is read. In .NET you
   write result.GetValue(fileOption). Here you write FileOption.ValueIn(Parsed): the
-  object asks the result, not the result the object. It was measured, not assumed
-  (design D2, 2026-08-24): an interface cannot declare a generic method at all --
+  object asks the result, not the result the object.
+  (design D2): an interface cannot declare a generic method at all --
   E2535 -- and even on a class Delphi will not infer T through an IOption<T>
   parameter -- E2010. Writing it the .NET way would mean giving up counted
   interfaces AND spelling the type out by hand, which is the repetition this module
@@ -53,8 +53,7 @@ type
   ///   It runs INSIDE the parse, so its refusal comes out through <c>Errors</c> like any
   ///   other invocation error (design D3). Validating afterwards moves the failure to
   ///   where it can no longer be reported next to the rest, and the tool ends up with two
-  ///   ways of saying that an invocation was wrong -- which is the same displacement the
-  ///   parked module made with the help text.
+  ///   ways of saying that an invocation was wrong.
   ///
   ///   A validation should be a pure question about the value.
   ///   <c>AcceptExistingOnly</c> is the conscious exception: it asks the file system.
@@ -354,9 +353,7 @@ type
 
   // The classes below are declared here rather than in the implementation section on
   // purpose: a parameterized method may not name a symbol local to implementation
-  // (E2506), and the CommandLine facade below reaches them from generic methods. It
-  // has already cost this repo twice -- TGrouping in Daf.Linq, ResolvedMemberName in
-  // Specification -- so it is planned for instead of discovered at compile time.
+  // (E2506), and the CommandLine facade below reaches them from generic methods.
 
   TSymbol = class(TInterfacedObject, ISymbol)
   private
@@ -774,7 +771,7 @@ begin
       'value: declare it on the element type instead', [AName]);
   // The check stays at DECLARATION, which is where it is worth something, and that is
   // why the conversion is taken at declaration too: a symbol either knows how to convert
-  // its type or it is refused on the spot. What changed is that "the engine does not know
+  // its type or it is refused on the spot. "the engine does not know
   // this type" is no longer the end of the conversation (design D2).
   if not Assigned(FParser) and not TCommandLineValue.Handles(FTypeInfo) then
     raise ECommandLine.CreateFmt('Symbol "%s" is declared with a type the command line cannot convert: %s. ' +

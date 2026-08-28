@@ -4,7 +4,7 @@
   The tokenizer, kept apart from the grammar on purpose (design D1).
 
   Deciding WHAT A TOKEN IS and deciding WHICH COMMAND OR OPTION IT REACHES are two
-  jobs, and the parse loop used to do both at once. Every extra way of writing an
+  jobs. Every extra way of writing an
   invocation -- the : delimiter, an alias glued to its value, a bundle of short
   options, the Windows / prefix -- takes a reading away from another, and doing that
   inside the parse loop would make the order of its ifs the semantics without anybody
@@ -13,8 +13,6 @@
   So this unit answers only the first question. It turns a token into the canonical
   form the parser already understands -- long name, = for an inline value -- and it
   can be exercised with no grammar at all: a list of tokens in, a list of tokens out.
-  If the rewriting is right, nothing that already worked changes, and that is the only
-  reason this change is reviewable.
 }
 
 interface
@@ -187,8 +185,7 @@ begin
     Exit;
 
   // A token that already names something declared is left exactly as written. Every
-  // rewriting below fires only for one that does not, which is what keeps a form this
-  // change adds from taking the place of one that already worked (design D2, D3).
+  // rewriting below fires only for one that does not (design D2, D3).
   if Known.Knows(Token) then
     Exit;
 
