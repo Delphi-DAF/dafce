@@ -89,6 +89,17 @@ TQuery.New.From('sesiones')
   .AsDelete;
 ```
 
+Una consulta **declara** qué sentencia es: lo fijan las fachadas de DML, y lo lees con
+`Query.Kind` (`Select` por defecto). Los back-ends lo consultan, en vez de deducirlo de
+qué cláusulas hay. Declarar dos tipos distintos en la misma consulta se queda con el
+**último** y retira las cláusulas del tipo descartado — igual que una llamada posterior
+de una cadena fluida anula a la anterior:
+
+```pascal
+TQuery.New.From('users').AsInsert(['name'], ['Ann']).AsDelete;
+// Kind es Delete, la inserción ya no está — compila DELETE FROM users
+```
+
 ### Compilador de dialecto
 
 ```pascal

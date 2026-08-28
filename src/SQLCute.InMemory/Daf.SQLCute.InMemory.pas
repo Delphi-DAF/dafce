@@ -630,9 +630,16 @@ end;
 { multi-source engine (Phase 3A: FROM + JOINs) }
 
 // Fail-fast on the multi-source features not yet handled by this lane.
-procedure EnsureMultiSupported(const Clauses: TArray<TAbstractClause>);
+procedure EnsureMultiSupported(const Query: IQuery);
 begin
-  for var C in Clauses do
+  // Read-only by declared kind, naming the statement — same whitelist-of-one as
+  // the single-source lane, so a future statement kind is covered without a
+  // clause-by-clause blacklist to remember.
+  if Query.Kind <> TQueryKind.Select then
+    raise EInMemoryQueryError.CreateFmt(
+      'The in-memory backend is read-only; it cannot execute a %s statement.',
+      [QueryKindName(Query.Kind)]);
+  for var C in Query.Clauses do
   begin
     if C is TJoinSubqueryClause then
       raise EInMemoryQueryError.Create('Subquery JOINs are not supported by the in-memory backend.');
@@ -640,8 +647,6 @@ begin
       raise EInMemoryQueryError.Create('Derived-table / raw FROM sources require Phase 3C.');
     if C is TWithClause then
       raise EInMemoryQueryError.Create('CTEs (WITH) are not supported by the in-memory backend.');
-    if (C is TInsertClause) or (C is TUpdateSetClause) or (C is TDeleteClause) then
-      raise EInMemoryQueryError.Create('The in-memory backend is read-only; DML stays SQL-only.');
   end;
 end;
 
@@ -997,7 +1002,7 @@ function ExecuteMultiCore(const Query: IQuery; const Context: IQueryContext;
   out Proj: TArray<TProjColumn>): IEnumerable<IRow>;
 begin
   var Clauses := Query.Clauses;
-  EnsureMultiSupported(Clauses);
+  EnsureMultiSupported(Query);
 
   var FromCl: TFromClause := nil;
   for var C in Clauses do

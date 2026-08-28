@@ -89,6 +89,17 @@ TQuery.New.From('sessions')
   .AsDelete;
 ```
 
+A query **declares** which statement it is: the DML facades set it, and you read it
+back with `Query.Kind` (`Select` by default). Back-ends consult that, rather than
+guessing from which clauses are present. Declaring two different kinds on one query
+keeps the **last** one and drops the losing kind's clauses — the way a later call in a
+fluent chain overrides the earlier one:
+
+```pascal
+TQuery.New.From('users').AsInsert(['name'], ['Ann']).AsDelete;
+// Kind is Delete, the INSERT is gone — compiles DELETE FROM users
+```
+
 ### Dialect compiler
 
 ```pascal
