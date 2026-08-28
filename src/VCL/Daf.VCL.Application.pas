@@ -96,8 +96,7 @@ type
 /// </summary>
 /// <remarks>
 ///   <b>El nombre no es Application, y el choque no es hipotetico:</b> en el mismo .dpr conviven
-///   este y el de la VCL, y hasta hoy habia un sample del propio modulo de aplicacion escribiendo
-///   <c>Application.Run</c> refiriendose al de la VCL. <b>La via preferente sigue siendo la
+///   este y el de la VCL. <b>La via preferente sigue siendo la
 ///   inyeccion:</b> esto es para el codigo de formulario que la plataforma construye por su
 ///   cuenta y al que nadie le puede inyectar nada.
 /// </remarks>
