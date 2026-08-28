@@ -208,8 +208,8 @@ Feature Reading a closed generic type @commons @rtti @generics
       end)
 
   .Scenario('The same code over a real closure still builds its own')
-    // Sin este caso la escena de arriba pasaria con un marcador que rompiese SIEMPRE, y lo
-    // que hay que probar es que solo rompe donde no habia nada que construir.
+    // Un marcador que rompiese siempre pasaria igual el escenario anterior; este fija que solo
+    // rompe donde no hay nada que construir, no sobre un cierre real.
     .When('the same generic is instantiated over a real class',
       procedure(W: TRttiWorld)
       begin
