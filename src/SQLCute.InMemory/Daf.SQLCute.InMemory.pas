@@ -9,7 +9,7 @@
     * TRttiAccessors<T> — cached (column -> member) RTTI accessors producing the
       TColumnGetter the non-generic predicate/comparers consume (fast lane).
     * TRttiRow<T> — a zero-copy IRow view over an object/record T, reusing the
-      accessors (general lane, Decision 4).
+      accessors (general lane).
     * TResultWriter<TResult> — the RTTI materializer IRow -> TResult (column/alias
       -> member, TValue coercion, TNullable via its Implicit operator).
     * TInMemoryPlan<T> / TInMemory — the reusable plan and the façade:
@@ -120,7 +120,7 @@ type
   end;
 
   /// <summary>
-  ///   Per-call catalog mapping source names to row sequences (Decision 6 — never
+  ///   Per-call catalog mapping source names to row sequences (never
   ///   global). Supplied at execution time for the general multi-source lane.
   /// </summary>
   IQueryContext = interface
@@ -461,7 +461,7 @@ function TInMemoryPlan<T>.DistinctComparer: IEqualityComparer<T>;
 begin
   var Acc := FAccessors;
   var Cols := Acc.AllColumns;
-  var VE := TValueComparers.Equality;   // NULLs equal (Decision 10)
+  var VE := TValueComparers.Equality;   // NULLs equal
   Result := TEqualityComparer<T>.Construct(
     function(const A, B: T): Boolean
     begin
@@ -773,7 +773,7 @@ begin
   end;
 end;
 
-{ GROUP BY / aggregates / HAVING (Phase 3B, Decision 11) }
+{ GROUP BY / aggregates / HAVING }
 
 function AsNumber(const V: TValue): Double;
 begin
@@ -874,7 +874,7 @@ end;
 
 // Groups rows by the GROUP BY columns, computes aggregates over each group's
 // members, applies HAVING, and emits one flat row per surviving group.
-// The hybrid of Decision 11: Daf.Linq does the grouping (key + members, its own
+// The hybrid: Daf.Linq does the grouping (key + members, its own
 // general-purpose shape) and this compiler layers SQL's flat aggregate row on
 // top — the SQL shape is not baked into the sequence library.
 function GroupAndAggregate(const Rows: TArray<IRow>; const C: TCompiledQuery): TArray<IRow>;

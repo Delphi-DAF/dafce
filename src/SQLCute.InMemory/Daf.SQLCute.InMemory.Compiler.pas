@@ -10,14 +10,14 @@
   The compiler:
     * fails fast when the query actually needs more than one source (JOIN,
       subquery, set operation, derived FROM) or a reshape the fast lane cannot
-      express (SELECT projection, GROUP BY/HAVING) — Decision 5;
+      express (SELECT projection, GROUP BY/HAVING);
     * builds the WHERE predicate from the SHARED Daf.SQLCute.WhereTree, so
-      AND/OR precedence matches the SQL backend by construction (Decision 13);
-    * evaluates comparisons with full ANSI three-valued logic (Decision 10):
+      AND/OR precedence matches the SQL backend by construction;
+    * evaluates comparisons with full ANSI three-valued logic:
       a comparison touching NULL is Unknown, not False; a row is kept only when
       the predicate is True.
 
-  Values are the TValue currency (Decision 3): SQLCute's Variant bindings are
+  Values are the TValue currency: SQLCute's Variant bindings are
   converted to TValue once, here at compile time, never per row. The generic
   half (Daf.SQLCute.InMemory) supplies a TColumnGetter over T via cached RTTI,
   so this unit knows nothing about the element type.
@@ -37,7 +37,7 @@ type
   /// <summary>Raised when a query cannot run on the single-source fast lane.</summary>
   EInMemoryQueryError = class(Exception);
 
-  /// <summary>SQL three-valued logic result (Decision 10).</summary>
+  /// <summary>SQL three-valued logic result.</summary>
   TTriState = (Unknown, No, Yes);
 
   /// <summary>Reads a (possibly qualified) column's value for the current element.</summary>
@@ -70,7 +70,7 @@ type
     Output: string;   // alias when present, otherwise the column name
   end;
 
-  /// <summary>An aggregate function over a group's members (Decision 11).</summary>
+  /// <summary>An aggregate function over a group's members.</summary>
   TAggFunc = (Count, Sum, Avg, Min, Max);
 
   /// <summary>One aggregate output column: function, argument column ('*' for COUNT(*)), output name.</summary>
@@ -115,14 +115,14 @@ type
     class function CompileMulti(const Query: IQuery): TCompiledQuery; static;
   end;
 
-// --- Three-valued logic combinators (Decision 10) ---------------------------
+// --- Three-valued logic combinators ---------------------------
 function BoolToTri(B: Boolean): TTriState;
 // --- Value helpers (shared with the generic half) ---------------------------
 /// <summary>Converts a SQLCute Variant binding to TValue; NULL/empty → empty TValue.</summary>
 function VariantToValue(const V: Variant): TValue;
 /// <summary>Non-NULL comparison of two values (both operands assumed present).</summary>
 function CompareValues(const L, R: TValue): Integer;
-/// <summary>Order comparison honoring direction and NULL policy (Decision 10/12).</summary>
+/// <summary>Order comparison honoring direction and NULL policy.</summary>
 function CompareForOrder(const L, R: TValue; const Spec: TOrderSpec): Integer;
 /// <summary>
 ///   Canonical match key for a column vs a Delphi member: bare, lower-cased and
@@ -636,7 +636,7 @@ begin
         end;
 end;
 
-{ ---- Source / shape analysis (fail-fast, Decision 5) ---- }
+{ ---- Source / shape analysis (fail-fast) ---- }
 
 // Extracts the SELECT projection as (source -> output) columns. A lone '*'
 // means "all columns" (no reshape -> nil). Raw / subquery SELECT columns need
@@ -714,7 +714,7 @@ begin
       var S: TOrderSpec;
       S.Column := O.Column;
       S.Descending := (O.Direction = TSortDir.Desc);
-      // The AST's SQL vocabulary maps onto the plan's own (Decision 6).
+      // The AST's SQL vocabulary maps onto the plan's own.
       case O.Nulls of
         TNullsOrder.First: S.Nulls := TNullsPolicy.First;
         TNullsOrder.Last:  S.Nulls := TNullsPolicy.Last;

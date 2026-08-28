@@ -17,7 +17,7 @@
   back-end accepts the very same AST with self-consistent bindings, and that
   neither back-end mutates the query. The mixed AND/OR case additionally pins
   the parentheses the SQL text carries, which is the tree the in-memory
-  predicate was built from (Decision 13 — parity by construction).
+  predicate was built from (parity by construction).
 }
 
 interface
