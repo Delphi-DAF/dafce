@@ -5,7 +5,7 @@
 
 uses
   Daf.MiniSpec,
-  Daf.SQLCute.Core in '..\Daf.SQLCute.Core.pas',
+  Daf.SQLCute.Core,
   SQLCute.SpecHelpers in 'SQLCute.SpecHelpers.pas',
   SQLCute.Select.Feat in 'SQLCute.Select.Feat.pas',
   SQLCute.Where.Feat in 'SQLCute.Where.Feat.pas',

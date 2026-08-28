@@ -15,4 +15,7 @@
         </BorlandProject>
         <ProjectFileVersion>12</ProjectFileVersion>
     </ProjectExtensions>
+    <PropertyGroup>
+        <PostBuildEvent>if exist "$(MSBuildProjectDirectory)\*.dfm" copy /Y "$(MSBuildProjectDirectory)\*.dfm" "$(PRJ_OUT_DIR)\lib\$(Platform)\$(Config)\" &gt;nul</PostBuildEvent>
+    </PropertyGroup>
 </Project>

@@ -11,7 +11,7 @@
 
 uses
   Daf.MiniSpec,
-  Daf.SQLCute.Core in '..\..\SQLCute\Daf.SQLCute.Core.pas',
+  Daf.SQLCute.Core,
   Daf.Specification,
   Daf.SQLCute.Specification,
   Emission.SpecHelpers in 'Emission.SpecHelpers.pas',
