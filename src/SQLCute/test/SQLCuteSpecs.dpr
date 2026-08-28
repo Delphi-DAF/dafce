@@ -9,6 +9,7 @@ uses
   SQLCute.SpecHelpers in 'SQLCute.SpecHelpers.pas',
   SQLCute.Select.Feat in 'SQLCute.Select.Feat.pas',
   SQLCute.Where.Feat in 'SQLCute.Where.Feat.pas',
+  SQLCute.Operators.Feat in 'SQLCute.Operators.Feat.pas',
   SQLCute.WhereTree.Feat in 'SQLCute.WhereTree.Feat.pas',
   SQLCute.Factory.Feat in 'SQLCute.Factory.Feat.pas',
   SQLCute.Join.Feat in 'SQLCute.Join.Feat.pas',

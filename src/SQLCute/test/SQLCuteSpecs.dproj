@@ -101,6 +101,7 @@
         <DCCReference Include="SQLCute.SpecHelpers.pas"/>
         <DCCReference Include="SQLCute.Select.Feat.pas"/>
         <DCCReference Include="SQLCute.Where.Feat.pas"/>
+        <DCCReference Include="SQLCute.Operators.Feat.pas"/>
         <DCCReference Include="SQLCute.WhereTree.Feat.pas"/>
         <DCCReference Include="SQLCute.Join.Feat.pas"/>
         <DCCReference Include="SQLCute.DML.Feat.pas"/>
