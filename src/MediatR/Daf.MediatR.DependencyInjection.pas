@@ -33,9 +33,6 @@ uses
 
 { TMediatRServiceCollection }
 
-// La contabilidad de paquetes ya escaneados es estado de la coleccion, no del proceso:
-// antes eran dos globales de unit, y dos colecciones vivas a la vez se contaminaban.
-// Lo que cambia es donde se anota; el escaneo (DiscoverImpl) sigue igual.
 procedure TMediatRServiceCollection.AddMediatR;
 begin
   if Contains<IMediatorImpl> then
