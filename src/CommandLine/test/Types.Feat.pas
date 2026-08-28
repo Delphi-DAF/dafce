@@ -75,7 +75,7 @@ procedure TTypesWorld.BuildOwnType;
 begin
   // The conversion is declared where the symbol is, and nowhere else: a registry of
   // types would be process-wide configuration, and two libraries registering the same
-  // type would fight over it in silence (design D2).
+  // type would fight over it in silence.
   MinVersionOpt := CommandLine.Option<TSemVer>('--min',
     function(const Raw: string; out Value: TSemVer; out Error: string): Boolean
     var

@@ -1,7 +1,7 @@
 ﻿unit Daf.CommandLine.Tokens;
 
 {
-  The tokenizer, kept apart from the grammar on purpose (design D1).
+  The tokenizer, kept apart from the grammar on purpose.
 
   Deciding WHAT A TOKEN IS and deciding WHICH COMMAND OR OPTION IT REACHES are two
   jobs. Every extra way of writing an
@@ -40,7 +40,7 @@ type
   ///   more.
   /// </summary>
   /// <remarks>
-  ///   Bundling and the <c>/</c> prefix are NOT purely lexical (design D2, D3):
+  ///   Bundling and the <c>/</c> prefix are NOT purely lexical:
   ///   <c>-fdx</c> can only be split knowing that f, d and x are declared, and
   ///   <c>/x</c> is an option only when x is. This is the whole of what that costs --
   ///   three questions, answerable by a test double, so the rewriting can be specified
@@ -93,7 +93,7 @@ type
       const Replacement: TArray<string>): TArray<string>; static;
   end;
 
-  /// <summary>A response file is a source of tokens, and is read with distrust (design D6).</summary>
+  /// <summary>A response file is a source of tokens, and is read with distrust.</summary>
   /// <remarks>
   ///   It exists for two concrete reasons -- a command line that does not fit in the
   ///   console's limit, and a long invocation that repeats -- and it does nothing beyond
@@ -185,14 +185,14 @@ begin
     Exit;
 
   // A token that already names something declared is left exactly as written. Every
-  // rewriting below fires only for one that does not (design D2, D3).
+  // rewriting below fires only for one that does not.
   if Known.Knows(Token) then
     Exit;
 
   // The Windows prefix, the other convention .NET admits on purpose. It is bounded
   // exactly like bundling: `/x` names an option only when x was declared, so a
   // positional whose value starts with a slash -- which on Windows is a POSIX absolute
-  // path, or somebody else's argument -- stays the value it was (design D3).
+  // path, or somebody else's argument -- stays the value it was.
   if Token.StartsWith(WindowsPrefix) then
   begin
     Cut := DelimiterAt(Token);
@@ -290,7 +290,7 @@ begin
       // Refused WHOLE, naming the letter. Taking the letters that exist and keeping
       // quiet about the one that does not would leave whoever invoked believing they
       // asked for something they did not -- the silent failure this module has spent
-      // three changes removing (design D2).
+      // three changes removing.
       Result.Tokens := nil;
       Result.Changed := True;
       Result.Error := Format('Unknown option "%s" inside the group "%s", so nothing in the group is taken',
@@ -375,7 +375,7 @@ begin
   begin
     // A file that is not there is an invalid invocation and not a literal token:
     // letting it through turns a typo into an argument with an at sign in front of it,
-    // travelling all the way to wherever it ends up used (design D6).
+    // travelling all the way to wherever it ends up used.
     Errors := Errors + [Format('Response file "%s" does not exist', [Path])];
     Exit;
   end;

@@ -7,7 +7,7 @@
   The one divergence that shows in every call is how a value is read. In .NET you
   write result.GetValue(fileOption). Here you write FileOption.ValueIn(Parsed): the
   object asks the result, not the result the object.
-  (design D2): an interface cannot declare a generic method at all --
+  an interface cannot declare a generic method at all --
   E2535 -- and even on a class Delphi will not infer T through an IOption<T>
   parameter -- E2010. Writing it the .NET way would mean giving up counted
   interfaces AND spelling the type out by hand, which is the repetition this module
@@ -40,7 +40,7 @@ type
   ///   It is declared ON THE SYMBOL and not in a registry of types, deliberately: a
   ///   registry would make it process-wide configuration, so two libraries declaring a
   ///   conversion for the same type would fight over it -- and the one that started last
-  ///   would win, in silence (design D2). On the symbol, its reach is exactly where it
+  ///   would win, in silence. On the symbol, its reach is exactly where it
   ///   was written.
   /// </remarks>
   TCommandLineParser<T> = reference to function(const Raw: string; out Value: T; out Error: string): Boolean;
@@ -51,7 +51,7 @@ type
   /// </summary>
   /// <remarks>
   ///   It runs INSIDE the parse, so its refusal comes out through <c>Errors</c> like any
-  ///   other invocation error (design D3). Validating afterwards moves the failure to
+  ///   other invocation error. Validating afterwards moves the failure to
   ///   where it can no longer be reported next to the rest, and the tool ends up with two
   ///   ways of saying that an invocation was wrong.
   ///
@@ -80,7 +80,7 @@ type
   ///   The five named values are .NET's. It is rarely written by hand because it is
   ///   derived from the declared type -- a boolean admits none or one, anything else
   ///   demands exactly one -- and it is what makes "required" and "many values" the
-  ///   same idea seen from its two ends (design D6).
+  ///   same idea seen from its two ends.
   /// </remarks>
   TArity = record
   strict private
@@ -119,7 +119,7 @@ type
     /// <summary>
     ///   True when <c>Token</c> is this symbol's name or one of its aliases.
     ///   Compared WITHOUT regard to case -- a declared divergence from .NET, which is
-    ///   case-sensitive by POSIX convention. See design D7 for the reason.
+    ///   case-sensitive by POSIX convention.
     /// </summary>
     function Matches(const Token: string): Boolean;
     /// <summary>True when the help does not list it. It changes NOTHING else.</summary>
@@ -129,7 +129,7 @@ type
     ///   tool works. Today the alternatives are not declaring it -- and then it does not
     ///   work -- or declaring it and accepting that it shows: two bad ones.
     ///
-    ///   Hiding is the HELP's business and nothing else (design D5). A hidden symbol that
+    ///   Hiding is the HELP's business and nothing else. A hidden symbol that
     ///   gets an invalid value fails the same way and is named in the error: hiding it
     ///   from the help is not hiding it from whoever is already using it, and an error
     ///   that will not say what failed turns a mistake into a riddle.
@@ -188,7 +188,7 @@ type
     // Fluency lives in the interface, never in a class helper: only one helper per
     // type is in scope and helpers never apply to interfaces, so a fluent API spread
     // over units breaks -- silently, last uses wins -- the moment someone reorders a
-    // uses clause (design D3).
+    // uses clause.
     function Add(const Option: IOption): ICommand; overload;
     function Add(const Argument: IArgument): ICommand; overload;
     function Add(const Subcommand: ICommand): ICommand; overload;
@@ -207,7 +207,7 @@ type
     /// <remarks>
     ///   It is what a WRAPPER needs -- <c>sudo -u admin apt update</c> reads its own and
     ///   hands the rest to another program. The mark belongs to the command because it
-    ///   says what that command IS (design D5); the default stays as it was, because for
+    ///   says what that command IS; the default stays as it was, because for
     ///   anything that wraps nobody an unrecognised token is a typo, and swallowing it in
     ///   silence is the worse of the two failures.
     ///
@@ -219,8 +219,7 @@ type
     function Hidden: ICommand;
     /// <summary>
     ///   The help text, rendered from the grammar every time it is asked for. Nothing
-    ///   composed is stored anywhere, so it cannot drift from what the program accepts
-    ///   (design D4).
+    ///   composed is stored anywhere, so it cannot drift from what the program accepts.
     /// </summary>
     function HelpText: string;
   end;
@@ -328,7 +327,7 @@ type
     function AcceptLegalFileNamesOnly: IOption<T>;
     /// <summary>Lets one mention of the name be followed by several values.</summary>
     /// <remarks>
-    ///   Opt-in, and it could not be anything else (design D4): were every option with
+    ///   Opt-in, and it could not be anything else: were every option with
     ///   room for many values greedy by default, a positional written behind one would
     ///   stop being a positional. The right default depends on the grammar, and only
     ///   whoever wrote it knows. .NET calls it the same thing, for the same reason.
@@ -491,7 +490,7 @@ type
     /// <remarks>
     ///   The conversion is taken HERE, at declaration, and not set afterwards: a symbol
     ///   that always knows how to convert its type is a symbol whose declaration can be
-    ///   refused on the spot when it does not (design D2). It also serves a type the
+    ///   refused on the spot when it does not. It also serves a type the
     ///   engine already knows, for reading it some other way.
     /// </remarks>
     class function Option<T>(const Name: string; const Parser: TCommandLineParser<T>;
@@ -772,11 +771,11 @@ begin
   // The check stays at DECLARATION, which is where it is worth something, and that is
   // why the conversion is taken at declaration too: a symbol either knows how to convert
   // its type or it is refused on the spot. "the engine does not know
-  // this type" is no longer the end of the conversation (design D2).
+  // this type" is no longer the end of the conversation.
   if not Assigned(FParser) and not TCommandLineValue.Handles(FTypeInfo) then
     raise ECommandLine.CreateFmt('Symbol "%s" is declared with a type the command line cannot convert: %s. ' +
       'Declare a conversion of its own for it', [AName, TCommandLineValue.TypeName(FTypeInfo)]);
-  // Derived from the type, so the ordinary case is never written by hand (design D6).
+  // Derived from the type, so the ordinary case is never written by hand.
   // A collection says "many" by being one, which is how .NET derives it too.
   if IsCollection then
     FArity := TArity.ZeroOrMore
@@ -824,7 +823,7 @@ begin
   // Validation runs HERE, inside the parse, and its refusal goes out through the same
   // Errors as everything else. Validating afterwards would move the failure to where it
   // is no longer an invocation error, and whoever invoked the tool would get two lists
-  // instead of one (design D3).
+  // instead of one.
   for Check in FValidators do
     if not Check(Parsed, Error) then
     begin
@@ -926,7 +925,7 @@ end;
 procedure TValuedSymbol.DemandPathType(const What: string);
 begin
   // Here a path is a string: what FileInfo and DirectoryInfo contributed in .NET was the
-  // validation, and the validation is what gets ported (design D1).
+  // validation, and the validation is what gets ported.
   // Through the element, so a collection of paths validates each one of them.
   if FElementTypeInfo <> System.TypeInfo(string) then
     raise ECommandLine.CreateFmt('%s applies to a path, and "%s" is declared as %s', [What, Name, TypeName]);
@@ -1008,7 +1007,7 @@ function TValuedSymbol<T>.DefaultOf: T;
 begin
   // Run here and nowhere else: this is the one place reached only when the invocation
   // did not carry the symbol. And run at most once, because a calculation that reads the
-  // environment or opens a file should not be paid for twice (design D4).
+  // environment or opens a file should not be paid for twice.
   if not FDefaultKnown then
   begin
     FDefaultValue := FDefaultFactory();
@@ -1695,7 +1694,7 @@ begin
   Scope.Enter(Current, Available, True);
 
   // Response files are resolved before anything else is decided about any token,
-  // because all they do is contribute tokens and nothing else (design D1, D6).
+  // because all they do is contribute tokens and nothing else.
   Tokens := TResponseFiles.Expand(Args, Expansion);
   for Error in Expansion do
     Outcome.AddError(Error);
@@ -1714,7 +1713,7 @@ begin
     end;
 
     // Before anything else is decided about this token, it is put in the canonical form
-    // the rest of this loop already understands (design D1). The rewriting is asked
+    // the rest of this loop already understands. The rewriting is asked
     // HERE, and not once over the whole array, because it needs to know what is
     // declared and that depends on the command reached.
     if not OptionsEnded then
@@ -1737,7 +1736,7 @@ begin
 
     if not OptionsEnded then
     begin
-      // Help is resolved BEFORE the grammar is validated (design D4): asking how the
+      // Help is resolved BEFORE the grammar is validated: asking how the
       // syntax works is not an invalid invocation, and a tool that demands you get the
       // syntax right in order to explain the syntax is no use. An application that
       // declared its own --help wins, so this only fires when nothing answers the token.
@@ -1763,7 +1762,7 @@ begin
       if Option = nil then
       begin
         // A wrapper hands on what is not its own; anything else refuses it, which is
-        // still the default (design D5). The token goes on WHOLE, value and all, so
+        // still the default. The token goes on WHOLE, value and all, so
         // whoever receives it gets what was written.
         if Current.TreatsUnmatchedTokensAsErrors then
           Outcome.AddError(Format('Unknown option "%s" for %s', [OptionName, Current.FullPath]))
@@ -1820,7 +1819,7 @@ begin
         Outcome.AddError(Error);
 
       // One mention of the name, several values -- but only for an option that asked
-      // for it (design D4). Taking them stops at the next token that looks like an
+      // for it. Taking them stops at the next token that looks like an
       // option, at `--`, and at the maximum the arity declared, so what is swallowed is
       // bounded by what was declared rather than by where the invocation happens to end.
       if Option.AllowsMultipleArgumentsPerToken and Option.Arity.AllowsMany then

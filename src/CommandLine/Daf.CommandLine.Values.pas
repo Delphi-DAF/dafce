@@ -114,7 +114,7 @@ end;
 class function TCommandLineValue.Handles(TypeInf: PTypeInfo): Boolean;
 begin
   // The list is translated from .NET's, not copied from it: what a command line needs is
-  // numbers of the widths people use, dates, identifiers and paths (design D1). Here a
+  // numbers of the widths people use, dates, identifiers and paths. Here a
   // path is a string, so it is already in. DateOnly and TimeOnly have no Delphi type of
   // their own, and TDateTime covers what interested them -- a declared divergence.
   Result := (TypeInf = System.TypeInfo(string)) or (TypeInf = System.TypeInfo(Integer)) or

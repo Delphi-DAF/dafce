@@ -4,7 +4,7 @@
   The help renderer.
 
   It walks the declared grammar and formats it, every time it is asked. No composed
-  text is stored anywhere, and that is the whole point (design D4): help that is kept
+  text is stored anywhere, and that is the whole point: help that is kept
   as text is documentation NEXT TO the code instead of derived FROM it, so it goes
   stale the moment somebody adds an option and forgets it -- and the mismatch breaks
   nothing, it only lies to whoever asked.
@@ -161,7 +161,7 @@ begin
     Lines.Add('Usage:');
     Lines.Add('  ' + UsageLine(Command));
 
-    // Hidden is filtered HERE and nowhere else (design D5). The heading is only written
+    // Hidden is filtered HERE and nowhere else. The heading is only written
     // when something is going to follow it: a section listing nothing reads as a bug in
     // the tool rather than as a symbol somebody chose not to advertise.
     if VisibleArguments(Command) > 0 then

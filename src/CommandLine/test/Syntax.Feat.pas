@@ -339,7 +339,7 @@ Feature Command line syntax @commandline @syntax
       procedure(W: TSyntaxWorld)
       begin
         // Making this greedy by default would move what invocations that already work
-        // mean, which is why the mark exists at all (design D4).
+        // mean, which is why the mark exists at all.
         Expect(W.Parsed.ErrorText).ToEqual('');
         Expect(string.Join(',', W.ReadLoose)).ToEqual('a');
         Expect(W.ReadName).ToEqual('b');
@@ -524,7 +524,7 @@ Feature Command line syntax @commandline @syntax
       procedure(W: TSyntaxWorld)
       begin
         // For anything that wraps nobody an unrecognised token is a typo, and taking it
-        // quietly is the worse of the two failures (design D5).
+        // quietly is the worse of the two failures.
         Expect(W.Parsed.Succeeded).ToBeFalse;
         Expect(W.Parsed.ErrorText).ToContain('stray');
       end)

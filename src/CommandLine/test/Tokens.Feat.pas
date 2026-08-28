@@ -8,7 +8,7 @@ uses
 type
   /// <summary>A grammar reduced to the three questions the rewriting is allowed to ask.</summary>
   /// <remarks>
-  ///   That the whole of it fits in twenty lines IS the point of design D1: the
+  ///   That the whole of it fits in twenty lines IS the point: the
   ///   rewriting can be told what it needs to know without a command, an option or a
   ///   parse anywhere near it, so what these specs measure is the rewriting and not the
   ///   grammar walking on top of it.
@@ -352,7 +352,6 @@ Feature Command line tokenizing @commandline @tokens
       begin
         // Accepting the letters that exist and keeping quiet about the one that does
         // not would leave the caller believing they asked for something they did not
-        // (design D2).
         Expect(W.Report).ToEqual('[]');
       end)
 
@@ -428,7 +427,7 @@ Feature Command line tokenizing @commandline @tokens
       procedure(W: TTokensWorld)
       begin
         // This is the cost of admitting the slash, and the whole of what bounds it: a
-        // slash names an option only when what follows it was declared (design D3).
+        // slash names an option only when what follows it was declared.
         Expect(W.Report).ToEqual('[/tmp/app.dpr]');
         Expect(W.ErrorReport).ToEqual('[]');
       end)
