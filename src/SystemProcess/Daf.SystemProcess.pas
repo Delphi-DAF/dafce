@@ -589,19 +589,6 @@ begin
   var EnvBuffer: PWideChar := nil;
   BuildEnvBuffer(EnvBuffer);
 
-(* To quick check EnvBuffer & CreateProcess:
-
-  Writeln('[Begin of env block]');
-  var p := EnvBuffer;
-  while not ((p^ = #0) and ((p + 1)^ = #0)) do
-  begin
-    Writeln(p);
-    Inc(p, Length(p) + 1);
-  end;
-  Writeln('[End of env block]');
-
-  FCommandLine := 'cmd.exe /C echo PATH=%PATH%';
-*)
 
   var Flags := DefaultFlags;
   if HideWindow then
