@@ -134,7 +134,7 @@ type
   end;
 
   // Base class for all pipeline behaviors.
-  // Invoke is the framework dispatch entry point — not virtual, not in any interface.
+  // Invoke is the framework dispatch entry point, and is not in any interface.
   // Global behaviors override Handle(TObject,...); typed behaviors override typed Handle.
   [MediatorAbstract]
   TPipelineBehavior = class abstract(TInterfacedObject, IPipelineBehavior)
