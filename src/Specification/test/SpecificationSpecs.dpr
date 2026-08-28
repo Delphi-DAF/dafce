@@ -1,7 +1,7 @@
 ﻿program SpecificationSpecs;
 
 {
-  The runner that PROVES Decision 6: it links the domain half only. If
+  The runner links the domain half only. If
   Daf.Specification ever acquires a SQLCute dependency, this project stops
   compiling — the isolation is a build fact, not a comment.
 }
