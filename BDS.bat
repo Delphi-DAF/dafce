@@ -160,8 +160,10 @@ call "%WORK_DIR%\project.cmd" :on_start
 call :BANNER
 
 :: select command
+rem The exit code of the selected command is this script's exit code. Swallowing it
+rem here made every build look successful to any caller, whatever msbuild said.
 call :%CMD% %*
-exit /B 0
+exit /B !ERRORLEVEL!
 goto :eof
 
 :: Error handling
@@ -346,12 +348,20 @@ if (%ARG_OUTPUT%) neq () (
 )
 set "MSB_VERBOSITY=quiet"
 if defined ARG_verbose set "MSB_VERBOSITY=%ARG_verbose%"
-if exist "%BDSbin%" ( 
-  call "%rsvars%" > nul
-  call msbuild "%PRJ_BUILD_FILE%" /t:Clean /verbosity:%MSB_VERBOSITY% /p:Platform=%ARG_PLATFORM% /p:Config=%ARG_CONFIG% /m:1
-  if !ERRORLEVEL!==0 echo Clean succeeded: %ARG_PLATFORM% %ARG_CONFIG%
+rem msbuild is the only thing that knows whether this worked, so its exit code is
+rem passed through. A missing toolchain builds nothing at all, which is a distinct
+rem failure from a build that ran and failed, and neither of them is success.
+if not exist "%BDSbin%" (
+  rem !BDSbin! and not %BDSbin%: the path holds "Program Files (x86)", whose closing
+  rem paren would end this if-block at parse time.
+  echo ERROR: RAD Studio bin not found [!BDSbin!] - nothing was built
+  exit /B 2
 )
-exit /B 0
+call "%rsvars%" > nul
+call msbuild "%PRJ_BUILD_FILE%" /t:Clean /verbosity:%MSB_VERBOSITY% /p:Platform=%ARG_PLATFORM% /p:Config=%ARG_CONFIG% /m:1
+set "_bds_rc=!ERRORLEVEL!"
+if !_bds_rc!==0 (echo Clean succeeded: %ARG_PLATFORM% %ARG_CONFIG%) else (echo Clean FAILED: %ARG_PLATFORM% %ARG_CONFIG% ^(msbuild rc=!_bds_rc!^))
+exit /B !_bds_rc!
 
 ::help>>
 :: MAKE: Build project using MSBuild (incremental)
@@ -376,12 +386,20 @@ if (%ARG_OUTPUT%) neq () (
 )
 set "MSB_VERBOSITY=quiet"
 if defined ARG_verbose set "MSB_VERBOSITY=%ARG_verbose%"
-if exist "%BDSbin%" ( 
-  call "%rsvars%" > nul
-  call msbuild "%PRJ_BUILD_FILE%" /t:make /verbosity:%MSB_VERBOSITY% /p:Platform=%ARG_PLATFORM% /p:Config=%ARG_CONFIG% /m:1
-  if !ERRORLEVEL!==0 echo Make succeeded: %ARG_PLATFORM% %ARG_CONFIG%
+rem msbuild is the only thing that knows whether this worked, so its exit code is
+rem passed through. A missing toolchain builds nothing at all, which is a distinct
+rem failure from a build that ran and failed, and neither of them is success.
+if not exist "%BDSbin%" (
+  rem !BDSbin! and not %BDSbin%: the path holds "Program Files (x86)", whose closing
+  rem paren would end this if-block at parse time.
+  echo ERROR: RAD Studio bin not found [!BDSbin!] - nothing was built
+  exit /B 2
 )
-exit /B 0
+call "%rsvars%" > nul
+call msbuild "%PRJ_BUILD_FILE%" /t:make /verbosity:%MSB_VERBOSITY% /p:Platform=%ARG_PLATFORM% /p:Config=%ARG_CONFIG% /m:1
+set "_bds_rc=!ERRORLEVEL!"
+if !_bds_rc!==0 (echo Make succeeded: %ARG_PLATFORM% %ARG_CONFIG%) else (echo Make FAILED: %ARG_PLATFORM% %ARG_CONFIG% ^(msbuild rc=!_bds_rc!^))
+exit /B !_bds_rc!
   
 ::help>>
 :: BUILD: Build project with full rebuild
@@ -406,12 +424,20 @@ if (%ARG_OUTPUT%) neq () (
 )
 set "MSB_VERBOSITY=quiet"
 if defined ARG_verbose set "MSB_VERBOSITY=%ARG_verbose%"
-if exist "%BDSbin%" ( 
-  call "%rsvars%" > nul
-  call msbuild "%PRJ_BUILD_FILE%" /t:Build /verbosity:%MSB_VERBOSITY% /p:Platform=%ARG_PLATFORM% /p:Config=%ARG_CONFIG% /m:1
-  if !ERRORLEVEL!==0 echo Build succeeded: %ARG_PLATFORM% %ARG_CONFIG%
+rem msbuild is the only thing that knows whether this worked, so its exit code is
+rem passed through. A missing toolchain builds nothing at all, which is a distinct
+rem failure from a build that ran and failed, and neither of them is success.
+if not exist "%BDSbin%" (
+  rem !BDSbin! and not %BDSbin%: the path holds "Program Files (x86)", whose closing
+  rem paren would end this if-block at parse time.
+  echo ERROR: RAD Studio bin not found [!BDSbin!] - nothing was built
+  exit /B 2
 )
-exit /B 0
+call "%rsvars%" > nul
+call msbuild "%PRJ_BUILD_FILE%" /t:Build /verbosity:%MSB_VERBOSITY% /p:Platform=%ARG_PLATFORM% /p:Config=%ARG_CONFIG% /m:1
+set "_bds_rc=!ERRORLEVEL!"
+if !_bds_rc!==0 (echo Build succeeded: %ARG_PLATFORM% %ARG_CONFIG%) else (echo Build FAILED: %ARG_PLATFORM% %ARG_CONFIG% ^(msbuild rc=!_bds_rc!^))
+exit /B !_bds_rc!
 
 ::help>>
 :: EXEC: Execute an .exe or .bat with the full project environment active
@@ -435,7 +461,8 @@ set "_exec_platform=%ARG_PLATFORM%"
 echo !_exec_target! | findstr /i "\\Win64\\" >nul && set "_exec_platform=Win64"
 echo !_exec_target! | findstr /i "\\Win32\\" >nul && set "_exec_platform=Win32"
 :: add project bin output to PATH so runtime DLLs/BPLs are found
-set "PATH=%PRJ_OUT_DIR%\%_exec_platform%\bin;%PATH%"
+if (%ARG_CONFIG%)==() set "ARG_CONFIG=Debug"
+set "PATH=%PRJ_OUT_DIR%\%_exec_platform%\%ARG_CONFIG%\bin;%PATH%"
 set "_exec_platform="
 call "!_exec_target!"
 exit /B %ERRORLEVEL%
@@ -590,11 +617,12 @@ set "_arl_proj=%~1"
 set "_arl_name=%~2"
 set "_arl_retry=0"
 set "_arl_log=%TEMP%\_bds_arl_%RANDOM%.log"
+set "_arl_libdir=%PRJ_OUT_DIR%\%ARG_PLATFORM%\%ARG_CONFIG%\lib"
 
 :AB_RETRY_LOOP_NEXT
 rem Capture newest file in lib output dir before make (progress marker)
 set "_arl_newest_before="
-for /f "usebackq tokens=*" %%N in (`dir /s /b /O:-D "%PRJ_OUT_DIR%\%ARG_PLATFORM%\lib" 2^>nul`) do (
+for /f "usebackq tokens=*" %%N in (`dir /s /b /O:-D "!_arl_libdir!" 2^>nul`) do (
   if not defined _arl_newest_before set "_arl_newest_before=%%N"
 )
 
@@ -626,8 +654,17 @@ if !ERRORLEVEL! neq 0 (
 
 rem Still ICE - check for progress
 set "_arl_newest_after="
-for /f "usebackq tokens=*" %%N in (`dir /s /b /O:-D "%PRJ_OUT_DIR%\%ARG_PLATFORM%\lib" 2^>nul`) do (
+for /f "usebackq tokens=*" %%N in (`dir /s /b /O:-D "!_arl_libdir!" 2^>nul`) do (
   if not defined _arl_newest_after set "_arl_newest_after=%%N"
+)
+
+rem An absent lib output yields the same empty marker as a stalled build, so the
+rem two are told apart here instead of both being reported as stuck.
+if not exist "!_arl_libdir!" (
+  echo  CANNOT MEASURE: lib output not found [!_arl_libdir!] - aborting [!_arl_name!]
+  if exist "!_arl_log!" del "!_arl_log!" 2>nul
+  set "AB_FAILED=!_arl_name! (no lib output to measure)"
+  exit /B 1
 )
 
 if "!_arl_newest_before!"=="!_arl_newest_after!" (
