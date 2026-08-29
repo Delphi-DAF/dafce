@@ -1,15 +1,16 @@
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <Import Project="$(MSBuildThisFileDirectory)paths.optset"/>
     <PropertyGroup>
         <DCC_RemoteDebug>false</DCC_RemoteDebug>
         <AppEnableRuntimeThemes>true</AppEnableRuntimeThemes>
         <AppDPIAwarenessMode>PerMonitorV2</AppDPIAwarenessMode>
-        <DCC_DcpOutput>$(PRJ_OUT_DIR)\test\lib\$(Platform)</DCC_DcpOutput>
+        <DCC_DcpOutput>$(DAF_TEST_LIB)</DCC_DcpOutput>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_Locale>1033</VerInfo_Locale>
-        <DCC_ExeOutput>$(PRJ_OUT_DIR)\test\bin\$(Platform)</DCC_ExeOutput>
-        <DCC_BplOutput>$(PRJ_OUT_DIR)\test\lib\$(Platform)</DCC_BplOutput>
-        <DCC_DcuOutput>$(PRJ_OUT_DIR)\test\lib\$(Platform)\$(MSBuildProjectName)</DCC_DcuOutput>
-        <DCC_UnitSearchPath>$(PRJ_OUT_DIR)\test\lib\$(Platform)\$(MSBuildProjectName);$(PRJ_OUT_DIR)\lib\$(Platform)\Debug;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_ExeOutput>$(DAF_TEST_BIN)</DCC_ExeOutput>
+        <DCC_BplOutput>$(DAF_TEST_LIB)</DCC_BplOutput>
+        <DCC_DcuOutput>$(DAF_TEST_LIB)</DCC_DcuOutput>
+        <DCC_UnitSearchPath>$(DAF_TEST_LIB);$(DAF_FW_LIB_DEBUG);$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
     </PropertyGroup>
     <ProjectExtensions>
         <Borland.Personality>Delphi.Personality.12</Borland.Personality>

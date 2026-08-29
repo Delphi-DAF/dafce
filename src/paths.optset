@@ -1,0 +1,41 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <!--
+      Forma de las rutas de salida, en un unico sitio. Los tres optsets de ambito
+      -source, samples y test- importan este fichero y no construyen rutas por su
+      cuenta, para que anadir una plataforma o mover el arbol se haga aqui y no en
+      tres ficheros que divergen.
+
+      La division es: plataforma primero, y "bin" o "lib" como ultimo tramo.
+
+        out\<Plataforma>\<Config>\lib          framework: DCU y DCP
+        out\<Plataforma>\<Config>\bin          framework: BPL
+        out\<Plataforma>\samples\lib           samples
+        out\<Plataforma>\samples\bin
+        out\<Plataforma>\test\<Runner>\lib    una suite por directorio
+        out\<Plataforma>\test\bin
+
+      Samples y test no llevan <Config>: se compilan siempre en Debug, y por eso
+      consumen el framework de DAF_FW_LIB_DEBUG y no del <Config> en curso.
+
+      El DCU de cada runner va a su propio directorio porque hay cuatro units
+      llamadas Doubles.Feat en el arbol, y un directorio compartido las mezcla.
+    -->
+    <PropertyGroup>
+        <DAF_OUT>$(PRJ_OUT_DIR)\$(Platform)</DAF_OUT>
+        <DAF_FW_BIN>$(DAF_OUT)\$(Config)\bin</DAF_FW_BIN>
+        <DAF_FW_LIB>$(DAF_OUT)\$(Config)\lib</DAF_FW_LIB>
+        <DAF_FW_LIB_DEBUG>$(DAF_OUT)\Debug\lib</DAF_FW_LIB_DEBUG>
+        <DAF_SAMPLES_BIN>$(DAF_OUT)\samples\bin</DAF_SAMPLES_BIN>
+        <DAF_SAMPLES_LIB>$(DAF_OUT)\samples\lib</DAF_SAMPLES_LIB>
+        <DAF_TEST_BIN>$(DAF_OUT)\test\bin</DAF_TEST_BIN>
+        <DAF_TEST_LIB>$(DAF_OUT)\test\$(MSBuildProjectName)\lib</DAF_TEST_LIB>
+    </PropertyGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Delphi.Personality.12</Borland.Personality>
+        <Borland.ProjectType>OptionSet</Borland.ProjectType>
+        <BorlandProject>
+            <Delphi.Personality/>
+        </BorlandProject>
+        <ProjectFileVersion>12</ProjectFileVersion>
+    </ProjectExtensions>
+</Project>

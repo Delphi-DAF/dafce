@@ -1,10 +1,11 @@
 ﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <Import Project="$(MSBuildThisFileDirectory)paths.optset"/>
     <PropertyGroup>
-        <DCC_DcpOutput>$(PRJ_OUT_DIR)\lib\$(Platform)\$(Config)</DCC_DcpOutput>
-        <DCC_ExeOutput>$(PRJ_OUT_DIR)\bin\$(Platform)\$(Config)</DCC_ExeOutput>
-        <DCC_BplOutput>$(PRJ_OUT_DIR)\bin\$(Platform)\$(Config)</DCC_BplOutput>
-        <DCC_DcuOutput>$(PRJ_OUT_DIR)\lib\$(Platform)\$(Config)</DCC_DcuOutput>
-        <DCC_UnitSearchPath>$(BDS)\Lib\$(Config)\Indy10;$(BDS)\lib;$(VENDOR_LIB);$(PRJ_OUT_DIR)\lib\$(Platform)\$(Config);$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_DcpOutput>$(DAF_FW_LIB)</DCC_DcpOutput>
+        <DCC_ExeOutput>$(DAF_FW_BIN)</DCC_ExeOutput>
+        <DCC_BplOutput>$(DAF_FW_BIN)</DCC_BplOutput>
+        <DCC_DcuOutput>$(DAF_FW_LIB)</DCC_DcuOutput>
+        <DCC_UnitSearchPath>$(BDS)\Lib\$(Config)\Indy10;$(BDS)\lib;$(VENDOR_LIB);$(DAF_FW_LIB);$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_MapFile>0</DCC_MapFile>
     </PropertyGroup>
     <ProjectExtensions>
@@ -16,6 +17,6 @@
         <ProjectFileVersion>12</ProjectFileVersion>
     </ProjectExtensions>
     <PropertyGroup>
-        <PostBuildEvent>if exist "$(MSBuildProjectDirectory)\*.dfm" copy /Y "$(MSBuildProjectDirectory)\*.dfm" "$(PRJ_OUT_DIR)\lib\$(Platform)\$(Config)\" &gt;nul</PostBuildEvent>
+        <PostBuildEvent>if exist "$(MSBuildProjectDirectory)\*.dfm" copy /Y "$(MSBuildProjectDirectory)\*.dfm" "$(DAF_FW_LIB)\" &gt;nul</PostBuildEvent>
     </PropertyGroup>
 </Project>
