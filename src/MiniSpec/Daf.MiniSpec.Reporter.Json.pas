@@ -90,7 +90,6 @@ begin
   for var H in Table.Headers do
     RowArr.Add(H);
   Result.AddElement(RowArr);
-  // Add data rows
   for Row in Table.Rows do
   begin
     RowArr := TJSONArray.Create;

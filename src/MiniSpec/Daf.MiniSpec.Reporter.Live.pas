@@ -184,7 +184,6 @@ begin
     StepObj.AddPair('ms', TJSONNumber.Create(Step.RunInfo.ExecTimeMs));
     if not Step.RunInfo.IsSuccess and (Step.RunInfo.ErrMsg <> '') then
       StepObj.AddPair('error', Step.RunInfo.ErrMsg);
-    // Add DataTable if present
     if Assigned(Step.DataTable) then
     begin
       TableArr := TJSONArray.Create;
@@ -193,7 +192,6 @@ begin
       for var H in Step.DataTable.Headers do
         RowArr.Add(H);
       TableArr.AddElement(RowArr);
-      // Add data rows
       for Row in Step.DataTable.Rows do
       begin
         RowArr := TJSONArray.Create;

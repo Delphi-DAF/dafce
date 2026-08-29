@@ -237,11 +237,7 @@ Feature Emitting an expression to WHERE clauses @expressions @emitter
         // that tree and wrote one group per operator change: two conjunctions
         // under a disjunction, so two groups and nothing else at this level.
         //
-        // The evidence is the SHAPE MATCHING THE TREE, not the list being flat. A
-        // flat list was evidence for an earlier emission rule; it said nothing
-        // about whether this layer computes precedence — and it does not, because
-        // there is no precedence table, no operator ranking and no reordering
-        // anywhere in the emission.
+        // The evidence is the SHAPE MATCHING THE TREE, not the list being flat.
         var Root := W.Authored as ILogicalExpr;
         Expect(Root.Op = TLogicalOp.opOr).ToBeTrue;
         Expect(Root.Left.Kind = TExprKind.Logical).ToBeTrue;

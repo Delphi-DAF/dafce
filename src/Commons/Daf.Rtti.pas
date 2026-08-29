@@ -705,7 +705,6 @@ var
   SrcType, DstType: TRttiType;
   SrcProp, DstProp: TRttiProperty;
 begin
-  //if not Assigned(Source) or not Assigned(Target) then  Exit;
 
   Ctx := TRttiContext.Create;
   try

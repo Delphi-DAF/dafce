@@ -211,7 +211,6 @@ begin
         try
           if Assigned(FOnTimer) and FEnabled then
             OnTimer();
-          //FThread := nil;
         finally
           FLock.Leave;
         end;

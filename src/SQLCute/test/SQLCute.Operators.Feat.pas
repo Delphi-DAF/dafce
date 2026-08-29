@@ -4,17 +4,8 @@
   La tabla de operadores textuales: la cadena que escribe quien llama --Where(col, '<=', v)--
   y el operador del arbol al que se traduce.
 
-  Existe porque la tabla no tenia red. Medido antes de escribirla: de sus once entradas, la suite
-  ejercitaba seis --y solo de refilon, a traves de escenarios que iban a por otra cosa--, mientras
-  que <, !=, "not like", "in" y "not in" no las tocaba nadie. Una reescritura de esa funcion podia
-  romper cinco operadores y dejar los 199 escenarios de SQLCute en verde.
-
-  Por eso esto se fija ANTES de tocar la funcion, y no despues: una tabla sin red no se refactoriza,
-  se reescribe a ciegas.
-
   Dos afirmaciones que no son entradas de la tabla y estan aqui a proposito: que la lectura no
-  distingue mayusculas --lo que hoy hace SameText y manana hara IndexText-- y que recorta los
-  espacios. Las dos son contrato para quien escribe la cadena, y ninguna se afirmaba.
+  distingue mayusculas y que recorta los espacios. Las dos son contrato para quien escribe la cadena.
 }
 
 interface

@@ -114,7 +114,7 @@ end;
 procedure TValuesWorld.BuildChecked;
 begin
   // A validation runs INSIDE the parse, so a value the type admits and the application
-  // does not is an invocation error like any other (design D3).
+  // does not is an invocation error like any other.
   CountOpt := CommandLine.Option<Integer>('--count', 'How many to make')
     .Validate(
     function(const Value: Integer; out Error: string): Boolean
@@ -134,7 +134,7 @@ procedure TValuesWorld.BuildComputed;
 begin
   DefaultRuns := 0;
   // A default that depends on the surroundings cannot be written as a constant in the
-  // grammar, which runs before there is anything to know (design D4). The text next to
+  // grammar, which runs before there is anything to know. The text next to
   // it is what the help shows, because the help does NOT run the calculation.
   OutOpt := CommandLine.Option<string>('--out', 'Where to write')
     .WithDefault(

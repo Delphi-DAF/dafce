@@ -57,9 +57,9 @@ type
 
   TStartupWorld = class
   strict private
-    // Hay escenarios que fallan a proposito, y desde que THost.Start informa de verdad ese fallo
-    // sale por la salida de error del arnes. Es el comportamiento que se quiere; aqui solo se
-    // aparta para que no se confunda con la salida de las specs.
+    // Hay escenarios que fallan a proposito, y ese fallo sale por la salida de error del arnes.
+    // Es el comportamiento que se quiere; aqui solo se aparta para que no se confunda con la
+    // salida de las specs.
     FSavedSinks: TArray<IBootstrapSink>;
   public
     Host: IHost;

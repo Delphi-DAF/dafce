@@ -3,7 +3,7 @@
 {
   NULL-aware comparison for the value currency used by the in-memory query
   engine. SQL NULL is modelled as an empty TValue (or a Variant-kind TValue
-  holding Null/Unassigned). Two coordinated policies (Decision 10):
+  holding Null/Unassigned). Two coordinated policies:
 
     * Ordering  — NULL sorts smaller than every non-NULL value (nulls-first
                   ASC / nulls-last DESC); two NULLs are equal.

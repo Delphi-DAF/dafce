@@ -1,6 +1,6 @@
 ﻿unit RuleSelection.Feat;
 
-// La primera suite de NNLog. Los dos defectos que cubre fallan en silencio y en direcciones
+// Los dos defectos que cubre fallan en silencio y en direcciones
 // opuestas —una regla sin `enabled` no escribe nada; una regla con `name` distinto de `*` lo
 // escribe todo—, así que ningún escenario afirma «se escribió» o «no se lanzó»: cada uno afirma
 // QUÉ anotó el destino de prueba (categoría por categoría), que es lo único que el código roto no

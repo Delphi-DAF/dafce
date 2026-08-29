@@ -392,7 +392,7 @@ Feature Command line help @commandline @help
       procedure(W: THelpWorld)
       begin
         // Hiding it from the help is not hiding it from whoever already uses it: an
-        // error that will not say what failed turns a mistake into a riddle (design D5).
+        // error that will not say what failed turns a mistake into a riddle.
         Expect(W.Parsed.Succeeded).ToBeFalse;
         // The message has to be the CONVERSION's, naming the option. Asserting only
         // that '--diag' appears would also be satisfied by "unknown option --diag",

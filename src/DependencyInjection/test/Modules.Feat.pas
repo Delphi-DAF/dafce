@@ -61,7 +61,7 @@ type
 /// Alternativa ligera al modulo: agrupa unos pocos registros sin declarar un tipo. En
 /// Delphi no encadena — se llama AddOtherFoo(Services), no Services.AddOtherFoo.
 // Las specs de reproducibilidad ejercitan el descubrimiento a proposito: sigue siendo
-// comportamiento publicado hasta 2.0, y es donde vivia el estado global que se arregla.
+// comportamiento publicado hasta 2.0.
 {$WARN SYMBOL_DEPRECATED OFF}
 
 function AddOtherFoo(const Services: IServiceCollection): IServiceCollection;
@@ -76,7 +76,7 @@ uses
   Daf.DependencyInjection;
 
 // Las specs de reproducibilidad ejercitan el descubrimiento a proposito: sigue siendo
-// comportamiento publicado hasta 2.0, y es donde vivia el estado global que se arregla.
+// comportamiento publicado hasta 2.0.
 {$WARN SYMBOL_DEPRECATED OFF}
 
 function AddOtherFoo(const Services: IServiceCollection): IServiceCollection;

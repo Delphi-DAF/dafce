@@ -1,9 +1,8 @@
 ﻿unit RestrictedRtti.Feat;
 
-// La RTTI de esta unit va recortada a proposito: METHODS, PROPERTIES y FIELDS vacios. Es
-// el caso que el descubrimiento dejaba ciego en silencio -- y la razon por la que se
-// retiro. Aqui se afirma lo contrario: recortar la RTTI no cambia lo que se registra,
-// porque el registro de modulos ya no la consulta.
+// La RTTI de esta unit va recortada a proposito: METHODS, PROPERTIES y FIELDS vacios.
+// Aqui se afirma: recortar la RTTI no cambia lo que se registra, porque el registro de
+// modulos no la consulta.
 {$RTTI EXPLICIT METHODS([]) PROPERTIES([]) FIELDS([])}
 
 interface

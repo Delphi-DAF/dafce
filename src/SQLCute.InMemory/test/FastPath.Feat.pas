@@ -1,7 +1,7 @@
 ﻿unit FastPath.Feat;
 
 {
-  Phase 1 — single-source fast lane. A SQLCute IQuery is compiled onto a typed
+  The single-source fast lane. A SQLCute IQuery is compiled onto a typed
   TList<T> via TInMemory.Elements<T>, preserving T end-to-end: no IRow, no catalog.
   Covers WHERE (comparisons, precedence, IS NULL, BETWEEN, IN/NOT IN, column-to-
   column, LIKE), three-valued NULL logic, ORDER BY / LIMIT / OFFSET / DISTINCT,

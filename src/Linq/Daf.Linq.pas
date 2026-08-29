@@ -657,7 +657,7 @@ end;
 
 class function Linq.From<T>(const Source: TSmartArray<T>): TQuery<T>;
 begin
-  var Data: TArray<T> := Source;   // TSmartArray<T> -> TArray<T> (implicit)
+  var Data: TArray<T> := Source;
   Result := From<T>(Data);
 end;
 

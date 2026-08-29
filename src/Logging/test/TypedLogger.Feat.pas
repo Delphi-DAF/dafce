@@ -68,9 +68,7 @@ type
   end;
 
 function NewCategorySpy: ICategorySpy;
-/// La categoria que le toca a una clase, calculada a partir de la clase misma. Escrita asi y no
-/// como un literal a proposito: si alguien renombra la clase, lo que se espera se mueve con ella
-/// -- que es exactamente la propiedad que este spec afirma.
+/// La categoria que le toca a una clase, calculada a partir de la clase misma.
 function CategoryOf(const AClass: TClass): string;
 
 implementation
@@ -238,9 +236,9 @@ Feature A service gets a logger that already carries its own category @logging @
       end)
 
   .Scenario('The category is derived from the class, not written down beside it')
-    // La razon de ser del contrato, y hasta ahora no habia nada que la afirmara. Lo que se espera
-    // se calcula a partir de la clase, asi que si alguien la renombra esta afirmacion se mueve con
-    // ella y la composicion de arriba no se toca: eso ES "renombrar no deja la categoria atras".
+    // Lo que se espera se calcula a partir de la clase, asi que si alguien la renombra esta
+    // afirmacion se mueve con ella y la composicion de arriba no se toca: eso ES "renombrar
+    // no deja la categoria atras".
     .Given('the default composition and one service',
       procedure(W: TTypedLoggerWorld)
       begin

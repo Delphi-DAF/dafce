@@ -111,10 +111,10 @@ type
     // Y el especificador de visibilidad que viene detras no es decorado: en Delphi un bloque
     // class var sigue abierto hasta el siguiente, asi que un campo escrito tras el class var de
     // abajo seria tambien un class var -- que la RTTI no expone y que todos los cierres
-    // compartirian. Medido: escrito ahi, el contenedor no ve campo y no rellena nada.
+    // compartirian.
     _ClosedArgs: TBoxArgs;
   public
-    // Compartido por todos los cierres a proposito, y no es un descuido: TBox<_> es UNA sola
+    // Compartido por todos los cierres a proposito: TBox<_> es UNA sola
     // clase. Sirve para contar construcciones, que es lo unico para lo que un valor comun vale.
     class var Built: Integer;
     constructor Create;
@@ -672,8 +672,7 @@ Feature One registration for every closure of a generic contract @di @generics @
     .&Then('it is refused rather than handed over',
       procedure(W: TOpenWorld)
       begin
-        // Medido antes de que esto existiera: se entregaba y devolvia 0, sin excepcion. Un
-        // cero que sale de leer un puntero nil como entero es el fallo mudo entero, en una
+        // Un cero que sale de leer un puntero nil como entero es el fallo mudo entero, en una
         // sola cifra que parece un resultado.
         Expect(W.Outcome).ToContain('same call shape');
       end)

@@ -317,7 +317,7 @@ Feature A hand-written factory knows what it is being asked for @di @factory @re
     .&Then('it resolves exactly as before',
       procedure(W: TRequestedWorld)
       begin
-        // Sobre lo que devuelve, no sobre que no lanzara: la forma corta no paso a ser un no-op.
+        // Sobre lo que devuelve, no sobre que no lanzara.
         Expect(W.Told).ToEqual('short-form');
         Expect(W.Outcome).ToEqual(SinFallo);
       end)

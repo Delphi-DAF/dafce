@@ -3,12 +3,6 @@
 {
   The value engine.
 
-  It is written from scratch rather than carried over from Daf.CmdLn, and the two
-  measured defects of that one say why. There an Integer was described by the regular
-  expression \d+ and the match was anchored only at the start, so -5 could not be
-  passed at all and --port 80xyz was accepted as the value 80: a number invented out
-  of an invalid invocation, which is worse than refusing it.
-
   Here a conversion consumes the WHOLE token or fails. Nothing is anchored by hand,
   because nothing is matched by pattern: TryStrToInt and TryStrToFloat already answer
   "does this entire string denote one value", which is the question that was being
@@ -120,7 +114,7 @@ end;
 class function TCommandLineValue.Handles(TypeInf: PTypeInfo): Boolean;
 begin
   // The list is translated from .NET's, not copied from it: what a command line needs is
-  // numbers of the widths people use, dates, identifiers and paths (design D1). Here a
+  // numbers of the widths people use, dates, identifiers and paths. Here a
   // path is a string, so it is already in. DateOnly and TimeOnly have no Delphi type of
   // their own, and TDateTime covers what interested them -- a declared divergence.
   Result := (TypeInf = System.TypeInfo(string)) or (TypeInf = System.TypeInfo(Integer)) or

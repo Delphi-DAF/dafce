@@ -160,7 +160,7 @@ Feature In-memory repository adapter @expressions @repository
     .&Then('an EXISTS-carrying query raises when the plan is compiled',
       procedure(W: TRepositoryWorld)
       begin
-        // The expression model cannot say EXISTS — that is Decision 6 working. So
+        // The expression model cannot say EXISTS. So
         // the untranslatable query arrives the only way it can: as the base query
         // this repository is scoped to.
         var WithExists := TQuery.New.From('Product')

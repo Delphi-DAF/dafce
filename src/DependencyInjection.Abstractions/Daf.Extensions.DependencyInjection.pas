@@ -606,11 +606,7 @@ end;
 
 procedure IServiceProvider.ShutDown;
 begin
-  // Se llega al contenedor por QueryInterface, NO resolviendo. Resolver era la dependencia que
-  // rompia el cierre repetido: IServiceScopeFactory se registra como singleton, y el primer
-  // cierre desmonta el ambito de singletons, asi que el segundo pedia un servicio a algo que ya
-  // no podia servirlo. Supports no consulta descriptores ni toca ese ambito, con lo que la
-  // guarda de idempotencia del contenedor queda por fin alcanzable.
+  // Se llega al contenedor por QueryInterface, NO resolviendo.
   var Container: IContainerAccess;
   if Supports(FImplementor, IContainerAccess, Container) then
     Container.ShutDown;

@@ -132,11 +132,10 @@ type
     /// The Value for the Key, or the empty string when the Key is absent.
     /// </summary>
     /// <remarks>
-    ///   Returns a plain string <b>on purpose</b>, and it is measured: a nullable
-    ///   return converts implicitly, and that conversion is applied in the comparison,
-    ///   so <c>C['absent'] = ''</c> and <c>C['empty'] = ''</c> both stay True. It would
-    ///   not fix the defect, it would hide it behind a type that promises to fix it.
-    ///   Use <see cref="Exists"/> or <see cref="Find"/> to tell the two apart.
+    ///   The indexer is typed as a plain string, so it cannot report absence: an
+    ///   absent Key and a Key with an empty value both read as the empty string, and
+    ///   <c>C['absent'] = ''</c> and <c>C['empty'] = ''</c> are both True. Use
+    ///   <see cref="Exists"/> or <see cref="Find"/> to tell the two apart.
     /// </remarks>
     property Item[const Key: string]: string read GetItem write SetItem; default;
   end;

@@ -160,8 +160,8 @@ Feature La variante Web de la familia @web @application-family
         Expect(W.Report).ToEqual('server=True router=True');
       end)
 
-  // Hasta ahora nada ejercitaba el arranque web por el uso: src/web no tiene un solo .dpr fuera
-  // de sus specs, asi que si su arranque dejara de arrancar no habria quien se diera cuenta.
+  // src/web no tiene un solo .dpr fuera de sus specs: este escenario es lo unico que se daria
+  // cuenta si su arranque dejara de arrancar.
   .Scenario('El arranque web llega hasta un servidor escuchando')
     .Given('una aplicacion web compuesta de punta a punta',
       procedure(W: TWebVariantWorld)

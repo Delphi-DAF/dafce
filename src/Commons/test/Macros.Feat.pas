@@ -75,7 +75,7 @@ Feature Commons macro expressions @commons @macros
             begin
               Result := Source;
             end);
-          Source := 'after';          // changed after registration
+          Source := 'after';
           W.FromThunk := Macros['dyn'];
         finally
           Macros.Free;

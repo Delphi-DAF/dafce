@@ -114,7 +114,6 @@ begin
 
   Dump('JSON', Config);
 
-//  ConfigBuilder := TConfigurationBuilder.Create;
 
   Config := IniConfig.AddFile(ConfigBuilder, TPath.Combine(SampleFilesPath, 'appsettings.ini')).Build;
 

@@ -2,8 +2,7 @@
 
 {
   Coverage for Commons' eager collection API (TSmartArray<T>): its filter and
-  mapper vocabulary. The type had no specs, so a signature change to Select had
-  no safety net — this is that net.
+  mapper vocabulary.
 
   The cross-API scenarios (the same filter or mapper value used with both the
   eager TSmartArray and the lazy Daf.Linq) live in LinqSpecs, which already

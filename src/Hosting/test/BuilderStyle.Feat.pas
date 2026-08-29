@@ -61,9 +61,6 @@ Feature Several startups in one process @hosting @builder-style
 
 .Rule('Overlapping startups')
 
-  // The uniqueness this used to assert was a class var, so a second builder created before
-  // the first was gone tripped it. With the immediate style that stops being the odd case:
-  // what used to be born and die inside Build now lives for the whole startup.
   .Scenario('Two builders alive at once')
     .Given('one builder that is not going to be released',
       procedure(W: TOverlapWorld)

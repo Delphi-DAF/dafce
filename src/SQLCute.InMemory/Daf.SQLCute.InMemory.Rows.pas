@@ -1,7 +1,7 @@
 ﻿unit Daf.SQLCute.InMemory.Rows;
 
 {
-  The dynamic row model (Decision 4) and the IRow-based pipeline helpers used by
+  The dynamic row model and the IRow-based pipeline helpers used by
   the general lane (projection / dynamic rows). IRow is the currency only where a
   static Delphi type is absent or a reshape is needed:
 
@@ -14,7 +14,7 @@
   SELECT projection to a row. TRttiRow<T> (the zero-copy object view) is generic and
   lives with the accessors in Daf.SQLCute.InMemory.
 
-  Values are TValue throughout (Decision 3); NULL semantics come from Daf.Comparers.
+  Values are TValue throughout; NULL semantics come from Daf.Comparers.
 }
 
 interface
@@ -81,7 +81,7 @@ type
   end;
 
   /// <summary>
-  ///   A composite row combining named child rows (Decision 4). Resolves a
+  ///   A composite row combining named child rows. Resolves a
   ///   qualified <c>alias.column</c> to the matching side and a bare column to the
   ///   first side that carries it, so joined rows expose every side's columns.
   /// </summary>

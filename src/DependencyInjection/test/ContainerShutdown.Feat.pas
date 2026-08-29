@@ -238,8 +238,7 @@ Feature Container shutdown leaves a defined state @di @lifetime @shutdown
     .&Then('they are served as before, with no error',
       procedure(W: TShutdownWorld)
       begin
-        // Esta escena pasa antes y despues del arreglo, y es a proposito: vigila que la guarda
-        // nueva no se lleve por delante la resolucion normal.
+        // vigila que la guarda no se lleve por delante la resolucion normal.
         Expect(W.Outcome).ToEqual(SinError);
       end)
     .&And('the singleton answers',

@@ -119,8 +119,7 @@ type
     FArgs: TArray<string>;
     FEnvironment: IHostEnvironment;
     FHostBuilderContext: IHostBuilderContext;
-    // UNA sola configuracion, y nace prepoblada. Antes eran dos objetos y dos fases, unidos por
-    // el proveedor encadenado; el estilo inmediato no une nada porque no hay dos que unir.
+    // UNA sola configuracion, y nace prepoblada.
     FConfiguration: IConfigurationManager;
     FServices: IServiceCollection;
     FAppServices: IServiceProvider;
@@ -190,9 +189,6 @@ uses
   System.SyncObjs,
   System.Types,
   Daf.DependencyInjection,
-  // Daf.Configuration.Chained ya no aparece: unir la configuracion de host con la de
-  // aplicacion era su unico llamador de framework, y con una sola configuracion no hay dos que
-  // unir. La pieza sigue publica y con spec propio -- lo que se va es este llamador.
   Daf.Configuration.Manager,
   Daf.Configuration.Env,
   Daf.Configuration.CommandLine;
