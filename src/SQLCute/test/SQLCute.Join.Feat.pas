@@ -1,7 +1,7 @@
 ﻿unit SQLCute.Join.Feat;
 
 {
-  TQuery: JOIN (all types), GROUP BY, HAVING, set operations,
+  TQuery: JOIN (all types), GROUP BY, HAVING,
           CTE (WITH / WITH RECURSIVE), subqueries.
 }
 
@@ -16,11 +16,11 @@ uses
 initialization
 
 Feature('''
-TQuery — JOIN / GROUP BY / set operations / CTE @unit @sqlcute
+TQuery — JOIN / GROUP BY / CTE @unit @sqlcute
 
   TQuery builds complex SELECT statements via a fluent API.
-  These specs cover: all JOIN types, GROUP BY, HAVING, UNION / ALL /
-  INTERSECT / EXCEPT, WITH / WITH RECURSIVE and FROM subqueries.
+  These specs cover: all JOIN types, GROUP BY, HAVING,
+  WITH / WITH RECURSIVE and FROM subqueries.
 ''')
 .UseWorld<TSQLCuteWorld>
 
@@ -144,61 +144,6 @@ TQuery — JOIN / GROUP BY / set operations / CTE @unit @sqlcute
     .&Then('SQL is "SELECT dept_id FROM orders GROUP BY dept_id HAVING SUM(total) > 1000"')
     .&Then('has 0 bindings')
 
-// -------------------------------------------------------------------------
-
-.Rule('Union combines two result sets')
-
-  .Scenario('Union produces UNION keyword')
-    .Given('a UNION query')
-    .When('I compile with ANSI')
-    .&Then('SQL is "SELECT id FROM active_users UNION SELECT id FROM archived_users"')
-
-// -------------------------------------------------------------------------
-
-.Rule('UnionAll, Intersect and Except produce their respective set operations')
-
-  .Scenario('UnionAll appends UNION ALL')
-    .Given('a UnionAll query')
-    .When('I compile with ANSI')
-    .&Then('SQL is "SELECT id FROM a UNION ALL SELECT id FROM b"')
-    .&Then('has 0 bindings')
-
-  .Scenario('Intersect appends INTERSECT')
-    .Given('an Intersect query')
-    .When('I compile with ANSI')
-    .&Then('SQL is "SELECT id FROM a INTERSECT SELECT id FROM b"')
-    .&Then('has 0 bindings')
-
-  .Scenario('Except appends EXCEPT')
-    .Given('an Except query')
-    .When('I compile with ANSI')
-    .&Then('SQL is "SELECT id FROM a EXCEPT SELECT id FROM b"')
-    .&Then('has 0 bindings')
-
-// -------------------------------------------------------------------------
-
-
-.Rule('IntersectAll and ExceptAll emit INTERSECT ALL / EXCEPT ALL')
-
-  .Scenario('IntersectAll produces INTERSECT ALL')
-    .Given('an IntersectAll query')
-    .When('I compile with ANSI')
-    .&Then('SQL is "SELECT id FROM a INTERSECT ALL SELECT id FROM b"')
-    .&Then('has 0 bindings')
-
-  .Scenario('ExceptAll produces EXCEPT ALL')
-    .Given('an ExceptAll query')
-    .When('I compile with ANSI')
-    .&Then('SQL is "SELECT id FROM a EXCEPT ALL SELECT id FROM b"')
-    .&Then('has 0 bindings')
-
-  .Scenario('CombineRaw emits the raw fragment verbatim')
-    .Given('a CombineRaw query')
-    .When('I compile with ANSI')
-    .&Then('SQL is "SELECT id FROM a UNION SELECT id FROM b WHERE status = ''active''"')
-    .&Then('has 0 bindings')
-
-// -------------------------------------------------------------------------
 .Rule('With names a common table expression')
 
   .Scenario('CTE used as FROM source')
