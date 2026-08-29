@@ -657,7 +657,7 @@ begin
           Continue;   // '*' — no explicit projection entry
         if Col.IsRaw or (Col.SubQuery <> nil) then
           raise EInMemoryQueryError.Create(
-            'Raw / subquery SELECT columns require the general lane (Phase 3).');
+            'Raw / subquery SELECT columns require the general lane.');
         var P: TProjColumn;
         P.Source := Col.Column;
         if Col.Alias <> '' then
@@ -682,25 +682,25 @@ begin
     if (C is TJoinClause) or (C is TJoinSubqueryClause) then
       raise EInMemoryQueryError.Create(
         'This query joins multiple sources; execute it with a query context '
-        + '(the general multi-source lane, Phase 3), not a single list.');
+        + '(the general multi-source lane), not a single list.');
     if C is TUnionClause then
       raise EInMemoryQueryError.Create(
-        'Set operations (UNION / INTERSECT / EXCEPT) require the multi-source lane (Phase 3).');
+        'Set operations (UNION / INTERSECT / EXCEPT) require the multi-source lane.');
     if (C is TFromSubqueryClause) or (C is TFromRawClause) then
       raise EInMemoryQueryError.Create(
-        'Derived-table / raw FROM sources require a query context (Phase 3).');
+        'Derived-table / raw FROM sources require a query context.');
     if C is TWithClause then
-      raise EInMemoryQueryError.Create('CTEs (WITH) require the multi-source lane (Phase 3).');
+      raise EInMemoryQueryError.Create('CTEs (WITH) require the multi-source lane.');
     if (C is TGroupByClause) or (C is THavingClause) then
       raise EInMemoryQueryError.Create(
-        'GROUP BY / HAVING aggregation requires the general lane (Phase 3).');
+        'GROUP BY / HAVING aggregation requires the general lane.');
     if C is TWhereClause then
     begin
       var W := TWhereClause(C);
       if (W.SubQuery <> nil)
          or (W.Op = TWhereOp.&Exists) or (W.Op = TWhereOp.NotExists) then
         raise EInMemoryQueryError.Create(
-          'Subquery / EXISTS WHERE conditions require a query context (Phase 3).');
+          'Subquery / EXISTS WHERE conditions require a query context.');
     end;
     if (C is TOrderByClause) and TOrderByClause(C).IsRaw then
       raise EInMemoryQueryError.Create('Raw ORDER BY expressions cannot be evaluated in memory.');

@@ -643,7 +643,7 @@ begin
     if C is TJoinSubqueryClause then
       raise EInMemoryQueryError.Create('Subquery JOINs are not supported by the in-memory backend.');
     if (C is TFromSubqueryClause) or (C is TFromRawClause) then
-      raise EInMemoryQueryError.Create('Derived-table / raw FROM sources require Phase 3C.');
+      raise EInMemoryQueryError.Create('Derived-table / raw FROM sources are not supported by the in-memory backend.');
     if C is TWithClause then
       raise EInMemoryQueryError.Create('CTEs (WITH) are not supported by the in-memory backend.');
   end;
