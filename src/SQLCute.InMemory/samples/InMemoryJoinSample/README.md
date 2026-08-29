@@ -20,7 +20,7 @@ Every section also prints the SQL the other back-end would send to a database.
 
 ```
 BDS make --project:src/SQLCute.InMemory/samples/InMemoryJoinSample/InMemoryJoinSample.dproj
-out\samples\bin\Win32\InMemoryJoinSample.exe
+out\Win32\samples\bin\InMemoryJoinSample.exe
 ```
 
 See also [InMemoryQuerySample](../InMemoryQuerySample/README.md) for the single-list fast lane, and the [usage guide](../../docs/GUIDE.md).

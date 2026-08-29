@@ -25,7 +25,7 @@ buildtool                        --verbose, -v   recursive: every leaf inherits 
 With no arguments it walks a set of invocations, including the four that fail:
 
 ```
-out\samples\bin\Win32\BuildTool.exe
+out\Win32\samples\bin\BuildTool.exe
 ```
 
 With arguments it parses those instead:

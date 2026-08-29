@@ -28,5 +28,5 @@ Dos detalles del mismo ejemplo:
 
 ```
 BDS make --project:src/Hosting/samples/PackageInit/PackageInit.dproj
-out\samples\bin\Win32\PackageInit.exe
+out\Win32\samples\bin\PackageInit.exe
 ```

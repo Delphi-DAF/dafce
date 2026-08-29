@@ -15,7 +15,7 @@ Swapping the in-memory adapter for a database-backed one is an edit to the secon
 
 ```bash
 BDS make --project:src/SQLCute.Specification/samples/CatalogServiceSample/CatalogServiceSample.dproj
-out\samples\bin\CatalogServiceSample.exe
+out\Win32\samples\bin\CatalogServiceSample.exe
 ```
 
 ## What it shows

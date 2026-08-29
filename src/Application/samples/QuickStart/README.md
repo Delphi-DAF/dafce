@@ -25,7 +25,7 @@ el `.dpr` no está en la sección `interface` de ninguna unit, y resolverlo abor
 
 ```
 BDS make --project:src/Application/samples/QuickStart/QuickStart.dproj
-out\samples\bin\Win32\QuickStart.exe
+out\Win32\samples\bin\QuickStart.exe
 ```
 
 Salida esperada:

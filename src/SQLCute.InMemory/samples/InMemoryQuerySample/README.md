@@ -21,7 +21,7 @@ Every section also prints the SQL the other back-end would send to a database, s
 
 ```
 BDS make --project:src/SQLCute.InMemory/samples/InMemoryQuerySample/InMemoryQuerySample.dproj
-out\samples\bin\Win32\InMemoryQuerySample.exe
+out\Win32\samples\bin\InMemoryQuerySample.exe
 ```
 
 See also [InMemoryJoinSample](../InMemoryJoinSample/README.md) for the multi-source lane, and the [usage guide](../../docs/GUIDE.md).
