@@ -11,6 +11,7 @@ uses
   SQLCute.Where.Feat in 'SQLCute.Where.Feat.pas',
   SQLCute.Operators.Feat in 'SQLCute.Operators.Feat.pas',
   SQLCute.WhereTree.Feat in 'SQLCute.WhereTree.Feat.pas',
+  SQLCute.Kind.Feat in 'SQLCute.Kind.Feat.pas',
   SQLCute.Factory.Feat in 'SQLCute.Factory.Feat.pas',
   SQLCute.Join.Feat in 'SQLCute.Join.Feat.pas',
   SQLCute.DML.Feat in 'SQLCute.DML.Feat.pas',

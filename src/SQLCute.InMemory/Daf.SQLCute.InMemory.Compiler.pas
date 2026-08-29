@@ -668,9 +668,16 @@ begin
       end;
 end;
 
-procedure EnsureSingleSource(const Clauses: TArray<TAbstractClause>);
+procedure EnsureSingleSource(const Query: IQuery);
 begin
-  for var C in Clauses do
+  // Read-only is now a whitelist of one: anything that is not a retrieval is
+  // rejected by the declared kind, naming it — so a statement kind added later
+  // is covered without anyone remembering to blacklist its clause here.
+  if Query.Kind <> TQueryKind.Select then
+    raise EInMemoryQueryError.CreateFmt(
+      'The in-memory backend is read-only; it cannot execute a %s statement.',
+      [QueryKindName(Query.Kind)]);
+  for var C in Query.Clauses do
   begin
     if (C is TJoinClause) or (C is TJoinSubqueryClause) then
       raise EInMemoryQueryError.Create(
@@ -687,8 +694,6 @@ begin
     if (C is TGroupByClause) or (C is THavingClause) then
       raise EInMemoryQueryError.Create(
         'GROUP BY / HAVING aggregation requires the general lane (Phase 3).');
-    if (C is TInsertClause) or (C is TUpdateSetClause) or (C is TDeleteClause) then
-      raise EInMemoryQueryError.Create('The in-memory backend is read-only; DML stays SQL-only.');
     if C is TWhereClause then
     begin
       var W := TWhereClause(C);
@@ -774,9 +779,8 @@ end;
 
 class function TInMemoryCompiler.Compile(const Query: IQuery): TCompiledQuery;
 begin
-  var Clauses := Query.Clauses;
-  EnsureSingleSource(Clauses);       // fail fast before allocating the plan
-  Result := Populate(Clauses);
+  EnsureSingleSource(Query);          // fail fast before allocating the plan
+  Result := Populate(Query.Clauses);
 end;
 
 class function TInMemoryCompiler.CompileMulti(const Query: IQuery): TCompiledQuery;

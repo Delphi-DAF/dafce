@@ -27,6 +27,13 @@ type
   TQueryImpl = class(TInterfacedObject, IQuery)
   private
     FClauses: TObjectList<TAbstractClause>;
+    FKind: TQueryKind;
+    /// Sets the statement kind. When it differs from the current one, the
+    /// clauses that mark the outgoing DML kind are removed first, so the tree
+    /// never keeps a clause no compiler emits. The single point the DML facades
+    /// go through — AsInsert delegates to AsInsertRows, so only the latter calls
+    /// this, never both.
+    procedure ReplaceKind(K: TQueryKind);
     function AddWhereClause(const Column: string; Op: TWhereOp;
       const Value: Variant; Conn: TBoolOp; IsNot: Boolean = False): IQuery;
     function AddWhereClause2(const Column: string; Op: TWhereOp;
@@ -99,6 +106,7 @@ type
     function Clone: IQuery;
     function Compile(const Compiler: IQueryCompiler): TSQLResult;
     function Clauses: TArray<TAbstractClause>;
+    function Kind: TQueryKind;
     // IQuery — Phase 2
     function Join(const Table, Col1, Col2: string; const Op: string = '='): IQuery; overload;
     function Join(const Table, Condition: string): IQuery; overload;
@@ -200,16 +208,53 @@ type
 
 { TQueryImpl }
 
+// The DML statement a clause marks, or Select for a clause that marks none
+// (the shared structural clauses: projection, source, conditions, ordering…).
+// This is the one place production classifies a clause on the statement axis;
+// the completeness spec keeps it exhaustive by failing on any clause type it
+// leaves out.
+function StatementKindOf(const C: TAbstractClause): TQueryKind;
+begin
+  if C is TInsertClause then
+    Exit(TQueryKind.Insert);
+  if C is TUpdateSetClause then
+    Exit(TQueryKind.Update);
+  if C is TDeleteClause then
+    Exit(TQueryKind.Delete);
+  Result := TQueryKind.Select;
+end;
+
 constructor TQueryImpl.Create;
 begin
   inherited Create;
   FClauses := TObjectList<TAbstractClause>.Create(True {owns objects});
+  FKind := TQueryKind.Select;
 end;
 
 destructor TQueryImpl.Destroy;
 begin
   FClauses.Free;
   inherited;
+end;
+
+procedure TQueryImpl.ReplaceKind(K: TQueryKind);
+begin
+  if K = FKind then
+    Exit;
+  // Switching away from a DML kind: drop its marker clauses so the tree does not
+  // keep a clause no compiler emits. Never when leaving Select — its "marker" is
+  // every structural clause, none of which the incoming kind wants gone.
+  // FClauses owns its objects, so Delete frees; Extract would leak.
+  if FKind <> TQueryKind.Select then
+    for var I := FClauses.Count - 1 downto 0 do
+      if StatementKindOf(FClauses[I]) = FKind then
+        FClauses.Delete(I);
+  FKind := K;
+end;
+
+function TQueryImpl.Kind: TQueryKind;
+begin
+  Result := FKind;
 end;
 
 function TQueryImpl.AddWhereClause(const Column: string; Op: TWhereOp;
@@ -576,6 +621,7 @@ var
   Cl: TAbstractClause;
 begin
   Copy := TQueryImpl.Create;
+  Copy.FKind := FKind;
   for Cl in FClauses do
     Copy.FClauses.Add(Cl.Clone);
   Result := Copy;
@@ -1268,6 +1314,7 @@ function TQueryImpl.AsInsertRows(const Columns: TArray<string>;
 var
   IC: TInsertClause;
 begin
+  ReplaceKind(TQueryKind.Insert);
   IC := TInsertClause.Create;
   IC.Columns := Columns;
   IC.Rows    := Rows;
@@ -1280,6 +1327,8 @@ function TQueryImpl.AsInsert(const Columns: TArray<string>;
 var
   Rows: TArray<TArray<Variant>>;
 begin
+  // Delegates to AsInsertRows, which sets the kind — the guard lives there and
+  // only there, so a single AsInsert call does not fire it twice.
   SetLength(Rows, 1);
   Rows[0] := Values;
   Result := AsInsertRows(Columns, Rows);
@@ -1290,6 +1339,7 @@ function TQueryImpl.AsInsertFrom(const Columns: TArray<string>;
 var
   IC: TInsertClause;
 begin
+  ReplaceKind(TQueryKind.Insert);
   IC := TInsertClause.Create;
   IC.Columns  := Columns;
   IC.SubQuery := SubQuery;
@@ -1303,6 +1353,9 @@ var
   I: Integer;
   US: TUpdateSetClause;
 begin
+  // One clause per column; declaring UPDATE twice accumulates columns because
+  // the kind is unchanged, so ReplaceKind removes nothing on the second call.
+  ReplaceKind(TQueryKind.Update);
   for I := 0 to Min(High(Columns), High(Values)) do
   begin
     US := TUpdateSetClause.Create;
@@ -1315,6 +1368,7 @@ end;
 
 function TQueryImpl.AsDelete: IQuery;
 begin
+  ReplaceKind(TQueryKind.Delete);
   FClauses.Add(TDeleteClause.Create);
   Result := Self;
 end;

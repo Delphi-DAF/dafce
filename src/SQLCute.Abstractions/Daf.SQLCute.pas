@@ -23,6 +23,15 @@ type
     class function Empty: TSQLResult; static;
   end;
 
+  /// <summary>
+  /// The kind of statement a query has been built as. Stored on the query and
+  /// set by the DML facades, not deduced by walking the clauses: a back-end
+  /// consults this instead of guessing from which clauses are present.
+  /// Select is the default — in SQL there is no third state, a query with no
+  /// modification clause is a retrieval — so it needs no explicit initialiser.
+  /// </summary>
+  TQueryKind = (Select, Insert, Update, Delete);
+
   // ---------------------------------------------------------------------------
   //  IQuery  —  fluent query builder interface
   // ---------------------------------------------------------------------------
@@ -369,6 +378,13 @@ type
 
     /// <summary>Returns the ordered list of AST clause nodes.</summary>
     function Clauses: TArray<TAbstractClause>;
+
+    /// <summary>
+    /// The kind of statement this query has been built as. The DML facades set
+    /// it; back-ends consult it rather than deducing the statement from the
+    /// clauses present. Defaults to <c>TQueryKind.Select</c>.
+    /// </summary>
+    function Kind: TQueryKind;
   end;
 
   // ---------------------------------------------------------------------------
@@ -440,11 +456,16 @@ procedure RegisterIQueryFactory(const AFactory: TIQueryFactory);
 /// <summary>Converts an operator string ('=', '>', '<', etc.) to TWhereOp.</summary>
 function ParseWhereOp(const Op: string): TWhereOp;
 
+/// <summary>The name of a statement kind ('Select', 'Insert', …), so a guard
+/// can name the kind it received rather than describing it.</summary>
+function QueryKindName(const K: TQueryKind): string;
+
 
 implementation
 
 uses
-  System.StrUtils;
+  System.StrUtils,
+  System.TypInfo;
 
 { TSQLResult }
 
@@ -482,6 +503,13 @@ begin
   if I < 0 then
     raise EArgumentException.CreateFmt('Unknown SQL operator: "%s"', [Op]);
   Result := WhereOpValues[I];
+end;
+
+{ QueryKindName }
+
+function QueryKindName(const K: TQueryKind): string;
+begin
+  Result := GetEnumName(TypeInfo(TQueryKind), Ord(K));
 end;
 
 { TQuery }

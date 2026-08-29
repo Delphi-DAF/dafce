@@ -13,6 +13,11 @@ uses
   Daf.SQLCute.WhereTree;
 
 type
+  /// <summary>Raised when the compiler is handed a statement kind it has no
+  /// path for — so a future kind fails loud instead of silently compiling a
+  /// retrieval.</summary>
+  ESQLCuteCompilerError = class(Exception);
+
   /// <summary>
   /// ANSI SQL compiler — baseline implementation of IQueryCompiler.
   /// Produces standard SQL with '?' positional parameters.
@@ -515,36 +520,41 @@ var
   Clauses: TArray<TAbstractClause>;
   Parts: TArray<string>;
   WithPart, UnionPart, MainSQL: string;
-  Clause: TAbstractClause;
 begin
   FBindings := TList<Variant>.Create;
   try
     Clauses := Query.Clauses;
 
-    // Detect DML query kind first
-    for Clause in Clauses do
-    begin
-      if Clause is TDeleteClause then
-      begin
-        Result.SQL      := CompileDelete(Clauses);
-        Result.Bindings := FBindings.ToArray;
-        Exit;
-      end;
-      if Clause is TUpdateSetClause then
-      begin
-        Result.SQL      := CompileUpdate(Clauses);
-        Result.Bindings := FBindings.ToArray;
-        Exit;
-      end;
-      if Clause is TInsertClause then
-      begin
-        Result.SQL      := CompileInsert(Clauses);
-        Result.Bindings := FBindings.ToArray;
-        Exit;
-      end;
+    // Route by the declared statement kind, not by which clauses are present.
+    // No mute branch: a kind with no path here raises rather than falling to
+    // SELECT — a future kind is a loud failure, not a silent retrieval. Select
+    // is the empty arm that falls through to the SELECT assembly below.
+    case Query.Kind of
+      TQueryKind.Delete:
+        begin
+          Result.SQL      := CompileDelete(Clauses);
+          Result.Bindings := FBindings.ToArray;
+          Exit;
+        end;
+      TQueryKind.Update:
+        begin
+          Result.SQL      := CompileUpdate(Clauses);
+          Result.Bindings := FBindings.ToArray;
+          Exit;
+        end;
+      TQueryKind.Insert:
+        begin
+          Result.SQL      := CompileInsert(Clauses);
+          Result.Bindings := FBindings.ToArray;
+          Exit;
+        end;
+      TQueryKind.Select: ;  // falls through to the SELECT assembly below
+    else
+      raise ESQLCuteCompilerError.CreateFmt(
+        'No SQL path for statement kind %s.', [QueryKindName(Query.Kind)]);
     end;
 
-    // Default: SELECT
+    // SELECT
     WithPart := CompileWith(Clauses);
 
     SetLength(Parts, 9);

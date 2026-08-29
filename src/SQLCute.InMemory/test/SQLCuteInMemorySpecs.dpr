@@ -11,7 +11,8 @@ uses
   Projection.Feat in 'Projection.Feat.pas',
   Context.Feat in 'Context.Feat.pas',
   EmptyIn.Feat in 'EmptyIn.Feat.pas',
-  Parity.Feat in 'Parity.Feat.pas';
+  Parity.Feat in 'Parity.Feat.pas',
+  ReadOnly.Feat in 'ReadOnly.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;
