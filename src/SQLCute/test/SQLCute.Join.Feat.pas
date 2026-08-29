@@ -88,6 +88,20 @@ TQuery — JOIN / GROUP BY / set operations / CTE @unit @sqlcute
 
 // -------------------------------------------------------------------------
 
+
+.Rule('JOIN with custom operator emits col1 op col2')
+
+  .Scenario('Join with <> operator')
+    .Given('a Join with not-equal operator query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM orders INNER JOIN users ON orders.user_id <> users.id"')
+    .&Then('has 0 bindings')
+
+  .Scenario('LeftJoin with >= operator')
+    .Given('a LeftJoin with >= operator query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM orders LEFT JOIN tiers ON orders.amount >= tiers.min_amount"')
+    .&Then('has 0 bindings')
 .Rule('GroupBy aggregates result rows')
 
   .Scenario('GroupBy a single column')
@@ -163,6 +177,28 @@ TQuery — JOIN / GROUP BY / set operations / CTE @unit @sqlcute
 
 // -------------------------------------------------------------------------
 
+
+.Rule('IntersectAll and ExceptAll emit INTERSECT ALL / EXCEPT ALL')
+
+  .Scenario('IntersectAll produces INTERSECT ALL')
+    .Given('an IntersectAll query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT id FROM a INTERSECT ALL SELECT id FROM b"')
+    .&Then('has 0 bindings')
+
+  .Scenario('ExceptAll produces EXCEPT ALL')
+    .Given('an ExceptAll query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT id FROM a EXCEPT ALL SELECT id FROM b"')
+    .&Then('has 0 bindings')
+
+  .Scenario('CombineRaw emits the raw fragment verbatim')
+    .Given('a CombineRaw query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT id FROM a UNION SELECT id FROM b WHERE status = ''active''"')
+    .&Then('has 0 bindings')
+
+// -------------------------------------------------------------------------
 .Rule('With names a common table expression')
 
   .Scenario('CTE used as FROM source')

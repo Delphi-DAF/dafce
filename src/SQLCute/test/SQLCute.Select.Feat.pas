@@ -77,6 +77,34 @@ TQuery — SELECT @unit @sqlcute
 
 // -------------------------------------------------------------------------
 
+
+.Rule('ForPage, Take and Skip control paging')
+
+  .Scenario('ForPage(2, 15) sets LIMIT 15 OFFSET 15')
+    .Given('a ForPage query page 2 per-page 15')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users LIMIT 15 OFFSET 15"')
+    .&Then('has 0 bindings')
+
+  .Scenario('ForPage(1, 10) sets LIMIT 10 OFFSET 0')
+    .Given('a ForPage query page 1 per-page 10')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users LIMIT 10 OFFSET 0"')
+    .&Then('has 0 bindings')
+
+  .Scenario('Take is an alias for Limit')
+    .Given('a Take query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users LIMIT 5"')
+    .&Then('has 0 bindings')
+
+  .Scenario('Skip is an alias for Offset')
+    .Given('a Skip query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users LIMIT 10 OFFSET 20"')
+    .&Then('has 0 bindings')
+
+// -------------------------------------------------------------------------
 .Rule('OrderBy and OrderByDesc sort the result set')
 
   .Scenario('OrderBy emits ASC')
