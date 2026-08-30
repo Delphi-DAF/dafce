@@ -87,7 +87,12 @@ Feature Several startups in one process @hosting @builder-style
                       SecondHost.Services.GetService<IMarker>.Name;
         finally
           FirstHost.Stop;
+          // Stop libera el host -- THost es TNoRefCountObject y se destruye al parar --, asi que
+          // la referencia se suelta sin pasar por _Release: el finalizador de la variable lo
+          // llamaria sobre memoria ya devuelta. El porque completo, en Daf.Cli.
+          Pointer(FirstHost) := nil;
           SecondHost.Stop;
+          Pointer(SecondHost) := nil;
         end;
       end)
     .When('both are built and asked what they registered').NoAction
@@ -113,6 +118,7 @@ Feature Several startups in one process @hosting @builder-style
             W.Report := W.Report + Host.Services.GetService<IMarker>.Name;
           finally
             Host.Stop;
+            Pointer(Host) := nil;
           end;
         end;
       end)
