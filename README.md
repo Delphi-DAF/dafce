@@ -23,10 +23,10 @@ The Community Edition already includes:
   - `.json` files
   - `.ini` files
   - Binding to custom Delphi classes
-- **Host Model** — ports of `IHost` and `IHostBuilder` for application composition and lifecycle management. Includes:
+- **Host Model** — ports of `IHost` and `IHostApplicationBuilder` for application composition and lifecycle management. Includes:
   - **IHostEnvironment** — for environment-based configuration
   - **IHostApplicationLifetime** — for application lifecycle events
-  - **IDafApplicationBuilder** and **IDafApplication** — for streamlined access to host services
+  - **TDafApplicationBuilder** and **IDafApplication** — for streamlined access to host services
 - **CQRS and In-Process Messaging** — modeled after [MediatR](https://github.com/jbogard/MediatR), supporting commands, queries, and notifications
 - **NNLog** — a Delphi-native port of [NLog](https://nlog-project.org/) ("**NNLog is Not NLog**"), fully integrated with DAF's logging abstractions
 - **MiniSpec** — BDD testing framework inspired by [Cucumber](https://cucumber.io/) and [RSpec](https://rspec.info/), including:
