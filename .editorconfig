@@ -68,6 +68,14 @@ end_of_line = crlf
 insert_final_newline = true
 
 # Herramientas y configuración, en convención de su propio ecosistema.
+[*.lua]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
 [*.py]
 charset = utf-8
 end_of_line = lf

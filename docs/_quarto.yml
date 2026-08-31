@@ -230,7 +230,7 @@ website:
   page-footer:
     left: |
       DAF — Delphi Application Foundation (Community Edition)
-      [MIT License](../../legal/LICENSE.md)
+      [MIT License](https://github.com/Delphi-DAF/dafce/blob/main/legal/LICENSE.md)
     right: |
       Built with [Quarto](https://quarto.org)
 
@@ -253,4 +253,4 @@ execute:
   freeze: auto
 
 filters:
-  - _filters/fix-readme-links.lua
+  - _gen/include-links.lua

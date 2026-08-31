@@ -8,7 +8,7 @@ lang: es
 
 **DAF (Delphi Application Foundation)** es una librería open-source que lleva los patrones arquitectónicos modernos a Delphi, haciéndolo familiar para desarrolladores .NET y más mantenible para todos.
 
-La **Community Edition (DAFce)** está disponible gratuitamente bajo la [licencia MIT](../../../legal/LICENSE.md).
+La **Community Edition (DAFce)** está disponible gratuitamente bajo la [licencia MIT](https://github.com/Delphi-DAF/dafce/blob/main/legal/LICENSE.md).
 
 ## Objetivos
 
@@ -35,4 +35,4 @@ Las contribuciones, issues y discusiones son bienvenidas en [github.com/Delphi-D
 
 ## Licencia
 
-MIT — ver [LICENSE](../../../legal/LICENSE.md).
+MIT — ver [LICENSE](https://github.com/Delphi-DAF/dafce/blob/main/legal/LICENSE.md).
