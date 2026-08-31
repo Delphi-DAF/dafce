@@ -23,7 +23,7 @@ graph TD
   MediatR[MediatR]
   MediatRAbstractions[MediatR.Abstractions]
   MiniSpec[MiniSpec]
-  NNlog[NNlog]
+  NNLog[NNLog]
   SQLCute[SQLCute]
   SQLCuteAbstractions[SQLCute.Abstractions]
   SQLCuteInMemory[SQLCute.InMemory]
@@ -62,8 +62,8 @@ graph TD
   LoggingAbstractions --> Commons
   MediatR --> MediatRAbstractions
   MediatRAbstractions --> DependencyInjectionAbstractions
-  NNlog --> HostingAbstractions
-  NNlog --> Logging
+  NNLog --> HostingAbstractions
+  NNLog --> Logging
   SQLCute --> SQLCuteAbstractions
   SQLCuteInMemory --> Linq
   SQLCuteInMemory --> SQLCute
@@ -75,7 +75,7 @@ graph TD
   Web --> Hosting
   FMX --> RTfmx
   MiniSpec --> RTIndy
-  NNlog -->|IndyCore · IndySystem| RTIndy
+  NNLog -->|IndyCore · IndySystem| RTIndy
   VCL --> RTvcl
   Web --> RTIndy
   Web --> RTRESTComponents
@@ -112,7 +112,7 @@ Installable on their own, with no dependency on another DAF package: `Commons`, 
 | `MediatR` | `rtl` |
 | `MediatR.Abstractions` | `rtl` |
 | `MiniSpec` | `IndyCore` · `IndyProtocols` · `IndySystem` · `rtl` |
-| `NNlog` | `IndyCore` · `IndySystem` · `rtl` |
+| `NNLog` | `IndyCore` · `IndySystem` · `rtl` |
 | `SQLCute` | `rtl` |
 | `SQLCute.Abstractions` | `rtl` |
 | `SQLCute.InMemory` | `rtl` |

@@ -13,7 +13,7 @@ type
 
   A single rule is defined with a logger element that filters what Logger-objects to match:
 
-  name – Match logger-name of the Logger-object - may include wildcard characters (* and ?), In Daf we use Logger.Category as NNlog logger name
+  name – Match logger-name of the Logger-object - may include wildcard characters (* and ?), In Daf we use Logger.Category as NNLog logger name
   minlevel – minimum level to log (matches the specified level and levels above)
   maxlevel – maximum level to log (matches the specified level and levels below)
   levels - comma separated list of levels to log
