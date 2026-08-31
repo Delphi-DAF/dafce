@@ -62,6 +62,8 @@ type
     function Pause(const Value: Boolean): TMiniSpec;overload;
     function DryRun: Boolean;overload;
     function DryRun(const Value: Boolean): TMiniSpec;overload;
+    function AllowUndefined: Boolean;overload;
+    function AllowUndefined(const Value: Boolean): TMiniSpec;overload;
     /// <summary>
     /// Sets the title/description of the test suite.
     /// </summary>
@@ -372,6 +374,17 @@ begin
   Result := Self;
   FOptions.IsDryRun := Value;
 end;
+
+function TMiniSpec.AllowUndefined: Boolean;
+begin
+  Result := FOptions.AllowUndefined;
+end;
+
+function TMiniSpec.AllowUndefined(const Value: Boolean): TMiniSpec;
+begin
+  Result := Self;
+  FOptions.AllowUndefined := Value;
+end;
 {$ENDREGION}
 
 procedure TMiniSpec.LoadConfig;
@@ -422,7 +435,9 @@ begin
     else if Param = '--stacktrace' then
       FOptions.StackTrace := True
     else if Param = '--strict-pending' then
-      FOptions.StrictPending := True;
+      FOptions.StrictPending := True
+    else if Param = '--allow-undefined' then
+      FOptions.AllowUndefined := True;
   end;
 
   // Guardar config si el archivo no existía
@@ -548,14 +563,8 @@ begin
        FRunner.FeatureCount, FRunner.ElapsedMs,
        FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', FRunner.CompletedAt)]));
 
-    // Exit code: failures and undefined always fail; pending only with --strict-pending
-    if (FRunner.FailCount > 0) or (FRunner.UndefinedCount > 0) then
-      ExitCode := 1
-    else if FRunner.PendingCount > 0 then
-    begin
-      if FOptions.StrictPending then
-        ExitCode := 1;
-    end;
+    ExitCode := FOptions.ExitCodeFor(FRunner.FailCount, FRunner.UndefinedCount,
+                                     FRunner.PendingCount);
 
     if Pause then
       OSShell.WaitForShutdown;
@@ -688,6 +697,7 @@ begin
   WriteLn('  --pause                 Wait for keypress before closing console');
   WriteLn('  --stacktrace            Show full stack trace on errors');
   WriteLn('  --strict-pending        Treat pending specs as failures (exit code 1)');
+  WriteLn('  --allow-undefined       Undefined steps do not set the exit code (still reported)');
   WriteLn('');
   WriteLn('Reporters:');
   WriteLn('  console                 Console output (default)');

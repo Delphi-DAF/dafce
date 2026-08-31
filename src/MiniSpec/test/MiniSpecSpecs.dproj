@@ -109,6 +109,7 @@
         <DCCReference Include="StepStatus.Feat.pas"/>
         <DCCReference Include="OutlinePlaceholderStep.Feat.pas"/>
         <DCCReference Include="Doubles.Feat.pas"/>
+        <DCCReference Include="ExitCode.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>

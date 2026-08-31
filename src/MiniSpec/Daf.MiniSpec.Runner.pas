@@ -35,6 +35,7 @@ type
     FDryRun: Boolean;
     FStackTrace: Boolean;
     FStrictPending: Boolean;
+    FAllowUndefined: Boolean;
     FReporterNames: TArray<string>;
     FReporterOptions: TObjectDictionary<string, TRunnerOptions>;
   public
@@ -58,7 +59,15 @@ type
     property Pause: Boolean read FPause write FPause;
     property IsDryRun: Boolean read FDryRun write FDryRun;
     property StackTrace: Boolean read FStackTrace write FStackTrace;
+    /// Decide el codigo de salida a partir de los tres recuentos. Vive aqui, y no dentro del
+    /// Run, porque un codigo de salida solo se comprueba desde fuera del proceso: como funcion
+    /// de los recuentos, la tabla de verdad entera cabe en una spec.
+    function ExitCodeFor(const FailCount, UndefinedCount, PendingCount: Integer): Integer;
     property StrictPending: Boolean read FStrictPending write FStrictPending;
+    /// Un Undefined es una omision no intencional y por eso rompe. La excepcion es de quien
+    /// prueba al propio runner: marcar un step como Undefined a proposito es la unica forma de
+    /// comprobar que los siguientes se saltan.
+    property AllowUndefined: Boolean read FAllowUndefined write FAllowUndefined;
     property ReporterNames: TArray<string> read FReporterNames write FReporterNames;
   end;
 
@@ -429,6 +438,17 @@ end;
 function TMiniSpecOptions.DryRun: Boolean;
 begin
   Result := FDryRun;
+end;
+
+function TMiniSpecOptions.ExitCodeFor(const FailCount, UndefinedCount, PendingCount: Integer): Integer;
+begin
+  Result := 0;
+  if FailCount > 0 then
+    Exit(1);
+  if (UndefinedCount > 0) and not FAllowUndefined then
+    Exit(1);
+  if (PendingCount > 0) and FStrictPending then
+    Exit(1);
 end;
 
 function TMiniSpecOptions.GetReporterOptions(const ReporterName: string): TRunnerOptions;

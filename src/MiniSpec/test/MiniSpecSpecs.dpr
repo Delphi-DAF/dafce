@@ -18,11 +18,16 @@ uses
   NoActionSteps.Feat in 'NoActionSteps.Feat.pas',
   StepStatus.Feat in 'StepStatus.Feat.pas',
   OutlinePlaceholderStep.Feat in 'OutlinePlaceholderStep.Feat.pas',
-  Doubles.Feat in 'Doubles.Feat.pas';
+  Doubles.Feat in 'Doubles.Feat.pas',
+  ExitCode.Feat in 'ExitCode.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;
   MiniSpec
+    // StepStatus.Feat marca un step como Undefined a proposito, que es la unica forma de
+    // comprobar que los siguientes se saltan. Sin esto la suite no puede salir verde nunca.
+    // Lo declara aqui el programa que lo necesita, y no el script que lo lanza.
+    .AllowUndefined(True)
     .Category('MiniSpec Framework Tests')
     .Before('Initialize test environment',
       procedure
