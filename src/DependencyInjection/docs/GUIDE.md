@@ -188,34 +188,211 @@ end;
 
 ## AppModule Pattern
 
-Split registrations across logical modules using `IAppModule`:
+Split registrations across logical modules using `IAppModule`; `TAppModule` is the base class that
+implements it. The services and the modules live in a unit and not in the program file: a type
+declared in a `.dpr` is in no unit's `interface` section, and resolving it aborts with
+`ENonPublicType`.
+
+The two blocks below are `samples/ModuleComposition/`, verbatim;
+`eng/check-quickstart-snippet.py` compares them with the files, so this is code the compiler
+reads:
+
+<!-- quickstart: src/DependencyInjection/samples/ModuleComposition/ModuleComposition.Services.pas -->
 
 ```pascal
-uses Daf.AppModule;
+unit ModuleComposition.Services;
+
+// Los tipos van en una unit y no en el .dpr por obligacion del contenedor: un tipo declarado en el
+// fichero de programa no esta en la seccion interface de ninguna unit, y resolverlo aborta en
+// tiempo de ejecucion con ENonPublicType.
+
+interface
+
+uses
+  Daf.Extensions.DependencyInjection,
+  Daf.AppModule.DependencyInjection;
 
 type
-  TInfrastructureModule = class(TInterfacedObject, IAppModule)
-  public
-    procedure AddServices(const Services: IServiceCollection);
+  IClock = interface(IInvokable)
+    ['{0ED801D1-8529-4C2F-860F-472419E770B3}']
+    function Today: string;
   end;
 
-procedure TInfrastructureModule.AddServices(const Services: IServiceCollection);
+  TSystemClock = class(TInterfacedObject, IClock)
+  public
+    function Today: string;
+  end;
+
+  IGreeter = interface(IInvokable)
+    ['{6803CD07-1D7D-4FA0-A890-65ED845860B1}']
+    function Greet(const Name: string): string;
+  end;
+
+  TGreeter = class(TInterfacedObject, IGreeter)
+  strict private
+    FClock: IClock;
+  public
+    constructor Create(const AClock: IClock);
+    function Greet(const Name: string): string;
+  end;
+
+  IBanner = interface(IInvokable)
+    ['{E9A88893-3081-4181-8279-B189E6CF33DB}']
+    function Text: string;
+  end;
+
+  TBanner = class(TInterfacedObject, IBanner)
+  strict private
+    FText: string;
+  public
+    constructor Create(const AText: string);
+    function Text: string;
+  end;
+
+  // Los modulos se declaran en la interface para que el linker no los descarte: un tipo que solo
+  // aparece en implementation y no se referencia se elimina como codigo muerto.
+  TInfrastructureModule = class(TAppModule)
+  public
+    procedure AddServices(const ServiceCollection: IServiceCollection); override;
+  end;
+
+  // Su registro resuelve IClock desde el proveedor, asi que necesita que el modulo que lo aporta
+  // se haya aplicado antes.
+  TDomainModule = class(TAppModule)
+  public
+    procedure AddServices(const ServiceCollection: IServiceCollection); override;
+  end;
+
+  // Solo tiene constructor con parametro: es el caso que unicamente cubre la sobrecarga de
+  // instancia, porque el modulo corre antes de que exista el proveedor.
+  TBannerModule = class(TAppModule)
+  strict private
+    FText: string;
+  public
+    constructor Create(const AText: string);
+    procedure AddServices(const ServiceCollection: IServiceCollection); override;
+  end;
+
+implementation
+
+uses
+  System.SysUtils;
+
+{ TSystemClock }
+
+function TSystemClock.Today: string;
 begin
-  Services.AddSingleton<IDatabase, TPostgresDatabase>;
-  Services.AddScoped<IUnitOfWork, TDbUnitOfWork>;
+  Result := FormatDateTime('yyyy-mm-dd', Now);
 end;
+
+{ TGreeter }
+
+constructor TGreeter.Create(const AClock: IClock);
+begin
+  inherited Create;
+  FClock := AClock;
+end;
+
+function TGreeter.Greet(const Name: string): string;
+begin
+  Result := Format('Hola, %s. Hoy es %s', [Name, FClock.Today]);
+end;
+
+{ TBanner }
+
+constructor TBanner.Create(const AText: string);
+begin
+  inherited Create;
+  FText := AText;
+end;
+
+function TBanner.Text: string;
+begin
+  Result := FText;
+end;
+
+{ TInfrastructureModule }
+
+procedure TInfrastructureModule.AddServices(const ServiceCollection: IServiceCollection);
+begin
+  ServiceCollection.AddSingleton<IClock, TSystemClock>;
+end;
+
+{ TDomainModule }
+
+procedure TDomainModule.AddServices(const ServiceCollection: IServiceCollection);
+begin
+  ServiceCollection.AddSingleton<IGreeter>(
+    function(Provider: IServiceProvider): IGreeter
+    begin
+      Result := TGreeter.Create(Provider.GetRequiredService<IClock>);
+    end);
+end;
+
+{ TBannerModule }
+
+constructor TBannerModule.Create(const AText: string);
+begin
+  inherited Create;
+  FText := AText;
+end;
+
+procedure TBannerModule.AddServices(const ServiceCollection: IServiceCollection);
+begin
+  ServiceCollection.AddSingleton<IBanner>(TBanner.Create(FText) as IBanner);
+end;
+
+end.
 ```
 
-Register all modules from the app entry point:
+Apply them from the app entry point, one `AddModule<T>` per module:
+
+<!-- quickstart: src/DependencyInjection/samples/ModuleComposition/ModuleComposition.dpr -->
 
 ```pascal
-var Services: IServiceCollection := TServiceCollection.Create;
-TInfrastructureModule.Create.AddServices(Services);
-TApplicationModule.Create.AddServices(Services);
-var Provider := Services.BuildServiceProvider;
+program ModuleComposition;
+
+{$APPTYPE CONSOLE}
+{$STRONGLINKTYPES ON}
+
+uses
+  Daf.Extensions.DependencyInjection,
+  Daf.DependencyInjection,
+  ModuleComposition.Services in 'ModuleComposition.Services.pas';
+
+begin
+  var Services: IServiceCollection := TServiceCollection.Create;
+
+  // AddModule<T> instancia el modulo y llama a su AddServices en el acto: lo que se escribe
+  // despues de un modulo se registra despues de el.
+  Services
+    .AddModule<TInfrastructureModule>
+    .AddModule<TDomainModule>;
+
+  // Un modulo con configuracion no la puede recibir del contenedor —corre antes de que exista el
+  // proveedor—, asi que la trae el llamante por la sobrecarga de instancia. Entregarlo como
+  // IAppModule es lo que le da un dueno.
+  var Banner: IAppModule := TBannerModule.Create('Composicion por modulos');
+  Services.AddModule(Banner);
+
+  var Provider := Services.BuildServiceProvider;
+
+  Writeln(Provider.GetRequiredService<IBanner>.Text);
+  Writeln(Provider.GetRequiredService<IGreeter>.Greet('DAF'));
+end.
 ```
 
-When using `Hosting`, modules are loaded automatically — see the Hosting module docs.
+`AddModule<T>` instantiates the module, calls its `AddServices` on the spot, and owns its
+lifetime. Do not call `TInfrastructureModule.Create.AddServices(Services)` by hand: the module is
+a `TInterfacedObject` created with a reference count of zero, so nobody frees it.
+
+A module carrying configuration cannot get it from the container — it runs before the provider
+exists — so the caller builds it and hands it over as an `IAppModule`, which is what gives it an
+owner. That is `TBannerModule` above.
+
+**There is no automatic discovery**, with `Hosting` or without it: a module is registered where it
+is written. The registration order, `TryAdd`/`Replace`/`Decorate` and the alternative of grouping
+with a function are in [Startup composition](STARTUP-COMPOSITION.md).
 
 ---
 

@@ -90,8 +90,9 @@ Organise registrations by module:
 
 ```pascal
 type
-  TMyModule = class(TInterfacedObject, IAppModule)
-    procedure AddServices(const Services: IServiceCollection);
+  TMyModule = class(TAppModule)
+  public
+    procedure AddServices(const Services: IServiceCollection); override;
   end;
 
 procedure TMyModule.AddServices(const Services: IServiceCollection);
@@ -99,6 +100,15 @@ begin
   Services.AddSingleton<IMyService, TMyService>;
   Services.AddTransient<IOther, TOtherImpl>;
 end;
+```
+
+Applied by name, in the order written — `AddModule<T>` instantiates the module and calls its
+`AddServices` on the spot, so nothing calls `AddServices` by hand:
+
+```pascal
+Services
+  .AddModule<TMyModule>
+  .AddModule<TOtherModule>;
 ```
 
 See [DependencyInjection.Abstractions](../DependencyInjection.Abstractions/README.md) for the `IAppModule` interface and all core contracts.
@@ -109,3 +119,4 @@ See [DependencyInjection.Abstractions](../DependencyInjection.Abstractions/READM
 
 - 📖 [Usage Guide](docs/GUIDE.md) — lifetimes, scopes, Lazy, DuckDecorator, integration with Hosting
 - 📖 [Startup composition](docs/STARTUP-COMPOSITION.md) — modules and `AddXxx` functions, `TryAdd`/`Replace`/`Decorate`, `IStartupTask`, graph validation
+- 📁 [ModuleComposition](samples/ModuleComposition/README.md) — three modules applied in order, and the one that only the instance overload can carry

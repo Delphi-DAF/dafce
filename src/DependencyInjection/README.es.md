@@ -90,8 +90,9 @@ Organiza los registros por módulo:
 
 ```pascal
 type
-  TMyModule = class(TInterfacedObject, IAppModule)
-    procedure AddServices(const Services: IServiceCollection);
+  TMyModule = class(TAppModule)
+  public
+    procedure AddServices(const Services: IServiceCollection); override;
   end;
 
 procedure TMyModule.AddServices(const Services: IServiceCollection);
@@ -99,6 +100,15 @@ begin
   Services.AddSingleton<IMyService, TMyService>;
   Services.AddTransient<IOther, TOtherImpl>;
 end;
+```
+
+Se aplican por nombre, en el orden escrito — `AddModule<T>` instancia el módulo y llama a su
+`AddServices` en el acto, así que nadie llama a `AddServices` a mano:
+
+```pascal
+Services
+  .AddModule<TMyModule>
+  .AddModule<TOtherModule>;
 ```
 
 Consulta [DependencyInjection.Abstractions](../DependencyInjection.Abstractions/README.es.md) para la interfaz `IAppModule` y todos los contratos clave.
@@ -109,3 +119,4 @@ Consulta [DependencyInjection.Abstractions](../DependencyInjection.Abstractions/
 
 - 📖 [Guía de uso](docs/GUIDE.es.md) — tiempos de vida, scopes, Lazy, DuckDecorator, integración con Hosting
 - 📖 [Composición del arranque](docs/STARTUP-COMPOSITION.es.md) — módulos y funciones `AddXxx`, `TryAdd`/`Replace`/`Decorate`, `IStartupTask`, validación del grafo
+- 📁 [ModuleComposition](samples/ModuleComposition/README.md) — tres módulos aplicados en orden, y el que solo puede entrar por la sobrecarga de instancia
