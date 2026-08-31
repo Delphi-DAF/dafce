@@ -1,0 +1,5 @@
+---
+sidebar: modules-es
+---
+
+{{< include ../../../src/SQLCute.Specification/docs/GUIDE.es.md >}}

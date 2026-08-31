@@ -1,0 +1,29 @@
+---
+sidebar: modules
+---
+
+{{< include ../../../src/Specification/docs/GUIDE.md >}}
+
+---
+
+## Authoring with operators
+
+{{< include ../../../src/Specification/docs/guide/authoring.md >}}
+
+---
+
+## The entity proxy
+
+{{< include ../../../src/Specification/docs/guide/entity-proxy.md >}}
+
+---
+
+## The optional metamodel
+
+{{< include ../../../src/Specification/docs/guide/metamodel.md >}}
+
+---
+
+## Specifications and the port
+
+{{< include ../../../src/Specification/docs/guide/specifications.md >}}

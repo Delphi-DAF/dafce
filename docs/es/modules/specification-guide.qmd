@@ -1,0 +1,29 @@
+---
+sidebar: modules-es
+---
+
+{{< include ../../../src/Specification/docs/GUIDE.es.md >}}
+
+---
+
+## Autoría con operadores
+
+{{< include ../../../src/Specification/docs/guide/authoring.es.md >}}
+
+---
+
+## El proxy de entidad
+
+{{< include ../../../src/Specification/docs/guide/entity-proxy.es.md >}}
+
+---
+
+## El metamodelo opcional
+
+{{< include ../../../src/Specification/docs/guide/metamodel.es.md >}}
+
+---
+
+## Especificaciones y el puerto
+
+{{< include ../../../src/Specification/docs/guide/specifications.es.md >}}
