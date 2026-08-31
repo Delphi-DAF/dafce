@@ -322,7 +322,7 @@ Builder.ConfigureServices(
 
 `AddModule<T>` instantiates the module, calls its `AddServices` on the spot, and owns its
 lifetime. Do not call `TInfraModule.Create.AddServices(Services)` by hand: the module is an
-`IInterfacedObject` created with a reference count of zero, so nobody frees it.
+`TInterfacedObject` created with a reference count of zero, so nobody frees it.
 
 When a module needs configuration, construct it yourself and pass the instance:
 `Services.AddModule(TInfraModule.Create(...))`. Handing it over as an `IAppModule` is what
