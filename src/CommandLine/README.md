@@ -409,7 +409,7 @@ application that declares its own `--help` or `--version` wins — it is the one
 ## Divergences from `System.CommandLine`, each with its cause
 
 **1 · The value is read the other way round.** In .NET you write `result.GetValue(fileOption)`. Here
-you write `fileOption.ValueIn(parsed)`: the object asks the result. Measured 2026-08-24, Delphi 37:
+you write `fileOption.ValueIn(parsed)`: the object asks the result:
 
 - An interface **cannot declare a generic method at all** — `E2535 Interface methods must not have
   parameterized methods`. So `ICommandLineParseResult.GetValue<T>` cannot exist, whatever else were

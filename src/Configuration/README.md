@@ -241,3 +241,4 @@ THostBuilder.Create
 ## Documentation
 
 - 📖 [Usage Guide](docs/GUIDE.md) — providers in depth, hierarchical keys, binder, custom sources
+- 📁 [ConfigSample](samples/ConfigSample/README.md) — the provider chain and its precedence, running

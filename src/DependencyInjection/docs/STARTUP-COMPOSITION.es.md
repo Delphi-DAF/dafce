@@ -347,7 +347,10 @@ begin
   // La aplicación sabe dónde viven sus datos; DAF no.
   BootstrapLog.AddSink(TFileBootstrapSink.Create(TPath.Combine(CarpetaDeDatos, 'startup.log')));
   try
-    var Host := THostBuilder.Create.ConfigureServices(AddPayroll).Build;
+    var Builder := THostBuilder.Create;
+    var Owner: IHostApplicationBuilder := Builder;
+    AddPayroll(Builder.Services);
+    var Host := Builder.Build;
     Host.Start;
     Host.WaitForShutdown;
   except

@@ -412,7 +412,7 @@ nada. Una aplicación que declare su propio `--help` o `--version` gana: es la q
 ## Divergencias con `System.CommandLine`, cada una con su causa
 
 **1 · El valor se lee al revés.** En .NET se escribe `result.GetValue(fileOption)`. Aquí,
-`fileOption.ValueIn(parsed)`: el objeto le pregunta al resultado. Medido el 2026-08-24, Delphi 37:
+`fileOption.ValueIn(parsed)`: el objeto le pregunta al resultado:
 
 - Una interfaz **no puede declarar un método genérico**, punto — `E2535 Interface methods must not
   have parameterized methods`. Así que `ICommandLineParseResult.GetValue<T>` no puede existir, fuera

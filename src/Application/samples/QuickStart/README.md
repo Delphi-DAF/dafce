@@ -8,18 +8,17 @@ el arranque cambia, el sample deja de compilar y el check deja de cuadrar — qu
 
 ## Qué enseña
 
-- `TDafApplication.CreateHostBuilder` devuelve un `TDafApplicationBuilder`, y hay que sostenerlo
-  en una variable **de esa clase**. Los `Configure*` devuelven `IHostBuilder`, cuyo `Build` da un
-  `IHost`: por esa vía nunca se obtiene la aplicación.
-- `Build` devuelve un `IDafApplication`, que **tiene** un host (`App.Host`) pero no *es* un `IHost`.
-- `Run(Exec)` ejecuta el proc con el proveedor ya construido y para al terminar. Sin argumentos,
-  `Run` no espera el apagado: para eso, `Run(True)`.
+- `TCliApplication.CreateBuilder` devuelve un `ICliApplicationBuilder` que ya está vivo: `Services`
+  responde antes de construir nada, así que el registro ocurre donde está escrito.
+- `OnExecute` recibe el proveedor ya construido y el resultado del parseo, y devuelve el código de
+  salida — `TCliExit.Ok` cuando el trabajo termina bien.
+- `Build` devuelve la `ICliApplication`, y `Run` es lo que se asigna a `ExitCode`.
 
 ## Por qué el servicio vive en su propia unit
 
 `QuickStart.Greeter.pas` existe por obligación del contenedor, no por gusto: un tipo declarado en
 el `.dpr` no está en la sección `interface` de ninguna unit, y resolverlo aborta en ejecución con
-`ENonPublicType`. Medido al escribir este sample.
+`ENonPublicType`.
 
 ## Ejecutar
 

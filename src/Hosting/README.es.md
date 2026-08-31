@@ -122,26 +122,22 @@ Lifetime.StopApplication;
 
 ---
 
-## Usando TDafApplication (módulo Application)
+## Usar la familia de aplicaciones (módulo Application)
 
 Para un programa con línea principal, el módulo `Application` envuelve este pipeline y añade `Run`,
-metadatos de versión y un acceso global. Fíjate en que el builder se sostiene en una variable **de
-su propia clase**: `ConfigureServices` devuelve un `IHostBuilder`, cuyo `Build` da un `IHost`, y un
-`IHost` no tiene `Run` — encadenarlo todo en cascada no compila.
+metadatos de versión y un accesor global. El builder es usable en cuanto se crea: `Services`,
+`Configuration` y `Environment` ya responden, así que los registros ocurren donde están escritos.
+`Build` devuelve la aplicación, y su `Run` da el código de salida.
 
 ```pascal
-uses Daf.Application.Builder;
+uses Daf.Cli, Daf.CommandLine, Daf.Configuration.CommandLine;
 
-var Builder := TDafApplication.CreateHostBuilder;
+var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
 
-Builder.ConfigureServices(
-  procedure(Context: IHostBuilderContext; Services: IServiceCollection)
-  begin
-    Services.AddSingleton<IMyService, TMyService>;
-    Services.AddHostedService<TMyWorker>;
-  end);
+B.Services.AddSingleton<IMyService, TMyService>;
+B.Services.AddHostedService<TMyWorker>;
 
-Builder.Build.Run(True);
+ExitCode := B.Build.Run;
 ```
 
 Consulta [Application](../Application/README.es.md) para la documentación completa del módulo Application.
@@ -152,3 +148,5 @@ Consulta [Application](../Application/README.es.md) para la documentación compl
 
 - 📖 [Guía de uso](docs/GUIDE.es.md) — pipeline de configuración, servicios scoped, hosted services, hooks de ciclo de vida
 - 📖 [Composición del arranque](../DependencyInjection/docs/STARTUP-COMPOSITION.es.md) — `IStartupTask` frente a `IHostedService`, y las dos fases del arranque
+- 📁 [ConsoleSample](samples/ConsoleSample/README.md) — el pipeline de punta a punta: configuración, servicios y un hosted service en un programa de consola
+- 📁 [PackageInit](samples/PackageInit/README.md) — un `IStartupTask` aportado desde un paquete, sin que el `.dpr` lo nombre

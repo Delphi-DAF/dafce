@@ -17,7 +17,8 @@ Todos los tipos se encuentran en `Daf.Extensions.Hosting`.
 
 | Interfaz | Rol |
 |----------|-----|
-| `IHostBuilder` | Constructor fluido — configura y construye el host |
+| `IHostApplicationBuilder` | El contrato común de la familia de aplicaciones: `Services`, `Configuration`, `Environment`, `Logging`, `Properties` |
+| `IStartupTask` | Se ejecuta una vez al arrancar, con el proveedor ya construido: `Run`, y nada que parar |
 | `IHost` | El host en ejecución: `Services`, `Start`, `Stop`, `WaitForShutdown` |
 | `IHostedService` | Contrato de servicio en segundo plano: `Start` / `Stop` |
 | `IHostEnvironment` | Entorno de ejecución: nombre, nombre de app, rutas, `IsDevelopment`, ... |
@@ -27,8 +28,6 @@ Todos los tipos se encuentran en `Daf.Extensions.Hosting`.
 ### Tipos delegado
 
 ```pascal
-TConfigureHostConfigAction = TProc<IConfigurationBuilder>;
-TConfigureAppConfigAction  = TProc<IHostBuilderContext, IConfigurationBuilder>;
 TConfigureServicesAction   = TProc<IHostBuilderContext, IServiceCollection>;
 ```
 

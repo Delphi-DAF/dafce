@@ -122,26 +122,22 @@ Lifetime.StopApplication;
 
 ---
 
-## Using TDafApplication (Application module)
+## Using the application family (Application module)
 
 For a program with a main line, the `Application` module wraps this pipeline and adds `Run`,
-version metadata and a global accessor. Note that the builder is held in a variable **of its own
-class**: `ConfigureServices` returns an `IHostBuilder`, whose `Build` gives an `IHost`, and an
-`IHost` has no `Run` — chaining the whole thing fluently does not compile.
+version metadata and a global accessor. The builder is usable the moment it is created: `Services`,
+`Configuration` and `Environment` already answer, so registrations happen where they are written.
+`Build` returns the application, and its `Run` gives the exit code.
 
 ```pascal
-uses Daf.Application.Builder;
+uses Daf.Cli, Daf.CommandLine, Daf.Configuration.CommandLine;
 
-var Builder := TDafApplication.CreateHostBuilder;
+var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
 
-Builder.ConfigureServices(
-  procedure(Context: IHostBuilderContext; Services: IServiceCollection)
-  begin
-    Services.AddSingleton<IMyService, TMyService>;
-    Services.AddHostedService<TMyWorker>;
-  end);
+B.Services.AddSingleton<IMyService, TMyService>;
+B.Services.AddHostedService<TMyWorker>;
 
-Builder.Build.Run(True);
+ExitCode := B.Build.Run;
 ```
 
 See [Application](../Application/README.md) for the full Application module docs.
@@ -152,3 +148,5 @@ See [Application](../Application/README.md) for the full Application module docs
 
 - 📖 [Usage Guide](docs/GUIDE.md) — configuration pipeline, scoped services, hosted services, lifetime hooks
 - 📖 [Startup composition](../DependencyInjection/docs/STARTUP-COMPOSITION.md) — `IStartupTask` vs `IHostedService`, and the two phases of startup
+- 📁 [ConsoleSample](samples/ConsoleSample/README.md) — the pipeline end to end: configuration, services and a hosted service in one console program
+- 📁 [PackageInit](samples/PackageInit/README.md) — an `IStartupTask` contributed from a package, without the `.dpr` naming it

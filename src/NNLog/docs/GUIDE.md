@@ -115,8 +115,10 @@ end;
 
 | Class | Unit | Output |
 |-------|------|--------|
-| `TNNLogConsoleTarget` | `DAF.NNLog.Targets.Console` | `stdout` with ANSI colour coding by level |
-| `TNNLogFileTarget` | `DAF.NNLog.Targets.File` | Rolling or fixed log file |
+| `TConsoleTarget` | `DAF.NNLog.Targets.Console` | `stdout` with ANSI colour coding by level |
+| `TFileTarget` | `DAF.NNLog.Targets.File_` | Rolling or fixed log file |
+| `TDebugTarget` | `DAF.NNLog.Targets.Debug` | The system debug output |
+| `TUDPTarget` | `DAF.NNLog.Targets.UDP` | A UDP endpoint: `Host` and `Port` |
 
 ---
 

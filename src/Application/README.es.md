@@ -48,8 +48,9 @@ begin
 end.
 ```
 
-El builder se sostiene en una variable **de su propia clase**, no en una cadena: `ConfigureServices`
-devuelve un `IHostBuilder`, cuyo `Build` da un `IHost` y no la aplicación.
+El builder es usable en cuanto se crea: `Services`, `Configuration` y `Environment` ya responden, así
+que los registros ocurren donde están escritos. `Build` devuelve la aplicación, y `Run` convierte el
+resultado del trabajo en un código de salida.
 
 ---
 

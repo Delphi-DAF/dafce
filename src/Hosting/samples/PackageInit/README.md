@@ -12,11 +12,7 @@ El paquete registra la tarea dentro de su propia función `AddLegacyEngine`, as�
 ejecutable escribe una línea y no menciona ni el tipo de la tarea ni lo que hace:
 
 ```pascal
-Builder.ConfigureServices(
-  procedure(Context: IHostBuilderContext; Services: IServiceCollection)
-  begin
-    AddLegacyEngine(Services);
-  end);
+AddLegacyEngine(B.Services);
 ```
 
 Dos detalles del mismo ejemplo:

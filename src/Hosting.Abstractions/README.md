@@ -17,7 +17,8 @@ All types live in `Daf.Extensions.Hosting`.
 
 | Interface | Role |
 |-----------|------|
-| `IHostBuilder` | Fluent builder — configure and build the host |
+| `IHostApplicationBuilder` | The shared contract of the application family: `Services`, `Configuration`, `Environment`, `Logging`, `Properties` |
+| `IStartupTask` | Runs once at startup with the provider already built: `Run`, and nothing to stop |
 | `IHost` | The running host: `Services`, `Start`, `Stop`, `WaitForShutdown` |
 | `IHostedService` | Background service contract: `Start` / `Stop` |
 | `IHostEnvironment` | Runtime environment: name, app name, paths, `IsDevelopment`, ... |
@@ -27,8 +28,6 @@ All types live in `Daf.Extensions.Hosting`.
 ### Delegate types
 
 ```pascal
-TConfigureHostConfigAction = TProc<IConfigurationBuilder>;
-TConfigureAppConfigAction  = TProc<IHostBuilderContext, IConfigurationBuilder>;
 TConfigureServicesAction   = TProc<IHostBuilderContext, IServiceCollection>;
 ```
 

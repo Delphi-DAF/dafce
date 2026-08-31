@@ -157,4 +157,4 @@ Linq.From<Integer>(Million).Where(IsPrime).Take(5).ToArray;
 |----------|-------------|
 | [**SQLCute In-Memory**](../SQLCute.InMemory/README.md) | Runs a SQLCute `IQuery` over in-memory collections on top of this library |
 | [In-Memory Usage Guide](../SQLCute.InMemory/docs/GUIDE.md) | Two lanes, NULL semantics, DISTINCT scope |
-| [SQLCute](../SQLCute.Abstractions/README.md) | The fluent SQL query builder |
+| [SQLCute](../SQLCute/README.md) | The fluent SQL query builder |

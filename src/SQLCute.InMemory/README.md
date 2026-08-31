@@ -130,5 +130,5 @@ The back-end is **read-only** — DML (`INSERT`/`UPDATE`/`DELETE`) stays SQL-onl
 | [InMemoryQuerySample](samples/InMemoryQuerySample/README.md) | Filter, sort, paginate and project one `TList<T>` |
 | [InMemoryJoinSample](samples/InMemoryJoinSample/README.md) | Two sources joined through a per-call context |
 | [Daf.Linq](../Linq/README.md) | The lazy sequence library the plans are built on |
-| [SQLCute](../SQLCute.Abstractions/README.md) | The fluent query builder producing the AST |
-| [Dialect Compilers](../SQLCute.Compilers/README.md) | The SQL back-end this one mirrors |
+| [SQLCute](../SQLCute/README.md) | The fluent query builder producing the AST |
+| [Dialect Compilers](../SQLCute/README.md) | The SQL back-end this one mirrors |

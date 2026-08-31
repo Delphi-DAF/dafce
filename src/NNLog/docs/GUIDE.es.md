@@ -115,8 +115,10 @@ end;
 
 | Clase | Unidad | Salida |
 |-------|--------|--------|
-| `TNNLogConsoleTarget` | `DAF.NNLog.Targets.Console` | `stdout` con codificación de color ANSI por nivel |
-| `TNNLogFileTarget` | `DAF.NNLog.Targets.File` | Fichero de log fijo o rotatorio |
+| `TConsoleTarget` | `DAF.NNLog.Targets.Console` | `stdout` con codificación de color ANSI por nivel |
+| `TFileTarget` | `DAF.NNLog.Targets.File_` | Fichero de log fijo o rotatorio |
+| `TDebugTarget` | `DAF.NNLog.Targets.Debug` | La salida de depuración del sistema |
+| `TUDPTarget` | `DAF.NNLog.Targets.UDP` | Un extremo UDP: `Host` y `Port` |
 
 ---
 

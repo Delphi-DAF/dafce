@@ -130,5 +130,5 @@ A member name that resolves to nothing raises at the point the expression is aut
 |----------|-------------|
 | [**Usage Guide**](docs/GUIDE.md) | Authoring, the proxy, the metamodel, specifications |
 | [Daf.SQLCute.Specification](../SQLCute.Specification/README.md) | The emission into `IQuery`, and the in-memory adapter |
-| [SQLCute](../SQLCute.Abstractions/README.md) | The query builder this eventually emits into |
+| [SQLCute](../SQLCute/README.md) | The query builder this eventually emits into |
 | [Daf.Linq](../Linq/README.md) | The closure world — the sibling, not the rival |

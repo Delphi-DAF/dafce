@@ -2,7 +2,7 @@
 
 **🌍 Language: English | [Español](README.es.md)**
 
-Top-level entry point for DAFce applications. `TDafApplication` wraps the generic [Hosting](../Hosting/README.md) pipeline and adds application-level lifecycle helpers, version metadata, and a global singleton accessor.
+Top-level entry point for DAFce applications. The application family — `TCliApplication`, `TWebApplication`, `TVclApplication`, `TFmxApplication` — wraps the generic [Hosting](../Hosting/README.md) pipeline and adds the edge around `Run`: exit codes, version metadata and the platform's own lifecycle. `TDafApplication` and `TDafApplicationBuilder` are **deprecated** and still compile; see the [Usage Guide](docs/GUIDE.md) for what replaced what.
 
 [![Delphi 12+](https://img.shields.io/badge/Delphi-12%2B-red.svg)](https://www.embarcadero.com/products/delphi)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../legal/LICENSE.md)
@@ -48,8 +48,9 @@ begin
 end.
 ```
 
-The builder is held in a variable of its **own class**, not chained: `ConfigureServices` returns an
-`IHostBuilder`, whose `Build` gives an `IHost` rather than the application.
+The builder is usable the moment it is created: `Services`, `Configuration` and `Environment` already
+answer, so registrations happen where they are written. `Build` returns the application, and `Run`
+turns the work's outcome into an exit code.
 
 ---
 

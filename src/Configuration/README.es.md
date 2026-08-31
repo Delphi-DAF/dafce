@@ -241,3 +241,4 @@ THostBuilder.Create
 ## Documentación
 
 - 📖 [Guía de uso](docs/GUIDE.es.md) — proveedores en profundidad, claves jerárquicas, binder, fuentes personalizadas
+- 📁 [ConfigSample](samples/ConfigSample/README.md) — la cadena de proveedores y su precedencia, funcionando

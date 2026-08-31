@@ -130,5 +130,5 @@ Un nombre de miembro que no resuelve a nada lanza en el punto donde se escribe l
 |---------|-------------|
 | [**Guía de uso**](docs/GUIDE.es.md) | Autoría, el proxy, el metamodelo, especificaciones |
 | [Daf.SQLCute.Specification](../SQLCute.Specification/README.es.md) | La emisión a `IQuery` y el adaptador en memoria |
-| [SQLCute](../SQLCute.Abstractions/README.es.md) | El constructor de consultas al que esto acaba emitiendo |
+| [SQLCute](../SQLCute/README.es.md) | El constructor de consultas al que esto acaba emitiendo |
 | [Daf.Linq](../Linq/README.es.md) | El mundo de las clausuras — el hermano, no el rival |

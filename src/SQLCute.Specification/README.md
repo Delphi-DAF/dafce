@@ -152,4 +152,4 @@ As the in-memory back-end grows those phases, this package inherits them with no
 | [CatalogServiceSample](samples/CatalogServiceSample/README.md) | A domain service over `IRepository<T>`, resolved from a `TList<T>` |
 | [Daf.Specification](../Specification/README.md) | The tree, the authoring surface, specifications and the port |
 | [SQLCute In-Memory](../SQLCute.InMemory/README.md) | The back-end this emission reaches through `IQuery` |
-| [SQLCute](../SQLCute.Abstractions/README.md) | The AST and the fluent surface this emits into |
+| [SQLCute](../SQLCute/README.md) | The AST and the fluent surface this emits into |

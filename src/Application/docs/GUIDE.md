@@ -23,7 +23,8 @@
 ## Which entry point is yours
 
 There is **one** per application variant, and picking is a matter of what kind of application you
-are writing — not which of two layers to use:
+are writing — not which of two layers to use. A VCL one, whole and with its own specs, is
+[TicTacToeApp](../samples/TicTacToeApp/README.md):
 
 | Your application | Entry point | Lives in | `Build` returns |
 |---|---|---|---|
@@ -140,11 +141,10 @@ end.
 
 Two shapes worth naming, because both are easy to get wrong:
 
-- **The builder is held in a variable of its own class.** `CreateHostBuilder` returns a
-  `TDafApplicationBuilder`, but every `Configure*` method returns `IHostBuilder`, and
-  `IHostBuilder.Build` returns an `IHost`. Chain the whole thing fluently and you get the host,
-  not the application. `TDafApplicationBuilder.Build` is the overload that returns
-  `IDafApplication`, and it is reachable only through the class.
+- **The builder answers before it is built.** `CreateBuilder` returns the family variant's own
+  builder, whose `Services`, `Configuration` and `Environment` are alive on return, so each
+  registration takes effect where it is written. `Build` returns the application, and its `Run`
+  gives the exit code.
 - **The service is declared in a unit, not in the `.dpr`.** A type in the program file is not in
   the `interface` section of any unit, and the container refuses it at run time with
   `ENonPublicType`.

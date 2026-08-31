@@ -53,7 +53,7 @@ Un caso especial importante: verificar que el código lanza una excepción. Mini
 | `ExpectException(Raised).ToHaveMessage('texto')` | Mensaje contiene substring |
 | `ExpectException(Raised).ToBeNone` | No se lanzó excepción |
 
-> 💡 Consulta el código fuente de `Daf.MiniSpec.Expect.pas` para ver todos los métodos disponibles.
+> 💡 Consulta el código fuente de `Daf.MiniSpec.Expects.pas` para ver todos los métodos disponibles.
 
 ---
 

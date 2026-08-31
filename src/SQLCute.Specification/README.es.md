@@ -152,4 +152,4 @@ A medida que el back-end en memoria vaya cubriendo esas fases, este paquete las 
 | [CatalogServiceSample](samples/CatalogServiceSample/README.md) | Un servicio de dominio sobre `IRepository<T>`, resuelto desde un `TList<T>` |
 | [Daf.Specification](../Specification/README.es.md) | El árbol, la superficie de autoría, especificaciones y el puerto |
 | [SQLCute In-Memory](../SQLCute.InMemory/README.es.md) | El back-end al que esta emisión llega vía `IQuery` |
-| [SQLCute](../SQLCute.Abstractions/README.es.md) | El AST y la superficie fluida a la que esto emite |
+| [SQLCute](../SQLCute/README.es.md) | El AST y la superficie fluida a la que esto emite |

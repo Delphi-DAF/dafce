@@ -23,7 +23,8 @@
 ## Cuál es tu punto de entrada
 
 Hay **uno** por variante de aplicación, y elegir es cuestión de qué tipo de aplicación estás
-escribiendo — no de cuál de dos capas usar:
+escribiendo — no de cuál de dos capas usar. Una VCL entera, con sus propias specs, es
+[TicTacToeApp](../samples/TicTacToeApp/README.md):
 
 | Tu aplicación | Punto de entrada | Vive en | `Build` devuelve |
 |---|---|---|---|
@@ -142,11 +143,10 @@ end.
 
 Dos formas que conviene nombrar, porque las dos se equivocan con facilidad:
 
-- **El builder se sostiene en una variable de su propia clase.** `CreateHostBuilder` devuelve un
-  `TDafApplicationBuilder`, pero todos los `Configure*` devuelven `IHostBuilder`, y
-  `IHostBuilder.Build` devuelve un `IHost`. Encadénalo todo en cascada y obtienes el host, no la
-  aplicación. `TDafApplicationBuilder.Build` es la sobrecarga que devuelve `IDafApplication`, y
-  solo se llega a ella por la clase.
+- **El builder responde antes de construirse.** `CreateBuilder` devuelve el builder propio de la
+  variante de la familia, cuyos `Services`, `Configuration` y `Environment` están vivos al volver,
+  así que cada registro surte efecto donde está escrito. `Build` devuelve la aplicación, y su `Run`
+  da el código de salida.
 - **El servicio se declara en una unit, no en el `.dpr`.** Un tipo del fichero de programa no está
   en la sección `interface` de ninguna unit, y el contenedor lo rechaza en ejecución con
   `ENonPublicType`.

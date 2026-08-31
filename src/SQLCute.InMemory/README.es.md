@@ -130,5 +130,5 @@ El back-end es **de solo lectura** — el DML (`INSERT`/`UPDATE`/`DELETE`) sigue
 | [InMemoryQuerySample](samples/InMemoryQuerySample/README.md) | Filtrar, ordenar, paginar y proyectar un `TList<T>` |
 | [InMemoryJoinSample](samples/InMemoryJoinSample/README.md) | Dos fuentes unidas mediante un contexto por llamada |
 | [Daf.Linq](../Linq/README.es.md) | La biblioteca de secuencias perezosas sobre la que se construyen los planes |
-| [SQLCute](../SQLCute.Abstractions/README.es.md) | El constructor fluido que produce el AST |
-| [Compiladores de dialecto](../SQLCute.Compilers/README.es.md) | El back-end SQL que este refleja |
+| [SQLCute](../SQLCute/README.es.md) | El constructor fluido que produce el AST |
+| [Compiladores de dialecto](../SQLCute/README.es.md) | El back-end SQL que este refleja |

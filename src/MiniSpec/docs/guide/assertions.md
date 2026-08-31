@@ -53,7 +53,7 @@ An important special case: verifying that code throws an exception. MiniSpec **a
 | `ExpectException(Raised).ToHaveMessage('text')` | Message contains substring |
 | `ExpectException(Raised).ToBeNone` | No exception was raised |
 
-> 💡 Check the source code of `Daf.MiniSpec.Expect.pas` for all available methods.
+> 💡 Check the source code of `Daf.MiniSpec.Expects.pas` for all available methods.
 
 ---
 

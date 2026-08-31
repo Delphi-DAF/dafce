@@ -26,7 +26,7 @@ Console application demonstrating all SQLCute fluent query-builder capabilities.
 ## Running
 
 ```
-BDS make --project:src/SQLCute.Abstractions/samples/SQLCuteSample/SQLCuteSample.dproj
+BDS make --project:src/SQLCute/samples/SQLCuteSample/SQLCuteSample.dproj
 out\Win32\samples\bin\SQLCuteSample.exe
 ```
 

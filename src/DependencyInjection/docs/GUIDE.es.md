@@ -275,18 +275,16 @@ Services.AddTransient<IMyService>(
 
 ## Integración con Hosting
 
-Con el módulo `Hosting`, el `IServiceCollection` lo proporciona automáticamente el `IHostBuilder`. Nunca llamas a `BuildServiceProvider` directamente:
+Con el módulo `Hosting`, el `IServiceCollection` lo proporciona el builder de la aplicación. Nunca llamas a `BuildServiceProvider` directamente:
 
 ```pascal
-uses Daf.Application.Builder, Daf.Extensions.DependencyInjection;
+uses Daf.Cli, Daf.CommandLine, Daf.Configuration.CommandLine, Daf.Extensions.DependencyInjection;
 
-TApplication.CreateBuilder
-  .ConfigureServices(procedure(Services: IServiceCollection)
-  begin
-    Services.AddSingleton<IMyService, TMyService>;
-  end)
-  .Build
-  .Run;
+var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
+
+B.Services.AddSingleton<IMyService, TMyService>;
+
+ExitCode := B.Build.Run;
 ```
 
 El `IServiceProvider` queda accesible a través de `IHost.Services` o mediante inyección en los servicios alojados.

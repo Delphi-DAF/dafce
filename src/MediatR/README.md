@@ -92,11 +92,6 @@ Services.AddTransient<IRequestHandler<TMyCommand>, TMyCommandHandler>;
 
 ---
 
-## Documentation
-
-
----
-
 ## Pipeline Behaviors
 
 Behaviors wrap every `Send` call with cross-cutting logic (logging, validation, caching, etc.).
@@ -233,3 +228,6 @@ Pipeline behaviors are opt-in. If no behaviors are registered, `Send` invokes th
 ---
 
 ## Documentation
+
+- 📖 [Usage Guide](docs/GUIDE.md) — IMediatorHelper, ARC responses, pipeline, [MediatorAbstract], DI scanning
+- 📁 [MediatRSample](samples/MediatRSample/README.md) — commands, queries and notifications in one program

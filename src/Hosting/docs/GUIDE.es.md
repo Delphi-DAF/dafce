@@ -9,13 +9,14 @@
 1. [Visión general de la arquitectura](#visión-general-de-la-arquitectura)
 2. [Construir un host](#construir-un-host)
 3. [Pipeline de configuración](#pipeline-de-configuración)
-4. [Registrar servicios](#registrar-servicios)
-5. [Hosted services (workers en segundo plano)](#hosted-services-workers-en-segundo-plano)
-6. [Entorno](#entorno)
-7. [Ciclo de vida de la aplicación](#ciclo-de-vida-de-la-aplicación)
-8. [Acceder a servicios tras el Build](#acceder-a-servicios-tras-el-build)
-9. [Apagado elegante](#apagado-elegante)
-10. [Patrón AppModule con Hosting](#patrón-appmodule-con-hosting)
+4. [Compartir datos entre piezas del arranque](#compartir-datos-entre-piezas-del-arranque)
+5. [Registrar servicios](#registrar-servicios)
+6. [Hosted services (workers en segundo plano)](#hosted-services-workers-en-segundo-plano)
+7. [Entorno](#entorno)
+8. [Ciclo de vida de la aplicación](#ciclo-de-vida-de-la-aplicación)
+9. [Acceder a servicios tras el Build](#acceder-a-servicios-tras-el-build)
+10. [Apagado elegante](#apagado-elegante)
+11. [Patrón AppModule con Hosting](#patrón-appmodule-con-hosting)
 
 ---
 
@@ -54,8 +55,9 @@ Host.Start;
 Host.WaitForShutdown; // bloquea hasta la señal de parada
 ```
 
-`THostBuilder` es un **singleton** — una sola instancia por proceso.  
-`Build` solo puede llamarse **una vez**; congela la configuración y crea el contenedor DI.
+Cada `THostBuilder` es independiente: puede haber varios builders y varios hosts vivos a la vez en
+un mismo proceso.  
+`Build` solo puede llamarse **una vez** por builder; congela la configuración y crea el contenedor DI.
 
 ---
 
@@ -102,6 +104,27 @@ end)
 ```
 
 Puedes llamar a `ConfigureServices` varias veces — todos los callbacks se aplican en orden de registro.
+
+---
+
+## Compartir datos entre piezas del arranque
+
+`Properties` es un `TDictionary<string, TValue>` que lleva el builder, para los datos que las piezas
+que componen el arranque necesitan pasarse entre sí. Está en `IHostApplicationBuilder`, y el mismo
+diccionario se lee desde el otro lado por `IHostBuilderContext.Properties` — que es lo que recibe un
+callback de configuración o de logging.
+
+`THostBuilder` añade `UseProperty` para escribir en él en cascada:
+
+```pascal
+Builder.UseProperty('tenant', 'acme');
+
+// ...en cualquier sitio que tenga el contexto:
+var Tenant := Context.Properties['tenant'].AsString;
+```
+
+`UseProperty` es método de la clase concreta `THostBuilder`, no de la interfaz: sostén el builder en
+una variable de su propio tipo para encadenarlo. Leer funciona por la interfaz en todas partes.
 
 ---
 

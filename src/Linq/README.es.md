@@ -157,4 +157,4 @@ Linq.From<Integer>(Millon).Where(EsPrimo).Take(5).ToArray;
 |---------|-------------|
 | [**SQLCute In-Memory**](../SQLCute.InMemory/README.es.md) | Ejecuta un `IQuery` de SQLCute sobre colecciones en memoria apoyándose en esta biblioteca |
 | [Guía de uso In-Memory](../SQLCute.InMemory/docs/GUIDE.es.md) | Los dos carriles, semántica NULL, alcance de DISTINCT |
-| [SQLCute](../SQLCute.Abstractions/README.es.md) | El constructor fluido de consultas SQL |
+| [SQLCute](../SQLCute/README.es.md) | El constructor fluido de consultas SQL |
