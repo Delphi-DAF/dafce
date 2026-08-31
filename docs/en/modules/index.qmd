@@ -34,7 +34,7 @@ Six modules also ship a `Daf.X.Abstractions` package containing only interfaces,
 ## What depends on what
 
 Install only the modules you want — but a module brings the packages it requires, and some of them
-bring a runtime package from the RAD Studio installation. Both are below, generated from the
-packages themselves.
+bring a runtime package from the RAD Studio installation. Both are below; the arrows read
+*requires*.
 
 {{< include ../../_partials/module-graph.en.md >}}

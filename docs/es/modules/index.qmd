@@ -35,7 +35,7 @@ Seis módulos incluyen también un paquete `Daf.X.Abstractions` con solo interfa
 ## Qué depende de qué
 
 Instala solo los módulos que quieras — pero un módulo se lleva los paquetes que requiere, y algunos
-de ellos se llevan un paquete del runtime de RAD Studio. Las dos cosas están abajo, generadas de los
-propios paquetes.
+de ellos se llevan un paquete del runtime de RAD Studio. Las dos cosas están abajo; las flechas se
+leen *requiere*.
 
 {{< include ../../_partials/module-graph.es.md >}}
