@@ -19,7 +19,8 @@ uses
   StepStatus.Feat in 'StepStatus.Feat.pas',
   OutlinePlaceholderStep.Feat in 'OutlinePlaceholderStep.Feat.pas',
   Doubles.Feat in 'Doubles.Feat.pas',
-  ExitCode.Feat in 'ExitCode.Feat.pas';
+  ExitCode.Feat in 'ExitCode.Feat.pas',
+  SuiteContext.Feat in 'SuiteContext.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;
@@ -28,6 +29,9 @@ begin
     // comprobar que los siguientes se saltan. Sin esto la suite no puede salir verde nunca.
     // Lo declara aqui el programa que lo necesita, y no el script que lo lanza.
     .AllowUndefined(True)
+    // El contexto de suite se declara aqui porque UseSuiteContext<T> sustituye la suite entera
+    // migrando lo ya registrado: el sitio natural es el programa, no una unit de features.
+    .UseSuiteContext<TSuiteResources>
     .Category('MiniSpec Framework Tests')
     .Before('Initialize test environment',
       procedure

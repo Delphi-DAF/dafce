@@ -541,16 +541,23 @@ begin
                  end;
     FOptions.SpecMatcher := Matcher;
 
-    // Run suite-level Before hooks
-    FSuite.RunBeforeHooks;
+    // El contexto de suite envuelve a los hooks: se crea antes del primero y se destruye
+    // despues del ultimo, que es lo que significa «compartido por toda la suite».
+    FSuite.SetUpSuiteContext;
     try
-      // Ejecutar TODAS las Features - el conteo debe reflejar el total definido
-      // Cada Feature/Rule/Scenario decide si se ejecuta o marca como Skip
-      for var F in FSuite.Features do
-        F.Run(Matcher);
+      // Run suite-level Before hooks
+      FSuite.RunBeforeHooks;
+      try
+        // Ejecutar TODAS las Features - el conteo debe reflejar el total definido
+        // Cada Feature/Rule/Scenario decide si se ejecuta o marca como Skip
+        for var F in FSuite.Features do
+          F.Run(Matcher);
+      finally
+        // Run suite-level After hooks
+        FSuite.RunAfterHooks;
+      end;
     finally
-      // Run suite-level After hooks
-      FSuite.RunAfterHooks;
+      FSuite.TearDownSuiteContext;
     end;
 
     // Usar el runner para reportar (notificará a todos los listeners)

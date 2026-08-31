@@ -411,6 +411,11 @@ type
     procedure AddAfterHook(const Description: string; const Hook: THookProc);
     procedure RunBeforeHooks;
     procedure RunAfterHooks;
+    /// Crea el contexto de suite y lo publica en SpecContext. Lo llama quien ejecuta la suite,
+    /// antes de la primera feature; sin esa llamada, UseSuiteContext<T> no construye nada.
+    procedure SetUpSuiteContext;
+    /// Lo retira de SpecContext y lo destruye. Va en un finally: es lo unico que lo libera.
+    procedure TearDownSuiteContext;
     /// <summary>
     /// Clears all features and hooks to break reference cycles.
     /// Call when the suite execution is complete.
@@ -730,8 +735,12 @@ type
     procedure AddAfterHook(const Description: string; const Hook: THookProc);
     procedure RunBeforeHooks;
     procedure RunAfterHooks;
+    /// Crea el contexto de suite y lo publica en SpecContext. Lo llama quien ejecuta la suite,
+    /// antes de la primera feature; sin esa llamada, UseSuiteContext<T> no construye nada.
+    procedure SetUpSuiteContext;
+    /// Lo retira de SpecContext y lo destruye. Va en un finally: es lo unico que lo libera.
+    procedure TearDownSuiteContext;
     procedure Clear;
-    procedure Run(const Matcher: TSpecMatcher = nil); reintroduce;
     property Title: string read GetTitle write SetTitle;
     property Features: TList<IFeature> read GetFeatures;
     property BeforeHooks: TList<IHook> read GetBeforeHooks;
@@ -1841,6 +1850,7 @@ end;
 
 destructor TSpecSuite.Destroy;
 begin
+  FSuiteContext.Free;
   FAfterHooks.Free;
   FBeforeHooks.Free;
   FFeatures.Free;
@@ -1925,53 +1935,16 @@ begin
   Result := nil;
 end;
 
-procedure TSpecSuite.Run(const Matcher: TSpecMatcher = nil);
+procedure TSpecSuite.SetUpSuiteContext;
 begin
-  var SW := TStopwatch.StartNew;
-  FRunInfo.State := srsRunning;
-  FRunInfo.Result := srrSuccess;
-
-  // Crear SuiteContext via método virtual (override en TSpecSuite<T>)
   FSuiteContext := CreateContext;
-
-  // Registrar en SpecContext global
   SpecContext.SetSuiteContext(FSuiteContext);
+end;
 
-  try
-    try
-      RunBeforeHooks;
-      for var Feature in FFeatures do
-      begin
-        if Assigned(Matcher) then
-        begin
-          if not Feature.HasMatchingScenarios(Matcher) then
-            Continue;
-        end;
-        Feature.Run(Matcher);
-        if Feature.RunInfo.Result = srrFail then
-          FRunInfo.Result := srrFail;
-        FRunInfo.Counts[rkPass]      := FRunInfo.Counts[rkPass]      + Feature.RunInfo.PassCount;
-        FRunInfo.Counts[rkFail]      := FRunInfo.Counts[rkFail]      + Feature.RunInfo.FailCount;
-        FRunInfo.Counts[rkSkipped]   := FRunInfo.Counts[rkSkipped]   + Feature.RunInfo.SkipCount;
-        FRunInfo.Counts[rkPending]   := FRunInfo.Counts[rkPending]   + Feature.RunInfo.PendingCount;
-        FRunInfo.Counts[rkUndefined] := FRunInfo.Counts[rkUndefined] + Feature.RunInfo.UndefinedCount;
-      end;
-      RunAfterHooks;
-    except
-      on E: Exception do
-      begin
-        FRunInfo.Result := srrError;
-        FRunInfo.SetError;
-      end;
-    end;
-  finally
-    // Limpiar SuiteContext y destruirlo
-    SpecContext.SetSuiteContext(nil);
-    FSuiteContext.Free;
-  end;
-
-  FRunInfo.State := srsFinished;
-  FRunInfo.ExecTimeMs := SW.ElapsedMilliseconds;
+procedure TSpecSuite.TearDownSuiteContext;
+begin
+  SpecContext.SetSuiteContext(nil);
+  FreeAndNil(FSuiteContext);
 end;
 
 { TSpecSuite<T> }
