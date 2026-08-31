@@ -5,8 +5,8 @@ sidebar: docs
 
 ## Requirements
 
-- **Delphi 12+ (Alexandria)** — required for inline variables, generics improvements and managed records
-- **Windows** — primary target; Linux via FMX/FireMonkey is experimental
+- **Delphi 12+ (Athens)** — required for multi-line string literals (`'''`), which five shipped units use
+- **Windows** — Win32 and Win64. No package declares a Linux target
 
 ## Installation
 
@@ -61,9 +61,9 @@ end.
 
 Two things about the shape, both of them easy to get wrong:
 
-- The builder is held in a variable of its **own class**, not chained. `ConfigureServices` and
-  friends return an `IHostBuilder`, whose `Build` gives you an `IHost` — the plain host, not the
-  application. `TDafApplicationBuilder.Build` is the one that returns an `IDafApplication`.
+- The builder is held in a variable, not chained, and registration happens where it is written:
+  there is no deferred `ConfigureServices` callback. `TCliApplication.CreateBuilder` returns an
+  `ICliApplicationBuilder`, whose `Build` returns the `ICliApplication` whose `Run` is the exit code.
 - The service lives in its own unit. A type declared in the `.dpr` is not in the `interface`
   section of any unit, and resolving it fails at run time with `ENonPublicType`.
 

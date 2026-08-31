@@ -5,7 +5,7 @@ sidebar: docs
 
 ## Layer model
 
-DAF follows a layered architecture where each module has a corresponding **Abstractions** companion:
+DAF follows a layered architecture. Six of its modules split their contracts into an **Abstractions** companion package, so app code can depend on interfaces alone:
 
 ```
 ┌─────────────────────────────────────────┐
@@ -21,7 +21,7 @@ DAF follows a layered architecture where each module has a corresponding **Abstr
 
 ## Abstractions pattern
 
-Every service module ships as a pair:
+Configuration, DependencyInjection, Hosting, Logging, MediatR and SQLCute ship as a pair:
 
 | Package | Role |
 |---------|------|
@@ -47,10 +47,24 @@ MiniSpec is independent of the rest of the stack. It can test any Delphi code us
 
 ```pascal
 Feature('Calculator')
+  .UseWorld<TCalculatorWorld>
   .Scenario('Add two numbers')
-  .Given('a calculator')
-  .When('I add 2 and 3')
-  .Then('the result is 5');
+    .Given('I have a calculator', procedure(World: TCalculatorWorld)
+      begin
+        World.Calculator := TCalculator.Create;
+      end)
+    .When('I add 2 and 3', procedure(World: TCalculatorWorld)
+      begin
+        World.Calculator.Add(2, 3);
+      end)
+    .&Then('the result is 5', procedure(World: TCalculatorWorld)
+      begin
+        Expect(World.Calculator.Result).ToEqual(5);
+      end);
 ```
+
+`&Then` carries the ampersand because `then` is a Delphi keyword, and `UseWorld<T>` comes first
+because it is what gives every step its `World`. The runnable version is
+[`src/MiniSpec/samples/CalculatorSpecs`](https://github.com/Delphi-DAF/dafce/tree/main/src/MiniSpec/samples/CalculatorSpecs).
 
 See the [MiniSpec module](../modules/minispec.qmd) for the full guide.

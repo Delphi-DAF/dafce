@@ -6,7 +6,7 @@ lang: es
 
 ## Modelo de capas
 
-DAF sigue una arquitectura en capas donde cada módulo tiene un compañero **Abstractions**:
+DAF sigue una arquitectura en capas. Seis de sus módulos separan sus contratos en un paquete **Abstractions**, para que el código de tu app pueda depender solo de interfaces:
 
 ```
 ┌─────────────────────────────────────────┐
@@ -22,7 +22,7 @@ DAF sigue una arquitectura en capas donde cada módulo tiene un compañero **Abs
 
 ## Patrón Abstractions
 
-Cada módulo de servicio se distribuye como par:
+Configuration, DependencyInjection, Hosting, Logging, MediatR y SQLCute se distribuyen como par:
 
 | Paquete | Rol |
 |---------|-----|
@@ -48,10 +48,24 @@ MiniSpec es independiente del resto del stack. Puede testear cualquier código D
 
 ```pascal
 Feature('Calculadora')
+  .UseWorld<TCalculatorWorld>
   .Scenario('Sumar dos números')
-  .Given('una calculadora')
-  .When('sumo 2 y 3')
-  .Then('el resultado es 5');
+    .Given('tengo una calculadora', procedure(World: TCalculatorWorld)
+      begin
+        World.Calculator := TCalculator.Create;
+      end)
+    .When('sumo 2 y 3', procedure(World: TCalculatorWorld)
+      begin
+        World.Calculator.Add(2, 3);
+      end)
+    .&Then('el resultado es 5', procedure(World: TCalculatorWorld)
+      begin
+        Expect(World.Calculator.Result).ToEqual(5);
+      end);
 ```
+
+`&Then` lleva el ampersand porque `then` es palabra reservada de Delphi, y `UseWorld<T>` va primero
+porque es lo que le da a cada paso su `World`. La versión que compila está en
+[`src/MiniSpec/samples/CalculatorSpecs`](https://github.com/Delphi-DAF/dafce/tree/main/src/MiniSpec/samples/CalculatorSpecs).
 
 Ver el [módulo MiniSpec](../modules/minispec.qmd) para la guía completa.

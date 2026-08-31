@@ -25,6 +25,10 @@ website:
           - text: "---"
           - text: "Application"
             href: en/modules/application.qmd
+          - text: "Cli"
+            href: en/modules/cli.qmd
+          - text: "CommandLine"
+            href: en/modules/commandline.qmd
           - text: "Commons"
             href: en/modules/commons.qmd
           - text: "Configuration"
@@ -53,6 +57,10 @@ website:
             href: en/modules/linq.qmd
           - text: "Specification"
             href: en/modules/specification.qmd
+          - text: "SystemProcess"
+            href: en/modules/systemprocess.qmd
+          - text: "VCL"
+            href: en/modules/vcl.qmd
           - text: "Web"
             href: en/modules/web.qmd
       - href: en/blog/index.qmd
@@ -136,6 +144,14 @@ website:
               href: en/modules/web.qmd
             - text: "FMX"
               href: en/modules/fmx.qmd
+            - text: "Cli"
+              href: en/modules/cli.qmd
+            - text: "CommandLine"
+              href: en/modules/commandline.qmd
+            - text: "VCL"
+              href: en/modules/vcl.qmd
+            - text: "SystemProcess"
+              href: en/modules/systemprocess.qmd
 
     - id: modules-es
       title: "Módulos"
@@ -189,6 +205,14 @@ website:
               href: es/modules/web.qmd
             - text: "FMX"
               href: es/modules/fmx.qmd
+            - text: "Cli"
+              href: es/modules/cli.qmd
+            - text: "CommandLine"
+              href: es/modules/commandline.qmd
+            - text: "VCL"
+              href: es/modules/vcl.qmd
+            - text: "SystemProcess"
+              href: es/modules/systemprocess.qmd
 
     - id: docs-es
       title: "Documentación"

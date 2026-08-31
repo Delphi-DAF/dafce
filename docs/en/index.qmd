@@ -37,7 +37,7 @@ Supports singleton, transient and scoped lifetimes.
 
 ::: {.g-col-12 .g-col-md-4}
 ### 🏠 Hosting
-`IHost` and `IHostBuilder` for application composition and lifecycle — just like ASP.NET Core.
+`IHost` and `IHostApplicationBuilder` for application composition and lifecycle — just like ASP.NET Core.
 
 [→ Learn more](modules/hosting.qmd)
 :::
