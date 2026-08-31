@@ -11,24 +11,6 @@ uses
   DAF.Extensions.DependencyInjection;
 
 type
-
-  TDIObject<T: class> = class(TInterfacedObject)
-  {$IFOPT D+}
-  strict private
-    class var FInstanceCount: Integer;
-    class var FInstances: TArray<T>;
-  private
-    FID: string;
-  public
-    class property InstanceCount: Integer read FInstanceCount;
-    class property Instances: TArray<T> read FInstances;
-    property _ID: string read FID;
-    procedure AfterConstruction; override;
-    procedure BeforeDestruction; override;
-  {$ENDIF}
-  end;
-
-type
 {$REGION 'from unit System.Rtti implem;'}
   PPVtable = ^PVtable;
   PVtable = ^TVtable;
@@ -40,7 +22,7 @@ type
 
   // Es un singleton. Contiene la lista de todos los Scopes creados asi como
   // el scope para singletons
-  TServiceScopeFactory = class(TDIObject<TServiceScopeFactory>, IServiceScopeFactory, IContainerAccess)
+  TServiceScopeFactory = class(TInterfacedObject, IServiceScopeFactory, IContainerAccess)
   strict private
     FServiceCollection: IServiceCollection;
     FSingletonScope: IServiceScope;
@@ -52,6 +34,7 @@ type
     procedure RemoveFromSingletonScope;
   protected
     procedure Shutdown;
+    function OwnedInstanceCount: Integer;
   public
     constructor Create(const ServiceCollection: IServiceCollection);
     destructor Destroy;override;
@@ -66,7 +49,7 @@ type
     function GetOrCreate(const Descriptor: TServiceDescriptor; const Provider: IServiceProvider): IInterface;overload;
   end;
 
-  TServiceScope = class(TDIObject<TServiceScope>, IServiceScope, IServiceProviderImpl, IServiceResolver,
+  TServiceScope = class(TInterfacedObject, IServiceScope, IServiceProviderImpl, IServiceResolver,
     IContainerAccess)
   private
     [Weak]
@@ -103,6 +86,7 @@ type
     // el de abajo recoge la basura de ESTE ambito, y este de aqui cierra el contenedor entero.
     procedure IContainerAccess.Shutdown = ShutdownContainer;
     procedure ShutdownContainer;
+    function OwnedInstanceCount: Integer;
   public
     constructor Create(const Factory: TServiceScopeFactory; const SingletonsScope: Boolean = False);
     destructor Destroy; override;
@@ -113,7 +97,7 @@ type
     property SingletonsScope: IServiceResolver read GetSingletonsScope;
   end;
 
-  TServiceCollection = class(TDIObject<TServiceCollection>, IServiceCollectionImpl)
+  TServiceCollection = class(TInterfacedObject, IServiceCollectionImpl)
   strict private
     FEntries: TDescriptorsDictionary;
     // Estado de la coleccion, no del proceso: componer dos veces en un mismo proceso
@@ -151,10 +135,6 @@ type
     property Descriptors[ServiceType: PTypeInfo]: TServiceDescriptors read GetDescriptors;default;
   end;
 
-{$IFOPT D+}
-var
-  GlobalInstanceCount: Integer;
-{$ENDIF}
 
 implementation
 
@@ -165,34 +145,6 @@ uses
   Daf.Rtti,
   Daf.DependencyInjection.ActivatorUtilities,
   Daf.DependencyInjection.OpenGenerics;
-
-{ TDIObject }
-
-{$IFOPT D+}
-procedure TDIObject<T>.AfterConstruction;
-begin
-  inherited;
-  FID := TGUID.NewGuid.ToString;
-  Setlength(Finstances, 1 + Length(Finstances));
-  FInstances[FinstanceCount] := Self as T;
-  AtomicIncrement(FInstanceCount);
-  AtomicIncrement(GlobalInstanceCount);
-end;
-
-procedure TDIObject<T>.BeforeDestruction;
-begin
-  var FoundIdx := TArray.IndexOf<T>(Finstances, Self as T);
-  if FoundIdx > -1 then
-  begin
-    FInstances[FoundIdx] := nil;
-    AtomicDecrement(FInstanceCount);
-    AtomicDecrement(GlobalInstanceCount);
-    if FinstanceCount = 0 then
-      FInstances := nil;
-  end;
-  inherited;
-end;
-{$ENDIF}
 
 { TServiceCollection }
 
@@ -466,6 +418,18 @@ begin
   end;
 end;
 
+function TServiceScopeFactory.OwnedInstanceCount: Integer;
+begin
+  Result := 0;
+  if Assigned(FSingletonScope) and Assigned(TServiceScope(FSingletonScope).FServiceInstances) then
+    Inc(Result, TServiceScope(FSingletonScope).FServiceInstances.Count);
+  // FSingletonScope no esta en FScopes, asi que se suma aparte: lo dice la nota de su creacion.
+  if Assigned(FScopes) then
+    for var Scope in FScopes do
+      if Assigned(TServiceScope(Scope).FServiceInstances) then
+        Inc(Result, TServiceScope(Scope).FServiceInstances.Count);
+end;
+
 function TServiceScopeFactory.CreateScope: IServiceScope;
 begin
   Result := TServiceScope.Create(Self);
@@ -584,6 +548,16 @@ begin
   // la costura por la que IServiceProvider.ShutDown llega al contenedor sin resolver nada.
   if FScopeFactory <> nil then
     FScopeFactory.Shutdown;
+end;
+
+function TServiceScope.OwnedInstanceCount: Integer;
+begin
+  // La misma costura por la que ShutdownContainer llega al contenedor entero: FScopeFactory es
+  // [Weak], la ve sin poseerla.
+  if FScopeFactory <> nil then
+    Result := FScopeFactory.OwnedInstanceCount
+  else
+    Result := 0;
 end;
 
 procedure TServiceScope.Shutdown;

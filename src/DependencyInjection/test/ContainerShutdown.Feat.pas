@@ -55,6 +55,7 @@ type
     Outcome: string;
     AliveAfterFirstClose, AliveAfterSecondClose: Integer;
     BetaCreatedBefore, BetaCreatedAfter: Integer;
+    OwnedBefore, OwnedAfter: Integer;
     Closed: Boolean;
     constructor Create;
     destructor Destroy; override;
@@ -331,6 +332,39 @@ Feature Container shutdown leaves a defined state @di @lifetime @shutdown
       procedure(W: TShutdownWorld)
       begin
         Expect(W.Outcome).ToContain('EContainerShutDownError');
+      end)
+
+.Rule('A closed container owns nothing')
+
+  // Lo que este escenario mide no era observable antes: solo se podia contar instancias de los
+  // tipos que heredaban de una clase base del framework, es decir de un doble de test. El
+  // contenedor cuenta lo que posee, sea de quien sea. Las dos mitades se afirman a proposito: un
+  // contador que devolviese siempre cero pasaria la segunda y fallaria la primera.
+  .Scenario('A container that has resolved services owns them until it is closed')
+    .Given('a container with a singleton and a scoped service already resolved',
+      procedure(W: TShutdownWorld)
+      begin
+        W.BuildAndResolve;
+      end)
+    .When('I read what it owns before and after closing it',
+      procedure(W: TShutdownWorld)
+      begin
+        var Access: IContainerAccess;
+        if not Supports(W.Provider, IContainerAccess, Access) then
+          raise Exception.Create('the provider does not expose IContainerAccess');
+        W.OwnedBefore := Access.OwnedInstanceCount;
+        W.Close;
+        W.OwnedAfter := Access.OwnedInstanceCount;
+      end)
+    .&Then('it owned something before',
+      procedure(W: TShutdownWorld)
+      begin
+        Expect(W.OwnedBefore > 0).ToBeTrue;
+      end)
+    .&And('and it owns nothing after',
+      procedure(W: TShutdownWorld)
+      begin
+        Expect(W.OwnedAfter).ToEqual(0);
       end)
 
 ;

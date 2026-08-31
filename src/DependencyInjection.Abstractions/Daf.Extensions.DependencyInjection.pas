@@ -131,8 +131,12 @@ type
   end;
 
   IContainerAccess = interface(IInvokable)
-    ['{606B658C-C5EB-48D6-B447-D9A19CBB31F5}']
+    ['{E0C55B47-03C5-4F25-98DC-F07C1AA27C01}']
     procedure Shutdown;
+    // Cuantos objetos sigue poseyendo el contenedor: los del ambito de singletons mas los de
+    // cada ambito vivo. NO cuenta los transient: el contenedor no los retiene, asi que para el
+    // dejan de existir en cuanto los entrega.
+    function OwnedInstanceCount: Integer;
   end;
 
   TServiceDescriptor = record
