@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check that every local link of the rendered site points at something that exists.
+"""Check that every local link of the rendered site resolves, and that every page can be reached.
 
 WHY THIS EXISTS
 ---------------
@@ -14,6 +14,16 @@ The links inside a document that the site publishes by `{{< include >}}` are the
 because they are written for the repository -- where GitHub resolves them -- and the site is not the
 repository. `docs/_gen/link-map.py` rewrites them at render time; this checks the result, which is
 the only place where the answer is not a guess.
+
+LAS DOS PREGUNTAS SON DUALES, Y HACEN FALTA LAS DOS
+---------------------------------------------------
+"Cada enlace tiene pagina" no dice nada de "cada pagina tiene quien la enlace". Medido antes de que
+esto existiera: **10 de las 11 paginas-guia no estaban en ninguna barra lateral**, y su unico acceso
+--el enlace "Usage Guide" de la pagina de su modulo-- era uno de los href muertos. Renderizaban, se
+publicaban y no se podia llegar a ellas desde ningun sitio. El recorrido arranca en el index de la
+raiz, sigue su <meta refresh> y anda tambien la arista del conmutador de idioma, que no es un href
+sino JS que reescribe /en/ <-> /es/ en la ruta: es una arista que el usuario recorre, y sin ella el
+about y el blog en espanol saldrian huerfanos sin serlo.
 
 WHY IT FAILS LOUDLY WHEN IT FINDS NOTHING
 -----------------------------------------
@@ -36,6 +46,9 @@ EXTERNAL = re.compile(r"^(?:[a-z][a-z0-9+.-]*:|//)")
 # --medido-- y no un enlace roto. Dentro de <main> si lo es: el filtro viejo producia href="#guide"
 # y href="#" con texto visible en lugar de una pagina, y eso Quarto no lo llama nada.
 MAIN = re.compile(rb'<main\b.*?</main>', re.S)
+# La raiz del sitio no es una pagina: es un <meta refresh> a en/index.html. Si el recorrido no lo
+# sigue, arranca en un nodo sin salidas y declara huerfano el sitio entero.
+REFRESH = re.compile(rb'(?i)<meta[^>]*http-equiv="refresh"[^>]*content="[^"]*url=([^"\s]+)')
 
 
 def main(argv):
@@ -45,14 +58,17 @@ def main(argv):
     if not site.is_absolute():
         site = pathlib.Path(__file__).resolve().parent.parent / site
 
-    pages = sorted(site.rglob("*.html"))
+    site = site.resolve()
+    pages = sorted(p.resolve() for p in site.rglob("*.html"))
     if not pages:
         print(f"no hay ningun .html bajo {site} -- no se ha medido nada; renderiza el sitio "
               f"antes ('quarto render docs --output-dir ../out/site')", file=sys.stderr)
         return 2
 
     findings, informe, total = [], [], 0
+    salidas = {}          # pagina -> paginas a las que se puede ir desde ella
     for page in pages:
+        salidas[page] = set()
         html = page.read_bytes()
         rel = page.relative_to(site).as_posix()
         ids = set(re.findall(rb'\sid="([^"]+)"', html))
@@ -74,10 +90,49 @@ def main(argv):
                     informe.append(f"{rel} -> {href} (la pagina no define ese ancla)")
                 continue
             total += 1
-            if not (page.parent / href.partition("#")[0]).resolve().exists():
+            destino = (page.parent / href.partition("#")[0]).resolve()
+            if not destino.exists():
                 findings.append(f"{rel} -> {href}")
+            elif destino.suffix == ".html":
+                salidas[page].add(destino)
+        for raw in REFRESH.findall(html):
+            destino = (page.parent / raw.decode("utf-8", "replace")).resolve()
+            if destino.exists():
+                salidas[page].add(destino)
 
-    print(f"{len(pages)} pagina(s), {total} enlace(s) locales, {len(findings)} muerto(s)")
+    # La dual de lo anterior: no "cada enlace tiene pagina" sino "cada pagina tiene quien la
+    # enlace". Medido antes de que existiera: 10 de las 11 paginas-guia no estaban en ninguna
+    # barra lateral y su unico acceso era un enlace roto -- publicadas y sin forma de llegar.
+    raiz = site / "index.html"
+    entradas = [raiz] if raiz.is_file() else sorted(site.glob("*/index.html"))
+    if not entradas:
+        print(f"no hay index.html por donde entrar en {site} -- no se ha medido la "
+              f"alcanzabilidad", file=sys.stderr)
+        return 2
+    # El conmutador de idioma no es un href: _partials/lang-toggle.html reescribe /en/ <-> /es/
+    # en la ruta actual. Es una arista que el usuario recorre, asi que el recorrido la anda; sin
+    # ella, about y el blog en espanol salen huerfanos y no lo son.
+    for pagina in list(salidas):
+        rel = pagina.relative_to(site).as_posix()
+        for a, b in (("en/", "es/"), ("es/", "en/")):
+            if rel.startswith(a):
+                gemela = site / (b + rel[len(a):])
+                if gemela.is_file():
+                    salidas[pagina].add(gemela.resolve())
+
+    vistas, cola = set(entradas), list(entradas)
+    while cola:
+        actual = cola.pop()
+        for destino in salidas.get(actual, ()):  # noqa: PLR1702
+            if destino not in vistas:
+                vistas.add(destino)
+                cola.append(destino)
+    huerfanas = [p.relative_to(site).as_posix() for p in pages if p not in vistas]
+    for h in sorted(huerfanas):
+        findings.append(f"{h} no se alcanza desde {entradas[0].relative_to(site).as_posix()}")
+
+    print(f"{len(pages)} pagina(s), {total} enlace(s) locales, {len(findings)} muerto(s); "
+          f"{len(pages) - len(huerfanas)}/{len(pages)} alcanzables")
     if informe:
         # Informe, no puerta: son enlaces internos de documentos que ya estaban asi, y forzar su
         # cero hoy dejaria el chequeo rojo de salida -- que es como se aprende a ignorarlo.
