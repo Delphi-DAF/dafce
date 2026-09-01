@@ -411,11 +411,6 @@ type
     procedure AddAfterHook(const Description: string; const Hook: THookProc);
     procedure RunBeforeHooks;
     procedure RunAfterHooks;
-    /// Crea el contexto de suite y lo publica en SpecContext. Lo llama quien ejecuta la suite,
-    /// antes de la primera feature; sin esa llamada, UseSuiteContext<T> no construye nada.
-    procedure SetUpSuiteContext;
-    /// Lo retira de SpecContext y lo destruye. Va en un finally: es lo unico que lo libera.
-    procedure TearDownSuiteContext;
     /// <summary>
     /// Clears all features and hooks to break reference cycles.
     /// Call when the suite execution is complete.
@@ -437,15 +432,6 @@ type
     /// Hooks that run once after all features in the suite.
     /// </summary>
     property AfterHooks: TList<IHook> read GetAfterHooks;
-  end;
-
-  /// <summary>
-  /// Suite genérica que crea un contexto de tipo T.
-  /// T puede ser cualquier clase con constructor sin parámetros.
-  /// Marker interface - la creación del contexto es interna via DoCreateContext.
-  /// </summary>
-  ISpecSuite<T: class, constructor> = interface(ISpecSuite)
-    ['{E1F2A3B4-C5D6-7E8F-9A0B-1C2D3E4F5A6B}']
   end;
 
   /// <summary>
@@ -720,13 +706,12 @@ type
     FBeforeHooks: TList<IHook>;
     FAfterHooks: TList<IHook>;
     FSuiteContext: TObject;
+    FContextCreator: TFunc<TObject>;
     function GetTitle: string;
     procedure SetTitle(const Value: string);
     function GetFeatures: TList<IFeature>;
     function GetBeforeHooks: TList<IHook>;
     function GetAfterHooks: TList<IHook>;
-  protected
-    function CreateContext: TObject; virtual;
   public
     constructor Create(const ATitle: string = '');
     destructor Destroy; override;
@@ -735,6 +720,9 @@ type
     procedure AddAfterHook(const Description: string; const Hook: THookProc);
     procedure RunBeforeHooks;
     procedure RunAfterHooks;
+    /// Fija como se construye el contexto de suite. La invoca SetUpSuiteContext una sola vez;
+    /// sin creator no hay contexto y SuiteContext queda nil.
+    procedure SetContextCreator(const Creator: TFunc<TObject>);
     /// Crea el contexto de suite y lo publica en SpecContext. Lo llama quien ejecuta la suite,
     /// antes de la primera feature; sin esa llamada, UseSuiteContext<T> no construye nada.
     procedure SetUpSuiteContext;
@@ -745,15 +733,6 @@ type
     property Features: TList<IFeature> read GetFeatures;
     property BeforeHooks: TList<IHook> read GetBeforeHooks;
     property AfterHooks: TList<IHook> read GetAfterHooks;
-  end;
-
-  /// <summary>
-  /// Suite genérica que crea y gestiona un contexto de tipo T.
-  /// T puede ser cualquier clase con constructor sin parámetros.
-  /// </summary>
-  TSpecSuite<T: class, constructor> = class(TSpecSuite, ISpecSuite<T>)
-  protected
-    function CreateContext: TObject; override;
   end;
 
   /// <summary>
@@ -1930,14 +1909,15 @@ begin
     Hook.Execute;
 end;
 
-function TSpecSuite.CreateContext: TObject;
+procedure TSpecSuite.SetContextCreator(const Creator: TFunc<TObject>);
 begin
-  Result := nil;
+  FContextCreator := Creator;
 end;
 
 procedure TSpecSuite.SetUpSuiteContext;
 begin
-  FSuiteContext := CreateContext;
+  if Assigned(FContextCreator) then
+    FSuiteContext := FContextCreator();
   SpecContext.SetSuiteContext(FSuiteContext);
 end;
 
@@ -1945,13 +1925,6 @@ procedure TSpecSuite.TearDownSuiteContext;
 begin
   SpecContext.SetSuiteContext(nil);
   FreeAndNil(FSuiteContext);
-end;
-
-{ TSpecSuite<T> }
-
-function TSpecSuite<T>.CreateContext: TObject;
-begin
-  Result := T.Create;
 end;
 
 { TRule<T> }

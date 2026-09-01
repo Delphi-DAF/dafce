@@ -38,6 +38,9 @@ type
     FConfigFile: string;
     FConfigExisted: Boolean;
     class var FInstance: TMiniSpec;
+    /// La suite como clase. El ciclo de vida del contexto de suite no viaja en ISpecSuite,
+    /// que es lo que ve quien escribe specs via SpecContext.Suite.
+    function SuiteImpl: TSpecSuite;
   protected
     class function CreateSingleton: TMiniSpec;
     class function Instance: TMiniSpec; static;
@@ -229,23 +232,19 @@ begin
   FSuite.AddAfterHook(Description, Hook);
 end;
 
+function TMiniSpec.SuiteImpl: TSpecSuite;
+begin
+  Result := FSuite as TSpecSuite;
+end;
+
 function TMiniSpec.UseSuiteContext<T>: TMiniSpec;
-var
-  OldSuite: ISpecSuite;
-  NewSuite: TSpecSuite<T>;
 begin
   Result := Self;
-  // Crear nueva suite genérica que puede crear contexto de tipo T
-  NewSuite := TSpecSuite<T>.Create(FSuite.Title);
-  // Migrar features y hooks de la suite anterior
-  OldSuite := FSuite;
-  for var Feature in OldSuite.Features do
-    NewSuite.AddFeature(Feature);
-  for var Hook in OldSuite.BeforeHooks do
-    NewSuite.BeforeHooks.Add(Hook);
-  for var Hook in OldSuite.AfterHooks do
-    NewSuite.AfterHooks.Add(Hook);
-  FSuite := NewSuite;
+  SuiteImpl.SetContextCreator(
+    function: TObject
+    begin
+      Result := T.Create;
+    end);
 end;
 
 procedure TMiniSpec.Register(Feature: IFeature);
@@ -543,7 +542,7 @@ begin
 
     // El contexto de suite envuelve a los hooks: se crea antes del primero y se destruye
     // despues del ultimo, que es lo que significa «compartido por toda la suite».
-    FSuite.SetUpSuiteContext;
+    SuiteImpl.SetUpSuiteContext;
     try
       // Run suite-level Before hooks
       FSuite.RunBeforeHooks;
@@ -557,7 +556,7 @@ begin
         FSuite.RunAfterHooks;
       end;
     finally
-      FSuite.TearDownSuiteContext;
+      SuiteImpl.TearDownSuiteContext;
     end;
 
     // Usar el runner para reportar (notificará a todos los listeners)

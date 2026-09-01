@@ -29,8 +29,6 @@ begin
     // comprobar que los siguientes se saltan. Sin esto la suite no puede salir verde nunca.
     // Lo declara aqui el programa que lo necesita, y no el script que lo lanza.
     .AllowUndefined(True)
-    // El contexto de suite se declara aqui porque UseSuiteContext<T> sustituye la suite entera
-    // migrando lo ya registrado: el sitio natural es el programa, no una unit de features.
     .UseSuiteContext<TSuiteResources>
     .Category('MiniSpec Framework Tests')
     .Before('Initialize test environment',
