@@ -285,6 +285,12 @@ type
     /// </summary>
     procedure MarkAsUndefined;
     /// <summary>
+    /// Marks this item as Error, taking ownership of the exception being handled: call it
+    /// from inside an except block. Unlike the three above it also counts the item as a
+    /// failure, because it replaces the run instead of preceding it — nobody counts after.
+    /// </summary>
+    procedure MarkAsError;
+    /// <summary>
     /// Increments the count for the given result kind and propagates to parent.
     /// Called by Scenario/Example when execution completes.
     /// </summary>
@@ -529,6 +535,7 @@ type
     procedure MarkAsPending;
     procedure MarkAsSkipped;
     procedure MarkAsUndefined;
+    procedure MarkAsError;
     procedure IncCount(Kind: TResultKind);virtual;
     property Parent: ISpecItem read FParent write SetParent;
     property Description: string read GetDescription;
@@ -1031,6 +1038,14 @@ procedure TSpecItem.MarkAsUndefined;
 begin
   FRunInfo.Result := srrUndefined;
   FRunInfo.State := srsFinished;
+end;
+
+procedure TSpecItem.MarkAsError;
+begin
+  FRunInfo.Result := srrError;
+  FRunInfo.SetError;
+  FRunInfo.State := srsFinished;
+  IncCount(rkFail);
 end;
 
 procedure TSpecItem.IncCount(Kind: TResultKind);
@@ -1736,6 +1751,7 @@ begin
       begin
         FRunInfo.Result := srrError;
         FRunInfo.SetError(Exception.Create(Hook.RunInfo.ErrMsg));
+        IncCount(rkFail);
         Break;  // Stop on first hook failure
       end;
     end;
@@ -1754,10 +1770,7 @@ begin
     end;
   except
     on E: Exception do
-    begin
-      FRunInfo.Result := srrError;
-      FRunInfo.SetError;
-    end;
+      MarkAsError;
   end;
 
   // Execute After hooks (once after all scenarios, even if there were errors)
@@ -1768,6 +1781,7 @@ begin
     begin
       FRunInfo.Result := srrError;
       FRunInfo.SetError(Exception.Create(Hook.RunInfo.ErrMsg));
+      IncCount(rkFail);
       // Continue executing remaining After hooks for cleanup
     end;
   end;
@@ -1978,34 +1992,37 @@ begin
       if not ShouldExecute then
         Continue;
 
-      // ScenarioOutline maneja sus propios Worlds (uno por Example)
-      // No crear World aquí para evitar Worlds fantasma
-      if Supports(Scenario, IScenarioOutline) then
-      begin
-        Scenario.Run(nil);
-        if Scenario.RunInfo.Result in [srrFail, srrError] then
-          FRunInfo.Result := srrFail;
-      end
-      else
-      begin
-        var World := CreateWorld;
-        TInjectorService.InjectInto(World);
-        RunBackground(World);
-        Scenario.Run(World);
-        if Scenario.RunInfo.Result in [srrFail, srrError] then
-          FRunInfo.Result := srrFail;
-        World.Free;
+      // Lo que falle preparando un escenario --construir su World, inyectarlo, el Background--
+      // es un fallo de ese escenario: se marca y se cuenta como cualquier otro suyo, y los que
+      // vienen detrás se ejecutan igual.
+      try
+        // ScenarioOutline maneja sus propios Worlds (uno por Example)
+        // No crear World aquí para evitar Worlds fantasma
+        if Supports(Scenario, IScenarioOutline) then
+          Scenario.Run(nil)
+        else
+        begin
+          var World := CreateWorld;
+          try
+            TInjectorService.InjectInto(World);
+            RunBackground(World);
+            Scenario.Run(World);
+          finally
+            World.Free;
+          end;
+        end;
+      except
+        on E: Exception do
+          Scenario.MarkAsError;
       end;
+
+      if Scenario.RunInfo.Result in [srrFail, srrError] then
+        FRunInfo.Result := srrFail;
     end;
-  except
-    on E: Exception do
-    begin
-      FRunInfo.Result := srrError;
-      FRunInfo.SetError;
-    end;
+  finally
+    FRunInfo.State := srsFinished;
+    FRunInfo.ExecTimeMs := SW.ElapsedMilliseconds;
   end;
-  FRunInfo.State := srsFinished;
-  FRunInfo.ExecTimeMs := SW.ElapsedMilliseconds;
 end;
 
 { TSpecContextImpl }

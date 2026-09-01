@@ -855,7 +855,10 @@ begin
         HasFinishedScenario := True;
         Break;
       end;
-  if not HasFinishedScenario then
+  // Sin escenarios terminados hay dos casos distintos: una feature que el filtro descartó
+  // --esa no se imprime-- y una que reventó antes de llegar a ellos. La segunda sí, porque su
+  // RunInfo es el único sitio donde consta que existió.
+  if not HasFinishedScenario and not (Feature.RunInfo.Result in [srrFail, srrError]) then
     Exit;
 
   Inc(FFeatureCount);

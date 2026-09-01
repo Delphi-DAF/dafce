@@ -186,6 +186,12 @@ begin
     for var Line in Feature.Narrative.Split([#13, #10]) do
       if Line.Trim <> '' then
         OutputLn(1, Line.Trim);
+  // OnItem se salta las features, asi que un fallo de la feature misma --un hook Before que
+  // revienta-- no tiene otro sitio donde salir. Un escenario suyo que falla no deja mensaje
+  // aqui: lo lleva el step, y ese si lo imprime OnItem.
+  var ErrMsg := Context.GetErrorDetail(Feature.RunInfo);
+  if not ErrMsg.IsEmpty then
+    OutputLn(1, 'ERROR: "' + ErrMsg + '"');
 end;
 
 procedure TConsoleReporter.OnBeginScenario(const Context: IRunContext; const Scenario: IScenario);
@@ -196,6 +202,11 @@ begin
   if Assigned(FCurrentRule) then
     Inc(Level);
   OutputLn(Level, Scenario.KeyWord + ': ' + Scenario.Description);
+  // Lo que falla antes del primer step --el World que no se puede construir-- no lo lleva
+  // ningun step, asi que sin esto no se imprime en ningun sitio.
+  var ErrMsg := Context.GetErrorDetail(Scenario.RunInfo);
+  if not ErrMsg.IsEmpty then
+    OutputLn(Level + 1, 'ERROR: "' + ErrMsg + '"');
 end;
 
 procedure TConsoleReporter.OnBeginOutline(const Context: IRunContext; const Outline: IScenarioOutline);
