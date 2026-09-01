@@ -20,13 +20,20 @@ implementation
 
 uses
   Daf.MiniSpec,
-  Daf.MiniSpec.Types;
+  Daf.MiniSpec.Types,
+  Daf.MiniSpec.Injection;
 
 type
   TSuiteCtxWorld = class
+  private
+    FGlobal: TSuiteResources;
   public
     Leido: TObject;
     Veces: Integer;
+    /// El contexto de suite pedido por inyeccion, que es lo que la documentacion promete y la via
+    /// que no obliga a castear desde TObject.
+    [Inject]
+    property Global: TSuiteResources read FGlobal write FGlobal;
   end;
 
 constructor TSuiteResources.Create;
@@ -69,6 +76,17 @@ Suite context @context
   .&Then('the context was constructed once', procedure(W: TSuiteCtxWorld)
     begin
       Expect(W.Veces).ToEqual(1);
+    end)
+
+.Scenario('A World receives it by [Inject], without casting from TObject')
+  .When('the runner builds the World of a scenario', procedure(W: TSuiteCtxWorld)
+    begin
+      W.Leido := W.Global;
+    end)
+  .&Then('the injected property holds the instance that was constructed', procedure(W: TSuiteCtxWorld)
+    begin
+      Expect(W.Leido <> nil).ToBeTrue;
+      Expect(W.Leido = TSuiteResources.Construido).ToBeTrue;
     end);
 
 end.

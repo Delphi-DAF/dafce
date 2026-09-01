@@ -1893,10 +1893,15 @@ begin
   if Assigned(FContextCreator) then
     FSuiteContext := FContextCreator();
   SpecContext.SetSuiteContext(FSuiteContext);
+  // Publicado tambien en el injector, que es la via por la que un World lo pide con [Inject], igual
+  // que TFeature<T>.Run hace con el suyo. Register ignora un nil, asi que una suite sin contexto no
+  // registra nada.
+  TInjectorService.Register(FSuiteContext);
 end;
 
 procedure TSpecSuite.TearDownSuiteContext;
 begin
+  TInjectorService.Unregister(FSuiteContext);
   SpecContext.SetSuiteContext(nil);
   FreeAndNil(FSuiteContext);
 end;
