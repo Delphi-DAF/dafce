@@ -370,11 +370,6 @@ type
     function GetAfterHooks: TList<IHook>;
     function HasMatchingScenarios(const Matcher: TSpecMatcher): Boolean;
     procedure Run(const Matcher: TSpecMatcher = nil);
-    /// <summary>
-    /// Clears all internal references to break reference cycles.
-    /// Call when the feature is no longer needed.
-    /// </summary>
-    procedure Clear;
     property Title: string read GetTitle;
     property Narrative: string read GetNarrative;
     /// <summary>
@@ -411,11 +406,6 @@ type
     procedure AddAfterHook(const Description: string; const Hook: THookProc);
     procedure RunBeforeHooks;
     procedure RunAfterHooks;
-    /// <summary>
-    /// Clears all features and hooks to break reference cycles.
-    /// Call when the suite execution is complete.
-    /// </summary>
-    procedure Clear;
     /// <summary>
     /// Title of the test suite (set via MiniSpec.Category).
     /// </summary>
@@ -683,7 +673,6 @@ type
     destructor Destroy; override;
     function HasMatchingScenarios(const Matcher: TSpecMatcher): Boolean;
     procedure Run(const Matcher: TSpecMatcher = nil);reintroduce;
-    procedure Clear;
     property Title: string read GetTitle;
     property Narrative: string read GetNarrative;
     property Category: string read GetCategory write SetCategory;
@@ -728,7 +717,6 @@ type
     procedure SetUpSuiteContext;
     /// Lo retira de SpecContext y lo destruye. Va en un finally: es lo unico que lo libera.
     procedure TearDownSuiteContext;
-    procedure Clear;
     property Title: string read GetTitle write SetTitle;
     property Features: TList<IFeature> read GetFeatures;
     property BeforeHooks: TList<IHook> read GetBeforeHooks;
@@ -1683,15 +1671,6 @@ begin
   inherited;
 end;
 
-procedure TFeature<T>.Clear;
-begin
-  // Clear the lists - [weak] references on FParent handle cycle breaking
-  FImplicitRule := nil;
-  FBeforeHooks.Clear;
-  FAfterHooks.Clear;
-  FRules.Clear;
-end;
-
 function TFeature<T>.GetBackGround: IBackground;
 begin
   Result := FImplicitRule.BackGround;
@@ -1834,25 +1813,6 @@ begin
   FBeforeHooks.Free;
   FFeatures.Free;
   inherited;
-end;
-
-procedure TSpecSuite.Clear;
-var
-  Ctx: TSpecContextImpl;
-begin
-  // Clear global context to release references to suite items
-  Ctx := TSpecContextImpl(SpecContext);
-  Ctx.SetScenario(nil);
-  Ctx.SetRule(nil);
-  Ctx.SetFeature(nil);
-  Ctx.SetSuite(nil);
-  // First clear each feature to break their internal cycles
-  for var Feature in FFeatures do
-    Feature.Clear;
-  // Then clear our own lists
-  FBeforeHooks.Clear;
-  FAfterHooks.Clear;
-  FFeatures.Clear;
 end;
 
 function TSpecSuite.GetTitle: string;
