@@ -84,6 +84,7 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 
 ### Changed
 
+- ⚠️ **DependencyInjection**: **Soltar un ámbito destruye ahora los servicios Scoped que creó.** Hasta ahora el contenedor retenía todos los ámbitos que repartía y no los soltaba hasta cerrarse, así que un proceso que abre un ámbito por petición —el patrón que la guía recomienda— acumulaba una instancia por petición durante toda su vida: mil peticiones, mil instancias vivas. **Rompe** a quien guardase una referencia a un servicio Scoped sin sostenerla, porque hasta hoy sobrevivía a su ámbito
 - ⚠️ **Logging**: Una línea que ningún destino aceptaría **deja de componerse**: la decisión por nivel se toma en el embudo, antes de analizar la plantilla y antes de entregar nada a un proveedor. `ILogger` gana `IsEnabled`, y eso **rompe** a quien implemente el contrato sin heredar de `TLogger` — el diff de ejemplo, en `MIGRATION-2.0.md`
 - ⚠️ **DependencyInjection**: **Un registro repetido pasa a dar dos instancias.** Pedirlos todos devolvía la primera dos veces: la segunda se declaraba, se contaba y no se construía nunca. Resolver uno solo no cambia —sigue ganando el último registrado—, ni cambia el orden de cierre
 - **DependencyInjection**: Un tipo de servicio ya no necesita estar declarado donde la reflexión pueda nombrarlo para poder resolverse: antes se registraba sin protestar y reventaba al resolver, lejos de su causa

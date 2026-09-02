@@ -28,7 +28,10 @@ type
     FServiceCollection: IServiceCollection;
     FSingletonScope: IServiceScope;
     FShutDonwnDone: Boolean;
-    FScopes: TList<IServiceScope>;
+    // Apuntados SIN contar referencia, a proposito: sostenerlos es justo lo que impediria que
+    // murieran cuando su creador los suelta. La baja la da el destructor del ambito, que es lo
+    // unico que ocurre exactamente cuando muere. Alcanzar sin sostener.
+    FScopes: TList<TServiceScope>;
     // Guarda FScopes y FShutDonwnDone, y nada mas. Es una HOJA: no se sostiene mientras se pide
     // ningun otro cerrojo, asi que la jerarquia no puede tener ciclos y no hay orden que
     // recordar. Lo que se hace bajo el es tomar una foto --la lista de ambitos, con referencias
@@ -42,6 +45,8 @@ type
   private
     procedure AddToSingletonScope;
     procedure RemoveFromSingletonScope;
+    procedure RemoveScope(const Scope: TServiceScope);
+    function LiveScopes: TArray<IServiceScope>;
   protected
     procedure Shutdown;
     function OwnedInstanceCount: Integer;
@@ -62,7 +67,9 @@ type
   TServiceScope = class(TInterfacedObject, IServiceScope, IServiceProviderImpl, IServiceResolver,
     IContainerAccess)
   private
-    [Weak]
+    // Apunta a la fabrica SIN sostenerla --sostenerla cerraria el ciclo con FScopes-- y no lleva
+    // [Weak]: ese atributo solo actua sobre referencias a interfaz, y sobre una a objeto no hace
+    // nada. Quien lo pone a nil es la propia fabrica al morir, que es la unica que sabe cuando.
     FScopeFactory: TServiceScopeFactory;
     [Weak]
     FServiceCollection: IServiceCollectionImpl;
@@ -97,6 +104,7 @@ type
     procedure CheckNotShutDown(const ServiceType: PTypeInfo);
     procedure RaiseShutDown(const ServiceType: PTypeInfo);
     procedure CollectGarbage;
+    class function TryAcquire(const Scope: TServiceScope; out Ref: IServiceScope): Boolean; static;
   protected
     property IsSingletonsScope: Boolean read FIsSingletonsScope;
     property ScopeFactory: TServiceScopeFactory read FScopeFactory;
@@ -446,12 +454,23 @@ begin
   FServiceCollection := ServiceCollection;
   // Note FSingletonScope is not in FScopes !!
   FSingletonScope := TServiceScope.Create(Self, True);
-  FScopes := TList<IServiceScope>.Create;
+  FScopes := TList<TServiceScope>.Create;
   AddToSingletonScope;
 end;
 
 destructor TServiceScopeFactory.Destroy;
 begin
+  // Los ambitos que sigan vivos apuntan aqui sin sostener, asi que al morir la fabrica hay que
+  // dejarles el puntero en nil: su destructor se da de baja aqui, y entrar en memoria liberada
+  // es un Access Violation leyendo el cerrojo. Los que ya murieron se dieron de baja solos, asi
+  // que la lista es exactamente los que quedan.
+  FLock.Acquire;
+  try
+    for var Scope in FScopes do
+      Scope.FScopeFactory := nil;
+  finally
+    FLock.Release;
+  end;
   FreeAndNil(FScopes);
   FreeAndNil(FLock);
   inherited;
@@ -469,18 +488,49 @@ begin
   TServiceScope(FSingletonScope).RemoveFirstInstance;
 end;
 
+procedure TServiceScopeFactory.RemoveScope(const Scope: TServiceScope);
+begin
+  FLock.Acquire;
+  try
+    // Que el ambito no este en la lista no es un error: el de singletons nunca estuvo, y uno
+    // creado con el contenedor ya cerrado se descarta sin llegar a apuntarse.
+    if Assigned(FScopes) then
+      FScopes.Remove(Scope);
+  finally
+    FLock.Release;
+  end;
+end;
+
+function TServiceScopeFactory.LiveScopes: TArray<IServiceScope>;
+begin
+  // Una referencia propia por cada ambito que SIGA vivo. El que ya esta muriendo la rechaza, y
+  // no hace falta desmontarlo desde aqui: su destructor llama a su propio Shutdown.
+  // Se llama con FLock tomado, y no toma ningun otro: ninguno de los contadores que toca puede
+  // llegar a cero --TryAcquire lo sube a dos antes de compensar-- asi que no corre ningun
+  // destructor y el cerrojo de la fabrica sigue siendo una hoja.
+  for var Scope in FScopes do
+  begin
+    var Ref: IServiceScope;
+    if TServiceScope.TryAcquire(Scope, Ref) then
+      Result := Result + [Ref];
+  end;
+end;
+
 procedure TServiceScopeFactory.Shutdown;
 begin
-  // Reclamar el cierre y vaciar la lista es lo unico que pasa bajo el cerrojo. Quien llegue
-  // despues encuentra la marca puesta y se va; quien pida un ambito, el error de contenedor
-  // cerrado. Asi no hay un tercer resultado: o la marca esta o no esta.
+  // Reclamar el cierre y tomar la foto de los ambitos vivos es lo unico que pasa bajo el
+  // cerrojo. Quien llegue despues encuentra la marca puesta y se va; quien pida un ambito, el
+  // error de contenedor cerrado. Asi no hay un tercer resultado: o la marca esta o no esta.
   var Scopes: TArray<IServiceScope>;
   FLock.Acquire;
   try
     if FShutDonwnDone then Exit;
     FShutDonwnDone := True;
-    Scopes := FScopes.ToArray;
-    FScopes.Clear;
+    // La lista NO se vacia: los ambitos que el llamante siga sosteniendo tienen que seguir
+    // siendo alcanzables desde aqui hasta que mueran, porque es como se les limpia el puntero a
+    // la fabrica. Los que mueran se daran de baja solos, y FShutDonwnDone ya rechaza todo lo
+    // demas, asi que la lista no vuelve a crecer.
+    Scopes := LiveScopes;
   finally
     FLock.Release;
   end;
@@ -530,7 +580,7 @@ begin
   try
     Singletons := FSingletonScope;
     if Assigned(FScopes) then
-      Scopes := FScopes.ToArray;
+      Scopes := LiveScopes;
   finally
     FLock.Release;
   end;
@@ -544,7 +594,8 @@ end;
 
 function TServiceScopeFactory.CreateScope: IServiceScope;
 begin
-  Result := TServiceScope.Create(Self);
+  var Scope := TServiceScope.Create(Self);
+  Result := Scope;
   FLock.Acquire;
   try
     // Comprobar y apuntar, en el mismo cerrojo: separados, un ambito creado justo despues de que
@@ -556,7 +607,7 @@ begin
       Result := nil;
       CheckNotShutDown;
     end;
-    FScopes.Add(Result);
+    FScopes.Add(Scope);
   finally
     FLock.Release;
   end;
@@ -598,8 +649,37 @@ begin
   FServiceCollection := Factory.ServiceCollection;
 end;
 
+class function TServiceScope.TryAcquire(const Scope: TServiceScope; out Ref: IServiceScope): Boolean;
+begin
+  Ref := nil;
+  if Scope = nil then Exit(False);
+
+  // Tomar referencia SOLO si sigue vivo. Hace falta porque el contador llega a cero fuera de
+  // todo cerrojo: entre ese cero y la primera linea del destructor --la baja-- la fabrica
+  // todavia ve el ambito en la lista.
+  // ⚠️ La guarda mira <= 0 y no = 0 porque el RTL marca al que muere poniendo el contador en
+  // Integer.MinValue, de forma atomica y ANTES de llamar al destructor. Si esa marca dejara de
+  // ser negativa, esta guarda dejaria de proteger sin que nada fallase.
+  var Current: Integer;
+  repeat
+    Current := Scope.FRefCount;
+    if Current <= 0 then Exit(False);
+  until AtomicCmpExchange(Scope.FRefCount, Current + 1, Current) = Current;
+
+  // El incremento de arriba ya es la referencia que se entrega; asignar la interfaz suma otra,
+  // asi que se compensa. Entre las dos lineas el contador vale dos, nunca cero, de modo que
+  // esta compensacion no puede destruir nada.
+  Ref := Scope;
+  Scope._Release;
+  Result := True;
+end;
+
 destructor TServiceScope.Destroy;
 begin
+  // La baja es lo PRIMERO: desde aqui la fabrica ya no puede alcanzarlo. Al reves --desmontar y
+  // darse de baja despues-- deja una ventana en la que alcanza un ambito a medio destruir.
+  if FScopeFactory <> nil then
+    FScopeFactory.RemoveScope(Self);
   // Just in case this Scope is temporal, and we not are in Shutdown
   Shutdown;
   FreeAndNil(FServiceInstances);
@@ -761,16 +841,16 @@ end;
 
 procedure TServiceScope.ShutdownContainer;
 begin
-  // El ambito alcanza la fabrica por FScopeFactory, que es [Weak]: la ve sin poseerla. Esta es
-  // la costura por la que IServiceProvider.ShutDown llega al contenedor sin resolver nada.
+  // El ambito alcanza la fabrica por FScopeFactory, que la ve sin poseerla. Esta es la costura
+  // por la que IServiceProvider.ShutDown llega al contenedor sin resolver nada.
   if FScopeFactory <> nil then
     FScopeFactory.Shutdown;
 end;
 
 function TServiceScope.OwnedInstanceCount: Integer;
 begin
-  // La misma costura por la que ShutdownContainer llega al contenedor entero: FScopeFactory es
-  // [Weak], la ve sin poseerla.
+  // La misma costura por la que ShutdownContainer llega al contenedor entero: FScopeFactory la
+  // ve sin poseerla.
   if FScopeFactory <> nil then
     Result := FScopeFactory.OwnedInstanceCount
   else

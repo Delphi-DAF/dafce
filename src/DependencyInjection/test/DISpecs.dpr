@@ -19,7 +19,8 @@ uses
   ServiceIdentity.Feat in 'ServiceIdentity.Feat.pas',
   RequestedType.Feat in 'RequestedType.Feat.pas',
   OpenGenerics.Feat in 'OpenGenerics.Feat.pas',
-  Options.Feat in 'Options.Feat.pas';
+  Options.Feat in 'Options.Feat.pas',
+  ScopeLifetime.Feat in 'ScopeLifetime.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

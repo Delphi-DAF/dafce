@@ -129,6 +129,7 @@ type
     procedure RaceResolvingTwoServices;
     procedure RaceTwoDifferentServicesFromSharedScope;
     procedure RaceResolveWhileClosing;
+    procedure RaceReleaseScopesWhileClosing;
     procedure RaceConstructionAgainstClose;
     procedure ResolveSharedScopeFromOtherThread;
     procedure CloseFromOtherThread;
@@ -149,6 +150,7 @@ type
     function TeardownBalanceReport: string;
     function ClosureOutcomesReport: string;
     function TeardownReport: string;
+    function LiveAfterRaceReport: string;
   end;
 
 const
@@ -457,6 +459,48 @@ begin
     end);
 end;
 
+procedure TConcurrencyWorld.RaceReleaseScopesWhileClosing;
+begin
+  // La carrera que antes no podia existir: hasta ahora ningun ambito moria antes del cierre,
+  // porque la fabrica los sostenia todos. Ahora el contador de un ambito puede llegar a cero
+  // mientras otro hilo recorre la lista para desmontarlo.
+  // Un hilo mas que los que trabajan, y es el que cierra. Los demas van por tiempo y no por
+  // vueltas: con un numero fijo terminarian antes del cierre y la ventana no se cruzaria.
+  Race(ThreadCount + 1,
+    procedure(Idx: Integer)
+    begin
+      if Idx = ThreadCount then
+      begin
+        TThread.Sleep(25);
+        Close;
+        FOutcomes[Idx] := 'closer';
+        Exit;
+      end;
+
+      var Clock := TStopwatch.StartNew;
+      while Clock.ElapsedMilliseconds < 500 do
+      begin
+        try
+          var Scope: IServiceScope := Provider.CreateScope;
+          Scope.ServiceProvider.GetRequiredService<IRacer>;
+          Scope := nil;
+          FOutcomes[Idx] := 'ok';
+        except
+          on E: EContainerShutDownError do
+          begin
+            FOutcomes[Idx] := 'closed';
+            Break;
+          end;
+          on E: Exception do
+          begin
+            FOutcomes[Idx] := E.ClassName + ': ' + E.Message;
+            Break;
+          end;
+        end;
+      end;
+    end);
+end;
+
 procedure TConcurrencyWorld.RaceConstructionAgainstClose;
 begin
   // El constructor no vuelve hasta que el cierre haya terminado, asi que quien construye pierde
@@ -646,6 +690,15 @@ begin
   // intermitente por medir algo que el requisito no promete.
   Result := Format('sin destruir=%d, vivos=%d, construidos>0=%s',
     [TRacer.Created - TRacer.Destroyed, TRacer.Alive, BoolToStr(TRacer.Created > 0, True)]);
+end;
+
+function TConcurrencyWorld.LiveAfterRaceReport: string;
+begin
+  // Imprime la cifra, no un booleano: si sobra alguno, el fallo tiene que decir cuantos.
+  // Se lee desde el paso Then, que es una rutina distinta de la que abrio los ambitos --dentro
+  // de aquella, los temporales del compilador cuentan como vivos.
+  Result := Format('vivos=%d, construidos>0=%s',
+    [TRacer.Alive, BoolToStr(TRacer.Created > 0, True)]);
 end;
 
 function TConcurrencyWorld.TeardownReport: string;
@@ -984,6 +1037,35 @@ Feature Resolving from several threads at once @di @concurrency
       procedure(W: TConcurrencyWorld)
       begin
         Expect(W.TeardownBalanceReport).ToEqual('sin destruir=0, vivos=0, construidos>0=True');
+      end)
+
+  .Scenario('A close concurrent with scopes being released')
+    .Given('a container with a scoped service and several threads about to open and release scopes',
+      procedure(W: TConcurrencyWorld)
+      begin
+        W.Register(Scoped);
+        W.NoCtorDelay;
+        W.Build;
+      end)
+    .When('another thread closes it while they open, resolve and release scopes in a loop',
+      procedure(W: TConcurrencyWorld)
+      begin
+        W.RaceReleaseScopesWhileClosing;
+      end)
+    .&Then('every unit of work either finished or failed with the shut down error, and nothing else',
+      procedure(W: TConcurrencyWorld)
+      begin
+        Expect(W.UnexpectedOutcomesReport).ToEqual(SinInesperados);
+      end)
+    .&And('and the race really happened: somebody met the close',
+      procedure(W: TConcurrencyWorld)
+      begin
+        Expect(W.ClosedSeenCount).ToBeGreaterThan(0);
+      end)
+    .&And('and nothing was left alive by the scopes that died during the close',
+      procedure(W: TConcurrencyWorld)
+      begin
+        Expect(W.LiveAfterRaceReport).ToEqual('vivos=0, construidos>0=True');
       end)
 
   .Scenario('Whoever loses the race does not leave its instance behind')

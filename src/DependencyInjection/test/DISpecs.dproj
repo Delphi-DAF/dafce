@@ -111,6 +111,7 @@
         <DCCReference Include="RequestedType.Feat.pas"/>
         <DCCReference Include="OpenGenerics.Feat.pas"/>
         <DCCReference Include="Options.Feat.pas"/>
+        <DCCReference Include="ScopeLifetime.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>
