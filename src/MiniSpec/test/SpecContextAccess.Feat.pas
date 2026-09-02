@@ -21,14 +21,33 @@ type
     FeatureTitle: string;
     ExampleRowIndex: Integer;
     Value: Integer;
+    SeenRule: string;
   end;
 
 var
   GBeforeExecuted: Boolean;
+  /// Que Rule vio el hook de feature, que corre fuera de todo escenario. Global porque un hook no
+  /// recibe World: es el mismo motivo por el que GBeforeExecuted lo es.
+  GRuleInFeatureHook: string;
+
+/// Que Rule ve el contexto ahora mismo, en una sola cadena. ToBeNull no imprime el valor real, y
+/// cuando esto falla lo que hay que ver es CUAL contesto, no que hubiera alguna.
+function RuleReport: string;
+begin
+  if SpecContext.Rule = nil then
+    Exit('none');
+  if SpecContext.Rule.Kind = sikRule then
+    Result := 'rule:<' + SpecContext.Rule.Description + '>'
+  else
+    Result := 'implicit:<' + SpecContext.Rule.Description + '>';
+end;
 
 initialization
 
 GBeforeExecuted := False;
+// Centinela: si el hook no llegara a correr, el escenario que lo comprueba falla diciendolo en vez
+// de comparar contra la cadena vacia, que es lo que dejaria una variable sin tocar.
+GRuleInFeatureHook := '<hook did not run>';
 
 Feature('''
 SpecContext Demo @meta
@@ -39,6 +58,12 @@ SpecContext Demo @meta
 ''')
 
 .UseWorld<TScenarioContext>
+
+.Before('read the Rule outside any scenario',
+  procedure
+  begin
+    GRuleInFeatureHook := RuleReport;
+  end)
 
 .Scenario('Access step info via global SpecContext')
   .Given('I have a simple ScenarioContext class', procedure(Ctx: TScenarioContext)
@@ -108,7 +133,39 @@ SpecContext Demo @meta
     [10],
     [20],
     [30]
-  ]);
+  ])
+
+// La Rule implicita no es un detalle interno del arbol: es lo que SpecContext.Rule devuelve cuando
+// nadie declaro una, y por eso Rule no es nil dentro de un escenario. Lo que la distingue de una
+// explicita es su Description vacia, no su ausencia.
+.Scenario('A scenario declared without a Rule still has one')
+  .When('it asks the context for its Rule', procedure(Ctx: TScenarioContext)
+    begin
+      Ctx.SeenRule := RuleReport;
+    end)
+  .&Then('it is the implicit Rule, and its description is empty', procedure(Ctx: TScenarioContext)
+    begin
+      Expect(Ctx.SeenRule).ToEqual('implicit:<>');
+    end)
+
+// El control del anterior: sin este, un SpecContext.Rule que nunca fuera nil pasaria aquel igual.
+.Scenario('Outside every scenario there is no Rule at all')
+  .&Then('the feature hook found none', procedure(Ctx: TScenarioContext)
+    begin
+      Expect(GRuleInFeatureHook).ToEqual('none');
+    end)
+
+.Rule('An explicit rule')
+
+  .Scenario('A scenario inside an explicit Rule reads that one')
+    .When('it asks the context for its Rule', procedure(Ctx: TScenarioContext)
+      begin
+        Ctx.SeenRule := RuleReport;
+      end)
+    .&Then('it is that Rule, named by its description', procedure(Ctx: TScenarioContext)
+      begin
+        Expect(Ctx.SeenRule).ToEqual('rule:<An explicit rule>');
+      end);
 
 finalization
   // Verificación deshabilitada temporalmente mientras se refactoriza el contexto
