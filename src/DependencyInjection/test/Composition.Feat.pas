@@ -181,6 +181,31 @@ Feature Service collection composition @di @composition
 
 .Rule('Composition stops once the provider is built')
 
+  // El caso mas directo, y el que faltaba: registrar a secas. Los tres de abajo van por TryAdd,
+  // Replace y RemoveAll, que son composicion elaborada; esto es lo que escribe cualquiera.
+  .Scenario('Registering on a frozen collection fails out loud')
+    .Given('a collection whose provider was already built',
+      procedure(W: TFooWorld)
+      begin
+        W.Services.AddSingleton<IFoo, TAppFoo>;
+        W.Build;
+      end)
+    .When('something else is registered',
+      procedure(W: TFooWorld)
+      begin
+        W.Failure := '';
+        try
+          W.Services.AddSingleton<IBar, TAppBar>;
+        except
+          on E: Exception do W.Failure := E.Message;
+        end;
+      end)
+    .&Then('it raises saying the collection admits no more changes',
+      procedure(W: TFooWorld)
+      begin
+        Expect(W.Failure).ToContain('frozen');
+      end)
+
   .Scenario('TryAdd on a frozen collection fails out loud')
     .Given('a collection whose provider was already built',
       procedure(W: TFooWorld)

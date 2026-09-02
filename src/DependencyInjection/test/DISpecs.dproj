@@ -106,6 +106,7 @@
         <DCCReference Include="Validation.Feat.pas"/>
         <DCCReference Include="GarbageCollection.Feat.pas"/>
         <DCCReference Include="ContainerShutdown.Feat.pas"/>
+        <DCCReference Include="Concurrency.Feat.pas"/>
         <DCCReference Include="ServiceIdentity.Feat.pas"/>
         <DCCReference Include="RequestedType.Feat.pas"/>
         <DCCReference Include="OpenGenerics.Feat.pas"/>

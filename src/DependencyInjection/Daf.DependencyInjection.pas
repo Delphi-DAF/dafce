@@ -6,6 +6,7 @@ uses
   System.TypInfo,
   System.Rtti,
   System.Classes,
+  System.SyncObjs,
   System.Generics.Collections,
   Daf.Enumerable,
   DAF.Extensions.DependencyInjection;
@@ -28,7 +29,16 @@ type
     FSingletonScope: IServiceScope;
     FShutDonwnDone: Boolean;
     FScopes: TList<IServiceScope>;
+    // Guarda FScopes y FShutDonwnDone, y nada mas. Es una HOJA: no se sostiene mientras se pide
+    // ningun otro cerrojo, asi que la jerarquia no puede tener ciclos y no hay orden que
+    // recordar. Lo que se hace bajo el es tomar una foto --la lista de ambitos, con referencias
+    // propias-- y el trabajo va fuera. Separado del de los ambitos porque crear un ambito no
+    // debe esperar a que otro hilo construya un servicio.
+    // Reentrante porque el desmontaje llega a destructores, y un destructor puede volver a
+    // llamar aqui.
+    FLock: TCriticalSection;
     function GetSingletonsScope: IServiceScope;
+    procedure CheckNotShutDown;
   private
     procedure AddToSingletonScope;
     procedure RemoveFromSingletonScope;
@@ -59,14 +69,18 @@ type
     // Ordenado a proposito: CollectGarbage lo recorre de atras hacia
     // delante para liberar en orden inverso al de creacion.
     FServiceInstances : TOrderedDictionary<TServiceIdentity, IInterface>;
-    FCreatingSingletons: TStack<TServiceDescriptor>;
+    // Los dos cerrojos del ambito. La regla: FInstancesLock se toma y se suelta en linea recta
+    // --para leer, o para anadir-- y nunca se sostiene mientras se pide FBuildLock ni mientras
+    // corre un constructor. Anidar dos tomas suyas, o leer teniendo la escritura, BLOQUEA sin
+    // lanzar. FBuildLock si es reentrante, que es lo que pide un grafo: construir A reentra la
+    // resolucion para B en el mismo hilo. Orden de los tres: fabrica, construccion, diccionario.
+    FInstancesLock: TLightweightMREW;
+    FBuildLock: TCriticalSection;
     FIsSingletonsScope: Boolean;
     FShutDonwnDone: Boolean;
     function GetServiceIdentity(const Descriptor: TServiceDescriptor): TServiceIdentity;
     function CreateInstance(const Descriptor: TServiceDescriptor; const Provider: IServiceProvider): IInterface;
     function GetOrCreate(const Descriptor: TServiceDescriptor; const Provider: IServiceProvider): IInterface;overload;
-    procedure BeginCreateSingleton(const Descriptor: TServiceDescriptor);
-    procedure EndCreateSingleton;
     function GetImplementor(const Descriptor: TServiceDescriptor): IInterface;
     function TryGet(const ServiceType: PTypeInfo; out Service): Boolean;
     function TryGetAll(const ServiceType: PTypeInfo; out Services: IInterfaceList): Boolean;
@@ -76,8 +90,12 @@ type
       const MatchedOpen: Boolean): TServiceDescriptor;
     function GetSingletonsScope: IServiceResolver;
     procedure AddServiceInstance(const Descriptor: TServiceDescriptor; const Service: IInterface);
+    function TryGetInstance(const Identity: TServiceIdentity; out Service: IInterface): Boolean;
+    procedure RemoveFirstInstance;
+    function InstanceCount: Integer;
     function CanResolve(const ServiceType: PTypeInfo): Boolean;
     procedure CheckNotShutDown(const ServiceType: PTypeInfo);
+    procedure RaiseShutDown(const ServiceType: PTypeInfo);
     procedure CollectGarbage;
   protected
     property IsSingletonsScope: Boolean read FIsSingletonsScope;
@@ -99,6 +117,12 @@ type
 
   TServiceCollection = class(TInterfacedObject, IServiceCollectionImpl)
   strict private
+    // Componer es de un solo hilo, y eso es el contrato, no una carencia: la coleccion se compone
+    // en un hilo, se congela al construir el proveedor, y desde entonces solo se lee. Por eso
+    // FEntries no lleva cerrojo -- la garantia viene de arriba, no del codigo -- y por eso
+    // FIsFrozen se puede escribir una vez y leer despues sin proteger: la escritura ocurre antes
+    // de que exista el segundo hilo. Lo unico que se escribe al RESOLVER es FOpenMatches, y por
+    // eso es lo unico que va con cerrojo.
     FEntries: TDescriptorsDictionary;
     // Estado de la coleccion, no del proceso: componer dos veces en un mismo proceso
     // tiene que dar el mismo resultado, y con una global de unit no lo daba.
@@ -108,11 +132,18 @@ type
     // recorreria todas las claves de la coleccion. Se vacia en cuanto la coleccion cambia:
     // un "ninguno" cacheado antes de un registro posterior seria una respuesta caducada.
     FOpenMatches: TDictionary<PTypeInfo, PTypeInfo>;
+    // FOpenMatches es el UNICO estado de la coleccion que se escribe al RESOLVER, y por eso es
+    // el unico que lleva cerrojo: lo demas se compone en un hilo, se congela, y luego solo se
+    // lee -- que es el contrato, no una casualidad. Sin este cerrojo, dos hilos resolviendo
+    // cierres distintos por primera vez escriben el mismo TDictionary a la vez.
+    // Toda lectura y toda escritura de FOpenMatches pasa por aqui, sin excepciones que recordar.
+    FOpenMatchesLock: TLightweightMREW;
     FIsFrozen: Boolean;
     function DescribeUnresolvable(const Descriptor: TServiceDescriptor; const Failed: TRttiParameter): string;
     procedure CollectCapturedScopes(const Descriptor: TServiceDescriptor; const Ctor: TRttiMethod;
       var Errors: TArray<string>);
     procedure Validate(const Provider: IServiceProvider; const Options: TServiceProviderOptions);
+    procedure ClearOpenMatches;
   protected
     function CreateScopeFactory: IServiceScopeFactory;
   public
@@ -146,6 +177,23 @@ uses
   Daf.DependencyInjection.ActivatorUtilities,
   Daf.DependencyInjection.OpenGenerics;
 
+type
+  PServiceDescriptor = ^TServiceDescriptor;
+
+threadvar
+  /// <summary>
+  ///   El singleton que este hilo esta construyendo, o nil. Apunta al descriptor que sostiene el
+  ///   marco de GetImplementor, asi que el puntero vale exactamente mientras esa construccion
+  ///   esta en curso.
+  ///   Es POR HILO y no por ambito porque compartir un ambito entre hilos esta soportado: con la
+  ///   marca en el ambito, la construccion en curso de un hilo le parece un ciclo al otro y la
+  ///   guarda de abajo rechaza grafos sanos de forma intermitente. Un rechazo que no se
+  ///   reproduce es peor que ninguno.
+  ///   Un puntero y no el registro: un threadvar de tipo gestionado no se finaliza al terminar
+  ///   el hilo.
+  /// </summary>
+  GCreatingSingleton: PServiceDescriptor;
+
 { TServiceCollection }
 
 constructor TServiceCollection.Create;
@@ -168,8 +216,18 @@ function TServiceCollection.TryFindOpenGeneric(const ClosedType: PTypeInfo; out 
 begin
   OpenType := nil;
   if (ClosedType = nil) or not _T.IsGeneric(ClosedType) then Exit(False);
-  if FOpenMatches.TryGetValue(ClosedType, OpenType) then Exit(OpenType <> nil);
 
+  FOpenMatchesLock.BeginRead;
+  try
+    if FOpenMatches.TryGetValue(ClosedType, OpenType) then Exit(OpenType <> nil);
+  finally
+    FOpenMatchesLock.EndRead;
+  end;
+
+  // El emparejamiento se calcula FUERA del cerrojo: solo lee FEntries, que a estas alturas esta
+  // congelada. Dos hilos pueden calcular el mismo y no importa -- el calculo no tiene efectos y
+  // la respuesta es la misma.
+  //
   // Un registro sin fijar no se empareja consigo mismo: IX<_> es un tipo cerrado legitimo y
   // se resuelve por la via directa, como cualquier otro.
   if not TOpenGeneric.IsOpen(ClosedType) then
@@ -180,8 +238,25 @@ begin
         Break;
       end;
 
-  FOpenMatches.AddOrSetValue(ClosedType, OpenType);
+  FOpenMatchesLock.BeginWrite;
+  try
+    // AddOrSetValue y no Add, y aqui eso importa: dos hilos que llegaron a la vez guardan la
+    // misma respuesta, y con Add el segundo chocaria con el primero.
+    FOpenMatches.AddOrSetValue(ClosedType, OpenType);
+  finally
+    FOpenMatchesLock.EndWrite;
+  end;
   Result := OpenType <> nil;
+end;
+
+procedure TServiceCollection.ClearOpenMatches;
+begin
+  FOpenMatchesLock.BeginWrite;
+  try
+    FOpenMatches.Clear;
+  finally
+    FOpenMatchesLock.EndWrite;
+  end;
 end;
 
 function TServiceCollection.TryMarkVisited(const Category, Key: string): Boolean;
@@ -317,7 +392,7 @@ function TServiceCollection.SetDescriptors(const ServiceType: PTypeInfo;
 begin
   CheckNotFrozen;
   Result := Self;
-  FOpenMatches.Clear;
+  ClearOpenMatches;
   FEntries.Remove(ServiceType);
   if Length(NewDescriptors) = 0 then Exit;
 
@@ -330,7 +405,7 @@ function TServiceCollection.RemoveAll(const ServiceType: PTypeInfo): IServiceCol
 begin
   CheckNotFrozen;
   Result := Self;
-  FOpenMatches.Clear;
+  ClearOpenMatches;
   // Se borra la entrada entera, no se vacia la lista: si quedara una clave con lista vacia,
   // Contains seguiria diciendo que si y TryAdd no repondria el registro.
   FEntries.Remove(ServiceType);
@@ -349,7 +424,7 @@ begin
 
   Assert(Assigned(Factory), 'ServiceFactory can''t be empty');
   Result := Self;
-  FOpenMatches.Clear;
+  ClearOpenMatches;
   var
     Descriptors: TServiceDescriptors;
 
@@ -367,6 +442,7 @@ end;
 constructor TServiceScopeFactory.Create(const ServiceCollection: IServiceCollection);
 begin
   inherited Create;
+  FLock := TCriticalSection.Create;
   FServiceCollection := ServiceCollection;
   // Note FSingletonScope is not in FScopes !!
   FSingletonScope := TServiceScope.Create(Self, True);
@@ -377,6 +453,7 @@ end;
 destructor TServiceScopeFactory.Destroy;
 begin
   FreeAndNil(FScopes);
+  FreeAndNil(FLock);
   inherited;
 end;
 
@@ -389,30 +466,53 @@ end;
 
 procedure TServiceScopeFactory.RemoveFromSingletonScope;
 begin
-  with TServiceScope(FSingletonScope).FServiceInstances do
-    Delete(0);
+  TServiceScope(FSingletonScope).RemoveFirstInstance;
 end;
 
 procedure TServiceScopeFactory.Shutdown;
 begin
-  if FShutDonwnDone then Exit;
-  FShutDonwnDone := True;
+  // Reclamar el cierre y vaciar la lista es lo unico que pasa bajo el cerrojo. Quien llegue
+  // despues encuentra la marca puesta y se va; quien pida un ambito, el error de contenedor
+  // cerrado. Asi no hay un tercer resultado: o la marca esta o no esta.
+  var Scopes: TArray<IServiceScope>;
+  FLock.Acquire;
+  try
+    if FShutDonwnDone then Exit;
+    FShutDonwnDone := True;
+    Scopes := FScopes.ToArray;
+    FScopes.Clear;
+  finally
+    FLock.Release;
+  end;
+
   _AddRef;
   try
     RemoveFromSingletonScope;
-  var Scopes := FScopes.ToArray;
-  FSCopes.Clear;
-  // downto, no to: ascendente iba de High a Low, asi que corria UNA vez con un solo ambito y
-  // NINGUNA con dos o mas -- que es cuando de verdad hacia falta. Cerrar en orden inverso al de
-  // creacion es ademas el orden correcto.
-  for var idx := High(Scopes) downto Low(Scopes) do
+    // downto, no to: ascendente iba de High a Low, asi que corria UNA vez con un solo ambito y
+    // NINGUNA con dos o mas -- que es cuando de verdad hacia falta. Cerrar en orden inverso al de
+    // creacion es ademas el orden correcto.
+    for var idx := High(Scopes) downto Low(Scopes) do
     begin
-       TServiceScope(Scopes[idx]).Shutdown;
-    Scopes[idx] := nil;
+      TServiceScope(Scopes[idx]).Shutdown;
+      Scopes[idx] := nil;
     end;
-  TServiceScope(FSingletonScope).Shutdown;
-  FSingletonScope := nil;
-    FServiceCollection := nil;
+    TServiceScope(FSingletonScope).Shutdown;
+
+    // El ambito de singletons se suelta al FINAL y con una referencia propia: mientras exista un
+    // ambito sin marcar, una resolucion suya puede pedirle un Singleton, y encontrarlo en nil
+    // seria el Access Violation que el requisito prohibe. Todos los ambitos alcanzables estan en
+    // FScopes --incluido el que creo BuildServiceProvider-- asi que a esta linea ya llevan todos
+    // la marca puesta.
+    var Singletons: IServiceScope;
+    FLock.Acquire;
+    try
+      Singletons := FSingletonScope;
+      FSingletonScope := nil;
+      FServiceCollection := nil;
+    finally
+      FLock.Release;
+    end;
+    Singletons := nil;
   finally
     _Release;
   end;
@@ -421,19 +521,52 @@ end;
 function TServiceScopeFactory.OwnedInstanceCount: Integer;
 begin
   Result := 0;
-  if Assigned(FSingletonScope) and Assigned(TServiceScope(FSingletonScope).FServiceInstances) then
-    Inc(Result, TServiceScope(FSingletonScope).FServiceInstances.Count);
+  // La foto se toma bajo el cerrojo y la cuenta se hace fuera, sobre referencias propias: asi el
+  // recorrido no se rompe si otro hilo crea o cierra un ambito, ninguno de los contados puede
+  // morir mientras se cuenta, y el cerrojo de la fabrica sigue siendo una hoja.
+  var Singletons: IServiceScope;
+  var Scopes: TArray<IServiceScope>;
+  FLock.Acquire;
+  try
+    Singletons := FSingletonScope;
+    if Assigned(FScopes) then
+      Scopes := FScopes.ToArray;
+  finally
+    FLock.Release;
+  end;
+
   // FSingletonScope no esta en FScopes, asi que se suma aparte: lo dice la nota de su creacion.
-  if Assigned(FScopes) then
-    for var Scope in FScopes do
-      if Assigned(TServiceScope(Scope).FServiceInstances) then
-        Inc(Result, TServiceScope(Scope).FServiceInstances.Count);
+  if Assigned(Singletons) then
+    Inc(Result, TServiceScope(Singletons).InstanceCount);
+  for var Scope in Scopes do
+    Inc(Result, TServiceScope(Scope).InstanceCount);
 end;
 
 function TServiceScopeFactory.CreateScope: IServiceScope;
 begin
   Result := TServiceScope.Create(Self);
-  FScopes.Add(Result);
+  FLock.Acquire;
+  try
+    // Comprobar y apuntar, en el mismo cerrojo: separados, un ambito creado justo despues de que
+    // el cierre vaciara la lista no lo alcanzaria nadie.
+    if FShutDonwnDone then
+    begin
+      // Se descarta el que se acaba de crear en vez de devolverlo: un ambito que no esta en la
+      // lista no lo cierra nadie.
+      Result := nil;
+      CheckNotShutDown;
+    end;
+    FScopes.Add(Result);
+  finally
+    FLock.Release;
+  end;
+end;
+
+procedure TServiceScopeFactory.CheckNotShutDown;
+begin
+  if not FShutDonwnDone then Exit;
+  raise EContainerShutDownError.CreateFmt('Cannot resolve %s: the container has been shut down',
+    [_T.NameOf(TypeInfo(IServiceScope))]);
 end;
 
 function TServiceScopeFactory.GetSingletonsScope: IServiceScope;
@@ -461,7 +594,7 @@ begin
         Result := Integer(Value.Registration) xor Integer(NativeInt(Value.ClosedType));
       end));
   FIsSingletonsScope := SingletonsScope;
-  FCreatingSingletons := TStack<TServiceDescriptor>.Create;
+  FBuildLock := TCriticalSection.Create;
   FServiceCollection := Factory.ServiceCollection;
 end;
 
@@ -470,21 +603,88 @@ begin
   // Just in case this Scope is temporal, and we not are in Shutdown
   Shutdown;
   FreeAndNil(FServiceInstances);
-  FreeAndNil(FCreatingSingletons);
+  FreeAndNil(FBuildLock);
   inherited;
 end;
 
 procedure TServiceScope.AddServiceInstance(const Descriptor: TServiceDescriptor; const Service: IInterface);
 begin
-  FServiceInstances.Add(GetServiceIdentity(Descriptor), Service);
+  FInstancesLock.BeginWrite;
+  try
+    FServiceInstances.Add(GetServiceIdentity(Descriptor), Service);
+  finally
+    FInstancesLock.EndWrite;
+  end;
+end;
+
+function TServiceScope.TryGetInstance(const Identity: TServiceIdentity; out Service: IInterface): Boolean;
+begin
+  FInstancesLock.BeginRead;
+  try
+    Result := FServiceInstances.TryGetValue(Identity, Service);
+  finally
+    FInstancesLock.EndRead;
+  end;
+end;
+
+procedure TServiceScope.RemoveFirstInstance;
+begin
+  FInstancesLock.BeginWrite;
+  try
+    FServiceInstances.Delete(0);
+  finally
+    FInstancesLock.EndWrite;
+  end;
+end;
+
+function TServiceScope.InstanceCount: Integer;
+begin
+  if not Assigned(FServiceInstances) then Exit(0);
+  FInstancesLock.BeginRead;
+  try
+    Result := FServiceInstances.Count;
+  finally
+    FInstancesLock.EndRead;
+  end;
 end;
 
 function TServiceScope.GetOrCreate(const Descriptor: TServiceDescriptor; const Provider: IServiceProvider): IInterface;
 begin
+  // El cierre se comprueba ANTES de tocar el diccionario, y del ambito de destino: un Singleton
+  // se guarda en el de singletons, que no es el que resuelve, asi que la guarda de
+  // TryGetDescriptors no lo cubre. Y va primero porque el desmontaje recorre el diccionario con
+  // el cerrojo de escritura tomado: un destructor que resuelva mientras eso pasa encuentra aqui
+  // el error de contenedor cerrado en vez de quedarse esperando ese cerrojo.
+  CheckNotShutDown(Descriptor.TypeInfo);
+
   var ServiceIdentity := GetServiceIdentity(Descriptor);
-  if FServiceInstances.TryGetValue(ServiceIdentity, Result) then Exit;
-  Result := CreateInstance(Descriptor, Provider);
-  AddServiceInstance(Descriptor, Result);
+  if TryGetInstance(ServiceIdentity, Result) then Exit;
+
+  FBuildLock.Acquire;
+  try
+    // La segunda comprobacion no es una precaucion opcional: entre la lectura de arriba y este
+    // cerrojo otro hilo pudo construirlo. Sin ella la ventana sigue abierta, mas estrecha -- y
+    // una carrera mas estrecha es peor, porque aparece en produccion y no en los tests.
+    if TryGetInstance(ServiceIdentity, Result) then Exit;
+
+    // El constructor corre con la construccion cerrada, no con el diccionario cerrado. Que
+    // corra dentro es lo que hace cierto "se construye una vez": construir fuera y quedarse con
+    // el ganador ejecuta el constructor una vez por hilo, y los efectos de un constructor no se
+    // deshacen por perder la carrera.
+    Result := CreateInstance(Descriptor, Provider);
+
+    if FShutDonwnDone then
+    begin
+      // Perdio la carrera con el cierre despues de construir. Soltar la referencia aqui destruye
+      // la instancia: entregarla seria una fuga --el contenedor ya no la va a desmontar-- y no
+      // entregarla pero dejarla viva, otra.
+      Result := nil;
+      CheckNotShutDown(Descriptor.TypeInfo);
+    end;
+    AddServiceInstance(Descriptor, Result);
+  finally
+    FBuildLock.Release;
+  end;
 end;
 
 function TServiceScope.CreateInstance(const Descriptor: TServiceDescriptor; const Provider: IServiceProvider): IInterface;
@@ -508,38 +708,55 @@ end;
 function TServiceScope.GetSingletonsScope: IServiceResolver;
 begin
   if IsSingletonsScope  then Exit(Self);
-  Result := FScopeFactory.SingletonsScope as IServiceResolver;
+  if FScopeFactory = nil then Exit(nil);
+  // Devuelve nil en vez de reventar, y quien llama decide con que error: el cierre suelta el
+  // ambito de singletons al final, y una resolucion que ya paso la guarda de SU ambito puede
+  // llegar aqui justo despues. Comprobar y usar no es atomico y no se puede hacer que lo sea sin
+  // un cerrojo en el camino caliente, asi que lo que se arregla es el modo de fallo: sin esto,
+  // "nil as IServiceResolver" daba un Access Violation leyendo la direccion 0 -- el tercer
+  // resultado que el requisito de cierre prohibe.
+  var Scope := FScopeFactory.SingletonsScope;
+  if Scope = nil then Exit(nil);
+  Result := Scope as IServiceResolver;
 end;
 
 procedure TServiceScope.CollectGarbage;
 begin
-  var UnusedFound: Boolean;
-  repeat
-    UnusedFound := False;
-    for var idx := FServiceInstances.Count - 1 downto 0 do
-    begin
-      // ValueList[idx] hands back the IInterface BY VALUE, so the compiler emits an
-      // _AddRef for the temporary AND the matching _Release when that temporary dies.
-      // Reading into a local and restoring the count keeps the read balanced. The
-      // threshold does not move: with the local alive the count is dictionary + local
-      // = 2, and _Release leaves it at 1. The local also keeps the
-      // entry alive across the Delete below, so the last reference can no longer drop
-      // while the dictionary is still holding it.
-      var Svc: IInterface := FServiceInstances.ValueList[idx];
-      var RefCount := Svc._Release;
-      Svc._AddRef;
-      if (RefCount = 1) then
-      // it is only referenced by FServiceInstances, so it will be released
-      // and that will reduce the RefCount of other services in this
-      // scope
+  // El recorrido entero bajo el cerrojo de escritura, no cada borrado: el algoritmo depende de
+  // que los recuentos de referencia bajen en cascada mientras itera, y con el cerrojo suelto
+  // entre vueltas otro hilo podria anadir una instancia a un ambito que se esta desmontando.
+  FInstancesLock.BeginWrite;
+  try
+    var UnusedFound: Boolean;
+    repeat
+      UnusedFound := False;
+      for var idx := FServiceInstances.Count - 1 downto 0 do
       begin
-        FServiceInstances.Delete(idx);
-        UnusedFound := True;
-        Break
+        // ValueList[idx] hands back the IInterface BY VALUE, so the compiler emits an
+        // _AddRef for the temporary AND the matching _Release when that temporary dies.
+        // Reading into a local and restoring the count keeps the read balanced. The
+        // threshold does not move: with the local alive the count is dictionary + local
+        // = 2, and _Release leaves it at 1. The local also keeps the
+        // entry alive across the Delete below, so the last reference can no longer drop
+        // while the dictionary is still holding it.
+        var Svc: IInterface := FServiceInstances.ValueList[idx];
+        var RefCount := Svc._Release;
+        Svc._AddRef;
+        if (RefCount = 1) then
+        // it is only referenced by FServiceInstances, so it will be released
+        // and that will reduce the RefCount of other services in this
+        // scope
+        begin
+          FServiceInstances.Delete(idx);
+          UnusedFound := True;
+          Break
+        end;
       end;
-    end;
-  until not UnusedFound;
-  FServiceInstances.Clear;
+    until not UnusedFound;
+    FServiceInstances.Clear;
+  finally
+    FInstancesLock.EndWrite;
+  end;
 end;
 
 procedure TServiceScope.ShutdownContainer;
@@ -656,34 +873,39 @@ end;
 procedure TServiceScope.CheckNotShutDown(const ServiceType: PTypeInfo);
 begin
   if not FShutDonwnDone then Exit;
+  RaiseShutDown(ServiceType);
+end;
+
+procedure TServiceScope.RaiseShutDown(const ServiceType: PTypeInfo);
+begin
   // El mensaje nombra lo que se pidio: sin depurador comodo, un "esta cerrado" a secas obliga
   // a adivinar quien preguntaba.
   raise EContainerShutDownError.CreateFmt('Cannot resolve %s: the container has been shut down',
     [_T.NameOf(ServiceType)]);
 end;
 
-procedure TServiceScope.BeginCreateSingleton(const Descriptor: TServiceDescriptor);
-begin
-  FCreatingSingletons.Push(Descriptor);
-end;
-
-procedure TServiceScope.EndCreateSingleton;
-begin
-  FCreatingSingletons.Pop;
-end;
-
 function TServiceScope.GetImplementor(const Descriptor: TServiceDescriptor): IInterface;
 begin
   case Descriptor.LifeTime of
-    Singleton: try
-      BeginCreateSingleton(Descriptor);
-      Result := SingletonsScope.GetOrCreate(Descriptor, Self);
-    finally
-      EndCreateSingleton;
+    Singleton: begin
+      var Singletons := SingletonsScope;
+      if Singletons = nil then
+        RaiseShutDown(Descriptor.TypeInfo);
+
+      // El anterior se guarda en una local --que es la pila real del hilo-- y se repone al
+      // salir. Con eso la cadena de singletons en construccion queda enlazada por los marcos de
+      // GetImplementor, sin un objeto por ambito y sin una asignacion por resolucion.
+      var Outer := GCreatingSingleton;
+      GCreatingSingleton := @Descriptor;
+      try
+        Result := Singletons.GetOrCreate(Descriptor, Self);
+      finally
+        GCreatingSingleton := Outer;
+      end;
     end;
     Scoped: begin
-      if not FCreatingSingletons.IsEmpty then
-        raise Exception.CreateFmt('singleton %s cannot depends on scoped %s ',[FCreatingSingletons.Peek.ServiceName, Descriptor.ServiceName]);
+      if GCreatingSingleton <> nil then
+        raise Exception.CreateFmt('singleton %s cannot depends on scoped %s ',[GCreatingSingleton.ServiceName, Descriptor.ServiceName]);
       Result := Self.GetOrCreate(Descriptor, Self);
     end;
     Transient: Result := Self.CreateInstance(Descriptor, Self);

@@ -84,6 +84,38 @@ end;
 
 ---
 
+## Hilos
+
+Una vez construido el proveedor, **resolver desde varios hilos a la vez es seguro**. Cada registro se
+construye **una sola vez y en un solo hilo**, y todos los hilos que lo pidan reciben esa misma
+instancia — así que un constructor no tiene por qué ser seguro entre hilos.
+
+Lo que esa garantía cubre es el contenedor, no lo que sale de él: un servicio resuelto es tan seguro
+entre hilos como lo haya hecho quien lo escribió.
+
+**Componer es de un solo hilo.** Se registra en un hilo, se construye el proveedor, y desde entonces
+la colección solo se lee — registrar después de construir falla diciendo que está congelada. No hay
+garantía frente a componer desde dos hilos, y no se piensa dar: es el montaje de una aplicación, y
+ocurre una vez.
+
+**Un ámbito es una frontera de vida, no un hilo.** Un ámbito se puede usar desde cualquier hilo, y
+desde varios a la vez, lo haya creado quien sea. Un ámbito por unidad de trabajo sigue siendo la
+recomendación, pero el motivo son **los servicios** y no el contenedor: un servicio con estado
+mutable no se vuelve concurrente por vivir en un ámbito. Y un ámbito por hilo **no** aísla los
+singletons — el ámbito de singletons es uno para todos, así que dos hilos con ámbitos propios lo
+siguen compartiendo.
+
+**Cerrar es seguro frente a resoluciones en curso.** Un `ShutDown` concurrente con una resolución
+termina de una de dos formas: la resolución se completa y entrega su servicio, o falla con
+`EContainerShutDownError`. Si ya había construido su instancia cuando perdió la carrera, esa
+instancia se destruye en vez de entregarse.
+
+⚠️ **Un constructor que resuelve en OTRO hilo y espera el resultado se interbloquea.** La
+construcción de un registro está serializada, así que el hilo que espera tiene tomado lo que el otro
+necesita. Ningún contenedor previene esto; pide la dependencia por el constructor.
+
+---
+
 ## Patrón AppModule
 
 Organiza los registros por módulo:

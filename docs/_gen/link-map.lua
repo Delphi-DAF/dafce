@@ -145,6 +145,7 @@ return {
     },
     ["en/modules/di-guide.qmd"] = {
       ["../../Hosting/docs/GUIDE.md"] = "/en/modules/hosting-guide.qmd",
+      ["../README.md#threads"] = "/en/modules/di.qmd#threads",
       ["GUIDE.es.md"] = "/es/modules/di-guide.qmd",
       ["STARTUP-COMPOSITION.md"] = "/en/docs/startup-composition.qmd",
     },
@@ -466,6 +467,7 @@ return {
     },
     ["es/modules/di-guide.qmd"] = {
       ["../../Hosting/docs/GUIDE.es.md"] = "/es/modules/hosting-guide.qmd",
+      ["../README.es.md#hilos"] = "/es/modules/di.qmd#hilos",
       ["GUIDE.md"] = "/en/modules/di-guide.qmd",
       ["STARTUP-COMPOSITION.es.md"] = "/es/docs/startup-composition.qmd",
     },

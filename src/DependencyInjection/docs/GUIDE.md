@@ -184,6 +184,39 @@ end;
 
 `IServiceScope` exposes only `ServiceProvider: IServiceProvider` — use that to resolve.
 
+### A scope per request, from a thread pool
+
+The pattern a server uses: one scope per unit of work, opened on the thread that handles it and
+closed when it ends. Nothing has to be single-threaded for this to be correct.
+
+```pascal
+// One provider for the whole process, built once at startup.
+procedure THandler.Handle(const Request: TRequest);
+begin
+  var Scope := FProvider.CreateScope;
+  try
+    var SP := Scope.ServiceProvider;
+    // Scoped services live as long as this request; singletons are shared with every
+    // other request, and the container built each of them exactly once.
+    SP.GetRequiredService<IRequestHandler>.Run(Request);
+  finally
+    Scope := nil;
+  end;
+end;
+```
+
+Two things about this that are easy to get wrong:
+
+- **The scope is not a thread boundary.** The scope above could be created on one thread and used
+  on another, and several threads could share it. What a scope bounds is the **lifetime** of its
+  Scoped services, nothing else.
+- **A scope per request does not isolate singletons.** The singletons scope is one for the whole
+  provider, so every request shares those instances. If a singleton holds mutable state, that
+  state is shared — and no arrangement of scopes changes it.
+
+Resolving concurrently is safe; the services you resolve are as safe as you wrote them. See
+[Threads](../README.md#threads) for the full guarantee and its limits.
+
 ---
 
 ## AppModule Pattern

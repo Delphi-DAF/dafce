@@ -184,6 +184,39 @@ end;
 
 `IServiceScope` solo expone `ServiceProvider: IServiceProvider` — úsalo para resolver.
 
+### Un ámbito por petición, desde un pool de hilos
+
+El patrón de un servidor: un ámbito por unidad de trabajo, abierto en el hilo que la atiende y
+cerrado al terminar. Nada tiene que ser de un solo hilo para que esto sea correcto.
+
+```pascal
+// Un proveedor para todo el proceso, construido una vez al arrancar.
+procedure THandler.Handle(const Request: TRequest);
+begin
+  var Scope := FProvider.CreateScope;
+  try
+    var SP := Scope.ServiceProvider;
+    // Los servicios Scoped viven lo que dure esta petición; los singletons se comparten
+    // con todas las demás, y el contenedor construyó cada uno exactamente una vez.
+    SP.GetRequiredService<IRequestHandler>.Run(Request);
+  finally
+    Scope := nil;
+  end;
+end;
+```
+
+Dos cosas de esto que se cuentan mal a menudo:
+
+- **El ámbito no es una frontera de hilo.** El ámbito de arriba podría crearse en un hilo y usarse
+  en otro, y varios hilos podrían compartirlo. Lo que un ámbito acota es la **vida** de sus
+  servicios Scoped, y nada más.
+- **Un ámbito por petición no aísla los singletons.** El ámbito de singletons es uno para todo el
+  proveedor, así que todas las peticiones comparten esas instancias. Si un singleton guarda estado
+  mutable, ese estado está compartido — y no hay reparto de ámbitos que lo cambie.
+
+Resolver en paralelo es seguro; los servicios que resuelves son tan seguros como los hayas escrito.
+La garantía completa y sus límites, en [Hilos](../README.es.md#hilos).
+
 ---
 
 ## Patrón AppModule

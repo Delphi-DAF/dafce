@@ -84,6 +84,36 @@ end;
 
 ---
 
+## Threads
+
+Once the provider is built, **resolving from several threads at once is safe**. Each registration is
+built **once, on one thread**, and every thread that asks gets that same instance — so a constructor
+does not have to be thread-safe.
+
+What that guarantee covers is the container, not what comes out of it: a resolved service is as
+thread-safe as its author made it.
+
+**Composing is single-threaded.** Register on one thread, build the provider, and from then on the
+collection is only read — registering after building fails saying it is frozen. There is no guarantee
+against composing from two threads, and none is planned: it is the one-time setup of an application.
+
+**A scope is a lifetime boundary, not a thread.** A scope can be used from any thread, and from
+several at the same time, whoever created it. One scope per unit of work is still the recommendation,
+but the reason is **the services**, not the container: a service with mutable state does not become
+concurrent by living in a scope. And a scope per thread does **not** isolate singletons — the
+singletons scope is one for all scopes, so two threads with their own scopes still share it.
+
+**Closing is safe against resolutions in flight.** A `ShutDown` concurrent with a resolution ends in
+one of two ways: the resolution completes and delivers its service, or it fails with
+`EContainerShutDownError`. If it had already built its instance when it lost the race, that instance
+is destroyed rather than handed out.
+
+⚠️ **A constructor that resolves on another thread and waits for the result deadlocks.** The
+construction of one registration is serialised, so the thread that waits is holding what the other
+one needs. No container prevents this; resolve the dependency through the constructor instead.
+
+---
+
 ## AppModule pattern
 
 Organise registrations by module:
