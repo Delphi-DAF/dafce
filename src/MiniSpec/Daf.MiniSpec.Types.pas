@@ -375,7 +375,9 @@ type
     function GetBeforeHooks: TList<IHook>;
     function GetAfterHooks: TList<IHook>;
     function HasMatchingScenarios(const Matcher: TSpecMatcher): Boolean;
-    procedure Run(const Matcher: TSpecMatcher = nil);
+    /// DryRun viaja con la ejecucion, por donde ya viaja el Matcher: leerlo de la global haria que
+    /// una ejecucion anidada heredase el modo de la de fuera.
+    procedure Run(const Matcher: TSpecMatcher = nil; const DryRun: Boolean = False);
     property Title: string read GetTitle;
     property Narrative: string read GetNarrative;
     /// <summary>
@@ -441,7 +443,7 @@ type
     function GetScenarios: TList<IScenario>;
     function GetFeature: IFeature;
     function HasMatchingScenarios(const Matcher: TSpecMatcher): Boolean;
-    procedure Run(const Matcher: TSpecMatcher = nil);
+    procedure Run(const Matcher: TSpecMatcher = nil; const DryRun: Boolean = False);
     property Feature: IFeature read GetFeature;
     property BackGround: IBackground read GetBackground write SetBackground;
     property Scenarios: TList<IScenario> read GetScenarios;
@@ -460,6 +462,9 @@ type
     function Scenario: IScenario;
     function Step: IScenarioStep;
     function DataTable: TDataTableObj;
+    /// El inyector de esta ejecucion, que es quien lo posee. Apilar un contexto cambia tambien
+    /// que contextos hay registrados: una ejecucion anidada no ve los de la que la lanzo.
+    function Injector: TInjectorService;
     // Contexts del usuario (para UseWorld/UseFeatureContext/UseSuiteContext)
     function SuiteContext: TObject;
     function FeatureContext: TObject;
@@ -487,13 +492,17 @@ type
     FSuiteContext: TObject;
     FFeatureContext: TObject;
     FScenarioContext: TObject;
+    FInjector: TInjectorService;
   public
+    constructor Create;
+    destructor Destroy; override;
     function Suite: ISpecSuite;
     function Feature: IFeature;
     function Rule: IRule;
     function Scenario: IScenario;
     function Step: IScenarioStep;
     function DataTable: TDataTableObj;
+    function Injector: TInjectorService;
     function SuiteContext: TObject;
     function FeatureContext: TObject;
     function ScenarioContext: TObject;
@@ -676,10 +685,13 @@ type
     function GetAfterHooks: TList<IHook>;
     procedure ParseDescription(const Description: string);
   public
-    constructor Create(const Description: string);
+    constructor Create(const Description: string);overload;
+    /// Registra la feature en la suite indicada. La sobrecarga sin suite delega en esta con la del
+    /// proceso, de modo que hay un unico sitio por el que una feature entra en una suite.
+    constructor Create(const Description: string; const Suite: ISpecSuite);overload;
     destructor Destroy; override;
     function HasMatchingScenarios(const Matcher: TSpecMatcher): Boolean;
-    procedure Run(const Matcher: TSpecMatcher = nil);reintroduce;
+    procedure Run(const Matcher: TSpecMatcher = nil; const DryRun: Boolean = False);reintroduce;
     property Title: string read GetTitle;
     property Narrative: string read GetNarrative;
     property Category: string read GetCategory write SetCategory;
@@ -752,7 +764,7 @@ type
     constructor Create(const Feature: IFeature; const Description: string; const Kind: TSpecItemKind);overload;
     destructor Destroy; override;
     function HasMatchingScenarios(const Matcher: TSpecMatcher): Boolean;
-    procedure Run(const Matcher: TSpecMatcher = nil);reintroduce;
+    procedure Run(const Matcher: TSpecMatcher = nil; const DryRun: Boolean = False);reintroduce;
     property Feature: IFeature read GetFeature;
     property Background: IBackground read GetBackGround write SetBackGround;
     property Scenarios: TList<IScenario> read GetScenarios;
@@ -767,6 +779,22 @@ function Val2Str(const V: TValue): string;
 /// Global execution context. Returns current ISpecContext.
 /// </summary>
 function SpecContext: ISpecContext;
+
+/// <summary>
+/// Hace activo el contexto dado y guarda el que lo estaba. Lo llama quien entra en una ejecucion.
+/// </summary>
+/// <remarks>
+/// Sin la pila, una ejecucion anidada pisaria el Step y el Scenario de la que la lanzo, y los steps
+/// siguientes de fuera leerian los de dentro. El desapilado va SIEMPRE en un finally: una excepcion
+/// que escape dejaria la pila torcida y el runner mintiendo en silencio.
+/// La pila es por hilo y no admite dos ejecuciones a la vez: la concurrencia esta fuera de alcance.
+/// </remarks>
+procedure PushSpecContext(const Context: ISpecContext);
+
+/// <summary>
+/// Restituye el contexto que estaba activo antes del Push correspondiente.
+/// </summary>
+procedure PopSpecContext;
 
 /// <summary>
 /// Returns the currently executing scenario. Used by ExpectRaised to access pending exceptions.
@@ -790,6 +818,8 @@ threadvar
   /// Global execution context. Access via SpecContext function.
   /// </summary>
   GSpecContext: ISpecContext;
+  /// Los contextos suspendidos por un Push, el mas reciente al final.
+  GContextStack: TArray<ISpecContext>;
 
 { TCapturedRaise }
 
@@ -1573,12 +1603,19 @@ begin
   for var Example in FExamples do
   begin
     ExampleWorld := Rule.CreateWorld;
-    TInjectorService.InjectInto(ExampleWorld);
     try
-      Rule.RunBackground(ExampleWorld);
-      Example.Run(ExampleWorld);
-      if not Example.RunInfo.IsSuccess then
-        FRunInfo.Result := srrFail;
+      SpecContext.Injector.Register(csScenario, ExampleWorld);
+      SpecContext.SetScenarioContext(ExampleWorld);
+      try
+        SpecContext.Injector.InjectInto(ExampleWorld);
+        Rule.RunBackground(ExampleWorld);
+        Example.Run(ExampleWorld);
+        if not Example.RunInfo.IsSuccess then
+          FRunInfo.Result := srrFail;
+      finally
+        SpecContext.SetScenarioContext(nil);
+        SpecContext.Injector.Unregister(csScenario);
+      end;
     finally
       ExampleWorld.Free;
     end;
@@ -1666,6 +1703,11 @@ end;
 
 constructor TFeature<T>.Create(const Description: string);
 begin
+  Create(Description, MiniSpec.Suite);
+end;
+
+constructor TFeature<T>.Create(const Description: string; const Suite: ISpecSuite);
+begin
   inherited Create(sikFeature, nil, Description);
   ParseDescription(Description);
   FRules := TList<IRule>.Create;
@@ -1674,7 +1716,7 @@ begin
   // Crear Rule implícita como contenedor por defecto
   FImplicitRule := TRule<T>.Create(Self, '', sikImplicitRule);
   FRules.Add(FImplicitRule);
-  MiniSpec.Register(Self as IFeature);
+  Suite.AddFeature(Self as IFeature);
 end;
 
 destructor TFeature<T>.Destroy;
@@ -1725,7 +1767,7 @@ begin
   Result := False;
 end;
 
-procedure TFeature<T>.Run(const Matcher: TSpecMatcher);
+procedure TFeature<T>.Run(const Matcher: TSpecMatcher; const DryRun: Boolean);
 var
   Ctx: TSpecContextImpl;
 begin
@@ -1737,7 +1779,7 @@ begin
   if Assigned(FContextCreator) then
   begin
     FFeatureContext := FContextCreator();
-    TInjectorService.Register(FFeatureContext);
+    SpecContext.Injector.Register(csFeature, FFeatureContext);
     Ctx := SpecContext as TSpecContextImpl;
     Ctx.SetFeatureContext(FFeatureContext);
   end;
@@ -1763,7 +1805,7 @@ begin
       // Cada Rule decide internamente qué escenarios ejecutar o marcar como Skip
       for var Rule in FRules do
       begin
-        Rule.Run(Matcher);
+        Rule.Run(Matcher, DryRun);
         if Rule.RunInfo.Result in [srrFail, srrError] then
           FRunInfo.Result := srrFail;
       end;
@@ -1789,7 +1831,7 @@ begin
   // Destruir FeatureContext
   if Assigned(FFeatureContext) then
   begin
-    TInjectorService.Unregister(FFeatureContext);
+    SpecContext.Injector.Unregister(csFeature);
     Ctx := SpecContext as TSpecContextImpl;
     Ctx.SetFeatureContext(nil);
     FreeAndNil(FFeatureContext);
@@ -1896,12 +1938,12 @@ begin
   // Publicado tambien en el injector, que es la via por la que un World lo pide con [Inject], igual
   // que TFeature<T>.Run hace con el suyo. Register ignora un nil, asi que una suite sin contexto no
   // registra nada.
-  TInjectorService.Register(FSuiteContext);
+  SpecContext.Injector.Register(csSuite, FSuiteContext);
 end;
 
 procedure TSpecSuite.TearDownSuiteContext;
 begin
-  TInjectorService.Unregister(FSuiteContext);
+  SpecContext.Injector.Unregister(csSuite);
   SpecContext.SetSuiteContext(nil);
   FreeAndNil(FSuiteContext);
 end;
@@ -1973,7 +2015,7 @@ begin
   Result := False;
 end;
 
-procedure TRule<T>.Run(const Matcher: TSpecMatcher);
+procedure TRule<T>.Run(const Matcher: TSpecMatcher; const DryRun: Boolean);
 var
   ShouldExecute: Boolean;
 begin
@@ -1991,7 +2033,7 @@ begin
         ShouldExecute := Matcher(Scenario);
 
       // Verificar modo DryRun
-      if ShouldExecute and MiniSpec.DryRun then
+      if ShouldExecute and DryRun then
         ShouldExecute := False;
 
       if not ShouldExecute then
@@ -2009,9 +2051,18 @@ begin
         begin
           var World := CreateWorld;
           try
-            TInjectorService.InjectInto(World);
-            RunBackground(World);
-            Scenario.Run(World);
+            // El World ES el contexto de escenario, y por eso se publica antes de inyectarlo: es
+            // el tercero de los tres que un [Inject] puede pedir, y el mas cercano al step.
+            SpecContext.Injector.Register(csScenario, World);
+            SpecContext.SetScenarioContext(World);
+            try
+              SpecContext.Injector.InjectInto(World);
+              RunBackground(World);
+              Scenario.Run(World);
+            finally
+              SpecContext.SetScenarioContext(nil);
+              SpecContext.Injector.Unregister(csScenario);
+            end;
           finally
             World.Free;
           end;
@@ -2031,6 +2082,23 @@ begin
 end;
 
 { TSpecContextImpl }
+
+constructor TSpecContextImpl.Create;
+begin
+  inherited;
+  FInjector := TInjectorService.Create;
+end;
+
+destructor TSpecContextImpl.Destroy;
+begin
+  FInjector.Free;
+  inherited;
+end;
+
+function TSpecContextImpl.Injector: TInjectorService;
+begin
+  Result := FInjector;
+end;
 
 function TSpecContextImpl.Suite: ISpecSuite;
 begin
@@ -2131,6 +2199,23 @@ begin
   Result := GSpecContext;
 end;
 
+procedure PushSpecContext(const Context: ISpecContext);
+begin
+  SetLength(GContextStack, Length(GContextStack) + 1);
+  // Se guarda GSpecContext en crudo y no SpecContext: si nadie lo habia pedido todavia, lo que
+  // toca restituir es el nil, no un contexto vacio recien construido para guardarlo.
+  GContextStack[High(GContextStack)] := GSpecContext;
+  GSpecContext := Context;
+end;
+
+procedure PopSpecContext;
+begin
+  if Length(GContextStack) = 0 then
+    raise Exception.Create('PopSpecContext sin Push: la pila de contextos de ejecucion esta vacia');
+  GSpecContext := GContextStack[High(GContextStack)];
+  SetLength(GContextStack, Length(GContextStack) - 1);
+end;
+
 function GetCurrentScenario: IScenario;
 begin
   Result := SpecContext.Scenario;
@@ -2177,5 +2262,6 @@ initialization
 finalization
   // Liberar singleton del thread principal para evitar memory leak
   GSpecContext := nil;
+  GContextStack := nil;
 
 end.

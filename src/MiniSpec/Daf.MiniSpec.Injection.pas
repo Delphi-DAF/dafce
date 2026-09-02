@@ -21,36 +21,48 @@ type
   EInjectionError = class(Exception);
 
   /// <summary>
+  /// Los tres ambitos en los que puede vivir un contexto, del mas cercano al step al mas lejano.
+  /// </summary>
+  /// <remarks>
+  /// El orden de la enumeracion ES la precedencia declarada: Resolve la recorre en este orden, asi
+  /// que anadir un ambito en medio cambia la regla. No es una lista de nombres.
+  /// </remarks>
+  TContextScope = (csScenario, csFeature, csSuite);
+
+  /// <summary>
   /// Servicio de inyección IoC.
-  /// El Runner registra/desregistra instancias de contexto.
+  /// Cada ejecución posee el suyo: los contextos registrados son los de esa ejecución y no
+  /// sobreviven a su entorno, de modo que una ejecución anidada no hereda los de la exterior.
   /// Al crear un ScenarioContext, el Runner llama InjectInto para
   /// completar las propiedades marcadas con [Inject].
   /// </summary>
   TInjectorService = class
-  private
-    class var FServices: TDictionary<TClass, TObject>;
-    class constructor Create;
-    class destructor Destroy;
+  strict private
+    FContexts: array[TContextScope] of TObject;
   public
     /// <summary>
-    /// Registra una instancia. Se indexa por su tipo real (ClassType).
-    /// Si ya existe una instancia del mismo tipo, se reemplaza.
+    /// Registra el contexto vivo de un ambito. Un segundo registro del mismo ambito reemplaza al
+    /// anterior; un nil deja el ambito vacio.
     /// </summary>
-    class procedure Register(Instance: TObject);
+    procedure Register(const Scope: TContextScope; Instance: TObject);
 
     /// <summary>
-    /// Desregistra una instancia por su tipo.
+    /// Vacia un ambito. Lo llama quien destruye el contexto de ese ambito.
     /// </summary>
-    class procedure Unregister(Instance: TObject); overload;
-    class procedure Unregister(AClass: TClass); overload;
+    procedure Unregister(const Scope: TContextScope);
 
     /// <summary>
-    /// Resuelve una instancia compatible con el tipo solicitado.
-    /// Busca primero coincidencia exacta, luego por herencia.
+    /// Resuelve el contexto vivo compatible con el tipo solicitado.
     /// </summary>
+    /// <remarks>
+    /// Precedencia declarada: primero una coincidencia exacta en cualquier ambito, y solo si no la
+    /// hay, un descendiente, en los dos casos recorriendo scenario, feature y suite en ese orden.
+    /// Que el tipo exacto gane a un descendiente mas cercano es deliberado: pedir el tipo que se
+    /// registro no puede contestarlo un hijo suyo por estar mas cerca del step.
+    /// </remarks>
     /// <returns>La instancia encontrada o nil si no hay ninguna compatible</returns>
-    class function Resolve(AClass: TClass): TObject; overload;
-    class function Resolve<T: class>: T; overload;
+    function Resolve(AClass: TClass): TObject; overload;
+    function Resolve<T: class>: T; overload;
 
     /// <summary>
     /// Inyecta en todas las propiedades del Target marcadas con [Inject].
@@ -60,80 +72,59 @@ type
     /// Si una propiedad [Inject] no es escribible, no es de tipo clase,
     /// o no se encuentra ningún servicio compatible registrado.
     /// </exception>
-    class procedure InjectInto(Target: TObject);
+    procedure InjectInto(Target: TObject);
 
     /// <summary>
-    /// Limpia todos los servicios registrados.
+    /// Vacia los tres ambitos.
     /// </summary>
-    class procedure Clear;
+    procedure Clear;
   end;
 
 implementation
 
 { TInjectorService }
 
-class constructor TInjectorService.Create;
+procedure TInjectorService.Register(const Scope: TContextScope; Instance: TObject);
 begin
-  FServices := TDictionary<TClass, TObject>.Create;
+  FContexts[Scope] := Instance;
 end;
 
-class destructor TInjectorService.Destroy;
+procedure TInjectorService.Unregister(const Scope: TContextScope);
 begin
-  FServices.Free;
+  FContexts[Scope] := nil;
 end;
 
-class procedure TInjectorService.Register(Instance: TObject);
-begin
-  if Instance = nil then
-    Exit;
-  FServices.AddOrSetValue(Instance.ClassType, Instance);
-end;
-
-class procedure TInjectorService.Unregister(Instance: TObject);
-begin
-  if Instance = nil then
-    Exit;
-  Unregister(Instance.ClassType);
-end;
-
-class procedure TInjectorService.Unregister(AClass: TClass);
-begin
-  if AClass = nil then
-    Exit;
-  FServices.Remove(AClass);
-end;
-
-class procedure TInjectorService.Clear;
-begin
-  FServices.Clear;
-end;
-
-class function TInjectorService.Resolve(AClass: TClass): TObject;
+procedure TInjectorService.Clear;
 var
-  Pair: TPair<TClass, TObject>;
+  Scope: TContextScope;
+begin
+  for Scope := Low(TContextScope) to High(TContextScope) do
+    FContexts[Scope] := nil;
+end;
+
+function TInjectorService.Resolve(AClass: TClass): TObject;
+var
+  Scope: TContextScope;
 begin
   Result := nil;
   if AClass = nil then
     Exit;
 
-  // Primero buscar coincidencia exacta
-  if FServices.TryGetValue(AClass, Result) then
-    Exit;
+  for Scope := Low(TContextScope) to High(TContextScope) do
+    if Assigned(FContexts[Scope]) and (FContexts[Scope].ClassType = AClass) then
+      Exit(FContexts[Scope]);
 
-  // Luego buscar por herencia (la instancia registrada hereda del tipo solicitado)
-  for Pair in FServices do
-  begin
-    if Pair.Key.InheritsFrom(AClass) then
-      Exit(Pair.Value);
-  end;
+  for Scope := Low(TContextScope) to High(TContextScope) do
+    if Assigned(FContexts[Scope]) and FContexts[Scope].ClassType.InheritsFrom(AClass) then
+      Exit(FContexts[Scope]);
 end;
 
-class function TInjectorService.Resolve<T>: T;
+function TInjectorService.Resolve<T>: T;
 begin
   Result := T(Resolve(T));
 end;
 
-class procedure TInjectorService.InjectInto(Target: TObject);
+procedure TInjectorService.InjectInto(Target: TObject);
 var
   RttiContext: TRttiContext;
   RttiType: TRttiType;

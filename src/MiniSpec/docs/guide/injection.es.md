@@ -35,31 +35,38 @@ Feature('...')
   .UseWorld<TWorld>             // Al crear World, inyecta FCtx
 ```
 
-## Servicios Personalizados a Nivel de Suite
+## Los tres contextos, y cuál gana
 
-```pascal
-MiniSpec
-  .Before('Setup services', procedure
-    begin
-      TInjectorService.Register(TDatabaseMock.Create);
-      TInjectorService.Register(THttpClientMock.Create);
-    end)
-  .After('Cleanup', procedure
-    begin
-      TInjectorService.Clear;  // Libera todos los servicios
-    end);
-```
+Una propiedad `[Inject]` recibe cualquiera de los tres contextos vivos mientras corre un step: el
+World del propio escenario, el contexto de feature declarado con `UseFeatureContext<T>` y el
+contexto de suite declarado con `UseSuiteContext<T>`.
+
+Cuando más de uno satisface el tipo pedido, el que gana está declarado:
+
+1. Una coincidencia exacta de tipo, mirando escenario, luego feature y luego suite.
+2. Si no la hay, un descendiente del tipo pedido, en ese mismo orden.
+
+Así, una propiedad declarada con una clase base de la que descienden dos contextos recibe el más
+cercano al step, y una declarada con el tipo exacto del contexto de suite recibe ese aunque un
+contexto de feature descienda de él.
+
+El inyector es de la ejecución: lo que contiene son los contextos de la ejecución en curso, y no le
+sobrevive. Una ejecución anidada no ve los contextos de la que la lanzó.
 
 ## API del TInjectorService
 
 | Método | Descripción |
 |--------|-------------|
-| `Register(Instance)` | Registra un servicio (la clase del objeto es la clave) |
-| `Unregister(Instance)` | Elimina el registro de un servicio |
-| `Resolve(AClass)` | Obtiene el servicio registrado para esa clase |
+| `Register(Scope, Instance)` | Publica el contexto de un ámbito: `csScenario`, `csFeature`, `csSuite` |
+| `Unregister(Scope)` | Vacía un ámbito |
+| `Resolve(AClass)` | Obtiene el contexto vivo compatible con esa clase, por la precedencia de arriba |
 | `Resolve<T>` | Versión genérica de Resolve |
-| `InjectInto(Target)` | Inyecta servicios en propiedades marcadas con `[Inject]` |
-| `Clear` | Libera y elimina todos los servicios registrados |
+| `InjectInto(Target)` | Inyecta contextos en propiedades marcadas con `[Inject]` |
+| `Clear` | Vacía los tres ámbitos |
+
+El runner llama a `Register` y `Unregister` por su cuenta según se crea y se destruye cada contexto.
+No hay registro de servicios sueltos: el colaborador que necesite un escenario se construye en el
+World, o en el contexto de feature o de suite si hay que compartirlo.
 
 ## Errores de Inyección
 

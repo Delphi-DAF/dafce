@@ -38,6 +38,8 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 - **Hosting**: Sample `PackageInit` — un paquete que trae su propia inicialización: el ejecutable llama a su `AddXxx` y no menciona ni el tipo de la tarea ni lo que hace
 - **Docs**: Página nueva «Composición del arranque» (EN/ES) — las dos fases del arranque, las dos formas de agrupar registros, la tabla de equivalencias con .NET y las divergencias justificadas
 - **MiniSpec**: `--allow-undefined` — un step undefined deja de fijar el código de salida, y se sigue contando e informando igual; una suite lo puede declarar por su cuenta con `MiniSpec.AllowUndefined(True)`. Por defecto rompe, porque un step sin binding es una omisión no intencional
+- **MiniSpec**: `TSpecRun` — una ejecución con suite, contexto, inyector, opciones y runner propios, que se puede lanzar dentro de otra sin alterar sus recuentos ni escribir en su informe. `Feature(Descripción, Suite)` declara la feature en esa suite en vez de en la del proceso
+- **MiniSpec**: El World de un escenario queda disponible como contexto de escenario: `SpecContext.ScenarioContext` lo devuelve y un `[Inject]` de su tipo lo recibe
 - **Daf.Linq**: Módulo nuevo — secuencias perezosas con conteo de referencias sobre `System.IEnumerable<T>`: `TQuery<T>`, `IGrouping<TKey, T>` y `Linq.From<T>`. Es el equivalente de LINQ-to-Objects; el nombre `IQueryable<T>` queda **reservado** para lo que significa en .NET, que DAF todavía no tiene
 - **Daf.Linq**: Operadores `Where`/`Filter`, `Select`/`Map`, `Take`, `Skip`, `Zip`, `Distinct`, `OrderBy`, `GroupBy`
 - **Daf.Linq**: Terminales `IsEmpty`, `Any`, `FirstOrDefault`/`LastOrDefault`, `TryFirst`, `Single`, `SingleOrDefault`, `TrySingle`, `ToArray`, `ToList`, `ToSmartArray`
@@ -101,6 +103,8 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 - **Commons**: `TFilterSpec<T>` —el filtro por clausuras— pasa a su propia unidad, `Daf.FilterSpec`
 - **Commons**: `TExpresion<T>` pasa a llamarse **`TDeferred<T>`** y se muda a `Daf.Types`. La firma no cambia y `TMacroExpression` sigue siendo el alias, así que quien use macros no toca nada
 - **Hosting**: El sample `ConsoleSample` se muda de `src/Application/samples/` a `src/Hosting/samples/`: lo que ilustra es el host —composición, configuración y ciclo de vida—, no la capa de aplicación en cuya carpeta estaba
+- ⚠️ **MiniSpec**: Cuando más de un contexto satisface un `[Inject]`, gana el más cercano al step —escenario, luego feature, luego suite— y una coincidencia exacta gana a cualquier descendiente. Antes contestaba el primero que encajara según el orden interno de un diccionario, que no se podía observar porque solo había un contexto registrado a la vez
+- ⚠️ **MiniSpec**: `TInjectorService` deja de admitir servicios sueltos y pasa a ser una instancia de la ejecución con los tres ámbitos, `Register(Scope, Instance)`. El colaborador que necesite un escenario se construye en el World, o en el contexto de feature o de suite si hay que compartirlo
 
 ### Removed
 

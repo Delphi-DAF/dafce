@@ -310,6 +310,27 @@ Es el frente más grande de 2.0 para cualquier cosa que tuviera un `.dpr`.
   `Build` — porque es cuando el fichero se abre ahora. Sigue saliendo por el canal de arranque y
   sigue propagando; lo que cambia es qué categoría lo firma.
 
+### 9. MiniSpec: el inyector guarda los tres contextos, y nada más
+
+- **`TInjectorService` deja de ser un registro de servicios sueltos a nivel de clase.** Es una
+  instancia de la ejecución, y lo que guarda son los tres contextos vivos mientras corre un step.
+  `Register` toma el ámbito, así que una suite que registraba mocks por su cuenta no compila:
+
+  ```pascal
+  // Antes: cualquier objeto, indexado por su clase
+  TInjectorService.Register(TDatabaseMock.Create);
+
+  // Ahora: no hay registro suelto. El colaborador se construye en el World, o se comparte
+  // por el contexto de feature o de suite, que es lo que se inyecta.
+  MiniSpec.UseSuiteContext<TTestResources>;   // TTestResources posee los mocks
+  ```
+
+- **Cuando más de un contexto satisface una propiedad `[Inject]`, el que gana está declarado**:
+  primero el tipo exacto —escenario, luego feature, luego suite— y solo después un descendiente, en
+  ese mismo orden. Antes contestaba el primero que encajara según el orden interno de un
+  diccionario. Esta no rompe la compilación: el World que reciba un contexto distinto al de antes es
+  uno que tenía dos encajando en la misma propiedad, y hasta ahora cuál llegaba no se podía prever.
+
 ## Cómo hacerlo
 
 1. Compila. Lo que falte sale como error del compilador, no como comportamiento raro en

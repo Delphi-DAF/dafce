@@ -20,7 +20,10 @@ uses
   OutlinePlaceholderStep.Feat in 'OutlinePlaceholderStep.Feat.pas',
   Doubles.Feat in 'Doubles.Feat.pas',
   ExitCode.Feat in 'ExitCode.Feat.pas',
-  SuiteContext.Feat in 'SuiteContext.Feat.pas';
+  SuiteContext.Feat in 'SuiteContext.Feat.pas',
+  InjectionPrecedence.Feat in 'InjectionPrecedence.Feat.pas',
+  NestedRun.Feat in 'NestedRun.Feat.pas',
+  FailureVisibility.Feat in 'FailureVisibility.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

@@ -111,6 +111,9 @@
         <DCCReference Include="Doubles.Feat.pas"/>
         <DCCReference Include="ExitCode.Feat.pas"/>
         <DCCReference Include="SuiteContext.Feat.pas"/>
+        <DCCReference Include="InjectionPrecedence.Feat.pas"/>
+        <DCCReference Include="NestedRun.Feat.pas"/>
+        <DCCReference Include="FailureVisibility.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>

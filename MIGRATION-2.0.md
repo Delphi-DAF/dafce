@@ -306,6 +306,28 @@ This is the largest front of 2.0 for anything that had a `.dpr`.
   `Build` — because that is when the file is opened now. It still goes through the bootstrap
   channel and still propagates; what changed is which category signs it.
 
+### 9. MiniSpec: the injector holds the three contexts, and nothing else
+
+- **`TInjectorService` is no longer a class-wide registry of loose services.** It is an instance
+  owned by the run, and what it holds are the three contexts alive while a step runs. `Register`
+  takes the scope, so a suite that registered mocks of its own does not compile:
+
+  ```pascal
+  // Before: any object, keyed by its class
+  TInjectorService.Register(TDatabaseMock.Create);
+
+  // Now: there is no loose registry. Build the collaborator in the World, or share it
+  // through the feature or suite context, which is what gets injected.
+  MiniSpec.UseSuiteContext<TTestResources>;   // TTestResources owns the mocks
+  ```
+
+- **When more than one context satisfies an `[Inject]` property, the winner is now declared**:
+  exact type first — scenario, then feature, then suite — and only then a descendant, in that same
+  order. It used to answer with the first entry that fitted according to a dictionary's internal
+  order. This one does not break compilation: a World that receives a different context than before
+  is one that had two of them fitting the same property, and until now which one arrived could not
+  be predicted.
+
 ## How to do it
 
 1. Compile. Whatever is missing comes out as a compiler error, not as odd behaviour at run time.

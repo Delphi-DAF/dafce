@@ -18,7 +18,7 @@ type
     FFeature: TFeature<T>;
   public
     constructor Create(const Feature: TFeature<T>);overload;
-    constructor Create(const Description: string; const Category: string = '');overload;
+    constructor Create(const Description: string; const Category: string = ''; const Suite: ISpecSuite = nil);overload;
     function Category(const Name: string): IFeatureBuilder<T>; overload;
     function Category(AClass: TClass): IFeatureBuilder<T>; overload;
     function Before(const Description: string; Hook: THookProc): IFeatureBuilder<T>;
@@ -34,9 +34,12 @@ type
   strict private
     FDescription: string;
     FCategory: string;
+    /// La suite destino. Sin ella la feature va a la del proceso, que es lo que hace cualquier
+    /// fichero de specs; con ella, a la de una ejecucion anidada.
+    FSuite: ISpecSuite;
     FContextCreator: TFunc<TObject>;  // Creador del FeatureContext (si se usa UseFeatureContext)
   public
-    constructor Create(const Description: string);
+    constructor Create(const Description: string; const Suite: ISpecSuite = nil);
     function Category(AClass: TClass): TFeatureBuilder;
     /// <summary>Define un contexto compartido para toda la Feature. Debe invocarse antes de UseWorld.</summary>
     function UseFeatureContext<T: class, constructor>: TFeatureBuilder;
@@ -180,10 +183,13 @@ begin
   FFeature := Feature;
 end;
 
-constructor TFeatureBuilder<T>.Create(const Description: string; const Category: string);
+constructor TFeatureBuilder<T>.Create(const Description: string; const Category: string; const Suite: ISpecSuite);
 begin
   inherited Create;
-  FFeature := TFeature<T>.Create(Description);
+  if Assigned(Suite) then
+    FFeature := TFeature<T>.Create(Description, Suite)
+  else
+    FFeature := TFeature<T>.Create(Description);
   if Category <> '' then
     FFeature.Category := Category;
 end;
@@ -247,11 +253,12 @@ end;
 
 { TFeatureBuilder }
 
-constructor TFeatureBuilder.Create(const Description: string);
+constructor TFeatureBuilder.Create(const Description: string; const Suite: ISpecSuite);
 begin
   inherited Create;
   FDescription := Description;
   FCategory := '';
+  FSuite := Suite;
 end;
 
 function TFeatureBuilder.Category(AClass: TClass): TFeatureBuilder;
@@ -283,7 +290,7 @@ function TFeatureBuilder.UseWorld<T>: IFeatureBuilder<T>;
 var
   Builder: TFeatureBuilder<T>;
 begin
-  Builder := TFeatureBuilder<T>.Create(FDescription, FCategory);
+  Builder := TFeatureBuilder<T>.Create(FDescription, FCategory, FSuite);
   // Si se configuró un FeatureContext, pasarlo a la Feature
   if Assigned(FContextCreator) then
     Builder.Feature.SetContextCreator(FContextCreator);
