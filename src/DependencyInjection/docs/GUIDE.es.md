@@ -13,10 +13,11 @@
 5. [Tiempos de vida](#tiempos-de-vida)
 6. [Scopes](#scopes)
 7. [Inyección por propiedad](#inyección-por-propiedad)
-8. [Patrón AppModule](#patrón-appmodule)
-9. [Resolución diferida (Lazy)](#resolución-diferida-lazy)
-10. [Decorador Duck Typing](#decorador-duck-typing)
-11. [Integración con Hosting](#integración-con-hosting)
+8. [Servicios con clave](#servicios-con-clave)
+9. [Patrón AppModule](#patrón-appmodule)
+10. [Resolución diferida (Lazy)](#resolución-diferida-lazy)
+11. [Decorador Duck Typing](#decorador-duck-typing)
+12. [Integración con Hosting](#integración-con-hosting)
 
 ---
 
@@ -317,6 +318,185 @@ señala las directivas.
 
 El cableado por código es la salida: no usa RTTI en absoluto, así que es la única vía inmune al
 recorte.
+
+---
+
+## Servicios con clave
+
+Dos implementaciones del mismo contrato, distinguidas por una clave. `IStorage` para blobs y para
+ficheros, `INotifier` por SMS y por correo. Sin esto, la decisión se traslada al consumidor —pedirlas
+todas y elegir por `is`— o el contrato se parte en dos interfaces que solo existen para tener nombres
+distintos.
+
+```pascal
+type
+  // En una unit propia -- ver «La marca propia de la aplicación», más abajo
+  TStorageKind = (Blob, FileSystem);
+
+Services.AddKeyedSingleton<IStorage, TBlobStorage>(TValue.From<TStorageKind>(Blob));
+Services.AddKeyedSingleton<IStorage, TFileStorage>(TValue.From<TStorageKind>(FileSystem));
+
+var Blobs := Provider.GetRequiredKeyedService<IStorage>(TValue.From<TStorageKind>(Blob));
+var Files := Provider.GetKeyedService<IStorage>(TValue.From<TStorageKind>(FileSystem));
+var Todos := Provider.GetKeyedServices<IStorage>(TValue.From<TStorageKind>(Blob));
+```
+
+Dos registros del mismo tipo con claves distintas son **dos registros**: cada uno con su instancia y
+su ciclo de vida.
+
+### Qué puede ser una clave
+
+Una cadena, un entero, un booleano, un valor de un enumerado, una metaclase o un `PTypeInfo`. Dos
+claves son la misma cuando coinciden **su tipo y su valor**, y de ahí salen tres consecuencias que
+conviene decir:
+
+```pascal
+Provider.GetKeyedService<IStorage>('42');            // NO es la clave 42
+Provider.GetKeyedService<IStorage>(TValue.From<Boolean>(True));  // NO es la clave 1
+// y dos enumerados de tipos distintos que comparten ordinal son claves distintas
+```
+
+Cualquier otra cosa —un registro, un objeto— se rechaza donde entra, nombrando el tipo: el contenedor
+no puede definir una igualdad que esos tipos no tienen. Un `TGUID` se escribe como su cadena y no
+pierde nada. Y un **carácter** no es una clave: una clave de un carácter es una clave de cadena.
+
+**La clave enumerada es la forma recomendada.** No por estilo: renombrar un miembro propaga a todos
+sus usos, y un typo es un error de compilación. `'bolb'` compila.
+
+### Los dos espacios están aislados, en los dos sentidos
+
+Es la regla que decide si la feature ayuda o estorba:
+
+```pascal
+Services.AddKeyedSingleton<IStorage, TBlobStorage>('blob');
+
+Provider.GetService<IStorage>;            // nil -- el que tiene clave no se alcanza sin ella
+Provider.GetServices<IStorage>;           // vacío -- no arrastra los que tienen clave
+Provider.CanResolve(TypeInfo(IStorage));  // False
+
+Services.AddSingleton<IStorage, TPlainStorage>;
+Provider.GetKeyedService<IStorage>('blob');   // el de blob
+Provider.GetRequiredService<IStorage>;        // el sin clave -- los dos conviven
+```
+
+Alcanza también a las operaciones destructivas, que es donde más importa:
+
+| Operación | Alcanza |
+|---|---|
+| `Replace`, `RemoveAll` | únicamente los registros sin clave |
+| `RemoveAllKeyed(Tipo, Clave)` | únicamente los registros de esa clave |
+| `TryAdd*` | pregunta por el par, así que una clave no bloquea a otra ni al registro sin clave |
+| `Decorate` | envuelve los registros sin clave y deja intactos los que la tienen |
+
+⚠️ **`RemoveAll` cambió de significado.** Antes no había claves, así que «todos los del tipo» y «todos
+los del tipo sin clave» eran lo mismo. Un arnés de specs que lo usara para desmontar un registro
+desmonta ahora menos de lo que cree — y lo descubre en verde.
+
+⚠️ **Decorar un tipo que solo tiene registros con clave falla** diciendo que no hay nada registrado
+para él. Está leyendo el espacio sin clave, y el espacio sin clave está vacío.
+
+### Pedir una clave desde un constructor o una propiedad
+
+La misma marca sirve a las dos posiciones, y la clave viaja dentro de ella —el modelo de
+`[Dependency("name")]` de Unity, en vez de un segundo atributo que hay que poner junto al primero
+siempre y que se puede poner suelto:
+
+```pascal
+type
+  [DafInjectProperties]
+  TReportService = class(TInterfacedObject, IReportService)
+  private
+    FStorage: IStorage;
+  public
+    constructor Create([DafInject('audit')] const Audit: IAuditLog);
+    [DafInject('file')]
+    property Storage: IStorage read FStorage write FStorage;
+  end;
+```
+
+Un parámetro o una propiedad **sin** clave siguen resolviéndose sin ella, y por tanto no alcanzan un
+registro con clave: el aislamiento no hace excepciones por venir de una propiedad.
+
+### La marca propia de la aplicación
+
+`[DafInject]` admite una cadena, un entero, un booleano, una metaclase o un `TypeInfo(...)`. Para una
+clave **enumerada** —la recomendada— la aplicación declara su propia marca en una línea:
+
+```pascal
+unit MiApp.MarcasDeInyeccion;   // ⚠️ una unit propia
+
+interface
+
+uses Daf.Extensions.DependencyInjection;
+
+type
+  TStorageKind = (Blob, FileSystem);
+
+  StorageInjectAttribute = class(DafInjectAttribute<TStorageKind>);
+
+implementation
+end.
+```
+
+```pascal
+[StorageInject(FileSystem)]
+property Storage: IStorage read FStorage write FStorage;
+```
+
+El contenedor la reconoce **por descendencia**, así que nunca necesita conocer ese enumerado, y el
+tipo del enumerado se conserva: otro enumerado con el mismo ordinal no la alcanza.
+
+⚠️ **La marca va en una unit propia, separada de las clases que la usan.** Declarada en la misma unit,
+leer el atributo aborta con un access violation. Es un defecto del compilador y no una cuestión de
+gusto; el framework no puede detectarlo, y el fallo es ruidoso pero ocurre en ejecución.
+
+⚠️ **El genérico no se escribe nunca dentro de un `[ ]`.** `[DafInject<TStorageKind>(...)]`
+**compila**, con un `W1074 Unknown custom attribute` que casi nadie lee, y en ejecución
+`GetAttributes` devuelve **cero**: la inyección no ocurre y nada lo dice. Es lo primero que va a
+intentar quien vea el genérico declarado.
+
+Para una clave enumerada suelta, sin declarar marca, queda un escape:
+
+```pascal
+[DafInject(TypeInfo(TStorageKind), Ord(FileSystem))]
+```
+
+El ordinal se comprueba contra el rango del tipo. Uno que no le pertenece falla nombrando la
+propiedad, en vez de producir una clave que no es la de nadie y leerse como «ese servicio no está
+registrado».
+
+### Un registro para cualquier clave
+
+`ServiceKey.Any` es el comodín: atiende toda clave de su tipo de servicio que no tenga registro
+propio, y su factoría recibe cuál se pidió.
+
+```pascal
+Services.AddKeyedSingleton<IStorage>(ServiceKey.Any,
+  function(P: IServiceProvider; const Key: TValue): IStorage
+  begin
+    Result := TFolderStorage.Create(Key.ToString);
+  end);
+```
+
+- **Un registro concreto le gana**: al comodín se le pregunta solo al fallar la búsqueda directa, el
+  mismo orden que ya rige entre un tipo cerrado y uno sin fijar.
+- **Cada clave que atiende recibe su propia instancia**, y pedir dos veces la misma da la misma.
+- **No cruza al espacio sin clave**: con solo un comodín registrado, `GetService<IStorage>` no
+  encuentra nada.
+
+El centinela es un valor de un tipo declarado dentro del módulo de DI, así que nadie de fuera puede
+nombrarlo. Ese es el punto: con una cadena reservada, quien registrase esa cadena se convertiría en el
+comodín sin enterarse — el registro funciona y lo que cambia es a quién atiende.
+
+### El límite: claves y genéricos sin fijar no se combinan
+
+```pascal
+Services.AddKeyedSingleton<IBox<_>, TBox<_>>('blob');   // falla al registrar
+```
+
+Dos emparejamientos cruzados multiplican los casos de precedencia, y no es este el change que los
+acomete. Falla **al registrar** y no al resolver, que es lo que lo convierte en un límite y no en una
+trampa: la alternativa es un registro que se acepta y luego no aparece nunca.
 
 ---
 

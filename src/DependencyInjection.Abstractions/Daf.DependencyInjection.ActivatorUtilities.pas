@@ -15,6 +15,21 @@ type
   ActivatorUtilitiesConstructorAttribute = class(TCustomAttribute)
   end;
 
+  /// <summary>
+  ///   Una propiedad marcada, con la clave que su marca declara.
+  /// </summary>
+  /// <remarks>
+  ///   La clave viaja con la propiedad y no se vuelve a leer: el barrido de atributos es lo caro
+  ///   --un formulario VCL tiene cientos de propiedades publicadas-- y por eso el catalogo se
+  ///   calcula una vez.
+  /// </remarks>
+  TInjectableProperty = record
+    Prop: TRttiProperty;
+    Key: TValue;
+    // Vacio salvo que la clave escrita en la marca sea imposible; el mensaje ya viene hecho.
+    KeyError: string;
+  end;
+
   TActivatorUtilities = class
   private
     class function TryResolveArgs(Provider: IServiceProvider; Ctor: TRttiMethod; out Args: TArray<TValue>; out Failed: TRttiParameter): Boolean;
@@ -76,10 +91,24 @@ type
     class function DeclaresPropertyInjection(const AClass: TClass): Boolean;
     // Las propiedades marcadas que la RTTI expone de la clase, jerarquia incluida. Vacio
     // significa dos cosas distintas segun lo anterior, y por eso se preguntan por separado.
-    class function InjectableProperties(const AClass: TClass): TArray<TRttiProperty>;
+    class function InjectableProperties(const AClass: TClass): TArray<TInjectableProperty>;
     // El mensaje de "declara participar y no se ve ninguna marca", compartido por la resolucion
     // y por la validacion para que las dos digan lo mismo.
     class function DescribeMissingMarks(const AClass: TClass): string;
+    /// <summary>
+    ///   La marca de inyeccion de un parametro o de una propiedad, si la lleva, con su clave.
+    /// </summary>
+    /// <remarks>
+    ///   Reconoce el marcador POR DESCENDENCIA y no por tipo exacto, y esa palabra lo decide todo:
+    ///   con el tipo exacto, el marcador tipado que una aplicacion declara sobre
+    ///   DafInjectAttribute&lt;T&gt; no existe, y sus propiedades quedan sin inyectar en silencio.
+    /// </remarks>
+    class function TryFindMark(const Member: TRttiObject; out Key: TValue; out KeyError: string): Boolean;
+    // La clave que un parametro de constructor declara, o vacia si no declara ninguna.
+    class function KeyOfParameter(const Param: TRttiParameter): TValue;
+    // El mensaje de un parametro que el contenedor no puede satisfacer, nombrando el servicio, la
+    // clave, el parametro y la clase. Compartido por el activador y por la validacion del grafo.
+    class function DescribeUnresolvedParameter(const AClass: TClass; const Param: TRttiParameter): string;
   end;
 
 implementation
@@ -95,7 +124,7 @@ type
   // los atributos de cada propiedad, y un formulario VCL tiene cientos de propiedades publicadas.
   TInjectionCatalog = record
     Declares: Boolean;
-    Props: TArray<TRttiProperty>;
+    Props: TArray<TInjectableProperty>;
   end;
 
 var
@@ -124,8 +153,12 @@ begin
   if RType = nil then Exit;
   // GetProperties recorre la jerarquia, asi que una propiedad marcada en la base entra aqui.
   for var Prop in RType.GetProperties do
-    if Prop.GetAttribute<DafInjectAttribute> <> nil then
-      Result.Props := Result.Props + [Prop];
+  begin
+    var Entry: TInjectableProperty;
+    if not TActivatorUtilities.TryFindMark(Prop, Entry.Key, Entry.KeyError) then Continue;
+    Entry.Prop := Prop;
+    Result.Props := Result.Props + [Entry];
+  end;
 end;
 
 function CatalogOf(const AClass: TClass): TInjectionCatalog;
@@ -144,6 +177,44 @@ end;
 
 { TActivatorUtilities }
 
+class function TActivatorUtilities.TryFindMark(const Member: TRttiObject; out Key: TValue;
+  out KeyError: string): Boolean;
+begin
+  Key := TValue.Empty;
+  KeyError := '';
+  Result := False;
+  if Member = nil then Exit;
+  for var Attr in Member.GetAttributes do
+    // POR DESCENDENCIA. Un `Attr is` y no una comparacion de tipo exacto: es lo que permite que
+    // una aplicacion declare su propio marcador tipado a su enumerado sin que el framework
+    // conozca ese enumerado.
+    if Attr is DafInjectAttribute then
+    begin
+      Key := DafInjectAttribute(Attr).Key;
+      KeyError := DafInjectAttribute(Attr).KeyError;
+      Exit(True);
+    end;
+end;
+
+class function TActivatorUtilities.KeyOfParameter(const Param: TRttiParameter): TValue;
+begin
+  var KeyError: string;
+  if not TryFindMark(Param, Result, KeyError) then
+    Result := TValue.Empty;
+end;
+
+class function TActivatorUtilities.DescribeUnresolvedParameter(const AClass: TClass;
+  const Param: TRttiParameter): string;
+begin
+  var Key: TValue;
+  var KeyError: string;
+  TryFindMark(Param, Key, KeyError);
+  if KeyError <> '' then
+    Exit(Format('%s: the key of parameter "%s" cannot be built: %s', [AClass.ClassName, Param.Name, KeyError]));
+  Result := Format('%s needs %s for parameter "%s", and nothing registers it',
+    [AClass.ClassName, ServiceRequestName(Param.ParamType.Handle, Key), Param.Name]);
+end;
+
 class function TActivatorUtilities.CanResolveArgs(const Provider: IServiceProvider; const Ctor: TRttiMethod): Boolean;
 begin
   var Failed: TRttiParameter;
@@ -160,7 +231,18 @@ begin
     var PInfo := Params[idx].ParamType.Handle;
     if (PInfo = TypeInfo(IServiceProviderImpl)) then Continue;
     if (PInfo = TypeInfo(IServiceProvider)) then Continue;
-    if (PInfo.Kind in [tkInterface, tkClass]) and not Provider.CanResolve(PInfo) then
+    // La clave se lee AQUI tambien y no solo al construir (D6): esta es la pregunta que decide QUE
+    // CONSTRUCTOR se elige, asi que uno cuyo parametro con clave no se pueda satisfacer tiene que
+    // quedar descartado en este punto -- si no, se elige y falla despues.
+    var Key: TValue;
+    var KeyError: string;
+    TryFindMark(Params[idx], Key, KeyError);
+    if KeyError <> '' then
+    begin
+      Failed := Params[idx];
+      Exit(False);
+    end;
+    if (PInfo.Kind in [tkInterface, tkClass]) and not Provider.CanResolveKeyed(PInfo, Key) then
     begin
       Failed := Params[idx];
       Exit(False);
@@ -243,7 +325,7 @@ begin
     if (PInfo = TypeInfo(IServiceProviderImpl)) or (PInfo = TypeInfo(IServiceProvider)) then
       Aux := Provider
     else
-    if not Provider.TryGet(PInfo, Aux) and (Pinfo.Kind <> tkRecord) then
+    if not Provider.TryGetKeyed(PInfo, KeyOfParameter(Params[idx]), Aux) and (Pinfo.Kind <> tkRecord) then
     begin
       Failed := Params[idx];
       Exit(False);
@@ -280,7 +362,7 @@ begin
   var Args: TArray<TValue>;
   var Failed: TRttiParameter;
   if not TryResolveArgs(Provider, Ctor, Args, Failed) then
-    raise EArgumentException.CreateFmt('Cannot resolve argument %s for %s', [Failed.Name, AClass.ClassName]);
+    raise EArgumentException.Create(DescribeUnresolvedParameter(AClass, Failed));
 
   // En dos tiempos, y no el Ctor.Invoke(AClass, Args) de una linea que habia antes. Invocar
   // sobre la METACLASE construye el objeto dentro de la llamada, asi que no hay instancia que
@@ -313,7 +395,7 @@ begin
   Result := CatalogOf(AClass).Declares;
 end;
 
-class function TActivatorUtilities.InjectableProperties(const AClass: TClass): TArray<TRttiProperty>;
+class function TActivatorUtilities.InjectableProperties(const AClass: TClass): TArray<TInjectableProperty>;
 begin
   if AClass = nil then Exit(nil);
   Result := CatalogOf(AClass).Props;
@@ -335,8 +417,16 @@ begin
   if Length(Catalog.Props) = 0 then
     raise EPropertyInjectionError.Create(DescribeMissingMarks(Instance.ClassType));
 
-  for var Prop in Catalog.Props do
+  for var Entry in Catalog.Props do
   begin
+    var Prop := Entry.Prop;
+    // Una clave imposible se dice AQUI y nombrando la propiedad: el constructor del atributo, que
+    // es quien la detecto, no sabe sobre que la escribieron. Y se dice en vez de resolver sin
+    // clave, porque eso se leeria como "ese servicio no esta registrado".
+    if Entry.KeyError <> '' then
+      raise EPropertyInjectionError.CreateFmt('%s.%s carries an unusable key: %s',
+        [Instance.ClassName, Prop.Name, Entry.KeyError]);
+
     if not Prop.IsWritable then
       raise EPropertyInjectionError.CreateFmt('%s.%s is marked with DafInject but is not writable',
         [Instance.ClassName, Prop.Name]);
@@ -348,9 +438,11 @@ begin
 
     var PInfo := PType.Handle;
     var Aux: IInterface;
-    if not Provider.TryGet(PInfo, Aux) then
+    // Una propiedad marcada SIN clave no alcanza un registro con clave: el aislamiento entre los
+    // dos espacios no hace excepciones por venir de una propiedad en vez de un parametro.
+    if not Provider.TryGetKeyed(PInfo, Entry.Key, Aux) then
       raise EPropertyInjectionError.CreateFmt('%s.%s needs %s, and nothing registers it',
-        [Instance.ClassName, Prop.Name, ServiceTypeName(PInfo)]);
+        [Instance.ClassName, Prop.Name, ServiceRequestName(PInfo, Entry.Key)]);
 
     var Value: TValue;
     TValue.Make(@Aux, PInfo, Value);
@@ -378,8 +470,9 @@ begin
   if not Catalog.Declares then Exit;
 
   var Empty: IInterface := nil;
-  for var Prop in Catalog.Props do
+  for var Entry in Catalog.Props do
   begin
+    var Prop := Entry.Prop;
     if not Prop.IsWritable then Continue;
     var PType := Prop.PropertyType;
     if (PType = nil) or (PType.TypeKind <> tkInterface) then Continue;

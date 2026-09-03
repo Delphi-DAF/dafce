@@ -18,7 +18,10 @@ type
   TVtable = array [0 .. MaxInt div SizeOf(Pointer) - 1] of Pointer;
 {$ENDREGION}
 
-  TDescriptorsDictionary = TObjectDictionary<PTypeInfo, TServiceDescriptors>;
+  // Indexado por el PAR (tipo, clave), no por el tipo. Es lo que hace el aislamiento entre los dos
+  // espacios estructural en vez de condicional: un registro con clave no esta donde busca una
+  // consulta sin clave, asi que no hay nada que cada consulta tenga que acordarse de filtrar.
+  TDescriptorsDictionary = TObjectDictionary<TServiceSlot, TServiceDescriptors>;
   TServiceScope = class;
 
   // Es un singleton. Contiene la lista de todos los Scopes creados asi como
@@ -89,18 +92,18 @@ type
     function CreateInstance(const Descriptor: TServiceDescriptor; const Provider: IServiceProvider): IInterface;
     function GetOrCreate(const Descriptor: TServiceDescriptor; const Provider: IServiceProvider): IInterface;overload;
     function GetImplementor(const Descriptor: TServiceDescriptor): IInterface;
-    function TryGet(const ServiceType: PTypeInfo; out Service): Boolean;
-    function TryGetAll(const ServiceType: PTypeInfo; out Services: IInterfaceList): Boolean;
-    function TryGetDescriptors(const ServiceType: PTypeInfo; out Descriptors: TServiceDescriptors;
-      out MatchedOpen: Boolean): Boolean;
-    function DescriptorFor(const ServiceType: PTypeInfo; const Descriptor: TServiceDescriptor;
-      const MatchedOpen: Boolean): TServiceDescriptor;
+    function TryGet(const Slot: TServiceSlot; out Service): Boolean;
+    function TryGetAll(const Slot: TServiceSlot; out Services: IInterfaceList): Boolean;
+    function TryGetDescriptors(const Slot: TServiceSlot; out Descriptors: TServiceDescriptors;
+      out MatchedOpen, MatchedAnyKey: Boolean): Boolean;
+    function DescriptorFor(const Slot: TServiceSlot; const Descriptor: TServiceDescriptor;
+      const MatchedOpen, MatchedAnyKey: Boolean): TServiceDescriptor;
     function GetSingletonsScope: IServiceResolver;
     procedure AddServiceInstance(const Descriptor: TServiceDescriptor; const Service: IInterface);
     function TryGetInstance(const Identity: TServiceIdentity; out Service: IInterface): Boolean;
     procedure RemoveFirstInstance;
     function InstanceCount: Integer;
-    function CanResolve(const ServiceType: PTypeInfo): Boolean;
+    function CanResolve(const Slot: TServiceSlot): Boolean;
     procedure CheckNotShutDown(const ServiceType: PTypeInfo);
     procedure RaiseShutDown(const ServiceType: PTypeInfo);
     procedure CollectGarbage;
@@ -166,22 +169,23 @@ type
     constructor Create;
     destructor Destroy; override;
     procedure CheckNotFrozen;
-    function GetDescriptors(ServiceType: PTypeInfo): TServiceDescriptors;
-    function SetDescriptors(const ServiceType: PTypeInfo; const NewDescriptors: TArray<TServiceDescriptor>): IServiceCollectionImpl;
-    function RemoveAll(const ServiceType: PTypeInfo): IServiceCollectionImpl;
+    function GetDescriptors(const Slot: TServiceSlot): TServiceDescriptors;
+    function SetDescriptors(const Slot: TServiceSlot; const NewDescriptors: TArray<TServiceDescriptor>): IServiceCollectionImpl;
+    function RemoveAll(const Slot: TServiceSlot): IServiceCollectionImpl;
     function TryFindOpenGeneric(const ClosedType: PTypeInfo; out OpenType: PTypeInfo): Boolean;
     function TryMarkVisited(const Category, Key: string): Boolean;
     function AddInjector(const AClass: TClass; const Injector: TServiceInjector): IServiceCollectionImpl;
     function InjectorsFor(const AClass: TClass): TArray<TServiceInjector>;
     function GetCount: Integer;
     function Add<ServiceType: IInterface>(const LifeTime: TServiceLifeTime; const Factory: TServiceFactory): IServiceCollectionImpl;overload;
-    function Add(const ServiceType: PTypeInfo; const LifeTime: TServiceLifeTime; const Factory: TServiceFactory;
-      const ImplClass: TClass = nil; const RequestedFactory: TServiceFactoryEx = nil): IServiceCollectionImpl;overload;
+    function Add(const Slot: TServiceSlot; const LifeTime: TServiceLifeTime; const Factory: TServiceFactory;
+      const ImplClass: TClass = nil; const RequestedFactory: TServiceFactoryEx = nil;
+      const KeyedFactory: TServiceKeyedFactory = nil): IServiceCollectionImpl;overload;
     function BuildServiceProvider: IServiceProviderImpl;overload;
     function BuildServiceProvider(const Options: TServiceProviderOptions): IServiceProviderImpl;overload;
     function Contains<T: IInterface>: Boolean;overload;
-    function Contains(const ServiceType: PTypeInfo): Boolean;overload;
-    property Descriptors[ServiceType: PTypeInfo]: TServiceDescriptors read GetDescriptors;default;
+    function Contains(const Slot: TServiceSlot): Boolean;overload;
+    property Descriptors[const Slot: TServiceSlot]: TServiceDescriptors read GetDescriptors;default;
   end;
 
 
@@ -230,7 +234,9 @@ threadvar
 constructor TServiceCollection.Create;
 begin
   inherited Create;
-  FEntries := TDescriptorsDictionary.Create([doOwnsValues]);
+  // Comparador explicito: la clave del indice lleva un TValue, que el comparador binario por
+  // defecto no sabe comparar -- y con el par sin comparar, dos claves iguales serian dos entradas.
+  FEntries := TDescriptorsDictionary.Create([doOwnsValues], TServiceSlot.Comparer);
   FVisited := TDictionary<string, Boolean>.Create;
   FOpenMatches := TDictionary<PTypeInfo, PTypeInfo>.Create;
   FInjectors := TList<TPair<TClass, TServiceInjector>>.Create;
@@ -281,11 +287,16 @@ begin
   //
   // Un registro sin fijar no se empareja consigo mismo: IX<_> es un tipo cerrado legitimo y
   // se resuelve por la via directa, como cualquier otro.
+  //
+  // Y solo mira el espacio SIN clave, que es donde puede haber un registro sin fijar: registrar
+  // uno CON clave se rechaza al registrar, asi que una consulta con clave no tiene aqui nada que
+  // encontrar -- y encontrarlo seria el cruce entre los dos espacios.
   if not TOpenGeneric.IsOpen(ClosedType) then
     for var Entry in FEntries do
-      if TOpenGeneric.IsOpen(Entry.Key) and TOpenGeneric.SameForm(Entry.Key, ClosedType) then
+      if (not Entry.Key.IsKeyed) and TOpenGeneric.IsOpen(Entry.Key.ServiceType) and
+         TOpenGeneric.SameForm(Entry.Key.ServiceType, ClosedType) then
       begin
-        OpenType := Entry.Key;
+        OpenType := Entry.Key.ServiceType;
         Break;
       end;
 
@@ -320,7 +331,7 @@ end;
 
 function TServiceCollection.Contains<T>: Boolean;
 begin
-  Result := Contains(TypeInfo(T));
+  Result := Contains(TServiceSlot.Create(TypeInfo(T)));
 end;
 
 procedure TServiceCollection.CheckNotFrozen;
@@ -329,9 +340,9 @@ begin
     raise Exception.Create('This ServiceCollection is frozen and can no longer be modified.');
 end;
 
-function TServiceCollection.Contains(const ServiceType: PTypeInfo): Boolean;
+function TServiceCollection.Contains(const Slot: TServiceSlot): Boolean;
 begin
-  Result := FEntries.ContainsKey(ServiceType);
+  Result := FEntries.ContainsKey(Slot);
 end;
 
 function TServiceCollection.CreateScopeFactory: IServiceScopeFactory;
@@ -367,18 +378,25 @@ begin
   Result := LowerCase(TEnum.ToString<TServiceLifeTime>(LifeTime));
 end;
 
+// Nombre de un par (tipo, clave) para un mensaje. Sin clave da exactamente el texto de siempre,
+// para que un mensaje que ya existia no cambie por existir esta capacidad.
+function SlotName(const Slot: TServiceSlot): string;
+begin
+  Result := ServiceRequestName(Slot.ServiceType, Slot.Key);
+end;
+
 type
-  // El grafo de dependencias tal como lo ve la validacion: un nodo por tipo de servicio
-  // registrado, y una arista por cada dependencia que se pueda seguir. La arista recuerda POR
-  // DONDE entra, porque eso es lo que decide si un ciclo se puede romper.
+  // El grafo de dependencias tal como lo ve la validacion: un nodo por REGISTRO --por par (tipo,
+  // clave), no por tipo-- y una arista por cada dependencia que se pueda seguir. La arista
+  // recuerda POR DONDE entra, porque eso es lo que decide si un ciclo se puede romper.
   TDepEdge = record
-    Target: PTypeInfo;
+    Target: TServiceSlot;
     ViaConstructor: Boolean;
     Member: string;
   end;
 
   TDepNode = record
-    ServiceType: PTypeInfo;
+    Slot: TServiceSlot;
     LifeTime: TServiceLifeTime;
     ImplName: string;
     Edges: TArray<TDepEdge>;
@@ -387,7 +405,7 @@ type
 function UnbreakableCycles(const Entries: TDescriptorsDictionary; const Provider: IServiceProvider): TArray<string>;
 var
   Nodes: TArray<TDepNode>;
-  IndexOf: TDictionary<PTypeInfo, Integer>;
+  IndexOf: TDictionary<TServiceSlot, Integer>;
   Color: TArray<Byte>;
   Stack: TArray<Integer>;
   Edges: TArray<TDepEdge>;
@@ -402,7 +420,7 @@ var
       // El ultimo descriptor es el que resuelve TryGet, asi que es su grafo el que se recorre.
       var Descriptor := Entry.Value.Last;
       var Node: TDepNode;
-      Node.ServiceType := Entry.Key;
+      Node.Slot := Entry.Key;
       Node.LifeTime := Descriptor.LifeTime;
       Node.Edges := [];
       Node.ImplName := '';
@@ -414,7 +432,7 @@ var
 
     for var Idx := 0 to High(Nodes) do
     begin
-      var Descriptor := Entries[Nodes[Idx].ServiceType].Last;
+      var Descriptor := Entries[Nodes[Idx].Slot].Last;
       var AClass := Descriptor.ImplementationClass;
       // Una factory es opaca: no aporta aristas, y por eso un ciclo que pase por ella no se ve.
       if AClass = nil then Continue;
@@ -427,18 +445,21 @@ var
           if Param.ParamType = nil then Continue;
           if Param.ParamType.Handle.Kind <> tkInterface then Continue;
           var Edge: TDepEdge;
-          Edge.Target := Param.ParamType.Handle;
+          // La arista apunta al PAR, no al tipo: una dependencia con clave sale de un registro y
+          // llega a otro, y con el tipo a secas dos claves del mismo contrato serian un nodo.
+          Edge.Target := TServiceSlot.Create(Param.ParamType.Handle, TActivatorUtilities.KeyOfParameter(Param));
           Edge.ViaConstructor := True;
           Edge.Member := Param.Name;
           Nodes[Idx].Edges := Nodes[Idx].Edges + [Edge];
         end;
 
       if not TActivatorUtilities.DeclaresPropertyInjection(AClass) then Continue;
-      for var Prop in TActivatorUtilities.InjectableProperties(AClass) do
+      for var Entry in TActivatorUtilities.InjectableProperties(AClass) do
       begin
+        var Prop := Entry.Prop;
         if (Prop.PropertyType = nil) or (Prop.PropertyType.TypeKind <> tkInterface) then Continue;
         var Edge: TDepEdge;
-        Edge.Target := Prop.PropertyType.Handle;
+        Edge.Target := TServiceSlot.Create(Prop.PropertyType.Handle, Entry.Key);
         Edge.ViaConstructor := False;
         Edge.Member := Prop.Name;
         Nodes[Idx].Edges := Nodes[Idx].Edges + [Edge];
@@ -464,16 +485,16 @@ var
     begin
       var Node := Nodes[Stack[Pos]];
       if Path <> '' then Path := Path + ' -> ';
-      Path := Path + Format('%s (%s)', [ServiceTypeName(Node.ServiceType), LifeTimeName(Node.LifeTime)]);
-      Key := Key + Format('%p|', [Pointer(Node.ServiceType)]);
+      Path := Path + Format('%s (%s)', [SlotName(Node.Slot), LifeTimeName(Node.LifeTime)]);
+      Key := Key + Format('%p|%s|', [Pointer(Node.Slot.ServiceType), ServiceKey.Text(Node.Slot.Key)]);
       if (Reason = '') and Edges[Pos].ViaConstructor then
         Reason := Format('%s needs %s through constructor parameter "%s", and a constructor cannot run before its argument exists',
-          [Node.ImplName, ServiceTypeName(Edges[Pos].Target), Edges[Pos].Member]);
+          [Node.ImplName, SlotName(Edges[Pos].Target), Edges[Pos].Member]);
       if (Reason = '') and (Node.LifeTime = Transient) then
         Reason := Format('%s is transient and the container does not retain transients, so nothing can undo the cycle',
-          [ServiceTypeName(Node.ServiceType)]);
+          [SlotName(Node.Slot)]);
     end;
-    Path := Path + ' -> ' + Format('%s (%s)', [ServiceTypeName(Nodes[Target].ServiceType),
+    Path := Path + ' -> ' + Format('%s (%s)', [SlotName(Nodes[Target].Slot),
       LifeTimeName(Nodes[Target].LifeTime)]);
     if Reason = '' then Exit;
     if Seen.ContainsKey(Key) then Exit;
@@ -505,7 +526,7 @@ begin
   Result := [];
   Nodes := [];
   Found := [];
-  IndexOf := TDictionary<PTypeInfo, Integer>.Create;
+  IndexOf := TDictionary<TServiceSlot, Integer>.Create(TServiceSlot.Comparer);
   Seen := TDictionary<string, Boolean>.Create;
   try
     BuildGraph;
@@ -576,11 +597,12 @@ begin
     Exit(Format('%s: %s has no public constructor the container can call',
       [Descriptor.ServiceName, Descriptor.ImplementationClass.ClassName]));
 
-  Result := Format('%s: %s needs %s for parameter "%s", and nothing registers it',
-    // El tipo del parametro tampoco tiene por que ser nombrable: QualifiedName aqui abortaba
-    // la validacion con un error de visibilidad en lugar de decir que falta el registro.
-    [Descriptor.ServiceName, Descriptor.ImplementationClass.ClassName,
-     ServiceTypeName(Failed.ParamType.Handle), Failed.Name]);
+  // El texto del parametro lo compone el activador, para que la validacion y la construccion
+  // digan lo mismo: el tipo, la clave que el parametro pide, y su nombre. El tipo del parametro
+  // tampoco tiene por que ser nombrable -- QualifiedName aqui abortaba la validacion con un error
+  // de visibilidad en lugar de decir que falta el registro.
+  Result := Format('%s: %s', [Descriptor.ServiceName,
+    TActivatorUtilities.DescribeUnresolvedParameter(Descriptor.ImplementationClass, Failed)]);
 end;
 
 procedure TServiceCollection.CollectCapturedScopes(const Descriptor: TServiceDescriptor; const Ctor: TRttiMethod;
@@ -593,7 +615,10 @@ begin
     if PInfo.Kind <> tkInterface then Continue;
 
     var Dependencies: TServiceDescriptors;
-    if not FEntries.TryGetValue(PInfo, Dependencies) then Continue;
+    // Por el PAR: un Singleton con clave que captura un Scoped con clave es la misma captura, y
+    // buscar por el tipo a secas no encontraria ninguno de los dos.
+    if not FEntries.TryGetValue(TServiceSlot.Create(PInfo, TActivatorUtilities.KeyOfParameter(Param)),
+      Dependencies) then Continue;
     if Dependencies.Count = 0 then Continue;
     // El ultimo descriptor es el que resuelve TryGet, asi que es su ciclo de vida el que cuenta.
     if Dependencies.Last.LifeTime <> Scoped then Continue;
@@ -616,8 +641,15 @@ begin
     Exit;
   end;
 
-  for var Prop in Props do
+  for var Entry in Props do
   begin
+    var Prop := Entry.Prop;
+    if Entry.KeyError <> '' then
+    begin
+      Errors := Errors + [Format('%s: %s.%s carries an unusable key: %s',
+        [Descriptor.ServiceName, AClass.ClassName, Prop.Name, Entry.KeyError])];
+      Continue;
+    end;
     if not Prop.IsWritable then
     begin
       Errors := Errors + [Format('%s: %s.%s is marked with DafInject but is not writable',
@@ -631,9 +663,9 @@ begin
       Continue;
     end;
     var PInfo := Prop.PropertyType.Handle;
-    if not Provider.CanResolve(PInfo) then
+    if not Provider.CanResolveKeyed(PInfo, Entry.Key) then
       Errors := Errors + [Format('%s: %s needs %s for property "%s", and nothing registers it',
-        [Descriptor.ServiceName, AClass.ClassName, ServiceTypeName(PInfo), Prop.Name])];
+        [Descriptor.ServiceName, AClass.ClassName, ServiceRequestName(PInfo, Entry.Key), Prop.Name])];
   end;
 end;
 
@@ -643,12 +675,13 @@ begin
   var AClass := Descriptor.ImplementationClass;
   if not TActivatorUtilities.DeclaresPropertyInjection(AClass) then Exit;
 
-  for var Prop in TActivatorUtilities.InjectableProperties(AClass) do
+  for var Entry in TActivatorUtilities.InjectableProperties(AClass) do
   begin
+    var Prop := Entry.Prop;
     if (Prop.PropertyType = nil) or (Prop.PropertyType.TypeKind <> tkInterface) then Continue;
 
     var Dependencies: TServiceDescriptors;
-    if not FEntries.TryGetValue(Prop.PropertyType.Handle, Dependencies) then Continue;
+    if not FEntries.TryGetValue(TServiceSlot.Create(Prop.PropertyType.Handle, Entry.Key), Dependencies) then Continue;
     if Dependencies.Count = 0 then Continue;
     if Dependencies.Last.LifeTime <> Scoped then Continue;
 
@@ -664,43 +697,46 @@ begin
   Result := FEntries.Count;
 end;
 
-function TServiceCollection.GetDescriptors(ServiceType: PTypeInfo): TServiceDescriptors;
+function TServiceCollection.GetDescriptors(const Slot: TServiceSlot): TServiceDescriptors;
 begin
-  Result := FEntries[ServiceType];
+  Result := FEntries[Slot];
 end;
 
-function TServiceCollection.SetDescriptors(const ServiceType: PTypeInfo;
+function TServiceCollection.SetDescriptors(const Slot: TServiceSlot;
   const NewDescriptors: TArray<TServiceDescriptor>): IServiceCollectionImpl;
 begin
   CheckNotFrozen;
   Result := Self;
   ClearOpenMatches;
-  FEntries.Remove(ServiceType);
+  FEntries.Remove(Slot);
   if Length(NewDescriptors) = 0 then Exit;
 
   var List := TServiceDescriptors.Create;
-  FEntries.AddOrSetValue(ServiceType, List);
+  FEntries.AddOrSetValue(Slot, List);
   List.AddRange(NewDescriptors);
 end;
 
-function TServiceCollection.RemoveAll(const ServiceType: PTypeInfo): IServiceCollectionImpl;
+function TServiceCollection.RemoveAll(const Slot: TServiceSlot): IServiceCollectionImpl;
 begin
   CheckNotFrozen;
   Result := Self;
   ClearOpenMatches;
   // Se borra la entrada entera, no se vacia la lista: si quedara una clave con lista vacia,
   // Contains seguiria diciendo que si y TryAdd no repondria el registro.
-  FEntries.Remove(ServiceType);
+  // Y se borra SOLO la del par que se nombro: quitar los registros sin clave no toca los que
+  // tienen clave, ni al reves. Es la interpretacion que no toca lo que el llamante no nombro.
+  FEntries.Remove(Slot);
 end;
 
 function TServiceCollection.Add<ServiceType>(const LifeTime: TServiceLifeTime;
   const Factory: TServiceFactory): IServiceCollectionImpl;
 begin
-  Result := Add(TypeInfo(ServiceType), LifeTime, Factory);
+  Result := Add(TServiceSlot.Create(TypeInfo(ServiceType)), LifeTime, Factory);
 end;
 
-function TServiceCollection.Add(const ServiceType: PTypeInfo; const LifeTime: TServiceLifeTime;
-  const Factory: TServiceFactory; const ImplClass: TClass; const RequestedFactory: TServiceFactoryEx): IServiceCollectionImpl;
+function TServiceCollection.Add(const Slot: TServiceSlot; const LifeTime: TServiceLifeTime;
+  const Factory: TServiceFactory; const ImplClass: TClass; const RequestedFactory: TServiceFactoryEx;
+  const KeyedFactory: TServiceKeyedFactory): IServiceCollectionImpl;
 begin
   CheckNotFrozen;
 
@@ -710,12 +746,12 @@ begin
   var
     Descriptors: TServiceDescriptors;
 
-  if not FEntries.TryGetValue(ServiceType, Descriptors) then
+  if not FEntries.TryGetValue(Slot, Descriptors) then
   begin
     Descriptors := TServiceDescriptors.Create;
-    FEntries.AddOrSetValue(ServiceType, Descriptors);
+    FEntries.AddOrSetValue(Slot, Descriptors);
   end;
-  var Descriptor := TServiceDescriptor.Create(Factory, LifeTime, ServiceType, ImplClass, RequestedFactory);
+  var Descriptor := TServiceDescriptor.Create(Factory, LifeTime, Slot, ImplClass, RequestedFactory, KeyedFactory);
   Descriptors.Add(Descriptor);
 end;
 
@@ -916,7 +952,8 @@ begin
       end,
       function(const Value: TServiceIdentity): Integer
       begin
-        Result := Integer(Value.Registration) xor Integer(NativeInt(Value.ClosedType));
+        Result := Integer(Value.Registration) xor Integer(NativeInt(Value.ClosedType)) xor
+          ServiceKey.HashOf(Value.ServedKey);
       end));
   FIsSingletonsScope := SingletonsScope;
   FBuildLock := TCriticalSection.Create;
@@ -1231,77 +1268,96 @@ begin
   Result := Self;
 end;
 
-function TServiceScope.CanResolve(const ServiceType: PTypeInfo): Boolean;
+function TServiceScope.CanResolve(const Slot: TServiceSlot): Boolean;
 begin
-  Result := ServiceCollection.Contains(ServiceType);
+  Result := ServiceCollection.Contains(Slot);
   if Result then Exit;
   // Y esto no es un adorno: TActivatorUtilities pregunta aqui ANTES de elegir constructor. Si
   // el emparejamiento sin fijar no se reflejase, el constructor que pide un cierre no se
   // elegiria, la clase se construiria con el de TObject y quedaria a medias -- en verde y sin
-  // excepcion, que es el peor sitio donde dejar esto sin contestar.
+  // excepcion, que es el peor sitio donde dejar esto sin contestar. Lo mismo vale para el comodin.
+  if Slot.IsKeyed then
+    Exit(ServiceCollection.Contains(Slot.AnyKeySlot));
+
   var OpenType: PTypeInfo;
-  Result := ServiceCollection.TryFindOpenGeneric(ServiceType, OpenType);
+  Result := ServiceCollection.TryFindOpenGeneric(Slot.ServiceType, OpenType);
 end;
 
-function TServiceScope.TryGetDescriptors(const ServiceType: PTypeInfo; out Descriptors: TServiceDescriptors;
-  out MatchedOpen: Boolean): Boolean;
+function TServiceScope.TryGetDescriptors(const Slot: TServiceSlot; out Descriptors: TServiceDescriptors;
+  out MatchedOpen, MatchedAnyKey: Boolean): Boolean;
 begin
   // El embudo por el que pasan TryGet y TryGetAll, y por tanto toda resolucion. La guarda vive
-  // aqui y no en las firmas publicas del record: alli habria que escribirla ocho veces.
-  CheckNotShutDown(ServiceType);
+  // aqui y no en las firmas publicas del record: alli habria que escribirla ocho veces. Y la clave
+  // llega hasta aqui y no mas lejos: GetImplementor, GetOrCreate y CollectGarbage siguen
+  // trabajando con descriptores y no se enteran de que existe.
+  CheckNotShutDown(Slot.ServiceType);
   Descriptors := nil;
   MatchedOpen := False;
+  MatchedAnyKey := False;
 
-  if ServiceCollection.Contains(ServiceType) then
+  if ServiceCollection.Contains(Slot) then
   begin
-    Descriptors := ServiceCollection.GetDescriptors(ServiceType);
+    Descriptors := ServiceCollection.GetDescriptors(Slot);
     Exit(True);
   end;
 
-  // El emparejamiento entra al FALLAR la busqueda directa, y ese orden ES el requisito: un
-  // registro concreto para un cierre gana al registro sin fijar.
+  // Los dos emparejamientos entran al FALLAR la busqueda directa, y ese orden ES el requisito: un
+  // registro concreto gana al general, tanto sobre el eje del cierre generico como sobre el de la
+  // clave.
+  if Slot.IsKeyed then
+  begin
+    // Y el comodin no cruza al espacio sin clave: solo se pregunta por el cuando habia clave.
+    Result := ServiceCollection.Contains(Slot.AnyKeySlot);
+    if not Result then Exit;
+    MatchedAnyKey := True;
+    Descriptors := ServiceCollection.GetDescriptors(Slot.AnyKeySlot);
+    Exit;
+  end;
+
   var OpenType: PTypeInfo;
-  Result := ServiceCollection.TryFindOpenGeneric(ServiceType, OpenType);
+  Result := ServiceCollection.TryFindOpenGeneric(Slot.ServiceType, OpenType);
   if not Result then Exit;
   MatchedOpen := True;
-  Descriptors := ServiceCollection.GetDescriptors(OpenType);
+  Descriptors := ServiceCollection.GetDescriptors(TServiceSlot.Create(OpenType));
 end;
 
-function TServiceScope.DescriptorFor(const ServiceType: PTypeInfo; const Descriptor: TServiceDescriptor;
-  const MatchedOpen: Boolean): TServiceDescriptor;
+function TServiceScope.DescriptorFor(const Slot: TServiceSlot; const Descriptor: TServiceDescriptor;
+  const MatchedOpen, MatchedAnyKey: Boolean): TServiceDescriptor;
 begin
   if MatchedOpen then
-    Result := Descriptor.ForClosedType(ServiceType)
+    Result := Descriptor.ForClosedType(Slot.ServiceType)
+  else if MatchedAnyKey then
+    Result := Descriptor.ForServedKey(Slot.Key)
   else
     Result := Descriptor;
 end;
 
-function TServiceScope.TryGet(const ServiceType: PTypeInfo; out Service): Boolean;
+function TServiceScope.TryGet(const Slot: TServiceSlot; out Service): Boolean;
 begin
   Pointer(Service) := nil;
   var
     Descriptors: TServiceDescriptors;
-  var MatchedOpen: Boolean;
-  Result := TryGetDescriptors(ServiceType, Descriptors, MatchedOpen);
+  var MatchedOpen, MatchedAnyKey: Boolean;
+  Result := TryGetDescriptors(Slot, Descriptors, MatchedOpen, MatchedAnyKey);
   if not Result then
     Exit;
   var
-  Descriptor := DescriptorFor(ServiceType, Descriptors.Last, MatchedOpen);
+  Descriptor := DescriptorFor(Slot, Descriptors.Last, MatchedOpen, MatchedAnyKey);
   IInterface(Service) := GetImplementor(Descriptor);
 end;
 
-function TServiceScope.TryGetAll(const ServiceType: PTypeInfo; out Services: IInterfaceList): Boolean;
+function TServiceScope.TryGetAll(const Slot: TServiceSlot; out Services: IInterfaceList): Boolean;
 begin
   Services := TInterfaceList<IInterface>.Create;
 
   var Descriptors: TServiceDescriptors;
-  var MatchedOpen: Boolean;
-  Result := TryGetDescriptors(ServiceType, Descriptors, MatchedOpen);
+  var MatchedOpen, MatchedAnyKey: Boolean;
+  Result := TryGetDescriptors(Slot, Descriptors, MatchedOpen, MatchedAnyKey);
   if not Result then
     Exit;
 
   for var Descriptor in Descriptors do
-    Services.Add(GetImplementor(DescriptorFor(ServiceType, Descriptor, MatchedOpen)));
+    Services.Add(GetImplementor(DescriptorFor(Slot, Descriptor, MatchedOpen, MatchedAnyKey)));
 end;
 
 function TServiceScope.CreateScope: IServiceScope;

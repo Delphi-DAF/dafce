@@ -6,6 +6,7 @@ uses
   System.SysUtils,
   System.Rtti,
   System.Generics.Collections,
+  System.Generics.Defaults,
   System.TypInfo,
   Daf.Enumerable;
 
@@ -32,6 +33,72 @@ type
   end;
 
   /// <summary>
+  ///   Todo lo que el contenedor sabe de una clave de servicio: que puede serlo, como se compara
+  ///   con otra, como se nombra en un mensaje, y cual es el comodin.
+  /// </summary>
+  /// <remarks>
+  ///   La clave es un TValue porque en .NET es un object?, y ese es el equivalente fiel: admite
+  ///   cadena, ordinal, enumerado --Boolean incluido--, metaclase y PTypeInfo, y dos valores de
+  ///   tipos DISTINTOS con el mismo ordinal son claves distintas. El TValue vacio ES el espacio
+  ///   sin clave, y no un tercer estado que cada consulta tenga que tratar aparte.
+  /// </remarks>
+  ServiceKey = record
+  public
+    // Si este TValue puede ser clave. El vacio lo es: significa "sin clave".
+    class function IsValid(const Key: TValue): Boolean; static;
+    /// <summary>
+    ///   Aborta si no puede serlo, nombrando el tipo que se intento usar.
+    /// </summary>
+    /// <remarks>
+    ///   Se llama donde la clave ENTRA --al registrar y al resolver-- y nunca al comparar dos
+    ///   claves entre si: un diccionario solo consulta la comparacion cuando dos claves caen en el
+    ///   mismo cubo, asi que un guardian puesto ahi no corre para un tipo que no colisiona con
+    ///   nada, y la busqueda devuelve "no encontrado" en silencio.
+    /// </remarks>
+    class procedure Check(const Key: TValue); static;
+    // Texto de una clave PARA UN MENSAJE, y para nada mas. No lanza.
+    class function Text(const Key: TValue): string; static;
+    // Dos claves son la misma cuando coinciden su TIPO y su valor. El tipo entra primero: es lo
+    // que separa dos enumerados distintos con el mismo ordinal, y la cadena '42' del entero 42.
+    class function Same(const A, B: TValue): Boolean; static;
+    // El tipo entra tambien en el hash, o dos claves distintas caerian en el mismo cubo y solo la
+    // comparacion las separaria: correcto, lento, y oculta el error.
+    class function HashOf(const Key: TValue): Integer; static;
+    /// <summary>
+    ///   La clave comodin: el registro que la lleva atiende cualquier clave de su tipo de servicio
+    ///   que no tenga registro propio. Es KeyedService.AnyKey de .NET.
+    /// </summary>
+    /// <remarks>
+    ///   Es un valor de un enumerado declarado en el CUERPO de esta unit, y esa es toda su
+    ///   seguridad: nadie de fuera puede nombrar el tipo para construirlo. Con una cadena
+    ///   reservada, quien la registrase legitimamente se convertiria en el comodin sin enterarse
+    ///   -- el registro funciona y lo que cambia es a quien atiende.
+    /// </remarks>
+    class function Any: TValue; static;
+    class function IsAny(const Key: TValue): Boolean; static;
+  end;
+
+  /// <summary>
+  ///   El par por el que el indice de la coleccion reparte descriptores: tipo de servicio y clave.
+  /// </summary>
+  /// <remarks>
+  ///   Con el par en la clave del indice, el aislamiento entre el espacio con clave y el sin clave
+  ///   es ESTRUCTURAL: un registro con clave no esta donde busca una consulta sin clave, y no hay
+  ///   nada que cada consulta tenga que acordarse de filtrar. Un filtro condicional repartido falla
+  ///   en la consulta que se olvide, y ese fallo no se nota porque las demas pasan igual.
+  /// </remarks>
+  TServiceSlot = record
+    ServiceType: PTypeInfo;
+    Key: TValue;
+    constructor Create(const AServiceType: PTypeInfo); overload;
+    constructor Create(const AServiceType: PTypeInfo; const AKey: TValue); overload;
+    function IsKeyed: Boolean;
+    // El slot comodin del mismo tipo de servicio: donde se busca al fallar la busqueda directa.
+    function AnyKeySlot: TServiceSlot;
+    class function Comparer: IEqualityComparer<TServiceSlot>; static;
+  end;
+
+  /// <summary>
   ///   Marca una propiedad como dependencia que el contenedor rellena. El tipo de la propiedad
   ///   es el contrato --ha de ser una interfaz-- y la propiedad ha de ser escribible.
   /// </summary>
@@ -39,8 +106,67 @@ type
   ///   El prefijo no es decorativo: Daf.MiniSpec.Injection exporta un InjectAttribute propio, y
   ///   dos units que exporten el mismo nombre en el mismo uses no dan error -- gana la ultima, y
   ///   el barrido deja de ver las propiedades marcadas sin decir nada.
+  ///
+  ///   Sirve igual sobre un PARAMETRO DE CONSTRUCTOR, que es el [FromKeyedServices] de .NET. Un
+  ///   solo atributo para las dos posiciones, para que el marcador propio de una aplicacion valga
+  ///   en las dos sin declararlo dos veces.
+  ///
+  ///   La clave viaja DENTRO, y no en un atributo acompanante: es lo que hace Unity con
+  ///   [Dependency("name")]. Un segundo atributo serian dos cosas que hay que poner juntas siempre
+  ///   y que se pueden poner sueltas.
+  ///
+  ///   Las sobrecargas por primitivo no son una complicacion evitable: los argumentos de un
+  ///   atributo en Delphi tienen que ser CONSTANTES, y un TValue en el sitio de uso da E2026 hasta
+  ///   con el literal de cadena mas simple. El TValue se construye dentro del constructor, al que
+  ///   llama la RTTI al leer el atributo -- ahi si se puede.
   /// </remarks>
   DafInjectAttribute = class(TCustomAttribute)
+  strict private
+    FKey: TValue;
+    FKeyError: string;
+  strict protected
+    /// <summary>
+    ///   La via de un descendiente que ya tiene su clave hecha. Un TValue SI puede ser parametro
+    ///   de un constructor; lo que no puede es aparecer en el sitio de uso de un atributo.
+    /// </summary>
+    constructor CreateWithKey(const AKey: TValue);
+  public
+    constructor Create; overload;                                     // [DafInject]
+    constructor Create(const AKey: string); overload;                 // [DafInject('blob')]
+    constructor Create(const AKey: Integer); overload;                // [DafInject(42)]
+    constructor Create(const AKey: Boolean); overload;                // [DafInject(True)]
+    constructor Create(const AKey: TClass); overload;                 // [DafInject(TOrderCreated)]
+    constructor Create(const AKeyType: PTypeInfo); overload;          // [DafInject(TypeInfo(IFoo))]
+    /// <summary>
+    ///   Escape para un enumerado suelto: [DafInject(TypeInfo(TTransport), Ord(trSms))]. NO es la
+    ///   via del enumerado -- esa es un descendiente de una linea sobre DafInjectAttribute&lt;T&gt;.
+    /// </summary>
+    /// <remarks>
+    ///   Ord(...) es un entero cualquiera, asi que el ordinal se comprueba contra el rango del
+    ///   tipo. Sin eso, un ordinal que el tipo no tiene da una clave que no es la de nadie, y el
+    ///   fallo se lee como "ese servicio no esta registrado" -- mandando a buscar donde no es.
+    /// </remarks>
+    constructor Create(const AKeyType: PTypeInfo; const AOrdinal: Integer); overload;
+    property Key: TValue read FKey;
+    // Vacio salvo que la clave escrita en el atributo sea imposible. Lo lee el barrido, que es
+    // quien puede nombrar la propiedad o el parametro en el mensaje.
+    property KeyError: string read FKeyError;
+  end;
+
+  /// <summary>
+  ///   Base para el marcador tipado de una aplicacion, que se declara en una linea:
+  ///   <c>StorageInject = class(DafInjectAttribute&lt;TStorageKind&gt;);</c>
+  /// </summary>
+  /// <remarks>
+  ///   NUNCA en posicion de atributo. [DafInject&lt;TStorageKind&gt;(...)] COMPILA, con un
+  ///   W1074 Unknown custom attribute que casi nadie lee, y en ejecucion GetAttributes devuelve
+  ///   CERO: la inyeccion no ocurre y nada lo dice. Es lo que va a intentar quien vea el generico
+  ///   declarado. Un constructor generico tampoco vale -- E2528, un constructor no puede llevar
+  ///   parametros de tipo en Delphi.
+  /// </remarks>
+  DafInjectAttribute<T> = class(DafInjectAttribute)
+  public
+    constructor Create(const AKey: T);
   end;
 
   /// <summary>
@@ -64,7 +190,7 @@ type
     FImplementor: IServiceProviderImpl;
     class function Error(const Fmt: string; const Args: array of const): EServiceProviderError; static;
   private
-    function GetFromInterfaceOps(const ServiceType: PTypeInfo): TArray<TRttiMethod>;
+    function GetFromInterfaceOps(const Slot: TServiceSlot): TArray<TRttiMethod>;
   public
     class operator Equal(S: IServiceProvider; P: Pointer): Boolean;
     class operator NotEqual(S: IServiceProvider; P: Pointer): Boolean;
@@ -85,6 +211,24 @@ type
 
     function TryGet(const ServiceType: PTypeInfo; out Service): Boolean;overload;
     function TryGet<ServiceType: IInterface>(out Service): Boolean;overload;
+
+    // Resolucion con clave. Los nombres son los de .NET a proposito: quien venga de alli no tiene
+    // que aprender otra palabra. Un registro hecho SIN clave no se alcanza desde aqui, y uno hecho
+    // CON clave no se alcanza desde los de arriba: un contrato con clave es un contrato distinto.
+    function CanResolveKeyed(const ServiceType: PTypeInfo; const Key: TValue): Boolean;
+
+    procedure GetKeyedService(const ServiceType: PTypeInfo; const Key: TValue; out Service); overload;
+    function GetKeyedService<ServiceType: IInterface>(const Key: TValue): ServiceType; overload;
+
+    procedure GetRequiredKeyedService(const ServiceType: PTypeInfo; const Key: TValue; out Service); overload;
+    function GetRequiredKeyedService<ServiceType>(const Key: TValue): ServiceType; overload;
+
+    function GetKeyedServices(const ServiceType: PTypeInfo; const Key: TValue): IInterfaceList<IInterface>; overload;
+    function GetKeyedServices<ServiceType: IInterface>(const Key: TValue): IInterfaceList<ServiceType>; overload;
+
+    function TryGetKeyed(const ServiceType: PTypeInfo; const Key: TValue; out Service): Boolean; overload;
+    function TryGetKeyed<ServiceType: IInterface>(const Key: TValue; out Service): Boolean; overload;
+
     function CreateScope: IServiceScope;
     procedure ShutDown;
   end;
@@ -99,6 +243,13 @@ type
   TServiceFactoryEx<ServiceType: IInterface> = reference to function(Provider: IServiceProvider;
     RequestedType: PTypeInfo): ServiceType;
   TServiceFactoryEx = TServiceFactoryEx<IInterface>;
+  // La misma idea que la de arriba, sobre el otro eje: recibe la CLAVE que se esta pidiendo. Es lo
+  // que hace util un registro comodin -- lo unico que puede hacer una factoria que atiende a todas
+  // las claves es decidir en funcion de cual le toca. Tipo aparte y no parametro opcional, por la
+  // razon que explica el comentario de TServiceFactoryEx.
+  TServiceKeyedFactory<ServiceType: IInterface> = reference to function(Provider: IServiceProvider;
+    const Key: TValue): ServiceType;
+  TServiceKeyedFactory = TServiceKeyedFactory<IInterface>;
   Factory = class
   public
     class function From(const ServiceType: PTypeInfo; const TImpl: TClass): TServiceFactory;overload;
@@ -126,6 +277,13 @@ type
     /// </summary>
     class function ForRequestedType(const RequestedType: PTypeInfo;
       const Aware: TServiceFactoryEx): TServiceFactory;
+    /// <summary>
+    ///   Lo mismo para el eje de la clave: baja una factoria consciente de la clave a una de un
+    ///   solo parametro, capturando la clave que se le entregara. Se llama con la clave del
+    ///   registro al registrar uno concreto, y con la clave PEDIDA al alcanzar el comodin.
+    /// </summary>
+    class function ForRequestedKey(const RequestedKey: TValue;
+      const Aware: TServiceKeyedFactory): TServiceFactory;
   end;
 
   // Cableado por codigo de una instancia recien construida: la tercera via de la inyeccion por
@@ -152,9 +310,15 @@ type
   // UN SOLO registro para todos sus cierres, asi que con el primer eje a secas todos
   // compartirian objeto. Y el fallo se lee como el acierto -- hay instancia, responde, y
   // trae los datos de otro cierre. Vale nil en un registro corriente.
+  // Y la CLAVE SERVIDA, por la misma razon que el tipo cerrado y no por la de estar registrado con
+  // clave: dos registros con claves distintas ya son dos registros, asi que Registration los
+  // separa solo. Lo que necesita eje propio es el registro COMODIN, que es UNO para todas las
+  // claves que atiende -- sin esto todas compartirian instancia, y el fallo se lee como el
+  // acierto. Vacia en un registro corriente.
   TServiceIdentity = record
     Registration: NativeInt;
     ClosedType: PTypeInfo;
+    ServedKey: TValue;
     class operator Equal(const A, B: TServiceIdentity): Boolean;
     class operator NotEqual(const A, B: TServiceIdentity): Boolean;
   end;
@@ -188,18 +352,36 @@ type
     // La factoria consciente del tipo pedido, si el registro se hizo con una; nil si no.
     // Es lo que ForClosedType necesita para volver a bajarla con el cierre concreto (D3).
     FRequestedFactory: TServiceFactoryEx;
+    // La clave con la que se registro: vacia en el espacio sin clave (D4).
+    FKey: TValue;
+    // La factoria consciente de la clave, si el registro se hizo con una; nil si no. Es lo que
+    // ForServedKey necesita para volver a bajarla con la clave que el comodin acaba de atender.
+    FKeyedFactory: TServiceKeyedFactory;
   public
     constructor Create(const Factory: TServiceFactory; const LifeTime: TServiceLifeTime; const TypeInfo: PTypeInfo;
-      const ImplementationClass: TClass = nil; const RequestedFactory: TServiceFactoryEx = nil);
-    // Nombre legible del tipo de servicio, y para nada mas que un mensaje de error.
+      const ImplementationClass: TClass = nil; const RequestedFactory: TServiceFactoryEx = nil); overload;
+    constructor Create(const Factory: TServiceFactory; const LifeTime: TServiceLifeTime; const Slot: TServiceSlot;
+      const ImplementationClass: TClass = nil; const RequestedFactory: TServiceFactoryEx = nil;
+      const KeyedFactory: TServiceKeyedFactory = nil); overload;
+    // Nombre legible del registro, y para nada mas que un mensaje de error. Nombra tambien la
+    // clave cuando la tiene: "falta IStorage" no dice cual falta si hay tres registrados por
+    // clave, y obliga a leer la composicion entera para averiguar de que se hablaba.
     // No decide nada y no lanza: ver la implementacion.
     function ServiceName: string;
+    // El par (tipo, clave) por el que este registro esta indexado.
+    function Slot: TServiceSlot;
     /// <summary>
     ///   Este mismo registro, atado al cierre que se acaba de pedir. Es lo que convierte UN
     ///   registro sin fijar en un registro por tipo cerrado: identidad propia --y con ella
     ///   ciclo de vida propio-- y una fabrica que sabe para que cierre construye.
     /// </summary>
     function ForClosedType(const AClosedType: PTypeInfo): TServiceDescriptor;
+    /// <summary>
+    ///   Este mismo registro, atado a la clave que el comodin acaba de atender. Es a la clave lo
+    ///   que ForClosedType es al cierre generico: identidad propia --y con ella instancia propia--
+    ///   y una fabrica que sabe para que clave construye.
+    /// </summary>
+    function ForServedKey(const AKey: TValue): TServiceDescriptor;
     // El cierre por el que se alcanzo este registro, o nil si se alcanzo directamente.
     function ClosedType: PTypeInfo;
     // Que registro es este. Se asigna al construirse y viaja con las copias, porque
@@ -210,6 +392,9 @@ type
     property Factory: TServiceFactory read FFactory;
     property LifeTime: TServiceLifeTime read FLifeTime;
     property TypeInfo: PTypeInfo read FTypeInfo;
+    // La clave del REGISTRO, vacia si se hizo sin clave. No es la clave servida: esa vive en la
+    // identidad, y solo difiere cuando a este registro se llego por el comodin.
+    property Key: TValue read FKey;
     // Clase de implementacion si el registro se hizo por clase; nil si se hizo por factory.
     // Es lo unico que la validacion del grafo puede inspeccionar: una lambda es opaca.
     property ImplementationClass: TClass read FImplementationClass;
@@ -220,9 +405,11 @@ type
 {$M+}
   IServiceProviderImpl = interface
     ['{D2043968-561D-4666-8A36-D2714BC262C4}']
-    function CanResolve(const ServiceType: PTypeInfo): Boolean;
-    function TryGet(const ServiceType: PTypeInfo; out Service): Boolean;
-    function TryGetAll(const ServiceType: PTypeInfo; out Services: IInterfaceList): Boolean;
+    // Por el PAR y no por el tipo: la clave llega hasta el embudo de resolucion, y ahi se acaba.
+    // GetImplementor, GetOrCreate y CollectGarbage siguen sin saber que existe.
+    function CanResolve(const Slot: TServiceSlot): Boolean;
+    function TryGet(const Slot: TServiceSlot; out Service): Boolean;
+    function TryGetAll(const Slot: TServiceSlot; out Services: IInterfaceList): Boolean;
     function CreateScope: IServiceScope;
   end;
 {$M-}
@@ -231,14 +418,15 @@ type
     ['{C767E76F-F5AE-438D-9725-B624E704127B}']
     function GetCount: Integer;
     procedure CheckNotFrozen;
-    function Add(const ServiceType: PTypeInfo; const LifeTime: TServiceLifeTime; const ServiceFactory: TServiceFactory;
-      const ImplClass: TClass = nil; const RequestedFactory: TServiceFactoryEx = nil): IServiceCollectionImpl; overload;
-    function Contains(const ServiceType: PTypeInfo): Boolean;
+    function Add(const Slot: TServiceSlot; const LifeTime: TServiceLifeTime; const ServiceFactory: TServiceFactory;
+      const ImplClass: TClass = nil; const RequestedFactory: TServiceFactoryEx = nil;
+      const KeyedFactory: TServiceKeyedFactory = nil): IServiceCollectionImpl; overload;
+    function Contains(const Slot: TServiceSlot): Boolean;
     function BuildServiceProvider: IServiceProviderImpl; overload;
     function BuildServiceProvider(const Options: TServiceProviderOptions): IServiceProviderImpl; overload;
-    function GetDescriptors(ServiceType: PTypeInfo): TServiceDescriptors;
-    function SetDescriptors(const ServiceType: PTypeInfo; const NewDescriptors: TArray<TServiceDescriptor>): IServiceCollectionImpl;
-    function RemoveAll(const ServiceType: PTypeInfo): IServiceCollectionImpl;
+    function GetDescriptors(const Slot: TServiceSlot): TServiceDescriptors;
+    function SetDescriptors(const Slot: TServiceSlot; const NewDescriptors: TArray<TServiceDescriptor>): IServiceCollectionImpl;
+    function RemoveAll(const Slot: TServiceSlot): IServiceCollectionImpl;
     // El registro sin fijar que puede servir a este cierre, si lo hay. Se pregunta al FALLAR
     // la busqueda directa y nunca antes: un registro concreto para un cierre tiene que seguir
     // mandando sobre el registro sin fijar.
@@ -275,12 +463,18 @@ type
     FImplementor: IServiceCollectionImpl;
     function GetCount: Integer;
   private
-    function AddDescriptor(const LifeTime: TServiceLifeTime; const ServiceType: PTypeInfo;
+    function AddDescriptor(const LifeTime: TServiceLifeTime; const Slot: TServiceSlot;
       const ServiceFactory: TServiceFactory; const ImplClass: TClass;
-      const RequestedFactory: TServiceFactoryEx = nil): IServiceCollection;
-    function AddAwareDescriptor(const LifeTime: TServiceLifeTime; const ServiceType: PTypeInfo;
+      const RequestedFactory: TServiceFactoryEx = nil;
+      const KeyedFactory: TServiceKeyedFactory = nil): IServiceCollection;
+    function AddAwareDescriptor(const LifeTime: TServiceLifeTime; const Slot: TServiceSlot;
       const Aware: TServiceFactoryEx): IServiceCollection;
-    function CanTryAdd(const ServiceType: PTypeInfo): Boolean;
+    function AddKeyAwareDescriptor(const LifeTime: TServiceLifeTime; const Slot: TServiceSlot;
+      const Aware: TServiceKeyedFactory): IServiceCollection;
+    function CanTryAdd(const Slot: TServiceSlot): Boolean;
+    // El slot de un registro CON clave: comprueba que la clave puede serlo y que el tipo no deja
+    // sus argumentos genericos sin fijar. Las dos, donde la clave entra.
+    function KeyedSlot(const ServiceType: PTypeInfo; const Key: TValue): TServiceSlot;
   public
     class operator Implicit(const Implementor: IServiceCollectionImpl): IServiceCollection;
     class operator Implicit(const ServiceCollection: IServiceCollection): IServiceCollectionImpl;
@@ -353,6 +547,69 @@ type
 
     function RemoveAll(const ServiceType: PTypeInfo): IServiceCollection; overload;
     function RemoveAll<ServiceType: IInterface>: IServiceCollection; overload;
+
+    // --- Registro con clave -------------------------------------------------------------------
+    // Las mismas formas que sus Add* --por clase, por factory y por instancia--, cada una tomando
+    // la clave. Un registro con clave NO bloquea ni sustituye a uno sin clave del mismo tipo, ni
+    // al de otra clave: la unidad de la pregunta es el par, no el tipo.
+    function AddKeyed(const LifeTime: TServiceLifeTime; const ServiceType: PTypeInfo; const Key: TValue;
+      const Factory: TServiceFactory): IServiceCollection; overload;
+    function AddKeyed<ServiceType: IInterface>(const LifeTime: TServiceLifeTime; const Key: TValue;
+      const Factory: TServiceFactory<ServiceType>): IServiceCollection; overload;
+    function AddKeyed<ServiceType: IInterface>(const LifeTime: TServiceLifeTime; const Key: TValue;
+      const Factory: TServiceKeyedFactory<ServiceType>): IServiceCollection; overload;
+
+    function AddKeyedSingleton(const ServiceType: PTypeInfo; const Key: TValue; const Factory: TServiceFactory): IServiceCollection; overload;
+    function AddKeyedSingleton(const ServiceType: PTypeInfo; const Key: TValue; const TImpl: TClass): IServiceCollection; overload;
+    function AddKeyedSingleton(const ServiceType: PTypeInfo; const Key: TValue; const Implementor: IInterface): IServiceCollection; overload;
+    function AddKeyedSingleton<ServiceType: IInterface>(const Key: TValue; const Factory: TServiceFactory<ServiceType>): IServiceCollection; overload;
+    function AddKeyedSingleton<ServiceType: IInterface>(const Key: TValue; const Factory: TServiceKeyedFactory<ServiceType>): IServiceCollection; overload;
+    function AddKeyedSingleton<ServiceType: IInterface>(const Key: TValue; const Implementor: ServiceType): IServiceCollection; overload;
+    function AddKeyedSingleton<ServiceType: IInterface; TImpl: ServiceType>(const Key: TValue): IServiceCollection; overload;
+
+    function AddKeyedScoped(const ServiceType: PTypeInfo; const Key: TValue; const Factory: TServiceFactory): IServiceCollection; overload;
+    function AddKeyedScoped(const ServiceType: PTypeInfo; const Key: TValue; const TImpl: TClass): IServiceCollection; overload;
+    function AddKeyedScoped<ServiceType: IInterface>(const Key: TValue; const Factory: TServiceFactory<ServiceType>): IServiceCollection; overload;
+    function AddKeyedScoped<ServiceType: IInterface>(const Key: TValue; const Factory: TServiceKeyedFactory<ServiceType>): IServiceCollection; overload;
+    function AddKeyedScoped<ServiceType: IInterface; TImpl: ServiceType>(const Key: TValue): IServiceCollection; overload;
+
+    function AddKeyedTransient(const ServiceType: PTypeInfo; const Key: TValue; const Factory: TServiceFactory): IServiceCollection; overload;
+    function AddKeyedTransient(const ServiceType: PTypeInfo; const Key: TValue; const TImpl: TClass): IServiceCollection; overload;
+    function AddKeyedTransient<ServiceType: IInterface>(const Key: TValue; const Factory: TServiceFactory<ServiceType>): IServiceCollection; overload;
+    function AddKeyedTransient<ServiceType: IInterface>(const Key: TValue; const Factory: TServiceKeyedFactory<ServiceType>): IServiceCollection; overload;
+    function AddKeyedTransient<ServiceType: IInterface; TImpl: ServiceType>(const Key: TValue): IServiceCollection; overload;
+
+    function TryAddKeyedSingleton(const ServiceType: PTypeInfo; const Key: TValue; const Factory: TServiceFactory): IServiceCollection; overload;
+    function TryAddKeyedSingleton(const ServiceType: PTypeInfo; const Key: TValue; const TImpl: TClass): IServiceCollection; overload;
+    function TryAddKeyedSingleton(const ServiceType: PTypeInfo; const Key: TValue; const Implementor: IInterface): IServiceCollection; overload;
+    function TryAddKeyedSingleton<ServiceType: IInterface>(const Key: TValue; const Factory: TServiceFactory<ServiceType>): IServiceCollection; overload;
+    function TryAddKeyedSingleton<ServiceType: IInterface>(const Key: TValue; const Factory: TServiceKeyedFactory<ServiceType>): IServiceCollection; overload;
+    function TryAddKeyedSingleton<ServiceType: IInterface>(const Key: TValue; const Implementor: ServiceType): IServiceCollection; overload;
+    function TryAddKeyedSingleton<ServiceType: IInterface; TImpl: ServiceType>(const Key: TValue): IServiceCollection; overload;
+
+    function TryAddKeyedScoped(const ServiceType: PTypeInfo; const Key: TValue; const Factory: TServiceFactory): IServiceCollection; overload;
+    function TryAddKeyedScoped(const ServiceType: PTypeInfo; const Key: TValue; const TImpl: TClass): IServiceCollection; overload;
+    function TryAddKeyedScoped<ServiceType: IInterface>(const Key: TValue; const Factory: TServiceFactory<ServiceType>): IServiceCollection; overload;
+    function TryAddKeyedScoped<ServiceType: IInterface>(const Key: TValue; const Factory: TServiceKeyedFactory<ServiceType>): IServiceCollection; overload;
+    function TryAddKeyedScoped<ServiceType: IInterface; TImpl: ServiceType>(const Key: TValue): IServiceCollection; overload;
+
+    function TryAddKeyedTransient(const ServiceType: PTypeInfo; const Key: TValue; const Factory: TServiceFactory): IServiceCollection; overload;
+    function TryAddKeyedTransient(const ServiceType: PTypeInfo; const Key: TValue; const TImpl: TClass): IServiceCollection; overload;
+    function TryAddKeyedTransient<ServiceType: IInterface>(const Key: TValue; const Factory: TServiceFactory<ServiceType>): IServiceCollection; overload;
+    function TryAddKeyedTransient<ServiceType: IInterface>(const Key: TValue; const Factory: TServiceKeyedFactory<ServiceType>): IServiceCollection; overload;
+    function TryAddKeyedTransient<ServiceType: IInterface; TImpl: ServiceType>(const Key: TValue): IServiceCollection; overload;
+
+    // Quita los registros de un tipo Y una clave. RemoveAll sin clave alcanza unicamente los del
+    // espacio sin clave: la interpretacion que se conserva es la que no toca lo que el llamante no
+    // nombro.
+    function RemoveAllKeyed(const ServiceType: PTypeInfo; const Key: TValue): IServiceCollection; overload;
+    function RemoveAllKeyed<ServiceType: IInterface>(const Key: TValue): IServiceCollection; overload;
+
+    function ContainsKeyed(const ServiceType: PTypeInfo; const Key: TValue): Boolean; overload;
+    function ContainsKeyed<ServiceType: IInterface>(const Key: TValue): Boolean; overload;
+
+    function KeyedDescriptors(const ServiceType: PTypeInfo; const Key: TValue): TArray<TServiceDescriptor>; overload;
+    function KeyedDescriptors<ServiceType: IInterface>(const Key: TValue): TArray<TServiceDescriptor>; overload;
 
     // Envuelve los registros existentes del tipo conservando su ciclo de vida. Para envolver
     // comportamiento (logging, cache, reintentos): los efectos laterales de arranque son IStartupTask.
@@ -435,15 +692,27 @@ type
 // compone dentro de la ruta de error, donde una excepcion no es un fallo mas: sustituye el
 // que se estaba contando y el original se pierde.
 function ServiceTypeName(const ServiceType: PTypeInfo): string;
+// Lo mismo para un servicio PEDIDO con una clave: nombra las dos cosas. Sin clave da exactamente
+// el texto de arriba, para que un mensaje que ya existia no cambie por existir esta capacidad.
+function ServiceRequestName(const ServiceType: PTypeInfo; const Key: TValue): string;
 
 implementation
 
 uses
+  System.Hash,
   Daf.Rtti,
   Daf.MemUtils,
   Daf.Activator,
   Daf.DependencyInjection.ActivatorUtilities,
   Daf.DependencyInjection.OpenGenerics;
+
+type
+  // El centinela del comodin, y toda su seguridad es vivir AQUI: nadie fuera de esta unit puede
+  // nombrar el tipo, asi que la clave no se puede construir por accidente ni pisar. Es la misma
+  // propiedad que en .NET da una instancia de object -- infalsificable por identidad-- conseguida
+  // por otra via, y funciona porque dos enumerados de tipos distintos no chocan aunque compartan
+  // ordinal.
+  TDafServiceKeyMarker = (dskAnyKey);
 
 var
   // Contador de proceso, y aqui si vale: la identidad de un registro solo tiene que ser
@@ -451,6 +720,205 @@ var
   // contabilidad de "esto ya se proceso", que por eso vive en la coleccion. Empieza en 1
   // para que el 0 de un TServiceDescriptor sin construir no se confunda con un registro.
   GLastServiceIdentity: Integer = 0;
+
+{ ServiceKey }
+
+class function ServiceKey.IsValid(const Key: TValue): Boolean;
+begin
+  // La vacia es valida: ES el espacio sin clave.
+  if Key.IsEmpty then Exit(True);
+  Result := Key.Kind in [tkUString, tkString, tkLString, tkWString,
+                         tkInteger, tkInt64, tkEnumeration, tkClassRef, tkPointer];
+end;
+
+class procedure ServiceKey.Check(const Key: TValue);
+begin
+  if IsValid(Key) then Exit;
+  if Key.Kind in [tkChar, tkWChar] then
+    raise EServiceProviderError.Create(
+      'A character cannot be a service key: a one character key is a string key, so use a string');
+  raise EServiceProviderError.CreateFmt(
+    'A %s cannot be a service key: only a string, an integer, an enumerated value, a metaclass or a PTypeInfo can',
+    [string(Key.TypeInfo.Name)]);
+end;
+
+class function ServiceKey.Text(const Key: TValue): string;
+begin
+  if Key.IsEmpty then Exit('<none>');
+  if IsAny(Key) then Exit('<any key>');
+  case Key.Kind of
+    tkUString, tkString, tkLString, tkWString: Result := '''' + Key.AsString + '''';
+    tkInteger, tkInt64: Result := Key.ToString;
+    tkEnumeration: Result := string(Key.TypeInfo.Name) + '.' + Key.ToString;
+    tkClassRef: Result := Key.AsClass.ClassName;
+    tkPointer:
+      begin
+        var Ptr := PPointer(Key.GetReferenceToRawData)^;
+        Result := Format('$%p', [Ptr]);
+        // Se INTENTA nombrarlo, no se exige: un tkPointer no tiene por que ser un PTypeInfo, y
+        // esto se compone dentro de la ruta de error, donde una excepcion sustituye a la que se
+        // estaba contando.
+        try
+          if Ptr <> nil then
+            Result := string(PTypeInfo(Ptr).Name);
+        except
+        end;
+      end;
+  else
+    Result := string(Key.TypeInfo.Name);
+  end;
+end;
+
+class function ServiceKey.Same(const A, B: TValue): Boolean;
+begin
+  if A.IsEmpty or B.IsEmpty then Exit(A.IsEmpty and B.IsEmpty);
+  // El tipo primero: es lo que separa dos enumerados distintos con el mismo ordinal, y la cadena
+  // '42' del entero 42. Es la semantica de .NET, donde la clave es un object y dos valores de
+  // tipos distintos no son iguales aunque el numero coincida.
+  if A.TypeInfo <> B.TypeInfo then Exit(False);
+  case A.Kind of
+    tkUString, tkString, tkLString, tkWString: Result := A.AsString = B.AsString;
+    tkInteger, tkInt64, tkEnumeration: Result := A.AsOrdinal = B.AsOrdinal;
+    // Metaclase y PTypeInfo, por identidad de puntero: es lo que ya hace el indice de servicios
+    // con PTypeInfo, y el enlazador unifica el del mismo tipo calculado en units distintas.
+    tkClassRef: Result := A.AsClass = B.AsClass;
+    tkPointer: Result := PPointer(A.GetReferenceToRawData)^ = PPointer(B.GetReferenceToRawData)^;
+  else
+    // Un tipo que no es clave no llega aqui, porque Check lo rechazo donde entraba. Y no se lanza
+    // desde aqui a proposito: una comprobacion puesta en la comparacion solo corre cuando dos
+    // claves caen en el mismo cubo -- medido -- asi que seria un guardian que salta a veces.
+    Result := False;
+  end;
+end;
+
+class function ServiceKey.HashOf(const Key: TValue): Integer;
+begin
+  if Key.IsEmpty then Exit(0);
+  // El tipo entra tambien en el hash, o dos claves distintas caerian en el mismo cubo por
+  // casualidad y solo la comparacion las separaria: correcto, lento, y oculta el error.
+  var Seed := Integer(THashBobJenkins.GetHashValue(string(Key.TypeInfo.Name)));
+  case Key.Kind of
+    tkUString, tkString, tkLString, tkWString:
+      Result := Seed xor Integer(THashBobJenkins.GetHashValue(Key.AsString));
+    tkInteger, tkInt64, tkEnumeration: Result := Seed xor Integer(Key.AsOrdinal);
+    tkClassRef: Result := Seed xor Integer(NativeInt(Key.AsClass));
+    tkPointer: Result := Seed xor Integer(NativeInt(PPointer(Key.GetReferenceToRawData)^));
+  else
+    Result := Seed;
+  end;
+end;
+
+class function ServiceKey.Any: TValue;
+begin
+  Result := TValue.From<TDafServiceKeyMarker>(dskAnyKey);
+end;
+
+class function ServiceKey.IsAny(const Key: TValue): Boolean;
+begin
+  Result := (not Key.IsEmpty) and (Key.TypeInfo = TypeInfo(TDafServiceKeyMarker));
+end;
+
+{ TServiceSlot }
+
+constructor TServiceSlot.Create(const AServiceType: PTypeInfo);
+begin
+  ServiceType := AServiceType;
+  Key := TValue.Empty;
+end;
+
+constructor TServiceSlot.Create(const AServiceType: PTypeInfo; const AKey: TValue);
+begin
+  ServiceType := AServiceType;
+  Key := AKey;
+end;
+
+function TServiceSlot.IsKeyed: Boolean;
+begin
+  Result := not Key.IsEmpty;
+end;
+
+function TServiceSlot.AnyKeySlot: TServiceSlot;
+begin
+  Result := TServiceSlot.Create(ServiceType, ServiceKey.Any);
+end;
+
+class function TServiceSlot.Comparer: IEqualityComparer<TServiceSlot>;
+begin
+  Result := TEqualityComparer<TServiceSlot>.Construct(
+    function(const A, B: TServiceSlot): Boolean
+    begin
+      Result := (A.ServiceType = B.ServiceType) and ServiceKey.Same(A.Key, B.Key);
+    end,
+    function(const Value: TServiceSlot): Integer
+    begin
+      Result := Integer(NativeInt(Value.ServiceType)) xor ServiceKey.HashOf(Value.Key);
+    end);
+end;
+
+{ DafInjectAttribute }
+
+constructor DafInjectAttribute.CreateWithKey(const AKey: TValue);
+begin
+  inherited Create;
+  FKey := AKey;
+end;
+
+constructor DafInjectAttribute.Create;
+begin
+  CreateWithKey(TValue.Empty);
+end;
+
+constructor DafInjectAttribute.Create(const AKey: string);
+begin
+  CreateWithKey(TValue.From<string>(AKey));
+end;
+
+constructor DafInjectAttribute.Create(const AKey: Integer);
+begin
+  CreateWithKey(TValue.From<Integer>(AKey));
+end;
+
+constructor DafInjectAttribute.Create(const AKey: Boolean);
+begin
+  CreateWithKey(TValue.From<Boolean>(AKey));
+end;
+
+constructor DafInjectAttribute.Create(const AKey: TClass);
+begin
+  CreateWithKey(TValue.From<TClass>(AKey));
+end;
+
+constructor DafInjectAttribute.Create(const AKeyType: PTypeInfo);
+begin
+  CreateWithKey(TValue.From<PTypeInfo>(AKeyType));
+end;
+
+constructor DafInjectAttribute.Create(const AKeyType: PTypeInfo; const AOrdinal: Integer);
+begin
+  inherited Create;
+  if (AKeyType = nil) or not (AKeyType.Kind in [tkEnumeration, tkInteger]) then
+  begin
+    FKeyError := 'the first argument of this mark has to be the TypeInfo of an ordinal type';
+    Exit;
+  end;
+  var Data := GetTypeData(AKeyType);
+  if (AOrdinal < Data.MinValue) or (AOrdinal > Data.MaxValue) then
+  begin
+    // No se lanza desde el constructor: lo llama la RTTI al leer el atributo, y una excepcion ahi
+    // no puede nombrar la propiedad ni el parametro que la lleva. Lo hace el barrido, que si.
+    FKeyError := Format('%d is not an ordinal of %s, whose range is %d..%d',
+      [AOrdinal, string(AKeyType.Name), Data.MinValue, Data.MaxValue]);
+    Exit;
+  end;
+  TValue.Make(@AOrdinal, AKeyType, FKey);
+end;
+
+{ DafInjectAttribute<T> }
+
+constructor DafInjectAttribute<T>.Create(const AKey: T);
+begin
+  CreateWithKey(TValue.From<T>(AKey));
+end;
 
 { TServiceProviderOptions }
 
@@ -469,7 +937,8 @@ end;
 
 class operator TServiceIdentity.Equal(const A, B: TServiceIdentity): Boolean;
 begin
-  Result := (A.Registration = B.Registration) and (A.ClosedType = B.ClosedType);
+  Result := (A.Registration = B.Registration) and (A.ClosedType = B.ClosedType) and
+    ServiceKey.Same(A.ServedKey, B.ServedKey);
 end;
 
 class operator TServiceIdentity.NotEqual(const A, B: TServiceIdentity): Boolean;
@@ -482,14 +951,30 @@ end;
 constructor TServiceDescriptor.Create(const Factory: TServiceFactory; const LifeTime: TServiceLifeTime;
   const TypeInfo: PTypeInfo; const ImplementationClass: TClass; const RequestedFactory: TServiceFactoryEx);
 begin
+  Self := TServiceDescriptor.Create(Factory, LifeTime, TServiceSlot.Create(TypeInfo),
+    ImplementationClass, RequestedFactory);
+end;
+
+constructor TServiceDescriptor.Create(const Factory: TServiceFactory; const LifeTime: TServiceLifeTime;
+  const Slot: TServiceSlot; const ImplementationClass: TClass; const RequestedFactory: TServiceFactoryEx;
+  const KeyedFactory: TServiceKeyedFactory);
+begin
   FFactory := Factory;
   FLifeTime := LifeTime;
-  FTypeInfo := TypeInfo;
+  FTypeInfo := Slot.ServiceType;
+  FKey := Slot.Key;
   FImplementationClass := ImplementationClass;
   FIdentity.Registration := AtomicIncrement(GLastServiceIdentity);
   FIdentity.ClosedType := nil;
+  FIdentity.ServedKey := TValue.Empty;
   FRequestedFactory := RequestedFactory;
+  FKeyedFactory := KeyedFactory;
  end;
+
+function TServiceDescriptor.Slot: TServiceSlot;
+begin
+  Result := TServiceSlot.Create(FTypeInfo, FKey);
+end;
 
 function TServiceDescriptor.ClosedType: PTypeInfo;
 begin
@@ -526,6 +1011,20 @@ begin
     FTypeInfo, AClosedType, Inner);
 end;
 
+function TServiceDescriptor.ForServedKey(const AKey: TValue): TServiceDescriptor;
+begin
+  Result := Self;
+  // El registro sigue siendo el mismo -- Registration no cambia -- y lo que se le anade es el eje
+  // que le faltaba. Dos claves atendidas por el mismo comodin son dos identidades, y por tanto dos
+  // instancias; la misma clave dos veces es una.
+  Result.FIdentity.ServedKey := AKey;
+  // Una fabrica que no sabe de claves se queda como esta; la que si sabe se vuelve a bajar, ahora
+  // con la clave que se pidio en vez de la del registro. Es el mismo brazo que ForClosedType tiene
+  // para la factoria consciente del tipo.
+  if Assigned(FKeyedFactory) then
+    Result.FFactory := Daf.Extensions.DependencyInjection.Factory.ForRequestedKey(AKey, FKeyedFactory);
+end;
+
 
 function ServiceTypeName(const ServiceType: PTypeInfo): string;
 begin
@@ -557,9 +1056,18 @@ begin
   end;
 end;
 
+function ServiceRequestName(const ServiceType: PTypeInfo; const Key: TValue): string;
+begin
+  Result := ServiceTypeName(ServiceType);
+  if Key.IsEmpty then Exit;
+  Result := Format('%s (key %s)', [Result, ServiceKey.Text(Key)]);
+end;
+
 function TServiceDescriptor.ServiceName: string;
 begin
   Result := ServiceTypeName(FTypeInfo);
+  if FKey.IsEmpty then Exit;
+  Result := Format('%s (key %s)', [Result, ServiceKey.Text(FKey)]);
 end;
 
 { IServiceProvider }
@@ -581,12 +1089,23 @@ end;
 
 function IServiceProvider.TryGet(const ServiceType: PTypeInfo; out Service): Boolean;
 begin
-  Result := FImplementor.TryGet(ServiceType, Service);
+  Result := TryGetKeyed(ServiceType, TValue.Empty, Service);
+end;
+
+function IServiceProvider.TryGetKeyed(const ServiceType: PTypeInfo; const Key: TValue; out Service): Boolean;
+begin
+  // La clave se comprueba DONDE ENTRA, que es aqui y en el registro. Un tipo que no puede ser
+  // clave tiene que abortar nombrandolo, no devolver "no encontrado" en silencio.
+  ServiceKey.Check(Key);
+  var Slot := TServiceSlot.Create(ServiceType, Key);
+  Result := FImplementor.TryGet(Slot, Service);
   if Result then Exit;
-  var Conversors := GetFromInterfaceOps(ServiceType);
+  // La conversion viaja con la clave: el servicio del que se convierte se busca con la MISMA, o
+  // seria una puerta trasera del espacio con clave al espacio sin clave.
+  var Conversors := GetFromInterfaceOps(Slot);
   for var Conversor in Conversors do
   begin
-    Result := FImplementor.TryGet(Conversor.GetParameters[0].ParamType.Handle, Service);
+    Result := FImplementor.TryGet(TServiceSlot.Create(Conversor.GetParameters[0].ParamType.Handle, Key), Service);
     if Result then
     begin
       var Arg: TValue;
@@ -605,6 +1124,11 @@ begin
   Result := TryGet(TypeInfo(ServiceType), Service);
 end;
 
+function IServiceProvider.TryGetKeyed<ServiceType>(const Key: TValue; out Service): Boolean;
+begin
+  Result := TryGetKeyed(TypeInfo(ServiceType), Key, Service);
+end;
+
 procedure IServiceProvider.GetService(const ServiceType: PTypeInfo; out Service);
 begin
   if not TryGet(ServiceType, Service) then
@@ -616,15 +1140,38 @@ begin
   GetService(TypeInfo(ServiceType), Result);
 end;
 
+procedure IServiceProvider.GetKeyedService(const ServiceType: PTypeInfo; const Key: TValue; out Service);
+begin
+  if not TryGetKeyed(ServiceType, Key, Service) then
+    IInterface(Service) := nil;
+end;
+
+function IServiceProvider.GetKeyedService<ServiceType>(const Key: TValue): ServiceType;
+begin
+  GetKeyedService(TypeInfo(ServiceType), Key, Result);
+end;
+
 procedure IServiceProvider.GetRequiredService(const ServiceType: PTypeInfo; out Service);
 begin
-  if not TryGet(ServiceType, Service) then
-    raise Error('Cannot resolve service: %s', [ServiceType.Name]);
+  GetRequiredKeyedService(ServiceType, TValue.Empty, Service);
 end;
 
 function IServiceProvider.GetRequiredService<ServiceType>: ServiceType;
 begin
   GetRequiredService(TypeInfo(ServiceType), Result);
+end;
+
+procedure IServiceProvider.GetRequiredKeyedService(const ServiceType: PTypeInfo; const Key: TValue; out Service);
+begin
+  if TryGetKeyed(ServiceType, Key, Service) then Exit;
+  if Key.IsEmpty then
+    raise Error('Cannot resolve service: %s', [ServiceType.Name]);
+  raise Error('Cannot resolve service: %s (key %s)', [ServiceType.Name, ServiceKey.Text(Key)]);
+end;
+
+function IServiceProvider.GetRequiredKeyedService<ServiceType>(const Key: TValue): ServiceType;
+begin
+  GetRequiredKeyedService(TypeInfo(ServiceType), Key, Result);
 end;
 
 function IServiceProvider.GetServices<ServiceType>: IInterfaceList<ServiceType>;
@@ -634,7 +1181,18 @@ end;
 
 function IServiceProvider.GetServices(const ServiceType: PTypeInfo): IInterfaceList<IInterface>;
 begin
-  FImplementor.TryGetAll(ServiceType, IInterfaceList(Result));
+  FImplementor.TryGetAll(TServiceSlot.Create(ServiceType), IInterfaceList(Result));
+end;
+
+function IServiceProvider.GetKeyedServices<ServiceType>(const Key: TValue): IInterfaceList<ServiceType>;
+begin
+  Result := IInterfaceList<ServiceType>(GetKeyedServices(TypeInfo(ServiceType), Key))
+end;
+
+function IServiceProvider.GetKeyedServices(const ServiceType: PTypeInfo; const Key: TValue): IInterfaceList<IInterface>;
+begin
+  ServiceKey.Check(Key);
+  FImplementor.TryGetAll(TServiceSlot.Create(ServiceType, Key), IInterfaceList(Result));
 end;
 
 function IServiceProvider.AsType<ServiceType>: ServiceType;
@@ -643,19 +1201,28 @@ begin
   Supports(FImplementor, PInfo.TypeData.Guid, Result);
 end;
 
-function IServiceProvider.GetFromInterfaceOps(const ServiceType: PTypeInfo): TArray<TRttiMethod>;
+function IServiceProvider.GetFromInterfaceOps(const Slot: TServiceSlot): TArray<TRttiMethod>;
 begin
   var FImpl := FImplementor;
-  Result :=_T.GetConverFromOps(ServiceType,  function(M: TRttiMethod): Boolean
+  var Key := Slot.Key;
+  Result :=_T.GetConverFromOps(Slot.ServiceType,  function(M: TRttiMethod): Boolean
               begin
                 var FromType := M.GetParameters[0].ParamType;
-                Result := (FromType.TypeKind = tkInterface) and FImpl.CanResolve(FromType.Handle);
+                Result := (FromType.TypeKind = tkInterface) and
+                  FImpl.CanResolve(TServiceSlot.Create(FromType.Handle, Key));
               end);
 end;
 
 function IServiceProvider.CanResolve(const ServiceType: PTypeInfo): Boolean;
 begin
-  Result := FImplementor.CanResolve(ServiceType) or (GetFromInterfaceOps(ServiceType) <> nil);
+  Result := CanResolveKeyed(ServiceType, TValue.Empty);
+end;
+
+function IServiceProvider.CanResolveKeyed(const ServiceType: PTypeInfo; const Key: TValue): Boolean;
+begin
+  ServiceKey.Check(Key);
+  var Slot := TServiceSlot.Create(ServiceType, Key);
+  Result := FImplementor.CanResolve(Slot) or (GetFromInterfaceOps(Slot) <> nil);
 end;
 
 function IServiceProvider.CreateScope: IServiceScope;
@@ -718,6 +1285,15 @@ begin
   Result := function(Provider: IServiceProvider): IInterface
             begin
               Result := Aware(Provider, RequestedType);
+            end;
+end;
+
+class function Factory.ForRequestedKey(const RequestedKey: TValue;
+  const Aware: TServiceKeyedFactory): TServiceFactory;
+begin
+  Result := function(Provider: IServiceProvider): IInterface
+            begin
+              Result := Aware(Provider, RequestedKey);
             end;
 end;
 
@@ -790,27 +1366,49 @@ begin
   Result := FImplementor.BuildServiceProvider(Options);
 end;
 
-function IServiceCollection.AddDescriptor(const LifeTime: TServiceLifeTime; const ServiceType: PTypeInfo;
+function IServiceCollection.AddDescriptor(const LifeTime: TServiceLifeTime; const Slot: TServiceSlot;
   const ServiceFactory: TServiceFactory; const ImplClass: TClass;
-  const RequestedFactory: TServiceFactoryEx): IServiceCollection;
+  const RequestedFactory: TServiceFactoryEx; const KeyedFactory: TServiceKeyedFactory): IServiceCollection;
 begin
-  FImplementor.Add(ServiceType, LifeTime, ServiceFactory, ImplClass, RequestedFactory);
+  FImplementor.Add(Slot, LifeTime, ServiceFactory, ImplClass, RequestedFactory, KeyedFactory);
   Result := Self;
 end;
 
-function IServiceCollection.AddAwareDescriptor(const LifeTime: TServiceLifeTime; const ServiceType: PTypeInfo;
+function IServiceCollection.AddAwareDescriptor(const LifeTime: TServiceLifeTime; const Slot: TServiceSlot;
   const Aware: TServiceFactoryEx): IServiceCollection;
 begin
   // D4: la factoria consciente se baja AQUI, con el tipo del servicio ya conocido, a una de un solo
   // parametro; y se guarda aparte para que ForClosedType pueda volver a bajarla con el cierre (D3).
   // Asi hay una sola forma de que una consciente llegue a llamarse: envuelta, nunca directa.
-  Result := AddDescriptor(LifeTime, ServiceType, Factory.ForRequestedType(ServiceType, Aware), nil, Aware);
+  Result := AddDescriptor(LifeTime, Slot, Factory.ForRequestedType(Slot.ServiceType, Aware), nil, Aware);
+end;
+
+function IServiceCollection.AddKeyAwareDescriptor(const LifeTime: TServiceLifeTime; const Slot: TServiceSlot;
+  const Aware: TServiceKeyedFactory): IServiceCollection;
+begin
+  // Lo mismo sobre el eje de la clave: se baja aqui con la clave del registro, y se guarda aparte
+  // para que ForServedKey pueda volver a bajarla con la clave que el comodin acabe atendiendo.
+  Result := AddDescriptor(LifeTime, Slot, Factory.ForRequestedKey(Slot.Key, Aware), nil, nil, Aware);
+end;
+
+function IServiceCollection.KeyedSlot(const ServiceType: PTypeInfo; const Key: TValue): TServiceSlot;
+begin
+  ServiceKey.Check(Key);
+  // Clave y argumentos genericos sin fijar son dos mecanismos de emparejamiento, y cruzarlos
+  // multiplica los casos de precedencia. Falla AL REGISTRAR y no al resolver, que es lo que lo
+  // convierte en un limite y no en una trampa: la alternativa es un registro que se acepta y
+  // luego no aparece nunca.
+  if (not Key.IsEmpty) and TOpenGeneric.IsOpen(ServiceType) then
+    raise EServiceProviderError.CreateFmt(
+      'Cannot register %s with the key %s: a service key and unbound generic arguments are not supported together',
+      [ServiceTypeName(ServiceType), ServiceKey.Text(Key)]);
+  Result := TServiceSlot.Create(ServiceType, Key);
 end;
 
 function IServiceCollection.Add<ServiceType>(const LifeTime: TServiceLifeTime;
   const Factory: TServiceFactoryEx<ServiceType>): IServiceCollection;
 begin
-  Result := AddAwareDescriptor(LifeTime, TypeInfo(ServiceType), TServiceFactoryEx(Factory));
+  Result := AddAwareDescriptor(LifeTime, TServiceSlot.Create(TypeInfo(ServiceType)), TServiceFactoryEx(Factory));
 end;
 
 function IServiceCollection.AddSingleton<ServiceType>(const Factory: TServiceFactoryEx<ServiceType>): IServiceCollection;
@@ -831,37 +1429,37 @@ end;
 function IServiceCollection.TryAddSingleton<ServiceType>(const Factory: TServiceFactoryEx<ServiceType>): IServiceCollection;
 begin
   Result := Self;
-  if not CanTryAdd(TypeInfo(ServiceType)) then Exit;
-  Result := AddAwareDescriptor(Singleton, TypeInfo(ServiceType), TServiceFactoryEx(Factory));
+  if not CanTryAdd(TServiceSlot.Create(TypeInfo(ServiceType))) then Exit;
+  Result := AddAwareDescriptor(Singleton, TServiceSlot.Create(TypeInfo(ServiceType)), TServiceFactoryEx(Factory));
 end;
 
 function IServiceCollection.TryAddScoped<ServiceType>(const Factory: TServiceFactoryEx<ServiceType>): IServiceCollection;
 begin
   Result := Self;
-  if not CanTryAdd(TypeInfo(ServiceType)) then Exit;
-  Result := AddAwareDescriptor(Scoped, TypeInfo(ServiceType), TServiceFactoryEx(Factory));
+  if not CanTryAdd(TServiceSlot.Create(TypeInfo(ServiceType))) then Exit;
+  Result := AddAwareDescriptor(Scoped, TServiceSlot.Create(TypeInfo(ServiceType)), TServiceFactoryEx(Factory));
 end;
 
 function IServiceCollection.TryAddTransient<ServiceType>(const Factory: TServiceFactoryEx<ServiceType>): IServiceCollection;
 begin
   Result := Self;
-  if not CanTryAdd(TypeInfo(ServiceType)) then Exit;
-  Result := AddAwareDescriptor(Transient, TypeInfo(ServiceType), TServiceFactoryEx(Factory));
+  if not CanTryAdd(TServiceSlot.Create(TypeInfo(ServiceType))) then Exit;
+  Result := AddAwareDescriptor(Transient, TServiceSlot.Create(TypeInfo(ServiceType)), TServiceFactoryEx(Factory));
 end;
 
 function IServiceCollection.AddScoped(const ServiceType: PTypeInfo; const TImpl: TClass): IServiceCollection;
 begin
-  Result := AddDescriptor(Scoped, ServiceType, Factory.From(ServiceType, Timpl), TImpl);
+  Result := AddDescriptor(Scoped, TServiceSlot.Create(ServiceType), Factory.From(ServiceType, Timpl), TImpl);
 end;
 
 function IServiceCollection.AddSingleton(const ServiceType: PTypeInfo; const TImpl: TClass): IServiceCollection;
 begin
-  Result := AddDescriptor(Singleton, ServiceType, Factory.From(ServiceType, Timpl), TImpl);
+  Result := AddDescriptor(Singleton, TServiceSlot.Create(ServiceType), Factory.From(ServiceType, Timpl), TImpl);
 end;
 
 function IServiceCollection.AddTransient(const ServiceType: PTypeInfo; const TImpl: TClass): IServiceCollection;
 begin
-  Result := AddDescriptor(Transient, ServiceType, Factory.From(ServiceType, Timpl), TImpl);
+  Result := AddDescriptor(Transient, TServiceSlot.Create(ServiceType), Factory.From(ServiceType, Timpl), TImpl);
 end;
 
 function IServiceCollection.AddSingleton(const ServiceType: PTypeInfo; const Implementor: IInterface): IServiceCollection;
@@ -871,7 +1469,7 @@ end;
 
 function IServiceCollection.Add(const LifeTime: TServiceLifeTime; const ServiceType: PTypeInfo; const Factory: TServiceFactory): IServiceCollection;
 begin
-  Result := AddDescriptor(LifeTime, ServiceType, Factory, nil);
+  Result := AddDescriptor(LifeTime, TServiceSlot.Create(ServiceType), Factory, nil);
 end;
 
 function IServiceCollection.Add<ServiceType>(const LifeTime: TServiceLifeTime; const Factory: TServiceFactory<ServiceType>): IServiceCollection;
@@ -936,16 +1534,16 @@ end;
 
 function IServiceCollection.Contains(const ServiceType: PTypeInfo): Boolean;
 begin
-  Result := FImplementor.Contains(ServiceType)
+  Result := FImplementor.Contains(TServiceSlot.Create(ServiceType))
 end;
 
 function IServiceCollection.Descriptors(const ServiceType: PTypeInfo): TArray<TServiceDescriptor>;
 begin
   Result := nil;
-  if not FImplementor.Contains(ServiceType) then Exit;
+  if not FImplementor.Contains(TServiceSlot.Create(ServiceType)) then Exit;
   // Copia: la lista viva la posee el diccionario interno (doOwnsValues), y repartirla
   // dejaria mutar la coleccion sin pasar por CheckNotFrozen.
-  Result := FImplementor.GetDescriptors(ServiceType).ToArray;
+  Result := FImplementor.GetDescriptors(TServiceSlot.Create(ServiceType)).ToArray;
 end;
 
 function IServiceCollection.Descriptors<ServiceType>: TArray<TServiceDescriptor>;
@@ -953,33 +1551,36 @@ begin
   Result := Descriptors(TypeInfo(ServiceType));
 end;
 
-function IServiceCollection.CanTryAdd(const ServiceType: PTypeInfo): Boolean;
+function IServiceCollection.CanTryAdd(const Slot: TServiceSlot): Boolean;
 begin
   // Un TryAdd que no anade sigue siendo una modificacion intentada: si la coleccion ya
   // esta congelada, quien llama tiene un error, no un no-op.
   FImplementor.CheckNotFrozen;
-  Result := not FImplementor.Contains(ServiceType);
+  // La unidad de la pregunta es el PAR, no el tipo: con clave, un TryAdd de 'blob' no ve el
+  // registro de 'file', y ninguno de los dos ve el registro sin clave. Si mirase solo el tipo, la
+  // primera clave registrada bloquearia a todas las demas.
+  Result := not FImplementor.Contains(Slot);
 end;
 
 function IServiceCollection.TryAddSingleton(const ServiceType: PTypeInfo; const Factory: TServiceFactory): IServiceCollection;
 begin
   Result := Self;
-  if not CanTryAdd(ServiceType) then Exit;
-  Result := AddDescriptor(Singleton, ServiceType, Factory, nil);
+  if not CanTryAdd(TServiceSlot.Create(ServiceType)) then Exit;
+  Result := AddDescriptor(Singleton, TServiceSlot.Create(ServiceType), Factory, nil);
 end;
 
 function IServiceCollection.TryAddSingleton(const ServiceType: PTypeInfo; const TImpl: TClass): IServiceCollection;
 begin
   Result := Self;
-  if not CanTryAdd(ServiceType) then Exit;
-  Result := AddDescriptor(Singleton, ServiceType, Factory.From(ServiceType, TImpl), TImpl);
+  if not CanTryAdd(TServiceSlot.Create(ServiceType)) then Exit;
+  Result := AddDescriptor(Singleton, TServiceSlot.Create(ServiceType), Factory.From(ServiceType, TImpl), TImpl);
 end;
 
 function IServiceCollection.TryAddSingleton(const ServiceType: PTypeInfo; const Implementor: IInterface): IServiceCollection;
 begin
   Result := Self;
-  if not CanTryAdd(ServiceType) then Exit;
-  Result := AddDescriptor(Singleton, ServiceType, Factory.From(ServiceType, Implementor), nil);
+  if not CanTryAdd(TServiceSlot.Create(ServiceType)) then Exit;
+  Result := AddDescriptor(Singleton, TServiceSlot.Create(ServiceType), Factory.From(ServiceType, Implementor), nil);
 end;
 
 function IServiceCollection.TryAddSingleton<ServiceType>(const Factory: TServiceFactory<ServiceType>): IServiceCollection;
@@ -1000,15 +1601,15 @@ end;
 function IServiceCollection.TryAddScoped(const ServiceType: PTypeInfo; const Factory: TServiceFactory): IServiceCollection;
 begin
   Result := Self;
-  if not CanTryAdd(ServiceType) then Exit;
-  Result := AddDescriptor(Scoped, ServiceType, Factory, nil);
+  if not CanTryAdd(TServiceSlot.Create(ServiceType)) then Exit;
+  Result := AddDescriptor(Scoped, TServiceSlot.Create(ServiceType), Factory, nil);
 end;
 
 function IServiceCollection.TryAddScoped(const ServiceType: PTypeInfo; const TImpl: TClass): IServiceCollection;
 begin
   Result := Self;
-  if not CanTryAdd(ServiceType) then Exit;
-  Result := AddDescriptor(Scoped, ServiceType, Factory.From(ServiceType, TImpl), TImpl);
+  if not CanTryAdd(TServiceSlot.Create(ServiceType)) then Exit;
+  Result := AddDescriptor(Scoped, TServiceSlot.Create(ServiceType), Factory.From(ServiceType, TImpl), TImpl);
 end;
 
 function IServiceCollection.TryAddScoped<ServiceType>(const Factory: TServiceFactory<ServiceType>): IServiceCollection;
@@ -1024,15 +1625,15 @@ end;
 function IServiceCollection.TryAddTransient(const ServiceType: PTypeInfo; const Factory: TServiceFactory): IServiceCollection;
 begin
   Result := Self;
-  if not CanTryAdd(ServiceType) then Exit;
-  Result := AddDescriptor(Transient, ServiceType, Factory, nil);
+  if not CanTryAdd(TServiceSlot.Create(ServiceType)) then Exit;
+  Result := AddDescriptor(Transient, TServiceSlot.Create(ServiceType), Factory, nil);
 end;
 
 function IServiceCollection.TryAddTransient(const ServiceType: PTypeInfo; const TImpl: TClass): IServiceCollection;
 begin
   Result := Self;
-  if not CanTryAdd(ServiceType) then Exit;
-  Result := AddDescriptor(Transient, ServiceType, Factory.From(ServiceType, TImpl), TImpl);
+  if not CanTryAdd(TServiceSlot.Create(ServiceType)) then Exit;
+  Result := AddDescriptor(Transient, TServiceSlot.Create(ServiceType), Factory.From(ServiceType, TImpl), TImpl);
 end;
 
 function IServiceCollection.TryAddTransient<ServiceType>(const Factory: TServiceFactory<ServiceType>): IServiceCollection;
@@ -1048,15 +1649,15 @@ end;
 function IServiceCollection.Replace(const LifeTime: TServiceLifeTime; const ServiceType: PTypeInfo;
   const Factory: TServiceFactory): IServiceCollection;
 begin
-  FImplementor.RemoveAll(ServiceType);
-  Result := AddDescriptor(LifeTime, ServiceType, Factory, nil);
+  FImplementor.RemoveAll(TServiceSlot.Create(ServiceType));
+  Result := AddDescriptor(LifeTime, TServiceSlot.Create(ServiceType), Factory, nil);
 end;
 
 function IServiceCollection.Replace(const LifeTime: TServiceLifeTime; const ServiceType: PTypeInfo;
   const TImpl: TClass): IServiceCollection;
 begin
-  FImplementor.RemoveAll(ServiceType);
-  Result := AddDescriptor(LifeTime, ServiceType, Factory.From(ServiceType, TImpl), TImpl);
+  FImplementor.RemoveAll(TServiceSlot.Create(ServiceType));
+  Result := AddDescriptor(LifeTime, TServiceSlot.Create(ServiceType), Factory.From(ServiceType, TImpl), TImpl);
 end;
 
 function IServiceCollection.Replace<ServiceType>(const LifeTime: TServiceLifeTime;
@@ -1072,7 +1673,7 @@ end;
 
 function IServiceCollection.RemoveAll(const ServiceType: PTypeInfo): IServiceCollection;
 begin
-  FImplementor.RemoveAll(ServiceType);
+  FImplementor.RemoveAll(TServiceSlot.Create(ServiceType));
   Result := Self;
 end;
 
@@ -1081,10 +1682,298 @@ begin
   Result := RemoveAll(TypeInfo(ServiceType));
 end;
 
+function IServiceCollection.AddKeyed(const LifeTime: TServiceLifeTime; const ServiceType: PTypeInfo;
+  const Key: TValue; const Factory: TServiceFactory): IServiceCollection;
+begin
+  Result := AddDescriptor(LifeTime, KeyedSlot(ServiceType, Key), Factory, nil);
+end;
+
+function IServiceCollection.AddKeyed<ServiceType>(const LifeTime: TServiceLifeTime; const Key: TValue;
+  const Factory: TServiceFactory<ServiceType>): IServiceCollection;
+begin
+  Result := AddKeyed(LifeTime, TypeInfo(ServiceType), Key, TServiceFactory(Factory));
+end;
+
+function IServiceCollection.AddKeyed<ServiceType>(const LifeTime: TServiceLifeTime; const Key: TValue;
+  const Factory: TServiceKeyedFactory<ServiceType>): IServiceCollection;
+begin
+  Result := AddKeyAwareDescriptor(LifeTime, KeyedSlot(TypeInfo(ServiceType), Key), TServiceKeyedFactory(Factory));
+end;
+
+function IServiceCollection.AddKeyedSingleton(const ServiceType: PTypeInfo; const Key: TValue;
+  const Factory: TServiceFactory): IServiceCollection;
+begin
+  Result := AddDescriptor(Singleton, KeyedSlot(ServiceType, Key), Factory, nil);
+end;
+
+function IServiceCollection.AddKeyedSingleton(const ServiceType: PTypeInfo; const Key: TValue;
+  const TImpl: TClass): IServiceCollection;
+begin
+  Result := AddDescriptor(Singleton, KeyedSlot(ServiceType, Key), Factory.From(ServiceType, TImpl), TImpl);
+end;
+
+function IServiceCollection.AddKeyedSingleton<ServiceType>(const Key: TValue;
+  const Factory: TServiceFactory<ServiceType>): IServiceCollection;
+begin
+  Result := AddKeyedSingleton(TypeInfo(ServiceType), Key, TServiceFactory(Factory));
+end;
+
+function IServiceCollection.AddKeyedSingleton<ServiceType>(const Key: TValue;
+  const Factory: TServiceKeyedFactory<ServiceType>): IServiceCollection;
+begin
+  Result := AddKeyAwareDescriptor(Singleton, KeyedSlot(TypeInfo(ServiceType), Key), TServiceKeyedFactory(Factory));
+end;
+
+function IServiceCollection.AddKeyedSingleton<ServiceType, TImpl>(const Key: TValue): IServiceCollection;
+begin
+  Result := AddKeyedSingleton(TypeInfo(ServiceType), Key, PTypeInfo(TypeInfo(TImpl)).TypeData.ClassType);
+end;
+
+function IServiceCollection.AddKeyedScoped(const ServiceType: PTypeInfo; const Key: TValue;
+  const Factory: TServiceFactory): IServiceCollection;
+begin
+  Result := AddDescriptor(Scoped, KeyedSlot(ServiceType, Key), Factory, nil);
+end;
+
+function IServiceCollection.AddKeyedScoped(const ServiceType: PTypeInfo; const Key: TValue;
+  const TImpl: TClass): IServiceCollection;
+begin
+  Result := AddDescriptor(Scoped, KeyedSlot(ServiceType, Key), Factory.From(ServiceType, TImpl), TImpl);
+end;
+
+function IServiceCollection.AddKeyedScoped<ServiceType>(const Key: TValue;
+  const Factory: TServiceFactory<ServiceType>): IServiceCollection;
+begin
+  Result := AddKeyedScoped(TypeInfo(ServiceType), Key, TServiceFactory(Factory));
+end;
+
+function IServiceCollection.AddKeyedScoped<ServiceType>(const Key: TValue;
+  const Factory: TServiceKeyedFactory<ServiceType>): IServiceCollection;
+begin
+  Result := AddKeyAwareDescriptor(Scoped, KeyedSlot(TypeInfo(ServiceType), Key), TServiceKeyedFactory(Factory));
+end;
+
+function IServiceCollection.AddKeyedScoped<ServiceType, TImpl>(const Key: TValue): IServiceCollection;
+begin
+  Result := AddKeyedScoped(TypeInfo(ServiceType), Key, PTypeInfo(TypeInfo(TImpl)).TypeData.ClassType);
+end;
+
+function IServiceCollection.AddKeyedTransient(const ServiceType: PTypeInfo; const Key: TValue;
+  const Factory: TServiceFactory): IServiceCollection;
+begin
+  Result := AddDescriptor(Transient, KeyedSlot(ServiceType, Key), Factory, nil);
+end;
+
+function IServiceCollection.AddKeyedTransient(const ServiceType: PTypeInfo; const Key: TValue;
+  const TImpl: TClass): IServiceCollection;
+begin
+  Result := AddDescriptor(Transient, KeyedSlot(ServiceType, Key), Factory.From(ServiceType, TImpl), TImpl);
+end;
+
+function IServiceCollection.AddKeyedTransient<ServiceType>(const Key: TValue;
+  const Factory: TServiceFactory<ServiceType>): IServiceCollection;
+begin
+  Result := AddKeyedTransient(TypeInfo(ServiceType), Key, TServiceFactory(Factory));
+end;
+
+function IServiceCollection.AddKeyedTransient<ServiceType>(const Key: TValue;
+  const Factory: TServiceKeyedFactory<ServiceType>): IServiceCollection;
+begin
+  Result := AddKeyAwareDescriptor(Transient, KeyedSlot(TypeInfo(ServiceType), Key), TServiceKeyedFactory(Factory));
+end;
+
+function IServiceCollection.AddKeyedTransient<ServiceType, TImpl>(const Key: TValue): IServiceCollection;
+begin
+  Result := AddKeyedTransient(TypeInfo(ServiceType), Key, PTypeInfo(TypeInfo(TImpl)).TypeData.ClassType);
+end;
+
+function IServiceCollection.AddKeyedSingleton(const ServiceType: PTypeInfo; const Key: TValue;
+  const Implementor: IInterface): IServiceCollection;
+begin
+  Result := AddDescriptor(Singleton, KeyedSlot(ServiceType, Key), Factory.From(ServiceType, Implementor), nil);
+end;
+
+function IServiceCollection.AddKeyedSingleton<ServiceType>(const Key: TValue;
+  const Implementor: ServiceType): IServiceCollection;
+begin
+  Result := AddKeyedSingleton(TypeInfo(ServiceType), Key, IInterface(Implementor));
+end;
+
+function IServiceCollection.TryAddKeyedSingleton(const ServiceType: PTypeInfo; const Key: TValue;
+  const Factory: TServiceFactory): IServiceCollection;
+begin
+  Result := Self;
+  var Slot := KeyedSlot(ServiceType, Key);
+  if not CanTryAdd(Slot) then Exit;
+  Result := AddDescriptor(Singleton, Slot, Factory, nil);
+end;
+
+function IServiceCollection.TryAddKeyedSingleton(const ServiceType: PTypeInfo; const Key: TValue;
+  const TImpl: TClass): IServiceCollection;
+begin
+  Result := Self;
+  var Slot := KeyedSlot(ServiceType, Key);
+  if not CanTryAdd(Slot) then Exit;
+  Result := AddDescriptor(Singleton, Slot, Factory.From(ServiceType, TImpl), TImpl);
+end;
+
+function IServiceCollection.TryAddKeyedSingleton<ServiceType>(const Key: TValue;
+  const Factory: TServiceFactory<ServiceType>): IServiceCollection;
+begin
+  Result := TryAddKeyedSingleton(TypeInfo(ServiceType), Key, TServiceFactory(Factory));
+end;
+
+function IServiceCollection.TryAddKeyedSingleton<ServiceType>(const Key: TValue;
+  const Factory: TServiceKeyedFactory<ServiceType>): IServiceCollection;
+begin
+  Result := Self;
+  var Slot := KeyedSlot(TypeInfo(ServiceType), Key);
+  if not CanTryAdd(Slot) then Exit;
+  Result := AddKeyAwareDescriptor(Singleton, Slot, TServiceKeyedFactory(Factory));
+end;
+
+function IServiceCollection.TryAddKeyedSingleton<ServiceType, TImpl>(const Key: TValue): IServiceCollection;
+begin
+  Result := TryAddKeyedSingleton(TypeInfo(ServiceType), Key, PTypeInfo(TypeInfo(TImpl)).TypeData.ClassType);
+end;
+
+function IServiceCollection.TryAddKeyedScoped(const ServiceType: PTypeInfo; const Key: TValue;
+  const Factory: TServiceFactory): IServiceCollection;
+begin
+  Result := Self;
+  var Slot := KeyedSlot(ServiceType, Key);
+  if not CanTryAdd(Slot) then Exit;
+  Result := AddDescriptor(Scoped, Slot, Factory, nil);
+end;
+
+function IServiceCollection.TryAddKeyedScoped(const ServiceType: PTypeInfo; const Key: TValue;
+  const TImpl: TClass): IServiceCollection;
+begin
+  Result := Self;
+  var Slot := KeyedSlot(ServiceType, Key);
+  if not CanTryAdd(Slot) then Exit;
+  Result := AddDescriptor(Scoped, Slot, Factory.From(ServiceType, TImpl), TImpl);
+end;
+
+function IServiceCollection.TryAddKeyedScoped<ServiceType>(const Key: TValue;
+  const Factory: TServiceFactory<ServiceType>): IServiceCollection;
+begin
+  Result := TryAddKeyedScoped(TypeInfo(ServiceType), Key, TServiceFactory(Factory));
+end;
+
+function IServiceCollection.TryAddKeyedScoped<ServiceType>(const Key: TValue;
+  const Factory: TServiceKeyedFactory<ServiceType>): IServiceCollection;
+begin
+  Result := Self;
+  var Slot := KeyedSlot(TypeInfo(ServiceType), Key);
+  if not CanTryAdd(Slot) then Exit;
+  Result := AddKeyAwareDescriptor(Scoped, Slot, TServiceKeyedFactory(Factory));
+end;
+
+function IServiceCollection.TryAddKeyedScoped<ServiceType, TImpl>(const Key: TValue): IServiceCollection;
+begin
+  Result := TryAddKeyedScoped(TypeInfo(ServiceType), Key, PTypeInfo(TypeInfo(TImpl)).TypeData.ClassType);
+end;
+
+function IServiceCollection.TryAddKeyedTransient(const ServiceType: PTypeInfo; const Key: TValue;
+  const Factory: TServiceFactory): IServiceCollection;
+begin
+  Result := Self;
+  var Slot := KeyedSlot(ServiceType, Key);
+  if not CanTryAdd(Slot) then Exit;
+  Result := AddDescriptor(Transient, Slot, Factory, nil);
+end;
+
+function IServiceCollection.TryAddKeyedTransient(const ServiceType: PTypeInfo; const Key: TValue;
+  const TImpl: TClass): IServiceCollection;
+begin
+  Result := Self;
+  var Slot := KeyedSlot(ServiceType, Key);
+  if not CanTryAdd(Slot) then Exit;
+  Result := AddDescriptor(Transient, Slot, Factory.From(ServiceType, TImpl), TImpl);
+end;
+
+function IServiceCollection.TryAddKeyedTransient<ServiceType>(const Key: TValue;
+  const Factory: TServiceFactory<ServiceType>): IServiceCollection;
+begin
+  Result := TryAddKeyedTransient(TypeInfo(ServiceType), Key, TServiceFactory(Factory));
+end;
+
+function IServiceCollection.TryAddKeyedTransient<ServiceType>(const Key: TValue;
+  const Factory: TServiceKeyedFactory<ServiceType>): IServiceCollection;
+begin
+  Result := Self;
+  var Slot := KeyedSlot(TypeInfo(ServiceType), Key);
+  if not CanTryAdd(Slot) then Exit;
+  Result := AddKeyAwareDescriptor(Transient, Slot, TServiceKeyedFactory(Factory));
+end;
+
+function IServiceCollection.TryAddKeyedTransient<ServiceType, TImpl>(const Key: TValue): IServiceCollection;
+begin
+  Result := TryAddKeyedTransient(TypeInfo(ServiceType), Key, PTypeInfo(TypeInfo(TImpl)).TypeData.ClassType);
+end;
+
+function IServiceCollection.TryAddKeyedSingleton(const ServiceType: PTypeInfo; const Key: TValue;
+  const Implementor: IInterface): IServiceCollection;
+begin
+  Result := Self;
+  var Slot := KeyedSlot(ServiceType, Key);
+  if not CanTryAdd(Slot) then Exit;
+  Result := AddDescriptor(Singleton, Slot, Factory.From(ServiceType, Implementor), nil);
+end;
+
+function IServiceCollection.TryAddKeyedSingleton<ServiceType>(const Key: TValue;
+  const Implementor: ServiceType): IServiceCollection;
+begin
+  Result := TryAddKeyedSingleton(TypeInfo(ServiceType), Key, IInterface(Implementor));
+end;
+
+function IServiceCollection.RemoveAllKeyed(const ServiceType: PTypeInfo; const Key: TValue): IServiceCollection;
+begin
+  ServiceKey.Check(Key);
+  FImplementor.RemoveAll(TServiceSlot.Create(ServiceType, Key));
+  Result := Self;
+end;
+
+function IServiceCollection.RemoveAllKeyed<ServiceType>(const Key: TValue): IServiceCollection;
+begin
+  Result := RemoveAllKeyed(TypeInfo(ServiceType), Key);
+end;
+
+function IServiceCollection.ContainsKeyed(const ServiceType: PTypeInfo; const Key: TValue): Boolean;
+begin
+  ServiceKey.Check(Key);
+  Result := FImplementor.Contains(TServiceSlot.Create(ServiceType, Key));
+end;
+
+function IServiceCollection.ContainsKeyed<ServiceType>(const Key: TValue): Boolean;
+begin
+  Result := ContainsKeyed(TypeInfo(ServiceType), Key);
+end;
+
+function IServiceCollection.KeyedDescriptors(const ServiceType: PTypeInfo;
+  const Key: TValue): TArray<TServiceDescriptor>;
+begin
+  Result := nil;
+  ServiceKey.Check(Key);
+  var Slot := TServiceSlot.Create(ServiceType, Key);
+  if not FImplementor.Contains(Slot) then Exit;
+  Result := FImplementor.GetDescriptors(Slot).ToArray;
+end;
+
+function IServiceCollection.KeyedDescriptors<ServiceType>(const Key: TValue): TArray<TServiceDescriptor>;
+begin
+  Result := KeyedDescriptors(TypeInfo(ServiceType), Key);
+end;
+
 function IServiceCollection.Decorate(const ServiceType: PTypeInfo; const Decorator: TServiceDecorator): IServiceCollection;
 begin
   FImplementor.CheckNotFrozen;
   Result := Self;
+  // Lee y escribe el espacio SIN clave, y por tanto deja intactos los registros con clave del mismo
+  // tipo. Decorar es por tipo, no por par: cruzarlo con las claves multiplicaria los casos y no se
+  // acomete aqui. Consecuencia que hay que decir: un tipo que solo tiene registros con clave falla
+  // abajo, porque desde aqui no hay nada que envolver.
   var Current := Descriptors(ServiceType);
   if Length(Current) = 0 then
     raise EServiceProviderError.CreateFmt('Cannot decorate %s: nothing is registered for it', [_T.NameOf(ServiceType)]);
@@ -1097,7 +1986,7 @@ begin
     Wrapped[Idx] := TServiceDescriptor.Create(DecoratedFactory(ServiceType, Current[Idx].Factory, Decorator),
       Current[Idx].LifeTime, ServiceType);
 
-  FImplementor.SetDescriptors(ServiceType, Wrapped);
+  FImplementor.SetDescriptors(TServiceSlot.Create(ServiceType), Wrapped);
 end;
 
 function IServiceCollection.Decorate<ServiceType>(const Decorator: TServiceDecorator<ServiceType>): IServiceCollection;

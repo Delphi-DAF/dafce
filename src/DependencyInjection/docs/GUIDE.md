@@ -13,10 +13,11 @@
 5. [Service Lifetimes](#service-lifetimes)
 6. [Scopes](#scopes)
 7. [Property Injection](#property-injection)
-8. [AppModule Pattern](#appmodule-pattern)
-9. [Lazy Resolution](#lazy-resolution)
-10. [Duck Typing Decorator](#duck-typing-decorator)
-11. [Integration with Hosting](#integration-with-hosting)
+8. [Keyed Services](#keyed-services)
+9. [AppModule Pattern](#appmodule-pattern)
+10. [Lazy Resolution](#lazy-resolution)
+11. [Duck Typing Decorator](#duck-typing-decorator)
+12. [Integration with Hosting](#integration-with-hosting)
 
 ---
 
@@ -314,6 +315,182 @@ the trim — and why a class that declares it and exposes no marked property is 
 class and points at the directives.
 
 Wiring by code is the way out: it uses no RTTI at all, so it is the only route immune to the trim.
+
+---
+
+## Keyed Services
+
+Two implementations of the same contract, told apart by a key. `IStorage` for blobs and for files,
+`INotifier` by SMS and by mail. Without it the choice moves to the consumer — ask for all of them and
+pick by `is` — or the contract gets split in two interfaces that exist only to have different names.
+
+```pascal
+type
+  // In a unit of its own -- see "The application's own mark" below
+  TStorageKind = (Blob, FileSystem);
+
+Services.AddKeyedSingleton<IStorage, TBlobStorage>(TValue.From<TStorageKind>(Blob));
+Services.AddKeyedSingleton<IStorage, TFileStorage>(TValue.From<TStorageKind>(FileSystem));
+
+var Blobs := Provider.GetRequiredKeyedService<IStorage>(TValue.From<TStorageKind>(Blob));
+var Files := Provider.GetKeyedService<IStorage>(TValue.From<TStorageKind>(FileSystem));
+var Every := Provider.GetKeyedServices<IStorage>(TValue.From<TStorageKind>(Blob));
+```
+
+Two registrations of the same type under different keys are **two registrations**: each has its own
+instance and its own lifetime.
+
+### What a key can be
+
+A string, an integer, a boolean, a value of an enumerated type, a metaclass or a `PTypeInfo`. Two
+keys are the same when their **type and value** match, which has three consequences worth stating:
+
+```pascal
+Provider.GetKeyedService<IStorage>('42');            // is NOT the key 42
+Provider.GetKeyedService<IStorage>(TValue.From<Boolean>(True));  // is NOT the key 1
+// and two enumerated values of different types that share an ordinal are different keys
+```
+
+Anything else — a record, an object — is rejected where it enters, naming the type: the container
+cannot define an equality those types do not have. A `TGUID` is written as its string and loses
+nothing. And a **character** is not a key: a one-character key is a string key.
+
+**The enumerated key is the recommended form.** Not for style: renaming a member propagates to every
+use, and a typo is a compile error. `'bolb'` compiles.
+
+### The two spaces are isolated, in both directions
+
+This is the rule that decides whether the feature helps or gets in the way:
+
+```pascal
+Services.AddKeyedSingleton<IStorage, TBlobStorage>('blob');
+
+Provider.GetService<IStorage>;            // nil -- the keyed one is not reachable without a key
+Provider.GetServices<IStorage>;           // empty -- it does not drag in the keyed ones
+Provider.CanResolve(TypeInfo(IStorage));  // False
+
+Services.AddSingleton<IStorage, TPlainStorage>;
+Provider.GetKeyedService<IStorage>('blob');   // the blob one
+Provider.GetRequiredService<IStorage>;        // the keyless one -- both live together
+```
+
+It reaches the destructive operations too, and that is where it matters most:
+
+| Operation | Reaches |
+|---|---|
+| `Replace`, `RemoveAll` | only the keyless registrations |
+| `RemoveAllKeyed(Type, Key)` | only the registrations under that key |
+| `TryAdd*` | asks about the pair, so one key does not block another nor the keyless one |
+| `Decorate` | wraps the keyless registrations, leaves the keyed ones alone |
+
+⚠️ **`RemoveAll` changed meaning.** Before there were no keys, so "all of the type" and "all of the
+type without a key" were the same thing. A test harness that used it to dismantle a registration now
+dismantles less than it thinks — and finds out in green.
+
+⚠️ **Decorating a type that has only keyed registrations fails** saying nothing is registered for it.
+It is reading the keyless space, and the keyless space is empty.
+
+### Asking for a key from a constructor or a property
+
+The same mark serves both positions, and the key travels inside it — the model of Unity's
+`[Dependency("name")]`, rather than a second attribute that has to be written next to the first every
+time and can be written on its own:
+
+```pascal
+type
+  [DafInjectProperties]
+  TReportService = class(TInterfacedObject, IReportService)
+  private
+    FStorage: IStorage;
+  public
+    constructor Create([DafInject('audit')] const Audit: IAuditLog);
+    [DafInject('file')]
+    property Storage: IStorage read FStorage write FStorage;
+  end;
+```
+
+A parameter or a property **without** a key keeps resolving without one, and therefore does not reach
+a keyed registration: the isolation makes no exception for coming from a property.
+
+### The application's own mark
+
+`[DafInject]` takes a string, an integer, a boolean, a metaclass or a `TypeInfo(...)`. For an
+**enumerated** key — the recommended one — the application declares its own mark in one line:
+
+```pascal
+unit MyApp.InjectionMarks;   // ⚠️ a unit of its own
+
+interface
+
+uses Daf.Extensions.DependencyInjection;
+
+type
+  TStorageKind = (Blob, FileSystem);
+
+  StorageInjectAttribute = class(DafInjectAttribute<TStorageKind>);
+
+implementation
+end.
+```
+
+```pascal
+[StorageInject(FileSystem)]
+property Storage: IStorage read FStorage write FStorage;
+```
+
+The container recognises it **by descent**, so it never needs to know that enumeration, and the type
+of the enumeration is preserved — another enumeration with the same ordinal does not reach it.
+
+⚠️ **The mark goes in a unit of its own, separate from the classes that use it.** Declared in the same
+unit, reading the attribute aborts with an access violation. It is a defect of the compiler and not a
+matter of taste; the framework cannot detect it, and the failure is loud but happens at run time.
+
+⚠️ **The generic is never written inside a `[ ]`.** `[DafInject<TStorageKind>(...)]` **compiles**, with
+a `W1074 Unknown custom attribute` almost nobody reads, and at run time `GetAttributes` returns
+**zero**: the injection does not happen and nothing says so. It is what anyone who sees the generic
+declared will try first.
+
+For a one-off enumerated key, without declaring a mark, there is an escape:
+
+```pascal
+[DafInject(TypeInfo(TStorageKind), Ord(FileSystem))]
+```
+
+The ordinal is checked against the range of the type. One that does not belong fails naming the
+property, instead of producing a key that is nobody's and reading as "that service is not registered".
+
+### One registration for any key
+
+`ServiceKey.Any` is the wildcard: it serves every key of its service type that has no registration of
+its own, and its factory is told which one was asked for.
+
+```pascal
+Services.AddKeyedSingleton<IStorage>(ServiceKey.Any,
+  function(P: IServiceProvider; const Key: TValue): IStorage
+  begin
+    Result := TFolderStorage.Create(Key.ToString);
+  end);
+```
+
+- A **concrete registration beats it**: the wildcard is asked only when the direct lookup fails, the
+  same order that already governs a closed type against an unbound generic one.
+- **Each key it serves gets its own instance**, and asking twice for the same key gives the same one.
+- **It does not cross into the keyless space**: with only a wildcard registered, `GetService<IStorage>`
+  finds nothing.
+
+The sentinel is a value of a type declared inside the DI module, so nobody outside can name it. That
+is the point: with a reserved string, whoever registered that string would become the wildcard without
+noticing — the registration works, and what changes is who it serves.
+
+### The limit: keys and unbound generics are not combined
+
+```pascal
+Services.AddKeyedSingleton<IBox<_>, TBox<_>>('blob');   // fails at registration
+```
+
+Two matchings crossed multiply the precedence cases, and this is not the change that takes them on.
+It fails **when registering** and not when resolving, which is what makes it a limit and not a trap:
+the alternative is a registration that is accepted and then never shows up.
 
 ---
 

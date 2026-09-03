@@ -68,6 +68,114 @@ Services.AddTransient<IMyService>(
 Services.AddSingleton<IMyService>(MyExistingInstance);
 ```
 
+
+---
+
+## Keyed services
+
+Two implementations of the same contract, told apart by a key. Same names as
+`Microsoft.Extensions.DependencyInjection`: `AddKeyedSingleton`, `GetRequiredKeyedService`,
+`RemoveAllKeyed`.
+
+```pascal
+Services.AddKeyedSingleton<IStorage, TBlobStorage>(TValue.From<TStorageKind>(Blob));
+Services.AddKeyedSingleton<IStorage, TFileStorage>(TValue.From<TStorageKind>(FileSystem));
+
+var Blobs := Provider.GetRequiredKeyedService<IStorage>(TValue.From<TStorageKind>(Blob));
+var Missing := Provider.GetKeyedService<IStorage>('nobody');   // nil
+```
+
+`AddKeyedSingleton`, `AddKeyedScoped` and `AddKeyedTransient` come in the same forms as their `Add*`
+— by class, by factory and by instance — and each has its `TryAddKeyed*`.
+
+**An enumerated key is the recommended form**, and the reason is the compiler: renaming a member
+propagates to every use and a typo is an error. `'bolb'` compiles.
+
+A key can be a **string**, an **integer**, a **boolean**, a value of an **enumerated type**, a
+**metaclass** or a **`PTypeInfo`**. Two keys are the same when their **type and value** match, so two
+enumerated values of different types that share an ordinal are different keys, and the string `'42'`
+is not the integer `42`. Anything else — a record, an object — is rejected where it enters, naming
+the type: the container cannot define an equality that those types do not have.
+
+⚠️ **A character is not a key.** A one-character key is a string key, and admitting both would make
+two keys that read identically in the source fail to find each other.
+
+### The two spaces are isolated
+
+A registration made **with** a key is not reachable **without** one, and the other way round. A
+contract with a key is a different contract:
+
+- `GetServices<T>` does not include the keyed registrations, and `CanResolve` without a key answers
+  only for the keyless ones.
+- `Replace` and `RemoveAll` reach only the keyless ones. `RemoveAllKeyed` takes the key.
+- `TryAdd*` asks about the **pair**, not the type: one key does not block another, and neither
+  blocks the keyless registration.
+- `Decorate` wraps the keyless registrations and leaves the keyed ones alone. Decorating a type that
+  has *only* keyed registrations fails saying nothing is registered for it.
+
+⚠️ **BREAKING** — `RemoveAll` used to remove everything registered for the type, because there were
+no keys. It now removes the keyless ones only.
+
+### Asking for a key from a constructor or a property
+
+The same mark serves both positions, and the key travels inside it:
+
+```pascal
+type
+  [DafInjectProperties]
+  TReportService = class(TInterfacedObject, IReportService)
+  private
+    FStorage: IStorage;
+  public
+    constructor Create([DafInject('audit')] const Audit: IAuditLog);
+    [StorageInject(FileSystem)]
+    property Storage: IStorage read FStorage write FStorage;
+  end;
+```
+
+`[DafInject]` takes a string, an integer, a boolean, a metaclass or a `TypeInfo(...)`. For an
+**enumerated** key the application declares its own mark, in one line:
+
+```pascal
+type
+  StorageInjectAttribute = class(DafInjectAttribute<TStorageKind>);
+```
+
+The container recognises it **by descent**, so it never needs to know that enumeration.
+
+⚠️ **That mark goes in a unit of its own**, separate from the classes that use it. Declared in the
+same unit, reading the attribute aborts with an access violation — measured, and it is a defect of
+the compiler, not a rule of taste.
+
+⚠️ **And the generic is never written inside a `[ ]`.** `[DafInject<TStorageKind>(...)]` *compiles*,
+with a `W1074 Unknown custom attribute` almost nobody reads, and at run time the property has no
+attribute at all: the injection does not happen and nothing says so.
+
+For a one-off enumerated key without declaring a mark there is an escape,
+`[DafInject(TypeInfo(TStorageKind), Ord(FileSystem))]`. The ordinal is checked against the range of
+the type, and one that does not belong fails naming the property.
+
+### One registration for any key
+
+A registration under `ServiceKey.Any` serves every key of its service type that has no registration
+of its own, and its factory is told which one was asked for:
+
+```pascal
+Services.AddKeyedSingleton<IStorage>(ServiceKey.Any,
+  function(P: IServiceProvider; const Key: TValue): IStorage
+  begin
+    Result := TStorage.Create(Key.ToString);
+  end);
+```
+
+A concrete registration beats it — the wildcard is asked only when the direct lookup fails — and each
+key it serves gets its own instance. The sentinel is a value of a type declared inside the DI module,
+so nobody outside can build it by accident: a reserved string would turn whoever registered it into
+the wildcard without noticing.
+
+⚠️ **A keyed registration cannot leave its generic arguments unbound.** The two matchings are not
+combined, and the registration is rejected on the spot rather than never showing up.
+
 ---
 
 ## Property injection

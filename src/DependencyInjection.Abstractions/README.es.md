@@ -75,6 +75,40 @@ type
   end;
 ```
 
+### `ServiceKey` y `TServiceSlot`
+
+`ServiceKey` es todo lo que el contenedor sabe de una clave de servicio: si un `TValue` puede serlo,
+cómo se comparan dos, cómo se nombra una en un mensaje, y cuál es el comodín.
+
+```pascal
+ServiceKey.IsValid(Key);   // una cadena, un entero, un booleano, un enumerado, una metaclase
+                           // o un PTypeInfo -- y la vacía, que significa "sin clave"
+ServiceKey.Check(Key);     // aborta nombrando el tipo cuando no puede serlo
+ServiceKey.Text(Key);      // para un mensaje, y para nada más
+ServiceKey.Any;            // la clave comodín
+```
+
+Dos claves son la misma cuando coinciden **su tipo y su valor**, así que dos enumerados de tipos
+distintos que compartan ordinal son claves distintas. El rechazo ocurre donde la clave **entra** —al
+registrar y al resolver— y nunca al comparar dos claves: un diccionario solo consulta la comparación
+para las que caen en el mismo cubo, así que un guardián puesto ahí no corre para un tipo que no
+colisiona con nada, y la búsqueda contesta «no encontrado» en silencio.
+
+`TServiceSlot` es el par `(tipo de servicio, clave)` por el que indexa la colección. Una clave vacía
+**es** el espacio sin clave, no un tercer estado.
+
+### `TServiceKeyedFactory<T>`
+
+```pascal
+TServiceKeyedFactory<ServiceType: IInterface> =
+  reference to function(Provider: IServiceProvider; const Key: TValue): ServiceType;
+```
+
+Una factoría enterada de **qué clave** se le está pidiendo. Es lo que hace útil un registro comodín:
+lo único que puede hacer una factoría que atiende a todas las claves es decidir en función de cuál le
+toca. Un tipo aparte y no un parámetro opcional de `TServiceFactory`, por la misma razón que
+`TServiceFactoryEx`.
+
 ### `DafInject` y `DafInjectProperties`
 
 Las dos marcas de la inyección por propiedad. `DafInjectProperties` va en la clase y declara que
@@ -99,6 +133,31 @@ levanta `EPropertyInjectionError` nombrando la propiedad, su tipo y la clase.
 existe para el barrido. El atributo de clase sigue ahí, y eso convierte «declara participar y no
 expone ninguna propiedad marcada» en una condición que el contenedor puede comprobar y decir. Deducir
 la participación de que haya alguna propiedad marcada se queda muda justo cuando hace falta hablar.
+
+La clave viaja **dentro de esta marca**, y la misma marca sirve a un **parámetro de constructor**:
+
+```pascal
+constructor Create([DafInject('audit')] const Audit: IAuditLog);
+```
+
+`[DafInject]` admite una cadena, un entero, un booleano, una metaclase, un `TypeInfo(...)`, o un
+`TypeInfo(...)` más un ordinal. No puede admitir un `TValue`: el argumento de un atributo tiene que
+ser una constante, y un `TValue` ahí da `E2026` hasta con un literal de cadena — el `TValue` se
+construye dentro del constructor, al que llama la RTTI al leer el atributo.
+
+Para una clave **enumerada**, la aplicación declara su propia marca sobre la base genérica, en una
+línea:
+
+```pascal
+type
+  StorageInjectAttribute = class(DafInjectAttribute<TStorageKind>);
+```
+
+El barrido la reconoce **por descendencia** (`Attr is DafInjectAttribute`), así que el framework nunca
+necesita conocer ese enumerado. ⚠️ **Esa marca va en una unit propia**, separada de las clases que la
+usan: declarada en la misma unit, leer el atributo aborta con un access violation. ⚠️ **Y el genérico
+no se escribe nunca dentro de un `[ ]`** — `[DafInject<TStorageKind>(...)]` compila con un `W1074` y
+en ejecución la propiedad no tiene ningún atributo.
 
 El nombre lleva el prefijo `Daf` a propósito: `Daf.MiniSpec.Injection` exporta un `InjectAttribute`
 propio, y dos units que exporten el mismo nombre en el mismo `uses` no dan error — gana la última, en

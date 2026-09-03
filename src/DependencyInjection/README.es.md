@@ -68,6 +68,114 @@ Services.AddTransient<IMyService>(
 Services.AddSingleton<IMyService>(MyExistingInstance);
 ```
 
+
+---
+
+## Servicios con clave
+
+Dos implementaciones del mismo contrato, distinguidas por una clave. Los mismos nombres que
+`Microsoft.Extensions.DependencyInjection`: `AddKeyedSingleton`, `GetRequiredKeyedService`,
+`RemoveAllKeyed`.
+
+```pascal
+Services.AddKeyedSingleton<IStorage, TBlobStorage>(TValue.From<TStorageKind>(Blob));
+Services.AddKeyedSingleton<IStorage, TFileStorage>(TValue.From<TStorageKind>(FileSystem));
+
+var Blobs := Provider.GetRequiredKeyedService<IStorage>(TValue.From<TStorageKind>(Blob));
+var Missing := Provider.GetKeyedService<IStorage>('nadie');   // nil
+```
+
+`AddKeyedSingleton`, `AddKeyedScoped` y `AddKeyedTransient` vienen en las mismas formas que sus
+`Add*` —por clase, por factoría y por instancia— y cada uno tiene su `TryAddKeyed*`.
+
+**La clave enumerada es la forma recomendada**, y la razón es el compilador: renombrar un miembro
+propaga a todos sus usos y un typo es un error. `'bolb'` compila.
+
+Una clave puede ser una **cadena**, un **entero**, un **booleano**, un valor de un **enumerado**, una
+**metaclase** o un **`PTypeInfo`**. Dos claves son la misma cuando coinciden **su tipo y su valor**,
+así que dos enumerados de tipos distintos que compartan ordinal son claves distintas, y la cadena
+`'42'` no es el entero `42`. Cualquier otra cosa —un registro, un objeto— se rechaza donde entra,
+nombrando el tipo: el contenedor no puede definir una igualdad que esos tipos no tienen.
+
+⚠️ **Un carácter no es una clave.** Una clave de un carácter es una clave de cadena, y admitir las dos
+haría que dos claves que en el fuente se leen idénticas no se encontrasen.
+
+### Los dos espacios están aislados
+
+Un registro hecho **con** clave no se alcanza **sin** ella, y al revés. Un contrato con clave es un
+contrato distinto:
+
+- `GetServices<T>` no incluye los registros con clave, y `CanResolve` sin clave responde solo por los
+  que no la tienen.
+- `Replace` y `RemoveAll` alcanzan únicamente los registros sin clave. `RemoveAllKeyed` toma la clave.
+- `TryAdd*` pregunta por el **par**, no por el tipo: una clave no bloquea a otra, y ninguna bloquea al
+  registro sin clave.
+- `Decorate` envuelve los registros sin clave y deja intactos los que la tienen. Decorar un tipo que
+  *solo* tiene registros con clave falla diciendo que no hay nada registrado para él.
+
+⚠️ **BREAKING** — `RemoveAll` quitaba todo lo registrado para el tipo, porque no había claves. Ahora
+quita únicamente los registros sin clave.
+
+### Pedir una clave desde un constructor o una propiedad
+
+La misma marca sirve a las dos posiciones, y la clave viaja dentro de ella:
+
+```pascal
+type
+  [DafInjectProperties]
+  TReportService = class(TInterfacedObject, IReportService)
+  private
+    FStorage: IStorage;
+  public
+    constructor Create([DafInject('audit')] const Audit: IAuditLog);
+    [StorageInject(FileSystem)]
+    property Storage: IStorage read FStorage write FStorage;
+  end;
+```
+
+`[DafInject]` admite una cadena, un entero, un booleano, una metaclase o un `TypeInfo(...)`. Para una
+clave **enumerada**, la aplicación declara su propia marca en una línea:
+
+```pascal
+type
+  StorageInjectAttribute = class(DafInjectAttribute<TStorageKind>);
+```
+
+El contenedor la reconoce **por descendencia**, así que nunca necesita conocer ese enumerado.
+
+⚠️ **Esa marca va en una unit propia**, separada de las clases que la usan. Declarada en la misma
+unit, leer el atributo aborta con un access violation — medido, y es un defecto del compilador, no una
+regla de gusto.
+
+⚠️ **Y el genérico no se escribe nunca dentro de un `[ ]`.** `[DafInject<TStorageKind>(...)]`
+*compila*, con un `W1074 Unknown custom attribute` que casi nadie lee, y en ejecución la propiedad no
+tiene ningún atributo: la inyección no ocurre y nada lo dice.
+
+Para una clave enumerada suelta, sin declarar marca, queda el escape
+`[DafInject(TypeInfo(TStorageKind), Ord(FileSystem))]`. El ordinal se comprueba contra el rango del
+tipo, y uno que no le pertenece falla nombrando la propiedad.
+
+### Un registro para cualquier clave
+
+Un registro bajo `ServiceKey.Any` atiende toda clave de su tipo de servicio que no tenga registro
+propio, y su factoría recibe cuál se pidió:
+
+```pascal
+Services.AddKeyedSingleton<IStorage>(ServiceKey.Any,
+  function(P: IServiceProvider; const Key: TValue): IStorage
+  begin
+    Result := TStorage.Create(Key.ToString);
+  end);
+```
+
+Un registro concreto le gana —al comodín se le pregunta solo al fallar la búsqueda directa— y cada
+clave que atiende recibe su propia instancia. El centinela es un valor de un tipo declarado dentro del
+módulo de DI, así que nadie de fuera puede construirlo por accidente: una cadena reservada convertiría
+en comodín a quien la registrase, sin enterarse.
+
+⚠️ **Un registro con clave no puede dejar sus argumentos genéricos sin fijar.** Los dos
+emparejamientos no se combinan, y el registro se rechaza en el acto en vez de no aparecer nunca.
+
 ---
 
 ## Inyección por propiedad

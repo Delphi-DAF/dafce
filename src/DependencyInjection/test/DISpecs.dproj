@@ -104,6 +104,8 @@
         <DCCReference Include="Modules.Feat.pas"/>
         <DCCReference Include="RestrictedRtti.Feat.pas"/>
         <DCCReference Include="PropertyInjection.Feat.pas"/>
+        <DCCReference Include="KeyedServices.Marks.pas"/>
+        <DCCReference Include="KeyedServices.Feat.pas"/>
         <DCCReference Include="TrimmedRtti.Feat.pas"/>
         <DCCReference Include="Validation.Feat.pas"/>
         <DCCReference Include="GarbageCollection.Feat.pas"/>

@@ -75,6 +75,39 @@ type
   end;
 ```
 
+### `ServiceKey` and `TServiceSlot`
+
+`ServiceKey` is everything the container knows about a service key: whether a `TValue` can be one,
+how two are compared, how one is named in a message, and which one is the wildcard.
+
+```pascal
+ServiceKey.IsValid(Key);   // a string, an integer, a boolean, an enumerated value,
+                           // a metaclass or a PTypeInfo -- and the empty one, which means "no key"
+ServiceKey.Check(Key);     // aborts naming the type when it cannot be one
+ServiceKey.Text(Key);      // for a message, and for nothing else
+ServiceKey.Any;            // the wildcard key
+```
+
+Two keys are the same when their **type and value** match, so two enumerated values of different
+types that share an ordinal are different keys. The rejection happens where the key **enters** — at
+registration and at resolution — and never when comparing two keys: a dictionary only consults the
+comparison for keys that land in the same bucket, so a guard placed there does not run for a type
+that collides with nothing, and the lookup answers "not found" in silence.
+
+`TServiceSlot` is the pair `(service type, key)` the collection indexes by. An empty key **is** the
+keyless space, not a third state.
+
+### `TServiceKeyedFactory<T>`
+
+```pascal
+TServiceKeyedFactory<ServiceType: IInterface> =
+  reference to function(Provider: IServiceProvider; const Key: TValue): ServiceType;
+```
+
+A factory told **which key** is being asked for. It is what makes a wildcard registration useful: the
+only thing a factory serving every key can do is decide by which one it got. A separate type and not
+an optional parameter of `TServiceFactory`, for the same reason as `TServiceFactoryEx`.
+
 ### `DafInject` and `DafInjectProperties`
 
 The two marks of property injection. `DafInjectProperties` goes on the class and declares that it
@@ -99,6 +132,30 @@ raises `EPropertyInjectionError` naming the property, its type and the class.
 exist for the sweep. The class attribute is still there, and that makes "declares taking part and
 exposes no marked property" a condition the container can check and report. Deducing participation
 from there being some marked property goes quiet exactly when it needs to speak.
+
+The key travels **inside this mark**, and the same mark serves a **constructor parameter**:
+
+```pascal
+constructor Create([DafInject('audit')] const Audit: IAuditLog);
+```
+
+`[DafInject]` accepts a string, an integer, a boolean, a metaclass, a `TypeInfo(...)`, or a
+`TypeInfo(...)` plus an ordinal. It cannot accept a `TValue`: an attribute argument has to be a
+constant, and a `TValue` there gives `E2026` even for a plain string literal — the `TValue` is built
+inside the constructor, which the RTTI calls when reading the attribute.
+
+For an **enumerated** key the application declares its own mark over the generic base, in one line:
+
+```pascal
+type
+  StorageInjectAttribute = class(DafInjectAttribute<TStorageKind>);
+```
+
+The sweep recognises it **by descent** (`Attr is DafInjectAttribute`), so the framework never needs to
+know that enumeration. ⚠️ **That mark goes in a unit of its own**, separate from the classes that use
+it: declared in the same unit, reading the attribute aborts with an access violation. ⚠️ **And the
+generic is never written inside a `[ ]`** — `[DafInject<TStorageKind>(...)]` compiles with a `W1074`
+and at run time the property has no attribute at all.
 
 The name carries the `Daf` prefix on purpose: `Daf.MiniSpec.Injection` exports an `InjectAttribute` of
 its own, and two units exporting the same name in the same `uses` is not an error — the last one wins,
