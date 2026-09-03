@@ -12,10 +12,11 @@
 4. [Resolving Services](#resolving-services)
 5. [Service Lifetimes](#service-lifetimes)
 6. [Scopes](#scopes)
-7. [AppModule Pattern](#appmodule-pattern)
-8. [Lazy Resolution](#lazy-resolution)
-9. [Duck Typing Decorator](#duck-typing-decorator)
-10. [Integration with Hosting](#integration-with-hosting)
+7. [Property Injection](#property-injection)
+8. [AppModule Pattern](#appmodule-pattern)
+9. [Lazy Resolution](#lazy-resolution)
+10. [Duck Typing Decorator](#duck-typing-decorator)
+11. [Integration with Hosting](#integration-with-hosting)
 
 ---
 
@@ -216,6 +217,103 @@ Two things about this that are easy to get wrong:
 
 Resolving concurrently is safe; the services you resolve are as safe as you wrote them. See
 [Threads](../README.md#threads) for the full guarantee and its limits.
+
+---
+
+## Property Injection
+
+A dependency can enter through a marked property instead of the constructor. The constructor stays
+the default — what it takes is guaranteed to be there — and this covers the two cases it cannot.
+
+### Two services that need each other
+
+A cycle by constructor is unbuildable: neither constructor can run before the other one finishes. By
+property it resolves, because the container publishes each instance before filling its properties.
+
+```pascal
+type
+  [DafInjectProperties]
+  TOrders = class(TInterfacedObject, IOrders)
+  private
+    FBilling: IBilling;
+  public
+    [DafInject]
+    property Billing: IBilling read FBilling write FBilling;
+  end;
+
+  [DafInjectProperties]
+  TBilling = class(TInterfacedObject, IBilling)
+  private
+    FOrders: IOrders;
+  public
+    [DafInject]
+    property Orders: IOrders read FOrders write FOrders;
+  end;
+
+Services.AddSingleton<IOrders, TOrders>;
+Services.AddSingleton<IBilling, TBilling>;
+
+var Orders := Provider.GetRequiredService<IOrders>;
+// Orders.Billing.Orders is the same instance as Orders
+```
+
+Both services must be `Singleton` or `Scoped`. A cycle that goes through a `Transient` is rejected —
+not because it cannot be resolved, but because it cannot be undone: the container does not retain
+transients, so the pair holds itself up and nothing can take it apart. A cycle with any edge through
+a constructor is rejected too, and for the older reason: the constructor cannot run before its
+argument exists.
+
+Both rejections name the whole path of the cycle. `ValidateOnBuild` reports every cycle in the graph
+at startup; with validation off, the resolution that walks into one fails naming the path it walked.
+
+⚠️ **During the resolution of a cycle, one participant receives another whose own properties are not
+filled yet.** That is unavoidable — the cycle has to be broken somewhere — and it is why a constructor
+can assume nothing about a marked property.
+
+Closing the container empties the injected properties of everything it owns before releasing any of
+it, so a cycle is taken apart instead of leaking.
+
+### Wiring an instance the container did not build
+
+A form is built by the platform, so there is no constructor for the container to choose:
+
+```pascal
+constructor TMainForm.Create(AOwner: TComponent);
+begin
+  inherited;
+  TActivatorUtilities.InjectInto(Provider, Self);
+end;
+```
+
+Same marks, same requirements, same errors as a resolution. What is wired this way is **not** owned
+by the container: it is not counted among its instances, closing does not destroy it and does not
+empty its properties, and the services it holds live for as long as it holds them.
+
+### Wiring by code
+
+```pascal
+Services.AddInjector<TReportService>(
+  procedure(const Instance: TReportService; const Provider: IServiceProvider)
+  begin
+    Instance.Storage := Provider.GetRequiredKeyedService<IStorage>(BlobKey);
+  end);
+```
+
+It is a policy of the type: it reaches every instance the container builds of that class or of one
+descending from it, and several wirings run in the order they were registered. It runs after the
+constructor and after the attribute injection, so it sees the marked properties already filled. It
+does **not** reach an instance the container did not build — that one is wired by its owner with
+`InjectInto`.
+
+### The limit: a trimmed property RTTI
+
+`{$RTTI EXPLICIT PROPERTIES([])}` leaves the properties of a whole unit out of the RTTI. For a class
+in such a unit, a marked property **does not exist** for the sweep: nothing would be injected and
+nothing would say so. That is why taking part is declared on the class — a class attribute survives
+the trim — and why a class that declares it and exposes no marked property is an error that names the
+class and points at the directives.
+
+Wiring by code is the way out: it uses no RTTI at all, so it is the only route immune to the trim.
 
 ---
 

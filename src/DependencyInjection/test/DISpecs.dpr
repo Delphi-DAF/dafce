@@ -12,6 +12,8 @@ uses
   Decoration.Feat in 'Decoration.Feat.pas',
   Modules.Feat in 'Modules.Feat.pas',
   RestrictedRtti.Feat in 'RestrictedRtti.Feat.pas',
+  PropertyInjection.Feat in 'PropertyInjection.Feat.pas',
+  TrimmedRtti.Feat in 'TrimmedRtti.Feat.pas',
   Validation.Feat in 'Validation.Feat.pas',
   GarbageCollection.Feat in 'GarbageCollection.Feat.pas',
   ContainerShutdown.Feat in 'ContainerShutdown.Feat.pas',

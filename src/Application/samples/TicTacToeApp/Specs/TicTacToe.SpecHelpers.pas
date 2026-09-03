@@ -23,10 +23,9 @@ type
   /// </summary>
   TGameWorld = class
   public
-    ViewModel: TGameViewModel;
+    ViewModel: IGameViewModel;
 
     constructor Create;
-    destructor Destroy; override;
   end;
 
 /// <summary>
@@ -93,12 +92,6 @@ constructor TGameWorld.Create;
 begin
   inherited Create;
   ViewModel := TGameViewModel.Create;
-end;
-
-destructor TGameWorld.Destroy;
-begin
-  ViewModel.Free;
-  inherited;
 end;
 
 { Helper functions }

@@ -9,12 +9,54 @@ uses
 
 type
   /// <summary>
+  /// The presentation contract the form consumes. It exists so the form can receive the ViewModel
+  /// by property injection: the container registers interfaces, and the form is built by the
+  /// platform, so there is no constructor for the container to choose.
+  /// </summary>
+  IGameViewModel = interface(IInvokable)
+    ['{B8D4F1A2-3C57-4E69-8A0B-2D6F4C1E7B93}']
+    // === Commands ===
+    procedure NewGame;
+    procedure PlacePiece(Row, Col: Integer);
+    procedure MovePiece(FromRow, FromCol, ToRow, ToCol: Integer);
+    procedure CellClick(Row, Col: Integer);
+
+    // === Domain queries (delegated) ===
+    function CellOwner(Row, Col: Integer): TPlayer;
+    function IsEmpty(Row, Col: Integer): Boolean;
+    function CurrentPlayer: TPlayer;
+    function Phase: TGamePhase;
+    function Status: TGameStatus;
+    function XPieceCount: Integer;
+    function OPieceCount: Integer;
+    function XRemainingPieces: Integer;
+    function ORemainingPieces: Integer;
+
+    // === Presentation queries ===
+    function CellText(Row, Col: Integer): string;
+    function StatusText: string;
+    function TurnText: string;
+    function PhaseText: string;
+    function IsGameOver: Boolean;
+    function IsSelected(Row, Col: Integer): Boolean;
+
+    // === ViewPort binding ===
+    function GetViewPort: IGameViewPort;
+    procedure SetViewPort(const Value: IGameViewPort);
+    property ViewPort: IGameViewPort read GetViewPort write SetViewPort;
+
+    // === Direct game access (for spec setup / Strangler Fig migration) ===
+    function GetGame: TTicTacToeGame;
+    property Game: TTicTacToeGame read GetGame;
+  end;
+
+  /// <summary>
   /// Presentation logic for TicTacToe.
   /// Wraps the domain Game and exposes UI-friendly state + commands.
   /// Notifies the ViewPort on every state change.
   /// Exceptions from the domain propagate to the caller (framework/UI catches).
   /// </summary>
-  TGameViewModel = class
+  TGameViewModel = class(TInterfacedObject, IGameViewModel)
   private
     FGame: TTicTacToeGame;
     FViewPort: IGameViewPort;
@@ -56,11 +98,13 @@ type
     function IsSelected(Row, Col: Integer): Boolean;
 
     // === ViewPort binding ===
+    function GetViewPort: IGameViewPort;
     procedure SetViewPort(const Value: IGameViewPort);
-    property ViewPort: IGameViewPort read FViewPort write SetViewPort;
+    property ViewPort: IGameViewPort read GetViewPort write SetViewPort;
 
     // === Direct game access (for spec setup / Strangler Fig migration) ===
-    property Game: TTicTacToeGame read FGame;
+    function GetGame: TTicTacToeGame;
+    property Game: TTicTacToeGame read GetGame;
   end;
 
 implementation
@@ -88,9 +132,19 @@ begin
     FViewPort.Refresh;
 end;
 
+function TGameViewModel.GetViewPort: IGameViewPort;
+begin
+  Result := FViewPort;
+end;
+
 procedure TGameViewModel.SetViewPort(const Value: IGameViewPort);
 begin
   FViewPort := Value;
+end;
+
+function TGameViewModel.GetGame: TTicTacToeGame;
+begin
+  Result := FGame;
 end;
 
 // === Commands ===

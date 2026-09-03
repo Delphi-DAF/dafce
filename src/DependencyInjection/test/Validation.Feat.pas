@@ -63,6 +63,45 @@ type
     constructor Create(const Dep: IScopedDep);
   end;
 
+  /// Captura el scoped por PROPIEDAD: el constructor esta limpio, asi que una validacion que
+  /// solo mire constructores lo declara sano.
+  IPropCaptor = interface(IInvokable)
+    ['{4C7A0E51-8B32-4D69-95F7-1A6E3C8B052D}']
+  end;
+
+  [DafInjectProperties]
+  TPropCaptor = class(TInterfacedObject, IPropCaptor)
+  private
+    FDep: IScopedDep;
+  public
+    [DafInject]
+    property Dep: IScopedDep read FDep write FDep;
+  end;
+
+  /// Ciclo con UNA arista por constructor: inconstruible por ese lado, aunque el otro vaya por
+  /// propiedad.
+  IMixedLeft = interface(IInvokable)
+    ['{0E3B7C24-5A19-4F86-B2D0-7C4E1A9F5386}']
+  end;
+
+  IMixedRight = interface(IInvokable)
+    ['{9A5C1F70-6D48-4B23-81E9-3F0B7C2D6E51}']
+  end;
+
+  TMixedLeft = class(TInterfacedObject, IMixedLeft)
+  public
+    constructor Create(const Right: IMixedRight);
+  end;
+
+  [DafInjectProperties]
+  TMixedRight = class(TInterfacedObject, IMixedRight)
+  private
+    FLeft: IMixedLeft;
+  public
+    [DafInject]
+    property Left: IMixedLeft read FLeft write FLeft;
+  end;
+
   TValidationWorld = class
   public
     Services: IServiceCollection;
@@ -80,7 +119,8 @@ uses
   System.TypInfo,
   Daf.MiniSpec,
   Daf.DependencyInjection,
-  Doubles.Feat;
+  Doubles.Feat,
+  PropertyInjection.Feat;
 
 constructor TFirstBroken.Create(const Missing: IMissing);
 begin
@@ -103,6 +143,11 @@ begin
 end;
 
 constructor TDependent.Create(const Dep: IScopedDep);
+begin
+  inherited Create;
+end;
+
+constructor TMixedLeft.Create(const Right: IMixedRight);
 begin
   inherited Create;
 end;
@@ -251,6 +296,25 @@ Feature Dependency graph validation @di @validation
         Expect(W.Provider.GetRequiredService<IHealthy> <> nil).ToBeTrue;
       end)
 
+  .Scenario('A healthy graph with marked properties is not blocked either')
+    .Given('a composition with classes taking part in property injection, all their dependencies registered',
+      procedure(W: TValidationWorld)
+      begin
+        W.Services.AddSingleton<IStorage, TStorage>;
+        W.Services.AddSingleton<IByField, TByField>;
+      end)
+    .When('the provider is built with ValidateOnBuild and ValidateScopes',
+      procedure(W: TValidationWorld)
+      begin
+        W.BuildWith(TServiceProviderOptions.Create(True, True));
+      end)
+    .&Then('the provider is built without flagging anything',
+      procedure(W: TValidationWorld)
+      begin
+        Expect(W.Failure).ToBeEmpty;
+        Expect(W.Provider.GetRequiredService<IByField>.StorageName).ToEqual('storage');
+      end)
+
   .Scenario('Without options nothing is validated')
     .Given('a registration with an unresolved dependency',
       procedure(W: TValidationWorld)
@@ -266,6 +330,153 @@ Feature Dependency graph validation @di @validation
       procedure(W: TValidationWorld)
       begin
         Expect(W.Failure).ToBeEmpty;
+      end)
+
+.Rule('Validation reaches the marked properties, not only the constructors')
+
+  .Scenario('An unregistered dependency asked for by property is caught the same way')
+    .Given('a registered class taking part in property injection, with a satisfiable constructor and a marked property nobody registers',
+      procedure(W: TValidationWorld)
+      begin
+        W.Services.AddSingleton<INeedsUnregistered, TNeedsUnregistered>;
+      end)
+    .When('the provider is built with ValidateOnBuild',
+      procedure(W: TValidationWorld)
+      begin
+        W.BuildWith(TServiceProviderOptions.Create(True, False));
+      end)
+    .&Then('it fails naming the missing service, the class asking for it and the property',
+      procedure(W: TValidationWorld)
+      begin
+        Expect(W.Failure).ToContain('IUnregistered');
+        Expect(W.Failure).ToContain('TNeedsUnregistered');
+        Expect(W.Failure).ToContain('Missing');
+      end)
+
+  .Scenario('A singleton capturing a scoped by property is rejected the same way')
+    .Given('a Singleton with a marked property of a Scoped service',
+      procedure(W: TValidationWorld)
+      begin
+        W.Services.AddScoped<IScopedDep, TScopedDep>;
+        W.Services.AddSingleton<IPropCaptor, TPropCaptor>;
+      end)
+    .When('the provider is built with ValidateScopes',
+      procedure(W: TValidationWorld)
+      begin
+        W.BuildWith(TServiceProviderOptions.Create(False, True));
+      end)
+    .&Then('it fails naming both services, their lifetimes and the property',
+      procedure(W: TValidationWorld)
+      begin
+        Expect(W.Failure).ToContain('singleton');
+        Expect(W.Failure).ToContain('scoped');
+        Expect(W.Failure).ToContain('IPropCaptor');
+        Expect(W.Failure).ToContain('IScopedDep');
+        Expect(W.Failure).ToContain('Dep');
+      end)
+
+.Rule('A cycle the container cannot resolve is rejected at build time')
+
+  .Scenario('A cycle with an edge by constructor')
+    .Given('two services where one asks the other by constructor and the other asks back by marked property',
+      procedure(W: TValidationWorld)
+      begin
+        W.Services.AddSingleton<IMixedLeft, TMixedLeft>;
+        W.Services.AddSingleton<IMixedRight, TMixedRight>;
+      end)
+    .When('the provider is built with ValidateOnBuild',
+      procedure(W: TValidationWorld)
+      begin
+        W.BuildWith(TServiceProviderOptions.Create(True, False));
+      end)
+    .&Then('it fails listing the path of the cycle and naming the constructor parameter that makes it unbreakable',
+      procedure(W: TValidationWorld)
+      begin
+        Expect(W.Failure).ToContain('cycle');
+        Expect(W.Failure).ToContain('IMixedLeft');
+        Expect(W.Failure).ToContain('IMixedRight');
+        Expect(W.Failure).ToContain('constructor parameter "Right"');
+      end)
+
+  .Scenario('A cycle going through a transient')
+    .Given('a cycle of two services by marked properties where one is registered as Transient',
+      procedure(W: TValidationWorld)
+      begin
+        W.Services.AddSingleton<ISingletonPeer, TSingletonPeer>;
+        W.Services.AddTransient<ITransientPeer, TTransientPeer>;
+      end)
+    .When('the provider is built with ValidateOnBuild',
+      procedure(W: TValidationWorld)
+      begin
+        W.BuildWith(TServiceProviderOptions.Create(True, False));
+      end)
+    .&Then('it fails listing the path and naming the Transient service as the unbreakable edge',
+      procedure(W: TValidationWorld)
+      begin
+        Expect(W.Failure).ToContain('cycle');
+        Expect(W.Failure).ToContain('ITransientPeer');
+        Expect(W.Failure).ToContain('transient');
+      end)
+
+  .Scenario('A cycle that can be broken is not rejected')
+    .Given('a cycle of two Singleton services where every edge goes by marked property',
+      procedure(W: TValidationWorld)
+      begin
+        W.Services.AddSingleton<IAlphaSvc, TAlphaSvc>;
+        W.Services.AddSingleton<IBetaSvc, TBetaSvc>;
+      end)
+    .When('the provider is built with ValidateOnBuild',
+      procedure(W: TValidationWorld)
+      begin
+        W.BuildWith(TServiceProviderOptions.Create(True, False));
+      end)
+    .&Then('the provider is built without flagging anything',
+      procedure(W: TValidationWorld)
+      begin
+        Expect(W.Failure).ToBeEmpty;
+      end)
+
+  .Scenario('A service that asks for itself by property')
+    .Given('a Singleton with a marked property of its own service type',
+      procedure(W: TValidationWorld)
+      begin
+        W.Services.AddSingleton<ITwin, TTwin>;
+      end)
+    .When('the provider is built with ValidateOnBuild',
+      procedure(W: TValidationWorld)
+      begin
+        W.BuildWith(TServiceProviderOptions.Create(True, False));
+      end)
+    .&Then('the provider is built, and resolving it the property points at the same instance',
+      procedure(W: TValidationWorld)
+      begin
+        Expect(W.Failure).ToBeEmpty;
+        var Twin := W.Provider.GetRequiredService<ITwin>;
+        Expect(Twin.Peer.Serial).ToEqual(Twin.Serial);
+      end)
+
+  .Scenario('Several failures are still all listed, cycles included')
+    .Given('three registrations with unresolved dependencies and one unbreakable cycle',
+      procedure(W: TValidationWorld)
+      begin
+        W.Services.AddSingleton<IFirstBroken, TFirstBroken>;
+        W.Services.AddSingleton<ISecondBroken, TSecondBroken>;
+        W.Services.AddSingleton<IThirdBroken, TThirdBroken>;
+        W.Services.AddSingleton<IMixedLeft, TMixedLeft>;
+        W.Services.AddSingleton<IMixedRight, TMixedRight>;
+      end)
+    .When('the provider is built with ValidateOnBuild',
+      procedure(W: TValidationWorld)
+      begin
+        W.BuildWith(TServiceProviderOptions.Create(True, False));
+      end)
+    .&Then('the message lists the four of them',
+      procedure(W: TValidationWorld)
+      begin
+        Expect(W.Failure).ToContain('TFirstBroken');
+        Expect(W.Failure).ToContain('TSecondBroken');
+        Expect(W.Failure).ToContain('TThirdBroken');
+        Expect(W.Failure).ToContain('cycle');
       end);
 
 end.

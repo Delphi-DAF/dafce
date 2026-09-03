@@ -17,7 +17,7 @@ Core contracts (interfaces and types) for the DAF Dependency Injection system. T
 | `Daf.Extensions.Options` | `IOptions<T>`, `TOptionsValidator<T>`, `EOptionsValidationError` — the options pattern contract |
 | `Daf.Options` | `TOptions<T>` and `AppOptions` — settings registered with code |
 | `Daf.AppModule` | `IAppModule` — module registration pattern |
-| `Daf.DependencyInjection.ActivatorUtilities` | Helpers to construct objects via RTTI with DI-resolved arguments |
+| `Daf.DependencyInjection.ActivatorUtilities` | Helpers to construct objects via RTTI with DI-resolved arguments, and `InjectInto` to wire an instance the container did not build |
 | `Daf.DependencyInjection.OpenGenerics` | Matching, checking and activation for registrations whose type arguments are left open |
 
 ---
@@ -74,6 +74,55 @@ type
     procedure AddServices(const Services: IServiceCollection);
   end;
 ```
+
+### `DafInject` and `DafInjectProperties`
+
+The two marks of property injection. `DafInjectProperties` goes on the class and declares that it
+takes part; `DafInject` goes on each property that the container fills.
+
+```pascal
+[DafInjectProperties]
+TReportService = class(TInterfacedObject, IReportService)
+private
+  FStorage: IStorage;
+public
+  [DafInject]
+  property Storage: IStorage read FStorage write FStorage;
+end;
+```
+
+The property must be of an interface type and writable. A marked property that cannot be filled
+raises `EPropertyInjectionError` naming the property, its type and the class.
+
+**Two marks and not one, because only the class one survives a trimmed RTTI.** Under
+`{$RTTI EXPLICIT PROPERTIES([])}` the properties of a unit are not emitted, so a marked one does not
+exist for the sweep. The class attribute is still there, and that makes "declares taking part and
+exposes no marked property" a condition the container can check and report. Deducing participation
+from there being some marked property goes quiet exactly when it needs to speak.
+
+The name carries the `Daf` prefix on purpose: `Daf.MiniSpec.Injection` exports an `InjectAttribute` of
+its own, and two units exporting the same name in the same `uses` is not an error — the last one wins,
+in silence.
+
+### `TServiceInjector<T>` and `AddInjector<T>`
+
+Wiring by code, for what cannot be annotated:
+
+```pascal
+Services.AddInjector<TReportService>(
+  procedure(const Instance: TReportService; const Provider: IServiceProvider)
+  begin
+    Instance.Storage := Provider.GetRequiredService<IStorage>;
+  end);
+```
+
+It is a policy of the type — it reaches descendants too — and it runs after the constructor and after
+the attribute injection, on every instance the container builds. It uses no RTTI, so it is the only
+route immune to a trimmed property RTTI.
+
+It is called `AddInjector` and not `AddInitializer` —the name the field uses— because it is the third
+route of one feature, sharing its root with `DafInject` and `TActivatorUtilities.InjectInto`.
+`AddInitializer` stays free for a general purpose post-construction hook, which is a different thing.
 
 ### `Factory`
 

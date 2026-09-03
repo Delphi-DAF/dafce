@@ -24,6 +24,39 @@ type
   EContainerShutDownError = class(EServiceProviderError)
   end;
 
+  // Una propiedad marcada que el contenedor no puede rellenar, o una clase que dice participar
+  // y no expone ninguna. Deriva de EServiceProviderError porque es un fallo de composicion como
+  // los demas, y es un tipo propio porque quien cablea a peticion una instancia suya necesita
+  // separarlo de "esto no esta registrado".
+  EPropertyInjectionError = class(EServiceProviderError)
+  end;
+
+  /// <summary>
+  ///   Marca una propiedad como dependencia que el contenedor rellena. El tipo de la propiedad
+  ///   es el contrato --ha de ser una interfaz-- y la propiedad ha de ser escribible.
+  /// </summary>
+  /// <remarks>
+  ///   El prefijo no es decorativo: Daf.MiniSpec.Injection exporta un InjectAttribute propio, y
+  ///   dos units que exporten el mismo nombre en el mismo uses no dan error -- gana la ultima, y
+  ///   el barrido deja de ver las propiedades marcadas sin decir nada.
+  /// </remarks>
+  DafInjectAttribute = class(TCustomAttribute)
+  end;
+
+  /// <summary>
+  ///   Declara que la clase participa en la inyeccion por propiedad. Sin el, sus propiedades
+  ///   marcadas no se rellenan.
+  /// </summary>
+  /// <remarks>
+  ///   Parece redundante con DafInject y no lo es: las directivas RTTI de una unit pueden dejar
+  ///   sus propiedades sin emitir, y entonces las marcas no existen para el barrido. Este
+  ///   atributo, que es de clase, sobrevive a ese recorte, asi que "declara participar y no se ve
+  ///   ninguna propiedad marcada" es una condicion comprobable. Deducir la participacion de que
+  ///   haya alguna marcada se queda muda justo ahi.
+  /// </remarks>
+  DafInjectPropertiesAttribute = class(TCustomAttribute)
+  end;
+
   // Interfaces don't support generic overload, so we model our desired interface using a record
   // that will delegate behavior in a true interface that implementor classes will support
   IServiceProvider = record
@@ -94,6 +127,12 @@ type
     class function ForRequestedType(const RequestedType: PTypeInfo;
       const Aware: TServiceFactoryEx): TServiceFactory;
   end;
+
+  // Cableado por codigo de una instancia recien construida: la tercera via de la inyeccion por
+  // propiedad, para lo que no se puede anotar --una clase de otra libreria, una unit con la RTTI
+  // recortada, una clave de servicio que en un atributo se escribe con dolor--. No usa RTTI.
+  TServiceInjector<T: class> = reference to procedure(const Instance: T; const Provider: IServiceProvider);
+  TServiceInjector = TServiceInjector<TObject>;
 
   // Envuelve el servicio que produce el registro previo. Es Scrutor: en .NET esto no
   // esta en el framework, lo trae una libreria encima de IServiceCollection.
@@ -207,6 +246,11 @@ type
     // Contabilidad de "esto ya se proceso", por coleccion y no por proceso: componer
     // dos veces en un proceso tiene que dar el mismo resultado.
     function TryMarkVisited(const Category, Key: string): Boolean;
+    // Los cableados por codigo son POLITICA de la coleccion y no propiedad de un registro:
+    // alcanzan a toda instancia construida que sea del tipo o descienda de el, y corren en el
+    // orden en que se registraron.
+    function AddInjector(const AClass: TClass; const Injector: TServiceInjector): IServiceCollectionImpl;
+    function InjectorsFor(const AClass: TClass): TArray<TServiceInjector>;
   end;
 
   IServiceScope = interface(IInvokable)
@@ -217,6 +261,13 @@ type
   IServiceScopeFactory = interface(IInvokable)
     ['{C3F2E1D4-7A6C-4B8E-9B12-5D8A6A2D9F3E}']
     function CreateScope: IServiceScope;
+  end;
+
+  // La costura por la que el activador alcanza los cableados por codigo: el activador solo tiene
+  // delante un proveedor, y los cableados viven en la coleccion.
+  IServiceInjectors = interface(IInvokable)
+    ['{CD6C10E8-D3C8-4A61-AEB0-38578B00CB72}']
+    function InjectorsFor(const AClass: TClass): TArray<TServiceInjector>;
   end;
 
   IServiceCollection = record
@@ -312,6 +363,20 @@ type
     // secuencia legible, y un TryAdd escrito despues de un modulo se ejecuta despues.
     function AddModule<T: class, IAppModule, constructor>: IServiceCollection; overload;
     function AddModule(const Module: IAppModule): IServiceCollection; overload;
+
+    /// <summary>
+    ///   Cablea por codigo toda instancia que el contenedor construya de esa clase o de una que
+    ///   descienda de ella, despues del constructor y despues de la inyeccion por atributo.
+    /// </summary>
+    /// <remarks>
+    ///   Se llama AddInjector y no AddInitializer --que es como lo nombran Simple Injector,
+    ///   Autofac y Windsor-- porque es la tercera via de UNA feature, y comparte raiz con
+    ///   DafInject y con TActivatorUtilities.InjectInto. AddInitializer queda libre para un
+    ///   gancho de post-construccion de proposito general, que es otra cosa.
+    ///   No alcanza a lo que el contenedor no construyo: para eso esta InjectInto, y la llama
+    ///   quien posee la instancia.
+    /// </remarks>
+    function AddInjector<T: class>(const Injector: TServiceInjector<T>): IServiceCollection;
 
     function TryMarkVisited(const Category, Key: string): Boolean;
     property Count: Integer read GetCount;
@@ -630,7 +695,9 @@ begin
     TOpenGeneric.CheckImplementation(ServiceType, TImpl);
   Result := function(Provider: IServiceProvider): IInterface
             begin
-              var Aux := TActivatorUtilities.CreateInstance(Provider, TImpl);
+              // Sin cablear: quien resuelve publica la instancia y la cablea despues, que es
+              // lo que hace resoluble un ciclo por propiedad.
+              var Aux := TActivatorUtilities.CreateUnwired(Provider, TImpl);
               Supports(Aux, _T.GUID(ServiceType), Result);
             end;
 end;
@@ -1058,6 +1125,19 @@ begin
     raise EServiceProviderError.CreateFmt('%s does not support IAppModule', [T.ClassName]);
   end;
   Result := AddModule(Module);
+end;
+
+function IServiceCollection.AddInjector<T>(const Injector: TServiceInjector<T>): IServiceCollection;
+begin
+  FImplementor.CheckNotFrozen;
+  // El envoltorio baja el cableado a TObject, que es como lo guarda la coleccion: dos
+  // instanciaciones distintas de un tipo generico no son asignables entre si.
+  FImplementor.AddInjector(T,
+    procedure(const Instance: TObject; const Provider: IServiceProvider)
+    begin
+      Injector(Instance as T, Provider);
+    end);
+  Result := Self;
 end;
 
 function IServiceCollection.TryMarkVisited(const Category, Key: string): Boolean;

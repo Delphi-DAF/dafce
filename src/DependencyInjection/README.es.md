@@ -70,6 +70,74 @@ Services.AddSingleton<IMyService>(MyExistingInstance);
 
 ---
 
+## Inyección por propiedad
+
+**El constructor es lo normal, y esto no lo sustituye.** Una dependencia que entra por el constructor
+la garantiza el compilador: el objeto no puede existir sin ella. Una que entra por una propiedad, no,
+y eso se paga en cada lectura. Hay dos casos que justifican el precio, y solo dos:
+
+- **Dos servicios que se necesitan mutuamente.** Un ciclo por constructor es inconstruible: ninguno de
+  los dos puede correr antes de que el otro termine. Por propiedad se resuelve.
+- **Una instancia que el contenedor no construye.** Un formulario lo construye la plataforma, así que
+  no hay constructor que el contenedor pueda elegir.
+
+La clase declara que participa, y cada propiedad se declara a sí misma:
+
+```pascal
+type
+  [DafInjectProperties]
+  TReportService = class(TInterfacedObject, IReportService)
+  private
+    FStorage: IStorage;
+  public
+    [DafInject]
+    property Storage: IStorage read FStorage write FStorage;
+  end;
+```
+
+La propiedad ha de ser de tipo interfaz y escribible; da igual si la respalda un campo o un método, y
+da igual que ese campo sea `strict private`. Una propiedad marcada que no se puede rellenar aborta
+nombrando la propiedad, su tipo y la clase — una dependencia declarada que se queda en `nil` traslada
+el fallo a la primera vez que alguien la use, en otro sitio.
+
+**El constructor no las ve.** La inyección ocurre cuando el constructor ya ha terminado, así que una
+propiedad marcada vale `nil` dentro de él. Una dependencia que haga falta **durante** la construcción
+va por el constructor; las dos vías conviven en la misma clase.
+
+### Cablear una instancia que el contenedor no construyó
+
+```pascal
+TActivatorUtilities.InjectInto(Provider, Self);   // en el constructor del formulario
+```
+
+Las mismas marcas, las mismas exigencias y los mismos errores que una resolución. El contenedor **no**
+toma posesión de lo que cablea: no lo cuenta, cerrarlo no lo destruye, y los servicios que sostenga
+viven mientras él los sostenga.
+
+### Cablear por código, sin marcar nada
+
+```pascal
+Services.AddInjector<TReportService>(
+  procedure(const Instance: TReportService; const Provider: IServiceProvider)
+  begin
+    Instance.Storage := Provider.GetRequiredService<IStorage>;
+  end);
+```
+
+Para lo que no se puede anotar: una clase de otra librería, una unit con la RTTI de propiedades
+recortada —esta vía no usa RTTI en absoluto, así que es la única inmune— y una clave de servicio
+incómoda de escribir dentro de un atributo. Es política del tipo, así que alcanza también a sus
+descendientes, y varios cableados corren en el orden en que se registraron. Corre después del
+constructor y después de la inyección por atributo, y solo sobre lo que el contenedor construye.
+
+⚠️ **Una RTTI de propiedades recortada esconde las marcas.** `{$RTTI EXPLICIT PROPERTIES([])}` deja
+las propiedades de una unit fuera de la RTTI, y entonces una marcada no existe para el barrido. Una
+clase que declara participar y no expone ninguna propiedad marcada falla diciéndolo y señalando las
+directivas — `ValidateOnBuild` lo informa al arrancar, y la resolución lo informa si la validación
+está apagada.
+
+---
+
 ## Scopes
 
 ```pascal

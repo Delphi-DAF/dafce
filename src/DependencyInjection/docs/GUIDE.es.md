@@ -12,10 +12,11 @@
 4. [Resolver servicios](#resolver-servicios)
 5. [Tiempos de vida](#tiempos-de-vida)
 6. [Scopes](#scopes)
-7. [Patrón AppModule](#patrón-appmodule)
-8. [Resolución diferida (Lazy)](#resolución-diferida-lazy)
-9. [Decorador Duck Typing](#decorador-duck-typing)
-10. [Integración con Hosting](#integración-con-hosting)
+7. [Inyección por propiedad](#inyección-por-propiedad)
+8. [Patrón AppModule](#patrón-appmodule)
+9. [Resolución diferida (Lazy)](#resolución-diferida-lazy)
+10. [Decorador Duck Typing](#decorador-duck-typing)
+11. [Integración con Hosting](#integración-con-hosting)
 
 ---
 
@@ -216,6 +217,106 @@ Dos cosas de esto que se cuentan mal a menudo:
 
 Resolver en paralelo es seguro; los servicios que resuelves son tan seguros como los hayas escrito.
 La garantía completa y sus límites, en [Hilos](../README.es.md#hilos).
+
+---
+
+## Inyección por propiedad
+
+Una dependencia puede entrar por una propiedad marcada en vez de por el constructor. El constructor
+sigue siendo lo normal —lo que recibe está garantizado— y esto cubre los dos casos que él no puede.
+
+### Dos servicios que se necesitan mutuamente
+
+Un ciclo por constructor es inconstruible: ninguno de los dos puede correr antes de que el otro
+termine. Por propiedad se resuelve, porque el contenedor publica cada instancia antes de rellenar sus
+propiedades.
+
+```pascal
+type
+  [DafInjectProperties]
+  TOrders = class(TInterfacedObject, IOrders)
+  private
+    FBilling: IBilling;
+  public
+    [DafInject]
+    property Billing: IBilling read FBilling write FBilling;
+  end;
+
+  [DafInjectProperties]
+  TBilling = class(TInterfacedObject, IBilling)
+  private
+    FOrders: IOrders;
+  public
+    [DafInject]
+    property Orders: IOrders read FOrders write FOrders;
+  end;
+
+Services.AddSingleton<IOrders, TOrders>;
+Services.AddSingleton<IBilling, TBilling>;
+
+var Orders := Provider.GetRequiredService<IOrders>;
+// Orders.Billing.Orders es la misma instancia que Orders
+```
+
+Los dos servicios han de ser `Singleton` o `Scoped`. Un ciclo que pasa por un `Transient` se rechaza
+—no por no poder resolverlo, sino por no poder deshacerlo: el contenedor no retiene los transient, así
+que el par se sostiene a sí mismo y no hay quien lo desmonte—. Un ciclo con alguna arista por
+constructor se rechaza también, y por la razón de siempre: el constructor no puede correr antes de que
+exista su argumento.
+
+Los dos rechazos nombran el camino completo del ciclo. `ValidateOnBuild` informa de todos los ciclos
+del grafo al arrancar; con la validación apagada, la resolución que se mete en uno falla nombrando el
+camino que recorrió.
+
+⚠️ **Durante la resolución de un ciclo, un participante recibe a otro que todavía no tiene sus propias
+propiedades rellenas.** Es inevitable —el ciclo hay que romperlo por algún sitio— y es la razón de que
+un constructor no pueda suponer nada de una propiedad marcada.
+
+Cerrar el contenedor vacía las propiedades inyectadas de todo lo que posee antes de soltar nada, así
+que un ciclo se desmonta en vez de quedarse vivo.
+
+### Cablear una instancia que el contenedor no construyó
+
+Un formulario lo construye la plataforma, así que no hay constructor que el contenedor pueda elegir:
+
+```pascal
+constructor TMainForm.Create(AOwner: TComponent);
+begin
+  inherited;
+  TActivatorUtilities.InjectInto(Provider, Self);
+end;
+```
+
+Las mismas marcas, las mismas exigencias y los mismos errores que una resolución. Lo cableado así
+**no** es del contenedor: no lo cuenta entre sus instancias, cerrarlo no lo destruye ni le vacía las
+propiedades, y los servicios que sostenga viven mientras él los sostenga.
+
+### Cablear por código
+
+```pascal
+Services.AddInjector<TReportService>(
+  procedure(const Instance: TReportService; const Provider: IServiceProvider)
+  begin
+    Instance.Storage := Provider.GetRequiredKeyedService<IStorage>(BlobKey);
+  end);
+```
+
+Es política del tipo: alcanza a toda instancia que el contenedor construya de esa clase o de una que
+descienda de ella, y varios cableados corren en el orden en que se registraron. Corre después del
+constructor y después de la inyección por atributo, así que ve las propiedades marcadas ya rellenas.
+**No** alcanza a una instancia que el contenedor no construyó — esa la cablea su dueño con
+`InjectInto`.
+
+### El límite: una RTTI de propiedades recortada
+
+`{$RTTI EXPLICIT PROPERTIES([])}` deja las propiedades de una unit entera fuera de la RTTI. Para una
+clase de esa unit, una propiedad marcada **no existe** para el barrido: no se inyectaría nada y nada
+lo diría. Por eso participar se declara en la clase —un atributo de clase sobrevive al recorte— y por
+eso una clase que lo declara y no expone ninguna propiedad marcada es un error que nombra la clase y
+señala las directivas.
+
+El cableado por código es la salida: no usa RTTI en absoluto, así que es la única vía inmune al
+recorte.
 
 ---
 

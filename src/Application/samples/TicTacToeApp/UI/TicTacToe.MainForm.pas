@@ -8,6 +8,7 @@ uses
   Vcl.Forms, Vcl.Controls, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.Graphics,
   TicTacToe.ViewPort,
   TicTacToe.ViewModel,
+  Daf.Extensions.DependencyInjection,
   Daf.DependencyInjection.ActivatorUtilities,
   Daf.VCL.Application;
 
@@ -19,11 +20,12 @@ type
   /// Movement lines show valid paths. Piece reserves show remaining pieces.
   /// All presentation logic lives in the ViewModel.
   /// </summary>
+  [DafInjectProperties]
   TMainForm = class(TForm, IGameViewPort)
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
   private
-    FViewModel: TGameViewModel;
+    FViewModel: IGameViewModel;
     FBoard: TPaintBox;
     FReserveX: TPaintBox;
     FReserveO: TPaintBox;
@@ -56,6 +58,11 @@ type
     procedure PaintMiniO(ACanvas: TCanvas; CX, CY, Size: Integer; AColor: TColor);
     { IGameViewPort }
     procedure Refresh;
+  public
+    /// La dependencia del formulario, y la unica via que tiene: la plataforma lo construye, asi
+    /// que no hay constructor que el contenedor pueda elegir.
+    [DafInject]
+    property ViewModel: IGameViewModel read FViewModel write FViewModel;
   end;
 
 var
@@ -91,10 +98,10 @@ begin
   FHoverRow := -1;
   FHoverCol := -1;
   DoubleBuffered := True;
-  // Por el contenedor y no con Create: el formulario lo construye la plataforma, asi que no
-  // hay nadie que le inyecte nada -- DafApp es la via de salida para justo este caso, y
-  // ActivatorUtilities resuelve por el proveedor lo que el ViewModel llegue a necesitar.
-  FViewModel := TActivatorUtilities.CreateInstance<TGameViewModel>(DafApp.Services);
+  // El formulario lo construye la plataforma, asi que el contenedor no elige su constructor:
+  // InjectInto rellena sus propiedades marcadas contra el proveedor, que es lo que ViewModel
+  // necesita. DafApp es como se llega al proveedor desde codigo que la plataforma construye.
+  TActivatorUtilities.InjectInto(DafApp.Services, Self);
   FViewModel.ViewPort := Self;
   BuildUI;
   Refresh;
@@ -102,8 +109,9 @@ end;
 
 procedure TMainForm.FormDestroy(Sender: TObject);
 begin
+  // Se suelta, no se libera: el ViewModel es del contenedor, que lo destruye al cerrarse.
   FViewModel.ViewPort := nil;
-  FViewModel.Free;
+  FViewModel := nil;
 end;
 
 procedure TMainForm.BuildUI;

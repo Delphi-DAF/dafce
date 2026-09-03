@@ -103,6 +103,8 @@
         <DCCReference Include="Decoration.Feat.pas"/>
         <DCCReference Include="Modules.Feat.pas"/>
         <DCCReference Include="RestrictedRtti.Feat.pas"/>
+        <DCCReference Include="PropertyInjection.Feat.pas"/>
+        <DCCReference Include="TrimmedRtti.Feat.pas"/>
         <DCCReference Include="Validation.Feat.pas"/>
         <DCCReference Include="GarbageCollection.Feat.pas"/>
         <DCCReference Include="ContainerShutdown.Feat.pas"/>

@@ -65,7 +65,7 @@ type
   end;
 
   TServiceScope = class(TInterfacedObject, IServiceScope, IServiceProviderImpl, IServiceResolver,
-    IContainerAccess)
+    IContainerAccess, IServiceInjectors)
   private
     // Apunta a la fabrica SIN sostenerla --sostenerla cerraria el ciclo con FScopes-- y no lleva
     // [Weak]: ese atributo solo actua sobre referencias a interfaz, y sobre una a objeto no hace
@@ -104,6 +104,7 @@ type
     procedure CheckNotShutDown(const ServiceType: PTypeInfo);
     procedure RaiseShutDown(const ServiceType: PTypeInfo);
     procedure CollectGarbage;
+    function InjectorsFor(const AClass: TClass): TArray<TServiceInjector>;
     class function TryAcquire(const Scope: TServiceScope; out Ref: IServiceScope): Boolean; static;
   protected
     property IsSingletonsScope: Boolean read FIsSingletonsScope;
@@ -146,10 +147,17 @@ type
     // cierres distintos por primera vez escriben el mismo TDictionary a la vez.
     // Toda lectura y toda escritura de FOpenMatches pasa por aqui, sin excepciones que recordar.
     FOpenMatchesLock: TLightweightMREW;
+    // Politica de la coleccion, con el mismo contrato que FEntries: se escribe al componer, se
+    // congela, y desde ahi solo se lee. Ordenada porque varios cableados del mismo tipo corren
+    // en el orden en que se registraron.
+    FInjectors: TList<TPair<TClass, TServiceInjector>>;
     FIsFrozen: Boolean;
     function DescribeUnresolvable(const Descriptor: TServiceDescriptor; const Failed: TRttiParameter): string;
     procedure CollectCapturedScopes(const Descriptor: TServiceDescriptor; const Ctor: TRttiMethod;
       var Errors: TArray<string>);
+    procedure CollectPropertyFailures(const Descriptor: TServiceDescriptor; const Provider: IServiceProvider;
+      var Errors: TArray<string>);
+    procedure CollectCapturedScopesByProperty(const Descriptor: TServiceDescriptor; var Errors: TArray<string>);
     procedure Validate(const Provider: IServiceProvider; const Options: TServiceProviderOptions);
     procedure ClearOpenMatches;
   protected
@@ -163,6 +171,8 @@ type
     function RemoveAll(const ServiceType: PTypeInfo): IServiceCollectionImpl;
     function TryFindOpenGeneric(const ClosedType: PTypeInfo; out OpenType: PTypeInfo): Boolean;
     function TryMarkVisited(const Category, Key: string): Boolean;
+    function AddInjector(const AClass: TClass; const Injector: TServiceInjector): IServiceCollectionImpl;
+    function InjectorsFor(const AClass: TClass): TArray<TServiceInjector>;
     function GetCount: Integer;
     function Add<ServiceType: IInterface>(const LifeTime: TServiceLifeTime; const Factory: TServiceFactory): IServiceCollectionImpl;overload;
     function Add(const ServiceType: PTypeInfo; const LifeTime: TServiceLifeTime; const Factory: TServiceFactory;
@@ -188,19 +198,32 @@ uses
 type
   PServiceDescriptor = ^TServiceDescriptor;
 
+type
+  PCreationFrame = ^TCreationFrame;
+  /// <summary>
+  ///   Un eslabon de la cadena de construcciones en curso de este hilo. Vive en la pila del
+  ///   metodo que construye, asi que vale exactamente mientras esa construccion esta en curso y
+  ///   no hay nada que liberar.
+  /// </summary>
+  TCreationFrame = record
+    Descriptor: PServiceDescriptor;
+    Identity: TServiceIdentity;
+    Outer: PCreationFrame;
+  end;
+
 threadvar
   /// <summary>
-  ///   El singleton que este hilo esta construyendo, o nil. Apunta al descriptor que sostiene el
-  ///   marco de GetImplementor, asi que el puntero vale exactamente mientras esa construccion
-  ///   esta en curso.
+  ///   Lo que este hilo esta construyendo ahora mismo, del ultimo al primero. Contesta dos
+  ///   preguntas: si hay un singleton en curso --lo que convierte en captura pedir un scoped-- y
+  ///   si una identidad ya esta en la cadena, que es un ciclo que la resolucion no puede romper.
   ///   Es POR HILO y no por ambito porque compartir un ambito entre hilos esta soportado: con la
-  ///   marca en el ambito, la construccion en curso de un hilo le parece un ciclo al otro y la
-  ///   guarda de abajo rechaza grafos sanos de forma intermitente. Un rechazo que no se
-  ///   reproduce es peor que ninguno.
+  ///   cadena en el ambito, la construccion en curso de un hilo le parece un ciclo al otro, y la
+  ///   guarda rechazaria grafos sanos de forma intermitente. Un rechazo que no se reproduce es
+  ///   peor que ninguno.
   ///   Un puntero y no el registro: un threadvar de tipo gestionado no se finaliza al terminar
   ///   el hilo.
   /// </summary>
-  GCreatingSingleton: PServiceDescriptor;
+  GCreating: PCreationFrame;
 
 { TServiceCollection }
 
@@ -210,14 +233,34 @@ begin
   FEntries := TDescriptorsDictionary.Create([doOwnsValues]);
   FVisited := TDictionary<string, Boolean>.Create;
   FOpenMatches := TDictionary<PTypeInfo, PTypeInfo>.Create;
+  FInjectors := TList<TPair<TClass, TServiceInjector>>.Create;
 end;
 
 destructor TServiceCollection.Destroy;
 begin
+  FInjectors.Free;
   FOpenMatches.Free;
   FVisited.Free;
   FEntries.Free;
   inherited;
+end;
+
+function TServiceCollection.AddInjector(const AClass: TClass; const Injector: TServiceInjector): IServiceCollectionImpl;
+begin
+  CheckNotFrozen;
+  FInjectors.Add(TPair<TClass, TServiceInjector>.Create(AClass, Injector));
+  Result := Self;
+end;
+
+function TServiceCollection.InjectorsFor(const AClass: TClass): TArray<TServiceInjector>;
+begin
+  Result := [];
+  if AClass = nil then Exit;
+  // Descendientes incluidos: es politica de un tipo, asi que declararla para una clase base
+  // alcanza a todas sus hijas.
+  for var Entry in FInjectors do
+    if AClass.InheritsFrom(Entry.Key) then
+      Result := Result + [Entry.Value];
 end;
 
 function TServiceCollection.TryFindOpenGeneric(const ClosedType: PTypeInfo; out OpenType: PTypeInfo): Boolean;
@@ -319,6 +362,168 @@ begin
   FIsFrozen := True;
 end;
 
+function LifeTimeName(const LifeTime: TServiceLifeTime): string;
+begin
+  Result := LowerCase(TEnum.ToString<TServiceLifeTime>(LifeTime));
+end;
+
+type
+  // El grafo de dependencias tal como lo ve la validacion: un nodo por tipo de servicio
+  // registrado, y una arista por cada dependencia que se pueda seguir. La arista recuerda POR
+  // DONDE entra, porque eso es lo que decide si un ciclo se puede romper.
+  TDepEdge = record
+    Target: PTypeInfo;
+    ViaConstructor: Boolean;
+    Member: string;
+  end;
+
+  TDepNode = record
+    ServiceType: PTypeInfo;
+    LifeTime: TServiceLifeTime;
+    ImplName: string;
+    Edges: TArray<TDepEdge>;
+  end;
+
+function UnbreakableCycles(const Entries: TDescriptorsDictionary; const Provider: IServiceProvider): TArray<string>;
+var
+  Nodes: TArray<TDepNode>;
+  IndexOf: TDictionary<PTypeInfo, Integer>;
+  Color: TArray<Byte>;
+  Stack: TArray<Integer>;
+  Edges: TArray<TDepEdge>;
+  Seen: TDictionary<string, Boolean>;
+  Found: TArray<string>;
+
+  procedure BuildGraph;
+  begin
+    for var Entry in Entries do
+    begin
+      if Entry.Value.Count = 0 then Continue;
+      // El ultimo descriptor es el que resuelve TryGet, asi que es su grafo el que se recorre.
+      var Descriptor := Entry.Value.Last;
+      var Node: TDepNode;
+      Node.ServiceType := Entry.Key;
+      Node.LifeTime := Descriptor.LifeTime;
+      Node.Edges := [];
+      Node.ImplName := '';
+      if Descriptor.ImplementationClass <> nil then
+        Node.ImplName := Descriptor.ImplementationClass.ClassName;
+      IndexOf.Add(Entry.Key, Length(Nodes));
+      Nodes := Nodes + [Node];
+    end;
+
+    for var Idx := 0 to High(Nodes) do
+    begin
+      var Descriptor := Entries[Nodes[Idx].ServiceType].Last;
+      var AClass := Descriptor.ImplementationClass;
+      // Una factory es opaca: no aporta aristas, y por eso un ciclo que pase por ella no se ve.
+      if AClass = nil then Continue;
+
+      var Ctor: TRttiMethod;
+      var Failed: TRttiParameter;
+      if TActivatorUtilities.TryFindConstructor(Provider, AClass, Ctor, Failed) and (Ctor <> nil) then
+        for var Param in Ctor.GetParameters do
+        begin
+          if Param.ParamType = nil then Continue;
+          if Param.ParamType.Handle.Kind <> tkInterface then Continue;
+          var Edge: TDepEdge;
+          Edge.Target := Param.ParamType.Handle;
+          Edge.ViaConstructor := True;
+          Edge.Member := Param.Name;
+          Nodes[Idx].Edges := Nodes[Idx].Edges + [Edge];
+        end;
+
+      if not TActivatorUtilities.DeclaresPropertyInjection(AClass) then Continue;
+      for var Prop in TActivatorUtilities.InjectableProperties(AClass) do
+      begin
+        if (Prop.PropertyType = nil) or (Prop.PropertyType.TypeKind <> tkInterface) then Continue;
+        var Edge: TDepEdge;
+        Edge.Target := Prop.PropertyType.Handle;
+        Edge.ViaConstructor := False;
+        Edge.Member := Prop.Name;
+        Nodes[Idx].Edges := Nodes[Idx].Edges + [Edge];
+      end;
+    end;
+  end;
+
+  procedure Report(const Target: Integer);
+  begin
+    var First := -1;
+    for var Pos := 0 to High(Stack) do
+      if Stack[Pos] = Target then
+      begin
+        First := Pos;
+        Break;
+      end;
+    if First < 0 then Exit;
+
+    var Path := '';
+    var Key := '';
+    var Reason := '';
+    for var Pos := First to High(Stack) do
+    begin
+      var Node := Nodes[Stack[Pos]];
+      if Path <> '' then Path := Path + ' -> ';
+      Path := Path + Format('%s (%s)', [ServiceTypeName(Node.ServiceType), LifeTimeName(Node.LifeTime)]);
+      Key := Key + Format('%p|', [Pointer(Node.ServiceType)]);
+      if (Reason = '') and Edges[Pos].ViaConstructor then
+        Reason := Format('%s needs %s through constructor parameter "%s", and a constructor cannot run before its argument exists',
+          [Node.ImplName, ServiceTypeName(Edges[Pos].Target), Edges[Pos].Member]);
+      if (Reason = '') and (Node.LifeTime = Transient) then
+        Reason := Format('%s is transient and the container does not retain transients, so nothing can undo the cycle',
+          [ServiceTypeName(Node.ServiceType)]);
+    end;
+    Path := Path + ' -> ' + Format('%s (%s)', [ServiceTypeName(Nodes[Target].ServiceType),
+      LifeTimeName(Nodes[Target].LifeTime)]);
+    if Reason = '' then Exit;
+    if Seen.ContainsKey(Key) then Exit;
+    Seen.Add(Key, True);
+    Found := Found + [Format('dependency cycle the container cannot break: %s; %s', [Path, Reason])];
+  end;
+
+  procedure Visit(const Idx: Integer);
+  begin
+    Color[Idx] := 1;
+    Stack := Stack + [Idx];
+    SetLength(Edges, Length(Stack));
+    for var Edge in Nodes[Idx].Edges do
+    begin
+      var Target: Integer;
+      if not IndexOf.TryGetValue(Edge.Target, Target) then Continue;
+      Edges[High(Edges)] := Edge;
+      if Color[Target] = 1 then
+        Report(Target)
+      else if Color[Target] = 0 then
+        Visit(Target);
+    end;
+    SetLength(Edges, Length(Stack) - 1);
+    SetLength(Stack, Length(Stack) - 1);
+    Color[Idx] := 2;
+  end;
+
+begin
+  Result := [];
+  Nodes := [];
+  Found := [];
+  IndexOf := TDictionary<PTypeInfo, Integer>.Create;
+  Seen := TDictionary<string, Boolean>.Create;
+  try
+    BuildGraph;
+    SetLength(Color, Length(Nodes));
+    for var Idx := 0 to High(Nodes) do
+      if Color[Idx] = 0 then
+      begin
+        Stack := [];
+        Edges := [];
+        Visit(Idx);
+      end;
+    Result := Found;
+  finally
+    Seen.Free;
+    IndexOf.Free;
+  end;
+end;
+
 procedure TServiceCollection.Validate(const Provider: IServiceProvider; const Options: TServiceProviderOptions);
 begin
   if not (Options.ValidateOnBuild or Options.ValidateScopes) then Exit;
@@ -340,9 +545,22 @@ begin
         Continue;
       end;
 
-      if Options.ValidateScopes and (Descriptor.LifeTime = Singleton) and (Ctor <> nil) then
-        CollectCapturedScopes(Descriptor, Ctor, Errors);
+      // Una clase cuya unica dependencia insatisfecha esta en una propiedad marcada tiene un
+      // constructor que el contenedor satisface sin mas: mirar solo constructores la declara
+      // sana y la entrega con la propiedad en nil.
+      if Options.ValidateOnBuild then
+        CollectPropertyFailures(Descriptor, Provider, Errors);
+
+      if Options.ValidateScopes and (Descriptor.LifeTime = Singleton) then
+      begin
+        if Ctor <> nil then
+          CollectCapturedScopes(Descriptor, Ctor, Errors);
+        CollectCapturedScopesByProperty(Descriptor, Errors);
+      end;
     end;
+
+  if Options.ValidateOnBuild then
+    Errors := Errors + UnbreakableCycles(FEntries, Provider);
 
   if Length(Errors) = 0 then Exit;
   // Todos los fallos juntos: un arranque mal cableado suele tener varios, y descubrirlos
@@ -382,6 +600,62 @@ begin
 
     Errors := Errors + [Format('captured dependency: singleton %s (%s) depends on scoped %s, via parameter "%s"',
       [Descriptor.ServiceName, Descriptor.ImplementationClass.ClassName, Dependencies.Last.ServiceName, Param.Name])];
+  end;
+end;
+
+procedure TServiceCollection.CollectPropertyFailures(const Descriptor: TServiceDescriptor;
+  const Provider: IServiceProvider; var Errors: TArray<string>);
+begin
+  var AClass := Descriptor.ImplementationClass;
+  if not TActivatorUtilities.DeclaresPropertyInjection(AClass) then Exit;
+
+  var Props := TActivatorUtilities.InjectableProperties(AClass);
+  if Length(Props) = 0 then
+  begin
+    Errors := Errors + [TActivatorUtilities.DescribeMissingMarks(AClass)];
+    Exit;
+  end;
+
+  for var Prop in Props do
+  begin
+    if not Prop.IsWritable then
+    begin
+      Errors := Errors + [Format('%s: %s.%s is marked with DafInject but is not writable',
+        [Descriptor.ServiceName, AClass.ClassName, Prop.Name])];
+      Continue;
+    end;
+    if (Prop.PropertyType = nil) or (Prop.PropertyType.TypeKind <> tkInterface) then
+    begin
+      Errors := Errors + [Format('%s: %s.%s is marked with DafInject but its type is not an interface',
+        [Descriptor.ServiceName, AClass.ClassName, Prop.Name])];
+      Continue;
+    end;
+    var PInfo := Prop.PropertyType.Handle;
+    if not Provider.CanResolve(PInfo) then
+      Errors := Errors + [Format('%s: %s needs %s for property "%s", and nothing registers it',
+        [Descriptor.ServiceName, AClass.ClassName, ServiceTypeName(PInfo), Prop.Name])];
+  end;
+end;
+
+procedure TServiceCollection.CollectCapturedScopesByProperty(const Descriptor: TServiceDescriptor;
+  var Errors: TArray<string>);
+begin
+  var AClass := Descriptor.ImplementationClass;
+  if not TActivatorUtilities.DeclaresPropertyInjection(AClass) then Exit;
+
+  for var Prop in TActivatorUtilities.InjectableProperties(AClass) do
+  begin
+    if (Prop.PropertyType = nil) or (Prop.PropertyType.TypeKind <> tkInterface) then Continue;
+
+    var Dependencies: TServiceDescriptors;
+    if not FEntries.TryGetValue(Prop.PropertyType.Handle, Dependencies) then Continue;
+    if Dependencies.Count = 0 then Continue;
+    if Dependencies.Last.LifeTime <> Scoped then Continue;
+
+    // La captura no depende de por donde entre la dependencia: un singleton que sostiene un
+    // scoped lo sostiene igual desde una propiedad que desde un campo del constructor.
+    Errors := Errors + [Format('captured dependency: singleton %s (%s) depends on scoped %s, via property "%s"',
+      [Descriptor.ServiceName, AClass.ClassName, Dependencies.Last.ServiceName, Prop.Name])];
   end;
 end;
 
@@ -728,6 +1002,68 @@ begin
   end;
 end;
 
+function InstanceOf(const Service: IInterface): TObject;
+begin
+  if Service = nil then Exit(nil);
+  Result := Service as TObject;
+end;
+
+// La cadena, del primero al ultimo, con el ciclo que cierra Descriptor al final.
+function DescribeCycle(const Descriptor: TServiceDescriptor): string;
+begin
+  var Path: TArray<string> := [];
+  var Frame := GCreating;
+  while Frame <> nil do
+  begin
+    Path := [Format('%s (%s)', [Frame.Descriptor.ServiceName, LifeTimeName(Frame.Descriptor.LifeTime)])] + Path;
+    if Frame.Identity = Descriptor.Identity then Break;
+    Frame := Frame.Outer;
+  end;
+  Path := Path + [Format('%s (%s)', [Descriptor.ServiceName, LifeTimeName(Descriptor.LifeTime)])];
+  Result := 'dependency cycle the container cannot break: ' + string.Join(' -> ', Path);
+end;
+
+// Anota que este hilo empieza a construir Descriptor, y falla si ya lo estaba construyendo. Lo
+// que llega aqui es un ciclo irrompible por construccion: uno rompible se satisface desde las
+// instancias ya publicadas y nunca vuelve a entrar a construir.
+procedure BeginCreate(var Frame: TCreationFrame; const Descriptor: TServiceDescriptor);
+begin
+  var Existing := GCreating;
+  while Existing <> nil do
+  begin
+    if Existing.Identity = Descriptor.Identity then
+      raise EServiceProviderError.Create(DescribeCycle(Descriptor));
+    Existing := Existing.Outer;
+  end;
+  Frame.Descriptor := @Descriptor;
+  Frame.Identity := Descriptor.Identity;
+  Frame.Outer := GCreating;
+  GCreating := @Frame;
+end;
+
+procedure EndCreate(var Frame: TCreationFrame);
+begin
+  GCreating := Frame.Outer;
+end;
+
+// El singleton mas cercano que este hilo esta construyendo, o nil.
+function CreatingSingleton: PServiceDescriptor;
+begin
+  var Frame := GCreating;
+  while Frame <> nil do
+  begin
+    if Frame.Descriptor.LifeTime = Singleton then Exit(Frame.Descriptor);
+    Frame := Frame.Outer;
+  end;
+  Result := nil;
+end;
+
+function TServiceScope.InjectorsFor(const AClass: TClass): TArray<TServiceInjector>;
+begin
+  if ServiceCollection = nil then Exit(nil);
+  Result := ServiceCollection.InjectorsFor(AClass);
+end;
+
 function TServiceScope.GetOrCreate(const Descriptor: TServiceDescriptor; const Provider: IServiceProvider): IInterface;
 begin
   // El cierre se comprueba ANTES de tocar el diccionario, y del ambito de destino: un Singleton
@@ -747,21 +1083,31 @@ begin
     // una carrera mas estrecha es peor, porque aparece en produccion y no en los tests.
     if TryGetInstance(ServiceIdentity, Result) then Exit;
 
-    // El constructor corre con la construccion cerrada, no con el diccionario cerrado. Que
-    // corra dentro es lo que hace cierto "se construye una vez": construir fuera y quedarse con
-    // el ganador ejecuta el constructor una vez por hilo, y los efectos de un constructor no se
-    // deshacen por perder la carrera.
-    Result := CreateInstance(Descriptor, Provider);
+    var Frame: TCreationFrame;
+    BeginCreate(Frame, Descriptor);
+    try
+      // El constructor corre con la construccion cerrada, no con el diccionario cerrado. Que
+      // corra dentro es lo que hace cierto "se construye una vez": construir fuera y quedarse con
+      // el ganador ejecuta el constructor una vez por hilo, y los efectos de un constructor no se
+      // deshacen por perder la carrera.
+      Result := CreateInstance(Descriptor, Provider);
 
-    if FShutDonwnDone then
-    begin
-      // Perdio la carrera con el cierre despues de construir. Soltar la referencia aqui destruye
-      // la instancia: entregarla seria una fuga --el contenedor ya no la va a desmontar-- y no
-      // entregarla pero dejarla viva, otra.
-      Result := nil;
-      CheckNotShutDown(Descriptor.TypeInfo);
+      if FShutDonwnDone then
+      begin
+        // Perdio la carrera con el cierre despues de construir. Soltar la referencia aqui destruye
+        // la instancia: entregarla seria una fuga --el contenedor ya no la va a desmontar-- y no
+        // entregarla pero dejarla viva, otra.
+        Result := nil;
+        CheckNotShutDown(Descriptor.TypeInfo);
+      end;
+      // Publicar y DESPUES cablear, en ese orden y para todo registro. Mientras la instancia no
+      // este en el diccionario, quien la vuelva a pedir --ella misma, o alguien a quien ella
+      // pide-- entra otra vez a construirla, y ahi no hay fondo.
+      AddServiceInstance(Descriptor, Result);
+      TActivatorUtilities.Wire(Provider, InstanceOf(Result));
+    finally
+      EndCreate(Frame);
     end;
-    AddServiceInstance(Descriptor, Result);
   finally
     FBuildLock.Release;
   end;
@@ -807,6 +1153,22 @@ begin
   // entre vueltas otro hilo podria anadir una instancia a un ambito que se esta desmontando.
   FInstancesLock.BeginWrite;
   try
+    // Vaciar las propiedades inyectadas de TODAS antes de soltar la primera. Dos servicios que
+    // se inyectaron mutuamente se sostienen entre ellos: ninguno baja de dos referencias, el
+    // bucle de abajo termina sin liberar nada y el Clear final los suelta a la vez, cada uno
+    // sosteniendo al otro. Y todas antes que ninguna, porque alternando podria morir uno
+    // mientras otro lo tiene en una propiedad sin vaciar.
+    // El catalogo sale del objeto real y no del descriptor: una factory es opaca, y lo que
+    // devuelva puede haberse cableado por su cuenta.
+    for var idx := 0 to FServiceInstances.Count - 1 do
+    begin
+      // A una local, como el bucle de abajo. Pasar ValueList[idx] directo a una llamada deja
+      // viva hasta el final del metodo la referencia del temporal que emite el compilador, y esa
+      // referencia impide que su instancia baje a uno: se libera fuera de orden, la ultima.
+      var Svc: IInterface := FServiceInstances.ValueList[idx];
+      TActivatorUtilities.ClearInjected(InstanceOf(Svc));
+    end;
+
     var UnusedFound: Boolean;
     repeat
       UnusedFound := False;
@@ -971,24 +1333,28 @@ begin
       var Singletons := SingletonsScope;
       if Singletons = nil then
         RaiseShutDown(Descriptor.TypeInfo);
-
-      // El anterior se guarda en una local --que es la pila real del hilo-- y se repone al
-      // salir. Con eso la cadena de singletons en construccion queda enlazada por los marcos de
-      // GetImplementor, sin un objeto por ambito y sin una asignacion por resolucion.
-      var Outer := GCreatingSingleton;
-      GCreatingSingleton := @Descriptor;
-      try
-        Result := Singletons.GetOrCreate(Descriptor, Self);
-      finally
-        GCreatingSingleton := Outer;
-      end;
+      Result := Singletons.GetOrCreate(Descriptor, Self);
     end;
     Scoped: begin
-      if GCreatingSingleton <> nil then
-        raise Exception.CreateFmt('singleton %s cannot depends on scoped %s ',[GCreatingSingleton.ServiceName, Descriptor.ServiceName]);
+      var Captor := CreatingSingleton;
+      if Captor <> nil then
+        raise Exception.CreateFmt('singleton %s cannot depends on scoped %s ',[Captor.ServiceName, Descriptor.ServiceName]);
       Result := Self.GetOrCreate(Descriptor, Self);
     end;
-    Transient: Result := Self.CreateInstance(Descriptor, Self);
+    Transient: begin
+      // El contenedor no retiene los transient, asi que no hay nada que publicar y el cableado
+      // corre aqui. La cadena si se anota: dos transient que se inyectan mutuamente no tienen
+      // ninguna instancia publicada desde la que satisfacerse, y sin la anotacion la resolucion
+      // construiria uno nuevo en cada vuelta.
+      var Frame: TCreationFrame;
+      BeginCreate(Frame, Descriptor);
+      try
+        Result := Self.CreateInstance(Descriptor, Self);
+        TActivatorUtilities.Wire(Self, InstanceOf(Result));
+      finally
+        EndCreate(Frame);
+      end;
+    end;
   end;
 end;
 

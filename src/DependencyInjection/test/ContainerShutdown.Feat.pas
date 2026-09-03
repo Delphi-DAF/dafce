@@ -4,7 +4,8 @@ interface
 
 uses
   System.SysUtils,
-  Daf.Extensions.DependencyInjection;
+  Daf.Extensions.DependencyInjection,
+  PropertyInjection.Feat;
 
 type
   /// <summary>
@@ -26,7 +27,9 @@ type
   public
     // Publicas a proposito: son el instrumento de medida del spec, no estado del servicio.
     class var Created: Integer;
+    class var Alive: Integer;
     constructor Create;
+    destructor Destroy; override;
     function Name: string;
   end;
 
@@ -56,13 +59,20 @@ type
     AliveAfterFirstClose, AliveAfterSecondClose: Integer;
     BetaCreatedBefore, BetaCreatedAfter: Integer;
     OwnedBefore, OwnedAfter: Integer;
+    // El objeto que el contenedor cablea sin construir: no es suyo, asi que el cierre no le
+    // vacia las propiedades ni lo destruye.
+    Guest: TGuest;
     Closed: Boolean;
     constructor Create;
     destructor Destroy; override;
     procedure BuildAndResolve;
+    // Resuelve sin quedarse con nada: el contador de vivos solo dice algo del desmontaje si
+    // nadie de fuera sostiene lo que se cuenta.
+    procedure BuildAndForget;
     procedure OpenChildScope;
     procedure Close;
     procedure Attempt(const Action: TProc);
+    function Owned: Integer;
   end;
 
 const
@@ -74,7 +84,8 @@ implementation
 
 uses
   Daf.MiniSpec,
-  Daf.DependencyInjection;
+  Daf.DependencyInjection,
+  Daf.DependencyInjection.ActivatorUtilities;
 
 { TAlpha }
 
@@ -82,6 +93,13 @@ constructor TAlpha.Create;
 begin
   inherited Create;
   Inc(Created);
+  Inc(Alive);
+end;
+
+destructor TAlpha.Destroy;
+begin
+  Dec(Alive);
+  inherited;
 end;
 
 function TAlpha.Name: string;
@@ -115,8 +133,15 @@ constructor TShutdownWorld.Create;
 begin
   inherited;
   TAlpha.Created := 0;
+  TAlpha.Alive := 0;
   TBeta.Created := 0;
   TBeta.Alive := 0;
+  TAlphaSvc.Destroyed := 0;
+  TBetaSvc.Destroyed := 0;
+  TRed.Alive := 0;
+  TGreen.Alive := 0;
+  TBlue.Alive := 0;
+  TCounted.Destroyed := 0;
   Outcome := '<sin intentar>';
   Services := TServiceCollection.Create;
 end;
@@ -125,6 +150,7 @@ destructor TShutdownWorld.Destroy;
 begin
   Child := nil;
   HeldBeta := nil;
+  Guest.Free;
   // No se cierra otra vez desde aqui: mientras el defecto este presente, el segundo cierre revienta,
   // y un runner que muere en el teardown no dice que asercion fallo.
   if not Closed then
@@ -153,6 +179,15 @@ begin
   Closed := True;
 end;
 
+procedure TShutdownWorld.BuildAndForget;
+begin
+  Services.AddSingleton<IAlpha, TAlpha>;
+  Services.AddScoped<IBeta, TBeta>;
+  Provider := Services.BuildServiceProvider;
+  Provider.GetRequiredService<IAlpha>;
+  Provider.GetRequiredService<IBeta>;
+end;
+
 procedure TShutdownWorld.Attempt(const Action: TProc);
 begin
   Outcome := SinError;
@@ -161,6 +196,14 @@ begin
   except
     on E: Exception do Outcome := E.ClassName + ': ' + E.Message;
   end;
+end;
+
+function TShutdownWorld.Owned: Integer;
+begin
+  var Access: IContainerAccess;
+  if not Supports(Provider, IContainerAccess, Access) then
+    raise Exception.Create('the provider does not expose IContainerAccess');
+  Result := Access.OwnedInstanceCount;
 end;
 
 initialization
@@ -365,6 +408,131 @@ Feature Container shutdown leaves a defined state @di @lifetime @shutdown
       procedure(W: TShutdownWorld)
       begin
         Expect(W.OwnedAfter).ToEqual(0);
+      end)
+
+  // La cuenta sola no dice nada del desmontaje: el cierre termina vaciando el registro, asi que
+  // un objeto que el cierre no consiguiera destruir desapareceria de la cuenta sin dejar de
+  // existir. Las dos mitades juntas, o ninguna.
+  .Scenario('The objects it counted have really been destroyed')
+    .Given('a container with resolved services that record their destruction',
+      procedure(W: TShutdownWorld)
+      begin
+        W.BuildAndForget;
+      end)
+    .When('it is closed',
+      procedure(W: TShutdownWorld)
+      begin
+        W.OwnedBefore := W.Owned;
+        W.Close;
+        W.OwnedAfter := W.Owned;
+      end)
+    .&Then('it owns none',
+      procedure(W: TShutdownWorld)
+      begin
+        Expect(W.OwnedBefore).ToBeGreaterThan(0);
+        Expect(W.OwnedAfter).ToEqual(0);
+      end)
+    .&And('and one destruction happened for each object it owned',
+      procedure(W: TShutdownWorld)
+      begin
+        Expect(TAlpha.Alive).ToEqual(0);
+        Expect(TBeta.Alive).ToEqual(0);
+      end)
+
+.Rule('Closing the container breaks the references it injected')
+
+  .Scenario('A cycle of two singletons is destroyed on close')
+    .Given('a container with two Singleton services that injected each other by property',
+      procedure(W: TShutdownWorld)
+      begin
+        W.Services.AddSingleton<IAlphaSvc, TAlphaSvc>;
+        W.Services.AddSingleton<IBetaSvc, TBetaSvc>;
+        W.Provider := W.Services.BuildServiceProvider;
+        W.Provider.GetRequiredService<IAlphaSvc>;
+      end)
+    .When('the container is closed',
+      procedure(W: TShutdownWorld)
+      begin
+        W.Close;
+      end)
+    .&Then('both of them are destroyed',
+      procedure(W: TShutdownWorld)
+      begin
+        Expect(TAlphaSvc.Destroyed).ToEqual(1);
+        Expect(TBetaSvc.Destroyed).ToEqual(1);
+      end)
+    .&And('and the container reports it owns none',
+      procedure(W: TShutdownWorld)
+      begin
+        Expect(W.Owned).ToEqual(0);
+      end)
+
+  .Scenario('A longer cycle is taken apart too')
+    .Given('three Scoped services chained in a cycle by injected properties',
+      procedure(W: TShutdownWorld)
+      begin
+        W.Services.AddScoped<IRed, TRed>;
+        W.Services.AddScoped<IGreen, TGreen>;
+        W.Services.AddScoped<IBlue, TBlue>;
+        W.Provider := W.Services.BuildServiceProvider;
+        W.Child := W.Provider.CreateScope;
+        W.Child.ServiceProvider.GetRequiredService<IRed>;
+      end)
+    .When('the scope that owns them is closed',
+      procedure(W: TShutdownWorld)
+      begin
+        W.Close;
+        W.Child := nil;
+      end)
+    .&Then('the three of them are destroyed',
+      procedure(W: TShutdownWorld)
+      begin
+        Expect(TRed.Alive).ToEqual(0);
+        Expect(TGreen.Alive).ToEqual(0);
+        Expect(TBlue.Alive).ToEqual(0);
+      end)
+
+  // El control del escenario de arriba: si esta cadena tampoco se desmontase, lo que falla no es
+  // el ciclo sino el desmontaje entero, y no habria nada que arreglar todavia.
+  .Scenario('A chain without a cycle is still taken apart as before')
+    .Given('a container with services depending on each other without forming a cycle',
+      procedure(W: TShutdownWorld)
+      begin
+        W.BuildAndForget;
+      end)
+    .When('it is closed',
+      procedure(W: TShutdownWorld)
+      begin
+        W.Close;
+      end)
+    .&Then('all of them are destroyed, just as before this pass existed',
+      procedure(W: TShutdownWorld)
+      begin
+        Expect(TAlpha.Alive).ToEqual(0);
+        Expect(TBeta.Alive).ToEqual(0);
+      end)
+
+  .Scenario('A wired foreign object is left alone')
+    .Given('an object built outside the container and wired against it, with its property filled',
+      procedure(W: TShutdownWorld)
+      begin
+        W.Services.AddSingleton<IStorage, TStorage>;
+        W.Services.AddSingleton<ICounted, TCounted>;
+        W.Provider := W.Services.BuildServiceProvider;
+        W.Guest := TGuest.Create;
+        TActivatorUtilities.InjectInto(W.Provider, W.Guest);
+      end)
+    .When('the container is closed',
+      procedure(W: TShutdownWorld)
+      begin
+        W.Close;
+      end)
+    .&Then('the object is still alive and its property still points where it pointed',
+      procedure(W: TShutdownWorld)
+      begin
+        Expect(W.Guest.Storage <> nil).ToBeTrue;
+        Expect(W.Guest.Storage.Name).ToEqual('storage');
+        Expect(TCounted.Destroyed).ToEqual(0);
       end)
 
 ;

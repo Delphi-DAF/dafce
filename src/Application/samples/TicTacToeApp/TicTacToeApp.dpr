@@ -16,11 +16,13 @@ uses
 // entregandole el bucle a la misma Vcl.Forms.Application de siempre, que es quien lo tiene.
 //
 // El formulario lo construye la plataforma, no el contenedor, asi que es justo el caso para el
-// que DafApp existe: desde FormCreate se llega al proveedor y el ViewModel se resuelve por el.
+// que DafApp existe: desde FormCreate se llega al proveedor y el formulario se cablea contra el.
 begin
   ReportMemoryLeaksOnShutdown := True;
 
   var B := TVclApplication.CreateBuilder;
+
+  B.Services.AddSingleton<IGameViewModel, TGameViewModel>;
 
   // Aqui `Application` sin cualificar es el de la VCL: los dos globales conviven en este mismo
   // fichero, y por eso el de DAF se llama DafApp y no Application.

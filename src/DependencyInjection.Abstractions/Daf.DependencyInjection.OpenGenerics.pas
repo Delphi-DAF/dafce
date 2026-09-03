@@ -323,7 +323,7 @@ begin
   // compatibilidad de las firmas, que ya ha mirado CheckMatch y no depende de lo que la
   // implementacion declare.
   if Length(Fields) = 0 then
-    Exit(TActivatorUtilities.CreateInstance(Provider, AClass));
+    Exit(TActivatorUtilities.CreateUnwired(Provider, AClass));
 
   var Args := _T.GenericArgs(ClosedType);
   var Classes: TArray<TClass>;
@@ -350,7 +350,7 @@ begin
 
   // Rellenar ANTES de que corra el constructor, que es donde se decide casi todo: un
   //    registrador elige su categoria al construirse, no despues.
-  Result := TActivatorUtilities.CreateInstance(Provider, AClass,
+  Result := TActivatorUtilities.CreateUnwired(Provider, AClass,
     procedure(Instance: TObject)
     begin
       // El campo del record vive dentro del campo de la instancia: la base para escribirlo es

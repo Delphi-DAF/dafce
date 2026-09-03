@@ -17,7 +17,7 @@ Contratos principales (interfaces y tipos) del sistema de Inyección de Dependen
 | `Daf.Extensions.Options` | `IOptions<T>`, `TOptionsValidator<T>`, `EOptionsValidationError` — el contrato del patrón de opciones |
 | `Daf.Options` | `TOptions<T>` y `AppOptions` — ajustes registrados con código |
 | `Daf.AppModule` | `IAppModule` — patrón de registro por módulo |
-| `Daf.DependencyInjection.ActivatorUtilities` | Helpers para construir objetos mediante RTTI con argumentos resueltos por DI |
+| `Daf.DependencyInjection.ActivatorUtilities` | Helpers para construir objetos mediante RTTI con argumentos resueltos por DI, e `InjectInto` para cablear una instancia que el contenedor no construyó |
 | `Daf.DependencyInjection.OpenGenerics` | Emparejamiento, comprobaciones y activación de los registros que dejan sus argumentos de tipo sin fijar |
 
 ---
@@ -74,6 +74,56 @@ type
     procedure AddServices(const Services: IServiceCollection);
   end;
 ```
+
+### `DafInject` y `DafInjectProperties`
+
+Las dos marcas de la inyección por propiedad. `DafInjectProperties` va en la clase y declara que
+participa; `DafInject` va en cada propiedad que el contenedor rellena.
+
+```pascal
+[DafInjectProperties]
+TReportService = class(TInterfacedObject, IReportService)
+private
+  FStorage: IStorage;
+public
+  [DafInject]
+  property Storage: IStorage read FStorage write FStorage;
+end;
+```
+
+La propiedad ha de ser de tipo interfaz y escribible. Una propiedad marcada que no se puede rellenar
+levanta `EPropertyInjectionError` nombrando la propiedad, su tipo y la clase.
+
+**Dos marcas y no una, porque solo la de clase sobrevive a una RTTI recortada.** Bajo
+`{$RTTI EXPLICIT PROPERTIES([])}` las propiedades de una unit no se emiten, así que una marcada no
+existe para el barrido. El atributo de clase sigue ahí, y eso convierte «declara participar y no
+expone ninguna propiedad marcada» en una condición que el contenedor puede comprobar y decir. Deducir
+la participación de que haya alguna propiedad marcada se queda muda justo cuando hace falta hablar.
+
+El nombre lleva el prefijo `Daf` a propósito: `Daf.MiniSpec.Injection` exporta un `InjectAttribute`
+propio, y dos units que exporten el mismo nombre en el mismo `uses` no dan error — gana la última, en
+silencio.
+
+### `TServiceInjector<T>` y `AddInjector<T>`
+
+El cableado por código, para lo que no se puede anotar:
+
+```pascal
+Services.AddInjector<TReportService>(
+  procedure(const Instance: TReportService; const Provider: IServiceProvider)
+  begin
+    Instance.Storage := Provider.GetRequiredService<IStorage>;
+  end);
+```
+
+Es política del tipo —alcanza también a sus descendientes— y corre después del constructor y después
+de la inyección por atributo, sobre toda instancia que el contenedor construya. No usa RTTI, así que
+es la única vía inmune a una RTTI de propiedades recortada.
+
+Se llama `AddInjector` y no `AddInitializer` —el nombre que usa el sector— porque es la tercera vía de
+una sola feature, y comparte raíz con `DafInject` y con `TActivatorUtilities.InjectInto`.
+`AddInitializer` queda libre para un gancho de post-construcción de propósito general, que es otra
+cosa.
 
 ### `Factory`
 

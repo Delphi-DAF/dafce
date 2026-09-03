@@ -39,15 +39,108 @@ type
     class function CreateInstance(const Provider: IServiceProvider; const AClass: TClass;
       const Initialize: TProc<TObject>): TObject; overload;
     class function CreateInstance<T: class>(const Provider: IServiceProvider): T; overload;
+    /// <summary>
+    ///   Construye SIN cablear. Lo usa el contenedor, que tiene que PUBLICAR la instancia entre
+    ///   construirla y cablearla: mientras no este publicada, un servicio que se pida a si mismo
+    ///   --directamente o a traves de otro-- vuelve a entrar en su propia fabrica sin fondo.
+    ///   Quien llame se encarga de llamar a Wire cuando toque.
+    /// </summary>
+    class function CreateUnwired(const Provider: IServiceProvider; const AClass: TClass;
+      const Initialize: TProc<TObject> = nil): TObject;
+
+    /// <summary>
+    ///   Rellena las propiedades marcadas con DafInject de una instancia ya construida,
+    ///   resolviendo cada una contra el proveedor que se pasa. Es la via para lo que el
+    ///   contenedor no construye: un formulario que crea la plataforma no tiene constructor que
+    ///   el contenedor pueda elegir.
+    /// </summary>
+    /// <remarks>
+    ///   El contenedor no toma posesion de lo que cablea aqui: no lo cuenta entre sus objetos,
+    ///   cerrarlo no lo destruye, y no le vacia las propiedades al cerrar.
+    /// </remarks>
+    class procedure InjectInto(const Provider: IServiceProvider; const Instance: TObject);
+    /// <summary>
+    ///   InjectInto mas los cableados por codigo que la coleccion registro para la clase. Es lo
+    ///   que corre sobre lo que construye el contenedor; InjectInto a secas es lo que corre
+    ///   sobre una instancia ajena, que no pasa por los cableados.
+    /// </summary>
+    class procedure Wire(const Provider: IServiceProvider; const Instance: TObject);
+    /// <summary>
+    ///   Deja en nil las propiedades marcadas de una instancia. Lo llama el desmontaje antes de
+    ///   soltar nada: dos servicios que se inyectaron mutuamente se sostienen entre ellos, y sin
+    ///   esto ninguno baja de dos referencias ni llega a destruirse nunca.
+    /// </summary>
+    class procedure ClearInjected(const Instance: TObject);
+
+    // Si la clase declara participar en la inyeccion por propiedad.
+    class function DeclaresPropertyInjection(const AClass: TClass): Boolean;
+    // Las propiedades marcadas que la RTTI expone de la clase, jerarquia incluida. Vacio
+    // significa dos cosas distintas segun lo anterior, y por eso se preguntan por separado.
+    class function InjectableProperties(const AClass: TClass): TArray<TRttiProperty>;
+    // El mensaje de "declara participar y no se ve ninguna marca", compartido por la resolucion
+    // y por la validacion para que las dos digan lo mismo.
+    class function DescribeMissingMarks(const AClass: TClass): string;
   end;
 
 implementation
 
 uses
+  System.Generics.Collections,
   Daf.Types;
 
 var RC: TRttiContext;
 
+type
+  // Lo que se sabe de una clase, calculado una vez: el barrido recorre la jerarquia entera y lee
+  // los atributos de cada propiedad, y un formulario VCL tiene cientos de propiedades publicadas.
+  TInjectionCatalog = record
+    Declares: Boolean;
+    Props: TArray<TRttiProperty>;
+  end;
+
+var
+  GCatalog: TDictionary<TClass, TInjectionCatalog>;
+  GCatalogLock: TObject;
+
+function DeclaresInHierarchy(const AClass: TClass): Boolean;
+begin
+  // La declaracion se hereda: una clase base que participa hace participar a sus hijas, igual
+  // que les hereda las propiedades marcadas.
+  var Current := AClass;
+  while Current <> nil do
+  begin
+    var RType := RC.GetType(Current);
+    if (RType <> nil) and (RType.GetAttribute<DafInjectPropertiesAttribute> <> nil) then Exit(True);
+    Current := Current.ClassParent;
+  end;
+  Result := False;
+end;
+
+function ScanCatalog(const AClass: TClass): TInjectionCatalog;
+begin
+  Result.Declares := DeclaresInHierarchy(AClass);
+  Result.Props := [];
+  var RType := RC.GetType(AClass);
+  if RType = nil then Exit;
+  // GetProperties recorre la jerarquia, asi que una propiedad marcada en la base entra aqui.
+  for var Prop in RType.GetProperties do
+    if Prop.GetAttribute<DafInjectAttribute> <> nil then
+      Result.Props := Result.Props + [Prop];
+end;
+
+function CatalogOf(const AClass: TClass): TInjectionCatalog;
+begin
+  TMonitor.Enter(GCatalogLock);
+  try
+    if not GCatalog.TryGetValue(AClass, Result) then
+    begin
+      Result := ScanCatalog(AClass);
+      GCatalog.Add(AClass, Result);
+    end;
+  finally
+    TMonitor.Exit(GCatalogLock);
+  end;
+end;
 
 { TActivatorUtilities }
 
@@ -167,6 +260,19 @@ end;
 class function TActivatorUtilities.CreateInstance(const Provider: IServiceProvider; const AClass: TClass;
   const Initialize: TProc<TObject>): TObject;
 begin
+  Result := CreateUnwired(Provider, AClass, Initialize);
+  try
+    Wire(Provider, Result);
+  except
+    // Una instancia a medio cablear no se entrega, y aqui nadie mas la nombra todavia.
+    Result.Free;
+    raise;
+  end;
+end;
+
+class function TActivatorUtilities.CreateUnwired(const Provider: IServiceProvider; const AClass: TClass;
+  const Initialize: TProc<TObject>): TObject;
+begin
   var Ctor := SelectBest(GetResolvableCtors(AClass, Provider));
   if Ctor = nil then
     raise EArgumentException.CreateFmt('Cannot find resolvable constructor for %s', [AClass.ClassName]);
@@ -201,8 +307,94 @@ begin
   Result := CreateInstance(Provider, T) as T;
 end;
 
+class function TActivatorUtilities.DeclaresPropertyInjection(const AClass: TClass): Boolean;
+begin
+  if AClass = nil then Exit(False);
+  Result := CatalogOf(AClass).Declares;
+end;
+
+class function TActivatorUtilities.InjectableProperties(const AClass: TClass): TArray<TRttiProperty>;
+begin
+  if AClass = nil then Exit(nil);
+  Result := CatalogOf(AClass).Props;
+end;
+
+class function TActivatorUtilities.DescribeMissingMarks(const AClass: TClass): string;
+begin
+  Result := Format('%s is marked with DafInjectProperties but no DafInject property of it is visible. ' +
+    'Check the RTTI directives of its unit: PROPERTIES([]) leaves its properties out of the RTTI, ' +
+    'and then the marks do not exist for the sweep',
+    [AClass.ClassName]);
+end;
+
+class procedure TActivatorUtilities.InjectInto(const Provider: IServiceProvider; const Instance: TObject);
+begin
+  if Instance = nil then Exit;
+  var Catalog := CatalogOf(Instance.ClassType);
+  if not Catalog.Declares then Exit;
+  if Length(Catalog.Props) = 0 then
+    raise EPropertyInjectionError.Create(DescribeMissingMarks(Instance.ClassType));
+
+  for var Prop in Catalog.Props do
+  begin
+    if not Prop.IsWritable then
+      raise EPropertyInjectionError.CreateFmt('%s.%s is marked with DafInject but is not writable',
+        [Instance.ClassName, Prop.Name]);
+
+    var PType := Prop.PropertyType;
+    if (PType = nil) or (PType.TypeKind <> tkInterface) then
+      raise EPropertyInjectionError.CreateFmt('%s.%s is marked with DafInject but its type is not an interface',
+        [Instance.ClassName, Prop.Name]);
+
+    var PInfo := PType.Handle;
+    var Aux: IInterface;
+    if not Provider.TryGet(PInfo, Aux) then
+      raise EPropertyInjectionError.CreateFmt('%s.%s needs %s, and nothing registers it',
+        [Instance.ClassName, Prop.Name, ServiceTypeName(PInfo)]);
+
+    var Value: TValue;
+    TValue.Make(@Aux, PInfo, Value);
+    Prop.SetValue(Instance, Value);
+  end;
+end;
+
+class procedure TActivatorUtilities.Wire(const Provider: IServiceProvider; const Instance: TObject);
+begin
+  if Instance = nil then Exit;
+  InjectInto(Provider, Instance);
+
+  if Provider = nil then Exit;
+  var Impl: IServiceProviderImpl := Provider;
+  var Injectors: IServiceInjectors;
+  if not Supports(Impl, IServiceInjectors, Injectors) then Exit;
+  for var Injector in Injectors.InjectorsFor(Instance.ClassType) do
+    Injector(Instance, Provider);
+end;
+
+class procedure TActivatorUtilities.ClearInjected(const Instance: TObject);
+begin
+  if Instance = nil then Exit;
+  var Catalog := CatalogOf(Instance.ClassType);
+  if not Catalog.Declares then Exit;
+
+  var Empty: IInterface := nil;
+  for var Prop in Catalog.Props do
+  begin
+    if not Prop.IsWritable then Continue;
+    var PType := Prop.PropertyType;
+    if (PType = nil) or (PType.TypeKind <> tkInterface) then Continue;
+    var Value: TValue;
+    TValue.Make(@Empty, PType.Handle, Value);
+    Prop.SetValue(Instance, Value);
+  end;
+end;
+
 initialization
   RC := TRttiContext.Create;
+  GCatalog := TDictionary<TClass, TInjectionCatalog>.Create;
+  GCatalogLock := TObject.Create;
 finalization
+  GCatalogLock.Free;
+  GCatalog.Free;
   RC.Free;
 end.

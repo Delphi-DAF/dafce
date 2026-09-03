@@ -70,6 +70,73 @@ Services.AddSingleton<IMyService>(MyExistingInstance);
 
 ---
 
+## Property injection
+
+**The constructor is the default, and this does not replace it.** A dependency that enters through
+the constructor is guaranteed by the compiler: the object cannot exist without it. One that enters
+through a property is not, and that is paid at every read. Two cases justify the price, and only two:
+
+- **Two services that need each other.** A cycle by constructor is unbuildable — neither constructor
+  can run before the other finishes. By property it resolves.
+- **An instance the container does not build.** A form is built by the platform, so there is no
+  constructor for the container to choose.
+
+The class declares that it takes part, and each property declares itself:
+
+```pascal
+type
+  [DafInjectProperties]
+  TReportService = class(TInterfacedObject, IReportService)
+  private
+    FStorage: IStorage;
+  public
+    [DafInject]
+    property Storage: IStorage read FStorage write FStorage;
+  end;
+```
+
+The property must be of an interface type and writable; whether a field or a method backs it makes no
+difference, and neither does that field being `strict private`. A marked property that cannot be
+filled aborts naming the property, its type and the class — a declared dependency left `nil` moves the
+failure to the first use, somewhere else.
+
+**The constructor does not see them.** Injection happens once the constructor has returned, so a
+marked property is `nil` inside it. A dependency needed *during* construction goes through the
+constructor; both routes live together in the same class.
+
+### Wiring an instance the container did not build
+
+```pascal
+TActivatorUtilities.InjectInto(Provider, Self);   // in the form's constructor
+```
+
+Same marks, same requirements, same errors as a resolution. The container does **not** take ownership
+of what it wires: it does not count it, closing does not destroy it, and the services it holds live as
+long as it holds them.
+
+### Wiring by code, with nothing marked
+
+```pascal
+Services.AddInjector<TReportService>(
+  procedure(const Instance: TReportService; const Provider: IServiceProvider)
+  begin
+    Instance.Storage := Provider.GetRequiredService<IStorage>;
+  end);
+```
+
+For what cannot be annotated: a class from another library, a unit whose property RTTI is trimmed —
+this route uses no RTTI at all, so it is the only one immune — and a service key that is awkward to
+write inside an attribute. It is a policy of the type, so it reaches descendants too, and several
+wirings run in the order they were registered. It runs after the constructor and after the attribute
+injection, and only on what the container builds.
+
+⚠️ **A trimmed property RTTI hides the marks.** `{$RTTI EXPLICIT PROPERTIES([])}` leaves the
+properties of a unit out of the RTTI, and then a marked one does not exist for the sweep. A class that
+declares taking part and exposes no marked property fails saying so and pointing at the directives —
+`ValidateOnBuild` reports it at startup, and the resolution reports it if validation is off.
+
+---
+
 ## Scopes
 
 ```pascal
