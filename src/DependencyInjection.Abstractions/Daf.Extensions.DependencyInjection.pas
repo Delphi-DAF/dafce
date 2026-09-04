@@ -169,20 +169,6 @@ type
     constructor Create(const AKey: T);
   end;
 
-  /// <summary>
-  ///   Declara que la clase participa en la inyeccion por propiedad. Sin el, sus propiedades
-  ///   marcadas no se rellenan.
-  /// </summary>
-  /// <remarks>
-  ///   Parece redundante con DafInject y no lo es: las directivas RTTI de una unit pueden dejar
-  ///   sus propiedades sin emitir, y entonces las marcas no existen para el barrido. Este
-  ///   atributo, que es de clase, sobrevive a ese recorte, asi que "declara participar y no se ve
-  ///   ninguna propiedad marcada" es una condicion comprobable. Deducir la participacion de que
-  ///   haya alguna marcada se queda muda justo ahi.
-  /// </remarks>
-  DafInjectPropertiesAttribute = class(TCustomAttribute)
-  end;
-
   // Interfaces don't support generic overload, so we model our desired interface using a record
   // that will delegate behavior in a true interface that implementor classes will support
   IServiceProvider = record

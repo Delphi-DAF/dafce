@@ -234,7 +234,6 @@ propiedades.
 
 ```pascal
 type
-  [DafInjectProperties]
   TOrders = class(TInterfacedObject, IOrders)
   private
     FBilling: IBilling;
@@ -243,7 +242,6 @@ type
     property Billing: IBilling read FBilling write FBilling;
   end;
 
-  [DafInjectProperties]
   TBilling = class(TInterfacedObject, IBilling)
   private
     FOrders: IOrders;
@@ -311,10 +309,15 @@ constructor y después de la inyección por atributo, así que ve las propiedade
 ### El límite: una RTTI de propiedades recortada
 
 `{$RTTI EXPLICIT PROPERTIES([])}` deja las propiedades de una unit entera fuera de la RTTI. Para una
-clase de esa unit, una propiedad marcada **no existe** para el barrido: no se inyectaría nada y nada
-lo diría. Por eso participar se declara en la clase —un atributo de clase sobrevive al recorte— y por
-eso una clase que lo declara y no expone ninguna propiedad marcada es un error que nombra la clase y
-señala las directivas.
+clase de esa unit, una propiedad marcada **no existe** para el barrido: participar se deduce de
+marcar, así que esa clase no participa en nada. Se resuelve sin error, su dependencia se queda en
+`nil`, y el fallo aparece en el primer uso como un access violation.
+
+⚠️ **El contenedor no puede avisar de esto**, y es una pérdida consciente. Una clase recortada sigue
+informando por RTTI de las propiedades de su ancestro, así que «ninguna propia» no distingue el
+recorte de una clase que sencillamente no tiene propiedades. Lo que hace aceptable la pérdida es que
+la causa es una directiva que alguien escribió a conciencia, en la cabecera de la misma unit que
+contiene la propiedad marcada.
 
 El cableado por código es la salida: no usa RTTI en absoluto, así que es la única vía inmune al
 recorte.
@@ -403,7 +406,6 @@ siempre y que se puede poner suelto:
 
 ```pascal
 type
-  [DafInjectProperties]
   TReportService = class(TInterfacedObject, IReportService)
   private
     FStorage: IStorage;

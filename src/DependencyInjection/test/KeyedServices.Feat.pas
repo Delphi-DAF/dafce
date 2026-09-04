@@ -147,7 +147,6 @@ type
     function StorageName: string;
   end;
 
-  [DafInjectProperties]
   TPropByKey = class(TInterfacedObject, IPropByKey)
   strict private
     FStorage: IStorage;
@@ -162,7 +161,6 @@ type
     function StorageName: string;
   end;
 
-  [DafInjectProperties]
   TPropNoKey = class(TInterfacedObject, IPropNoKey)
   strict private
     FStorage: IStorage;
@@ -177,7 +175,6 @@ type
     function StorageName: string;
   end;
 
-  [DafInjectProperties]
   TPropUnknownKey = class(TInterfacedObject, IPropUnknownKey)
   strict private
     FStorage: IStorage;
@@ -193,7 +190,6 @@ type
     function StorageName: string;
   end;
 
-  [DafInjectProperties]
   TPropByOwnMark = class(TInterfacedObject, IPropByOwnMark)
   strict private
     FStorage: IStorage;
@@ -209,7 +205,6 @@ type
     function StorageName: string;
   end;
 
-  [DafInjectProperties]
   TPropBadOrdinal = class(TInterfacedObject, IPropBadOrdinal)
   strict private
     FStorage: IStorage;
@@ -220,7 +215,6 @@ type
   end;
 
   /// Una instancia que el contenedor NO construye: la cablea su dueno con InjectInto.
-  [DafInjectProperties]
   TGuest = class
   strict private
     FStorage: IStorage;

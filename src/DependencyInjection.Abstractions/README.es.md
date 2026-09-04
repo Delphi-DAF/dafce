@@ -109,13 +109,12 @@ lo único que puede hacer una factoría que atiende a todas las claves es decidi
 toca. Un tipo aparte y no un parámetro opcional de `TServiceFactory`, por la misma razón que
 `TServiceFactoryEx`.
 
-### `DafInject` y `DafInjectProperties`
+### `DafInject`
 
-Las dos marcas de la inyección por propiedad. `DafInjectProperties` va en la clase y declara que
-participa; `DafInject` va en cada propiedad que el contenedor rellena.
+La marca de la inyección por propiedad: va en cada propiedad que el contenedor rellena, y una clase
+participa por tenerla. No hay nada que declarar en la clase.
 
 ```pascal
-[DafInjectProperties]
 TReportService = class(TInterfacedObject, IReportService)
 private
   FStorage: IStorage;
@@ -128,11 +127,12 @@ end;
 La propiedad ha de ser de tipo interfaz y escribible. Una propiedad marcada que no se puede rellenar
 levanta `EPropertyInjectionError` nombrando la propiedad, su tipo y la clase.
 
-**Dos marcas y no una, porque solo la de clase sobrevive a una RTTI recortada.** Bajo
-`{$RTTI EXPLICIT PROPERTIES([])}` las propiedades de una unit no se emiten, así que una marcada no
-existe para el barrido. El atributo de clase sigue ahí, y eso convierte «declara participar y no
-expone ninguna propiedad marcada» en una condición que el contenedor puede comprobar y decir. Deducir
-la participación de que haya alguna propiedad marcada se queda muda justo cuando hace falta hablar.
+**Una marca y no dos**, y la alternativa merece nombrarse porque fue el diseño anterior: un segundo
+atributo en la clase sobrevive a `{$RTTI EXPLICIT PROPERTIES([])}`, y con él el contenedor podría
+decir «esta clase participa y no veo ninguna propiedad marcada». Se retiró porque una marca que hay
+que acordarse de escribir se puede olvidar, y olvidarla deja las propiedades sin rellenar y sin error
+— el mismo silencio, movido del caso raro al común. Lo que se pierde queda escrito: bajo una RTTI
+recortada la inyección está apagada y nada lo dice.
 
 La clave viaja **dentro de esta marca**, y la misma marca sirve a un **parámetro de constructor**:
 

@@ -122,7 +122,6 @@ La misma marca sirve a las dos posiciones, y la clave viaja dentro de ella:
 
 ```pascal
 type
-  [DafInjectProperties]
   TReportService = class(TInterfacedObject, IReportService)
   private
     FStorage: IStorage;
@@ -193,7 +192,6 @@ La clase declara que participa, y cada propiedad se declara a sí misma:
 
 ```pascal
 type
-  [DafInjectProperties]
   TReportService = class(TInterfacedObject, IReportService)
   private
     FStorage: IStorage;
@@ -238,11 +236,13 @@ incómoda de escribir dentro de un atributo. Es política del tipo, así que alc
 descendientes, y varios cableados corren en el orden en que se registraron. Corre después del
 constructor y después de la inyección por atributo, y solo sobre lo que el contenedor construye.
 
-⚠️ **Una RTTI de propiedades recortada esconde las marcas.** `{$RTTI EXPLICIT PROPERTIES([])}` deja
-las propiedades de una unit fuera de la RTTI, y entonces una marcada no existe para el barrido. Una
-clase que declara participar y no expone ninguna propiedad marcada falla diciéndolo y señalando las
-directivas — `ValidateOnBuild` lo informa al arrancar, y la resolución lo informa si la validación
-está apagada.
+⚠️ **Una RTTI de propiedades recortada apaga esto, y nada lo dice.** `{$RTTI EXPLICIT
+PROPERTIES([])}` deja las propiedades de una unit fuera de la RTTI, y entonces una marcada no existe
+para el barrido: la clase parece cualquier otra que no marca nada, así que se resuelve con su
+dependencia en `nil` y el fallo aparece en el primer uso. El contenedor no puede detectarlo — una
+clase recortada sigue informando de las propiedades de su ancestro, así que «ninguna propia» no
+distingue el recorte de una clase que sencillamente no tiene. La directiva la escribe alguien a mano
+en la cabecera de esa misma unit, y la salida es el cableado por código, que no usa RTTI.
 
 ---
 

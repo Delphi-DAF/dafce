@@ -56,7 +56,6 @@ type
     function StorageName: string;
   end;
 
-  [DafInjectProperties]
   TByField = class(TInterfacedObject, IByField)
   private
     FStorage: IStorage;
@@ -71,7 +70,6 @@ type
     function StorageName: string;
   end;
 
-  [DafInjectProperties]
   TBySetter = class(TInterfacedObject, IBySetter)
   private
     FStorage: IStorage;
@@ -88,7 +86,6 @@ type
     function StorageName: string;
   end;
 
-  [DafInjectProperties]
   TByStrictField = class(TInterfacedObject, IByStrictField)
   strict private
     FStorage: IStorage;
@@ -112,7 +109,6 @@ type
     property Storage: IStorage read FStorage write FStorage;
   end;
 
-  [DafInjectProperties]
   TInheritedProp = class(TInjectableBase, IInherited)
   public
     function StorageName: string;
@@ -124,7 +120,6 @@ type
     function ClockIsNil: Boolean;
   end;
 
-  [DafInjectProperties]
   TWithUnmarked = class(TInterfacedObject, IWithUnmarked)
   private
     FStorage: IStorage;
@@ -144,7 +139,6 @@ type
     function StorageName: string;
   end;
 
-  [DafInjectProperties]
   TCtorReader = class(TInterfacedObject, ICtorReader)
   private
     FStorage: IStorage;
@@ -161,7 +155,6 @@ type
     function StorageName: string;
   end;
 
-  [DafInjectProperties]
   TBoth = class(TInterfacedObject, IBoth)
   private
     FClock: IClock;
@@ -180,7 +173,6 @@ type
     ['{7C1A5E29-3F84-4D60-B2E7-0C8B6A4F1D53}']
   end;
 
-  [DafInjectProperties]
   TNeedsUnregistered = class(TInterfacedObject, INeedsUnregistered)
   private
     FMissing: IUnregistered;
@@ -193,7 +185,6 @@ type
     ['{2D6F8B37-5C10-4E9A-8B43-7A1E5D0C2F68}']
   end;
 
-  [DafInjectProperties]
   TReadOnlyMark = class(TInterfacedObject, IReadOnlyMark)
   private
     FStorage: IStorage;
@@ -206,7 +197,6 @@ type
     ['{6A0E3C74-8D25-4F1B-93A6-2E7C5B9D0184}']
   end;
 
-  [DafInjectProperties]
   TNonInterfaceMark = class(TInterfacedObject, INonInterfaceMark)
   private
     FRetries: Integer;
@@ -215,18 +205,19 @@ type
     property Retries: Integer read FRetries write FRetries;
   end;
 
-  /// Declara participar y no marca nada, con la RTTI completa. El mismo sintoma que el recorte,
-  /// y la misma respuesta.
+  /// No marca ninguna propiedad, teniendo una que el contenedor sabria rellenar. Participar se
+  /// deduce de marcar, asi que esta clase no participa -- y esa es la unica lectura posible.
   INothingMarked = interface(IInvokable)
     ['{4F8C2A05-7E63-4B19-A0D8-5C3B1F6E9247}']
+    function StorageName: string;
   end;
 
-  [DafInjectProperties]
   TNothingMarked = class(TInterfacedObject, INothingMarked)
   private
     FStorage: IStorage;
   public
     property Storage: IStorage read FStorage write FStorage;
+    function StorageName: string;
   end;
 
   /// La marca esta escrita DENTRO de un tipo generico. Existe como control: si el compilador
@@ -246,7 +237,6 @@ type
     function StorageName: string;
   end;
 
-  [DafInjectProperties]
   TGenericMarked = class(TGenericBase<IClock>, IGenericMarked)
   end;
 
@@ -279,7 +269,6 @@ type
     function Peer: IAlphaSvc;
   end;
 
-  [DafInjectProperties]
   TAlphaSvc = class(TInterfacedObject, IAlphaSvc)
   private
     FSerial: Integer;
@@ -295,7 +284,6 @@ type
     function Peer: IBetaSvc;
   end;
 
-  [DafInjectProperties]
   TBetaSvc = class(TInterfacedObject, IBetaSvc)
   private
     FSerial: Integer;
@@ -331,7 +319,6 @@ type
     function Next: IRed;
   end;
 
-  [DafInjectProperties]
   TRed = class(TInterfacedObject, IRed)
   private
     FNext: IGreen;
@@ -345,7 +332,6 @@ type
     function Next: IGreen;
   end;
 
-  [DafInjectProperties]
   TGreen = class(TInterfacedObject, IGreen)
   private
     FNext: IBlue;
@@ -359,7 +345,6 @@ type
     function Next: IBlue;
   end;
 
-  [DafInjectProperties]
   TBlue = class(TInterfacedObject, IBlue)
   private
     FNext: IRed;
@@ -380,7 +365,6 @@ type
     function Peer: ITwin;
   end;
 
-  [DafInjectProperties]
   TTwin = class(TInterfacedObject, ITwin)
   private
     FSerial: Integer;
@@ -425,7 +409,6 @@ type
     ['{4B9F1C60-3E85-4A72-96D0-8A2C5F7E1B43}']
   end;
 
-  [DafInjectProperties]
   TSingletonPeer = class(TInterfacedObject, ISingletonPeer)
   private
     FPeer: ITransientPeer;
@@ -434,7 +417,6 @@ type
     property Peer: ITransientPeer read FPeer write FPeer;
   end;
 
-  [DafInjectProperties]
   TTransientPeer = class(TInterfacedObject, ITransientPeer)
   private
     FPeer: ISingletonPeer;
@@ -447,7 +429,6 @@ type
 
   /// Ni interfaz ni registro: lo construye y lo destruye su dueno, como haria la plataforma con
   /// un formulario.
-  [DafInjectProperties]
   TGuest = class
   private
     FStorage: IStorage;
@@ -480,7 +461,6 @@ type
     function Note: string;
   end;
 
-  [DafInjectProperties]
   TMarkedAndWired = class(TInterfacedObject, IMarkedAndWired)
   private
     FStorage: IStorage;
@@ -629,6 +609,14 @@ function TInheritedProp.StorageName: string;
 begin
   if Storage = nil then Exit('<nil>');
   Result := Storage.Name;
+end;
+
+{ TNothingMarked }
+
+function TNothingMarked.StorageName: string;
+begin
+  if FStorage = nil then Exit('<nil>');
+  Result := FStorage.Name;
 end;
 
 { TWithUnmarked }
@@ -1691,10 +1679,12 @@ Feature Property injection @di @injection
         Expect(W.Report).ToEqual('storage');
       end)
 
-.Rule('A trimmed RTTI does not switch the injection off in silence')
+.Rule('Taking part is deduced from marking, so a class that marks nothing does not take part')
 
-  .Scenario('A class that participates and has no marked property at all, with full RTTI')
-    .Given('a class that declares participation and really marks nothing',
+  .Scenario('A class with no marked property is resolved and nothing is injected')
+    // Es el reverso del primer escenario del fichero, y hace falta escrito: sin el, «no inyecta
+    // nada» y «no habia nada que inyectar» dan el mismo verde.
+    .Given('a registered class with a writable interface property that nobody marked, and its type registered',
       procedure(W: TInjectionWorld)
       begin
         W.Services.AddSingleton<IStorage, TStorage>;
@@ -1704,13 +1694,12 @@ Feature Property injection @di @injection
       procedure(W: TInjectionWorld)
       begin
         W.Build;
-        W.Attempt(procedure begin W.Held := W.Provider.GetRequiredService<INothingMarked>; end);
+        W.Attempt(procedure begin W.Report := W.Provider.GetRequiredService<INothingMarked>.StorageName; end);
       end)
-    .&Then('it fails just the same, because declaring participation and marking nothing has no other useful reading',
+    .&Then('it resolves with no error, and the property is left as the constructor left it',
       procedure(W: TInjectionWorld)
       begin
-        Expect(W.Outcome).ToContain('TNothingMarked');
-        Expect(W.Outcome).ToContain('DafInjectProperties');
+        Expect(W.Outcome + ' / ' + W.Report).ToEqual(NoFailure + ' / <nil>');
       end)
 
 ;

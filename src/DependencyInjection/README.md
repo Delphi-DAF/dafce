@@ -122,7 +122,6 @@ The same mark serves both positions, and the key travels inside it:
 
 ```pascal
 type
-  [DafInjectProperties]
   TReportService = class(TInterfacedObject, IReportService)
   private
     FStorage: IStorage;
@@ -193,7 +192,6 @@ The class declares that it takes part, and each property declares itself:
 
 ```pascal
 type
-  [DafInjectProperties]
   TReportService = class(TInterfacedObject, IReportService)
   private
     FStorage: IStorage;
@@ -238,10 +236,13 @@ write inside an attribute. It is a policy of the type, so it reaches descendants
 wirings run in the order they were registered. It runs after the constructor and after the attribute
 injection, and only on what the container builds.
 
-⚠️ **A trimmed property RTTI hides the marks.** `{$RTTI EXPLICIT PROPERTIES([])}` leaves the
-properties of a unit out of the RTTI, and then a marked one does not exist for the sweep. A class that
-declares taking part and exposes no marked property fails saying so and pointing at the directives —
-`ValidateOnBuild` reports it at startup, and the resolution reports it if validation is off.
+⚠️ **A trimmed property RTTI switches this off, and nothing says so.** `{$RTTI EXPLICIT
+PROPERTIES([])}` leaves the properties of a unit out of the RTTI, and then a marked one does not exist
+for the sweep: the class looks like any other that marks nothing, so it resolves with its dependency
+left `nil` and the failure appears at the first use. The container cannot detect it — a trimmed class
+still reports its ancestor's properties, so "none of its own" does not tell a trim from a class that
+simply has none. The directive is written by hand at the top of that same unit, and the way out is
+wiring by code, which uses no RTTI.
 
 ---
 

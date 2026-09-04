@@ -87,14 +87,9 @@ type
     /// </summary>
     class procedure ClearInjected(const Instance: TObject);
 
-    // Si la clase declara participar en la inyeccion por propiedad.
-    class function DeclaresPropertyInjection(const AClass: TClass): Boolean;
-    // Las propiedades marcadas que la RTTI expone de la clase, jerarquia incluida. Vacio
-    // significa dos cosas distintas segun lo anterior, y por eso se preguntan por separado.
+    // Las propiedades marcadas que la RTTI expone de la clase, jerarquia incluida. Vacio significa
+    // que la clase no participa: participar se deduce de marcar, no se declara aparte.
     class function InjectableProperties(const AClass: TClass): TArray<TInjectableProperty>;
-    // El mensaje de "declara participar y no se ve ninguna marca", compartido por la resolucion
-    // y por la validacion para que las dos digan lo mismo.
-    class function DescribeMissingMarks(const AClass: TClass): string;
     /// <summary>
     ///   La marca de inyeccion de un parametro o de una propiedad, si la lleva, con su clave.
     /// </summary>
@@ -123,7 +118,6 @@ type
   // Lo que se sabe de una clase, calculado una vez: el barrido recorre la jerarquia entera y lee
   // los atributos de cada propiedad, y un formulario VCL tiene cientos de propiedades publicadas.
   TInjectionCatalog = record
-    Declares: Boolean;
     Props: TArray<TInjectableProperty>;
   end;
 
@@ -131,23 +125,8 @@ var
   GCatalog: TDictionary<TClass, TInjectionCatalog>;
   GCatalogLock: TObject;
 
-function DeclaresInHierarchy(const AClass: TClass): Boolean;
-begin
-  // La declaracion se hereda: una clase base que participa hace participar a sus hijas, igual
-  // que les hereda las propiedades marcadas.
-  var Current := AClass;
-  while Current <> nil do
-  begin
-    var RType := RC.GetType(Current);
-    if (RType <> nil) and (RType.GetAttribute<DafInjectPropertiesAttribute> <> nil) then Exit(True);
-    Current := Current.ClassParent;
-  end;
-  Result := False;
-end;
-
 function ScanCatalog(const AClass: TClass): TInjectionCatalog;
 begin
-  Result.Declares := DeclaresInHierarchy(AClass);
   Result.Props := [];
   var RType := RC.GetType(AClass);
   if RType = nil then Exit;
@@ -389,33 +368,19 @@ begin
   Result := CreateInstance(Provider, T) as T;
 end;
 
-class function TActivatorUtilities.DeclaresPropertyInjection(const AClass: TClass): Boolean;
-begin
-  if AClass = nil then Exit(False);
-  Result := CatalogOf(AClass).Declares;
-end;
-
 class function TActivatorUtilities.InjectableProperties(const AClass: TClass): TArray<TInjectableProperty>;
 begin
   if AClass = nil then Exit(nil);
   Result := CatalogOf(AClass).Props;
 end;
 
-class function TActivatorUtilities.DescribeMissingMarks(const AClass: TClass): string;
-begin
-  Result := Format('%s is marked with DafInjectProperties but no DafInject property of it is visible. ' +
-    'Check the RTTI directives of its unit: PROPERTIES([]) leaves its properties out of the RTTI, ' +
-    'and then the marks do not exist for the sweep',
-    [AClass.ClassName]);
-end;
-
 class procedure TActivatorUtilities.InjectInto(const Provider: IServiceProvider; const Instance: TObject);
 begin
   if Instance = nil then Exit;
+  // Participar es tener alguna propiedad marcada. Sin marcas no hay nada que rellenar y no hay
+  // nada que decir: una clase que no participa no se distingue de una que participa sin marcas,
+  // y ese estado no existe.
   var Catalog := CatalogOf(Instance.ClassType);
-  if not Catalog.Declares then Exit;
-  if Length(Catalog.Props) = 0 then
-    raise EPropertyInjectionError.Create(DescribeMissingMarks(Instance.ClassType));
 
   for var Entry in Catalog.Props do
   begin
@@ -467,7 +432,6 @@ class procedure TActivatorUtilities.ClearInjected(const Instance: TObject);
 begin
   if Instance = nil then Exit;
   var Catalog := CatalogOf(Instance.ClassType);
-  if not Catalog.Declares then Exit;
 
   var Empty: IInterface := nil;
   for var Entry in Catalog.Props do

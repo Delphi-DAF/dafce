@@ -20,7 +20,6 @@ type
   /// Movement lines show valid paths. Piece reserves show remaining pieces.
   /// All presentation logic lives in the ViewModel.
   /// </summary>
-  [DafInjectProperties]
   TMainForm = class(TForm, IGameViewPort)
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);

@@ -108,13 +108,12 @@ A factory told **which key** is being asked for. It is what makes a wildcard reg
 only thing a factory serving every key can do is decide by which one it got. A separate type and not
 an optional parameter of `TServiceFactory`, for the same reason as `TServiceFactoryEx`.
 
-### `DafInject` and `DafInjectProperties`
+### `DafInject`
 
-The two marks of property injection. `DafInjectProperties` goes on the class and declares that it
-takes part; `DafInject` goes on each property that the container fills.
+The mark of property injection: it goes on each property the container fills, and a class takes part
+by having one. There is nothing to declare on the class.
 
 ```pascal
-[DafInjectProperties]
 TReportService = class(TInterfacedObject, IReportService)
 private
   FStorage: IStorage;
@@ -127,11 +126,12 @@ end;
 The property must be of an interface type and writable. A marked property that cannot be filled
 raises `EPropertyInjectionError` naming the property, its type and the class.
 
-**Two marks and not one, because only the class one survives a trimmed RTTI.** Under
-`{$RTTI EXPLICIT PROPERTIES([])}` the properties of a unit are not emitted, so a marked one does not
-exist for the sweep. The class attribute is still there, and that makes "declares taking part and
-exposes no marked property" a condition the container can check and report. Deducing participation
-from there being some marked property goes quiet exactly when it needs to speak.
+**One mark and not two**, and the alternative is worth naming because it was the earlier design: a
+second attribute on the class survives `{$RTTI EXPLICIT PROPERTIES([])}`, which would let the
+container say "this class takes part and I see no marked property". It was dropped because a mark you
+must remember to write can be forgotten, and forgetting it leaves the properties unfilled with no
+error — the same silence, moved from the rare case to the common one. What is lost is written down:
+under a trimmed RTTI the injection is off and nothing says so.
 
 The key travels **inside this mark**, and the same mark serves a **constructor parameter**:
 

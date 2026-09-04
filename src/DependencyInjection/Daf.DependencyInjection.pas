@@ -453,7 +453,8 @@ var
           Nodes[Idx].Edges := Nodes[Idx].Edges + [Edge];
         end;
 
-      if not TActivatorUtilities.DeclaresPropertyInjection(AClass) then Continue;
+      // Sin guarda de participacion: una clase que no marca nada devuelve una lista vacia, que es
+      // lo mismo que decia la guarda y una condicion menos que mantener.
       for var Entry in TActivatorUtilities.InjectableProperties(AClass) do
       begin
         var Prop := Entry.Prop;
@@ -632,14 +633,7 @@ procedure TServiceCollection.CollectPropertyFailures(const Descriptor: TServiceD
   const Provider: IServiceProvider; var Errors: TArray<string>);
 begin
   var AClass := Descriptor.ImplementationClass;
-  if not TActivatorUtilities.DeclaresPropertyInjection(AClass) then Exit;
-
   var Props := TActivatorUtilities.InjectableProperties(AClass);
-  if Length(Props) = 0 then
-  begin
-    Errors := Errors + [TActivatorUtilities.DescribeMissingMarks(AClass)];
-    Exit;
-  end;
 
   for var Entry in Props do
   begin
@@ -673,8 +667,6 @@ procedure TServiceCollection.CollectCapturedScopesByProperty(const Descriptor: T
   var Errors: TArray<string>);
 begin
   var AClass := Descriptor.ImplementationClass;
-  if not TActivatorUtilities.DeclaresPropertyInjection(AClass) then Exit;
-
   for var Entry in TActivatorUtilities.InjectableProperties(AClass) do
   begin
     var Prop := Entry.Prop;

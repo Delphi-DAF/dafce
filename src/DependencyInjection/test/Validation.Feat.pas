@@ -69,7 +69,6 @@ type
     ['{4C7A0E51-8B32-4D69-95F7-1A6E3C8B052D}']
   end;
 
-  [DafInjectProperties]
   TPropCaptor = class(TInterfacedObject, IPropCaptor)
   private
     FDep: IScopedDep;
@@ -93,7 +92,6 @@ type
     constructor Create(const Right: IMixedRight);
   end;
 
-  [DafInjectProperties]
   TMixedRight = class(TInterfacedObject, IMixedRight)
   private
     FLeft: IMixedLeft;
@@ -335,7 +333,7 @@ Feature Dependency graph validation @di @validation
 .Rule('Validation reaches the marked properties, not only the constructors')
 
   .Scenario('An unregistered dependency asked for by property is caught the same way')
-    .Given('a registered class taking part in property injection, with a satisfiable constructor and a marked property nobody registers',
+    .Given('a registered class with a satisfiable constructor and a marked property nobody registers',
       procedure(W: TValidationWorld)
       begin
         W.Services.AddSingleton<INeedsUnregistered, TNeedsUnregistered>;

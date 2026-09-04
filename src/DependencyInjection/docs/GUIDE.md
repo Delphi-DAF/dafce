@@ -233,7 +233,6 @@ property it resolves, because the container publishes each instance before filli
 
 ```pascal
 type
-  [DafInjectProperties]
   TOrders = class(TInterfacedObject, IOrders)
   private
     FBilling: IBilling;
@@ -242,7 +241,6 @@ type
     property Billing: IBilling read FBilling write FBilling;
   end;
 
-  [DafInjectProperties]
   TBilling = class(TInterfacedObject, IBilling)
   private
     FOrders: IOrders;
@@ -309,10 +307,14 @@ does **not** reach an instance the container did not build — that one is wired
 ### The limit: a trimmed property RTTI
 
 `{$RTTI EXPLICIT PROPERTIES([])}` leaves the properties of a whole unit out of the RTTI. For a class
-in such a unit, a marked property **does not exist** for the sweep: nothing would be injected and
-nothing would say so. That is why taking part is declared on the class — a class attribute survives
-the trim — and why a class that declares it and exposes no marked property is an error that names the
-class and points at the directives.
+in such a unit, a marked property **does not exist** for the sweep: taking part is deduced from
+marking, so that class takes part in nothing. It resolves with no error, its dependency stays `nil`,
+and the failure surfaces at the first use as an access violation.
+
+⚠️ **The container cannot warn about it**, and that is a conscious loss. A trimmed class still reports
+the properties of its ancestor through the RTTI, so "none of its own" does not tell a trim from a class
+that simply has no properties. What makes the loss acceptable is that the cause is a directive somebody
+wrote on purpose, at the top of the very unit that holds the marked property.
 
 Wiring by code is the way out: it uses no RTTI at all, so it is the only route immune to the trim.
 
@@ -398,7 +400,6 @@ time and can be written on its own:
 
 ```pascal
 type
-  [DafInjectProperties]
   TReportService = class(TInterfacedObject, IReportService)
   private
     FStorage: IStorage;
