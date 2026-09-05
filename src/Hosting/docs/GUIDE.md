@@ -284,7 +284,7 @@ end;
 3. DI container disposes Singleton instances (reverse creation order)
 4. `IHostApplicationLifetime.ApplicationStopped` callbacks fire
 
-Always prefer `WaitForShutdown` over busy-waiting — it integrates with the OS signal handler via `TShutdownHook`.
+`WaitForShutdown` integrates with the OS signal handler via `TShutdownHook`.
 
 ---
 

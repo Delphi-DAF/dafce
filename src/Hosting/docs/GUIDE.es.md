@@ -284,7 +284,7 @@ end;
 3. El contenedor DI libera las instancias Singleton (en orden inverso de creación)
 4. Se disparan los callbacks de `IHostApplicationLifetime.ApplicationStopped`
 
-Usa siempre `WaitForShutdown` en lugar de busy-waiting — se integra con el manejador de señales del SO mediante `TShutdownHook`.
+`WaitForShutdown` se integra con el manejador de señales del SO mediante `TShutdownHook`.
 
 ---
 
