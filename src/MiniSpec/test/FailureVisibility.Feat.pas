@@ -25,7 +25,7 @@ type
   strict private
     FMissing: TNeverRegistered;
   public
-    [Inject]
+    [MiniInject]
     property Missing: TNeverRegistered read FMissing write FMissing;
   end;
 

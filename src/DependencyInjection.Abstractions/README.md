@@ -157,9 +157,9 @@ it: declared in the same unit, reading the attribute aborts with an access viola
 generic is never written inside a `[ ]`** — `[DafInject<TStorageKind>(...)]` compiles with a `W1074`
 and at run time the property has no attribute at all.
 
-The name carries the `Daf` prefix on purpose: `Daf.MiniSpec.Injection` exports an `InjectAttribute` of
-its own, and two units exporting the same name in the same `uses` is not an error — the last one wins,
-in silence.
+The name carries the `Daf` prefix on purpose: `Inject` on its own is a name several tools claim, and
+two units exporting the same one in the same `uses` is not an error — the last one wins, in silence,
+and the sweep stops seeing the marked properties.
 
 ### `TServiceInjector<T>` and `AddInjector<T>`
 

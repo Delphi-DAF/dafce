@@ -431,7 +431,7 @@ type
 
   TApiWorld = class
   private
-    [Inject] FCtx: TApiContext;
+    [MiniInject] FCtx: TApiContext;
   public
     Client: THTTPClient;
     Response: IHTTPResponse;

@@ -1935,7 +1935,7 @@ begin
   if Assigned(FContextCreator) then
     FSuiteContext := FContextCreator();
   SpecContext.SetSuiteContext(FSuiteContext);
-  // Publicado tambien en el injector, que es la via por la que un World lo pide con [Inject], igual
+  // Publicado tambien en el injector, que es la via por la que un World lo pide con [MiniInject], igual
   // que TFeature<T>.Run hace con el suyo. Register ignora un nil, asi que una suite sin contexto no
   // registra nada.
   SpecContext.Injector.Register(csSuite, FSuiteContext);
@@ -2052,7 +2052,7 @@ begin
           var World := CreateWorld;
           try
             // El World ES el contexto de escenario, y por eso se publica antes de inyectarlo: es
-            // el tercero de los tres que un [Inject] puede pedir, y el mas cercano al step.
+            // el tercero de los tres que un [MiniInject] puede pedir, y el mas cercano al step.
             SpecContext.Injector.Register(csScenario, World);
             SpecContext.SetScenarioContext(World);
             try

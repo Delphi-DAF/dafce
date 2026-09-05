@@ -306,7 +306,33 @@ This is the largest front of 2.0 for anything that had a `.dpr`.
   `Build` — because that is when the file is opened now. It still goes through the bootstrap
   channel and still propagates; what changed is which category signs it.
 
-### 9. MiniSpec: the injector holds the three contexts, and nothing else
+### 9. MiniSpec: the injection mark is renamed, and the injector holds the three contexts
+
+- **`[Inject]` is now `[MiniInject]`.** `Inject` on its own is a name several tools claim, and two
+  units exporting the same one in the same `uses` is not an error — the last one wins, in silence.
+  The attribute travels in the facade now, so the extra `uses` goes away:
+
+  ```pascal
+  // Before
+  uses Daf.MiniSpec, Daf.MiniSpec.Injection;
+  ...
+    [Inject]
+    property Shared: TSharedContext read FShared write FShared;
+
+  // Now
+  uses Daf.MiniSpec;
+  ...
+    [MiniInject]
+    property Shared: TSharedContext read FShared write FShared;
+  ```
+
+  Leaving `[Inject]` in place does **not** fail the build: the compiler emits `W1074 Unknown custom
+  attribute` and at run time the member has no attribute, so nothing is injected and nothing says
+  so. Search your specs for `[Inject]`.
+
+- **The mark now works on a field too**, which is what the guide always showed and what never
+  worked. A field is reached whatever its visibility; a property only when it is public or
+  published.
 
 - **`TInjectorService` is no longer a class-wide registry of loose services.** It is an instance
   owned by the run, and what it holds are the three contexts alive while a step runs. `Register`
@@ -321,7 +347,7 @@ This is the largest front of 2.0 for anything that had a `.dpr`.
   MiniSpec.UseSuiteContext<TTestResources>;   // TTestResources owns the mocks
   ```
 
-- **When more than one context satisfies an `[Inject]` property, the winner is now declared**:
+- **When more than one context satisfies an `[MiniInject]` property, the winner is now declared**:
   exact type first — scenario, then feature, then suite — and only then a descendant, in that same
   order. It used to answer with the first entry that fitted according to a dictionary's internal
   order. This one does not break compilation: a World that receives a different context than before

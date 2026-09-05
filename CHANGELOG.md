@@ -119,6 +119,7 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 - **Hosting**: El sample `ConsoleSample` se muda de `src/Application/samples/` a `src/Hosting/samples/`: lo que ilustra es el host —composición, configuración y ciclo de vida—, no la capa de aplicación en cuya carpeta estaba
 - ⚠️ **MiniSpec**: Cuando más de un contexto satisface un `[Inject]`, gana el más cercano al step —escenario, luego feature, luego suite— y una coincidencia exacta gana a cualquier descendiente. Antes contestaba el primero que encajara según el orden interno de un diccionario, que no se podía observar porque solo había un contexto registrado a la vez
 - ⚠️ **MiniSpec**: `TInjectorService` deja de admitir servicios sueltos y pasa a ser una instancia de la ejecución con los tres ámbitos, `Register(Scope, Instance)`. El colaborador que necesite un escenario se construye en el World, o en el contexto de feature o de suite si hay que compartirlo
+- ⚠️ **MiniSpec**: El atributo de inyección pasa a llamarse **`[MiniInject]`**. `Inject` a secas es un nombre que reclaman varias herramientas, y dos units que exporten el mismo en el mismo `uses` no dan error: gana la última y el barrido deja de ver lo marcado, en silencio. Viaja además en la facade, así que `uses Daf.MiniSpec` basta para marcar. **Rompe** a quien use `[Inject]`; el diff de ejemplo, en `MIGRATION-2.0.md`
 
 ### Removed
 
@@ -130,6 +131,7 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 
 ### Fixed
 
+- **MiniSpec**: La marca de inyección funciona **sobre un campo**, que es lo que la guía enseña desde siempre —`[MiniInject] FCtx: TFeatureContext;`— y nunca había funcionado: el barrido solo recorría propiedades, así que el campo se quedaba en `nil`, sin error y sin aviso. Un campo se alcanza sea cual sea su visibilidad, `strict private` incluido; una propiedad, solo si es public o published
 - **NNLog**: Una regla obedece los dos campos de su configuración que se ignoraban en silencio: `enabled` ausente vale ahora **activada** —solo el literal `false` la desactiva—, y `name` filtra de verdad (`*`, ausente o vacío nombra todas; cualquier otro valor es una expresión regular anclada). **Cambio de comportamiento observable**: un config con alguna regla de `name` distinto de `*` deja de recibirlo todo
 - **DependencyInjection**: Cerrar el contenedor lo deja **cerrado**: resolver después de `ShutDown` lanza `EContainerShutDownError` nombrando el servicio, en vez de `EAccessViolation` o de servirlo en silencio. Cerrar dos veces deja de romper, y cerrarlo cierra todos sus ámbitos y no ninguno
 - **DependencyInjection**: Un ciclo de dependencias que el contenedor no puede romper **deja de matar el proceso**. Agotaba la pila y el proceso moría sin excepción, sin mensaje y con la salida pendiente perdida en el búfer; ahora la resolución falla nombrando el camino del ciclo, esté la validación al construir encendida o apagada — que por defecto lo está la segunda

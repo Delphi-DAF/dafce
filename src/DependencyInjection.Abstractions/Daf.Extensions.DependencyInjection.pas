@@ -103,9 +103,9 @@ type
   ///   es el contrato --ha de ser una interfaz-- y la propiedad ha de ser escribible.
   /// </summary>
   /// <remarks>
-  ///   El prefijo no es decorativo: Daf.MiniSpec.Injection exporta un InjectAttribute propio, y
-  ///   dos units que exporten el mismo nombre en el mismo uses no dan error -- gana la ultima, y
-  ///   el barrido deja de ver las propiedades marcadas sin decir nada.
+  ///   El prefijo no es decorativo: Inject a secas es un nombre que reclaman varias herramientas
+  ///   a la vez, y dos units que exporten el mismo en el mismo uses no dan error -- gana la ultima,
+  ///   y el barrido deja de ver las propiedades marcadas sin decir nada.
   ///
   ///   Sirve igual sobre un PARAMETRO DE CONSTRUCTOR, que es el [FromKeyedServices] de .NET. Un
   ///   solo atributo para las dos posiciones, para que el marcador propio de una aplicacion valga

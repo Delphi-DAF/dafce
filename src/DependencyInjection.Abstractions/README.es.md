@@ -159,9 +159,9 @@ usan: declarada en la misma unit, leer el atributo aborta con un access violatio
 no se escribe nunca dentro de un `[ ]`** — `[DafInject<TStorageKind>(...)]` compila con un `W1074` y
 en ejecución la propiedad no tiene ningún atributo.
 
-El nombre lleva el prefijo `Daf` a propósito: `Daf.MiniSpec.Injection` exporta un `InjectAttribute`
-propio, y dos units que exporten el mismo nombre en el mismo `uses` no dan error — gana la última, en
-silencio.
+El nombre lleva el prefijo `Daf` a propósito: `Inject` a secas es un nombre que reclaman varias
+herramientas, y dos units que exporten el mismo en el mismo `uses` no dan error — gana la última, en
+silencio, y el barrido deja de ver las propiedades marcadas.
 
 ### `TServiceInjector<T>` y `AddInjector<T>`
 

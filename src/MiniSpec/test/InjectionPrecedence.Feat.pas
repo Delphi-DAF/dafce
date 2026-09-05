@@ -33,7 +33,7 @@ type
   strict private
     FOwn: TOwnCtx;
   public
-    [Inject]
+    [MiniInject]
     property Own: TOwnCtx read FOwn write FOwn;
   end;
 
@@ -43,7 +43,7 @@ type
   strict private
     FGlobal: TSuiteResources;
   public
-    [Inject]
+    [MiniInject]
     property Global: TSuiteResources read FGlobal write FGlobal;
   end;
 
@@ -51,7 +51,7 @@ type
   strict private
     FMissing: TUnavailable;
   public
-    [Inject]
+    [MiniInject]
     property Missing: TUnavailable read FMissing write FMissing;
   end;
 
@@ -156,7 +156,7 @@ Injection precedence @injection
 .Rule('A declared dependency that is absent is an omission, not a value')
 
   .Scenario('Nobody registered that type')
-    .When('a World with an [Inject] property nothing satisfies is built', procedure(W: TInjWorld)
+    .When('a World with an [MiniInject] property nothing satisfies is built', procedure(W: TInjWorld)
       begin
         try
           W.Injector.InjectInto(W.Needy);

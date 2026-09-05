@@ -32,7 +32,7 @@ type
     Veces: Integer;
     /// El contexto de suite pedido por inyeccion, que es lo que la documentacion promete y la via
     /// que no obliga a castear desde TObject.
-    [Inject]
+    [MiniInject]
     property Global: TSuiteResources read FGlobal write FGlobal;
   end;
 
@@ -78,7 +78,7 @@ Suite context @context
       Expect(W.Veces).ToEqual(1);
     end)
 
-.Scenario('A World receives it by [Inject], without casting from TObject')
+.Scenario('A World receives it by [MiniInject], without casting from TObject')
   .When('the runner builds the World of a scenario', procedure(W: TSuiteCtxWorld)
     begin
       W.Leido := W.Global;

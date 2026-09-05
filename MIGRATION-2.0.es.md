@@ -310,7 +310,33 @@ Es el frente más grande de 2.0 para cualquier cosa que tuviera un `.dpr`.
   `Build` — porque es cuando el fichero se abre ahora. Sigue saliendo por el canal de arranque y
   sigue propagando; lo que cambia es qué categoría lo firma.
 
-### 9. MiniSpec: el inyector guarda los tres contextos, y nada más
+### 9. MiniSpec: la marca de inyección se renombra, y el inyector guarda los tres contextos
+
+- **`[Inject]` pasa a ser `[MiniInject]`.** `Inject` a secas es un nombre que reclaman varias
+  herramientas, y dos units que exporten el mismo en el mismo `uses` no dan error: gana la última,
+  en silencio. El atributo viaja ahora en la facade, así que el `uses` de más sobra:
+
+  ```pascal
+  // Antes
+  uses Daf.MiniSpec, Daf.MiniSpec.Injection;
+  ...
+    [Inject]
+    property Shared: TSharedContext read FShared write FShared;
+
+  // Ahora
+  uses Daf.MiniSpec;
+  ...
+    [MiniInject]
+    property Shared: TSharedContext read FShared write FShared;
+  ```
+
+  Dejar `[Inject]` **no** rompe la compilación: el compilador emite `W1074 Unknown custom attribute`
+  y en ejecución el miembro no tiene atributo, así que no se inyecta nada y nada lo dice. Busca
+  `[Inject]` en tus specs.
+
+- **La marca funciona ahora también sobre un campo**, que es lo que la guía enseñaba desde siempre y
+  nunca había funcionado. Un campo se alcanza sea cual sea su visibilidad; una propiedad, solo si es
+  public o published.
 
 - **`TInjectorService` deja de ser un registro de servicios sueltos a nivel de clase.** Es una
   instancia de la ejecución, y lo que guarda son los tres contextos vivos mientras corre un step.
@@ -325,7 +351,7 @@ Es el frente más grande de 2.0 para cualquier cosa que tuviera un `.dpr`.
   MiniSpec.UseSuiteContext<TTestResources>;   // TTestResources posee los mocks
   ```
 
-- **Cuando más de un contexto satisface una propiedad `[Inject]`, el que gana está declarado**:
+- **Cuando más de un contexto satisface una propiedad `[MiniInject]`, el que gana está declarado**:
   primero el tipo exacto —escenario, luego feature, luego suite— y solo después un descendiente, en
   ese mismo orden. Antes contestaba el primero que encajara según el orden interno de un
   diccionario. Esta no rompe la compilación: el World que reciba un contexto distinto al de antes es

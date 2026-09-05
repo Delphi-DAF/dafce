@@ -63,7 +63,7 @@ begin
 end.
 ```
 
-Los World de cada feature pueden inyectar este contexto con `[Inject]`.
+Los World de cada feature pueden inyectar este contexto con `[MiniInject]`.
 
 ### Opciones de Ejecución
 
@@ -140,7 +140,7 @@ type
 
   TScenarioWorld = class
   private
-    [Inject] FShared: TSharedContext;  // Inyectado automáticamente
+    [MiniInject] FShared: TSharedContext;  // Inyectado automáticamente
   public
     LocalData: string;
     property Shared: TSharedContext read FShared;

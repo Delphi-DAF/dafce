@@ -10,6 +10,7 @@ uses
   System.Rtti,
   System.Classes,
   Daf.MiniSpec.Types,
+  Daf.MiniSpec.Injection,
   Daf.MiniSpec.Builders,
   Daf.MiniSpec.Binding,
   Daf.MiniSpec.Runner,
@@ -24,6 +25,15 @@ type
 {$SCOPEDENUMS ON}
   TRunMode = (rmRun, rmListTags, rmQuery, rmHelp, rmReporterHelp);
 {$SCOPEDENUMS Off}
+
+  /// <summary>
+  /// Reexportado de Daf.MiniSpec.Injection: marcar un miembro no exige un uses mas.
+  /// </summary>
+  /// <remarks>
+  /// Quien escriba [MiniInject] sin esa unit en el uses se lleva un W1074 Unknown custom
+  /// attribute, y en ejecucion el miembro no tiene atributo ninguno: no se inyecta, y nada lo dice.
+  /// </remarks>
+  MiniInjectAttribute = Daf.MiniSpec.Injection.MiniInjectAttribute;
 
   TMiniSpec = class
   public

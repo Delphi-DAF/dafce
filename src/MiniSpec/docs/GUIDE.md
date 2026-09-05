@@ -33,7 +33,7 @@ Welcome to the MiniSpec guide, the BDD framework for Delphi.
 ### Advanced Configuration
 - [**Hooks (Before/After)**](guide/hooks.md) — Feature-level setup/teardown code
 - [**Global Configuration**](guide/configuration.md) — MiniSpec, SpecContext, FeatureContext
-- [**Dependency Injection**](guide/injection.md) — Built-in [Inject] system
+- [**Dependency Injection**](guide/injection.md) — Built-in [MiniInject] system
 
 ### Execution and Output
 - [**Reporters**](guide/reporters.md) — Console, JSON, JUnit, Gherkin, Live Dashboard

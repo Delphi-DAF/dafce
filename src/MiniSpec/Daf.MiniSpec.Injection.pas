@@ -9,10 +9,15 @@ uses
 
 type
   /// <summary>
-  /// Marca una propiedad para inyección automática de contexto.
-  /// El tipo de la propiedad debe coincidir con un servicio registrado.
+  /// Marca un campo o una propiedad para inyección automática de contexto.
+  /// El tipo del miembro debe coincidir con un servicio registrado.
   /// </summary>
-  InjectAttribute = class(TCustomAttribute)
+  /// <remarks>
+  /// El prefijo no es decorativo: Inject a secas es un nombre que reclaman varias herramientas a
+  /// la vez, y dos units que exporten el mismo en el mismo uses no dan error -- gana la ultima, y
+  /// el barrido deja de ver los miembros marcados sin decir nada.
+  /// </remarks>
+  MiniInjectAttribute = class(TCustomAttribute)
   end;
 
   /// <summary>
@@ -34,11 +39,18 @@ type
   /// Cada ejecución posee el suyo: los contextos registrados son los de esa ejecución y no
   /// sobreviven a su entorno, de modo que una ejecución anidada no hereda los de la exterior.
   /// Al crear un ScenarioContext, el Runner llama InjectInto para
-  /// completar las propiedades marcadas con [Inject].
+  /// completar los miembros marcados con [MiniInject].
   /// </summary>
   TInjectorService = class
   strict private
     FContexts: array[TContextScope] of TObject;
+    class function IsMarked(Member: TRttiMember): Boolean; static;
+    /// <summary>
+    /// La parte comun a un campo y a una propiedad: comprobar y resolver. AKind es el sustantivo
+    /// que llevan los tres mensajes de error, "Field" o "Property".
+    /// </summary>
+    function ResolveFor(Target: TObject; const AKind, AName: string; AType: TRttiType;
+      const AWritable: Boolean): TObject;
   public
     /// <summary>
     /// Registra el contexto vivo de un ambito. Un segundo registro del mismo ambito reemplaza al
@@ -65,11 +77,16 @@ type
     function Resolve<T: class>: T; overload;
 
     /// <summary>
-    /// Inyecta en todas las propiedades del Target marcadas con [Inject].
-    /// Para cada propiedad, resuelve por tipo y asigna.
+    /// Inyecta en todos los campos y propiedades del Target marcados con [MiniInject].
+    /// Para cada uno, resuelve por tipo y asigna.
     /// </summary>
+    /// <remarks>
+    /// Los campos entran por la RTTI de campos, que en Delphi alcanza tambien a los privados; las
+    /// propiedades, por la suya, que solo alcanza a las publicas y publicadas. Un campo strict
+    /// private marcado se rellena; una propiedad private marcada no la ve nadie.
+    /// </remarks>
     /// <exception cref="EInjectionError">
-    /// Si una propiedad [Inject] no es escribible, no es de tipo clase,
+    /// Si un miembro [MiniInject] no es escribible, no es de tipo clase,
     /// o no se encuentra ningún servicio compatible registrado.
     /// </exception>
     procedure InjectInto(Target: TObject);
@@ -124,16 +141,45 @@ begin
   Result := T(Resolve(T));
 end;
 
+class function TInjectorService.IsMarked(Member: TRttiMember): Boolean;
+var
+  Attr: TCustomAttribute;
+begin
+  for Attr in Member.GetAttributes do
+    if Attr is MiniInjectAttribute then
+      Exit(True);
+  Result := False;
+end;
+
+function TInjectorService.ResolveFor(Target: TObject; const AKind, AName: string;
+  AType: TRttiType; const AWritable: Boolean): TObject;
+var
+  MemberClass: TClass;
+begin
+  if not AWritable then
+    raise EInjectionError.CreateFmt(
+      '%s "%s" in %s is marked with [MiniInject] but is not writable',
+      [AKind, AName, Target.ClassName]);
+
+  if (AType = nil) or (AType.TypeKind <> tkClass) then
+    raise EInjectionError.CreateFmt(
+      '%s "%s" in %s is marked with [MiniInject] but is not a class type',
+      [AKind, AName, Target.ClassName]);
+
+  MemberClass := AType.AsInstance.MetaclassType;
+  Result := Resolve(MemberClass);
+  if Result = nil then
+    raise EInjectionError.CreateFmt(
+      'Cannot resolve service for %s "%s" of type %s in %s: no compatible service registered',
+      [LowerCase(AKind), AName, MemberClass.ClassName, Target.ClassName]);
+end;
+
 procedure TInjectorService.InjectInto(Target: TObject);
 var
   RttiContext: TRttiContext;
   RttiType: TRttiType;
+  Field: TRttiField;
   Prop: TRttiProperty;
-  Attr: TCustomAttribute;
-  HasInjectAttr: Boolean;
-  PropType: TRttiType;
-  PropClass: TClass;
-  ResolvedValue: TObject;
 begin
   if Target = nil then
     Exit;
@@ -144,47 +190,15 @@ begin
     if RttiType = nil then
       Exit;
 
+    for Field in RttiType.GetFields do
+      if IsMarked(Field) then
+        Field.SetValue(Target, TValue.From<TObject>(
+          ResolveFor(Target, 'Field', Field.Name, Field.FieldType, True)));
+
     for Prop in RttiType.GetProperties do
-    begin
-      // Buscar atributo [Inject]
-      HasInjectAttr := False;
-      for Attr in Prop.GetAttributes do
-      begin
-        if Attr is InjectAttribute then
-        begin
-          HasInjectAttr := True;
-          Break;
-        end;
-      end;
-
-      if not HasInjectAttr then
-        Continue;
-
-      // Verificar que la propiedad es escribible
-      if not Prop.IsWritable then
-        raise EInjectionError.CreateFmt(
-          'Property "%s" in %s is marked with [Inject] but is not writable',
-          [Prop.Name, Target.ClassName]);
-
-      // Obtener el tipo de la propiedad
-      PropType := Prop.PropertyType;
-      if PropType.TypeKind <> tkClass then
-        raise EInjectionError.CreateFmt(
-          'Property "%s" in %s is marked with [Inject] but is not a class type',
-          [Prop.Name, Target.ClassName]);
-
-      PropClass := PropType.AsInstance.MetaclassType;
-
-      // Resolver el servicio por tipo
-      ResolvedValue := Resolve(PropClass);
-      if ResolvedValue = nil then
-        raise EInjectionError.CreateFmt(
-          'Cannot resolve service for property "%s" of type %s in %s: no compatible service registered',
-          [Prop.Name, PropClass.ClassName, Target.ClassName]);
-
-      // Inyectar
-      Prop.SetValue(Target, TValue.From<TObject>(ResolvedValue));
-    end;
+      if IsMarked(Prop) then
+        Prop.SetValue(Target, TValue.From<TObject>(
+          ResolveFor(Target, 'Property', Prop.Name, Prop.PropertyType, Prop.IsWritable)));
   finally
     RttiContext.Free;
   end;

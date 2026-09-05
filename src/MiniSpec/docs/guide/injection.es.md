@@ -1,4 +1,4 @@
-# Inyección de Dependencias con [Inject]
+# Inyección de Dependencias con [MiniInject]
 
 **🌍 Idioma: [English](injection.md) | Español**
 
@@ -6,7 +6,8 @@
 
 ---
 
-MiniSpec incluye un sistema ligero de inyección de dependencias para propiedades marcadas con `[Inject]`.
+MiniSpec incluye un sistema ligero de inyección de dependencias para campos y propiedades marcados
+con `[MiniInject]`.
 
 ## Uso Básico
 
@@ -14,8 +15,7 @@ Inyección automática del FeatureContext:
 
 ```pascal
 uses
-  Daf.MiniSpec,
-  Daf.MiniSpec.Injection;  // Para el atributo [Inject]
+  Daf.MiniSpec;  // MiniInject viaja en la facade
 
 type
   TFeatureContext = class
@@ -25,7 +25,7 @@ type
 
   TWorld = class
   private
-    [Inject] FCtx: TFeatureContext;  // Inyectado automáticamente
+    [MiniInject] FCtx: TFeatureContext;  // Inyectado automáticamente
   public
     property Ctx: TFeatureContext read FCtx;
   end;
@@ -35,9 +35,17 @@ Feature('...')
   .UseWorld<TWorld>             // Al crear World, inyecta FCtx
 ```
 
+## Dónde puede ir la marca
+
+Sobre un **campo** o sobre una **propiedad**. Un campo se alcanza sea cual sea su visibilidad,
+`strict private` incluido; una propiedad solo si es public o published, que es lo que emite la RTTI
+por defecto de Delphi para propiedades. Marcar una propiedad privada no hace nada y no da error.
+
+`TInjectorService` exige además que la propiedad sea escribible. Un campo siempre lo es.
+
 ## Los tres contextos, y cuál gana
 
-Una propiedad `[Inject]` recibe cualquiera de los tres contextos vivos mientras corre un step: el
+Un miembro `[MiniInject]` recibe cualquiera de los tres contextos vivos mientras corre un step: el
 World del propio escenario, el contexto de feature declarado con `UseFeatureContext<T>` y el
 contexto de suite declarado con `UseSuiteContext<T>`.
 
@@ -61,7 +69,7 @@ sobrevive. Una ejecución anidada no ve los contextos de la que la lanzó.
 | `Unregister(Scope)` | Vacía un ámbito |
 | `Resolve(AClass)` | Obtiene el contexto vivo compatible con esa clase, por la precedencia de arriba |
 | `Resolve<T>` | Versión genérica de Resolve |
-| `InjectInto(Target)` | Inyecta contextos en propiedades marcadas con `[Inject]` |
+| `InjectInto(Target)` | Inyecta contextos en campos y propiedades marcados con `[MiniInject]` |
 | `Clear` | Vacía los tres ámbitos |
 
 El runner llama a `Register` y `Unregister` por su cuenta según se crea y se destruye cada contexto.
@@ -70,7 +78,7 @@ World, o en el contexto de feature o de suite si hay que compartirlo.
 
 ## Errores de Inyección
 
-Si una propiedad marcada con `[Inject]` no puede ser inyectada, se lanza `EInjectionError`:
+Si un miembro marcado con `[MiniInject]` no puede ser inyectado, se lanza `EInjectionError`:
 
 - Propiedad no es de tipo clase
 - Propiedad no tiene setter
