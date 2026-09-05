@@ -26,10 +26,10 @@ Las propiedades ganan a los campos, igual que en la resolución del propio carri
 
 ## La hoja lleva un nombre de propiedad
 
-No un nombre de columna. Tres razones independientes:
+No un nombre de columna.
 
-- Un nombre de columna es vocabulario de persistencia. Una hoja que lo llevara sería consciente de la persistencia y no podría vivir en un paquete que debe permanecer libre de SQL.
-- Declararía el mapeo dos veces — una donde lo describa el ORM, otra aquí — sin ningún enlace del compilador entre las copias. La divergencia sería entonces solo cuestión de tiempo, y divergiría *en silencio*.
+- Un nombre de columna es vocabulario de persistencia, y este paquete permanece libre de SQL.
+
 - El nombre de propiedad es la moneda correcta para el carril en memoria, que no necesita mapeo alguno. Solo SQL necesita la columna, y la obtiene en el momento de emitir, en un único sitio, una sola vez.
 
 ---
@@ -52,7 +52,7 @@ Los valores por defecto son deliberadamente mínimos:
 | ¿Qué columna para este miembro? | El nombre del miembro, sin cambios |
 | ¿Qué tabla para este tipo? | El nombre del tipo sin la `T` inicial |
 
-La `T` se quita solo cuando le sigue una mayúscula, así que `TProduct` → `Product` mientras `Thing` se deja en paz. Sin pluralización y sin conversión de caso: eso es *política* de nombres, y adivinarla chocaría con lo que decida el ORM mientras parece una funcionalidad.
+La `T` se quita solo cuando le sigue una mayúscula, así que `TProduct` → `Product` mientras `Thing` se deja en paz. Sin pluralización y sin conversión de caso.
 
 Aportar la tuya es una clase:
 
@@ -93,7 +93,7 @@ TExprEmitter.Apply<TProduct>(Q, Spec, TMappedResolver.Create);
 
 ## Lo que la estrategia no es
 
-Es una costura para nombres, no un modelo de mapeo. Claves, columnas de bloqueo, atributos, mapeo de herencia y DML dirigido por instancia son todos metadatos del ORM, y el ORM aún no está diseñado. Meter aquí un modelo de mapeo prejuzgaría ese diseño desde la capa equivocada.
+Es una costura para nombres, no un modelo de mapeo. Claves, columnas de bloqueo, atributos, mapeo de herencia y DML dirigido por instancia son todos metadatos del ORM, y el ORM aún no está diseñado.
 
 Así que esta capa se compromete con la costura: sea lo que sea el ORM, aportará su propia `INameResolver` y aquí no cambiará nada.
 
@@ -101,6 +101,6 @@ Así que esta capa se compromete con la costura: sea lo que sea el ORM, aportar�
 
 ## El accesor reservado
 
-`IMemberExpr.Accessor` existe y hoy siempre vale `nil`. El sitio está reservado porque el verdadero beneficio de un metamodelo generado no serían los nombres, sino adjuntar aquí un accesor ya resuelto, permitiendo al carril en memoria saltarse la normalización de nombre, la búsqueda en diccionario y el encajonado que hace por fila y por columna. Reservar el campo ahora permite que eso llegue sin reformar el nodo.
+`IMemberExpr.Accessor` existe y hoy siempre vale `nil`.
 
-Los dos caminos de autoría lo dejan en `nil`, a propósito: si uno lo rellenara y el otro no, se convertiría en aquello que distingue una hoja de metamodelo de una de tiempo de ejecución.
+Los dos caminos de autoría lo dejan en `nil`.

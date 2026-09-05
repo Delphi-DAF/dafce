@@ -50,9 +50,7 @@ en ejecución.
 
 ## Declarar una gramática
 
-Los métodos fluidos viven **en las interfaces**, nunca en un `class helper`: solo un helper por tipo
-está en ámbito y los helpers no aplican a interfaces, así que un API fluida repartida entre units se
-rompería —en silencio, ganando el último `uses`— en cuanto alguien reordenara una cláusula.
+Los métodos fluidos viven **en las interfaces**, nunca en un `class helper`.
 
 ```pascal
 var VerboseOpt := CommandLine.Option<Boolean>('--verbose', 'Cuenta más').Recursive;
@@ -119,9 +117,7 @@ Compra tres cosas que parecían independientes:
   por los dos — y, con `.AllowMultipleArgumentsPerToken`, también `--file a.pas b.pas`.
 - **Requerido, en los argumentos.** Un mínimo de uno **es** requerido; no hace falta un segundo
   concepto.
-- **Se acaba el último-gana silencioso.** Con máximo uno, repetir la opción es un **error**. Quedarse
-  callado con el último es un valor que elige el parser por su cuenta — el mismo pecado que leer
-  `80xyz` como `80`.
+- **Se acaba el último-gana silencioso.** Con máximo uno, repetir la opción es un **error**.
 
 En las **opciones**, `Required` es una marca aparte, como en .NET: una opción de un valor puede ser
 obligatoria o no, y la aridad no lo dice.
@@ -135,9 +131,8 @@ el texto recibido, en vez de valer `80`; y `-5` es un valor, no una opción desc
 
 ### Los tipos de serie, y qué traduce cada uno
 
-La lista está **traducida** de la de .NET, no copiada: copiarla sería portar nombres en vez de
-capacidades. Lo que necesita una línea de comandos son números de los anchos que la gente usa,
-fechas, identificadores y rutas.
+La lista está **traducida** de la de .NET, no copiada. Lo que necesita una línea de comandos son
+números de los anchos que la gente usa, fechas, identificadores y rutas.
 
 | `System.CommandLine` | Aquí | Por qué |
 |---|---|---|
@@ -199,9 +194,7 @@ El rechazo sale por `ParseResult.Errors` como cualquier otro, así que un tipo q
 falla igual de bien que uno de serie. Sirve también para un tipo que el motor ya conoce, para leerlo de
 otra forma — hexadecimal en un `Integer`, por ejemplo.
 
-**En el símbolo y no en un registro de tipos**, a propósito: un registro lo convierte en configuración
-de proceso, así que dos librerías que declaren la conversión del mismo tipo pelean y gana la que
-arrancó última, en silencio. En el símbolo, el alcance es exactamente donde se escribió.
+**En el símbolo y no en un registro de tipos.** El alcance es exactamente donde se escribió.
 
 El límite **se movió pero no desapareció**: un tipo que el motor no cubre y para el que no se declara
 conversión se sigue rechazando **al declararlo**, que es donde quien escribe la gramática puede hacer
@@ -221,10 +214,6 @@ CountOpt := CommandLine.Option<Integer>('--count', 'Cuántos hacer')
       Error := Format('--count tiene que ser mayor que cero, y %d no lo es', [Value]);
   end);
 ```
-
-Dentro, y no después, por un motivo: validar fuera desplaza el fallo a donde ya no es un error de
-invocación, y la herramienta acaba reportando unos fallos de una forma y otros de otra — quien la
-invocó ve dos listas en vez de una.
 
 Se pueden declarar varias; el primer rechazo es el error de ese valor. Una validación debería ser una
 pregunta pura sobre el valor.
@@ -265,9 +254,7 @@ de saberlo. Sin esto, la aplicación deja el default vacío y lo rellena despué
 ayuda muestra un default que el programa no usa.
 
 El cálculo corre como máximo una vez, y **la ayuda no lo ejecuta**: muestra el texto que se declare
-junto a él, y ningún default cuando no hay ninguno. Un cálculo puede abrir un fichero o leer el
-entorno, y la ayuda no tiene forma de saber si este lo hace; no mostrar nada es mejor que inventar un
-valor o que pagar un efecto para pintar una línea.
+junto a él, y ningún default cuando no hay ninguno.
 
 ---
 
@@ -278,20 +265,17 @@ DiagOpt := CommandLine.Option<Integer>('--diag', 'Nivel de diagnóstico').Hidden
 ```
 
 Es lo que necesita una opción de diagnóstico, una en transición o una que solo usa un script interno:
-existir sin ponerse delante de todo el que pregunta cómo se usa la herramienta. Las alternativas eran
-no declararla —y entonces no funciona— o declararla y aceptar que salga.
+existir sin ponerse delante de todo el que pregunta cómo se usa la herramienta.
 
 Ocultar es cosa de **la ayuda** y de nada más. Un símbolo oculto se declara, se parsea y se lee igual,
-y cuando recibe un valor inválido el error **lo nombra**: esconderlo de la ayuda no es esconderlo de
-quien ya lo usa, y un error que no dice qué falló convierte una errata en un acertijo.
+y cuando recibe un valor inválido el error **lo nombra**.
 
 ---
 
 ## Cómo se puede escribir una invocación
 
 La misma invocación, escrita como ya la escribe quien la teclea. Ninguna de estas formas dice nada
-que no digan las otras: existen para que una herramienta hecha con esto no necesite una sección del
-README explicando por qué su sintaxis es la excepción.
+que no digan las otras.
 
 | Forma | Ejemplo | Equivale a |
 |-------|---------|------------|
@@ -307,8 +291,7 @@ README explicando por qué su sintaxis es la excepción.
 Todas están acotadas igual: **cada una actúa solo cuando el token no nombra ya algo declarado**.
 `-fdx` se parte en tres porque `f`, `d` y `x` son alias declarados; si existiera una opción llamada
 `-fdx`, eso es lo que el token seguiría siendo. Y un grupo con una letra que nadie declaró se rechaza
-**entero**, nombrando la letra — aceptar las que sí y callar la que no te dejaría creyendo que
-pediste algo que no pediste.
+**entero**, nombrando la letra.
 
 ### ⚠️ Qué quita admitirlas
 
@@ -343,9 +326,8 @@ bin\app.exe
 ```
 
 Una línea, un token: no se parte por espacios, no se expande ninguna variable y no se resuelve
-ninguna ruta contra nada — cuanto menos haga, menos hay que explicar sobre de dónde salió un token.
-Un fichero puede nombrar a otro; el anidamiento está acotado, y uno que se nombra a sí mismo falla
-diciéndolo en vez de colgarse.
+ninguna ruta contra nada. Un fichero puede nombrar a otro; el anidamiento está acotado, y uno que se
+nombra a sí mismo falla diciéndolo en vez de colgarse.
 
 ### Varios valores tras un solo nombre
 
@@ -354,10 +336,7 @@ var ItemsOpt := CommandLine.Option<string>('--items', 'Varios de una vez')
   .WithArity(TArity.ZeroOrMore).AllowMultipleArgumentsPerToken;
 ```
 
-`--items a b c` pasa a valer por los tres. Es **opt-in, y no podía ser otra cosa**: si toda opción
-con sitio para varios valores fuera glotona por defecto, un posicional escrito detrás de una dejaría
-de ser posicional. El default correcto depende de la gramática y solo lo sabe quien la escribió — en
-.NET se llama igual, por lo mismo.
+`--items a b c` pasa a valer por los tres. Es **opt-in**: en .NET se llama igual.
 
 ### Un comando que envuelve a otro
 
@@ -370,9 +349,7 @@ var Parsed := Sudo.Parse(['-u', 'admin', 'apt', 'update']);
 var Resto  := Parsed.UnmatchedTokens;   // ['apt', 'update']
 ```
 
-Sin eso —y sigue siendo el defecto— un token que no casa con nada es un error de parseo. Para todo lo
-que no envuelve a nadie, un token sin reconocer es una errata, y tragárselo en silencio es el peor de
-los dos fallos.
+Sin eso —y sigue siendo el defecto— un token que no casa con nada es un error de parseo.
 
 ---
 
@@ -403,13 +380,13 @@ Options:
 Toda gramática responde a `--help` y `-h`, y toda **raíz** responde a `--version`, sin declarar nada.
 Pedir cualquiera de las dos es un **resultado válido**, no un fallo: `HelpRequested` /
 `VersionRequested` son ciertos y `Errors` está vacío. La ayuda se resuelve *antes* de validar la
-gramática, porque una herramienta que exige acertar la sintaxis para explicar la sintaxis no sirve de
-nada. Una aplicación que declare su propio `--help` o `--version` gana: es la que conoce su caso. Y
-`--version` va en la raíz y no en cada subcomando, como en .NET: la versión es de la herramienta.
+gramática. Una aplicación que declare su propio `--help` o `--version` gana: es la que conoce su
+caso. Y `--version` va en la raíz y no en cada subcomando, como en .NET: la versión es de la
+herramienta.
 
 ---
 
-## Divergencias con `System.CommandLine`, cada una con su causa
+## Divergencias con `System.CommandLine`
 
 **1 · El valor se lee al revés.** En .NET se escribe `result.GetValue(fileOption)`. Aquí,
 `fileOption.ValueIn(parsed)`: el objeto le pregunta al resultado:
@@ -421,23 +398,18 @@ nada. Una aplicación que declare su propio `--help` o `--version` gana: es la q
   Incompatible types: 'IOption<T>' and 'IOption<string>'`. La inferencia funciona cuando el parámetro
   **es** `T`, no cuando `T` va anidada dentro de otro genérico.
 
-La llamada de .NET costaría renunciar a las interfaces contadas **y además** escribir `<string>` a
-mano en cada lectura — reintroduciendo justo la repetición que este módulo existe para quitar.
 `ValueIn` no necesita inferencia porque `T` ya viene fijada por el receptor.
 
 **2 · Los nombres se comparan sin distinguir mayúsculas.** .NET es **sensible** por convención POSIX;
-aquí `--OUT` y `--out` son la misma opción. La causa es el entorno, no la comodidad: Delphi es un
-lenguaje insensible a mayúsculas y las CLI de Windows lo son por costumbre, así que una herramienta
-DAF que distinguiera `--Out` de `--out` sorprendería a su propio público. El coste aceptado: dos
-alias que solo difieran en mayúsculas son el mismo alias, y una CLI donde el caso **es** el
-significado —`git clean -x` frente a `-X`— no se puede expresar. Para eso, dos opciones.
+aquí `--OUT` y `--out` son la misma opción. El coste aceptado: dos alias que solo difieran en
+mayúsculas son el mismo alias, y una CLI donde el caso **es** el significado —`git clean -x` frente a
+`-X`— no se puede expresar. Para eso, dos opciones.
 
 **3 · Una fecha se lee en ISO 8601 y de ninguna otra forma.** El `DateTime` de .NET admite además la
 convención local. Aquí `--since 2026-08-25` vale y `--since 25/08/2026` se rechaza, nombrando la
-opción y el texto. La causa: `01/02/2026` denota dos días distintos según quién lo lea, y una línea de
-comandos no es prosa dependiente del locale — es lo que escribió un script. El coste aceptado: quien
-teclee a mano tiene que escribir la fecha como la lee la máquina. Y como Delphi tiene un solo tipo de
-fecha, «solo fecha» y «solo hora» no son declarables; quien lo necesite lo acota con una validación.
+opción y el texto. El coste aceptado: quien teclee a mano tiene que escribir la fecha como la lee la
+máquina. Y como Delphi tiene un solo tipo de fecha, «solo fecha» y «solo hora» no son declarables;
+quien lo necesite lo acota con una validación.
 
 ---
 
@@ -464,8 +436,7 @@ un valor de `appsettings.json`— es otro trabajo y pertenece a
 `Microsoft.Extensions.Configuration.CommandLine` no usa `System.CommandLine`.
 
 `Daf.CmdLn` era el módulo anterior al que este sustituye. Se retiró en 2.0.0, y no hay
-capa de adaptación ni alias de unidad: son APIs distintas a propósito, y una capa que las uniera
-conservaría precisamente lo que se estaba sustituyendo. `MIGRATION-2.0.es.md` lleva las dos
+capa de adaptación ni alias de unidad: son APIs distintas. `MIGRATION-2.0.es.md` lleva las dos
 declaraciones enfrentadas.
 
 ---

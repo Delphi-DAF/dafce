@@ -50,9 +50,7 @@ run time.
 
 ## Declaring a grammar
 
-Fluent methods live **on the interfaces**, never on a `class helper`: only one helper per type is in
-scope and helpers never apply to interfaces, so a fluent API spread over units would break — silently,
-last `uses` winning — the moment somebody reordered a clause.
+Fluent methods live **on the interfaces**, never on a `class helper`.
 
 ```pascal
 var VerboseOpt := CommandLine.Option<Boolean>('--verbose', 'Say more').Recursive;
@@ -118,9 +116,7 @@ It buys three things that look unrelated:
 - **Several values.** A maximum above one is what lets `--file a.pas --file b.pas` mean both — and,
   with `.AllowMultipleArgumentsPerToken`, `--file a.pas b.pas` as well.
 - **Required, at the argument end.** A minimum of one *is* required; there is no second concept.
-- **No silent last-wins.** With a maximum of one, repeating the option is an **error**. Quietly
-  keeping the last value is a value the parser chose on its own — the same sin as reading `80xyz`
-  as `80`.
+- **No silent last-wins.** With a maximum of one, repeating the option is an **error**.
 
 On **options**, `Required` is a mark of its own, as in .NET: an option that takes one value may be
 obligatory or not, and arity cannot say which.
@@ -134,9 +130,8 @@ the text received, rather than becoming `80`; and `-5` is a value, not an unknow
 
 ### The types of serie, and what each one translates
 
-The list is **translated** from .NET's rather than copied: copying it would port names instead of
-capabilities. What a command line needs is numbers of the widths people use, dates, identifiers and
-paths.
+The list is **translated** from .NET's rather than copied. What a command line needs is numbers of
+the widths people use, dates, identifiers and paths.
 
 | `System.CommandLine` | Here | Why |
 |---|---|---|
@@ -197,9 +192,7 @@ The refusal comes out through `ParseResult.Errors` like any other, so a type a t
 as well as one of serie. It also serves a type the engine already knows, for reading it some other way
 — hexadecimal into an `Integer`, say.
 
-**On the symbol and not in a registry of types**, deliberately: a registry makes it process-wide
-configuration, so two libraries declaring a conversion for the same type fight over it and the one
-that started last wins, in silence. On the symbol, its reach is exactly where it was written.
+**On the symbol and not in a registry of types.** Its reach is exactly where it was written.
 
 The limit **moved but did not disappear**: a type the engine does not cover and for which no
 conversion is declared is still refused **at the declaration**, which is where whoever writes the
@@ -219,10 +212,6 @@ CountOpt := CommandLine.Option<Integer>('--count', 'How many to make')
       Error := Format('--count has to be greater than zero, and %d is not', [Value]);
   end);
 ```
-
-Inside, and not afterwards, for one reason: validating outside moves the failure to where it is no
-longer an invocation error, and the tool ends up reporting some failures one way and others another —
-whoever invoked it sees two lists instead of one.
 
 Several can be declared; the first refusal is the error for that value. A validation should be a pure
 question about the value.
@@ -263,9 +252,7 @@ before there is anything to know. Without this, the application leaves the defau
 in after reading — and then the help shows a default the program does not use.
 
 The calculation runs at most once, and **the help does not run it**: it shows the text declared beside
-it, and no default at all when there is none. A calculation may open a file or read the environment,
-and the help has no way of knowing whether this one does; showing nothing beats inventing a value or
-paying for a side effect to paint a line.
+it, and no default at all when there is none.
 
 ---
 
@@ -276,21 +263,17 @@ DiagOpt := CommandLine.Option<Integer>('--diag', 'Diagnostics level').Hidden;
 ```
 
 It is what a diagnostic option, one in transition, or one only an internal script uses needs: to exist
-without being put in front of everybody who asks how the tool works. The alternatives were not
-declaring it — and then it does not work — or declaring it and accepting that it shows.
+without being put in front of everybody who asks how the tool works.
 
 Hiding is the **help's** business and nothing else. A hidden symbol is declared, parsed and read the
-same, and when it gets an invalid value the error **names it**: hiding it from the help is not hiding
-it from whoever is already using it, and an error that will not say what failed turns a mistake into a
-riddle.
+same, and when it gets an invalid value the error **names it**.
 
 ---
 
 ## How an invocation can be written
 
 The same invocation, written the way whoever is typing it already writes them. None of these forms
-says anything the others do not: they exist so a tool built with this needs no README section
-explaining why its own syntax is the exception.
+says anything the others do not.
 
 | Form | Example | Same as |
 |------|---------|---------|
@@ -306,8 +289,7 @@ explaining why its own syntax is the exception.
 Every one of them is bounded the same way: **each fires only when the token does not already name
 something declared**. `-fdx` becomes three because `f`, `d` and `x` are declared aliases; were there
 an option called `-fdx`, that is what the token would stay. And a group with a letter nobody declared
-is refused **whole**, naming the letter — taking the ones that exist and keeping quiet about the one
-that does not would leave you believing you asked for something you did not.
+is refused **whole**, naming the letter.
 
 ### ⚠️ What admitting them takes away
 
@@ -340,9 +322,8 @@ bin\app.exe
 ```
 
 One line, one token: nothing is split on spaces, no variable is expanded and no path is resolved
-against anything — the less it does, the less there is to explain about where a token came from. A
-file may name another; the nesting is bounded, and one that names itself fails saying so instead of
-hanging.
+against anything. A file may name another; the nesting is bounded, and one that names itself fails
+saying so instead of hanging.
 
 ### Several values behind one name
 
@@ -351,10 +332,7 @@ var ItemsOpt := CommandLine.Option<string>('--items', 'Several at once')
   .WithArity(TArity.ZeroOrMore).AllowMultipleArgumentsPerToken;
 ```
 
-`--items a b c` then means all three. It is **opt-in, and could not be anything else**: were every
-option with room for many values greedy by default, a positional written behind one would stop being
-a positional. The right default depends on the grammar and only whoever wrote it knows — .NET calls
-it the same thing, for the same reason.
+`--items a b c` then means all three. It is **opt-in**: .NET calls it the same thing.
 
 ### A command that wraps another
 
@@ -367,9 +345,7 @@ var Parsed := Sudo.Parse(['-u', 'admin', 'apt', 'update']);
 var Rest   := Parsed.UnmatchedTokens;   // ['apt', 'update']
 ```
 
-Without it — and that is still the default — a token matching nothing is a parse error. For anything
-that wraps nobody an unrecognised token is a typo, and swallowing it in silence is the worse of the
-two failures.
+Without it — and that is still the default — a token matching nothing is a parse error.
 
 ---
 
@@ -399,14 +375,13 @@ Options:
 
 Every grammar answers `--help` and `-h`, and every **root** answers `--version`, without declaring
 anything. Asking for either is a **valid outcome**, not a parse failure: `HelpRequested` /
-`VersionRequested` are true and `Errors` is empty. Help is resolved *before* the grammar is validated,
-because a tool that demands you get the syntax right in order to explain the syntax is no use. An
-application that declares its own `--help` or `--version` wins — it is the one that knows its case.
+`VersionRequested` are true and `Errors` is empty. Help is resolved *before* the grammar is validated.
+An application that declares its own `--help` or `--version` wins — it is the one that knows its case.
 `--version` sits on the root and not on each subcommand, as in .NET: a version belongs to the tool.
 
 ---
 
-## Divergences from `System.CommandLine`, each with its cause
+## Divergences from `System.CommandLine`
 
 **1 · The value is read the other way round.** In .NET you write `result.GetValue(fileOption)`. Here
 you write `fileOption.ValueIn(parsed)`: the object asks the result:
@@ -418,24 +393,18 @@ you write `fileOption.ValueIn(parsed)`: the object asks the result:
   types: 'IOption<T>' and 'IOption<string>'`. Inference works when the parameter *is* `T`, not when
   `T` is nested inside another generic.
 
-The .NET call would cost giving up counted interfaces **and** spelling `<string>` out by hand at
-every read — reintroducing exactly the repetition this module exists to remove. `ValueIn` needs no
-inference, because `T` is already fixed by the receiver.
+`ValueIn` needs no inference, because `T` is already fixed by the receiver.
 
 **2 · Names are matched without regard to case.** .NET is case-**sensitive** by POSIX convention;
-here `--OUT` and `--out` are the same option. The cause is the surroundings and not convenience:
-Delphi is a case-insensitive language and Windows CLIs are case-insensitive by habit, so a DAF tool
-that distinguished `--Out` from `--out` would surprise its own audience. The accepted cost: two
-aliases differing only in case are the same alias, and a CLI where the case *is* the meaning — `git
-clean -x` against `-X` — cannot be expressed. Declare two options for that.
+here `--OUT` and `--out` are the same option. The accepted cost: two aliases differing only in case
+are the same alias, and a CLI where the case *is* the meaning — `git clean -x` against `-X` — cannot
+be expressed. Declare two options for that.
 
 **3 · A date is read as ISO 8601, and in no other way.** .NET's `DateTime` also takes the local
 convention. Here `--since 2026-08-25` works and `--since 25/08/2026` is refused, naming the option
-and the text. The cause: `01/02/2026` denotes two different days depending on who reads it, and a
-command line is not locale-dependent prose — it is what a script wrote down. The accepted cost:
-somebody typing by hand has to write the date the way the machine reads it. And since Delphi has a
-single date type, "only a date" and "only a time" are not declarable; whoever needs that bounds it
-with a validation.
+and the text. The accepted cost: somebody typing by hand has to write the date the way the machine
+reads it. And since Delphi has a single date type, "only a date" and "only a time" are not
+declarable; whoever needs that bounds it with a validation.
 
 ---
 
@@ -463,8 +432,7 @@ value from `appsettings.json` — is a different job and belongs to
 `Microsoft.Extensions.Configuration.CommandLine` does not use `System.CommandLine`.
 
 `Daf.CmdLn` was the earlier module this one replaces. It was withdrawn in 2.0.0, with no adapter and
-no unit alias: they are different APIs on purpose, and a layer joining them would preserve precisely
-what was being replaced. `MIGRATION-2.0.md` has the two declarations side by side.
+no unit alias: they are different APIs. `MIGRATION-2.0.md` has the two declarations side by side.
 
 ---
 
