@@ -93,9 +93,8 @@ TExprEmitter.Apply<TProduct>(Q, Spec, TMappedResolver.Create);
 
 ## What the strategy is not
 
-It is a seam for names, not a mapping model. Keys, lock columns, attributes, inheritance mapping and instance-driven DML are all ORM metadata, and the ORM is not designed yet.
+It is a seam for names, not a mapping model. Keys, lock columns, attributes, inheritance mapping and instance-driven DML are all ORM metadata.
 
-So this layer commits to the seam: whatever the ORM turns out to be, it supplies its own `INameResolver` and nothing here changes.
 
 ---
 

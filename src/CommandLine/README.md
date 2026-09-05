@@ -25,9 +25,7 @@ var Path := FileOpt.ValueIn(Parsed);       // a string, statically
 ```
 
 `Path` is a `string`, not a `TValue`, and the name `--file` is written **once**. A name spelled
-twice — once to declare, once to read — is a mismatch no compiler can see, and asking for the wrong
-one gives back something that looks exactly like an option the user did not pass. With the object as
-the key that mistake is not representable.
+twice — once to declare, once to read — is a mismatch no compiler can see.
 
 Reading an `IOption<Integer>` into a `string` is a **compile** error, not a conversion that fails at
 run time.
@@ -135,7 +133,7 @@ the widths people use, dates, identifiers and paths.
 
 | `System.CommandLine` | Here | Why |
 |---|---|---|
-| `int`, `long`, `short`, `byte` and unsigned | `Integer`, `Int64` | the two that cover the real use; another width enters when somebody asks for it twice |
+| `int`, `long`, `short`, `byte` and unsigned | `Integer`, `Int64` | the two that cover the real use |
 | `float`, `double` | `Double` | a binary float, which is what a ratio or a threshold is |
 | `decimal` | `Currency` | the exact decimal: an amount written with up to four decimals comes back with those four, and does not round on its own |
 | `bool` | `Boolean` | it is the flag: naming it is enough |
@@ -228,8 +226,7 @@ element. Declaring either on something that is not a path is refused at the decl
 
 ⚠️ **A conversion or a validation of its own cannot be declared on a collection.** Both receive the
 value of **one** token, and for a collection that value is an element — which `T` cannot name, because
-Delphi has no way of saying "the element of `T`" in an interface. It is refused where it is declared
-rather than never run. Declare it on the element type, in a symbol of its own.
+Delphi has no way of saying "the element of `T`" in an interface. It is refused where it is declared. Declare it on the element type, in a symbol of its own.
 
 ---
 
@@ -416,8 +413,7 @@ Nothing below changes the shape of the API, so all of it is additive:
   somebody asks for it; until then a conversion of its own covers it in one line.
 
 **There is no invocation, and that one is a decision rather than a gap.** `SetAction` / `Invoke` —
-dispatching to the leaf and running a handler — are deliberately out: that turns the library into the
-runner of the whole CLI and drags exit codes, cancellation and middleware behind it. `Daf.CommandLine`
+dispatching to the leaf and running a handler — are out. `Daf.CommandLine`
 parses and hands back typed values; what to do with them is the application's decision. The
 `[diagram]` and `[suggest]` directives and shell completion ride on invocation, so they are out with
 it.

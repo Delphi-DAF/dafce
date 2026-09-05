@@ -25,9 +25,7 @@ var Path := FileOpt.ValueIn(Parsed);       // un string, estáticamente
 ```
 
 `Path` es un `string`, no un `TValue`, y el nombre `--file` se escribe **una sola vez**. Un nombre
-escrito dos veces —una al declarar, otra al leer— es un desajuste que ningún compilador ve, y pedir
-el equivocado devuelve algo idéntico a una opción que el usuario no pasó. Con el objeto como llave
-ese error deja de ser representable.
+escrito dos veces —una al declarar, otra al leer— es un desajuste que ningún compilador ve.
 
 Leer un `IOption<Integer>` como `string` es un error **de compilación**, no una conversión que falla
 en ejecución.
@@ -136,7 +134,7 @@ números de los anchos que la gente usa, fechas, identificadores y rutas.
 
 | `System.CommandLine` | Aquí | Por qué |
 |---|---|---|
-| `int`, `long`, `short`, `byte` y sin signo | `Integer`, `Int64` | los dos que cubren el uso real; otro ancho entra cuando alguien lo pida dos veces |
+| `int`, `long`, `short`, `byte` y sin signo | `Integer`, `Int64` | los dos que cubren el uso real |
 | `float`, `double` | `Double` | un flotante binario, que es lo que son una proporción o un umbral |
 | `decimal` | `Currency` | el decimal exacto: un importe escrito con hasta cuatro decimales vuelve con esos cuatro, y no redondea por su cuenta |
 | `bool` | `Boolean` | es el flag: basta con nombrarlo |
@@ -230,8 +228,7 @@ elemento. Declarar cualquiera de las dos sobre algo que no es una ruta se rechaz
 
 ⚠️ **Una conversión o una validación propias no se pueden declarar sobre una colección.** Las dos
 reciben el valor de **un** token, y en una colección ese valor es un elemento — que `T` no puede
-nombrar, porque Delphi no tiene forma de decir «el elemento de `T`» en una interfaz. Se rechaza donde
-se declara en vez de no correr nunca. Declárala sobre el tipo del elemento, en un símbolo aparte.
+nombrar, porque Delphi no tiene forma de decir «el elemento de `T`» en una interfaz. Se rechaza donde se declara. Declárala sobre el tipo del elemento, en un símbolo aparte.
 
 ---
 
@@ -421,8 +418,7 @@ Nada de lo de abajo cambia la forma del API, así que todo es aditivo:
   alguien lo pide; hasta entonces una conversión propia lo cubre en una línea.
 
 **No hay invocación, y esa sí es una decisión y no un hueco.** `SetAction` / `Invoke` —despachar a la
-hoja y ejecutar su handler— quedan fuera a propósito: eso convierte la librería en el runner de la
-CLI entera y arrastra códigos de salida, cancelación y middleware. `Daf.CommandLine` parsea y entrega
+hoja y ejecutar su handler— quedan fuera. `Daf.CommandLine` parsea y entrega
 valores tipados; qué hacer con ellos lo decide la aplicación. Las directivas `[diagram]` y `[suggest]`
 y el autocompletado van montados sobre la invocación, así que salen con ella.
 

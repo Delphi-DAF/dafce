@@ -93,9 +93,8 @@ TExprEmitter.Apply<TProduct>(Q, Spec, TMappedResolver.Create);
 
 ## Lo que la estrategia no es
 
-Es una costura para nombres, no un modelo de mapeo. Claves, columnas de bloqueo, atributos, mapeo de herencia y DML dirigido por instancia son todos metadatos del ORM, y el ORM aún no está diseñado.
+Es una costura para nombres, no un modelo de mapeo. Claves, columnas de bloqueo, atributos, mapeo de herencia y DML dirigido por instancia son todos metadatos del ORM.
 
-Así que esta capa se compromete con la costura: sea lo que sea el ORM, aportará su propia `INameResolver` y aquí no cambiará nada.
 
 ---
 
