@@ -97,8 +97,7 @@ así que dos enumerados de tipos distintos que compartan ordinal son claves dist
 `'42'` no es el entero `42`. Cualquier otra cosa —un registro, un objeto— se rechaza donde entra,
 nombrando el tipo: el contenedor no puede definir una igualdad que esos tipos no tienen.
 
-⚠️ **Un carácter no es una clave.** Una clave de un carácter es una clave de cadena, y admitir las dos
-haría que dos claves que en el fuente se leen idénticas no se encontrasen.
+⚠️ **Un carácter no es una clave.** Una clave de un carácter es una clave de cadena: usa una cadena.
 
 ### Los dos espacios están aislados
 
@@ -143,8 +142,7 @@ type
 El contenedor la reconoce **por descendencia**, así que nunca necesita conocer ese enumerado.
 
 ⚠️ **Esa marca va en una unit propia**, separada de las clases que la usan. Declarada en la misma
-unit, leer el atributo aborta con un access violation — medido, y es un defecto del compilador, no una
-regla de gusto.
+unit, leer el atributo aborta con un access violation.
 
 ⚠️ **Y el genérico no se escribe nunca dentro de un `[ ]`.** `[DafInject<TStorageKind>(...)]`
 *compila*, con un `W1074 Unknown custom attribute` que casi nadie lee, y en ejecución la propiedad no
@@ -169,19 +167,16 @@ Services.AddKeyedSingleton<IStorage>(ServiceKey.Any,
 
 Un registro concreto le gana —al comodín se le pregunta solo al fallar la búsqueda directa— y cada
 clave que atiende recibe su propia instancia. El centinela es un valor de un tipo declarado dentro del
-módulo de DI, así que nadie de fuera puede construirlo por accidente: una cadena reservada convertiría
-en comodín a quien la registrase, sin enterarse.
+módulo de DI, así que nadie de fuera puede construirlo por accidente.
 
 ⚠️ **Un registro con clave no puede dejar sus argumentos genéricos sin fijar.** Los dos
-emparejamientos no se combinan, y el registro se rechaza en el acto en vez de no aparecer nunca.
+emparejamientos no se combinan, y el registro se rechaza en el acto.
 
 ---
 
 ## Inyección por propiedad
 
-**El constructor es lo normal, y esto no lo sustituye.** Una dependencia que entra por el constructor
-la garantiza el compilador: el objeto no puede existir sin ella. Una que entra por una propiedad, no,
-y eso se paga en cada lectura. Hay dos casos que justifican el precio, y solo dos:
+**El constructor es lo normal, y esto no lo sustituye.** Dos casos piden la inyección por propiedad:
 
 - **Dos servicios que se necesitan mutuamente.** Un ciclo por constructor es inconstruible: ninguno de
   los dos puede correr antes de que el otro termine. Por propiedad se resuelve.
@@ -203,8 +198,7 @@ type
 
 La propiedad ha de ser de tipo interfaz y escribible; da igual si la respalda un campo o un método, y
 da igual que ese campo sea `strict private`. Una propiedad marcada que no se puede rellenar aborta
-nombrando la propiedad, su tipo y la clase — una dependencia declarada que se queda en `nil` traslada
-el fallo a la primera vez que alguien la use, en otro sitio.
+nombrando la propiedad, su tipo y la clase.
 
 **El constructor no las ve.** La inyección ocurre cuando el constructor ya ha terminado, así que una
 propiedad marcada vale `nil` dentro de él. Una dependencia que haga falta **durante** la construcción
@@ -239,10 +233,9 @@ constructor y después de la inyección por atributo, y solo sobre lo que el con
 ⚠️ **Una RTTI de propiedades recortada apaga esto, y nada lo dice.** `{$RTTI EXPLICIT
 PROPERTIES([])}` deja las propiedades de una unit fuera de la RTTI, y entonces una marcada no existe
 para el barrido: la clase parece cualquier otra que no marca nada, así que se resuelve con su
-dependencia en `nil` y el fallo aparece en el primer uso. El contenedor no puede detectarlo — una
-clase recortada sigue informando de las propiedades de su ancestro, así que «ninguna propia» no
-distingue el recorte de una clase que sencillamente no tiene. La directiva la escribe alguien a mano
-en la cabecera de esa misma unit, y la salida es el cableado por código, que no usa RTTI.
+dependencia en `nil` y el fallo aparece en el primer uso. El contenedor no puede detectarlo. La
+directiva la escribe alguien a mano en la cabecera de esa misma unit, y la salida es el cableado por
+código, que no usa RTTI.
 
 ---
 

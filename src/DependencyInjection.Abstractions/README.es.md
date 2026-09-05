@@ -90,9 +90,7 @@ ServiceKey.Any;            // la clave comodín
 
 Dos claves son la misma cuando coinciden **su tipo y su valor**, así que dos enumerados de tipos
 distintos que compartan ordinal son claves distintas. El rechazo ocurre donde la clave **entra** —al
-registrar y al resolver— y nunca al comparar dos claves: un diccionario solo consulta la comparación
-para las que caen en el mismo cubo, así que un guardián puesto ahí no corre para un tipo que no
-colisiona con nada, y la búsqueda contesta «no encontrado» en silencio.
+registrar y al resolver— y nunca al comparar dos claves.
 
 `TServiceSlot` es el par `(tipo de servicio, clave)` por el que indexa la colección. Una clave vacía
 **es** el espacio sin clave, no un tercer estado.
@@ -106,8 +104,7 @@ TServiceKeyedFactory<ServiceType: IInterface> =
 
 Una factoría enterada de **qué clave** se le está pidiendo. Es lo que hace útil un registro comodín:
 lo único que puede hacer una factoría que atiende a todas las claves es decidir en función de cuál le
-toca. Un tipo aparte y no un parámetro opcional de `TServiceFactory`, por la misma razón que
-`TServiceFactoryEx`.
+toca.
 
 ### `DafInject`
 
@@ -127,12 +124,7 @@ end;
 La propiedad ha de ser de tipo interfaz y escribible. Una propiedad marcada que no se puede rellenar
 levanta `EPropertyInjectionError` nombrando la propiedad, su tipo y la clase.
 
-**Una marca y no dos**, y la alternativa merece nombrarse porque fue el diseño anterior: un segundo
-atributo en la clase sobrevive a `{$RTTI EXPLICIT PROPERTIES([])}`, y con él el contenedor podría
-decir «esta clase participa y no veo ninguna propiedad marcada». Se retiró porque una marca que hay
-que acordarse de escribir se puede olvidar, y olvidarla deja las propiedades sin rellenar y sin error
-— el mismo silencio, movido del caso raro al común. Lo que se pierde queda escrito: bajo una RTTI
-recortada la inyección está apagada y nada lo dice.
+**Una marca y no dos.** Bajo una RTTI recortada la inyección está apagada y nada lo dice.
 
 La clave viaja **dentro de esta marca**, y la misma marca sirve a un **parámetro de constructor**:
 
@@ -159,10 +151,6 @@ usan: declarada en la misma unit, leer el atributo aborta con un access violatio
 no se escribe nunca dentro de un `[ ]`** — `[DafInject<TStorageKind>(...)]` compila con un `W1074` y
 en ejecución la propiedad no tiene ningún atributo.
 
-El nombre lleva el prefijo `Daf` a propósito: `Inject` a secas es un nombre que reclaman varias
-herramientas, y dos units que exporten el mismo en el mismo `uses` no dan error — gana la última, en
-silencio, y el barrido deja de ver las propiedades marcadas.
-
 ### `TServiceInjector<T>` y `AddInjector<T>`
 
 El cableado por código, para lo que no se puede anotar:
@@ -178,11 +166,6 @@ Services.AddInjector<TReportService>(
 Es política del tipo —alcanza también a sus descendientes— y corre después del constructor y después
 de la inyección por atributo, sobre toda instancia que el contenedor construya. No usa RTTI, así que
 es la única vía inmune a una RTTI de propiedades recortada.
-
-Se llama `AddInjector` y no `AddInitializer` —el nombre que usa el sector— porque es la tercera vía de
-una sola feature, y comparte raíz con `DafInject` y con `TActivatorUtilities.InjectInto`.
-`AddInitializer` queda libre para un gancho de post-construcción de propósito general, que es otra
-cosa.
 
 ### `Factory`
 
@@ -237,16 +220,14 @@ misma puerta que los que vienen de un fichero, y el servicio que los recibe no d
 salen. Llenarlos desde una sección de configuración es `ConfigOptions.Bind`, en
 [`Configuration`](../Configuration/README.es.md).
 
-El valor se construye en el **primer uso**, no al registrarse, y **una sola vez**: componer no es
-arrancar, así que unos ajustes que la ejecución no llega a usar no leen ni validan nada; y el valor
-es un objeto mutable, así que dos lecturas que devolvieran objetos distintos harían que escribir en
-él significara cosas distintas según quién preguntara.
+El valor se construye en el **primer uso**, no al registrarse, y **una sola vez**: unos ajustes que la
+ejecución no llega a usar no leen ni validan nada.
 
 ### El valor tiene dueño, y aquí es donde muerde
 
 `Value` devuelve un objeto **crudo**, y su dueño es la opción. Delphi no tiene recolector, así que
 quien se guarde el objeto y suelte la opción se queda con un puntero colgando — un riesgo que no
-existe allí de donde se porta esto, y por eso se dice aquí y no en una nota al pie.
+existe allí de donde se porta esto.
 
 Dos formas correctas de consumirlo, y no hay una tercera:
 
@@ -275,22 +256,14 @@ AppOptions.Configure<TCacheSettings>(Services,
 ```
 
 Corre una vez, al construirse el valor, y un fallo levanta `EOptionsValidationError` **nombrando el
-ajuste**. El nombre es el requisito, no un adorno: un `MaxItems` a cero que abortara diciendo
-«configuración inválida» obligaría a quien lo lee a repasarse el fichero entero, que es el trabajo
-que este patrón viene a quitar.
+ajuste**.
 
 ### Lo que nadie registró no se inventa
 
-Pedir unos ajustes que nadie registró **falla nombrando el tipo**. Es una divergencia con el
-original que se porta, y va escrita como divergencia porque quien viene de ahí espera lo contrario:
-en .NET un único registro sin fijar sirve a todos los tipos de ajustes a la vez, así que pedir unos
-que nadie configuró devuelve un objeto recién construido con todo a cero, sin decir nada.
+Pedir unos ajustes que nadie registró **falla nombrando el tipo**. Es una divergencia con el original
+que se porta: en .NET un único registro sin fijar sirve a todos los tipos de ajustes a la vez, así que
+pedir unos que nadie configuró devuelve un objeto recién construido con todo a cero, sin decir nada.
 
-La causa de la divergencia es que aquí esa forma de registrar no existe —los genéricos de Delphi se
-cierran al compilar, y un tipo que el compilador no instanció no se puede construir después—, pero
-el resultado es el bueno: un ajuste ausente y un ajuste a cero dejan de ser indistinguibles.
-
-El mismo razonamiento tiene un corolario que conviene decir con las mismas palabras:
 **`IOptions<TSeccion>` no se deriva de una clase de ajustes padre que tenga una propiedad de ese
 tipo.** .NET tampoco lo hace. La sección se registra contra su propia ruta, y si se registran las
 dos, el objeto anidado del padre y el de la sección son **dos instancias distintas**.
@@ -298,8 +271,7 @@ dos, el objeto anidado del padre y el de la sección son **dos instancias distin
 ### Unos ajustes con miembros objeto liberan lo suyo
 
 Una clase de ajustes con miembros de tipo objeto **los libera ella**. La opción libera el objeto
-raíz y nada más. No es una carga nueva —es la regla que ya cumple la única clase de ajustes anidados
-que hay en el repositorio—, pero este es el sitio donde está escrita. Ver la
+raíz y nada más. Ver la
 [guía de Configuration](../Configuration/docs/GUIDE.es.md), que es donde el enlazador construye esos
 miembros.
 
@@ -387,9 +359,8 @@ Siete cosas que saber de ese campo, y cada una es una forma de equivocarse:
 - **Cuidado con dónde cae el campo dentro de la clase.** En Delphi un bloque `class var` sigue
   abierto hasta el siguiente especificador de visibilidad, así que un campo escrito detrás es
   también un class var — que la RTTI no ve y que comparten todos los cierres. Esto es Delphi, no
-  DAF, y ya no falla al registrar: ahora que declarar el campo es opcional, el contenedor no ve
-  campo ninguno, no escribe nada, y `_ClosedArgs` sale a `nil` en el constructor. Pon un
-  especificador de visibilidad entre los dos.
+  DAF: el contenedor no ve campo ninguno, no escribe nada, y `_ClosedArgs` sale a `nil` en el
+  constructor. Pon un especificador de visibilidad entre los dos.
 
 ### Para qué sirve esto, y para qué no
 
@@ -402,19 +373,18 @@ La prueba se hace con un dedo. **Tapa cada `T` del cuerpo** de la implementació
 sigue en pie, es registrable sin fijar. Si algo necesitaba que `T` fuera `T` — un `T.Create`, un
 `TypeInfo(T)`, una variable de tipo `T` con un valor de verdad dentro —, no lo es.
 
-Y tres límites, dichos aquí en vez de dejados para que alguien tropiece con ellos:
+Y tres límites:
 
 - **Todos los argumentos o ninguno.** `IFoo<TConocido, _>`, fijando unos y dejando otros sin fijar,
   no está soportado.
 - **El argumento tiene que viajar como referencia.** Un contrato donde `T` aparezca en una posición
   cuya representación dependa de `T` —devuelto por valor, un record, un entero— no se puede servir
   por esta vía. El contenedor **compara los dos contratos método a método y lo rechaza**, nombrando
-  el método: entrar en ese emparejamiento corrompería la pila en vez de fallar. Lo rechaza sea lo
-  que sea lo que declare la implementación, con `_ClosedArgs` o sin él — que un emparejamiento sea
-  seguro es una propiedad de los dos contratos. Para saberlo de antemano, hazle la prueba del dedo
-  al **contrato** en vez de al cuerpo de la implementación: lee las firmas, y si `T` aparece en
-  algún sitio que no sea un objeto, una interfaz o una referencia de clase, el contrato no es
-  registrable sin fijar.
+  el método. Lo rechaza sea lo que sea lo que declare la implementación, con `_ClosedArgs` o sin él —
+  que un emparejamiento sea seguro es una propiedad de los dos contratos. Para saberlo de antemano,
+  hazle la prueba del dedo al **contrato** en vez de al cuerpo de la implementación: lee las firmas, y
+  si `T` aparece en algún sitio que no sea un objeto, una interfaz o una referencia de clase, el
+  contrato no es registrable sin fijar.
 - **El emparejamiento es por nombre y aridad, no por identidad.** Dos familias genéricas del mismo
   nombre simple y la misma aridad, declaradas en units distintas, emparejan. Lo que queda debajo no
   es la nada —esa misma comparación método a método rechaza el emparejamiento nombrando el primer
@@ -423,10 +393,9 @@ Y tres límites, dichos aquí en vez de dejados para que alguien tropiece con el
 ### Una factoría escrita a mano puede enterarse de qué le piden
 
 La ruta por clase de arriba rellena `_ClosedArgs` antes de que corra el constructor, así que una
-implementación registrada sin fijar conoce su cierre. Una **factoría escrita a mano** registrada sin
-fijar no tenía nada parecido: recibía solo el proveedor, así que una única factoría atendía todos los
-cierres y devolvía el mismo objeto a todos -- un `ILogger<TFacturas>` escribiendo bajo la categoría
-de otro cierre, sin que nada se quejara.
+implementación registrada sin fijar conoce su cierre. Una **factoría escrita a mano** que recibe solo
+el proveedor, no: una única factoría atiende todos los cierres y devuelve el mismo objeto a todos --
+un `ILogger<TFacturas>` escribiendo bajo la categoría de otro cierre, sin que nada se queje.
 
 Un segundo tipo de factoría recibe, además del proveedor, el tipo que se está resolviendo:
 
@@ -447,18 +416,13 @@ resuelve (`IRepo<TUser>`); para un registro corriente es el tipo del propio serv
 dato significa lo mismo en los dos -- «esto es lo que se está resolviendo» -- así que una única
 factoría registrada para varios contratos también puede distinguirlos.
 
-**Por qué un segundo tipo y no un parámetro opcional del primero.** Ampliar `TServiceFactory` con un
-segundo parámetro *opcional* parece aditivo y es lo contrario. Un valor por defecto sirve al *sitio
-de llamada*, no a la compatibilidad de asignación: un tipo procedural exige una lista de parámetros
-idéntica, así que una lambda de un parámetro asignada al tipo de dos no compila --
-`E2010 Incompatible types`--. Eso dejaría sin compilar toda factoría ya escrita, en DAF y en
-cualquier consumidor. La sobrecarga --que parece el cambio mayor-- es la que no rompe nada, y el
-compilador la elige por la aridad de la lambda.
+**Las dos formas son tipos distintos, no uno con un parámetro opcional.** Un tipo procedural
+exige una lista de parámetros idéntica, así que una lambda cuya aridad no coincide con el tipo
+al que se asigna no compila -- `E2010 Incompatible types`--.
 
 **Una factoría que no pregunta no es un caso especial.** La forma corta es la que usa casi todo
 registro, y la mayoría no tienen nada que preguntar. Una que toma solo el proveedor se registra y
-resuelve exactamente igual que antes; registrada sin fijar, sigue sirviendo el mismo objeto a todos
-los cierres -- ya no porque *no pueda* conocer el cierre, sino porque no lo pidió.
+resuelve como siempre; registrada sin fijar, sirve el mismo objeto a todos los cierres.
 
 ---
 

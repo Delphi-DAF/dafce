@@ -90,9 +90,7 @@ ServiceKey.Any;            // the wildcard key
 
 Two keys are the same when their **type and value** match, so two enumerated values of different
 types that share an ordinal are different keys. The rejection happens where the key **enters** — at
-registration and at resolution — and never when comparing two keys: a dictionary only consults the
-comparison for keys that land in the same bucket, so a guard placed there does not run for a type
-that collides with nothing, and the lookup answers "not found" in silence.
+registration and at resolution — and never when comparing two keys.
 
 `TServiceSlot` is the pair `(service type, key)` the collection indexes by. An empty key **is** the
 keyless space, not a third state.
@@ -105,8 +103,7 @@ TServiceKeyedFactory<ServiceType: IInterface> =
 ```
 
 A factory told **which key** is being asked for. It is what makes a wildcard registration useful: the
-only thing a factory serving every key can do is decide by which one it got. A separate type and not
-an optional parameter of `TServiceFactory`, for the same reason as `TServiceFactoryEx`.
+only thing a factory serving every key can do is decide by which one it got.
 
 ### `DafInject`
 
@@ -126,12 +123,7 @@ end;
 The property must be of an interface type and writable. A marked property that cannot be filled
 raises `EPropertyInjectionError` naming the property, its type and the class.
 
-**One mark and not two**, and the alternative is worth naming because it was the earlier design: a
-second attribute on the class survives `{$RTTI EXPLICIT PROPERTIES([])}`, which would let the
-container say "this class takes part and I see no marked property". It was dropped because a mark you
-must remember to write can be forgotten, and forgetting it leaves the properties unfilled with no
-error — the same silence, moved from the rare case to the common one. What is lost is written down:
-under a trimmed RTTI the injection is off and nothing says so.
+**One mark and not two.** Under a trimmed RTTI the injection is off and nothing says so.
 
 The key travels **inside this mark**, and the same mark serves a **constructor parameter**:
 
@@ -157,10 +149,6 @@ it: declared in the same unit, reading the attribute aborts with an access viola
 generic is never written inside a `[ ]`** — `[DafInject<TStorageKind>(...)]` compiles with a `W1074`
 and at run time the property has no attribute at all.
 
-The name carries the `Daf` prefix on purpose: `Inject` on its own is a name several tools claim, and
-two units exporting the same one in the same `uses` is not an error — the last one wins, in silence,
-and the sweep stops seeing the marked properties.
-
 ### `TServiceInjector<T>` and `AddInjector<T>`
 
 Wiring by code, for what cannot be annotated:
@@ -176,10 +164,6 @@ Services.AddInjector<TReportService>(
 It is a policy of the type — it reaches descendants too — and it runs after the constructor and after
 the attribute injection, on every instance the container builds. It uses no RTTI, so it is the only
 route immune to a trimmed property RTTI.
-
-It is called `AddInjector` and not `AddInitializer` —the name the field uses— because it is the third
-route of one feature, sharing its root with `DafInject` and `TActivatorUtilities.InjectInto`.
-`AddInitializer` stays free for a general purpose post-construction hook, which is a different thing.
 
 ### `Factory`
 
@@ -234,17 +218,14 @@ read from a file, and the service that receives them cannot tell where they came
 from a configuration section is `ConfigOptions.Bind`, in
 [`Configuration`](../Configuration/README.md).
 
-The value is built on **first use** rather than when it is registered, and built **once**: composing
-is not starting up, so settings the run never gets to use read nothing and validate nothing; and the
-value is a mutable object, so two reads that returned different objects would make writing to it
-mean different things depending on who asked.
+The value is built on **first use** rather than when it is registered, and built **once**: settings
+the run never gets to use read nothing and validate nothing.
 
 ### The value has an owner, and this is where it bites
 
 `Value` hands back a **raw object**, and its owner is the option. Delphi has no garbage collector,
 so a consumer that keeps the object and lets go of the option is left with a dangling pointer — a
-hazard that does not exist where this pattern is ported from, which is exactly why it is said here
-and not in a footnote.
+hazard that does not exist where this pattern is ported from.
 
 Two correct ways to consume it, and no third:
 
@@ -273,31 +254,20 @@ AppOptions.Configure<TCacheSettings>(Services,
 ```
 
 It runs once, when the value is built, and a failure raises `EOptionsValidationError` **naming the
-setting**. The name is the requirement, not decoration: a `MaxItems` at zero that aborted saying
-"invalid configuration" would send whoever reads it back through the whole file, which is the work
-this pattern exists to remove.
-
-### What nobody registered is not invented
+setting**.
 
 Asking for settings nobody registered **fails naming the type**. This diverges from the framework
-being ported, and it is written down as a divergence because whoever comes from there expects the
-opposite: in .NET a single open registration serves every settings type at once, so asking for one
+being ported: in .NET a single open registration serves every settings type at once, so asking for one
 nobody configured hands back a freshly built object with everything at zero and says nothing.
 
-The cause of the divergence is that this registration shape does not exist here — Delphi closes
-generics at compile time, so a type the compiler never instantiated cannot be built afterwards — but
-the outcome is the better one: a missing setting and a setting at zero stop being indistinguishable.
-
-The same reasoning has a corollary worth saying in the same words: **`IOptions<TSection>` is not
-derived from a parent settings class that has a property of that type.** .NET does not do it either.
-The section is registered against its own path, and if both are registered, the parent's nested
-object and the section's are **two distinct instances**.
+**`IOptions<TSection>` is not derived from a parent settings class that has a property of that type.**
+.NET does not do it either. The section is registered against its own path, and if both are registered,
+the parent's nested object and the section's are **two distinct instances**.
 
 ### Settings with object members free what is theirs
 
 A settings class with members of object type **frees them itself**. Options frees the root object
-and nothing else. This is not a new burden — it is the rule the only nested settings class in the
-repository already follows — but this is where it is written down. See
+and nothing else. See
 [Configuration's guide](../Configuration/docs/GUIDE.md), where the binder builds those members.
 
 ---
@@ -383,9 +353,9 @@ Seven things to know about that field, and every one of them is a way to get it 
   container finds it in the most restrictive one there is.
 - **Mind where the field sits in the class.** In Delphi a `class var` block stays open until the
   next visibility specifier, so a field written after one is a class var too — invisible to RTTI,
-  and shared by every closure. This is Delphi, not DAF, and it no longer fails the registration:
-  now that declaring the field is optional, the container sees no field at all, writes nothing, and
-  `_ClosedArgs` reads `nil` in the constructor. Put a visibility specifier between the two.
+  and shared by every closure. This is Delphi, not DAF: the container sees no field at all, writes
+  nothing, and `_ClosedArgs` reads `nil` in the constructor. Put a visibility specifier between the
+  two.
 
 ### What this is for, and what it is not
 
@@ -398,18 +368,18 @@ The test takes a finger. **Cover every `T` in the body** of the implementation: 
 stands, it is registrable with its arguments left open. If something needed `T` to be `T` — a
 `T.Create`, a `TypeInfo(T)`, a variable of type `T` holding a real value — it is not.
 
-And three limits, said here rather than left to be tripped over:
+And three limits:
 
 - **All the arguments or none.** `IFoo<TKnown, _>`, fixing some and leaving others open, is not
   supported.
 - **The argument has to travel as a reference.** A contract where `T` appears in a position whose
   representation depends on `T` — returned by value, a record, an integer — cannot be served this
   way. The container **compares the two contracts method by method and refuses**, naming the
-  method: entering such a match would corrupt the stack rather than fail. It refuses whatever the
-  implementation declares, `_ClosedArgs` or not — what makes a match safe is a property of the two
-  contracts. To know in advance, run the finger test on the **contract** rather than on the
-  implementation's body: read the signatures, and if `T` appears anywhere other than as an object,
-  an interface or a class reference, the contract is not registrable with its arguments left open.
+  method. It refuses whatever the implementation declares, `_ClosedArgs` or not — what makes a match
+  safe is a property of the two contracts. To know in advance, run the finger test on the
+  **contract** rather than on the implementation's body: read the signatures, and if `T` appears
+  anywhere other than as an object, an interface or a class reference, the contract is not
+  registrable with its arguments left open.
 - **Matching is by name and arity, not by identity.** Two generic families with the same simple
   name and the same arity, declared in different units, match. What sits underneath is not nothing
   — that same method-by-method check refuses the match, naming the first method that does not fit
@@ -418,10 +388,9 @@ And three limits, said here rather than left to be tripped over:
 ### A hand-written factory can be told what it is being asked for
 
 The class route above fills `_ClosedArgs` before the constructor runs, so an implementation
-registered open knows its closure. A **hand-written factory** registered open had nothing of the
-sort: it received only the provider, so one factory served every closure and returned the same
-object to all of them -- an `ILogger<TInvoices>` writing under another closure's category, with
-nothing to complain about.
+registered open knows its closure. A **hand-written factory** that takes only the provider does not:
+one factory serves every closure and returns the same object to all of them -- an
+`ILogger<TInvoices>` writing under another closure's category, with nothing to complain about.
 
 A second factory shape receives the type being resolved as well as the provider:
 
@@ -442,18 +411,13 @@ type resolved (`IRepo<TUser>`); for an ordinary registration it is the service t
 (`IRepo`). The datum means the same in both -- "this is what is being resolved" -- so a single
 factory registered for several contracts can also tell them apart.
 
-**Why a second type and not an optional parameter of the first.** Widening `TServiceFactory` with a
-second, *optional* parameter looks additive and is the opposite. A default value serves the *call
-site*, not assignment compatibility: a procedural type demands an identical parameter list, so a
-one-parameter lambda assigned to the two-parameter type fails to compile with
-`E2010 Incompatible types`. That would break every factory already written, in DAF and in every
-consumer. The overload -- which looks like the larger change -- is the one that breaks nothing, and
-the compiler picks it by the lambda's arity.
+**The two forms are separate types, not one with an optional parameter.** A procedural type
+demands an identical parameter list, so a lambda whose arity does not match the type it is
+assigned to fails to compile with `E2010 Incompatible types`.
 
 **A factory that does not ask is not a special case.** The short form is what almost every
 registration uses, and most have nothing to ask. One that takes only the provider registers and
-resolves exactly as before; registered open, it still serves the same object to every closure -- no
-longer because it *cannot* know the closure, but because it did not ask for it.
+resolves as usual; registered open, it serves the same object to every closure.
 
 ---
 

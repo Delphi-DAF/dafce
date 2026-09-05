@@ -256,18 +256,16 @@ var Orders := Provider.GetRequiredService<IOrders>;
 // Orders.Billing.Orders is the same instance as Orders
 ```
 
-Both services must be `Singleton` or `Scoped`. A cycle that goes through a `Transient` is rejected —
-not because it cannot be resolved, but because it cannot be undone: the container does not retain
-transients, so the pair holds itself up and nothing can take it apart. A cycle with any edge through
-a constructor is rejected too, and for the older reason: the constructor cannot run before its
+Both services must be `Singleton` or `Scoped`. A cycle that goes through a `Transient` is rejected:
+the container does not retain transients, so the pair holds itself up and nothing can take it apart.
+A cycle with any edge through a constructor is rejected too: the constructor cannot run before its
 argument exists.
 
 Both rejections name the whole path of the cycle. `ValidateOnBuild` reports every cycle in the graph
 at startup; with validation off, the resolution that walks into one fails naming the path it walked.
 
 ⚠️ **During the resolution of a cycle, one participant receives another whose own properties are not
-filled yet.** That is unavoidable — the cycle has to be broken somewhere — and it is why a constructor
-can assume nothing about a marked property.
+filled yet.** A constructor can assume nothing about a marked property.
 
 Closing the container empties the injected properties of everything it owns before releasing any of
 it, so a cycle is taken apart instead of leaking.
@@ -311,10 +309,8 @@ in such a unit, a marked property **does not exist** for the sweep: taking part 
 marking, so that class takes part in nothing. It resolves with no error, its dependency stays `nil`,
 and the failure surfaces at the first use as an access violation.
 
-⚠️ **The container cannot warn about it**, and that is a conscious loss. A trimmed class still reports
-the properties of its ancestor through the RTTI, so "none of its own" does not tell a trim from a class
-that simply has no properties. What makes the loss acceptable is that the cause is a directive somebody
-wrote on purpose, at the top of the very unit that holds the marked property.
+⚠️ **The container cannot warn about it.** The cause is a directive written on purpose, at the top of
+the very unit that holds the marked property.
 
 Wiring by code is the way out: it uses no RTTI at all, so it is the only route immune to the trim.
 
@@ -395,8 +391,7 @@ It is reading the keyless space, and the keyless space is empty.
 ### Asking for a key from a constructor or a property
 
 The same mark serves both positions, and the key travels inside it — the model of Unity's
-`[Dependency("name")]`, rather than a second attribute that has to be written next to the first every
-time and can be written on its own:
+`[Dependency("name")]`:
 
 ```pascal
 type
@@ -443,13 +438,12 @@ The container recognises it **by descent**, so it never needs to know that enume
 of the enumeration is preserved — another enumeration with the same ordinal does not reach it.
 
 ⚠️ **The mark goes in a unit of its own, separate from the classes that use it.** Declared in the same
-unit, reading the attribute aborts with an access violation. It is a defect of the compiler and not a
-matter of taste; the framework cannot detect it, and the failure is loud but happens at run time.
+unit, reading the attribute aborts with an access violation. The framework cannot detect it, and the
+failure is loud but happens at run time.
 
 ⚠️ **The generic is never written inside a `[ ]`.** `[DafInject<TStorageKind>(...)]` **compiles**, with
 a `W1074 Unknown custom attribute` almost nobody reads, and at run time `GetAttributes` returns
-**zero**: the injection does not happen and nothing says so. It is what anyone who sees the generic
-declared will try first.
+**zero**: the injection does not happen and nothing says so.
 
 For a one-off enumerated key, without declaring a mark, there is an escape:
 
@@ -458,7 +452,7 @@ For a one-off enumerated key, without declaring a mark, there is an escape:
 ```
 
 The ordinal is checked against the range of the type. One that does not belong fails naming the
-property, instead of producing a key that is nobody's and reading as "that service is not registered".
+property.
 
 ### One registration for any key
 
@@ -479,9 +473,7 @@ Services.AddKeyedSingleton<IStorage>(ServiceKey.Any,
 - **It does not cross into the keyless space**: with only a wildcard registered, `GetService<IStorage>`
   finds nothing.
 
-The sentinel is a value of a type declared inside the DI module, so nobody outside can name it. That
-is the point: with a reserved string, whoever registered that string would become the wildcard without
-noticing — the registration works, and what changes is who it serves.
+The sentinel is a value of a type declared inside the DI module, so nobody outside can name it.
 
 ### The limit: keys and unbound generics are not combined
 
@@ -489,9 +481,7 @@ noticing — the registration works, and what changes is who it serves.
 Services.AddKeyedSingleton<IBox<_>, TBox<_>>('blob');   // fails at registration
 ```
 
-Two matchings crossed multiply the precedence cases, and this is not the change that takes them on.
-It fails **when registering** and not when resolving, which is what makes it a limit and not a trap:
-the alternative is a registration that is accepted and then never shows up.
+It fails **when registering** and not when resolving.
 
 ---
 
@@ -502,9 +492,7 @@ implements it. The services and the modules live in a unit and not in the progra
 declared in a `.dpr` is in no unit's `interface` section, and resolving it aborts with
 `ENonPublicType`.
 
-The two blocks below are `samples/ModuleComposition/`, verbatim;
-`eng/check-quickstart-snippet.py` compares them with the files, so this is code the compiler
-reads:
+The two blocks below are `samples/ModuleComposition/`, verbatim:
 
 <!-- quickstart: src/DependencyInjection/samples/ModuleComposition/ModuleComposition.Services.pas -->
 

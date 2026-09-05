@@ -257,19 +257,17 @@ var Orders := Provider.GetRequiredService<IOrders>;
 // Orders.Billing.Orders es la misma instancia que Orders
 ```
 
-Los dos servicios han de ser `Singleton` o `Scoped`. Un ciclo que pasa por un `Transient` se rechaza
-—no por no poder resolverlo, sino por no poder deshacerlo: el contenedor no retiene los transient, así
-que el par se sostiene a sí mismo y no hay quien lo desmonte—. Un ciclo con alguna arista por
-constructor se rechaza también, y por la razón de siempre: el constructor no puede correr antes de que
-exista su argumento.
+Los dos servicios han de ser `Singleton` o `Scoped`. Un ciclo que pasa por un `Transient` se rechaza:
+el contenedor no retiene los transient, así que el par se sostiene a sí mismo y no hay quien lo
+desmonte. Un ciclo con alguna arista por constructor se rechaza también: el constructor no puede
+correr antes de que exista su argumento.
 
 Los dos rechazos nombran el camino completo del ciclo. `ValidateOnBuild` informa de todos los ciclos
 del grafo al arrancar; con la validación apagada, la resolución que se mete en uno falla nombrando el
 camino que recorrió.
 
 ⚠️ **Durante la resolución de un ciclo, un participante recibe a otro que todavía no tiene sus propias
-propiedades rellenas.** Es inevitable —el ciclo hay que romperlo por algún sitio— y es la razón de que
-un constructor no pueda suponer nada de una propiedad marcada.
+propiedades rellenas.** Un constructor no puede suponer nada de una propiedad marcada.
 
 Cerrar el contenedor vacía las propiedades inyectadas de todo lo que posee antes de soltar nada, así
 que un ciclo se desmonta en vez de quedarse vivo.
@@ -313,11 +311,8 @@ clase de esa unit, una propiedad marcada **no existe** para el barrido: particip
 marcar, así que esa clase no participa en nada. Se resuelve sin error, su dependencia se queda en
 `nil`, y el fallo aparece en el primer uso como un access violation.
 
-⚠️ **El contenedor no puede avisar de esto**, y es una pérdida consciente. Una clase recortada sigue
-informando por RTTI de las propiedades de su ancestro, así que «ninguna propia» no distingue el
-recorte de una clase que sencillamente no tiene propiedades. Lo que hace aceptable la pérdida es que
-la causa es una directiva que alguien escribió a conciencia, en la cabecera de la misma unit que
-contiene la propiedad marcada.
+⚠️ **El contenedor no puede avisar de esto.** La causa es una directiva que alguien escribió a
+conciencia, en la cabecera de la misma unit que contiene la propiedad marcada.
 
 El cableado por código es la salida: no usa RTTI en absoluto, así que es la única vía inmune al
 recorte.
@@ -401,8 +396,7 @@ para él. Está leyendo el espacio sin clave, y el espacio sin clave está vací
 ### Pedir una clave desde un constructor o una propiedad
 
 La misma marca sirve a las dos posiciones, y la clave viaja dentro de ella —el modelo de
-`[Dependency("name")]` de Unity, en vez de un segundo atributo que hay que poner junto al primero
-siempre y que se puede poner suelto:
+`[Dependency("name")]` de Unity—:
 
 ```pascal
 type
@@ -449,13 +443,12 @@ El contenedor la reconoce **por descendencia**, así que nunca necesita conocer 
 tipo del enumerado se conserva: otro enumerado con el mismo ordinal no la alcanza.
 
 ⚠️ **La marca va en una unit propia, separada de las clases que la usan.** Declarada en la misma unit,
-leer el atributo aborta con un access violation. Es un defecto del compilador y no una cuestión de
-gusto; el framework no puede detectarlo, y el fallo es ruidoso pero ocurre en ejecución.
+leer el atributo aborta con un access violation. El framework no puede detectarlo, y el fallo es
+ruidoso pero ocurre en ejecución.
 
 ⚠️ **El genérico no se escribe nunca dentro de un `[ ]`.** `[DafInject<TStorageKind>(...)]`
 **compila**, con un `W1074 Unknown custom attribute` que casi nadie lee, y en ejecución
-`GetAttributes` devuelve **cero**: la inyección no ocurre y nada lo dice. Es lo primero que va a
-intentar quien vea el genérico declarado.
+`GetAttributes` devuelve **cero**: la inyección no ocurre y nada lo dice.
 
 Para una clave enumerada suelta, sin declarar marca, queda un escape:
 
@@ -464,8 +457,7 @@ Para una clave enumerada suelta, sin declarar marca, queda un escape:
 ```
 
 El ordinal se comprueba contra el rango del tipo. Uno que no le pertenece falla nombrando la
-propiedad, en vez de producir una clave que no es la de nadie y leerse como «ese servicio no está
-registrado».
+propiedad.
 
 ### Un registro para cualquier clave
 
@@ -487,8 +479,7 @@ Services.AddKeyedSingleton<IStorage>(ServiceKey.Any,
   encuentra nada.
 
 El centinela es un valor de un tipo declarado dentro del módulo de DI, así que nadie de fuera puede
-nombrarlo. Ese es el punto: con una cadena reservada, quien registrase esa cadena se convertiría en el
-comodín sin enterarse — el registro funciona y lo que cambia es a quién atiende.
+nombrarlo.
 
 ### El límite: claves y genéricos sin fijar no se combinan
 
@@ -496,9 +487,7 @@ comodín sin enterarse — el registro funciona y lo que cambia es a quién atie
 Services.AddKeyedSingleton<IBox<_>, TBox<_>>('blob');   // falla al registrar
 ```
 
-Dos emparejamientos cruzados multiplican los casos de precedencia, y no es este el change que los
-acomete. Falla **al registrar** y no al resolver, que es lo que lo convierte en un límite y no en una
-trampa: la alternativa es un registro que se acepta y luego no aparece nunca.
+Falla **al registrar** y no al resolver.
 
 ---
 
@@ -509,9 +498,7 @@ implementa. Los servicios y los módulos viven en una unit y no en el fichero de
 declarado en un `.dpr` no está en la sección `interface` de ninguna unit, y resolverlo aborta con
 `ENonPublicType`.
 
-Los dos bloques de abajo son `samples/ModuleComposition/`, literal;
-`eng/check-quickstart-snippet.py` los compara con los ficheros, así que esto es código que lee el
-compilador:
+Los dos bloques de abajo son `samples/ModuleComposition/`, literal:
 
 <!-- quickstart: src/DependencyInjection/samples/ModuleComposition/ModuleComposition.Services.pas -->
 

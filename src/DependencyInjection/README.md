@@ -97,8 +97,7 @@ enumerated values of different types that share an ordinal are different keys, a
 is not the integer `42`. Anything else — a record, an object — is rejected where it enters, naming
 the type: the container cannot define an equality that those types do not have.
 
-⚠️ **A character is not a key.** A one-character key is a string key, and admitting both would make
-two keys that read identically in the source fail to find each other.
+⚠️ **A character is not a key.** A one-character key is a string key: use a string.
 
 ### The two spaces are isolated
 
@@ -143,8 +142,7 @@ type
 The container recognises it **by descent**, so it never needs to know that enumeration.
 
 ⚠️ **That mark goes in a unit of its own**, separate from the classes that use it. Declared in the
-same unit, reading the attribute aborts with an access violation — measured, and it is a defect of
-the compiler, not a rule of taste.
+same unit, reading the attribute aborts with an access violation.
 
 ⚠️ **And the generic is never written inside a `[ ]`.** `[DafInject<TStorageKind>(...)]` *compiles*,
 with a `W1074 Unknown custom attribute` almost nobody reads, and at run time the property has no
@@ -169,19 +167,16 @@ Services.AddKeyedSingleton<IStorage>(ServiceKey.Any,
 
 A concrete registration beats it — the wildcard is asked only when the direct lookup fails — and each
 key it serves gets its own instance. The sentinel is a value of a type declared inside the DI module,
-so nobody outside can build it by accident: a reserved string would turn whoever registered it into
-the wildcard without noticing.
+so nobody outside can build it by accident.
 
 ⚠️ **A keyed registration cannot leave its generic arguments unbound.** The two matchings are not
-combined, and the registration is rejected on the spot rather than never showing up.
+combined, and the registration is rejected on the spot.
 
 ---
 
 ## Property injection
 
-**The constructor is the default, and this does not replace it.** A dependency that enters through
-the constructor is guaranteed by the compiler: the object cannot exist without it. One that enters
-through a property is not, and that is paid at every read. Two cases justify the price, and only two:
+**The constructor is the default, and this does not replace it.** Two cases need property injection:
 
 - **Two services that need each other.** A cycle by constructor is unbuildable — neither constructor
   can run before the other finishes. By property it resolves.
@@ -203,8 +198,7 @@ type
 
 The property must be of an interface type and writable; whether a field or a method backs it makes no
 difference, and neither does that field being `strict private`. A marked property that cannot be
-filled aborts naming the property, its type and the class — a declared dependency left `nil` moves the
-failure to the first use, somewhere else.
+filled aborts naming the property, its type and the class.
 
 **The constructor does not see them.** Injection happens once the constructor has returned, so a
 marked property is `nil` inside it. A dependency needed *during* construction goes through the
@@ -239,10 +233,8 @@ injection, and only on what the container builds.
 ⚠️ **A trimmed property RTTI switches this off, and nothing says so.** `{$RTTI EXPLICIT
 PROPERTIES([])}` leaves the properties of a unit out of the RTTI, and then a marked one does not exist
 for the sweep: the class looks like any other that marks nothing, so it resolves with its dependency
-left `nil` and the failure appears at the first use. The container cannot detect it — a trimmed class
-still reports its ancestor's properties, so "none of its own" does not tell a trim from a class that
-simply has none. The directive is written by hand at the top of that same unit, and the way out is
-wiring by code, which uses no RTTI.
+left `nil` and the failure appears at the first use. The container cannot detect it. The directive is
+written by hand at the top of that same unit, and the way out is wiring by code, which uses no RTTI.
 
 ---
 
