@@ -68,8 +68,7 @@ La unit que 1.6.0 traía dentro de `Daf.Commons` **ya no se distribuye**. Su sus
 `Daf.CommandLine`, el porting de
 [`System.CommandLine`](https://learn.microsoft.com/dotnet/standard/commandline) de .NET
 —la librería sobre la que está construido el propio `dotnet` CLI—. **No hay adaptador ni alias de
-unidad**: son APIs distintas a propósito, y una capa que las uniera conservaría justo lo que se está
-sustituyendo.
+unidad**: son APIs distintas, y las cláusulas `uses` que existan no siguen compilando.
 
 La misma gramática, declarada de las dos formas:
 

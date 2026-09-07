@@ -66,8 +66,8 @@ and it must be added to the `requires` of whichever package uses it:
 The unit 1.6.0 shipped inside `Daf.Commons` **is no longer distributed**. Its replacement is
 `Daf.CommandLine`, a port of .NET's
 [`System.CommandLine`](https://learn.microsoft.com/dotnet/standard/commandline) — the library the
-`dotnet` CLI itself is built on. There is **no adapter and no unit alias**: they are different APIs
-on purpose, and a layer joining them would keep the very thing being replaced.
+`dotnet` CLI itself is built on. There is **no adapter and no unit alias**: they are different APIs,
+and existing `uses` clauses do not keep compiling.
 
 The same grammar, declared both ways:
 
