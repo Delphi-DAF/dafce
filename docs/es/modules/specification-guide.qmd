@@ -1,5 +1,6 @@
 ---
 sidebar: modules-es
+lang: es
 ---
 
 {{< include ../../../src/Specification/docs/GUIDE.es.md >}}
