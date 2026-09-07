@@ -3,8 +3,8 @@
 return {
   -- cuantos documentos incluye cada pagina (informativo)
   pages = {
-    ["en/docs/migration-2.0.qmd"] = 1,
     ["en/docs/startup-composition.qmd"] = 1,
+    ["en/migration/2.0.qmd"] = 1,
     ["en/modules/application-guide.qmd"] = 1,
     ["en/modules/application.qmd"] = 1,
     ["en/modules/cli.qmd"] = 1,
@@ -40,8 +40,8 @@ return {
     ["en/modules/vcl.qmd"] = 1,
     ["en/modules/web-guide.qmd"] = 1,
     ["en/modules/web.qmd"] = 1,
-    ["es/docs/migration-2.0.qmd"] = 1,
     ["es/docs/startup-composition.qmd"] = 1,
+    ["es/migration/2.0.qmd"] = 1,
     ["es/modules/application-guide.qmd"] = 1,
     ["es/modules/application.qmd"] = 1,
     ["es/modules/cli.qmd"] = 1,
@@ -79,13 +79,13 @@ return {
     ["es/modules/web.qmd"] = 1,
   },
   links = {
-    ["en/docs/migration-2.0.qmd"] = {
-      ["src/DependencyInjection.Abstractions/README.md#registering-a-generic-contract-once"] = "/en/modules/di.qmd#registering-a-generic-contract-once",
-    },
     ["en/docs/startup-composition.qmd"] = {
       ["#net--daf"] = "#net-daf",
       ["GUIDE.md"] = "/en/modules/di-guide.qmd",
       ["STARTUP-COMPOSITION.es.md"] = "/es/docs/startup-composition.qmd",
+    },
+    ["en/migration/2.0.qmd"] = {
+      ["src/DependencyInjection.Abstractions/README.md#registering-a-generic-contract-once"] = "/en/modules/di.qmd#registering-a-generic-contract-once",
     },
     ["en/modules/application-guide.qmd"] = {
       ["#tdafapplicationapp"] = "#tdafapplication.app",
@@ -401,13 +401,13 @@ return {
       ["README.es.md"] = "/es/modules/web.qmd",
       ["docs/GUIDE.md"] = "/en/modules/web-guide.qmd",
     },
-    ["es/docs/migration-2.0.qmd"] = {
-      ["src/DependencyInjection.Abstractions/README.es.md#registrar-un-contrato-genérico-una-sola-vez"] = "/es/modules/di.qmd#registrar-un-contrato-genérico-una-sola-vez",
-    },
     ["es/docs/startup-composition.qmd"] = {
       ["#net--daf"] = "#net-daf",
       ["GUIDE.es.md"] = "/es/modules/di-guide.qmd",
       ["STARTUP-COMPOSITION.md"] = "/en/docs/startup-composition.qmd",
+    },
+    ["es/migration/2.0.qmd"] = {
+      ["src/DependencyInjection.Abstractions/README.es.md#registrar-un-contrato-genérico-una-sola-vez"] = "/es/modules/di.qmd#registrar-un-contrato-genérico-una-sola-vez",
     },
     ["es/modules/application-guide.qmd"] = {
       ["#qué-es-esta-capa-en-términos-de-net"] = "#qué-es-esta-capa-en-términos-de-.net",

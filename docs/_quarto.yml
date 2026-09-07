@@ -63,6 +63,8 @@ website:
             href: en/modules/vcl.qmd
           - text: "Web"
             href: en/modules/web.qmd
+      - href: en/migration/index.qmd
+        text: Migration
       - href: en/blog/index.qmd
         text: News
       - href: en/about.qmd
@@ -89,8 +91,15 @@ website:
           href: en/docs/architecture.qmd
         - text: "Startup composition"
           href: en/docs/startup-composition.qmd
-        - text: "Migrating to 2.0"
-          href: en/docs/migration-2.0.qmd
+
+    - id: migration
+      title: "Migration"
+      style: "docked"
+      contents:
+        - text: "Overview"
+          href: en/migration/index.qmd
+        - text: "1.x → 2.0"
+          href: en/migration/2.0.qmd
 
     - id: modules
       title: "Modules"
@@ -276,8 +285,15 @@ website:
           href: es/docs/architecture.qmd
         - text: "Composición del arranque"
           href: es/docs/startup-composition.qmd
-        - text: "Migrar a 2.0"
-          href: es/docs/migration-2.0.qmd
+
+    - id: migration-es
+      title: "Migración"
+      style: "docked"
+      contents:
+        - text: "Resumen"
+          href: es/migration/index.qmd
+        - text: "1.x → 2.0"
+          href: es/migration/2.0.qmd
 
   page-footer:
     left: |

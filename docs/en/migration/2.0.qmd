@@ -1,6 +1,6 @@
 ---
 title: "Migrating to DAF 2.0"
-sidebar: docs
+sidebar: migration
 lang: en
 ---
 
