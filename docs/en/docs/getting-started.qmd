@@ -10,15 +10,41 @@ sidebar: docs
 
 ## Installation
 
-DAF is distributed as a set of Delphi packages (`.dpk`). Clone the repo and open the group project:
+DAF is distributed as a set of Delphi packages (`.dpk`). Clone the repo:
 
 ```bash
 git clone https://github.com/Delphi-DAF/dafce.git
 ```
 
-Then open `src/DAFGroup.groupproj` in Delphi IDE and build all packages.
+### Building the packages
 
-Alternatively, add the `src/[Module]/` paths you need directly to your project's search path — every module is self-contained.
+Every project takes its output paths from `src/paths.optset`, which derives all of them from
+`PRJ_OUT_DIR`. `BDS.bat` sets that variable from its own location, so the IDE is started through it:
+
+```cmd
+BDS start
+```
+
+That opens RAD Studio with the project's environment and loads `src/DAFGroup.groupproj`. An IDE
+started any other way leaves `PRJ_OUT_DIR` undefined, and every output path is then built from an
+empty value. `BDS inspect` prints what is set; the project's own variables live in `project.cmd`,
+and per-machine overrides go in a `%COMPUTERNAME%.project.cmd` beside it.
+
+From the command line there is nothing to set up — both scripts call `BDS.bat` themselves:
+
+```cmd
+buildall.bat all
+runtests.bat all
+```
+
+`buildall.bat` builds the framework in Debug and Release, then the samples and the specs in Debug.
+`runtests.bat` runs every suite the specs group declares. Both take `Win32`, `Win64` or `all`, and
+`buildall.bat` also takes `--clean`, which deletes `out/` first.
+
+### Using the source directly
+
+Adding the `src/[Module]/` paths you need to your own project's search path compiles those units with
+your project's output paths, so none of the above applies. Every module is self-contained.
 
 ## Your first DAF application
 

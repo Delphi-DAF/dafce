@@ -40,6 +40,28 @@ DAF Community Edition is distributed under the [MIT License](./legal/LICENSE.md)
 A Pro edition is available, offering documentation and commercial support.  
 Advanced features for DAF Pro are coming soon.
 
+## Building
+
+Every project takes its output paths from `src/paths.optset`, which derives all of them from
+`PRJ_OUT_DIR`. `BDS.bat` sets that variable from its own location, so the IDE is started through it:
+
+```cmd
+BDS start
+```
+
+That opens RAD Studio with the project's environment and loads `src/DAFGroup.groupproj`. An IDE
+started any other way leaves `PRJ_OUT_DIR` undefined, and every output path is then built from an
+empty value.
+
+From the command line there is nothing to set up, because both scripts call `BDS.bat` themselves:
+`buildall.bat all` builds the framework, the samples and the specs on Win32 and Win64, and
+`runtests.bat all` runs every suite the specs group declares.
+
+Requires Delphi 12 (Athens) or later, on Windows: Win32 and Win64. No package declares a Linux
+target.
+
+The full documentation is at <https://delphi-daf.github.io/dafce>.
+
 ## Editions
 
 | Edition | License | Description |
