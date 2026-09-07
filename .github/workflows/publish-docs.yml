@@ -41,6 +41,12 @@ jobs:
       - name: Check the documented startup is the compiled one
         run: python3 eng/check-quickstart-snippet.py
 
+      # Quarto renderiza un id de sidebar que no existe en silencio: la pagina sale publicada sin
+      # su barra lateral, sin aviso y sin codigo de salida. No tiene enlace muerto y se llega a
+      # ella desde el navbar, asi que ni el mapa de enlaces ni el comprobador del sitio la ven.
+      - name: Check the front matter of every published page
+        run: python3 eng/check-frontmatter.py
+
       # Los enlaces de un documento que el sitio publica por include estan escritos para el
       # repositorio, donde GitHub los resuelve. El mapa los traduce al renderizar; si un documento
       # gana un enlace y el mapa no lo sigue, el sitio publica un href muerto sin decir nada.
