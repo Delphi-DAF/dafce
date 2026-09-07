@@ -148,5 +148,6 @@ Consulta [Application](../Application/README.es.md) para la documentación compl
 
 - 📖 [Guía de uso](docs/GUIDE.es.md) — pipeline de configuración, servicios scoped, hosted services, hooks de ciclo de vida
 - 📖 [Composición del arranque](../DependencyInjection/docs/STARTUP-COMPOSITION.es.md) — `IStartupTask` frente a `IHostedService`, y las dos fases del arranque
-- 📁 [ConsoleSample](samples/ConsoleSample/README.md) — el pipeline de punta a punta: configuración, servicios y un hosted service en un programa de consola
-- 📁 [PackageInit](samples/PackageInit/README.md) — un `IStartupTask` aportado desde un paquete, sin que el `.dpr` lo nombre
+- 📁 [HostQuickStart](samples/HostQuickStart/README.md) — componer, construir, arrancar y parar, sin ninguna variante de aplicación alrededor
+- 📁 [ConsoleSample](../Cli/samples/ConsoleSample/README.md) — el pipeline de punta a punta: configuración, servicios y un hosted service en un programa de consola
+- 📁 [PackageInit](../Cli/samples/PackageInit/README.md) — un `IStartupTask` aportado desde un paquete, sin que el `.dpr` lo nombre

@@ -83,6 +83,16 @@ end.
 
 ---
 
+## Los tres samples
+
+| Sample | Qué usa |
+|---|---|
+| [`QuickStart`](samples/QuickStart/) | el builder, el trabajo y el código de salida, y nada más |
+| [`ServiceWiring`](samples/ServiceWiring/) | lo mismo, más un servicio registrado y resuelto |
+| [`GreetTool`](samples/GreetTool/) | la gramática, `--help`, códigos de salida por política — el bloque de arriba |
+
+---
+
 ## El estilo inmediato
 
 El builder es utilizable **en cuanto se crea**: `Configuration` y `Environment` ya responden, así que

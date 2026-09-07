@@ -24,7 +24,7 @@
 
 Hay **uno** por variante de aplicación, y elegir es cuestión de qué tipo de aplicación estás
 escribiendo — no de cuál de dos capas usar. Una VCL entera, con sus propias specs, es
-[TicTacToeApp](../samples/TicTacToeApp/README.md):
+[TicTacToeApp](../../VCL/samples/TicTacToeApp/README.md):
 
 | Tu aplicación | Punto de entrada | Vive en | `Build` devuelve |
 |---|---|---|---|
@@ -104,42 +104,11 @@ Donde **diverge**, y esto importa más que el parecido:
 
 ## Inicio rápido
 
-Esto es `samples/QuickStart/QuickStart.dpr` tal cual; `eng/check-quickstart-snippet.py` compara los
-dos, así que este bloque es un fichero que lee el compilador:
-
-<!-- quickstart: src/Application/samples/QuickStart/QuickStart.dpr -->
-
-```pascal
-program QuickStart;
-
-{$APPTYPE CONSOLE}
-{$STRONGLINKTYPES ON}
-
-uses
-  System.SysUtils,
-  Daf.Extensions.DependencyInjection,
-  Daf.CommandLine,
-  Daf.Configuration.CommandLine,
-  Daf.Cli,
-  QuickStart.Greeter in 'QuickStart.Greeter.pas';
-
-// Lo mas corto que se puede escribir con la familia: una variante, sus registros donde estan
-// escritos, y el codigo de salida que devuelve el trabajo.
-begin
-  var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
-
-  B.Services.AddSingleton<IGreeter, TGreeter>;
-
-  B.OnExecute(
-    function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
-    begin
-      Writeln(Services.GetRequiredService<IGreeter>.Greet);
-      Result := TCliExit.Ok;
-    end);
-
-  ExitCode := B.Build.Run;
-end.
-```
+El ejemplo de entrada es de la variante de la familia. Para una herramienta de consola es
+[`Cli/samples/QuickStart`](../../Cli/samples/QuickStart/) —construir, declarar el trabajo,
+ejecutar— y [`Cli/samples/ServiceWiring`](../../Cli/samples/ServiceWiring/) es lo mismo con un
+servicio registrado y resuelto. Para el host genérico sin ninguna variante alrededor,
+[`Hosting/samples/HostQuickStart`](../../Hosting/samples/HostQuickStart/).
 
 Dos formas que conviene nombrar, porque las dos se equivocan con facilidad:
 

@@ -11,42 +11,11 @@ Top-level entry point for DAFce applications. The application family — `TCliAp
 
 ## Quick Start
 
-This is the [`QuickStart` sample](samples/QuickStart/), verbatim. `eng/check-quickstart-snippet.py`
-compares the two, so what you copy from here is what the compiler reads:
-
-<!-- quickstart: src/Application/samples/QuickStart/QuickStart.dpr -->
-
-```pascal
-program QuickStart;
-
-{$APPTYPE CONSOLE}
-{$STRONGLINKTYPES ON}
-
-uses
-  System.SysUtils,
-  Daf.Extensions.DependencyInjection,
-  Daf.CommandLine,
-  Daf.Configuration.CommandLine,
-  Daf.Cli,
-  QuickStart.Greeter in 'QuickStart.Greeter.pas';
-
-// Lo mas corto que se puede escribir con la familia: una variante, sus registros donde estan
-// escritos, y el codigo de salida que devuelve el trabajo.
-begin
-  var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
-
-  B.Services.AddSingleton<IGreeter, TGreeter>;
-
-  B.OnExecute(
-    function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
-    begin
-      Writeln(Services.GetRequiredService<IGreeter>.Greet);
-      Result := TCliExit.Ok;
-    end);
-
-  ExitCode := B.Build.Run;
-end.
-```
+The entry example belongs to the family variant you are writing:
+[`Cli/samples/QuickStart`](../Cli/samples/QuickStart/) for a console tool,
+[`Cli/samples/ServiceWiring`](../Cli/samples/ServiceWiring/) for the same with a registered service,
+and [`Hosting/samples/HostQuickStart`](../Hosting/samples/HostQuickStart/) for the generic host with
+no variant around it.
 
 The builder is usable the moment it is created: `Services`, `Configuration` and `Environment` already
 answer, so registrations happen where they are written. `Build` returns the application, and `Run`

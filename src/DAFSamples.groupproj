@@ -9,19 +9,25 @@
         <Projects Include="MediatR\samples\MediatRSample\MediatRSample.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="Hosting\samples\ConsoleSample\ConsoleSample.dproj">
+        <Projects Include="Cli\samples\ConsoleSample\ConsoleSample.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="Hosting\samples\PackageInit\PackageInit.dproj">
+        <Projects Include="Hosting\samples\HostQuickStart\HostQuickStart.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="Cli\samples\PackageInit\PackageInit.dproj">
             <Dependencies/>
         </Projects>
         <Projects Include="Cli\samples\GreetTool\GreetTool.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="Application\samples\HostedService\HostedService.dproj">
+        <Projects Include="samples\HostedService\HostedService.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="Application\samples\QuickStart\QuickStart.dproj">
+        <Projects Include="Cli\samples\QuickStart\QuickStart.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="Cli\samples\ServiceWiring\ServiceWiring.dproj">
             <Dependencies/>
         </Projects>
         <Projects Include="SystemProcess\samples\PingProcess\PingProcess.dproj">
@@ -36,10 +42,10 @@
         <Projects Include="MiniSpec\samples\MastermindSpecs\MasterMind.Specs.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="Application\samples\TicTacToeApp\TicTacToeApp.dproj">
+        <Projects Include="VCL\samples\TicTacToeApp\TicTacToeApp.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="Application\samples\TicTacToeApp\TicTacToeSpecs.dproj">
+        <Projects Include="VCL\samples\TicTacToeApp\TicTacToeSpecs.dproj">
             <Dependencies/>
         </Projects>
         <Projects Include="SQLCute\samples\SQLCuteSample\SQLCuteSample.dproj">
@@ -84,22 +90,31 @@
         <MSBuild Projects="MediatR\samples\MediatRSample\MediatRSample.dproj" Targets="Make"/>
     </Target>
     <Target Name="ConsoleSample">
-        <MSBuild Projects="Hosting\samples\ConsoleSample\ConsoleSample.dproj"/>
+        <MSBuild Projects="Cli\samples\ConsoleSample\ConsoleSample.dproj"/>
     </Target>
     <Target Name="ConsoleSample:Clean">
-        <MSBuild Projects="Hosting\samples\ConsoleSample\ConsoleSample.dproj" Targets="Clean"/>
+        <MSBuild Projects="Cli\samples\ConsoleSample\ConsoleSample.dproj" Targets="Clean"/>
     </Target>
     <Target Name="ConsoleSample:Make">
-        <MSBuild Projects="Hosting\samples\ConsoleSample\ConsoleSample.dproj" Targets="Make"/>
+        <MSBuild Projects="Cli\samples\ConsoleSample\ConsoleSample.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="HostQuickStart">
+        <MSBuild Projects="Hosting\samples\HostQuickStart\HostQuickStart.dproj"/>
+    </Target>
+    <Target Name="HostQuickStart:Clean">
+        <MSBuild Projects="Hosting\samples\HostQuickStart\HostQuickStart.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="HostQuickStart:Make">
+        <MSBuild Projects="Hosting\samples\HostQuickStart\HostQuickStart.dproj" Targets="Make"/>
     </Target>
     <Target Name="PackageInit">
-        <MSBuild Projects="Hosting\samples\PackageInit\PackageInit.dproj"/>
+        <MSBuild Projects="Cli\samples\PackageInit\PackageInit.dproj"/>
     </Target>
     <Target Name="PackageInit:Clean">
-        <MSBuild Projects="Hosting\samples\PackageInit\PackageInit.dproj" Targets="Clean"/>
+        <MSBuild Projects="Cli\samples\PackageInit\PackageInit.dproj" Targets="Clean"/>
     </Target>
     <Target Name="PackageInit:Make">
-        <MSBuild Projects="Hosting\samples\PackageInit\PackageInit.dproj" Targets="Make"/>
+        <MSBuild Projects="Cli\samples\PackageInit\PackageInit.dproj" Targets="Make"/>
     </Target>
     <Target Name="GreetTool">
         <MSBuild Projects="Cli\samples\GreetTool\GreetTool.dproj"/>
@@ -111,22 +126,31 @@
         <MSBuild Projects="Cli\samples\GreetTool\GreetTool.dproj" Targets="Make"/>
     </Target>
     <Target Name="HostedService">
-        <MSBuild Projects="Application\samples\HostedService\HostedService.dproj"/>
+        <MSBuild Projects="samples\HostedService\HostedService.dproj"/>
     </Target>
     <Target Name="HostedService:Clean">
-        <MSBuild Projects="Application\samples\HostedService\HostedService.dproj" Targets="Clean"/>
+        <MSBuild Projects="samples\HostedService\HostedService.dproj" Targets="Clean"/>
     </Target>
     <Target Name="HostedService:Make">
-        <MSBuild Projects="Application\samples\HostedService\HostedService.dproj" Targets="Make"/>
+        <MSBuild Projects="samples\HostedService\HostedService.dproj" Targets="Make"/>
     </Target>
     <Target Name="QuickStart">
-        <MSBuild Projects="Application\samples\QuickStart\QuickStart.dproj"/>
+        <MSBuild Projects="Cli\samples\QuickStart\QuickStart.dproj"/>
     </Target>
     <Target Name="QuickStart:Clean">
-        <MSBuild Projects="Application\samples\QuickStart\QuickStart.dproj" Targets="Clean"/>
+        <MSBuild Projects="Cli\samples\QuickStart\QuickStart.dproj" Targets="Clean"/>
     </Target>
     <Target Name="QuickStart:Make">
-        <MSBuild Projects="Application\samples\QuickStart\QuickStart.dproj" Targets="Make"/>
+        <MSBuild Projects="Cli\samples\QuickStart\QuickStart.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="ServiceWiring">
+        <MSBuild Projects="Cli\samples\ServiceWiring\ServiceWiring.dproj"/>
+    </Target>
+    <Target Name="ServiceWiring:Clean">
+        <MSBuild Projects="Cli\samples\ServiceWiring\ServiceWiring.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="ServiceWiring:Make">
+        <MSBuild Projects="Cli\samples\ServiceWiring\ServiceWiring.dproj" Targets="Make"/>
     </Target>
     <Target Name="PingProcess">
         <MSBuild Projects="SystemProcess\samples\PingProcess\PingProcess.dproj"/>
@@ -165,22 +189,22 @@
         <MSBuild Projects="MiniSpec\samples\MastermindSpecs\MasterMind.Specs.dproj" Targets="Make"/>
     </Target>
     <Target Name="TicTacToeApp">
-        <MSBuild Projects="Application\samples\TicTacToeApp\TicTacToeApp.dproj"/>
+        <MSBuild Projects="VCL\samples\TicTacToeApp\TicTacToeApp.dproj"/>
     </Target>
     <Target Name="TicTacToeApp:Clean">
-        <MSBuild Projects="Application\samples\TicTacToeApp\TicTacToeApp.dproj" Targets="Clean"/>
+        <MSBuild Projects="VCL\samples\TicTacToeApp\TicTacToeApp.dproj" Targets="Clean"/>
     </Target>
     <Target Name="TicTacToeApp:Make">
-        <MSBuild Projects="Application\samples\TicTacToeApp\TicTacToeApp.dproj" Targets="Make"/>
+        <MSBuild Projects="VCL\samples\TicTacToeApp\TicTacToeApp.dproj" Targets="Make"/>
     </Target>
     <Target Name="TicTacToeSpecs">
-        <MSBuild Projects="Application\samples\TicTacToeApp\TicTacToeSpecs.dproj"/>
+        <MSBuild Projects="VCL\samples\TicTacToeApp\TicTacToeSpecs.dproj"/>
     </Target>
     <Target Name="TicTacToeSpecs:Clean">
-        <MSBuild Projects="Application\samples\TicTacToeApp\TicTacToeSpecs.dproj" Targets="Clean"/>
+        <MSBuild Projects="VCL\samples\TicTacToeApp\TicTacToeSpecs.dproj" Targets="Clean"/>
     </Target>
     <Target Name="TicTacToeSpecs:Make">
-        <MSBuild Projects="Application\samples\TicTacToeApp\TicTacToeSpecs.dproj" Targets="Make"/>
+        <MSBuild Projects="VCL\samples\TicTacToeApp\TicTacToeSpecs.dproj" Targets="Make"/>
     </Target>
     <Target Name="SQLCuteSample">
         <MSBuild Projects="SQLCute\samples\SQLCuteSample\SQLCuteSample.dproj"/>
@@ -228,13 +252,13 @@
         <MSBuild Projects="DependencyInjection\samples\ModuleComposition\ModuleComposition.dproj" Targets="Make"/>
     </Target>
     <Target Name="Build">
-        <CallTarget Targets="ConfigExample;MediatRSample;ConsoleSample;HostedService;PackageInit;GreetTool;PingProcess;BuildTool;CalculatorSpecs;MasterMind_Specs;TicTacToeApp;TicTacToeSpecs;SQLCuteSample;InMemoryQuerySample;InMemoryJoinSample;CatalogServiceSample;QuickStart;ModuleComposition"/>
+        <CallTarget Targets="ConfigExample;MediatRSample;ConsoleSample;HostQuickStart;HostedService;PackageInit;GreetTool;PingProcess;BuildTool;CalculatorSpecs;MasterMind_Specs;TicTacToeApp;TicTacToeSpecs;SQLCuteSample;InMemoryQuerySample;InMemoryJoinSample;CatalogServiceSample;QuickStart;ServiceWiring;ModuleComposition"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="ConfigExample:Clean;MediatRSample:Clean;ConsoleSample:Clean;HostedService:Clean;PackageInit:Clean;GreetTool:Clean;PingProcess:Clean;BuildTool:Clean;CalculatorSpecs:Clean;MasterMind_Specs:Clean;TicTacToeApp:Clean;TicTacToeSpecs:Clean;SQLCuteSample:Clean;InMemoryQuerySample:Clean;InMemoryJoinSample:Clean;CatalogServiceSample:Clean;QuickStart:Clean;ModuleComposition:Clean"/>
+        <CallTarget Targets="ConfigExample:Clean;MediatRSample:Clean;ConsoleSample:Clean;HostQuickStart:Clean;HostedService:Clean;PackageInit:Clean;GreetTool:Clean;PingProcess:Clean;BuildTool:Clean;CalculatorSpecs:Clean;MasterMind_Specs:Clean;TicTacToeApp:Clean;TicTacToeSpecs:Clean;SQLCuteSample:Clean;InMemoryQuerySample:Clean;InMemoryJoinSample:Clean;CatalogServiceSample:Clean;QuickStart:Clean;ServiceWiring:Clean;ModuleComposition:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="ConfigExample:Make;MediatRSample:Make;ConsoleSample:Make;HostedService:Make;PackageInit:Make;GreetTool:Make;PingProcess:Make;BuildTool:Make;CalculatorSpecs:Make;MasterMind_Specs:Make;TicTacToeApp:Make;TicTacToeSpecs:Make;SQLCuteSample:Make;InMemoryQuerySample:Make;InMemoryJoinSample:Make;CatalogServiceSample:Make;QuickStart:Make;ModuleComposition:Make"/>
+        <CallTarget Targets="ConfigExample:Make;MediatRSample:Make;ConsoleSample:Make;HostQuickStart:Make;HostedService:Make;PackageInit:Make;GreetTool:Make;PingProcess:Make;BuildTool:Make;CalculatorSpecs:Make;MasterMind_Specs:Make;TicTacToeApp:Make;TicTacToeSpecs:Make;SQLCuteSample:Make;InMemoryQuerySample:Make;InMemoryJoinSample:Make;CatalogServiceSample:Make;QuickStart:Make;ServiceWiring:Make;ModuleComposition:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

@@ -1,0 +1,31 @@
+﻿program ServiceWiring;
+
+{$APPTYPE CONSOLE}
+{$STRONGLINKTYPES ON}
+
+uses
+  System.SysUtils,
+  Daf.Extensions.DependencyInjection,
+  Daf.CommandLine,
+  Daf.Configuration.CommandLine,
+  Daf.Cli,
+  ServiceWiring.Greeter in 'ServiceWiring.Greeter.pas';
+
+// Como entra un servicio en una herramienta de linea de comandos: se registra en el builder, que
+// ya esta vivo, y el trabajo lo resuelve del proveedor que recibe.
+//
+//   ServiceWiring  -> 0, saluda a traves del servicio
+begin
+  var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
+
+  B.Services.AddSingleton<IGreeter, TGreeter>;
+
+  B.OnExecute(
+    function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+    begin
+      Writeln(Services.GetRequiredService<IGreeter>.Greet);
+      Result := TCliExit.Ok;
+    end);
+
+  ExitCode := B.Build.Run;
+end.

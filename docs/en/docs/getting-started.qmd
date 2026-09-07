@@ -51,10 +51,55 @@ your project's output paths, so none of the above applies. Every module is self-
 This is the `QuickStart` sample, verbatim — it is the file the compiler reads, and a check
 compares the two, so what you copy from here is what builds:
 
-<!-- quickstart: src/Application/samples/QuickStart/QuickStart.dpr -->
+<!-- quickstart: src/Cli/samples/QuickStart/QuickStart.dpr -->
 
 ```pascal
 program QuickStart;
+
+{$APPTYPE CONSOLE}
+
+uses
+  Daf.Extensions.DependencyInjection,
+  Daf.CommandLine,
+  Daf.Configuration.CommandLine,
+  Daf.Cli;
+
+// El ejemplo de entrada de una herramienta de linea de comandos: el builder, el trabajo escrito en
+// el sitio, y el codigo de salida que devuelve ese trabajo.
+//
+//   QuickStart  -> 0, saluda
+//
+// Como se anade un servicio esta en el sample ServiceWiring, que es el nivel siguiente.
+begin
+  var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
+
+  B.OnExecute(
+    function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+    begin
+      Writeln('Hola desde DAF');
+      Result := TCliExit.Ok;
+    end);
+
+  ExitCode := B.Build.Run;
+end.
+```
+
+Two things about the shape, both of them easy to get wrong:
+
+- The builder is held in a variable, not chained, and registration happens where it is written:
+  there is no deferred `ConfigureServices` callback. `TCliApplication.CreateBuilder` returns an
+  `ICliApplicationBuilder`, whose `Build` returns the `ICliApplication` whose `Run` is the exit code.
+- `Daf.Extensions.DependencyInjection` is in the `uses` although nothing is registered: the
+  signature of `OnExecute` names `IServiceProvider`, and Delphi needs the type visible to write it.
+
+## Adding a service
+
+The `ServiceWiring` sample is the same program with one service registered and resolved:
+
+<!-- quickstart: src/Cli/samples/ServiceWiring/ServiceWiring.dpr -->
+
+```pascal
+program ServiceWiring;
 
 {$APPTYPE CONSOLE}
 {$STRONGLINKTYPES ON}
@@ -65,10 +110,12 @@ uses
   Daf.CommandLine,
   Daf.Configuration.CommandLine,
   Daf.Cli,
-  QuickStart.Greeter in 'QuickStart.Greeter.pas';
+  ServiceWiring.Greeter in 'ServiceWiring.Greeter.pas';
 
-// Lo mas corto que se puede escribir con la familia: una variante, sus registros donde estan
-// escritos, y el codigo de salida que devuelve el trabajo.
+// Como entra un servicio en una herramienta de linea de comandos: se registra en el builder, que
+// ya esta vivo, y el trabajo lo resuelve del proveedor que recibe.
+//
+//   ServiceWiring  -> 0, saluda a traves del servicio
 begin
   var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
 
@@ -85,16 +132,17 @@ begin
 end.
 ```
 
-Two things about the shape, both of them easy to get wrong:
-
-- The builder is held in a variable, not chained, and registration happens where it is written:
-  there is no deferred `ConfigureServices` callback. `TCliApplication.CreateBuilder` returns an
-  `ICliApplicationBuilder`, whose `Build` returns the `ICliApplication` whose `Run` is the exit code.
+- `Services` answers before anything is built, so `AddSingleton` takes effect where it is written,
+  and `OnExecute` resolves from the provider it receives.
 - The service lives in its own unit. A type declared in the `.dpr` is not in the `interface`
-  section of any unit, and resolving it fails at run time with `ENonPublicType`.
+  section of any unit, and resolving it fails at run time with `ENonPublicType`. That is also why
+  the program carries `{$STRONGLINKTYPES ON}`: without it the linker drops the RTTI the container
+  resolves by.
 
 There is a second, lower-level entry point — `THostBuilder` from the **Hosting** module — for when
-you want the host without the application layer around it. The
+you want the host without the application layer around it, with
+[`Hosting/samples/HostQuickStart`](https://github.com/Delphi-DAF/dafce/tree/main/src/Hosting/samples/HostQuickStart)
+as its own entry example. The
 [Application guide](../modules/application-guide.qmd) says what each one gives you.
 
 ## Module map

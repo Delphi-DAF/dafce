@@ -14,7 +14,8 @@ on:
       - 'src/**/*.dpk'
       # The quick-start block is a verbatim copy of this sample, so the sample changing
       # makes the site stale without any document being edited.
-      - 'src/Application/samples/QuickStart/**'
+      - 'src/Cli/samples/QuickStart/**'
+      - 'src/Cli/samples/ServiceWiring/**'
   workflow_dispatch:
 
 permissions:

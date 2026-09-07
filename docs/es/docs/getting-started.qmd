@@ -55,10 +55,55 @@ autocontenido.
 Esto es el sample `QuickStart` tal cual — es el fichero que lee el compilador, y un check
 compara los dos, así que lo que copies de aquí es lo que compila:
 
-<!-- quickstart: src/Application/samples/QuickStart/QuickStart.dpr -->
+<!-- quickstart: src/Cli/samples/QuickStart/QuickStart.dpr -->
 
 ```pascal
 program QuickStart;
+
+{$APPTYPE CONSOLE}
+
+uses
+  Daf.Extensions.DependencyInjection,
+  Daf.CommandLine,
+  Daf.Configuration.CommandLine,
+  Daf.Cli;
+
+// El ejemplo de entrada de una herramienta de linea de comandos: el builder, el trabajo escrito en
+// el sitio, y el codigo de salida que devuelve ese trabajo.
+//
+//   QuickStart  -> 0, saluda
+//
+// Como se anade un servicio esta en el sample ServiceWiring, que es el nivel siguiente.
+begin
+  var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
+
+  B.OnExecute(
+    function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+    begin
+      Writeln('Hola desde DAF');
+      Result := TCliExit.Ok;
+    end);
+
+  ExitCode := B.Build.Run;
+end.
+```
+
+Dos cosas sobre la forma, y las dos se equivocan con facilidad:
+
+- El builder se sostiene en una variable, no en una cadena, y los registros ocurren donde están
+  escritos: no hay callback diferido `ConfigureServices`. `TCliApplication.CreateBuilder` devuelve un
+  `ICliApplicationBuilder`, cuyo `Build` devuelve el `ICliApplication` cuyo `Run` es el código de salida.
+- `Daf.Extensions.DependencyInjection` está en el `uses` aunque no se registre nada: la firma de
+  `OnExecute` nombra `IServiceProvider`, y Delphi exige que el tipo esté visible para escribirla.
+
+## Añadir un servicio
+
+El sample `ServiceWiring` es el mismo programa con un servicio registrado y resuelto:
+
+<!-- quickstart: src/Cli/samples/ServiceWiring/ServiceWiring.dpr -->
+
+```pascal
+program ServiceWiring;
 
 {$APPTYPE CONSOLE}
 {$STRONGLINKTYPES ON}
@@ -69,10 +114,12 @@ uses
   Daf.CommandLine,
   Daf.Configuration.CommandLine,
   Daf.Cli,
-  QuickStart.Greeter in 'QuickStart.Greeter.pas';
+  ServiceWiring.Greeter in 'ServiceWiring.Greeter.pas';
 
-// Lo mas corto que se puede escribir con la familia: una variante, sus registros donde estan
-// escritos, y el codigo de salida que devuelve el trabajo.
+// Como entra un servicio en una herramienta de linea de comandos: se registra en el builder, que
+// ya esta vivo, y el trabajo lo resuelve del proveedor que recibe.
+//
+//   ServiceWiring  -> 0, saluda a traves del servicio
 begin
   var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
 
@@ -89,16 +136,17 @@ begin
 end.
 ```
 
-Dos cosas sobre la forma, y las dos se equivocan con facilidad:
-
-- El builder se sostiene en una variable, no en una cadena, y los registros ocurren donde están
-  escritos: no hay callback diferido `ConfigureServices`. `TCliApplication.CreateBuilder` devuelve un
-  `ICliApplicationBuilder`, cuyo `Build` devuelve el `ICliApplication` cuyo `Run` es el código de salida.
+- `Services` responde antes de construir nada, así que el `AddSingleton` surte efecto donde está
+  escrito, y `OnExecute` resuelve del proveedor que recibe.
 - El servicio vive en su propia unit. Un tipo declarado en el `.dpr` no está en la sección
-  `interface` de ninguna unit, y resolverlo falla en ejecución con `ENonPublicType`.
+  `interface` de ninguna unit, y resolverlo falla en ejecución con `ENonPublicType`. Es también por
+  lo que el programa lleva `{$STRONGLINKTYPES ON}`: sin él el enlazador descarta la RTTI por la que
+  el contenedor resuelve.
 
 Hay un segundo punto de entrada, más abajo: `THostBuilder`, del módulo **Hosting**, para cuando
-quieres el host sin la capa de aplicación alrededor. La
+quieres el host sin la capa de aplicación alrededor, con
+[`Hosting/samples/HostQuickStart`](https://github.com/Delphi-DAF/dafce/tree/main/src/Hosting/samples/HostQuickStart)
+como su propio ejemplo de entrada. La
 [guía de Application](../modules/application-guide.qmd) dice qué te da cada uno.
 
 ## Mapa de módulos

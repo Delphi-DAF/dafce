@@ -1,10 +1,10 @@
 ﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
     <PropertyGroup>
-        <ProjectGuid>{A3D71E05-6C48-4B92-8E17-9F250BD6C4A1}</ProjectGuid>
-        <MainSource>QuickStart.dpr</MainSource>
+        <ProjectGuid>{6F1C84B2-3A7D-4E59-B0C6-1D82E5A47F30}</ProjectGuid>
+        <MainSource>ServiceWiring.dpr</MainSource>
         <Base>True</Base>
         <Config Condition="'$(Config)'==''">Debug</Config>
-        <ProjectName Condition="'$(ProjectName)'==''">QuickStart</ProjectName>
+        <ProjectName Condition="'$(ProjectName)'==''">ServiceWiring</ProjectName>
         <TargetedPlatforms>1</TargetedPlatforms>
         <AppType>Console</AppType>
         <FrameworkType>None</FrameworkType>
@@ -43,7 +43,7 @@
         <DCC_N>false</DCC_N>
         <DCC_S>false</DCC_S>
         <DCC_ImageBase>00400000</DCC_ImageBase>
-        <SanitizedProjectName>QuickStart</SanitizedProjectName>
+        <SanitizedProjectName>ServiceWiring</SanitizedProjectName>
         <VerInfo_Locale>1027</VerInfo_Locale>
         <VerInfo_Keys>CompanyName=;FileDescription=;FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductName=;ProductVersion=1.0.0.0;Comments=;CFBundleName=</VerInfo_Keys>
         <DCC_Namespace>System;Xml;Data;Datasnap;Web;Soap;$(DCC_Namespace)</DCC_Namespace>
@@ -82,7 +82,7 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
-        <DCCReference Include="QuickStart.Greeter.pas"/>
+        <DCCReference Include="ServiceWiring.Greeter.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\..\samples.optset</DependentOn>
@@ -102,7 +102,7 @@
         <BorlandProject>
             <Delphi.Personality>
                 <Source>
-                    <Source Name="MainSource">QuickStart.dpr</Source>
+                    <Source Name="MainSource">ServiceWiring.dpr</Source>
                 </Source>
                 <Excluded_Packages>
                     <Excluded_Packages Name="$(BDSBIN)\bcboffice2k290.bpl">Embarcadero C++Builder Office 2000 Servers Package</Excluded_Packages>
@@ -131,9 +131,9 @@
                         <Overwrite>true</Overwrite>
                     </Platform>
                 </DeployFile>
-                <DeployFile LocalName="..\..\out\samples\bin\QuickStart.exe" Configuration="Debug" Class="ProjectOutput">
+                <DeployFile LocalName="..\..\out\samples\bin\ServiceWiring.exe" Configuration="Debug" Class="ProjectOutput">
                     <Platform Name="Win32">
-                        <RemoteName>QuickStart.exe</RemoteName>
+                        <RemoteName>ServiceWiring.exe</RemoteName>
                         <Overwrite>true</Overwrite>
                     </Platform>
                 </DeployFile>

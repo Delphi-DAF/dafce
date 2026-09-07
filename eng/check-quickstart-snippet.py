@@ -15,14 +15,13 @@ HOW IT WORKS
 A document cites a source file with a marker, and the fenced block right after it must be that
 file, verbatim:
 
-    <!-- quickstart: src/Application/samples/QuickStart/QuickStart.dpr -->
+    <!-- quickstart: src/Cli/samples/QuickStart/QuickStart.dpr -->
 
     ```pascal
     ...the contents of that file...
     ```
 
-The sample is in `DAFSamples.groupproj`, so it is built like any other, and its specs live in
-`src/Application/test/`. If the startup API changes, the sample stops compiling; if someone edits
+The sample is in `DAFSamples.groupproj`, so it is built like any other. If the startup API changes, the sample stops compiling; if someone edits
 a document instead, this stops matching. Either way something goes red.
 
 WHY IT FAILS LOUDLY WHEN IT FINDS NOTHING

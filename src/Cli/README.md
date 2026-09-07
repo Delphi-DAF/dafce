@@ -82,6 +82,16 @@ end.
 
 ---
 
+## The three samples
+
+| Sample | What it uses |
+|---|---|
+| [`QuickStart`](samples/QuickStart/) | the builder, the work, the exit code — nothing else |
+| [`ServiceWiring`](samples/ServiceWiring/) | the same, plus a service registered and resolved |
+| [`GreetTool`](samples/GreetTool/) | the grammar, `--help`, exit codes by policy — the block above |
+
+---
+
 ## The immediate style
 
 The builder is usable **the moment it is created**: `Configuration` and `Environment` already answer,

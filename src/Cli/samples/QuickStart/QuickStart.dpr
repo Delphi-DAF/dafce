@@ -1,27 +1,26 @@
 ﻿program QuickStart;
 
 {$APPTYPE CONSOLE}
-{$STRONGLINKTYPES ON}
 
 uses
-  System.SysUtils,
   Daf.Extensions.DependencyInjection,
   Daf.CommandLine,
   Daf.Configuration.CommandLine,
-  Daf.Cli,
-  QuickStart.Greeter in 'QuickStart.Greeter.pas';
+  Daf.Cli;
 
-// Lo mas corto que se puede escribir con la familia: una variante, sus registros donde estan
-// escritos, y el codigo de salida que devuelve el trabajo.
+// El ejemplo de entrada de una herramienta de linea de comandos: el builder, el trabajo escrito en
+// el sitio, y el codigo de salida que devuelve ese trabajo.
+//
+//   QuickStart  -> 0, saluda
+//
+// Como se anade un servicio esta en el sample ServiceWiring, que es el nivel siguiente.
 begin
   var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
-
-  B.Services.AddSingleton<IGreeter, TGreeter>;
 
   B.OnExecute(
     function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
     begin
-      Writeln(Services.GetRequiredService<IGreeter>.Greet);
+      Writeln('Hola desde DAF');
       Result := TCliExit.Ok;
     end);
 

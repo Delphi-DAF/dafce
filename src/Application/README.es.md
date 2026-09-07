@@ -11,42 +11,11 @@ Punto de entrada principal de las aplicaciones DAFce. `TDafApplication` envuelve
 
 ## Inicio rápido
 
-Esto es el [sample `QuickStart`](samples/QuickStart/) tal cual. `eng/check-quickstart-snippet.py`
-compara los dos, así que lo que copies de aquí es lo que lee el compilador:
-
-<!-- quickstart: src/Application/samples/QuickStart/QuickStart.dpr -->
-
-```pascal
-program QuickStart;
-
-{$APPTYPE CONSOLE}
-{$STRONGLINKTYPES ON}
-
-uses
-  System.SysUtils,
-  Daf.Extensions.DependencyInjection,
-  Daf.CommandLine,
-  Daf.Configuration.CommandLine,
-  Daf.Cli,
-  QuickStart.Greeter in 'QuickStart.Greeter.pas';
-
-// Lo mas corto que se puede escribir con la familia: una variante, sus registros donde estan
-// escritos, y el codigo de salida que devuelve el trabajo.
-begin
-  var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
-
-  B.Services.AddSingleton<IGreeter, TGreeter>;
-
-  B.OnExecute(
-    function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
-    begin
-      Writeln(Services.GetRequiredService<IGreeter>.Greet);
-      Result := TCliExit.Ok;
-    end);
-
-  ExitCode := B.Build.Run;
-end.
-```
+El ejemplo de entrada es de la variante de la familia que estés escribiendo:
+[`Cli/samples/QuickStart`](../Cli/samples/QuickStart/) para una herramienta de consola,
+[`Cli/samples/ServiceWiring`](../Cli/samples/ServiceWiring/) para lo mismo con un servicio
+registrado, y [`Hosting/samples/HostQuickStart`](../Hosting/samples/HostQuickStart/) para el host
+genérico sin ninguna variante alrededor.
 
 El builder es usable en cuanto se crea: `Services`, `Configuration` y `Environment` ya responden, así
 que los registros ocurren donde están escritos. `Build` devuelve la aplicación, y `Run` convierte el
