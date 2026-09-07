@@ -21,7 +21,7 @@ Nos complace anunciar el lanzamiento del sitio oficial de **documentación de DA
 | Módulo | Qué hace |
 |--------|----------|
 | Application | Constructor y ejecutor de aplicaciones |
-| Hosting | Ciclo de vida, `IHost`, `IHostApplicationBuilder` |
+| Hosting | Ciclo de vida, `IHost`, `IHostBuilder` |
 | DependencyInjection | Contenedor DI completo |
 | Configuration | JSON, variables de entorno, binding tipado |
 | Logging | Logging estructurado con ámbitos |
