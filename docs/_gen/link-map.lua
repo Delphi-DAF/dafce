@@ -122,12 +122,15 @@ return {
     ["en/modules/commons-guide.qmd"] = {
       ["#dafactivator"] = "#daf.activator",
       ["#dafarrays"] = "#daf.arrays",
+      ["#dafcomparers"] = "#daf.comparers",
       ["#dafenumerable"] = "#daf.enumerable",
       ["#dafmemutils--smart-pointers"] = "#daf.memutils-smart-pointers",
+      ["#dafnullable"] = "#daf.nullable",
       ["#dafrtti"] = "#daf.rtti",
       ["#dafthreading--cancellation-tokens-and-shutdown"] = "#daf.threading-cancellation-tokens-and-shutdown",
       ["../../CommandLine/README.md"] = "/en/modules/commandline.qmd",
       ["../../Linq/README.md"] = "/en/modules/linq.qmd",
+      ["../../SQLCute.InMemory/README.md"] = "/en/modules/sqlcute-inmemory.qmd",
       ["../../SystemProcess/README.md"] = "/en/modules/systemprocess.qmd",
       ["GUIDE.es.md"] = "/es/modules/commons-guide.qmd",
     },
@@ -176,6 +179,7 @@ return {
       ["README.es.md"] = "/es/modules/fmx.qmd",
     },
     ["en/modules/hosting-guide.qmd"] = {
+      ["../../Cli/samples/PackageInit/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/Cli/samples/PackageInit/README.md",
       ["../../DependencyInjection/docs/GUIDE.md"] = "/en/modules/di-guide.qmd",
       ["../../DependencyInjection/docs/STARTUP-COMPOSITION.md"] = "/en/docs/startup-composition.qmd",
       ["GUIDE.es.md"] = "/es/modules/hosting-guide.qmd",
@@ -204,6 +208,8 @@ return {
     ["en/modules/logging.qmd"] = {
       ["../../legal/LICENSE.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/legal/LICENSE.md",
       ["../DependencyInjection.Abstractions/README.md#registering-a-generic-contract-once"] = "/en/modules/di.qmd#registering-a-generic-contract-once",
+      ["../DependencyInjection/docs/STARTUP-COMPOSITION.md"] = "/en/docs/startup-composition.qmd",
+      ["../FMX/README.md"] = "/en/modules/fmx.qmd",
       ["../Logging/README.md"] = "/en/modules/logging.qmd",
       ["../Logging/docs/GUIDE.md"] = "/en/modules/logging-guide.qmd",
       ["../Logging/docs/GUIDE.md#composing-with-no-destination-is-an-error"] = "/en/modules/logging-guide.qmd#composing-with-no-destination-is-an-error",
@@ -325,6 +331,7 @@ return {
       ["docs/GUIDE.md"] = "/en/modules/specification-guide.qmd",
     },
     ["en/modules/sqlcute-guide.qmd"] = {
+      ["../../../SQLCute.InMemory/README.md"] = "/en/modules/sqlcute-inmemory.qmd",
       ["../GUIDE.md"] = "/en/modules/sqlcute-guide.qmd",
       ["../samples/SQLCuteSample/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/SQLCute/samples/SQLCuteSample/README.md",
       ["GUIDE.es.md"] = "/es/modules/sqlcute-guide.qmd",
@@ -461,12 +468,15 @@ return {
     ["es/modules/commons-guide.qmd"] = {
       ["#dafactivator"] = "#daf.activator",
       ["#dafarrays"] = "#daf.arrays",
+      ["#dafcomparers"] = "#daf.comparers",
       ["#dafenumerable"] = "#daf.enumerable",
       ["#dafmemutils--punteros-inteligentes"] = "#daf.memutils-punteros-inteligentes",
+      ["#dafnullable"] = "#daf.nullable",
       ["#dafrtti"] = "#daf.rtti",
       ["#dafthreading--tokens-de-cancelación-y-apagado"] = "#daf.threading-tokens-de-cancelación-y-apagado",
       ["../../CommandLine/README.es.md"] = "/es/modules/commandline.qmd",
       ["../../Linq/README.md"] = "/en/modules/linq.qmd",
+      ["../../SQLCute.InMemory/README.es.md"] = "/es/modules/sqlcute-inmemory.qmd",
       ["../../SystemProcess/README.es.md"] = "/es/modules/systemprocess.qmd",
       ["GUIDE.md"] = "/en/modules/commons-guide.qmd",
     },
@@ -515,6 +525,7 @@ return {
       ["README.md"] = "/en/modules/fmx.qmd",
     },
     ["es/modules/hosting-guide.qmd"] = {
+      ["../../Cli/samples/PackageInit/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/Cli/samples/PackageInit/README.md",
       ["../../DependencyInjection/docs/GUIDE.es.md"] = "/es/modules/di-guide.qmd",
       ["../../DependencyInjection/docs/STARTUP-COMPOSITION.es.md"] = "/es/docs/startup-composition.qmd",
       ["GUIDE.md"] = "/en/modules/hosting-guide.qmd",
@@ -543,6 +554,8 @@ return {
     ["es/modules/logging.qmd"] = {
       ["../../legal/LICENSE.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/legal/LICENSE.md",
       ["../DependencyInjection.Abstractions/README.es.md#registrar-un-contrato-genérico-una-sola-vez"] = "/es/modules/di.qmd#registrar-un-contrato-genérico-una-sola-vez",
+      ["../DependencyInjection/docs/STARTUP-COMPOSITION.es.md"] = "/es/docs/startup-composition.qmd",
+      ["../FMX/README.md"] = "/en/modules/fmx.qmd",
       ["../Logging/README.es.md"] = "/es/modules/logging.qmd",
       ["../Logging/docs/GUIDE.es.md"] = "/es/modules/logging-guide.qmd",
       ["../Logging/docs/GUIDE.es.md#componer-sin-destino-es-un-error"] = "/es/modules/logging-guide.qmd#componer-sin-destino-es-un-error",
@@ -663,6 +676,7 @@ return {
       ["docs/GUIDE.es.md"] = "/es/modules/specification-guide.qmd",
     },
     ["es/modules/sqlcute-guide.qmd"] = {
+      ["../../../SQLCute.InMemory/README.es.md"] = "/es/modules/sqlcute-inmemory.qmd",
       ["../GUIDE.es.md"] = "/es/modules/sqlcute-guide.qmd",
       ["../samples/SQLCuteSample/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/SQLCute/samples/SQLCuteSample/README.md",
       ["GUIDE.md"] = "/en/modules/sqlcute-guide.qmd",

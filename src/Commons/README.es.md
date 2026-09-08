@@ -15,7 +15,10 @@ Utilidades transversales para aplicaciones DAFce — punteros inteligentes, toke
 |--------|-------------------|
 | `Daf.MemUtils` | `ARC<T>` smart pointer (`reference to function: T`), `TFinalizer`, `TPurgatory` |
 | `Daf.Threading` | `ICancellationToken`, `ICancellationTokenSource` (fábrica: `CreateCancellationTokenSource`), `TShutdownHook` |
-| `Daf.Enumerable` | Adaptador `ToIEnumerable<T>`, `IInterfaceList<T>`, `TInterfaceList<T>` |
+| `Daf.Enumerable` | Adaptador `ToIEnumerable<T>`, `IInterfaceList<T>`, `TInterfaceList<T>`, `TDeferredEnumerable<T>` / `TGeneratorEnumerator<T>` (la secuencia diferida) |
+| `Daf.Nullable` | `TNullable<T>` — un valor ausente distinguido de un valor por defecto presente |
+| `Daf.Comparers` | `TValueComparers`, `TNullableComparers` — orden e igualdad conscientes de NULL |
+| `Daf.Application.Version` | `TVersionInfo`, `VersionAttribute` — la versión SemVer de la aplicación, y la plataforma para la que se compiló |
 | `Daf.Rtti` | Helpers de RTTI — `_T.Extends`, predicados de tipo |
 | `Daf.Activator` | Crear instancias de clases mediante RTTI |
 | `Daf.Arrays` | `TArrayHelper` (`Map`, `Trim`), `TSmartArray<T>` (estilo LINQ: `Where`, `Select`, `Contains`, `Sort`, …) |

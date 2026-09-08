@@ -177,6 +177,76 @@ end;
 
 ---
 
+## Canal de arranque
+
+Un `ILogger` disponible desde `initialization`, sin inyección de dependencias y sin configuración.
+Cubre el tramo anterior a `BuildServiceProvider`, donde todavía no hay nada registrado que pueda
+informar de un fallo — y solo ese tramo: sin niveles por categoría, sin layouts configurables, sin
+escritura asíncrona. **No** se configura por fichero, a propósito: leer configuración para saber
+dónde informar de que falló la lectura de la configuración es el mismo huevo y la misma gallina.
+
+Cuándo recurrir a él, qué recibe cada forma de despliegue y el relevo con el pipeline están en
+[Composición del arranque](../DependencyInjection/docs/STARTUP-COMPOSITION.es.md).
+
+### IBootstrapSink
+
+Un destino del canal. Recibe una **línea ya formada** —nunca un `TLogEntry`—, así que no puede
+inventarse su propio formato ni filtrar: no ve nada que se lo permita.
+
+```pascal
+IBootstrapSink = interface(IInvokable)
+  function IsAvailable: Boolean;
+  procedure Write(const Line: string);
+end;
+```
+
+Un destino que no puede escribir **se declara no disponible**; nunca acepta una línea que va a
+perder en silencio. `IsAvailable` se contesta aquí y ahora, no una vez al registrarse: el handle de error
+de un proceso sin consola, o una ruta que dejó de ser escribible, cambian la respuesta.
+
+### BootstrapLog
+
+El canal en sí: el registro de destinos y el reparto. **Nunca lanza** — un canal cuya razón de ser
+es informar de un fallo no puede provocar un segundo fallo.
+
+```pascal
+BootstrapLog = record
+  class procedure AddSink(const Sink: IBootstrapSink); static;
+  class procedure RemoveSink(const Sink: IBootstrapSink); static;
+  class procedure ClearSinks; static;
+  class function Sinks: TArray<IBootstrapSink>; static;
+  class function AvailableSinks: TArray<IBootstrapSink>; static;
+  class function HasAvailableSink: Boolean; static;
+  class procedure Write(const Line: string); static;
+  class function FormatLine(const Entry: TLogEntry): string; static;
+  class function LoggerFor(const Category: string): ILogger; static;
+end;
+```
+
+| Miembro | Responde |
+|---------|----------|
+| `AddSink` `RemoveSink` `ClearSinks` | Los destinos se añaden y se quitan desde `initialization` o desde el main, antes de construir el host. Añadir es aditivo: los informes de DAF siguen saliendo por los suyos |
+| `Sinks` | Todos los destinos registrados |
+| `AvailableSinks` `HasAvailableSink` | Los que pueden escribir **ahora mismo**. Que esté vacío es el caso peor —nadie va a enterarse de nada— y hay que poder distinguirlo de haber informado |
+| `Write` | Reparte una línea ya formada a los destinos disponibles |
+| `FormatLine` | El layout del canal, aplicado antes de repartir para que todos los destinos escriban lo mismo |
+| `LoggerFor` | Un `ILogger` de arranque con la categoría **de quien llama**: la aplicación informa de su propio arranque sin disfrazarse de DAF. Es la única vía, y los informes de DAF salen también por ella |
+
+El canal mantiene un umbral de `Warning` para arriba.
+
+### Los destinos que viven aquí
+
+| Clase | Escribe en | Registrado por defecto |
+|-------|------------|------------------------|
+| `TDebugOutputBootstrapSink` | la salida de depuración del sistema — en Windows, `OutputDebugString`, que es del sistema y no del depurador, así que se captura sin uno conectado | sí |
+| `TStdErrBootstrapSink` | la salida de error del proceso. Una aplicación sin consola no tiene handle de error, y ahí el destino se declara no disponible; no lanza al escribir | sí |
+| `TFileBootstrapSink` | el fichero que se le nombra en el constructor, releíble por su propiedad `FileName` | **no** — una ruta duradera la conoce la aplicación, no el framework |
+
+`TPlatformLogBootstrapSink`, sobre `IFMXLoggingService`, vive en el paquete `Daf.FMX` para que
+FireMonkey alcance solo a quien lo referencie — ver [Daf.FMX](../FMX/README.md).
+
+---
+
 ## Qué vive aquí, y por qué
 
 Este es el paquete de contratos, y sin embargo también tiene clases concretas: `TNullLogger`,

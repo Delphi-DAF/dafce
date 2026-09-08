@@ -12,11 +12,12 @@
 4. [Sharing data between startup pieces](#sharing-data-between-startup-pieces)
 5. [Registering Services](#registering-services)
 6. [Hosted Services (Background Workers)](#hosted-services-background-workers)
-7. [Environment](#environment)
-8. [Application Lifetime](#application-lifetime)
-9. [Accessing Services After Build](#accessing-services-after-build)
-10. [Graceful Shutdown](#graceful-shutdown)
-11. [AppModule Pattern with Hosting](#appmodule-pattern-with-hosting)
+7. [Startup Tasks](#startup-tasks)
+8. [Environment](#environment)
+9. [Application Lifetime](#application-lifetime)
+10. [Accessing Services After Build](#accessing-services-after-build)
+11. [Graceful Shutdown](#graceful-shutdown)
+12. [AppModule Pattern with Hosting](#appmodule-pattern-with-hosting)
 
 ---
 
@@ -180,6 +181,57 @@ Services.AddHostedService<TOrderProcessor>;
 - `Start` is called for each hosted service when `Host.Start` runs, **in registration order**.
 - `Stop` is called in **reverse registration order** during shutdown.
 - Hosted services are Singletons — you can inject them as `IOrderProcessor` too if needed.
+
+---
+
+## Startup Tasks
+
+An `IStartupTask` runs **once** at startup, with the provider already built. It has a `Run` and
+nothing to stop: it is initialization, not a service with a lifetime.
+
+```pascal
+type
+  TWarmUpCache = class(TInterfacedObject, IStartupTask)
+  public
+    procedure Run;
+  end;
+
+procedure TWarmUpCache.Run;
+begin
+  // read what the application needs before it serves anything
+end;
+```
+
+Register it on the collection:
+
+```pascal
+Services.AddStartupTask<TWarmUpCache>;
+```
+
+`THost.Start` runs the tasks **in registration order, before every `IHostedService` and before
+`ApplicationStarted`** — a hosted service may depend on the state a task prepares, so the order is
+the point and not an accident.
+
+**A task that raises aborts the startup.** The exception is reported and re-raised, so no hosted
+service starts and the application is never declared started. That is what makes a startup task the
+place for a precondition: a cache that cannot be filled, a folder that is not writable, a schema
+that is not the expected one.
+
+### When the helper is shadowed
+
+Only one `record helper` per type is visible in Delphi, so a unit that brings a second helper for
+`IServiceCollection` hides this one. The class facade is the way through, and it takes the
+implementation as a metaclass:
+
+```pascal
+Hosting.AddStartupTask(Services, TWarmUpCache);
+```
+
+It is the same registration: a package contributes its own initialization with it without the
+`.dpr` naming the task — see [PackageInit](../../Cli/samples/PackageInit/README.md).
+
+Choosing between an `IStartupTask` and an `IHostedService` is decided in
+[Startup composition](../../DependencyInjection/docs/STARTUP-COMPOSITION.md).
 
 ---
 

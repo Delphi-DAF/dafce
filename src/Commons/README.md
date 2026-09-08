@@ -15,7 +15,10 @@ Cross-cutting utilities for DAFce applications — smart pointers, cancellation 
 |------|-----------|
 | `Daf.MemUtils` | `ARC<T>` smart pointer (`reference to function: T`), `TFinalizer`, `TPurgatory` |
 | `Daf.Threading` | `ICancellationToken`, `ICancellationTokenSource` (factory: `CreateCancellationTokenSource`), `TShutdownHook` |
-| `Daf.Enumerable` | `ToIEnumerable<T>` adapter, `IInterfaceList<T>`, `TInterfaceList<T>` |
+| `Daf.Enumerable` | `ToIEnumerable<T>` adapter, `IInterfaceList<T>`, `TInterfaceList<T>`, `TDeferredEnumerable<T>` / `TGeneratorEnumerator<T>` (the deferred sequence) |
+| `Daf.Nullable` | `TNullable<T>` — an absent value told apart from a present default |
+| `Daf.Comparers` | `TValueComparers`, `TNullableComparers` — NULL-aware ordering and equality |
+| `Daf.Application.Version` | `TVersionInfo`, `VersionAttribute` — the application's SemVer version, and the platform it was compiled for |
 | `Daf.Rtti` | RTTI helpers — `_T.Extends`, type predicates |
 | `Daf.Activator` | Create class instances via RTTI |
 | `Daf.Arrays` | `TArrayHelper` (`Map`, `Trim`), `TSmartArray<T>` (LINQ-style: `Where`, `Select`, `Contains`, `Sort`, …) |

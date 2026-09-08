@@ -12,11 +12,12 @@
 4. [Compartir datos entre piezas del arranque](#compartir-datos-entre-piezas-del-arranque)
 5. [Registrar servicios](#registrar-servicios)
 6. [Hosted services (workers en segundo plano)](#hosted-services-workers-en-segundo-plano)
-7. [Entorno](#entorno)
-8. [Ciclo de vida de la aplicación](#ciclo-de-vida-de-la-aplicación)
-9. [Acceder a servicios tras el Build](#acceder-a-servicios-tras-el-build)
-10. [Apagado elegante](#apagado-elegante)
-11. [Patrón AppModule con Hosting](#patrón-appmodule-con-hosting)
+7. [Tareas de arranque](#tareas-de-arranque)
+8. [Entorno](#entorno)
+9. [Ciclo de vida de la aplicación](#ciclo-de-vida-de-la-aplicación)
+10. [Acceder a servicios tras el Build](#acceder-a-servicios-tras-el-build)
+11. [Apagado elegante](#apagado-elegante)
+12. [Patrón AppModule con Hosting](#patrón-appmodule-con-hosting)
 
 ---
 
@@ -180,6 +181,57 @@ Services.AddHostedService<TOrderProcessor>;
 - `Start` se llama para cada hosted service cuando se ejecuta `Host.Start`, **en orden de registro**.
 - `Stop` se llama en **orden inverso de registro** durante el apagado.
 - Los hosted services son Singletons — también puedes inyectarlos como `IOrderProcessor` si es necesario.
+
+---
+
+## Tareas de arranque
+
+Un `IStartupTask` corre **una vez** al arrancar, con el proveedor ya construido. Tiene un `Run` y
+nada que parar: es inicialización, no un servicio con ciclo de vida.
+
+```pascal
+type
+  TWarmUpCache = class(TInterfacedObject, IStartupTask)
+  public
+    procedure Run;
+  end;
+
+procedure TWarmUpCache.Run;
+begin
+  // leer lo que la aplicación necesita antes de atender nada
+end;
+```
+
+Se registra en la colección:
+
+```pascal
+Services.AddStartupTask<TWarmUpCache>;
+```
+
+`THost.Start` ejecuta las tareas **en orden de registro, antes de todos los `IHostedService` y
+antes de `ApplicationStarted`** — un servicio alojado puede depender del estado que prepara una
+tarea, así que el orden es el punto y no una casualidad.
+
+**Una tarea que lanza aborta el arranque.** La excepción se informa y se vuelve a lanzar, así que
+no arranca ningún servicio alojado y la aplicación nunca se declara arrancada. Eso es lo que hace
+de una tarea de arranque el sitio de una precondición: una caché que no se puede llenar, una
+carpeta que no es escribible, un esquema que no es el esperado.
+
+### Cuando el helper queda ensombrecido
+
+En Delphi solo hay un `record helper` visible por tipo, así que una unit que traiga un segundo
+helper para `IServiceCollection` esconde a este. La fachada de clase es la vía, y toma la
+implementación como metaclase:
+
+```pascal
+Hosting.AddStartupTask(Services, TWarmUpCache);
+```
+
+Es el mismo registro: con ella un paquete aporta su propia inicialización sin que el `.dpr` nombre
+la tarea — ver [PackageInit](../../Cli/samples/PackageInit/README.md).
+
+Elegir entre un `IStartupTask` y un `IHostedService` se decide en
+[Composición del arranque](../../DependencyInjection/docs/STARTUP-COMPOSITION.es.md).
 
 ---
 

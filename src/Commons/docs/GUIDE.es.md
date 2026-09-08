@@ -12,6 +12,8 @@
 4. [Daf.Rtti](#dafrtti)
 5. [Daf.Activator](#dafactivator)
 6. [Daf.Arrays](#dafarrays)
+7. [Daf.Nullable](#dafnullable)
+8. [Daf.Comparers](#dafcomparers)
 
 `Daf.SystemProcess` y `Daf.CmdLn.Parser` se documentaban aquí. La primera vive en un paquete propio
 —ver [SystemProcess](../../SystemProcess/README.es.md)—; la segunda se ha retirado, y la línea de
@@ -312,4 +314,76 @@ var Gritos: TFilterSpec<string> := TPredicate<string>(
 
 Items.Where(Largos and not Gritos);      // compuesto con and / or / not
 ```
+
+---
+
+## Daf.Nullable
+
+### TNullable\<T\>
+
+Un valor opcional: o un valor ausente —el NULL de SQL— o un valor presente de `T`. Lo que aporta es
+la distinción entre **ningún valor** y un valor por defecto presente: `0`, `''` y `False` son
+valores, y un `T` a solas no puede decir cuál de las dos cosas es.
+
+```pascal
+uses Daf.Nullable;
+
+var Edad: TNullable<Integer> := TNullable<Integer>.Null;
+Edad.IsNull;                     // True
+Edad.GetValueOrDefault(-1);      // -1
+
+Edad := 42;                      // conversión implícita desde T
+Edad.HasValue;                   // True
+Edad.Value;                      // 42
+
+var Plano: Integer := Edad;       // conversión implícita de vuelta a T
+```
+
+| Miembro | Responde |
+|---------|----------|
+| `Null` | Un nullable explícitamente ausente |
+| `From(Value)` | Envuelve un valor presente; la conversión implícita desde `T` hace lo mismo |
+| `IsNull` | True cuando no hay valor presente |
+| `HasValue` | True cuando sí lo hay. `HasValue = not IsNull` |
+| `GetValueOrDefault(Fallback)` | El valor si está presente y, si no, el que se le pase |
+| `Value` | El valor presente — `Default(T)` cuando es NULL |
+
+**Los dos predicados de presencia se publican a propósito.** `IsNull` es el idioma del dominio de
+datos, el que casa con el `TField.IsNull` de Delphi y con el `IS NULL` de SQLCute; `HasValue` es el
+de .NET. El correcto es el que se lea mejor donde se escribe.
+
+Un `TNullable<T>` recién declarado arranca ausente: `Initialize` lo deja así, y es un operador de
+record gestionado, así que un campo de una clase o un elemento de un array arrancan ausentes
+también sin que nadie los inicialice.
+
+## Daf.Comparers
+
+Comparación consciente de NULL, en dos políticas coordinadas: el **orden** pone NULL por debajo de
+todo valor no NULL —nulls primero ascendiendo, nulls al final descendiendo— y dos NULL comparan
+iguales; la **igualdad** hace iguales los NULL, que es lo que colapsa los NULL duplicados bajo
+`DISTINCT`.
+
+```pascal
+uses Daf.Comparers;
+
+// Sobre TValue — la moneda de valor del motor de consultas en memoria
+var Orden := TValueComparers.Ordinal;
+var Igual := TValueComparers.Equality;
+
+// Sobre TNullable<T>
+var PorEdad := TNullableComparers.Ordinal<Integer>;
+```
+
+| Punto de entrada | Responde |
+|------------------|----------|
+| `TValueComparers.Ordinal` | `IComparer<TValue>`: NULL por debajo de todo valor no NULL, NULL iguales |
+| `TValueComparers.Equality` | `IEqualityComparer<TValue>`: iguales por contenido, NULL iguales |
+| `TNullableComparers.Ordinal<T>` | El mismo orden sobre `TNullable<T>` |
+| `TNullableComparers.Equality<T>` | Dos valores ausentes son iguales |
+| `IsNullValue(V)` | Si un `TValue` representa el NULL de SQL: vacío, o un Variant con `Null`/`Unassigned` |
+| `CompareValuesNullSmallest(L, R)` | La comparación en sí, sin pasar por un comparador |
+
+Sobre `TValue`, el NULL de SQL se modela como un `TValue` **vacío**, o uno de clase Variant con
+`Null` o `Unassigned`. Es sobre esto que `SQLCute.InMemory` construye su semántica ANSI de NULL —
+ver [SQLCute.InMemory](../../SQLCute.InMemory/README.es.md).
 

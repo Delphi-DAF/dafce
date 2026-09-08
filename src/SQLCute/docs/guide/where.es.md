@@ -248,6 +248,56 @@ memoria la aplica de forma idéntica.
 
 ---
 
+## Precedencia, y el árbol que hay detrás
+
+`AND` liga más fuerte que `OR`. Una cadena plana de condiciones no se lee de izquierda a derecha:
+primero se agrupan las tiradas consecutivas de `AND`, y esos grupos se unen luego con `OR`.
+
+```pascal
+Query.From('users')
+  .Where('active', '=', True)
+  .Where('age', '>', 18)
+  .OrWhere('role', '=', 'admin')
+// -> WHERE (active = ? AND age > ?) OR role = ?
+```
+
+Los paréntesis de ese SQL se **emiten**, no se dan por supuestos. Cada condición lleva el conector
+que la une con la anterior, y `Daf.SQLCute.WhereTree` normaliza esa lista plana en un árbol
+booleano con la precedencia correcta antes de compilar nada:
+
+```pascal
+uses Daf.SQLCute.WhereTree;
+
+var Tree := TWhereTree.Build(Query.Clauses);
+try
+  // Tree.Kind es TWhereNodeKind.Disjunction para la consulta de arriba
+finally
+  Tree.Free;
+end;
+```
+
+| Miembro | Responde |
+|---------|----------|
+| `TWhereTree.Build(Clauses)` | El árbol de las cláusulas que afectan al WHERE. `nil` cuando no hay ninguna. **Quien lo pide lo posee y lo libera** |
+| `TWhereTree.BuildHaving(Clauses)` | La misma normalización sobre `THavingClause`. HAVING no tiene anidamiento ni `NOT`, así que el árbol es una agrupación AND/OR plana |
+| `TWhereNode.Kind` | `TWhereNodeKind.Leaf`, `.Neg`, `.Conjunction` o `.Disjunction` — la unit compila con enumerados con ámbito |
+| `TWhereNode.Clause` | La condición, en un `Leaf`. **No la posee**: apunta de vuelta al AST de la consulta |
+| `TWhereNode.Children` | Los operandos de una conjunción o disyunción, o el único hijo de un `Neg`. Los posee, y los libera recursivamente |
+
+Un grupo por callback baja como un nodo anidado, y uno negado envuelve su nodo en un `Neg`.
+
+**Los dos back-ends consumen el mismo árbol, y eso es el punto.** El compilador ANSI lo recorre y
+escribe los paréntesis, así que la precedencia deja de depender de cómo parsee una base de datos
+concreta; el compilador en memoria construye a partir de él su predicado de tres valores. Dos
+motores que leen un solo árbol no pueden discrepar sobre la precedencia — ver
+[SQLCute.InMemory](../../../SQLCute.InMemory/README.es.md).
+
+El recorrido es en profundidad y de izquierda a derecha, lo que conserva el orden original de las
+condiciones. Es lo que permite que un consumidor emita bindings posicionales mientras recorre y
+obtenga el mismo orden que producía la lista plana.
+
+---
+
 ## WhereColumns
 
 Comparación columna a columna (sin binding — los valores se emiten literalmente):

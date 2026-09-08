@@ -177,6 +177,77 @@ end;
 
 ---
 
+## Bootstrap channel
+
+An `ILogger` available from `initialization`, with no dependency injection and no configuration. It
+covers the stretch before `BuildServiceProvider`, where nothing that was registered can report a
+failure yet — and only that stretch: no per-category levels, no configurable layouts, no
+asynchronous writing. It is **not** configured from a file, deliberately: reading configuration to
+find out where to report that reading the configuration failed is the same chicken and the same
+egg.
+
+When to reach for it, what each deployment shape gets, and the handover to the pipeline are in
+[Startup composition](../DependencyInjection/docs/STARTUP-COMPOSITION.md).
+
+### IBootstrapSink
+
+A destination of the channel. It receives a **line already formed** — never a `TLogEntry` — so it
+cannot invent its own format nor filter: it sees nothing that lets it.
+
+```pascal
+IBootstrapSink = interface(IInvokable)
+  function IsAvailable: Boolean;
+  procedure Write(const Line: string);
+end;
+```
+
+A destination that cannot write **declares itself unavailable**; it never takes a line it will
+lose in silence. `IsAvailable` is answered here and now, not once at registration: the error
+handle of a process without a console, or a path that stopped being writable, change the answer.
+
+### BootstrapLog
+
+The channel itself: the registry of destinations and the dispatch. **It never raises** — a channel
+whose reason to exist is reporting a failure cannot cause a second one.
+
+```pascal
+BootstrapLog = record
+  class procedure AddSink(const Sink: IBootstrapSink); static;
+  class procedure RemoveSink(const Sink: IBootstrapSink); static;
+  class procedure ClearSinks; static;
+  class function Sinks: TArray<IBootstrapSink>; static;
+  class function AvailableSinks: TArray<IBootstrapSink>; static;
+  class function HasAvailableSink: Boolean; static;
+  class procedure Write(const Line: string); static;
+  class function FormatLine(const Entry: TLogEntry): string; static;
+  class function LoggerFor(const Category: string): ILogger; static;
+end;
+```
+
+| Member | Answers |
+|--------|---------|
+| `AddSink` `RemoveSink` `ClearSinks` | Destinations are added and removed from `initialization` or from the main, before the host is built. Adding is additive: DAF's own reports keep coming out through theirs |
+| `Sinks` | Every registered destination |
+| `AvailableSinks` `HasAvailableSink` | The ones that can write **right now**. Empty is the worst case — nobody is going to learn anything — and it has to be distinguishable from having reported |
+| `Write` | Dispatches a line already formed to the available destinations |
+| `FormatLine` | The layout of the channel, applied before dispatching so every destination writes the same thing |
+| `LoggerFor` | A startup `ILogger` under the **caller's** category: an application reports its own startup without disguising itself as DAF. It is the only way in, and DAF's own reports go through it too |
+
+The channel keeps a `Warning`-and-above threshold.
+
+### The destinations that live here
+
+| Class | Writes to | Registered by default |
+|-------|-----------|-----------------------|
+| `TDebugOutputBootstrapSink` | the system debug output — on Windows, `OutputDebugString`, which belongs to the system and not to the debugger, so it is captured with none attached | yes |
+| `TStdErrBootstrapSink` | the process's error output. An application with no console has no error handle, and the destination declares itself unavailable there; it does not raise on write | yes |
+| `TFileBootstrapSink` | the file named in its constructor, readable back from its `FileName` property | **no** — a durable path is known by the application, not by the framework |
+
+`TPlatformLogBootstrapSink`, over `IFMXLoggingService`, lives in the `Daf.FMX` package so that
+FireMonkey reaches only whoever references it — see [Daf.FMX](../FMX/README.md).
+
+---
+
 ## What lives here, and why
 
 This is the contracts package, and yet it also holds concrete classes: `TNullLogger`,

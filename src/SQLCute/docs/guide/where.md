@@ -247,6 +247,55 @@ identically.
 
 ---
 
+## Precedence, and the tree behind it
+
+`AND` binds tighter than `OR`. A flat chain of conditions is not read left to right: consecutive
+`AND` runs are grouped first, and those groups are then `OR`-ed.
+
+```pascal
+Query.From('users')
+  .Where('active', '=', True)
+  .Where('age', '>', 18)
+  .OrWhere('role', '=', 'admin')
+// -> WHERE (active = ? AND age > ?) OR role = ?
+```
+
+The parentheses in that SQL are **emitted**, not assumed. Each condition carries the connector that
+joins it with the previous one, and `Daf.SQLCute.WhereTree` normalizes that flat list into a
+precedence-correct boolean tree before anything is compiled:
+
+```pascal
+uses Daf.SQLCute.WhereTree;
+
+var Tree := TWhereTree.Build(Query.Clauses);
+try
+  // Tree.Kind is TWhereNodeKind.Disjunction for the query above
+finally
+  Tree.Free;
+end;
+```
+
+| Member | Answers |
+|--------|---------|
+| `TWhereTree.Build(Clauses)` | The tree of the WHERE-relevant clauses. `nil` when there are none. **The caller owns it and frees it** |
+| `TWhereTree.BuildHaving(Clauses)` | The same normalization over `THavingClause`. HAVING has no nesting and no `NOT`, so the tree is a flat AND/OR grouping |
+| `TWhereNode.Kind` | `TWhereNodeKind.Leaf`, `.Neg`, `.Conjunction` or `.Disjunction` — the unit compiles with scoped enums |
+| `TWhereNode.Clause` | The condition, on a `Leaf`. **Not owned**: it points back into the query's AST |
+| `TWhereNode.Children` | The operands of a conjunction or disjunction, or the single child of a `Neg`. Owned, and freed recursively |
+
+A grouped callback recurses as a nested node, and a negated one wraps its node in a `Neg`.
+
+**Both back-ends consume the same tree, and that is the point.** The ANSI compiler walks it and
+writes the parentheses out, so precedence stops depending on how a particular database parses; the
+in-memory compiler builds its three-valued predicate from it. Two engines that read one tree cannot
+disagree about precedence — see [SQLCute.InMemory](../../../SQLCute.InMemory/README.md).
+
+The walk is depth-first, left to right, which preserves the original order of the conditions. That
+is what lets a consumer emit positional bindings while walking and get the same order the flat list
+produced.
+
+---
+
 ## WhereColumns
 
 Column-to-column comparison (no binding — values are emitted verbatim):
