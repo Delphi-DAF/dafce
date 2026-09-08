@@ -360,6 +360,18 @@ begin
     var Lifetime := GetServices.GetRequiredService<IHostApplicationLifetime>;
     if Assigned(Lifetime) then
       (Lifetime as THostApplicationLifetime).NotifyStarted;
+
+    // UNA sola senal de apagado: el manejador de consola pide la parada por el mismo camino
+    // que la pide el codigo --StopApplication--, y quien la espera observa ApplicationStopping.
+    //
+    // El TProc es de clase, asi que con dos hosts vivos a la vez el ultimo en arrancar atiende
+    // la senal y el primero en pararse la libera. Un proceso con dos hosts es cosa de un arnes
+    // de specs, y el peor caso es un Ctrl+C que no para nada.
+    TShutdownHook.OnShutdownRequested :=
+      procedure
+      begin
+        Lifetime.StopApplication;
+      end;
   except
     on E: Exception do
     begin
@@ -379,6 +391,10 @@ begin
   try
     try
       FStopped := True;
+
+      // Antes de cualquier cosa que pueda lanzar: el TProc de clase sostiene el lifetime de
+      // este host, asi que dejarlo puesto deja un host parado atendiendo la senal.
+      TShutdownHook.OnShutdownRequested := nil;
 
       var Lifetime := GetServices.GetService<IHostApplicationLifetime>;
 
@@ -408,7 +424,11 @@ end;
 
 procedure THost.WaitForShutdown;
 begin
-  TShutdownHook.WaitForShutdown;
+  // Lo primero que se ve por consola es como salir. El texto es traducible por la aplicacion.
+  Writeln(TShutdownHook.PresCtlCMsg);
+  // High(Cardinal) es INFINITE sin arrastrar Winapi.Windows a este unit.
+  GetServices.GetRequiredService<IHostApplicationLifetime>
+    .ApplicationStopping.WaitFor(High(Cardinal));
 end;
 
 { THostBuilderContext }

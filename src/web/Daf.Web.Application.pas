@@ -270,7 +270,9 @@ begin
   try
     GetServer.Start;
     try
-      TShutdownHook.WaitForShutdown;
+      // Por el host y no por el hook del proceso: es lo que hace que la parada pedida
+      // por codigo --StopApplication-- despierte tambien a una aplicacion web.
+      FHost.WaitForShutdown;
     finally
       GetServer.Stop;
     end;
