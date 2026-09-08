@@ -23,10 +23,12 @@
 ## Architecture Overview
 
 ```
-THostBuilder
-  ├── ConfigureHostConfiguration   ← low-level host config (env vars, etc.)
-  ├── ConfigureAppConfiguration    ← app-level config (JSON, INI, env)
-  ├── ConfigureServices            ← DI registrations
+THost.CreateBuilder ──► IGenericHostBuilder
+  ├── Configuration: IConfigurationManager   ← sources, and reading them back
+  ├── Environment: IHostEnvironment          ← already resolved, derived from host config
+  ├── Services: IServiceCollection           ← DI registrations
+  ├── Logging: ILoggingBuilder               ← only composed if you touch it
+  ├── Properties                             ← data the startup pieces share
   └── Build ──► IHost
                  ├── Services: IServiceProvider
                  ├── IHostEnvironment
@@ -43,67 +45,69 @@ The host is built once, started once, and shut down once. All services are manag
 ```pascal
 uses Daf.Hosting, Daf.Extensions.Hosting, Daf.Extensions.DependencyInjection;
 
-var Host := THostBuilder.Create
-  .ConfigureServices(procedure(Context: IHostBuilderContext;
-                               Services: IServiceCollection)
-  begin
-    Services.AddSingleton<IMyService, TMyService>;
-  end)
-  .Build;
+var Builder := THost.CreateBuilder;
 
+Builder.Services.AddSingleton<IMyService, TMyService>;
+
+var Host := Builder.Build;
 Host.Start;
 Host.WaitForShutdown; // blocks until shutdown signal
 ```
 
-Each `THostBuilder` is independent: several builders and several hosts can be alive at once in
-one process.  
+`THost.CreateBuilder` hands back an `IGenericHostBuilder`, so a single variable owns the builder
+and reaches `Build`. Each builder is independent: several builders and several hosts can be alive
+at once in one process.  
 `Build` can only be called **once** per builder; it freezes configuration and creates the DI container.
 
 ---
 
 ## Configuration Pipeline
 
-The host runs configuration in three ordered phases:
+There is **one** configuration, and it is already populated when the builder hands itself back.
+`Builder.Configuration` is an `IConfigurationManager` — a builder and a reader at the same time —
+so a source can be chosen from what is already configured.
 
-### 1. Host configuration
+### 1. What the builder seeds
 
-Bootstrap-level settings — applied before the environment is known:
-
-```pascal
-.ConfigureHostConfiguration(procedure(Builder: IConfigurationBuilder)
-begin
-  Builder.Add(TEnvironmentVariablesConfigurationSource.Create); // reads DAF_APP_ENV, DAF_APP_NAME, etc.
-end)
-```
-
-### 2. App configuration
-
-Full app settings — runs after the environment is resolved:
+Before returning, the builder reads the process environment variables prefixed `DAF_` — where
+`DAF_APP_ENV`, `DAF_APP_NAME` and `DAF_CONTENT_ROOT` come from — and, if it was given arguments,
+the command line:
 
 ```pascal
-.ConfigureAppConfiguration(procedure(Context: IHostBuilderContext;
-                                     Builder: IConfigurationBuilder)
-begin
-  JsonConfig.AddFile(Builder, 'appsettings.json');
-  JsonConfig.AddFile(Builder,
-    'appsettings.' + string(Context.Environment.EnvironmentName) + '.json', [csoOptional]);
-end)
+var Builder := THost.CreateBuilder(CommandLineConfig.ProcessArgs);
 ```
 
-### 3. Services
+Arguments are added after the environment variables, so they win. A variant that declares its own
+command-line grammar does **not** pass them here: that is two readings of the same `argv` under
+different rules, and they disagree by construction.
 
-DI registrations — `Context.Configuration` is fully populated here:
+### 2. The environment, already resolved
+
+`Builder.Environment` is derived from that seed inside the constructor. That is what lets the next
+step depend on it: there is no phase to wait for.
+
+### 3. Your own sources
+
+Add them where you stand, between the builder and `Build`:
 
 ```pascal
-.ConfigureServices(procedure(Context: IHostBuilderContext;
-                              Services: IServiceCollection)
-begin
-  var Db := Context.Configuration['Database:ConnectionString'];
-  Services.AddSingleton<IDatabase>(TDatabase.Create(Db));
-end)
+JsonConfig.AddFile(Builder.Configuration, 'appsettings.json');
+JsonConfig.AddFile(Builder.Configuration,
+  'appsettings.' + string(Builder.Environment.EnvironmentName) + '.json', [csoOptional]);
 ```
 
-You can call `ConfigureServices` multiple times — all callbacks are applied in registration order.
+And because the manager reads as well as builds, a registration consumes configuration on the spot:
+
+```pascal
+var Db := Builder.Configuration['Database:ConnectionString'];
+Builder.Services.AddSingleton<IDatabase>(TDatabase.Create(Db));
+```
+
+That is what the deferred callbacks existed for, and why there are none: a configuration that can
+be read while it is being composed leaves nothing to defer.
+
+`Build` freezes it. From there on the same configuration is what `IHostBuilderContext.Configuration`
+hands out.
 
 ---
 
@@ -111,39 +115,37 @@ You can call `ConfigureServices` multiple times — all callbacks are applied in
 
 `Properties` is a `TDictionary<string, TValue>` the builder carries, for the data that the pieces
 composing startup need to pass to each other. It is on `IHostApplicationBuilder`, and the same
-dictionary is read from the other side through `IHostBuilderContext.Properties` — which is what a
-configuration or logging callback receives.
-
-`THostBuilder` adds `UseProperty` for writing to it fluently:
+dictionary is read from the other side through `IHostBuilderContext.Properties`, which is
+registered in the container.
 
 ```pascal
-Builder.UseProperty('tenant', 'acme');
+Builder.Properties.AddOrSetValue('tenant', 'acme');
 
 // ...anywhere holding the context:
 var Tenant := Context.Properties['tenant'].AsString;
 ```
 
-`UseProperty` is a method of the concrete `THostBuilder`, not of the interface: hold the builder in
-a variable of its own type to chain it. Reading works through the interface everywhere.
+`THostBuilder` also has `UseProperty` for writing to it fluently, but it is a method of the
+concrete class and not of the interface, so it is reachable only by constructing `THostBuilder`
+yourself — not through `THost.CreateBuilder`. Through the interface, write to `Properties`
+directly, as above.
 
 ---
 
 ## Registering Services
 
-Inside `ConfigureServices` the full `IServiceCollection` API is available:
+The full `IServiceCollection` API is available on `Builder.Services`:
 
 ```pascal
-.ConfigureServices(procedure(Context: IHostBuilderContext;
-                              Services: IServiceCollection)
-begin
-  // Lifetimes
-  Services.AddSingleton<ICache, TMemoryCache>;
-  Services.AddScoped<IUnitOfWork, TDbUnitOfWork>;
-  Services.AddTransient<IEmailSender, TSmtpSender>;
+var Services := Builder.Services;
 
-  // Hosted service (started/stopped with the host)
-  Services.AddHostedService<TBackgroundIndexer>;
-end)
+// Lifetimes
+Services.AddSingleton<ICache, TMemoryCache>;
+Services.AddScoped<IUnitOfWork, TDbUnitOfWork>;
+Services.AddTransient<IEmailSender, TSmtpSender>;
+
+// Hosted service (started/stopped with the host)
+Services.AddHostedService<TBackgroundIndexer>;
 ```
 
 See [DependencyInjection](../../DependencyInjection/docs/GUIDE.md) for the full registration reference.
@@ -250,7 +252,7 @@ Lifetime.StopApplication;
 ## Accessing Services After Build
 
 ```pascal
-var Host := HostBuilder.Build;
+var Host := Builder.Build;
 Host.Start;
 
 // Access services from outside the DI graph
@@ -308,16 +310,12 @@ begin
 end;
 ```
 
-Load the modules in `ConfigureServices`, one `AddModule<T>` per module:
+Load the modules on `Builder.Services`, one `AddModule<T>` per module:
 
 ```pascal
-Builder.ConfigureServices(
-  procedure(Context: IHostBuilderContext; Services: IServiceCollection)
-  begin
-    Services
-      .AddModule<TInfraModule>
-      .AddModule<TDomainModule>;
-  end);
+Builder.Services
+  .AddModule<TInfraModule>
+  .AddModule<TDomainModule>;
 ```
 
 `AddModule<T>` instantiates the module, calls its `AddServices` on the spot, and owns its

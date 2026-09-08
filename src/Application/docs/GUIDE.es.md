@@ -129,24 +129,16 @@ Dos formas que conviene nombrar, porque las dos se equivocan con facilidad:
 ## TDafApplicationBuilder
 
 `TDafApplicationBuilder` extiende `THostBuilder`, así que hereda toda su superficie fluida:
-`ConfigureHostConfiguration`, `ConfigureAppConfiguration`, `ConfigureServices`, `UseProperty`,
+`Services`, `Configuration`, `Environment`, `Logging`, `Properties`, `UseProperty`,
 `AddHostedService<T>`. Lo que añade es un `Build` que devuelve la aplicación:
 
 ```pascal
 var Builder := TDafApplication.CreateHostBuilder;
 
-Builder.ConfigureAppConfiguration(
-  procedure(Context: IHostBuilderContext; Config: IConfigurationBuilder)
-  begin
-    JsonConfig.AddFile(Config, 'appsettings.json');
-  end);
+JsonConfig.AddFile(Builder.Configuration, 'appsettings.json');
 
-Builder.ConfigureServices(
-  procedure(Context: IHostBuilderContext; Services: IServiceCollection)
-  begin
-    Services.AddHostedService<TWorker>;
-    Services.AddTransient<IMyService, TMyService>;
-  end);
+Builder.AddHostedService<TWorker>;
+Builder.Services.AddTransient<IMyService, TMyService>;
 
 Builder.Build.Run(True);
 ```
@@ -312,11 +304,7 @@ end;
 
 // TMyApp aquí, no TDafApplication.
 var Builder := TMyApp.CreateHostBuilder;
-Builder.ConfigureServices(
-  procedure(Context: IHostBuilderContext; Services: IServiceCollection)
-  begin
-    Services.AddTransient<IWorkerService, TWorkerService>;
-  end);
+Builder.Services.AddTransient<IWorkerService, TWorkerService>;
 Builder.Build.Run;
 ```
 

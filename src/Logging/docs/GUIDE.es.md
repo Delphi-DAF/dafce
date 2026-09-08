@@ -191,11 +191,11 @@ Factory.AddProvider(TNNLogProvider.Create(Targets, Rules));
 ```pascal
 uses DAF.Logging.Builder, DAF.NNLog;
 
-// En ConfigureServices:
-AddLogging(Services,
-  procedure(Builder: ILoggingBuilder)
+// Al componer el arranque, sobre los Services del builder:
+AddLogging(Builder.Services,
+  procedure(Log: ILoggingBuilder)
   begin
-    Builder.AddProvider(TNNLogProvider.Create(Targets, Rules));
+    Log.AddProvider(TNNLogProvider.Create(Targets, Rules));
   end);
 ```
 

@@ -28,15 +28,12 @@ uses
   Daf.Extensions.Hosting,
   Daf.Extensions.DependencyInjection;
 
-var Host := THostBuilder.Create
-  .ConfigureServices(procedure(Context: IHostBuilderContext;
-                               Services: IServiceCollection)
-  begin
-    Services.AddSingleton<IMyService, TMyService>;
-    Services.AddHostedService<TMyWorker>; // IHostedService
-  end)
-  .Build;
+var Builder := THost.CreateBuilder;
 
+Builder.Services.AddSingleton<IMyService, TMyService>;
+Builder.Services.AddHostedService<TMyWorker>; // IHostedService
+
+var Host := Builder.Build;
 Host.Start;
 Host.WaitForShutdown;
 ```

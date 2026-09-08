@@ -35,13 +35,9 @@ untouched. What disappears is how they were found, not what they are.
 package on its own; now it registers none. Declare yours where you compose services:
 
 ```pascal
-Builder.ConfigureServices(
-  procedure(Context: IHostBuilderContext; Services: IServiceCollection)
-  begin
-    Services
-      .AddModule<TEnvironmentModule>
-      .AddModule<TEvaluationModule>;
-  end);
+Builder.Services
+  .AddModule<TEnvironmentModule>
+  .AddModule<TEvaluationModule>;
 ```
 
 **Why.** Under native compilation, discovery did not save the declaration: it hid it. For the RTTI

@@ -216,24 +216,23 @@ it changed. A view that follows live configuration is a separate piece, and it d
 
 ## Integration with Hosting
 
-When using `Hosting`, configure sources in `ConfigureAppConfiguration`:
+When using `Hosting`, add the sources to the builder's `Configuration`:
 
 ```pascal
-THostBuilder.Create
-  .ConfigureAppConfiguration(procedure(Ctx: IHostBuilderContext;
-                                       Builder: IConfigurationBuilder)
-  begin
-    JsonConfig.AddFile(Builder, 'appsettings.json');
-    JsonConfig.AddFile(Builder,
-      'appsettings.' + string(Ctx.Environment.EnvironmentName) + '.json', [csoOptional]);
-    Builder.Add(TEnvironmentVariablesConfigurationSource.Create);
-  end)
-  .ConfigureServices(procedure(Ctx: IHostBuilderContext; Services: IServiceCollection)
-  begin
-    // Ctx.Configuration is fully built here
-    Services.AddSingleton<IMyOptions>(TMyOptions.Create(Ctx.Configuration));
-  end)
-  .Build.Run;
+var Builder := THost.CreateBuilder;
+
+JsonConfig.AddFile(Builder.Configuration, 'appsettings.json');
+JsonConfig.AddFile(Builder.Configuration,
+  'appsettings.' + string(Builder.Environment.EnvironmentName) + '.json', [csoOptional]);
+Builder.Configuration.Add(TEnvironmentVariablesConfigurationSource.Create);
+
+// The manager reads as well as builds, so the registration consumes it on the spot. The cast
+// is because the manager is reader and builder at once, and Delphi allows one parent interface.
+Builder.Services.AddSingleton<IMyOptions>(
+  TMyOptions.Create(Builder.Configuration as IConfiguration));
+
+var Host := Builder.Build;
+Host.Start;
 ```
 
 ---

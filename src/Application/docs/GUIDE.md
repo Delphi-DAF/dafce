@@ -127,24 +127,16 @@ Two shapes worth naming, because both are easy to get wrong:
 ## TDafApplicationBuilder
 
 `TDafApplicationBuilder` extends `THostBuilder`, so it inherits the whole fluent surface —
-`ConfigureHostConfiguration`, `ConfigureAppConfiguration`, `ConfigureServices`, `UseProperty`,
+`Services`, `Configuration`, `Environment`, `Logging`, `Properties`, `UseProperty`,
 `AddHostedService<T>`. What it adds is a `Build` that returns the application:
 
 ```pascal
 var Builder := TDafApplication.CreateHostBuilder;
 
-Builder.ConfigureAppConfiguration(
-  procedure(Context: IHostBuilderContext; Config: IConfigurationBuilder)
-  begin
-    JsonConfig.AddFile(Config, 'appsettings.json');
-  end);
+JsonConfig.AddFile(Builder.Configuration, 'appsettings.json');
 
-Builder.ConfigureServices(
-  procedure(Context: IHostBuilderContext; Services: IServiceCollection)
-  begin
-    Services.AddHostedService<TWorker>;
-    Services.AddTransient<IMyService, TMyService>;
-  end);
+Builder.AddHostedService<TWorker>;
+Builder.Services.AddTransient<IMyService, TMyService>;
 
 Builder.Build.Run(True);
 ```
@@ -310,11 +302,7 @@ end;
 
 // TMyApp here, not TDafApplication.
 var Builder := TMyApp.CreateHostBuilder;
-Builder.ConfigureServices(
-  procedure(Context: IHostBuilderContext; Services: IServiceCollection)
-  begin
-    Services.AddTransient<IWorkerService, TWorkerService>;
-  end);
+Builder.Services.AddTransient<IWorkerService, TWorkerService>;
 Builder.Build.Run;
 ```
 

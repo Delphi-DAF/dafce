@@ -23,10 +23,12 @@
 ## Visión general de la arquitectura
 
 ```
-THostBuilder
-  ├── ConfigureHostConfiguration   ← configuración de bajo nivel (variables de entorno, etc.)
-  ├── ConfigureAppConfiguration    ← configuración de app (JSON, INI, env)
-  ├── ConfigureServices            ← registros DI
+THost.CreateBuilder ──► IGenericHostBuilder
+  ├── Configuration: IConfigurationManager   ← las fuentes, y su lectura
+  ├── Environment: IHostEnvironment          ← ya resuelto, derivado de la config de host
+  ├── Services: IServiceCollection           ← registros DI
+  ├── Logging: ILoggingBuilder               ← solo se compone si lo tocas
+  ├── Properties                             ← datos que comparten las piezas del arranque
   └── Build ──► IHost
                  ├── Services: IServiceProvider
                  ├── IHostEnvironment
@@ -43,67 +45,69 @@ El host se construye una vez, se arranca una vez y se para una vez. Todos los se
 ```pascal
 uses Daf.Hosting, Daf.Extensions.Hosting, Daf.Extensions.DependencyInjection;
 
-var Host := THostBuilder.Create
-  .ConfigureServices(procedure(Context: IHostBuilderContext;
-                               Services: IServiceCollection)
-  begin
-    Services.AddSingleton<IMyService, TMyService>;
-  end)
-  .Build;
+var Builder := THost.CreateBuilder;
 
+Builder.Services.AddSingleton<IMyService, TMyService>;
+
+var Host := Builder.Build;
 Host.Start;
 Host.WaitForShutdown; // bloquea hasta la señal de parada
 ```
 
-Cada `THostBuilder` es independiente: puede haber varios builders y varios hosts vivos a la vez en
-un mismo proceso.  
+`THost.CreateBuilder` entrega un `IGenericHostBuilder`, así que una sola variable posee el builder
+y llega a `Build`. Cada builder es independiente: puede haber varios builders y varios hosts vivos
+a la vez en un mismo proceso.  
 `Build` solo puede llamarse **una vez** por builder; congela la configuración y crea el contenedor DI.
 
 ---
 
 ## Pipeline de configuración
 
-El host ejecuta la configuración en tres fases ordenadas:
+Hay **una** configuración, y ya viene poblada cuando el builder se entrega.
+`Builder.Configuration` es un `IConfigurationManager` —constructor y lector a la vez—, así que una
+fuente se puede elegir a partir de lo ya configurado.
 
-### 1. Configuración del host
+### 1. Lo que siembra el builder
 
-Ajustes de bootstrap — se aplican antes de que se conozca el entorno:
-
-```pascal
-.ConfigureHostConfiguration(procedure(Builder: IConfigurationBuilder)
-begin
-  Builder.Add(TEnvironmentVariablesConfigurationSource.Create); // lee DAF_APP_ENV, DAF_APP_NAME, etc.
-end)
-```
-
-### 2. Configuración de la app
-
-Ajustes completos — se ejecuta tras resolver el entorno:
+Antes de entregarse, el builder lee las variables de entorno del proceso con prefijo `DAF_` —de
+donde salen `DAF_APP_ENV`, `DAF_APP_NAME` y `DAF_CONTENT_ROOT`— y, si se le dieron argumentos, la
+línea de comandos:
 
 ```pascal
-.ConfigureAppConfiguration(procedure(Context: IHostBuilderContext;
-                                     Builder: IConfigurationBuilder)
-begin
-  JsonConfig.AddFile(Builder, 'appsettings.json');
-  JsonConfig.AddFile(Builder,
-    'appsettings.' + string(Context.Environment.EnvironmentName) + '.json', [csoOptional]);
-end)
+var Builder := THost.CreateBuilder(CommandLineConfig.ProcessArgs);
 ```
 
-### 3. Servicios
+Los argumentos se añaden después de las variables de entorno, así que ganan. Una variante que
+declare gramática propia de línea de comandos **no** los pasa aquí: son dos lecturas del mismo
+`argv` con reglas distintas, y discrepan por construcción.
 
-Registros DI — `Context.Configuration` está completamente poblado aquí:
+### 2. El entorno, ya resuelto
+
+`Builder.Environment` se deriva de esa siembra dentro del constructor. Eso es lo que permite que el
+paso siguiente dependa de él: no hay ninguna fase que esperar.
+
+### 3. Tus propias fuentes
+
+Se añaden donde estás, entre el builder y `Build`:
 
 ```pascal
-.ConfigureServices(procedure(Context: IHostBuilderContext;
-                              Services: IServiceCollection)
-begin
-  var Db := Context.Configuration['Database:ConnectionString'];
-  Services.AddSingleton<IDatabase>(TDatabase.Create(Db));
-end)
+JsonConfig.AddFile(Builder.Configuration, 'appsettings.json');
+JsonConfig.AddFile(Builder.Configuration,
+  'appsettings.' + string(Builder.Environment.EnvironmentName) + '.json', [csoOptional]);
 ```
 
-Puedes llamar a `ConfigureServices` varias veces — todos los callbacks se aplican en orden de registro.
+Y como el manager lee además de construir, un registro consume configuración en el sitio:
+
+```pascal
+var Db := Builder.Configuration['Database:ConnectionString'];
+Builder.Services.AddSingleton<IDatabase>(TDatabase.Create(Db));
+```
+
+Para eso existían los callbacks diferidos, y por eso no hay ninguno: con una configuración que se
+lee mientras se compone, no queda nada que diferir.
+
+`Build` la congela. A partir de ahí, esa misma configuración es la que entrega
+`IHostBuilderContext.Configuration`.
 
 ---
 
@@ -111,39 +115,36 @@ Puedes llamar a `ConfigureServices` varias veces — todos los callbacks se apli
 
 `Properties` es un `TDictionary<string, TValue>` que lleva el builder, para los datos que las piezas
 que componen el arranque necesitan pasarse entre sí. Está en `IHostApplicationBuilder`, y el mismo
-diccionario se lee desde el otro lado por `IHostBuilderContext.Properties` — que es lo que recibe un
-callback de configuración o de logging.
-
-`THostBuilder` añade `UseProperty` para escribir en él en cascada:
+diccionario se lee desde el otro lado por `IHostBuilderContext.Properties`, que está registrado en
+el contenedor.
 
 ```pascal
-Builder.UseProperty('tenant', 'acme');
+Builder.Properties.AddOrSetValue('tenant', 'acme');
 
 // ...en cualquier sitio que tenga el contexto:
 var Tenant := Context.Properties['tenant'].AsString;
 ```
 
-`UseProperty` es método de la clase concreta `THostBuilder`, no de la interfaz: sostén el builder en
-una variable de su propio tipo para encadenarlo. Leer funciona por la interfaz en todas partes.
+`THostBuilder` tiene además `UseProperty` para escribir en él en cascada, pero es método de la
+clase concreta y no de la interfaz, así que solo se alcanza construyendo `THostBuilder` a mano —no
+por `THost.CreateBuilder`—. Por la interfaz, escribe directamente en `Properties`, como arriba.
 
 ---
 
 ## Registrar servicios
 
-Dentro de `ConfigureServices` está disponible la API completa de `IServiceCollection`:
+La API completa de `IServiceCollection` está disponible en `Builder.Services`:
 
 ```pascal
-.ConfigureServices(procedure(Context: IHostBuilderContext;
-                              Services: IServiceCollection)
-begin
-  // Tiempos de vida
-  Services.AddSingleton<ICache, TMemoryCache>;
-  Services.AddScoped<IUnitOfWork, TDbUnitOfWork>;
-  Services.AddTransient<IEmailSender, TSmtpSender>;
+var Services := Builder.Services;
 
-  // Hosted service (arranca/para con el host)
-  Services.AddHostedService<TBackgroundIndexer>;
-end)
+// Tiempos de vida
+Services.AddSingleton<ICache, TMemoryCache>;
+Services.AddScoped<IUnitOfWork, TDbUnitOfWork>;
+Services.AddTransient<IEmailSender, TSmtpSender>;
+
+// Hosted service (arranca/para con el host)
+Services.AddHostedService<TBackgroundIndexer>;
 ```
 
 Consulta [DependencyInjection](../../DependencyInjection/docs/GUIDE.es.md) para la referencia completa de registro.
@@ -250,7 +251,7 @@ Lifetime.StopApplication;
 ## Acceder a servicios tras el Build
 
 ```pascal
-var Host := HostBuilder.Build;
+var Host := Builder.Build;
 Host.Start;
 
 // Acceder a servicios desde fuera del grafo DI
@@ -308,16 +309,12 @@ begin
 end;
 ```
 
-Carga los módulos en `ConfigureServices`, un `AddModule<T>` por módulo:
+Carga los módulos en `Builder.Services`, un `AddModule<T>` por módulo:
 
 ```pascal
-Builder.ConfigureServices(
-  procedure(Context: IHostBuilderContext; Services: IServiceCollection)
-  begin
-    Services
-      .AddModule<TInfraModule>
-      .AddModule<TDomainModule>;
-  end);
+Builder.Services
+  .AddModule<TInfraModule>
+  .AddModule<TDomainModule>;
 ```
 
 `AddModule<T>` instancia el módulo, llama a su `AddServices` en el sitio y se hace cargo de su

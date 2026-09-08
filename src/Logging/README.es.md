@@ -72,10 +72,10 @@ La plantilla y los argumentos se mantienen juntos en `TLogState`, lo que permite
 ```pascal
 uses DAF.Logging.Builder, DAF.NNLog;
 
-// En ConfigureServices:
-AddLogging(Services, procedure(Builder: ILoggingBuilder)
+// Al componer el arranque, sobre los Services del builder:
+AddLogging(Builder.Services, procedure(Log: ILoggingBuilder)
 begin
-  Builder.AddProvider(TNNLogProvider.Create(Targets, Rules));
+  Log.AddProvider(TNNLogProvider.Create(Targets, Rules));
 end);
 
 // Resolver en un servicio:

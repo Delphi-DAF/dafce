@@ -58,8 +58,8 @@ type
   private
     FStopping: Boolean;
   public
-    function StartAsync: TTask;
-    function StopAsync: TTask;
+    procedure Start;
+    procedure Stop;
   end;
 
 // Servicio con temporizador
@@ -68,26 +68,30 @@ type
   private
     FTimer: TTimer;
   public
-    function StartAsync: TTask;
-    function StopAsync: TTask;
+    procedure Start;
+    procedure Stop;
   end;
 ```
 
 ## Configuración del Host
 
 ```pascal
-var Host := THostBuilder.Create
-  .ConfigureServices(
-    procedure(Services: IServiceCollection)
-    begin
-      // Registrar servicios hospedados
-      Services.AddHostedService<TBackgroundWorker>;
-      Services.AddHostedService<TTimerHostedService>;
-      
-      // Registrar dependencias
-      Services.AddSingleton<ILogger, TLogger>;
-    end)
-  .Build;
+var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
+
+// El entorno ya responde al volver del constructor: no hace falta un callback para leerlo.
+var JsonFilePath := TPath.Combine(B.Environment.BinPath, B.Environment.ApplicationName,
+                                  'appsettings.json');
+JsonConfig.AddFile(B.Configuration, JsonFilePath);
+
+// Registrar servicios hospedados
+B.Services.AddHostedService<TBackgroundWorker>;
+B.Services.AddHostedService<TTimerHostedService>;
+
+// El proveedor de log se compone leyendo la configuración que se acaba de añadir.
+B.Logging.AddProvider(TNNLogLoader.BuildProvider(
+  B.Environment, B.Configuration.GetSection('Logging:NLog')));
+
+ExitCode := B.Build.Run;
 ```
 
 ## Flujo de Ejecución

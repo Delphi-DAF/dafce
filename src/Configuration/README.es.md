@@ -216,24 +216,23 @@ vista que sigue a la configuración viva es otra pieza, y todavía no existe.
 
 ## Integración con Hosting
 
-Con `Hosting`, configura las fuentes en `ConfigureAppConfiguration`:
+Con `Hosting`, añade las fuentes a la `Configuration` del builder:
 
 ```pascal
-THostBuilder.Create
-  .ConfigureAppConfiguration(procedure(Ctx: IHostBuilderContext;
-                                       Builder: IConfigurationBuilder)
-  begin
-    JsonConfig.AddFile(Builder, 'appsettings.json');
-    JsonConfig.AddFile(Builder,
-      'appsettings.' + string(Ctx.Environment.EnvironmentName) + '.json', [csoOptional]);
-    Builder.Add(TEnvironmentVariablesConfigurationSource.Create);
-  end)
-  .ConfigureServices(procedure(Ctx: IHostBuilderContext; Services: IServiceCollection)
-  begin
-    // Ctx.Configuration está completamente construida aquí
-    Services.AddSingleton<IMyOptions>(TMyOptions.Create(Ctx.Configuration));
-  end)
-  .Build.Run;
+var Builder := THost.CreateBuilder;
+
+JsonConfig.AddFile(Builder.Configuration, 'appsettings.json');
+JsonConfig.AddFile(Builder.Configuration,
+  'appsettings.' + string(Builder.Environment.EnvironmentName) + '.json', [csoOptional]);
+Builder.Configuration.Add(TEnvironmentVariablesConfigurationSource.Create);
+
+// El gestor lee además de construir, así que el registro la consume en el sitio. El cast es
+// porque el gestor es lector y constructor a la vez, y Delphi solo admite un padre por interfaz.
+Builder.Services.AddSingleton<IMyOptions>(
+  TMyOptions.Create(Builder.Configuration as IConfiguration));
+
+var Host := Builder.Build;
+Host.Start;
 ```
 
 ---

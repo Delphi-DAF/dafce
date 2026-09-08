@@ -36,13 +36,9 @@ aplicación por su cuenta; ahora no registra ninguno. Declara los tuyos donde co
 servicios:
 
 ```pascal
-Builder.ConfigureServices(
-  procedure(Context: IHostBuilderContext; Services: IServiceCollection)
-  begin
-    Services
-      .AddModule<TEntornoModule>
-      .AddModule<TEvaluationModule>;
-  end);
+Builder.Services
+  .AddModule<TEntornoModule>
+  .AddModule<TEvaluationModule>;
 ```
 
 **Por qué.** En compilación nativa el descubrimiento no ahorraba la declaración: la escondía. Para

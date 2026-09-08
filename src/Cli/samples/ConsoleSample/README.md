@@ -67,22 +67,17 @@ end;
 ## Ejemplo de Uso
 
 ```pascal
-// Crear y configurar el host
-var Host := THostBuilder.Create
-  .ConfigureAppConfiguration(
-    procedure(Config: IConfigurationBuilder)
-    begin
-      JsonConfig.AddFile(Config, 'appsettings.json');
-    end)
-  .ConfigureServices(
-    procedure(Services: IServiceCollection)
-    begin
-      Services.AddHostedService<TGreeterService>;
-    end)
-  .Build;
+// Crear y configurar el builder
+var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
+
+// El entorno ya responde al volver del constructor: no hace falta un callback para leerlo.
+var SampleFilesPath := TPath.Combine(B.Environment.BinPath, B.Environment.ApplicationName);
+JsonConfig.AddFile(B.Configuration, TPath.Combine(SampleFilesPath, 'appsettings.json'));
+
+B.Services.AddSingleton<IGreeter, TGreeter>;
 
 // Ejecutar la aplicación
-Host.Run;
+ExitCode := B.Build.Run;
 ```
 
 ## Beneficios del Diseño

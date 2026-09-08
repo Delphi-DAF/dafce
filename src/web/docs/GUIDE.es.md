@@ -199,8 +199,8 @@ Srv.Start;
 ### Con Hosting
 
 ```pascal
-// En ConfigureServices:
-Services.AddSingleton<IDafHttpServer>(
+// Al componer el arranque:
+Builder.Services.AddSingleton<IDafHttpServer>(
   function(P: IServiceProvider): IDafHttpServer
   begin
     Result := TDafHttpServer.Create(TMyWebModule,
