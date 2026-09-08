@@ -118,6 +118,60 @@ for var Item in Seq do
 var Arr := ToIEnumerable<Integer>(List).ToArray;
 ```
 
+### TDeferredEnumerable\<T\>
+
+`IEnumerable<T>` built from a closure that returns the enumerator — the deferred sequence
+primitive. Nothing runs until `GetEnumerator` is called, and every iteration invokes the factory
+again, so the same sequence can be walked more than once.
+
+```pascal
+uses Daf.Enumerable;
+
+var Calls := 0;
+var Seq: IEnumerable<Integer> := TDeferredEnumerable<Integer>.Create(
+  function: IEnumerator<Integer>
+  var
+    N: Integer;
+  begin
+    Inc(Calls);
+    N := 0;
+    Result := TGeneratorEnumerator<Integer>.Create(
+      function(var Current: Integer): Boolean
+      begin
+        Result := N < 3;
+        if Result then
+        begin
+          Inc(N);
+          Current := N;
+        end;
+      end);
+  end);
+
+// Calls is still 0: declaring the sequence enumerated nothing
+
+for var I in Seq do    // Calls = 1, yields 1, 2, 3
+  Process(I);
+
+for var I in Seq do    // Calls = 2 — a new enumerator, walked from the start
+  Process(I);
+```
+
+This is the primitive `Daf.Linq` is built on: `Where`, `Select`, `Take` and the rest each return one
+of these wrapping the previous sequence, which is what makes a chain of operators traverse the
+source once, and only when a terminal asks for an element. See [Daf.Linq](../../Linq/README.md).
+
+### TGeneratorEnumerator\<T\>
+
+The enumerator of the pair above, built from an advance-and-yield closure: a `TGeneratorFunc<T>` is
+a `function(var Current: T): Boolean` that returns `False` when the sequence is exhausted and
+otherwise writes the next element into `Current`. The state of the walk lives in the closure, so a
+sequence with no collection behind it — a counter, a file being read, a computed series — needs no
+enumerator class of its own.
+
+`Reset` raises `ENotImplemented`: a closure that has already advanced cannot be rewound. Walking a
+sequence a second time is what `TDeferredEnumerable<T>` is for — it asks its factory for a **new**
+enumerator, with its own state.
+
 ### IInterfaceList\<T\>
 
 Type-safe list of interface references, with `GetEnumerator` support.

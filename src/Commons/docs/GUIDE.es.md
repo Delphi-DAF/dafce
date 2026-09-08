@@ -118,6 +118,61 @@ for var Item in Seq do
 var Arr := ToIEnumerable<Integer>(Lista).ToArray;
 ```
 
+### TDeferredEnumerable\<T\>
+
+`IEnumerable<T>` construido a partir de un closure que devuelve el enumerador — la primitiva de
+secuencia diferida. No se ejecuta nada hasta que se llama a `GetEnumerator`, y cada iteración vuelve
+a invocar la factoría, así que la misma secuencia se puede recorrer más de una vez.
+
+```pascal
+uses Daf.Enumerable;
+
+var Llamadas := 0;
+var Seq: IEnumerable<Integer> := TDeferredEnumerable<Integer>.Create(
+  function: IEnumerator<Integer>
+  var
+    N: Integer;
+  begin
+    Inc(Llamadas);
+    N := 0;
+    Result := TGeneratorEnumerator<Integer>.Create(
+      function(var Current: Integer): Boolean
+      begin
+        Result := N < 3;
+        if Result then
+        begin
+          Inc(N);
+          Current := N;
+        end;
+      end);
+  end);
+
+// Llamadas sigue en 0: declarar la secuencia no enumeró nada
+
+for var I in Seq do    // Llamadas = 1, entrega 1, 2, 3
+  Procesar(I);
+
+for var I in Seq do    // Llamadas = 2 — un enumerador nuevo, recorrido desde el principio
+  Procesar(I);
+```
+
+Es la primitiva sobre la que está construido `Daf.Linq`: `Where`, `Select`, `Take` y los demás
+devuelven uno de estos envolviendo la secuencia anterior, y eso es lo que hace que una cadena de
+operadores recorra la fuente una sola vez, y solo cuando un terminal pide un elemento. Ver
+[Daf.Linq](../../Linq/README.md).
+
+### TGeneratorEnumerator\<T\>
+
+El enumerador de la pareja anterior, construido con un closure de avanzar y entregar: un
+`TGeneratorFunc<T>` es una `function(var Current: T): Boolean` que devuelve `False` cuando la
+secuencia se agotó y, si no, escribe el elemento siguiente en `Current`. El estado del recorrido
+vive en el closure, así que una secuencia sin colección detrás — un contador, un fichero que se
+lee, una serie calculada — no necesita una clase enumeradora propia.
+
+`Reset` lanza `ENotImplemented`: un closure que ya avanzó no se puede rebobinar. Recorrer una
+secuencia por segunda vez es para lo que está `TDeferredEnumerable<T>` — le pide a su factoría un
+enumerador **nuevo**, con su propio estado.
+
 ### IInterfaceList\<T\>
 
 Lista con tipo seguro de referencias a interfaces, con soporte `GetEnumerator`.

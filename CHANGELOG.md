@@ -68,7 +68,7 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 - **SQLCute**: `WhereNot(Callback)` y `OrWhereNot(Callback)` — grupos WHERE entre paréntesis negados como una unidad, `NOT (…)`
 - **SQLCute**: Orden de NULL por columna en ORDER BY — sobrecargas `OrderBy`/`OrderByDesc` con `TNullsOrder` y modificadores `NullsFirst`/`NullsLast`. Postgres, Oracle, Firebird y SQLite lo emiten nativo; MySQL y SQL Server, que no tienen esa sintaxis, lo emulan con una clave de orden previa
 - **Commons**: `TNullable<T>` en `Daf.Nullable`
-- **Commons**: `TDeferredEnumerable<T>` en `Daf.Enumerable`
+- **Commons**: `TDeferredEnumerable<T>` y `TGeneratorEnumerator<T>` en `Daf.Enumerable` — la secuencia perezosa y el enumerador construido con un closure de avanzar y entregar
 - **Commons**: `Daf.Comparers` — comparadores conscientes de NULL para `TValue` y `TNullable<T>`
 - **Daf.Web**: Módulo nuevo en paquete — servidor HTTP ligero sobre Indy y WebBroker, controladores enrutados por atributos y construidos por el contenedor, y action results. Las fuentes ya se publicaban; faltaba el `.dpk` con el que instalarlo
 - **Daf.Web**: El paquete **no enlaza DataSnap ni DBX**: el `uses` heredado de la plantilla *DataSnap WebBroker Application* arrastraba 59 unidades de remoting. Quien lo instale se lleva un servidor HTTP
