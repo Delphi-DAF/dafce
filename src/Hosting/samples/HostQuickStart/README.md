@@ -5,17 +5,19 @@ ninguna variante de la familia por encima.
 
 ## Qué enseña
 
-- `THostBuilder.Create` devuelve un builder ya vivo: `Services`, `Configuration`, `Environment` y
+- `THost.CreateBuilder` devuelve un builder ya vivo: `Services`, `Configuration`, `Environment` y
   `Logging` responden antes de construir nada.
-- `AddHostedService<T>` registra algo con ciclo de vida. La regla de elección es una frase: si
+- `Services.AddHostedService<T>` registra algo con ciclo de vida — va por `Services` porque una
+  interfaz de Delphi no puede declarar un método genérico. La regla de elección es una frase: si
   tiene algo que parar es `IHostedService`; si solo se ejecuta una vez, `IStartupTask`.
 - `Build` devuelve la `IHost`, y `Start` / `Stop` son el ciclo que el host conduce.
 
-## El dueño del builder no es decorativo
+## El dueño lo pone el punto de entrada
 
-`THostBuilder` es contado por referencia. Encadenar directamente sobre `THostBuilder.Create` deja
-la instancia sin dueño y se fuga; el `var Owner: IHostApplicationBuilder := Builder` del `.dpr` es
-quien la libera al salir.
+`THostBuilder` es contado por referencia, así que la instancia necesita una interfaz que la posea.
+`THost.CreateBuilder` devuelve `IGenericHostBuilder` —el contrato compartido más su propio
+`Build`—, así que la variable del `.dpr` es a la vez la dueña y la que construye el host.
+Encadenar sobre `THostBuilder.Create`, la clase, deja la instancia sin dueño y se fuga.
 
 ## Cuando la aplicación es una herramienta de consola
 

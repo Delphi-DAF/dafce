@@ -65,6 +65,19 @@ type
     property EnvVar[VarName: string]: string read GetEnvVar;default;
   end;
 
+  /// <summary>El componedor del host generico: el contrato compartido mas su propio Build.</summary>
+  /// <remarks>
+  ///   Cada variante de la familia declara su Build en su propia interfaz porque cada uno devuelve
+  ///   un tipo distinto. Un Build comun en IHostApplicationBuilder se puede DECLARAR y no se puede
+  ///   implementar: Delphi distingue sobrecargas por parametros y no por tipo de retorno, y una
+  ///   interfaz no admite covarianza de retorno, asi que ninguna clase cumple los dos.
+  /// </remarks>
+  IGenericHostBuilder = interface(IHostApplicationBuilder)
+    ['{4851D11B-9A47-4C5F-BF9D-EB46C278517D}']
+    /// <summary>Construye el host con lo registrado hasta aqui.</summary>
+    function Build: IHost;
+  end;
+
   THost = class(TNoRefCountObject, IHost)
   private
     FServices: IServiceProviderImpl;
@@ -77,6 +90,9 @@ type
     FReleased: Boolean;
     procedure SetServiceProvider(const Services: IServiceProvider);
   public
+    /// <summary>El punto de entrada del host generico: entrega el componedor ya con dueno, asi que
+    /// una sola variable lo posee y llega a Build.</summary>
+    class function CreateBuilder(const Args: TArray<string> = nil): IGenericHostBuilder; static;
     constructor Create;
     destructor Destroy; override;
     function GetServices: IServiceProvider;
@@ -111,7 +127,7 @@ type
   ///   quien la llama y cuando. Tres Initialize* suben al constructor; las dos que dependen de
   ///   lo que el usuario anada despues se quedan en Build.
   /// </remarks>
-  THostBuilder = class(TSingleton<THostBuilder>, IHostApplicationBuilder)
+  THostBuilder = class(TSingleton<THostBuilder>, IGenericHostBuilder, IHostApplicationBuilder)
   private
     // "Build ya se llamo" es de este builder, no del proceso: como class var, un proceso
     // solo podia construir un host en toda su vida, y un arnes de specs construye varios.
@@ -319,6 +335,11 @@ begin
 end;
 
 { THost }
+
+class function THost.CreateBuilder(const Args: TArray<string>): IGenericHostBuilder;
+begin
+  Result := THostBuilder.Create(Args);
+end;
 
 constructor THost.Create;
 begin

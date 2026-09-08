@@ -13,11 +13,9 @@ uses
 //
 //   HostQuickStart  -> arranca el servicio, informa, y lo para
 begin
-  var Builder := THostBuilder.Create;
-  // El builder es contado por referencia: sin un dueno declarado nadie lo libera.
-  var Owner: IHostApplicationBuilder := Builder;
+  var Builder := THost.CreateBuilder;
 
-  Builder.AddHostedService<TGreetingWorker>;
+  Builder.Services.AddHostedService<TGreetingWorker>;
 
   var Host := Builder.Build;
   Host.Start;

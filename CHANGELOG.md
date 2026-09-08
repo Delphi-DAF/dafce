@@ -95,6 +95,7 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 - **Hosting**: Sample `HostQuickStart` — componer, construir, arrancar y parar el host genérico, sin ninguna variante de la familia alrededor
 - **Docs**: `SQLCute.Abstractions` documentado (EN/ES) — el AST público de la consulta y los dos contratos que habla un back-end: los 22 nodos de cláusula, los ocho enumerados, el cast de las subconsultas y la factoría que `TQuery.New` necesita para entregar un `IQuery`
 - **Hosting**: Sample `StartupReport` — el `.dpr` que decide dónde queda el informe de arranque y qué se ve cuando el arranque falla: destino de fichero para el canal de bootstrap, `ExitCode` distinto de cero para la consola y el desatendido, y la propagación que hace que el escritorio lo muestre. `--fail` provoca el fallo. Es el programa que la página «Composición del arranque» cita literalmente, así que deja de ser un bloque que nadie compila
+- **Hosting**: `THost.CreateBuilder` e `IGenericHostBuilder` — el host genérico gana el punto de entrada y la interfaz de builder que las otras cuatro variantes de la familia ya tenían, así que una sola variable posee el componedor y llega a `Build`: `var Builder := THost.CreateBuilder;`. `THostBuilder.Create` sigue existiendo y encadenar sobre él sigue fugando la instancia, que es lo que el punto de entrada resuelve. `Build` no puede vivir en `IHostApplicationBuilder`: cada variante devuelve un tipo distinto, y Delphi no sobrecarga por tipo de retorno ni admite covarianza de retorno en interfaces
 
 ### Changed
 

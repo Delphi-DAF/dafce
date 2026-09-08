@@ -364,12 +364,7 @@ begin
   // La aplicacion sabe donde viven sus datos; DAF no.
   BootstrapLog.AddSink(TFileBootstrapSink.Create(TPath.Combine(DataFolder, 'startup.log')));
   try
-    var Builder := THostBuilder.Create;
-    // Dos variables, por dos motivos distintos: Build esta en THostBuilder y no en
-    // IHostApplicationBuilder, asi que solo la variable de clase construye el host; y
-    // THostBuilder es contado por referencia, asi que sin una interfaz que lo posea
-    // nadie lo libera.
-    var Owner: IHostApplicationBuilder := Builder;
+    var Builder := THost.CreateBuilder;
 
     AddPayroll(Builder.Services);
 
