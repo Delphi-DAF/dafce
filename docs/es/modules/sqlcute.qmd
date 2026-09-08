@@ -4,3 +4,9 @@ lang: es
 ---
 
 {{< include ../../../src/SQLCute/README.es.md >}}
+
+---
+
+## Abstracciones
+
+{{< include ../../../src/SQLCute.Abstractions/README.es.md >}}

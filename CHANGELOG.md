@@ -93,6 +93,7 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 - **Cli**: Sample `QuickStart` — el ejemplo de entrada: construir, declarar el trabajo, devolver el código de salida. Es la fuente del snippet de inicio rápido de la documentación, que lo cita literalmente
 - **Cli**: Sample `ServiceWiring` — el mismo programa con un servicio registrado en el builder y resuelto por el trabajo, y la unit donde el servicio tiene que vivir
 - **Hosting**: Sample `HostQuickStart` — componer, construir, arrancar y parar el host genérico, sin ninguna variante de la familia alrededor
+- **Docs**: `SQLCute.Abstractions` documentado (EN/ES) — el AST público de la consulta y los dos contratos que habla un back-end: los 22 nodos de cláusula, los ocho enumerados, el cast de las subconsultas y la factoría que `TQuery.New` necesita para entregar un `IQuery`
 
 ### Changed
 

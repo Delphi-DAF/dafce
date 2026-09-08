@@ -3,3 +3,9 @@ sidebar: modules
 ---
 
 {{< include ../../../src/SQLCute/README.md >}}
+
+---
+
+## Abstractions
+
+{{< include ../../../src/SQLCute.Abstractions/README.md >}}
