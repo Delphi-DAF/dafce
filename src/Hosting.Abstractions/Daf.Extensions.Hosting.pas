@@ -78,8 +78,6 @@ type
     procedure Run;
   end;
 
-  TConfigureServicesAction = TProc<IHostBuilderContext, IServiceCollection>;
-
   /// <summary>
   /// El contrato que comparten los miembros de la familia de aplicaciones --CLI, Web, VCL y
   /// FMX--, y lo que hace que sean una familia y no cuatro cosas parecidas.

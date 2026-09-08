@@ -22,14 +22,8 @@ Todos los tipos se encuentran en `Daf.Extensions.Hosting`.
 | `IHost` | El host en ejecución: `Services`, `Start`, `Stop`, `WaitForShutdown` |
 | `IHostedService` | Contrato de servicio en segundo plano: `Start` / `Stop` |
 | `IHostEnvironment` | Entorno de ejecución: nombre, nombre de app, rutas, `IsDevelopment`, ... |
-| `IHostBuilderContext` | Contexto pasado a los callbacks de configuración: `Environment` + `Configuration` |
+| `IHostBuilderContext` | Contexto de arranque, registrado en el contenedor: `Environment`, `Configuration`, `Properties` |
 | `IHostApplicationLifetime` | Señales de ciclo de vida: `ApplicationStarted`, `ApplicationStopping`, `ApplicationStopped`, `StopApplication` |
-
-### Tipos delegado
-
-```pascal
-TConfigureServicesAction   = TProc<IHostBuilderContext, IServiceCollection>;
-```
 
 ### Constantes de entorno
 

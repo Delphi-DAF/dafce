@@ -22,14 +22,8 @@ All types live in `Daf.Extensions.Hosting`.
 | `IHost` | The running host: `Services`, `Start`, `Stop`, `WaitForShutdown` |
 | `IHostedService` | Background service contract: `Start` / `Stop` |
 | `IHostEnvironment` | Runtime environment: name, app name, paths, `IsDevelopment`, ... |
-| `IHostBuilderContext` | Context passed to configuration callbacks: `Environment` + `Configuration` |
+| `IHostBuilderContext` | Startup context, registered in the container: `Environment`, `Configuration`, `Properties` |
 | `IHostApplicationLifetime` | Lifetime signals: `ApplicationStarted`, `ApplicationStopping`, `ApplicationStopped`, `StopApplication` |
-
-### Delegate types
-
-```pascal
-TConfigureServicesAction   = TProc<IHostBuilderContext, IServiceCollection>;
-```
 
 ### Environment constants
 

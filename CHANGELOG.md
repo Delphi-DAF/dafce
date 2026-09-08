@@ -128,6 +128,7 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 
 ### Removed
 
+- **Hosting**: `IHostBuilder`, y con él el estilo diferido: los callbacks `ConfigureServices`, `ConfigureAppConfiguration` y `ConfigureHostConfiguration`, más el tipo `TConfigureServicesAction`. Queda un solo estilo, el inmediato: el builder responde en cuanto se crea, así que lo registrado ocurre donde está escrito y una fuente se puede elegir leyendo lo ya configurado. `THostBuilder` baja a detalle de implementación; el punto de entrada es la variante de la familia, o `THost.CreateBuilder` para el host genérico. El diff de ejemplo, en `MIGRATION-2.0.md`
 - **Commons**: `TGenericRTTI`. Su `MakeGenericType` prometía fabricar un genérico en ejecución, que es justamente lo que Delphi no hace: fallaba con violación de acceso incluso en el caso para el que se escribió. Lo que sí servía —leer los argumentos de una instanciación— vuelve como `_T.GenericArgs`
 - **DependencyInjection**: `AddModules(Package)`, el descubrimiento por RTTI de los `IAppModule`. El sustituto es `AddModule<T>`, una llamada por módulo y en el orden que la aplicación quiera; `IAppModule`, `TAppModule` y el cuerpo de cada módulo no cambian. Una `TDafApplication` **ya no registra módulos por su cuenta**; el diff de ejemplo, en `MIGRATION-2.0.md`
 - **Logging**: La global `DAFInternalLogger`, sustituida por `BootstrapLog.LoggerFor(<categoría>)`, que es por donde informa ahora también el propio DAF. Quien la llamara se lleva un error de compilación, no un cambio silencioso de comportamiento
