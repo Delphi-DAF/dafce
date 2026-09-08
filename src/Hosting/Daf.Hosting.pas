@@ -15,23 +15,7 @@ uses
   Daf.Extensions.DependencyInjection;
 
 type
-  TSingleton<T: class> = class(TInterfacedObject)
-  {$IFOPT D+}
-  strict private
-    // Estado de esta instancia, no del proceso -- mismo motivo que FStopped y FHostBuilt. Con
-    // class var, dos entornos, dos contextos o dos builders vivos a la vez en un mismo proceso
-    // se pisaban el uno al otro, y la asercion pasaba de no dispararse nunca a dispararse
-    // siempre. Con el estilo inmediato eso deja de ser el caso raro: lo que antes nacia y moria
-    // dentro de Build ahora vive todo el rato, y un arnes de specs construye varios a la vez.
-    FInstance: T;
-  public
-    property Instance: T read FInstance;
-    procedure AfterConstruction; override;
-    procedure BeforeDestruction; override;
-  {$ENDIF}
-  end;
-
-  THostEnvironment = class(TSingleton<THostEnvironment>, IHostEnvironment)
+  THostEnvironment = class(TInterfacedObject, IHostEnvironment)
   strict private
     FEnvironmentName: TEnvironmentName;
     FApplicationName: string;
@@ -101,7 +85,7 @@ type
     procedure WaitForShutdown;
   end;
 
-  THostBuilderContext = class(TSingleton<THostBuilderContext>, IHostBuilderContext)
+  THostBuilderContext = class(TInterfacedObject, IHostBuilderContext)
   private
     FProperties: TDictionary<string, TValue>;
     FConfiguration: IConfiguration;
@@ -127,7 +111,7 @@ type
   ///   quien la llama y cuando. Tres Initialize* suben al constructor; las dos que dependen de
   ///   lo que el usuario anada despues se quedan en Build.
   /// </remarks>
-  THostBuilder = class(TSingleton<THostBuilder>, IGenericHostBuilder, IHostApplicationBuilder)
+  THostBuilder = class(TInterfacedObject, IGenericHostBuilder, IHostApplicationBuilder)
   private
     // "Build ya se llamo" es de este builder, no del proceso: como class var, un proceso
     // solo podia construir un host en toda su vida, y un arnes de specs construye varios.
@@ -170,7 +154,6 @@ type
       const Configuration: IConfigurationManager = nil);
     destructor Destroy;override;
     function AddHostedService<T: class, IHostedService>: IHostApplicationBuilder;
-    function UseProperty(const Key: string; const Value: TValue): IHostApplicationBuilder;
     function Build: IHost;
     property Services: IServiceCollection read GetServices;
     property Configuration: IConfigurationManager read GetConfiguration;
@@ -234,22 +217,6 @@ begin
     Result := BootstrapLog.LoggerFor(Category);
 end;
 
-
-{$IFOPT D+}
-{ TSingleton<T> }
-procedure TSingleton<T>.AfterConstruction;
-begin
-  inherited;
-  Assert(FInstance = nil);
-  FInstance := Self as T;
-end;
-
-procedure TSingleton<T>.BeforeDestruction;
-begin
-  FInstance := nil;
-  inherited;
-end;
-{$ENDIF}
 
 { THostEnvironment }
 
@@ -534,12 +501,6 @@ begin
   // de composicion en toda aplicacion que no configure logging.
   FLoggingTouched := True;
   Result := FLogging;
-end;
-
-function THostBuilder.UseProperty(const Key: string; const Value: TValue): IHostApplicationBuilder;
-begin
-  Properties.AddOrSetValue(Key, Value);
-  Result := Self;
 end;
 
 function THostBuilder.AddHostedService<T>: IHostApplicationBuilder;

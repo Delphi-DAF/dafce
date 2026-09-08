@@ -125,11 +125,6 @@ Builder.Properties.AddOrSetValue('tenant', 'acme');
 var Tenant := Context.Properties['tenant'].AsString;
 ```
 
-`THostBuilder` also has `UseProperty` for writing to it fluently, but it is a method of the
-concrete class and not of the interface, so it is reachable only by constructing `THostBuilder`
-yourself — not through `THost.CreateBuilder`. Through the interface, write to `Properties`
-directly, as above.
-
 ---
 
 ## Registering Services

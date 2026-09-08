@@ -125,10 +125,6 @@ Builder.Properties.AddOrSetValue('tenant', 'acme');
 var Tenant := Context.Properties['tenant'].AsString;
 ```
 
-`THostBuilder` tiene además `UseProperty` para escribir en él en cascada, pero es método de la
-clase concreta y no de la interfaz, así que solo se alcanza construyendo `THostBuilder` a mano —no
-por `THost.CreateBuilder`—. Por la interfaz, escribe directamente en `Properties`, como arriba.
-
 ---
 
 ## Registrar servicios

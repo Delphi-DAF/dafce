@@ -126,9 +126,9 @@ Two shapes worth naming, because both are easy to get wrong:
 
 ## TDafApplicationBuilder
 
-`TDafApplicationBuilder` extends `THostBuilder`, so it inherits the whole fluent surface —
-`Services`, `Configuration`, `Environment`, `Logging`, `Properties`, `UseProperty`,
-`AddHostedService<T>`. What it adds is a `Build` that returns the application:
+`TDafApplicationBuilder` extends `THostBuilder`, so it inherits its whole surface — `Services`,
+`Configuration`, `Environment`, `Logging`, `Properties` and `AddHostedService<T>`. What it adds is
+a `Build` that returns the application:
 
 ```pascal
 var Builder := TDafApplication.CreateHostBuilder;

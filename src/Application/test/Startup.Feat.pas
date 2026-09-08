@@ -89,9 +89,6 @@ begin
   else
     App.Run;
   Result := Spy.Trace;
-  // El contenedor sostiene el IHostEnvironment que se le registro, y THostEnvironment es un
-  // TSingleton que en Debug afirma ser el unico vivo: sin soltar el contenedor, la llamada
-  // siguiente muere en ese Assert en vez de medir nada.
   Provider.ShutDown;
 end;
 
