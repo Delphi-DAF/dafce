@@ -6,6 +6,9 @@
         <Projects Include="samples\HostQuickStart\HostQuickStart.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="samples\StartupReport\StartupReport.dproj">
+            <Dependencies/>
+        </Projects>
     </ItemGroup>
     <ProjectExtensions>
         <Borland.Personality>Default.Personality.12</Borland.Personality>
@@ -23,14 +26,23 @@
     <Target Name="HostQuickStart:Make">
         <MSBuild Projects="samples\HostQuickStart\HostQuickStart.dproj" Targets="Make"/>
     </Target>
+    <Target Name="StartupReport">
+        <MSBuild Projects="samples\StartupReport\StartupReport.dproj"/>
+    </Target>
+    <Target Name="StartupReport:Clean">
+        <MSBuild Projects="samples\StartupReport\StartupReport.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="StartupReport:Make">
+        <MSBuild Projects="samples\StartupReport\StartupReport.dproj" Targets="Make"/>
+    </Target>
     <Target Name="Build">
-        <CallTarget Targets="HostQuickStart"/>
+        <CallTarget Targets="HostQuickStart;StartupReport"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="HostQuickStart:Clean"/>
+        <CallTarget Targets="HostQuickStart:Clean;StartupReport:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="HostQuickStart:Make"/>
+        <CallTarget Targets="HostQuickStart:Make;StartupReport:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

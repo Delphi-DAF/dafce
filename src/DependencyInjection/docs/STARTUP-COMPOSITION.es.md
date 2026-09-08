@@ -335,30 +335,53 @@ usa.
 | Consola | la salida de error, más un código de retorno distinto de cero |
 | Desatendido (envoltorio, programador de tareas) | la salida de error, que el envoltorio o el programador capturan; un destino de fichero para el registro duradero |
 
-El `.dpr` es donde se decide esto, antes de construir el host:
+El `.dpr` es donde se decide esto, antes de construir el host. Es el sample `StartupReport`
+literal -- el fichero que lee el compilador, y un chequeo compara los dos:
+
+<!-- quickstart: src/Hosting/samples/StartupReport/StartupReport.dpr -->
 
 ```pascal
-program Payroll;
+program StartupReport;
+
+{$APPTYPE CONSOLE}
+{$STRONGLINKTYPES ON}
 
 uses
-  System.IOUtils, System.SysUtils, DAF.Extensions.Logging, Daf.Hosting;
+  System.IOUtils,
+  System.SysUtils,
+  DAF.Extensions.Logging,
+  Daf.Extensions.Hosting,
+  Daf.Hosting,
+  StartupReport.Payroll in 'StartupReport.Payroll.pas';
 
+// Lo que el .dpr decide antes de que exista el host: donde queda el informe de arranque, y que se
+// ve cuando el arranque falla. La consola se lleva el error y un codigo de salida distinto de
+// cero; el fichero se lleva el registro que sobrevive.
+//
+//   StartupReport         -> arranca el servicio, y sale con Ctrl+C
+//   StartupReport --fail  -> el arranque aborta: rc=1, y el motivo en startup.log
 begin
-  // La aplicación sabe dónde viven sus datos; DAF no.
-  BootstrapLog.AddSink(TFileBootstrapSink.Create(TPath.Combine(CarpetaDeDatos, 'startup.log')));
+  // La aplicacion sabe donde viven sus datos; DAF no.
+  BootstrapLog.AddSink(TFileBootstrapSink.Create(TPath.Combine(DataFolder, 'startup.log')));
   try
     var Builder := THostBuilder.Create;
+    // Dos variables, por dos motivos distintos: Build esta en THostBuilder y no en
+    // IHostApplicationBuilder, asi que solo la variable de clase construye el host; y
+    // THostBuilder es contado por referencia, asi que sin una interfaz que lo posea
+    // nadie lo libera.
     var Owner: IHostApplicationBuilder := Builder;
+
     AddPayroll(Builder.Services);
+
     var Host := Builder.Build;
     Host.Start;
     Host.WaitForShutdown;
   except
     on E: Exception do
     begin
-      BootstrapLog.LoggerFor('Payroll').LogCritical(E, 'la aplicación no pudo arrancar');
-      ExitCode := 1;   // consola y desatendido: el código de retorno es parte del informe
-      raise;           // escritorio: es lo que hace que la plataforma lo enseñe
+      BootstrapLog.LoggerFor('Acme.Payroll').LogCritical(E, 'el arranque no pudo completarse');
+      ExitCode := 1;   // consola y desatendido: el codigo de salida es parte del informe
+      raise;           // escritorio: esto es lo que hace que la plataforma lo muestre
     end;
   end;
 end.

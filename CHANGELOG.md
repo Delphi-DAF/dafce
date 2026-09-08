@@ -94,6 +94,7 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 - **Cli**: Sample `ServiceWiring` — el mismo programa con un servicio registrado en el builder y resuelto por el trabajo, y la unit donde el servicio tiene que vivir
 - **Hosting**: Sample `HostQuickStart` — componer, construir, arrancar y parar el host genérico, sin ninguna variante de la familia alrededor
 - **Docs**: `SQLCute.Abstractions` documentado (EN/ES) — el AST público de la consulta y los dos contratos que habla un back-end: los 22 nodos de cláusula, los ocho enumerados, el cast de las subconsultas y la factoría que `TQuery.New` necesita para entregar un `IQuery`
+- **Hosting**: Sample `StartupReport` — el `.dpr` que decide dónde queda el informe de arranque y qué se ve cuando el arranque falla: destino de fichero para el canal de bootstrap, `ExitCode` distinto de cero para la consola y el desatendido, y la propagación que hace que el escritorio lo muestre. `--fail` provoca el fallo. Es el programa que la página «Composición del arranque» cita literalmente, así que deja de ser un bloque que nadie compila
 
 ### Changed
 

@@ -330,30 +330,53 @@ call DAF's own reports go through now, so the framework does not preach an API i
 | Console | the error output, plus a non-zero exit code |
 | Unattended (wrapper, task scheduler) | the error output, which the wrapper or the scheduler captures; a file destination for the durable record |
 
-The `.dpr` is where this is decided, before the host is built:
+The `.dpr` is where this is decided, before the host is built. This is the `StartupReport`
+sample, verbatim -- the file the compiler reads, and a check compares the two:
+
+<!-- quickstart: src/Hosting/samples/StartupReport/StartupReport.dpr -->
 
 ```pascal
-program Payroll;
+program StartupReport;
+
+{$APPTYPE CONSOLE}
+{$STRONGLINKTYPES ON}
 
 uses
-  System.IOUtils, System.SysUtils, DAF.Extensions.Logging, Daf.Hosting;
+  System.IOUtils,
+  System.SysUtils,
+  DAF.Extensions.Logging,
+  Daf.Extensions.Hosting,
+  Daf.Hosting,
+  StartupReport.Payroll in 'StartupReport.Payroll.pas';
 
+// Lo que el .dpr decide antes de que exista el host: donde queda el informe de arranque, y que se
+// ve cuando el arranque falla. La consola se lleva el error y un codigo de salida distinto de
+// cero; el fichero se lleva el registro que sobrevive.
+//
+//   StartupReport         -> arranca el servicio, y sale con Ctrl+C
+//   StartupReport --fail  -> el arranque aborta: rc=1, y el motivo en startup.log
 begin
-  // The application knows where its data lives; DAF does not.
+  // La aplicacion sabe donde viven sus datos; DAF no.
   BootstrapLog.AddSink(TFileBootstrapSink.Create(TPath.Combine(DataFolder, 'startup.log')));
   try
     var Builder := THostBuilder.Create;
+    // Dos variables, por dos motivos distintos: Build esta en THostBuilder y no en
+    // IHostApplicationBuilder, asi que solo la variable de clase construye el host; y
+    // THostBuilder es contado por referencia, asi que sin una interfaz que lo posea
+    // nadie lo libera.
     var Owner: IHostApplicationBuilder := Builder;
+
     AddPayroll(Builder.Services);
+
     var Host := Builder.Build;
     Host.Start;
     Host.WaitForShutdown;
   except
     on E: Exception do
     begin
-      BootstrapLog.LoggerFor('Payroll').LogCritical(E, 'the application could not start');
-      ExitCode := 1;   // console and unattended: the exit code is part of the report
-      raise;           // desktop: this is what makes the platform show it
+      BootstrapLog.LoggerFor('Acme.Payroll').LogCritical(E, 'el arranque no pudo completarse');
+      ExitCode := 1;   // consola y desatendido: el codigo de salida es parte del informe
+      raise;           // escritorio: esto es lo que hace que la plataforma lo muestre
     end;
   end;
 end.
