@@ -116,6 +116,29 @@ Provider.ShutDown;
 
 This releases all managed singleton instances in reverse creation order.
 
+### Checking what the container still owns
+
+`IContainerAccess` publishes how many objects the container still owns: the singleton scope plus
+every live scope. Transients are not counted — the container does not retain them, so for it they
+stop existing the moment it hands one over.
+
+It is reached by `QueryInterface`, not by resolving it as a service:
+
+```pascal
+uses System.SysUtils; // Supports
+
+var Access: IContainerAccess;
+if Supports(Provider, IContainerAccess, Access) then
+  WriteLn(Access.OwnedInstanceCount);
+```
+
+Zero after `ShutDown` makes "everything was released" a fact a test asserts over any service, with
+no leak detector and without naming the services one by one.
+
+The count belongs to the container and not to the handle it is asked through: a scope reports the
+same number as the provider it came from, because both reach the same scope factory. It is safe to
+read while other threads create and close scopes.
+
 ---
 
 ## Resolving Services

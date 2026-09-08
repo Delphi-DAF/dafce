@@ -116,6 +116,29 @@ Provider.ShutDown;
 
 Esto libera todas las instancias singleton gestionadas en orden inverso de creación.
 
+### Comprobar qué sigue poseyendo el contenedor
+
+`IContainerAccess` publica cuántos objetos sigue poseyendo el contenedor: el ámbito de singletons
+más cada ámbito vivo. Los transient no se cuentan — el contenedor no los retiene, así que para él
+dejan de existir en cuanto entrega uno.
+
+Se llega a él por `QueryInterface`, no resolviéndolo como servicio:
+
+```pascal
+uses System.SysUtils; // Supports
+
+var Access: IContainerAccess;
+if Supports(Provider, IContainerAccess, Access) then
+  WriteLn(Access.OwnedInstanceCount);
+```
+
+Cero después de `ShutDown` convierte «se liberó todo» en un hecho que un test afirma sobre
+cualquier servicio, sin un detector de fugas y sin nombrarlos uno a uno.
+
+El recuento es del contenedor y no del handle por el que se pregunta: un ámbito informa del mismo
+número que el proveedor del que salió, porque los dos llegan a la misma fábrica de ámbitos. Se
+puede leer mientras otros hilos crean y cierran ámbitos.
+
 ---
 
 ## Resolver servicios
