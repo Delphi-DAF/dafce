@@ -44,7 +44,7 @@ ASP.NET Core walked with the `Startup` class before turning back.
 
 The two phases are not rivals: a package usually needs both — it declares its registrations
 in phase 1 and leaves a phase-2 task behind, so the executable writes one line. See
-`src/Hosting/samples/PackageInit`.
+`src/Cli/samples/PackageInit`.
 
 ## Grouping registrations
 
@@ -401,4 +401,4 @@ inspectable part of it is.
 ---
 
 **See also:** [DependencyInjection — Usage Guide](GUIDE.md) ·
-`src/Hosting/samples/PackageInit`
+`src/Cli/samples/PackageInit`

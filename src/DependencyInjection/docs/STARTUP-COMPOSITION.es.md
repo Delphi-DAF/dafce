@@ -44,7 +44,7 @@ recorrió con la clase `Startup` antes de volverse atrás.
 
 Las dos fases no compiten: un paquete suele necesitar las dos — declara sus registros en la
 fase 1 y deja encargada una tarea de fase 2, de modo que el ejecutable escribe una línea.
-Está en `src/Hosting/samples/PackageInit`.
+Está en `src/Cli/samples/PackageInit`.
 
 ## Agrupar registros
 
@@ -405,4 +405,4 @@ valida sin quejarse no dice que el grafo entero esté bien: dice que lo inspecci
 ---
 
 **Ver también:** [DependencyInjection — Guía de uso](GUIDE.es.md) ·
-`src/Hosting/samples/PackageInit`
+`src/Cli/samples/PackageInit`
