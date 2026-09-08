@@ -23,7 +23,7 @@ Utilidades transversales para aplicaciones DAFce — punteros inteligentes, toke
 | `Daf.Activator` | Crear instancias de clases mediante RTTI |
 | `Daf.Arrays` | `TArrayHelper` (`Map`, `Trim`), `TSmartArray<T>` (estilo LINQ: `Where`, `Select`, `Contains`, `Sort`, …) |
 | `Daf.FilterSpec` | `TFilterSpec<T>` — predicado por clausuras, componible con `and` / `or` / `not` |
-| `Daf.Types` | Tipos base comunes |
+| `Daf.Types` | `TDeferred<T>` (se relee en cada acceso), `TMacrosList` (sustitución de `${nombre}`), `TEnvVars`, `Coalesce`, `Debugger` |
 
 ---
 

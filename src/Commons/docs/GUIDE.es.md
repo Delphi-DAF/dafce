@@ -14,6 +14,7 @@
 6. [Daf.Arrays](#dafarrays)
 7. [Daf.Nullable](#dafnullable)
 8. [Daf.Comparers](#dafcomparers)
+9. [Daf.Types](#daftypes)
 
 `Daf.SystemProcess` y `Daf.CmdLn.Parser` se documentaban aquí. La primera vive en un paquete propio
 —ver [SystemProcess](../../SystemProcess/README.es.md)—; la segunda se ha retirado, y la línea de
@@ -386,4 +387,118 @@ var PorEdad := TNullableComparers.Ordinal<Integer>;
 Sobre `TValue`, el NULL de SQL se modela como un `TValue` **vacío**, o uno de clase Variant con
 `Null` o `Unassigned`. Es sobre esto que `SQLCute.InMemory` construye su semántica ANSI de NULL —
 ver [SQLCute.InMemory](../../SQLCute.InMemory/README.es.md).
+
+---
+
+## Daf.Types
+
+### TDeferred\<T\>
+
+Un valor que se da directamente o como thunk, y que **se reevalúa en cada lectura**. Las
+conversiones implícitas son lo que hace intercambiables las dos formas en el punto de llamada:
+
+```pascal
+uses Daf.Types;
+
+var Origen := 'antes';
+
+var Fijo: TDeferred<string> := 'literal';
+var Vivo: TDeferred<string> := TFunc<string>(
+  function: string
+  begin
+    Result := Origen;
+  end);
+
+Origen := 'después';
+
+var A: string := Fijo;   // 'literal'
+var B: string := Vivo;   // 'después' — leído ahora, no cuando se registró
+```
+
+**No es `Lazy<T>`.** Ese memoriza: ejecuta el thunk una vez y se queda con la respuesta. Este lo
+ejecuta otra vez en cada lectura, que es lo que necesita la resolución de macros — una macro cuyo
+valor sigue algo que se mueve.
+
+**Ni es el `Expression<TDelegate>` de .NET.** Allí una expresión es un árbol inspeccionable; un
+`TDeferred<T>` es un closure y nadie puede mirar dentro. El árbol inspeccionable es `IExpr` y
+`TSpecification<T>`, en [Daf.Specification](../../Specification/README.es.md).
+
+`TMacroExpression` es `TDeferred<string>` con el nombre que usa la lista de macros.
+
+### TMacrosList
+
+Un conjunto de `TMacroExpression` con nombre, y la sustitución de `${nombre}` dentro de una cadena.
+
+```pascal
+var Macros := TMacrosList.Create;
+try
+  Macros['product'] := 'DAF';
+  Macros['edition'] := TFunc<string>(
+    function: string begin Result := EdicionActual; end);
+
+  Macros.ResolveMacros('${product} ${edition}');   // 'DAF Community'
+finally
+  Macros.Free;
+end;
+```
+
+| Miembro | Responde |
+|---------|----------|
+| `Value[Name]` (la propiedad por defecto) | Lee y escribe una macro. Leerla resuelve el thunk |
+| `ResolveMacros(Source, MaxRecursionLevel)` | Sustituye cada `${nombre}` de `Source`. Una macro cuyo valor nombra otra macro se resuelve también, hasta `MaxRecursionLevel` — 100 por defecto, que es lo que detiene a un par que se nombra mutuamente |
+| `Contains(Key)` `Count` | Qué hay registrado |
+| `Keys[I]` `ValueFromIndex[I]` | El orden de registro se conserva: la lista es un diccionario ordenado |
+
+### TEnvVars
+
+Las variables de entorno del proceso leídas a un diccionario, y escritas de vuelta como el bloque
+de entorno que recibe un proceso hijo.
+
+```pascal
+var Env := TEnvVars.Create;
+try
+  for var Pair in Env.Vars do
+    Writeln(Pair.Key, '=', Pair.Value);
+
+  Env.Refresh;             // volver a leer el sistema, por si cambió
+finally
+  Env.Free;
+end;
+```
+
+| Miembro | Responde |
+|---------|----------|
+| `Vars` | El diccionario recogido al construirse. `Refresh` vuelve a leer el sistema |
+| `Buffer` | El mismo conjunto como el bloque separado por nulos que espera `CreateProcess` |
+| `WriteTo(Buffer)` | Escribe ese bloque en un puntero de quien llama — así se le da a un proceso hijo un entorno con entradas añadidas al del padre |
+| `ClearBuffer` | Libera el bloque |
+
+`Daf.Configuration` lee `Vars` para convertir el entorno en una fuente de configuración, y
+`Daf.SystemProcess` usa `WriteTo` para entregarle a un hijo su propio entorno.
+
+### Coalesce
+
+La primera de varias referencias a interfaz que no es `nil`.
+
+```pascal
+var Elegido := Coalesce.From<ILogger>(Explicito, DelContenedor);
+var Primero := Coalesce.From<ILogger>([Explicito, DelContenedor, PorDefecto]);
+```
+
+Los dos argumentos se evalúan antes de la llamada, como en cualquier función: esto elige entre
+referencias que ya se tienen, y no es un cortocircuito.
+
+### Debugger
+
+```pascal
+Debugger.Write('caché cargada con %d entradas', [Count]);
+if Debugger.Enabled then
+  Debugger.Write(Informe);
+```
+
+| Miembro | Responde |
+|---------|----------|
+| `Write(Text)` / `Write(FmtStr, Args)` | Escribe en la salida de depuración del sistema. En Windows es `OutputDebugString`; **fuera de Windows no escribe nada** — para un destino que sí funcione allí, ver `TPlatformLogBootstrapSink` en [Daf.FMX](../../FMX/README.es.md) |
+| `Enabled` | Si hay un depurador **enganchado** (`System.DebugHook`). No si el build es Debug |
+| `CurrentProcessId` `CurrentThreadId` | Los ids, para un informe que tenga que decir qué proceso o qué hilo lo escribió |
 

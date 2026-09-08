@@ -14,6 +14,7 @@
 6. [Daf.Arrays](#dafarrays)
 7. [Daf.Nullable](#dafnullable)
 8. [Daf.Comparers](#dafcomparers)
+9. [Daf.Types](#daftypes)
 
 `Daf.SystemProcess` and `Daf.CmdLn.Parser` used to be documented here. The first lives in a package
 of its own — see [SystemProcess](../../SystemProcess/README.md); the second has been withdrawn, and
@@ -383,4 +384,118 @@ var ByAge := TNullableComparers.Ordinal<Integer>;
 Over `TValue`, SQL NULL is modelled as an **empty** `TValue`, or a Variant-kind one holding `Null`
 or `Unassigned`. This is what `SQLCute.InMemory` builds its ANSI NULL semantics on — see
 [SQLCute.InMemory](../../SQLCute.InMemory/README.md).
+
+---
+
+## Daf.Types
+
+### TDeferred\<T\>
+
+A value given either directly or as a thunk, and **re-evaluated on every read**. The implicit
+conversions are what make the two forms interchangeable at the call site:
+
+```pascal
+uses Daf.Types;
+
+var Source := 'before';
+
+var Fixed: TDeferred<string> := 'literal';
+var Live: TDeferred<string> := TFunc<string>(
+  function: string
+  begin
+    Result := Source;
+  end);
+
+Source := 'after';
+
+var A: string := Fixed;   // 'literal'
+var B: string := Live;    // 'after' — read now, not when it was registered
+```
+
+**It is not `Lazy<T>`.** That one memoizes: it runs the thunk once and keeps the answer. This one
+runs it again on each read, which is what macro resolution needs — a macro whose value tracks
+something that moves.
+
+**Nor is it .NET's `Expression<TDelegate>`.** An expression there is an inspectable tree; a
+`TDeferred<T>` is a closure and nothing can look inside it. The inspectable tree is `IExpr` and
+`TSpecification<T>` in [Daf.Specification](../../Specification/README.md).
+
+`TMacroExpression` is `TDeferred<string>` under the name the macro list uses.
+
+### TMacrosList
+
+A named set of `TMacroExpression`, and the substitution of `${name}` inside a string.
+
+```pascal
+var Macros := TMacrosList.Create;
+try
+  Macros['product'] := 'DAF';
+  Macros['edition'] := TFunc<string>(
+    function: string begin Result := CurrentEdition; end);
+
+  Macros.ResolveMacros('${product} ${edition}');   // 'DAF Community'
+finally
+  Macros.Free;
+end;
+```
+
+| Member | Answers |
+|--------|---------|
+| `Value[Name]` (the default property) | Reads and writes a macro. Reading resolves the thunk |
+| `ResolveMacros(Source, MaxRecursionLevel)` | Substitutes every `${name}` in `Source`. A macro whose value names another macro is resolved too, up to `MaxRecursionLevel` — 100 by default, which is what stops a pair that names each other |
+| `Contains(Key)` `Count` | What is registered |
+| `Keys[I]` `ValueFromIndex[I]` | Registration order is kept: the list is an ordered dictionary |
+
+### TEnvVars
+
+The process's environment variables read into a dictionary, and written back out as the
+environment block a child process takes.
+
+```pascal
+var Env := TEnvVars.Create;
+try
+  for var Pair in Env.Vars do
+    Writeln(Pair.Key, '=', Pair.Value);
+
+  Env.Refresh;             // read the system again, in case it moved
+finally
+  Env.Free;
+end;
+```
+
+| Member | Answers |
+|--------|---------|
+| `Vars` | The dictionary collected at construction. `Refresh` reads the system again |
+| `Buffer` | The same set as the null-separated block `CreateProcess` expects |
+| `WriteTo(Buffer)` | Writes that block into a caller's pointer — how a child process is given an environment with entries added to the parent's |
+| `ClearBuffer` | Releases the block |
+
+`Daf.Configuration` reads `Vars` to turn the environment into a configuration source, and
+`Daf.SystemProcess` uses `WriteTo` to hand a child its own environment.
+
+### Coalesce
+
+The first of several interface references that is not `nil`.
+
+```pascal
+var Chosen := Coalesce.From<ILogger>(Explicit, FromContainer);
+var First  := Coalesce.From<ILogger>([Explicit, FromContainer, Fallback]);
+```
+
+Both arguments are evaluated before the call, as in any function: this picks between references
+already held, and it is not a short-circuit.
+
+### Debugger
+
+```pascal
+Debugger.Write('cache primed with %d entries', [Count]);
+if Debugger.Enabled then
+  Debugger.Write(Report);
+```
+
+| Member | Answers |
+|--------|---------|
+| `Write(Text)` / `Write(FmtStr, Args)` | Writes to the system debug output. On Windows that is `OutputDebugString`; **outside Windows it writes nothing** — for a destination that works there, see `TPlatformLogBootstrapSink` in [Daf.FMX](../../FMX/README.md) |
+| `Enabled` | Whether a debugger is **attached** (`System.DebugHook`). Not whether the build is a Debug one |
+| `CurrentProcessId` `CurrentThreadId` | The ids, for a report that has to say which process or thread wrote it |
 
