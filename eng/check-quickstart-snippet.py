@@ -41,6 +41,12 @@ Line endings: the comparison is on normalized text, because the source is CRLF-w
 document is CRLF, and a check that fails over invisible bytes gets ignored -- which is worse than
 not having it.
 
+But --write has to WRITE those bytes back, and normalizing is exactly what it must not do. It used
+to decode with utf-8-sig and encode without, so every document that carries a BOM lost it -- 25 of
+them in this repo, and nothing reports a BOM that went missing. Measured the day two citations were
+added: the rewrite stripped the BOM from a sample README and the only reason it was caught was
+comparing against git. So the BOM is now preserved per file, and the CRLF conversion stays explicit.
+
 Usage:
     python3 eng/check-quickstart-snippet.py            # gate: rc=1 on any mismatch
     python3 eng/check-quickstart-snippet.py --write     # rewrite the blocks from the sources
@@ -62,6 +68,10 @@ def normalize(text: str) -> str:
 
 def read(path: pathlib.Path) -> str:
     return path.read_bytes().decode('utf-8-sig', errors='replace')
+
+
+def has_bom(path: pathlib.Path) -> bool:
+    return path.read_bytes().startswith(b'\xef\xbb\xbf')
 
 
 # Build leftovers and the git directory. Everything else is fair game on purpose: scanning the
@@ -125,10 +135,12 @@ def main(argv):
                     f'      rerun with --write to copy it over')
 
         if write_mode and replacements:
+            bom = has_bom(doc)
             lines = read(doc).replace('\r\n', '\n').split('\n')
             for first, last, new in reversed(replacements):
                 lines[first:last] = new
-            doc.write_bytes(('\n'.join(lines)).replace('\n', '\r\n').encode('utf-8'))
+            out = ('\n'.join(lines)).replace('\n', '\r\n').encode('utf-8')
+            doc.write_bytes(b'\xef\xbb\xbf' + out if bom else out)
             rewritten += 1
 
     if not cited:

@@ -94,6 +94,62 @@ B.Logging.AddProvider(TNNLogLoader.BuildProvider(
 ExitCode := B.Build.Run;
 ```
 
+## El programa completo
+
+Lo de arriba es el fragmento que explica la forma. Este es el `.dpr` que compila, íntegro:
+
+<!-- quickstart: src/samples/HostedService/HostedService.dpr -->
+
+```pascal
+program HostedService;
+
+{$APPTYPE CONSOLE}
+{$STRONGLINKTYPES ON}
+uses
+  System.SysUtils,
+  System.IOUtils,
+  Daf.Extensions.Logging,
+  Daf.Logging.Provider,
+  Daf.NNLog.Loader,
+  Daf.NNLog.Targets.Console,
+  Daf.NNLog.Targets.File_,
+  Daf.NNLog.Targets.UDP,
+  Daf.Extensions.DependencyInjection,
+  // Por AddHostedService, que es metodo del record helper que declara esta unit.
+  Daf.Extensions.Hosting,
+  Daf.Extensions.Configuration,
+  Daf.Configuration.Json,
+  Daf.CommandLine,
+  Daf.Configuration.CommandLine,
+  Daf.Cli,
+  HostedWorker in 'HostedWorker.pas';
+
+begin
+  ReportMemoryLeaksOnShutdown := True;
+  try
+    var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
+
+    // El entorno YA responde: no hace falta un callback para poder leerlo. Esta es la linea
+    // que antes costaba un ConfigureAppConfiguration entero.
+    var JsonFilePath := TPath.Combine(B.Environment.BinPath, B.Environment.ApplicationName, 'appsettings.json');
+    JsonConfig.AddFile(B.Configuration, JsonFilePath);
+
+    // Y la configuracion tambien: el proveedor de log se compone leyendo lo que se acaba de anadir.
+    B.Logging.AddProvider(TNNLogLoader.BuildProvider(B.Environment, B.Configuration.GetSection('Logging:NLog')));
+
+    B.Services.AddHostedService<THostedWorker>;
+
+    ExitCode := B.Build.Run;
+  except
+    on E: Exception do
+    begin
+      Write(E.Message);
+      ReadLn;
+    end;
+  end;
+end.
+```
+
 ## Flujo de Ejecución
 
 1. **Inicio del Servicio**:
