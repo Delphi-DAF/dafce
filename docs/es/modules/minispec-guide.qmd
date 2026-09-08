@@ -100,6 +100,12 @@ lang: es
 ## Línea de Comandos
 
 {{< include ../../../src/MiniSpec/docs/guide/cli.es.md >}}
+
+---
+
+## Ejecuciones anidadas
+
+{{< include ../../../src/MiniSpec/docs/guide/nested-runs.es.md >}}
 ---
 
 ## Testing Patterns

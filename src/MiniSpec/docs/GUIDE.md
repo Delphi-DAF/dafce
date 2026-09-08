@@ -38,6 +38,7 @@ Welcome to the MiniSpec guide, the BDD framework for Delphi.
 ### Execution and Output
 - [**Reporters**](guide/reporters.md) — Console, JSON, JUnit, Gherkin, Live Dashboard
 - [**Command Line**](guide/cli.md) — Execution options
+- [**Nested Runs**](guide/nested-runs.md) — `TSpecRun`: a suite run inside another one
 
 ---
 

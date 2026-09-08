@@ -77,4 +77,4 @@ port=8080
 
 ---
 
-[← Reporters](reporters.es.md) | [Volver a la Guía →](../GUIDE.es.md)
+[← Reporters](reporters.es.md) | [Siguiente: Ejecuciones anidadas →](nested-runs.es.md)
