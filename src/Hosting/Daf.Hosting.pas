@@ -153,7 +153,6 @@ type
     constructor Create(const Args: TArray<string> = nil;
       const Configuration: IConfigurationManager = nil);
     destructor Destroy;override;
-    function AddHostedService<T: class, IHostedService>: IHostApplicationBuilder;
     function Build: IHost;
     property Services: IServiceCollection read GetServices;
     property Configuration: IConfigurationManager read GetConfiguration;
@@ -521,13 +520,6 @@ begin
   // de composicion en toda aplicacion que no configure logging.
   FLoggingTouched := True;
   Result := FLogging;
-end;
-
-function THostBuilder.AddHostedService<T>: IHostApplicationBuilder;
-begin
-  Assert(Supports(T, IHostedService));
-  Result := Self;
-  FServices.AddSingleton<IHostedService, T>;
 end;
 
 procedure THostBuilder.InitializeHostConfiguration;

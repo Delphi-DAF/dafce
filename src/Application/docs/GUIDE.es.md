@@ -129,15 +129,15 @@ Dos formas que conviene nombrar, porque las dos se equivocan con facilidad:
 ## TDafApplicationBuilder
 
 `TDafApplicationBuilder` extiende `THostBuilder`, así que hereda toda su superficie:
-`Services`, `Configuration`, `Environment`, `Logging`, `Properties` y `AddHostedService<T>`. Lo
-que añade es un `Build` que devuelve la aplicación:
+`Services`, `Configuration`, `Environment`, `Logging` y `Properties`. Lo que añade es un `Build`
+que devuelve la aplicación:
 
 ```pascal
 var Builder := TDafApplication.CreateHostBuilder;
 
 JsonConfig.AddFile(Builder.Configuration, 'appsettings.json');
 
-Builder.AddHostedService<TWorker>;
+Builder.Services.AddHostedService<TWorker>;
 Builder.Services.AddTransient<IMyService, TMyService>;
 
 Builder.Build.Run(True);
