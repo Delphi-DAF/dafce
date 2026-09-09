@@ -119,10 +119,6 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 
 ## [1.6.0] - 2026-07-20
 
-### Fixed
-
-- **SQLCute**: `SqlServerCompiler` no emitía la cláusula `TOP` cuando se especificaba `LIMIT` sin `OFFSET`
-
 ### Added
 
 - **MediatR**: Pipeline behaviors — `TPipelineBehavior<TRequest, TResponse>` con descubrimiento RTTI automático; soporte para behaviors globales y específicos por tipo de request
@@ -138,8 +134,13 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 - **MiniSpec**: Flag `--strict-pending`: hace que specs pendientes cuenten como fallo del proceso
 - **MiniSpec**: Console reporter progresivo — Feature y Scenario se emiten al encontrarse, steps con símbolos Gherkin (`✓ ✗ ~ P ?`) al completarse
 
+### Changed
+
+- **MiniSpec**: Pie de resumen renombrado de `Pass/Fail/Skip` a `Passed/Failed/Pending/Undefined/Skipped`
+
 ### Fixed
 
+- **SQLCute**: `SqlServerCompiler` no emitía la cláusula `TOP` cuando se especificaba `LIMIT` sin `OFFSET`
 - **MediatR**: Closure variable capture bug en la cadena de behaviors
 - **MediatR**: Descubrimiento de behaviors globales con `StrictExtensions=False`
 - **MediatR**: Warnings de ocultación en jerarquía `TPipelineBehavior`
@@ -147,25 +148,6 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 - **MiniSpec**: Tabla de ejemplos de Outline: cabecera desalineada respecto a las filas de datos
 - **MiniSpec**: Features sin escenarios ejecutados aparecían igualmente al filtrar con `-f`; ahora se suprimen en todos los reporters (console, JSON, Gherkin, JUnit)
 - **MiniSpec**: Pie de resumen pegado a la última línea Gherkin; ahora lleva una línea en blanco antes
-
-### Changed
-
-- **MiniSpec**: Pie de resumen renombrado de `Pass/Fail/Skip` a `Passed/Failed/Pending/Undefined/Skipped`
-- **MiniSpec**: `MarkAsSkipped` / `MarkAsUndefined` en `ISpecItem`
-- **MiniSpec**: `UndefinedCount` en el runner y en el pie de resumen
-- **MiniSpec**: Flag `--strict-pending`: hace que specs pendientes cuenten como fallo del proceso
-- **MiniSpec**: Console reporter progresivo — Feature y Scenario se emiten al encontrarse, steps con símbolos Gherkin (`✓ ✗ ~ P ?`) al completarse
-
-### Fixed
-
-- **MiniSpec**: Step sin lambda en `ScenarioOutline` se trataba como `Undefined`; ahora es no-op (display-only) porque `ExampleInit` inyecta los valores vía RTTI
-- **MiniSpec**: Tabla de ejemplos de Outline: cabecera desalineada respecto a las filas de datos
-- **MiniSpec**: Features sin escenarios ejecutados aparecían igualmente al filtrar con `-f`; ahora se suprimen en todos los reporters (console, JSON, Gherkin, JUnit)
-- **MiniSpec**: Pie de resumen pegado a la última línea Gherkin; ahora lleva una línea en blanco antes
-
-### Changed
-
-- **MiniSpec**: Pie de resumen renombrado de `Pass/Fail/Skip` a `Passed/Failed/Pending/Undefined/Skipped`
 
 ## [1.5.0] - 2026-03-20
 
@@ -292,7 +274,8 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 - MiniSpec BDD testing framework
 - Sample projects: Calculator, Config, Console, HostedService, Mastermind, MediatR, Ping
 
-[Unreleased]: https://github.com/Delphi-DAF/dafce/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/Delphi-DAF/dafce/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/Delphi-DAF/dafce/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/Delphi-DAF/dafce/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/Delphi-DAF/dafce/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/Delphi-DAF/dafce/compare/v1.2.0...v1.3.0
