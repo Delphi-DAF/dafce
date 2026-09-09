@@ -1,5 +1,7 @@
 ﻿# Changelog
 
+**🌍 Language: English | [Español](CHANGELOG.es.md)**
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
@@ -8,159 +10,160 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
 ## [Unreleased]
 
-Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` en español).
+The changes that break compilation are collected, with their example diff, in `MIGRATION-2.0.md`
+(`MIGRATION-2.0.es.md` in Spanish).
 
 ### Added
 
-- **DependencyInjection**: Servicios con clave — dos implementaciones del mismo contrato distinguidas por una clave, con el juego `AddKeyed*` / `TryAddKeyed*` / `GetKeyed*` de .NET
-- **DependencyInjection**: Inyección por propiedad — `[DafInject]` en la propiedad y el contenedor la rellena cuando el constructor ya ha terminado, así que **un ciclo entre dos servicios es resoluble**
-- **DependencyInjection**: `TActivatorUtilities.InjectInto` — cablea una instancia que el contenedor no construyó, como un formulario que crea la plataforma, sin tomar posesión de ella
-- **DependencyInjection**: `AddInjector<T>` — cablear por código, sin atributos y sin RTTI, así que llega a una clase de otra librería
-- **DependencyInjection**: `IOptions<T>` — un servicio pide sus ajustes en el constructor y los recibe construidos y validados, de `AppOptions.Configure<T>` o de una sección de configuración
-- **DependencyInjection**: Genéricos abiertos — `AddSingleton<IRepo<_>, TRepo<_>>` sirve a todos los cierres del contrato. Qué cubre y qué no, en el README
-- **DependencyInjection**: `ValidateOnBuild` y `ValidateScopes`, opt-in en `BuildServiceProvider(TServiceProviderOptions)` — el grafo se comprueba al construir y reporta todos los fallos juntos. Los registros por factory quedan fuera
-- **DependencyInjection**: Mejoras en la composición de la colección
-  - `TryAddSingleton` / `TryAddScoped` / `TryAddTransient`, `Replace` y `RemoveAll`, con la semántica de .NET
-  - `Descriptors` — los registros de un servicio, en sólo lectura
-  - `Decorate<S>` — envuelve los registros existentes conservando su ciclo de vida
-  - `AddModule<T>` y `AddModule(Module)` — registros agrupados en una clase, aplicados en el orden escrito
-  - `IContainerAccess.OwnedInstanceCount` — cuántos objetos sigue poseyendo el contenedor, para afirmar «se liberó todo»
-- **Logging**: `ILogger.IsEnabled(Level)` — preguntar si una entrada de ese nivel llegaría a algún destino antes de construir sus argumentos
-- **Logging**: `ILogger<T>` — un servicio lo pide por constructor y recibe un registrador con su propia categoría
-- **Logging**: Canal de arranque — un `ILogger` desde la primera línea del proceso, sin inyección de dependencias y sin configuración, para la fase anterior a `BuildServiceProvider`: informa con `BootstrapLog.LoggerFor` y añade destinos con `BootstrapLog.AddSink`. El catálogo de destinos, en el README
-- **Logging**: `Builder.AddNullProvider` — descartar las entradas a propósito, dicho al componer
-- **Configuration**: Cuarto proveedor, la línea de comandos — `CommandLineConfig.AddArgs`, en `Daf.Configuration.CommandLine`, lee los argumentos del proceso como claves. Las formas admitidas, en el README
-- **Configuration**: `ConfigOptions.Bind<T>` — una sección llega tipada y con dueño a quien la necesita, y el servicio deja de nombrar su sección: la decide el arranque
-- **Hosting**: `IStartupTask` y `AddStartupTask<T>` — inicialización que corre una vez al arrancar, con el proveedor ya construido y antes de los `IHostedService`. Si una falla, el arranque aborta
-- **Hosting**: `THost.CreateBuilder` e `IGenericHostBuilder` — el punto de entrada del host genérico, en la forma de la familia: `var Builder := THost.CreateBuilder;`. `THostBuilder.Create` sigue existiendo, y encadenar sobre él sigue fugando la instancia
-- **Application**: La familia de aplicaciones — `TCliApplication` (`Daf.Cli`), `TVclApplication` (`Daf.VCL`), `TFmxApplication` (`Daf.FMX`) y `TWebApplication` (`Daf.Web`): el mismo arranque hasta que la plataforma toma el bucle, y alrededor de `Run` el código de salida y los metadatos de versión. FMX no añade targets: siguen siendo Win32 y Win64
-- **MiniSpec**: `TSpecRun` — una ejecución con suite, contexto, inyector y runner propios, lanzable dentro de otra sin alterar sus recuentos ni su informe
-- **MiniSpec**: `--allow-undefined` — un step undefined deja de fijar el código de salida; `MiniSpec.AllowUndefined(True)` lo declara en la suite. Por defecto rompe
-- **MiniSpec**: `SpecContext.ScenarioContext` devuelve el World del escenario, y un `[MiniInject]` de su tipo lo recibe
-- **NNLog**: El proveedor se puede construir con ajustes escritos con código, y no solo leídos de una sección
-- **SQLCute**: Mejoras en el constructor de consultas
-  - `WhereNot(Callback)` y `OrWhereNot(Callback)` — grupos WHERE negados como una unidad, `NOT (…)`
-  - Orden de NULL por columna — `OrderBy` / `OrderByDesc` con `TNullsOrder`, y `NullsFirst` / `NullsLast`
-- **Commons**: Utilidades nuevas
-  - `TNullable<T>` en `Daf.Nullable`
-  - `TDeferredEnumerable<T>` y `TGeneratorEnumerator<T>` en `Daf.Enumerable`
-  - `Daf.Comparers` — comparadores conscientes de NULL para `TValue` y `TNullable<T>`
-- **Daf.CommandLine**: Módulo nuevo — porting de `System.CommandLine` de .NET, con `--help` y `--version` integrados
-- **Daf.Linq**: Módulo nuevo — el equivalente de LINQ-to-Objects: secuencias perezosas sobre `System.IEnumerable<T>`, con `TQuery<T>` y `Linq.From<T>`
-- **Daf.Specification**: Módulo nuevo — el patrón Specification: `TSpecification<T>` reúne filtro, orden y paginación en una regla reutilizable y afirmable sin base de datos, con `IRepository<T>` como puerto
-- **SQLCute.InMemory**: Módulo nuevo — segundo back-end: ejecuta un `IQuery` sobre colecciones cargadas —JOINs, GROUP BY, subconsultas, operaciones de conjunto— con semántica ANSI de NULL
-- **SQLCute.Specification**: Módulo nuevo — baja una `Specification` entera a un `IQuery`, así que la misma regla va a la base de datos o a una colección cargada
-- **Daf.Web**: Paquete nuevo — servidor HTTP ligero sobre Indy y WebBroker, con controladores enrutados por atributos y construidos por el contenedor. El paquete **no enlaza DataSnap ni DBX**
-- **Samples**: `QuickStart`, `ServiceWiring` y `PackageInit` (Cli); `HostQuickStart` y `StartupReport` (Hosting)
-- **Docs**: «Composición del arranque», el AST público de `SQLCute.Abstractions`, y el criterio de reparto de los paquetes de logging (EN/ES)
+- **DependencyInjection**: Keyed services — two implementations of the same contract told apart by a key, with .NET's `AddKeyed*` / `TryAddKeyed*` / `GetKeyed*` set
+- **DependencyInjection**: Property injection — `[DafInject]` on the property and the container fills it once the constructor has finished, which makes **a cycle between two services resolvable**
+- **DependencyInjection**: `TActivatorUtilities.InjectInto` — wires an instance the container did not build, such as a form the platform creates, without taking ownership of it
+- **DependencyInjection**: `AddInjector<T>` — wiring in code, with no attributes and no RTTI, so it reaches a class from another library
+- **DependencyInjection**: `IOptions<T>` — a service asks for its settings in the constructor and gets them built and validated, from `AppOptions.Configure<T>` or from a configuration section
+- **DependencyInjection**: Open generics — `AddSingleton<IRepo<_>, TRepo<_>>` serves every closure of the contract. What it covers and what it does not, in the README
+- **DependencyInjection**: `ValidateOnBuild` and `ValidateScopes`, opt-in on `BuildServiceProvider(TServiceProviderOptions)` — the graph is checked at build time and every failure is reported together. Factory registrations are left out
+- **DependencyInjection**: Improvements to composing the collection
+  - `TryAddSingleton` / `TryAddScoped` / `TryAddTransient`, `Replace` and `RemoveAll`, with .NET's semantics
+  - `Descriptors` — a service's registrations, read-only
+  - `Decorate<S>` — wraps the existing registrations keeping their lifetime
+  - `AddModule<T>` and `AddModule(Module)` — registrations grouped in a class, applied in the order written
+  - `IContainerAccess.OwnedInstanceCount` — how many objects the container still owns, to assert "everything was released"
+- **Logging**: `ILogger.IsEnabled(Level)` — asking whether an entry of that level would reach any sink before building its arguments
+- **Logging**: `ILogger<T>` — a service asks for it by constructor and gets a logger carrying its own category
+- **Logging**: Bootstrap channel — an `ILogger` from the process's first line, with no dependency injection and no configuration, for the phase before `BuildServiceProvider`: report with `BootstrapLog.LoggerFor` and add sinks with `BootstrapLog.AddSink`. The sink catalogue, in the README
+- **Logging**: `Builder.AddNullProvider` — discarding entries on purpose, stated while composing
+- **Configuration**: A fourth provider, the command line — `CommandLineConfig.AddArgs`, in `Daf.Configuration.CommandLine`, reads the process arguments as keys. The accepted forms, in the README
+- **Configuration**: `ConfigOptions.Bind<T>` — a section arrives typed and owned to whoever needs it, and the service stops naming its section: startup decides it
+- **Hosting**: `IStartupTask` and `AddStartupTask<T>` — initialization that runs once at startup, with the provider already built and before the `IHostedService`s. If one fails, startup aborts
+- **Hosting**: `THost.CreateBuilder` and `IGenericHostBuilder` — the generic host's entry point, in the family's shape: `var Builder := THost.CreateBuilder;`. `THostBuilder.Create` still exists, and chaining off it still leaks the instance
+- **Application**: The application family — `TCliApplication` (`Daf.Cli`), `TVclApplication` (`Daf.VCL`), `TFmxApplication` (`Daf.FMX`) and `TWebApplication` (`Daf.Web`): the same startup up to where the platform takes over the loop, and around `Run` the exit code and the version metadata. FMX adds no targets: they are still Win32 and Win64
+- **MiniSpec**: `TSpecRun` — a run with its own suite, context, injector and runner, launchable inside another without disturbing its counts or its report
+- **MiniSpec**: `--allow-undefined` — an undefined step stops setting the exit code; `MiniSpec.AllowUndefined(True)` declares it in the suite. By default it breaks
+- **MiniSpec**: `SpecContext.ScenarioContext` returns the scenario's World, and a `[MiniInject]` of its type receives it
+- **NNLog**: The provider can be built with settings written in code, not only read from a section
+- **SQLCute**: Improvements to the query builder
+  - `WhereNot(Callback)` and `OrWhereNot(Callback)` — WHERE groups negated as a unit, `NOT (…)`
+  - Per-column NULL ordering — `OrderBy` / `OrderByDesc` with `TNullsOrder`, and `NullsFirst` / `NullsLast`
+- **Commons**: New utilities
+  - `TNullable<T>` in `Daf.Nullable`
+  - `TDeferredEnumerable<T>` and `TGeneratorEnumerator<T>` in `Daf.Enumerable`
+  - `Daf.Comparers` — NULL-aware comparers for `TValue` and `TNullable<T>`
+- **Daf.CommandLine**: New module — a port of .NET's `System.CommandLine`, with `--help` and `--version` built in
+- **Daf.Linq**: New module — the LINQ-to-Objects equivalent: lazy sequences over `System.IEnumerable<T>`, with `TQuery<T>` and `Linq.From<T>`
+- **Daf.Specification**: New module — the Specification pattern: `TSpecification<T>` gathers filter, order and paging into a reusable rule that can be asserted without a database, with `IRepository<T>` as the port
+- **SQLCute.InMemory**: New module — a second back-end: runs an `IQuery` over loaded collections —JOINs, GROUP BY, subqueries, set operations— with ANSI NULL semantics
+- **SQLCute.Specification**: New module — lowers a whole `Specification` onto an `IQuery`, so the same rule goes to the database or to a loaded collection
+- **Daf.Web**: New package — a lightweight HTTP server over Indy and WebBroker, with controllers routed by attributes and built by the container. The package **links neither DataSnap nor DBX**
+- **Samples**: `QuickStart`, `ServiceWiring` and `PackageInit` (Cli); `HostQuickStart` and `StartupReport` (Hosting)
+- **Docs**: "Startup composition", the public AST of `SQLCute.Abstractions`, and the criterion behind splitting the logging packages (EN/ES)
 
 ### Changed
 
-- ⚠️ **DependencyInjection**: `Replace` y `RemoveAll` alcanzan solo los registros **sin clave**; para los otros está `RemoveAllKeyed`. **Rompe** en verde a quien los use para desmontar registros en un arnés de specs: desmonta menos que antes
-- ⚠️ **DependencyInjection**: Soltar un ámbito **destruye los servicios Scoped que creó**. Antes los retenía hasta cerrarse, así que un ámbito por petición acumulaba una instancia por petición. **Rompe** a quien guardase una referencia a un Scoped sin sostenerla
-- ⚠️ **DependencyInjection**: La resolución **publica la instancia antes de rellenar sus propiedades**, participe o no en la inyección por propiedad. **Rompe** el constructor que resuelve su propio servicio: recibe la instancia a medio construir en vez de recursar sin fondo
-- ⚠️ **DependencyInjection**: Cerrar el contenedor **vacía las propiedades inyectadas** de lo que posee antes de soltar nada, para que dos servicios que se inyectaron mutuamente se destruyan
-- ⚠️ **DependencyInjection**: Un registro repetido **pasa a dar dos instancias**; pedirlos todos devolvía la primera dos veces. Resolver uno solo y el orden de cierre no cambian
-- ⚠️ **Logging**: Una línea que ningún destino aceptaría **deja de componerse**: el nivel se decide antes de analizar la plantilla. `ILogger` gana `IsEnabled`, y eso **rompe** a quien implemente el contrato sin heredar de `TLogger`
-- ⚠️ **SQLCute**: Una consulta **declara** qué sentencia es —`IQuery.Kind`, con `Select` por defecto— en vez de deducirse de sus cláusulas; declarar dos se queda con el último, donde antes ganaba el primero. El miembro nuevo **rompe** a quien implemente `IQuery` por su cuenta
-- ⚠️ **MiniSpec**: `[Inject]` pasa a llamarse **`[MiniInject]`** y viaja en la facade, así que `uses Daf.MiniSpec` basta para marcar
-- ⚠️ **MiniSpec**: `TInjectorService` deja de admitir servicios sueltos: es una instancia de la ejecución con los tres ámbitos, `Register(Scope, Instance)`. El colaborador que necesite un escenario se construye en el World
-- ⚠️ **MiniSpec**: Cuando más de un contexto satisface un `[MiniInject]`, gana el más cercano al step —escenario, feature, suite—, y una coincidencia exacta gana a cualquier descendiente
-- **DependencyInjection**: Un tipo de servicio ya no necesita estar visible a la reflexión para resolverse: antes se registraba sin protestar y reventaba al resolver, lejos de su causa
-- **Commons**: El módulo pasa a contener **solo lo que extiende la biblioteca estándar**
-  - `Daf.SystemProcess` sale al paquete nuevo del mismo nombre, sin cambiar de unidad ni de tipos
-  - `Daf.CmdLn.Parser` sale por el mismo criterio, y no continúa: la línea de comandos es `Daf.CommandLine`, con otro API
-  - `TExpresion<T>` pasa a llamarse **`TDeferred<T>`** y se muda a `Daf.Types`; `TMacroExpression` sigue siendo el alias
-  - `TFilterSpec<T>`, el filtro por clausuras, pasa a su propia unidad `Daf.FilterSpec`
-  - `TSmartArray<T>.Select` toma `TFunc<T, TTarget>` en lugar de `TDeferred<TMapper<T, TTarget>>`
-  - `Daf.Enumerable.ToArray` pasa de O(n²) a O(n)
-- **SQLCute**: De **5 paquetes a 4**: los seis compiladores de dialecto se integran en `Daf.SQLCute` y `Daf.SQLCute.Compilers` desaparece. Las unidades no cambian; quien lo referenciara en un `requires` o un `DCCReference` debe usar `Daf.SQLCute`
-- **SQLCute**: `CompileWhere` y `CompileHaving` emiten paréntesis explícitos de precedencia
-- **Hosting**: `THost.Start` y `THost.Stop` informan por el pipeline de `ILogger` —el canal de arranque queda de respaldo—, y los informes de DAF salen bajo la categoría de la clase que informa en vez de bajo `DAF`
-- **Logging**: Componer el pipeline sin un solo proveedor **falla al construir el host**, con `ELoggingCompositionError`, en vez de entregar un `ILogger` que acepta todo y no escribe nada. El silencio deliberado se declara con `AddNullProvider`
-- **Logging**: Un destino del canal de arranque que no puede escribir **se declara no disponible** en lugar de aceptar el informe y perderlo, y uno que lanza queda fuera sin tumbar el arranque. `BootstrapLog.HasAvailableSink` lo distingue
-- **Samples**: Cada sample se archiva bajo el módulo que declara lo que usa: `ConsoleSample` a `src/Cli/samples/`, `TicTacToeApp` a `src/VCL/samples/`, y `HostedService` a `src/samples/`
+- ⚠️ **DependencyInjection**: `Replace` and `RemoveAll` now reach only the registrations **without a key**; for the others there is `RemoveAllKeyed`. **Breaks**, and stays green, whoever uses them to tear a registration down in a spec harness: it tears down less than before
+- ⚠️ **DependencyInjection**: Releasing a scope **destroys the Scoped services it created**. The container used to retain them until it closed, so one scope per request piled up one instance per request. **Breaks** whoever kept a reference to a Scoped service without holding it
+- ⚠️ **DependencyInjection**: Resolution **publishes the instance before filling its properties**, whether or not it takes part in property injection. **Breaks** the constructor that resolves its own service: it now receives the half-built instance instead of recursing without end
+- ⚠️ **DependencyInjection**: Shutting the container down **clears the injected properties** of what it owns before releasing anything, so that two services that injected each other are destroyed
+- ⚠️ **DependencyInjection**: A repeated registration **now gives two instances**; asking for all of them returned the first one twice. Resolving a single one, and the shutdown order, do not change
+- ⚠️ **Logging**: A line no sink would accept **stops being composed**: the level is decided before parsing the template. `ILogger` gains `IsEnabled`, which **breaks** whoever implements the contract without inheriting from `TLogger`
+- ⚠️ **SQLCute**: A query **declares** which statement it is —`IQuery.Kind`, `Select` by default— instead of being inferred from its clauses; declaring two keeps the last one, where the first used to win. The new member **breaks** whoever implements `IQuery` on their own
+- ⚠️ **MiniSpec**: `[Inject]` is renamed to **`[MiniInject]`** and travels in the facade, so `uses Daf.MiniSpec` is enough to mark
+- ⚠️ **MiniSpec**: `TInjectorService` no longer takes loose services: it is an instance of the run with the three scopes, `Register(Scope, Instance)`. A collaborator that needs a scenario is built in the World
+- ⚠️ **MiniSpec**: When more than one context satisfies a `[MiniInject]`, the nearest to the step wins —scenario, feature, suite—, and an exact match beats any descendant
+- **DependencyInjection**: A service type no longer needs to be visible to reflection in order to resolve: it used to register without complaint and blow up on resolution, far from its cause
+- **Commons**: The module now holds **only what extends the standard library**
+  - `Daf.SystemProcess` moves out to the new package of the same name, with no change of unit or types
+  - `Daf.CmdLn.Parser` moves out on the same criterion, and does not continue: the command line is `Daf.CommandLine`, with a different API
+  - `TExpresion<T>` is renamed to **`TDeferred<T>`** and moves to `Daf.Types`; `TMacroExpression` is still the alias
+  - `TFilterSpec<T>`, the closure-based filter, moves to its own unit `Daf.FilterSpec`
+  - `TSmartArray<T>.Select` takes `TFunc<T, TTarget>` instead of `TDeferred<TMapper<T, TTarget>>`
+  - `Daf.Enumerable.ToArray` goes from O(n²) to O(n)
+- **SQLCute**: From **5 packages to 4**: the six dialect compilers move into `Daf.SQLCute` and `Daf.SQLCute.Compilers` disappears. The units keep their names; whoever referenced that package in a `requires` or a `DCCReference` must use `Daf.SQLCute`
+- **SQLCute**: `CompileWhere` and `CompileHaving` emit explicit precedence parentheses
+- **Hosting**: `THost.Start` and `THost.Stop` report through the `ILogger` pipeline —the bootstrap channel stays as a fallback—, and DAF's own reports come out under the category of the class reporting instead of under `DAF`
+- **Logging**: Composing the pipeline without a single provider **fails at host build time**, with `ELoggingCompositionError`, instead of handing out an `ILogger` that accepts everything and writes nothing. Deliberate silence is declared with `AddNullProvider`
+- **Logging**: A bootstrap-channel sink that cannot write **declares itself unavailable** instead of accepting the report and losing it, and one that raises is left out without taking startup down. `BootstrapLog.HasAvailableSink` tells them apart
+- **Samples**: Every sample is filed under the module that declares what it uses: `ConsoleSample` to `src/Cli/samples/`, `TicTacToeApp` to `src/VCL/samples/`, and `HostedService` to `src/samples/`
 
 ### Removed
 
-- ⚠️ **Hosting**: `IHostBuilder`, y con él el estilo diferido: los callbacks `ConfigureServices`, `ConfigureAppConfiguration` y `ConfigureHostConfiguration`, más `TConfigureServicesAction`. Queda un solo estilo, el inmediato; el punto de entrada es `THost.CreateBuilder` o la variante de la familia
-- ⚠️ **DependencyInjection**: `AddModules(Package)`, el descubrimiento por RTTI de los `IAppModule`. El sustituto es `AddModule<T>`, una llamada por módulo y en el orden que la aplicación quiera; `IAppModule` y `TAppModule` no cambian
-- **Logging**: La global `DAFInternalLogger`, sustituida por `BootstrapLog.LoggerFor(<categoría>)`
-- **Hosting**: Restos del estilo fluido y del andamiaje del builder
-  - `THostBuilder.AddHostedService<T>` — la vía es `Builder.Services.AddHostedService<T>`; la fachada `Hosting.AddHostedService(Services, TClass)` **se queda**
-  - `UseProperty` — `Properties`, en `IHostApplicationBuilder`, hace lo mismo
-  - `TSingleton<T>`, base de `THostEnvironment`, `THostBuilderContext` y `THostBuilder`, que pasan a derivar de `TInterfacedObject`
-- **Commons**: Retirados
-  - `TGenericRTTI` — su `MakeGenericType` prometía fabricar un genérico en ejecución, que es justo lo que Delphi no hace. Lo aprovechable vuelve como `_T.GenericArgs`
-  - `&If.Exp<T>`, el ternario escrito como función: evaluaba las **dos** ramas, así que no cortocircuitaba. El operador ternario de Delphi 13 lo sustituye
+- ⚠️ **Hosting**: `IHostBuilder`, and with it the deferred style: the `ConfigureServices`, `ConfigureAppConfiguration` and `ConfigureHostConfiguration` callbacks, plus `TConfigureServicesAction`. One style is left, the immediate one; the entry point is `THost.CreateBuilder` or the family's variant
+- ⚠️ **DependencyInjection**: `AddModules(Package)`, the RTTI discovery of `IAppModule`s. The replacement is `AddModule<T>`, one call per module and in whatever order the application wants; `IAppModule` and `TAppModule` do not change
+- **Logging**: The global `DAFInternalLogger`, replaced by `BootstrapLog.LoggerFor(<category>)`
+- **Hosting**: Leftovers of the fluent style and of the builder's scaffolding
+  - `THostBuilder.AddHostedService<T>` — the way is `Builder.Services.AddHostedService<T>`; the `Hosting.AddHostedService(Services, TClass)` facade **stays**
+  - `UseProperty` — `Properties`, on `IHostApplicationBuilder`, does the same
+  - `TSingleton<T>`, the base of `THostEnvironment`, `THostBuilderContext` and `THostBuilder`, which now derive from `TInterfacedObject`
+- **Commons**: Withdrawn
+  - `TGenericRTTI` — its `MakeGenericType` promised to build a generic at run time, which is exactly what Delphi does not do. What was worth keeping comes back as `_T.GenericArgs`
+  - `&If.Exp<T>`, the ternary written as a function: it evaluated **both** branches, so it did not short-circuit. Delphi 13's ternary operator replaces it
   - `TBooleanExpresion`
-  - La unidad `Daf.Expression`, disuelta en `Daf.FilterSpec` y `Daf.Types`
+  - The `Daf.Expression` unit, dissolved into `Daf.FilterSpec` and `Daf.Types`
 
 ### Fixed
 
-- **DependencyInjection**: Correcciones del contenedor
-  - Cerrar un ámbito soltaba **una referencia de más por cada servicio que había creado**, así que el servicio se destruía mientras su titular lo seguía usando
-  - Resolver desde varios hilos entrega **una sola instancia por registro** y su constructor corre una vez; antes corría una vez por hilo y la mayoría fallaban con `EListError`. Componer la colección sigue siendo de un solo hilo
-  - Un ciclo que el contenedor no puede romper **deja de matar el proceso**: la resolución falla nombrando el camino, en vez de agotar la pila sin excepción ni mensaje
-  - Resolver después de `ShutDown` lanza `EContainerShutDownError` nombrando el servicio, en vez de `EAccessViolation`. Cerrar dos veces deja de romper
-- **MiniSpec**: Correcciones
-  - La marca de inyección funciona **sobre un campo**: el barrido solo recorría propiedades, así que el campo se quedaba en `nil` sin aviso
-  - `UseSuiteContext<T>` construye el contexto de suite: `SpecContext.SuiteContext` valía `nil` en todos los steps
-  - Una feature que falla antes de sus escenarios sale en el informe y pone la suite roja; antes desaparecía y el proceso salía con 0
-  - Un genérico en la descripción de un step —`AsType<T>`, `TList<T>`— se leía como placeholder de Scenario Outline y fallaba con `T not found in World`
-- **Hosting**: `IHostApplicationLifetime.StopApplication` para de verdad la aplicación: cancelaba `ApplicationStopping` en vez de pedir la parada, así que `WaitForShutdown` seguía bloqueado y los `IHostedService` no se paraban nunca
-- **Hosting**: Un proceso puede construir más de un host: «Build already called» y el «ya parado» eran estado de clase, así que un arnés que monta y desmonta hosts solo podía montar el primero
-- **NNLog**: `enabled` y `name` de una regla se ignoraban en silencio: `enabled` ausente vale **activada** —solo el literal `false` la desactiva— y `name` filtra de verdad. **Cambio observable**: un config con alguna regla de `name` distinto de `*` deja de recibirlo todo
-- **MediatR**: Componer dos veces en un mismo proceso da el mismo resultado; la contabilidad de paquetes ya escaneados era estado global de unit
-- **SQLCute**: `WhereIn` con un conjunto de valores **vacío** emitía `col IN ()`, inválido en casi cualquier motor; ahora no casa ninguna fila y `WhereNotIn` las casa todas, igual en los dos back-ends. Afecta también a `OrWhereIn` / `OrWhereNotIn` y a `IsIn([])`
-- **Application**: `TVersionInfo.Tag` estaba **siempre vacío**, y `GetFrom` sobre una clase sin atributo devolvía lo que hubiera en la memoria del destino
-- **Commons**: `TMacrosList.GetValueFromIndex` devolvía cadena vacía en toda lectura de macro
-- **Docs**: El arranque que enseñaba la documentación **no compilaba**, la guía describía una superficie de `IDafApplication` que no era la real, y la de Hosting seguía prometiendo el descubrimiento automático de los `IAppModule`. Ahora enseña `AddModule<T>`
+- **DependencyInjection**: Container fixes
+  - Closing a scope released **one reference too many for every service it had created**, so the service was destroyed while its holder was still using it
+  - Resolving from several threads gives **a single instance per registration** and its constructor runs once; it used to run once per thread and most of them failed with `EListError`. Composing the collection is still single-threaded
+  - A cycle the container cannot break **stops killing the process**: resolution fails naming the path, instead of exhausting the stack with no exception and no message
+  - Resolving after `ShutDown` raises `EContainerShutDownError` naming the service, instead of `EAccessViolation`. Closing twice stops breaking
+- **MiniSpec**: Fixes
+  - The injection marker works **on a field**: the sweep only walked properties, so the field stayed `nil` with no warning
+  - `UseSuiteContext<T>` builds the suite context: `SpecContext.SuiteContext` was `nil` in every step
+  - A feature that fails before its scenarios shows up in the report and turns the suite red; it used to vanish and the process exited with 0
+  - A generic in a step's description —`AsType<T>`, `TList<T>`— was read as a Scenario Outline placeholder and failed with `T not found in World`
+- **Hosting**: `IHostApplicationLifetime.StopApplication` really stops the application: it cancelled `ApplicationStopping` instead of requesting the stop, so `WaitForShutdown` stayed blocked and the `IHostedService`s were never stopped
+- **Hosting**: A process can build more than one host: "Build already called" and the "already stopped" flag were class state, so a harness that sets hosts up and tears them down could only set the first one up
+- **NNLog**: A rule's `enabled` and `name` were silently ignored: a missing `enabled` now means **enabled** —only the literal `false` disables it— and `name` really filters. **Observable change**: a config with any rule whose `name` is not `*` stops receiving everything
+- **MediatR**: Composing twice in the same process gives the same result; the accounting of already-scanned packages was unit-global state
+- **SQLCute**: `WhereIn` with an **empty** set of values emitted `col IN ()`, invalid on almost any engine; it now matches no row and `WhereNotIn` matches them all, alike on both back-ends. It also affects `OrWhereIn` / `OrWhereNotIn` and `IsIn([])`
+- **Application**: `TVersionInfo.Tag` was **always empty**, and `GetFrom` on a class with no attribute returned whatever was in the target's memory
+- **Commons**: `TMacrosList.GetValueFromIndex` returned an empty string on every macro read
+- **Docs**: The startup the documentation taught **did not compile**, the guide described a surface of `IDafApplication` that was not the real one, and Hosting's still promised automatic discovery of `IAppModule`s. It now teaches `AddModule<T>`
 
 ## [1.6.0] - 2026-07-20
 
 ### Added
 
-- **MediatR**: Pipeline behaviors — `TPipelineBehavior<TRequest, TResponse>` con descubrimiento RTTI automático; soporte para behaviors globales y específicos por tipo de request
-- **MediatR**: `TNext<TResponse>` y `TNextValue` — delegate tipado para invocar el siguiente eslabón de la cadena de behaviors
-- **MediatR**: Sample rediseñado demostrando los cuatro conceptos clave (handler, behavior de logging, behavior de validación, pipeline completo)
-- **SQLCute**: Módulo completo de query builder SQL fluent — `IQuery`, `TAnsiSqlCompiler`, soporte para WHERE, JOINs, GROUP BY/HAVING, UNION, CTE, subqueries, EXISTS, DML (INSERT/UPDATE/DELETE), paginación, set operations
-- **SQLCute**: `SQLCute.Abstractions` — Core package con `TQueryImpl` y compilers detrás de factory pattern
-- **SQLCute**: `SQLCuteSample` — sample completo con demostración de toda la API
-- **SQLCute**: Documentación bilingüe (EN/ES) integrada en el site Quarto
-- **MiniSpec**: `srrSkipped` y `srrUndefined` en `TSpecRunResult` — resultado explícito para steps saltados y sin definición
-- **MiniSpec**: `MarkAsSkipped` / `MarkAsUndefined` en `ISpecItem`
-- **MiniSpec**: `UndefinedCount` en el runner y en el pie de resumen
-- **MiniSpec**: Flag `--strict-pending`: hace que specs pendientes cuenten como fallo del proceso
-- **MiniSpec**: Console reporter progresivo — Feature y Scenario se emiten al encontrarse, steps con símbolos Gherkin (`✓ ✗ ~ P ?`) al completarse
+- **MediatR**: Pipeline behaviors — `TPipelineBehavior<TRequest, TResponse>` with automatic RTTI discovery; support for global behaviors and for request-type-specific ones
+- **MediatR**: `TNext<TResponse>` and `TNextValue` — typed delegate to invoke the next link of the behavior chain
+- **MediatR**: Redesigned sample showing the four key concepts (handler, logging behavior, validation behavior, full pipeline)
+- **SQLCute**: Complete fluent SQL query builder module — `IQuery`, `TAnsiSqlCompiler`, support for WHERE, JOINs, GROUP BY/HAVING, UNION, CTE, subqueries, EXISTS, DML (INSERT/UPDATE/DELETE), paging, set operations
+- **SQLCute**: `SQLCute.Abstractions` — core package with `TQueryImpl` and compilers behind a factory pattern
+- **SQLCute**: `SQLCuteSample` — full sample demonstrating the whole API
+- **SQLCute**: Bilingual documentation (EN/ES) integrated into the Quarto site
+- **MiniSpec**: `srrSkipped` and `srrUndefined` in `TSpecRunResult` — explicit result for skipped and undefined steps
+- **MiniSpec**: `MarkAsSkipped` / `MarkAsUndefined` on `ISpecItem`
+- **MiniSpec**: `UndefinedCount` in the runner and in the summary footer
+- **MiniSpec**: `--strict-pending` flag: makes pending specs count as a process failure
+- **MiniSpec**: Progressive console reporter — Feature and Scenario are emitted as they are found, steps with Gherkin symbols (`✓ ✗ ~ P ?`) as they complete
 
 ### Changed
 
-- **MiniSpec**: Pie de resumen renombrado de `Pass/Fail/Skip` a `Passed/Failed/Pending/Undefined/Skipped`
+- **MiniSpec**: Summary footer renamed from `Pass/Fail/Skip` to `Passed/Failed/Pending/Undefined/Skipped`
 
 ### Fixed
 
-- **SQLCute**: `SqlServerCompiler` no emitía la cláusula `TOP` cuando se especificaba `LIMIT` sin `OFFSET`
-- **MediatR**: Closure variable capture bug en la cadena de behaviors
-- **MediatR**: Descubrimiento de behaviors globales con `StrictExtensions=False`
-- **MediatR**: Warnings de ocultación en jerarquía `TPipelineBehavior`
-- **MiniSpec**: Step sin lambda en `ScenarioOutline` se trataba como `Undefined`; ahora es no-op (display-only) porque `ExampleInit` inyecta los valores vía RTTI
-- **MiniSpec**: Tabla de ejemplos de Outline: cabecera desalineada respecto a las filas de datos
-- **MiniSpec**: Features sin escenarios ejecutados aparecían igualmente al filtrar con `-f`; ahora se suprimen en todos los reporters (console, JSON, Gherkin, JUnit)
-- **MiniSpec**: Pie de resumen pegado a la última línea Gherkin; ahora lleva una línea en blanco antes
+- **SQLCute**: `SqlServerCompiler` did not emit the `TOP` clause when `LIMIT` was given without `OFFSET`
+- **MediatR**: Closure variable capture bug in the behavior chain
+- **MediatR**: Discovery of global behaviors with `StrictExtensions=False`
+- **MediatR**: Hiding warnings in the `TPipelineBehavior` hierarchy
+- **MiniSpec**: A step with no lambda in a `ScenarioOutline` was treated as `Undefined`; it is now a no-op (display-only), because `ExampleInit` injects the values through RTTI
+- **MiniSpec**: Outline examples table: header misaligned with respect to the data rows
+- **MiniSpec**: Features with no scenarios run still showed up when filtering with `-f`; they are now suppressed in every reporter (console, JSON, Gherkin, JUnit)
+- **MiniSpec**: Summary footer stuck to the last Gherkin line; it now carries a blank line before it
 
 ## [1.5.0] - 2026-03-20
 
 ### Added
 
-- **Docs**: Sitio de documentación Quarto bilingüe (EN/ES) para todos los módulos
+- **Docs**: Bilingual (EN/ES) Quarto documentation site for every module
 
 ### Fixed
 
-- **MiniSpec**: Eliminar `PendingStep` muerto de todos los builders
-- **MiniSpec**: Renombrar `Expect(TProc)` → `ExpectException` para resolver ambigüedad con `TValue`
-- **MiniSpec**: Fixes en step bindings — lazy binding, `NoAction` lskThen, aserciones DI en Then, memory leak
-- **MiniSpec**: `CmdLnParser` usa `Build(False)` para evitar double-free con destructor
+- **MiniSpec**: Remove the dead `PendingStep` from every builder
+- **MiniSpec**: Rename `Expect(TProc)` → `ExpectException` to resolve the ambiguity with `TValue`
+- **MiniSpec**: Step binding fixes — lazy binding, `NoAction` lskThen, DI assertions in Then, memory leak
+- **MiniSpec**: `CmdLnParser` uses `Build(False)` to avoid a double free with the destructor
 
 ## [1.4.0] - 2026-02-16
 
