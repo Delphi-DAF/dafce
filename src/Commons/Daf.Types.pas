@@ -100,11 +100,6 @@ type
     class function CurrentThreadId: Cardinal; static;
   end;
 
-  &If = class
-  public
-    class function Exp<T>(const Cond: Boolean; const WhenTrue: T; WhenFalse: T): T;
-  end;
-
 implementation
 
 uses
@@ -352,16 +347,6 @@ end;
 class procedure Debugger.Write(const FmtStr:string; Args: array of const);
 begin
   Write(Format(FmtStr, Args));
-end;
-
-{ &If }
-
-class function &If.Exp<T>(const Cond: Boolean; const WhenTrue: T; WhenFalse: T): T;
-begin
-  if Cond then
-    Result := WhenTrue
-  else
-    Result := WhenFalse;
 end;
 
 end.

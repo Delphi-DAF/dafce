@@ -137,6 +137,7 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 - **Logging**: La global `DAFInternalLogger`, sustituida por `BootstrapLog.LoggerFor(<categoría>)`, que es por donde informa ahora también el propio DAF. Quien la llamara se lleva un error de compilación, no un cambio silencioso de comportamiento
 - **Commons**: `TBooleanExpresion`
 - **Commons**: La unidad `Daf.Expression`, disuelta en `Daf.FilterSpec` y `Daf.Types`
+- **Commons**: `&If.Exp<T>`, el ternario escrito como función. Evaluaba las **dos** ramas —son parámetros por valor—, así que se leía como una condicional sin cortocircuitar: `&If.Exp(P <> nil, P.Name, '')` revienta con `P` en `nil`. No tenía ningún llamador ni una sola spec, y el operador ternario nativo de Delphi 13 lo deja sin razón de ser
 
 ### Fixed
 
