@@ -40,7 +40,7 @@ The changes that break compilation are collected, with their example diff, in `M
 - **MiniSpec**: `TSpecRun` — a run with its own suite, context, injector and runner, launchable inside another without disturbing its counts or its report
 - **MiniSpec**: `--allow-undefined` — an undefined step stops setting the exit code; `MiniSpec.AllowUndefined(True)` declares it in the suite. By default it breaks
 - **MiniSpec**: `SpecContext.ScenarioContext` returns the scenario's World, and a `[MiniInject]` of its type receives it
-- **NNLog**: The provider can be built with settings written in code, not only read from a section
+- **NNLog**: `TNNLogLoader.BuildProvider` accepts a `TNNLogConfiguration` — settings written in code, not only read from a section
 - **SQLCute**: Improvements to the query builder
   - `WhereNot(Callback)` and `OrWhereNot(Callback)` — WHERE groups negated as a unit, `NOT (…)`
   - Per-column NULL ordering — `OrderBy` / `OrderByDesc` with `TNullsOrder`, and `NullsFirst` / `NullsLast`
@@ -48,12 +48,12 @@ The changes that break compilation are collected, with their example diff, in `M
   - `TNullable<T>` in `Daf.Nullable`
   - `TDeferredEnumerable<T>` and `TGeneratorEnumerator<T>` in `Daf.Enumerable`
   - `Daf.Comparers` — NULL-aware comparers for `TValue` and `TNullable<T>`
-- **Daf.CommandLine**: New module — a port of .NET's `System.CommandLine`, with `--help` and `--version` built in
+- **Daf.CommandLine**: New module — a port of .NET's `System.CommandLine`, with `--version` and a `--help` that `TCommandLineHelp` renders from the grammar
 - **Daf.Linq**: New module — the LINQ-to-Objects equivalent: lazy sequences over `System.IEnumerable<T>`, with `TQuery<T>` and `Linq.From<T>`
 - **Daf.Specification**: New module — the Specification pattern: `TSpecification<T>` gathers filter, order and paging into a reusable rule that can be asserted without a database, with `IRepository<T>` as the port
-- **SQLCute.InMemory**: New module — a second back-end: runs an `IQuery` over loaded collections —JOINs, GROUP BY, subqueries, set operations— with ANSI NULL semantics
+- **SQLCute.InMemory**: New module — a second back-end: `TInMemory` runs an `IQuery` over loaded collections —JOINs, GROUP BY, subqueries, set operations— with ANSI NULL semantics
 - **SQLCute.Specification**: New module — lowers a whole `Specification` onto an `IQuery`, so the same rule goes to the database or to a loaded collection
-- **Daf.Web**: New package — a lightweight HTTP server over Indy and WebBroker, with controllers routed by attributes and built by the container. The package **links neither DataSnap nor DBX**
+- **Daf.Web**: New package — a lightweight HTTP server over Indy and WebBroker, with controllers routed by `[WebRoute]` and built by the container. The package **links neither DataSnap nor DBX**
 - **Samples**: `QuickStart`, `ServiceWiring` and `PackageInit` (Cli); `HostQuickStart` and `StartupReport` (Hosting)
 - **Docs**: "Startup composition", the public AST of `SQLCute.Abstractions`, and the criterion behind splitting the logging packages (EN/ES)
 
