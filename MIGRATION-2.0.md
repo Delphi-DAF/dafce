@@ -1,4 +1,4 @@
-# Migrating to DAF 2.0
+﻿# Migrating to DAF 2.0
 
 This release is a **major**: some changes break compilation. Every one of them shows up at compile
 time — none degrades silently — and the list below covers all of them.
@@ -350,6 +350,89 @@ This is the largest front of 2.0 for anything that had a `.dpr`.
   is one that had two of them fitting the same property, and until now which one arrived could not
   be predicted.
 
+### 10. A scope now destroys what it created
+
+- **Releasing a scope destroys the Scoped services it built.** The container used to retain every
+  scope it handed out and release nothing until it was closed, so a process that opens a scope per
+  request — the pattern the guide recommends — accumulated one instance per request for its whole
+  life.
+- **What breaks**: keeping a reference to a Scoped service without holding its scope. Until now it
+  survived the scope it came from; now it does not.
+
+```pascal
+// Before: the cache outlived its scope by accident
+var Scope := Provider.CreateScope;
+FCache := Scope.ServiceProvider.GetRequiredService<ICache>;
+Scope := nil;
+FCache.Get('k');                       // now: the instance is already gone
+
+// Now: hold the scope for as long as you hold what it built
+FScope := Provider.CreateScope;
+FCache := FScope.ServiceProvider.GetRequiredService<ICache>;
+```
+
+### 11. Property injection changes when an instance is published, and when it is cleared
+
+- **The instance is published before its properties are filled**, for every registration, whether or
+  not it takes part in property injection. That is what makes a cycle between two services
+  resolvable: whoever re-enters to resolve the same service receives the instance already published.
+- **What breaks**: a constructor that resolves its own service. It used to recurse without end; it
+  now receives the instance half built.
+- **Closing the container clears the injected properties** of everything it owns before releasing
+  anything. Without that pass, two services that injected each other hold one another up and are
+  never destroyed. A destructor that reads an injected property now reads `nil`.
+
+```pascal
+// Now: whatever the destructor needs, keep it in a field of its own
+destructor TReportService.Destroy;
+begin
+  FLogger.Info('closing');             // FLogger is [DafInject]: nil by now
+  inherited;
+end;
+```
+
+### 12. `Replace` and `RemoveAll` only reach unkeyed registrations
+
+Keyed services introduce a second space, and these two operations stay in the unkeyed one. Before
+there were no keys, so "all of the type" and "all of the type without a key" were the same thing.
+
+- **What breaks**: using them to dismantle a registration in a spec harness. They dismantle less
+  than they used to, and you find out in green.
+
+```pascal
+Services.RemoveAll<IClock>;                                  // unkeyed registrations only
+Services.RemoveAllKeyed<IClock>(TValue.From<string>('utc')); // the keyed one
+```
+
+### 13. A duplicate registration now yields two instances
+
+Registering the same pair twice and then asking for all of them returned the first one twice: the
+second registration was declared, was counted, and was never built.
+
+- **What breaks**: a composition that registers a default and then registers it again instead of
+  replacing it. `TryAdd*` registers only if absent, and `Replace` substitutes.
+- Resolving a single service does not change — the last registration still wins — and neither does
+  the order in which they are closed.
+
+### 14. SQLCute: a query declares its kind
+
+`IQuery` gains `Kind: TQueryKind`. It defaults to `Select` and is set by `AsInsert`, `AsUpdate` and
+their siblings, instead of being deduced from the clauses present.
+
+- **What breaks**: implementing `IQuery` yourself. The new member has to be provided.
+- Declaring two kinds on the same query now keeps the last one, where the first used to win. A query
+  with a single kind emits exactly what it emitted before.
+
+### 15. MiniSpec: which context satisfies a `[MiniInject]` is now declared
+
+- **The precedence is declared, and it was the internal order of a dictionary before.** Two passes:
+  first an **exact** type match, walking scenario → feature → suite; and only if there is none, a
+  descendant, in the same order. So an exact match in the suite beats a nearer descendant in the
+  scenario — asking for the type you wrote is not a guess.
+- **What breaks**: a step that injects a base type while two scopes hold compatible objects. It
+  compiles, and it gets a different instance than before — the old winner depended on hash order,
+  so it was never a decision. Name the exact type you want, or keep one of the two.
+
 ## How to do it
 
 1. Compile. Whatever is missing comes out as a compiler error, not as odd behaviour at run time.
@@ -359,3 +442,6 @@ This is the largest front of 2.0 for anything that had a `.dpr`.
 4. Rename the types and units from the tables above.
 5. Compile again and run your tests. `ValidateOnBuild` helps confirm the composition registers what
    it did before.
+6. Sections 10 to 13 and 15 are **run-time** changes: the compiler says nothing about them. Read them
+   against your own composition — scope lifetimes, duplicate registrations, and anything a
+   destructor reads.

@@ -1,4 +1,4 @@
-# Migrar a DAF 2.0
+﻿# Migrar a DAF 2.0
 
 Esta versión es un **major**: hay cambios que rompen la compilación. Todos se detectan al
 compilar —ninguno degrada en silencio— y la lista de abajo los cubre por completo.
@@ -352,6 +352,90 @@ Es el frente más grande de 2.0 para cualquier cosa que tuviera un `.dpr`.
   diccionario. Esta no rompe la compilación: el World que reciba un contexto distinto al de antes es
   uno que tenía dos encajando en la misma propiedad, y hasta ahora cuál llegaba no se podía prever.
 
+### 10. Un ámbito destruye ahora lo que creó
+
+- **Soltar un ámbito destruye los servicios Scoped que construyó.** El contenedor retenía todos los
+  ámbitos que repartía y no soltaba nada hasta cerrarse, así que un proceso que abre un ámbito por
+  petición —el patrón que recomienda la guía— acumulaba una instancia por petición durante toda su
+  vida.
+- **Qué rompe**: guardar una referencia a un servicio Scoped sin sostener su ámbito. Hasta ahora
+  sobrevivía al ámbito del que salió; ya no.
+
+```pascal
+// Antes: la caché sobrevivía a su ámbito por accidente
+var Scope := Provider.CreateScope;
+FCache := Scope.ServiceProvider.GetRequiredService<ICache>;
+Scope := nil;
+FCache.Get('k');                       // ahora: la instancia ya no está
+
+// Ahora: sostén el ámbito mientras sostengas lo que construyó
+FScope := Provider.CreateScope;
+FCache := FScope.ServiceProvider.GetRequiredService<ICache>;
+```
+
+### 11. La inyección por propiedad cambia cuándo se publica una instancia, y cuándo se vacía
+
+- **La instancia se publica antes de rellenar sus propiedades**, para todo registro participe o no
+  en la inyección por propiedad. Es lo que hace resoluble un ciclo: quien reentre a resolver el
+  mismo servicio recibe la instancia ya publicada.
+- **Qué rompe**: un constructor que resuelve su propio servicio. Antes recursaba sin fondo; ahora
+  recibe la instancia a medio construir.
+- **Cerrar el contenedor vacía las propiedades inyectadas** de lo que posee antes de soltar nada.
+  Sin esa pasada, dos servicios que se inyectaron mutuamente se sostienen entre ellos y no se
+  destruyen nunca. Un destructor que lea una propiedad inyectada lee ahora `nil`.
+
+```pascal
+// Ahora: lo que necesite el destructor, guárdalo en un campo propio
+destructor TReportService.Destroy;
+begin
+  FLogger.Info('closing');             // FLogger es [DafInject]: a estas alturas, nil
+  inherited;
+end;
+```
+
+### 12. `Replace` y `RemoveAll` solo alcanzan los registros sin clave
+
+Los servicios con clave introducen un segundo espacio, y estas dos operaciones se quedan en el que
+no la tiene. Antes no había claves, así que «todos los del tipo» y «todos los del tipo sin clave»
+eran lo mismo.
+
+- **Qué rompe**: usarlos para desmontar un registro en un arnés de specs. Desmontan menos que antes,
+  y se descubre en verde.
+
+```pascal
+Services.RemoveAll<IClock>;                                  // solo los registros sin clave
+Services.RemoveAllKeyed<IClock>(TValue.From<string>('utc')); // el que la tiene
+```
+
+### 13. Un registro repetido da ahora dos instancias
+
+Registrar el mismo par dos veces y pedirlos todos devolvía la primera instancia repetida: el segundo
+registro se declaraba, se contaba y no se construía nunca.
+
+- **Qué rompe**: una composición que registra un valor por defecto y vuelve a registrarlo en vez de
+  sustituirlo. `TryAdd*` registra solo si no está, y `Replace` sustituye.
+- Resolver un solo servicio no cambia —sigue ganando el último registrado— ni cambia el orden de
+  cierre.
+
+### 14. SQLCute: una consulta declara qué sentencia es
+
+`IQuery` gana `Kind: TQueryKind`. Vale `Select` por defecto y lo fijan `AsInsert`, `AsUpdate` y sus
+hermanos, en vez de deducirse de las cláusulas presentes.
+
+- **Qué rompe**: implementar `IQuery` por tu cuenta. Hay que aportar el miembro nuevo.
+- Declarar dos tipos en la misma consulta se queda ahora con el último, donde antes ganaba el
+  primero. Una consulta de un solo tipo emite exactamente lo que emitía.
+
+### 15. MiniSpec: qué contexto satisface un `[MiniInject]` pasa a estar declarado
+
+- **La precedencia está declarada, y antes era el orden interno de un diccionario.** Dos pasadas:
+  primero una coincidencia **exacta** de tipo, recorriendo escenario → feature → suite; y solo si no
+  hay ninguna, un descendiente, en el mismo orden. Así que una coincidencia exacta en la suite gana a
+  un descendiente más cercano en el escenario — pedir el tipo que escribiste no es una apuesta.
+- **Qué rompe**: un step que inyecta un tipo base mientras dos ámbitos sostienen objetos
+  compatibles. Compila, y recibe otra instancia que antes — el ganador anterior dependía del orden
+  del hash, así que nunca fue una decisión. Nombra el tipo exacto que quieres, o deja uno de los dos.
+
 ## Cómo hacerlo
 
 1. Compila. Lo que falte sale como error del compilador, no como comportamiento raro en
@@ -363,3 +447,6 @@ Es el frente más grande de 2.0 para cualquier cosa que tuviera un `.dpr`.
 4. Renombra los tipos y unidades de las tablas de arriba.
 5. Vuelve a compilar y pasa tus tests. `ValidateOnBuild` ayuda a confirmar que la composición
    registra lo mismo que antes.
+6. Las secciones 10 a 13 y la 15 son cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
+   contra tu propia composición — la vida de los ámbitos, los registros repetidos, y lo que lea
+   un destructor.
