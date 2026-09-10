@@ -31,11 +31,8 @@ type
     function GetEnvVar(VarName: string): string;
   public
     /// <summary>
-    /// El entorno SALE de la configuracion de host, como en el linaje. Antes leia las tres
-    /// variables del proceso por su cuenta y la configuracion no participaba, asi que no habia
-    /// forma de fijar el entorno por linea de comandos -- que es lo primero que se prueba en
-    /// cuanto el builder recibe argumentos, y lo que menos avisa cuando no funciona: el valor
-    /// por defecto es indistinguible del argumento ignorado.
+    /// El entorno SALE de la configuracion de host, como en el linaje: las tres claves las
+    /// resuelve cualquier proveedor que este en ella, incluida la linea de comandos.
     /// </summary>
     constructor Create(const HostConfiguration: IConfiguration);
     function IsDevelopment: Boolean;

@@ -26,8 +26,8 @@ begin
   try
     var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
 
-    // El entorno YA responde: no hace falta un callback para poder leerlo. Esta es la linea
-    // que antes costaba un ConfigureAppConfiguration entero.
+    // El builder expone el entorno antes de construir el host, asi que la ruta del
+    // appsettings se resuelve aqui mismo.
     var JsonFilePath := TPath.Combine(B.Environment.BinPath, B.Environment.ApplicationName, 'appsettings.json');
     JsonConfig.AddFile(B.Configuration, JsonFilePath);
 
