@@ -34,7 +34,7 @@
 ### Command (no return value)
 
 ```pascal
-uses Daf.MediatR.Abstractions;
+uses Daf.MediatR.Contracts;
 
 type
   TDeleteUserCommand = class(TRequest)
