@@ -125,12 +125,12 @@ end;
 ## Múltiples targets y reglas
 
 ```pascal
-var File := TNNLogFileTarget.Create;
+var File := TFileTarget.Create;
 File.Name     := 'file';
 File.FileName := 'app.log';
 File.Layout   := '${timestamp} [${level}] ${message} ${exception}';
 
-var Console := TNNLogConsoleTarget.Create;
+var Console := TConsoleTarget.Create;
 Console.Name := 'console';
 
 // Regla 1: debug+ solo al fichero
@@ -198,10 +198,10 @@ uses DAF.Logging.Builder, DAF.NNLog, DAF.NNLog.Targets.Console;
 AddLogging(Services,
   procedure(Builder: ILoggingBuilder)
   var
-    Target : TNNLogConsoleTarget;
+    Target : TConsoleTarget;
     Rule   : TLogRule;
   begin
-    Target           := TNNLogConsoleTarget.Create;
+    Target           := TConsoleTarget.Create;
     Target.Name      := 'console';
 
     Rule          := TLogRule.Create;

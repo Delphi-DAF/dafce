@@ -286,9 +286,12 @@ Un `HostedService` representa un **servicio de infraestructura de larga duració
 
 ```delphi
 type
-  TEmailSyncWorker = class(THostedServiceBase)
-  protected
-    procedure Execute(const Token: ICancellationToken); override;
+  TEmailSyncWorker = class(TInterfacedObject, IHostedService)
+  private
+    procedure DoWork(const Token: ICancellationToken);
+  public
+    procedure Start;
+    procedure Stop;
   end;
 ```
 

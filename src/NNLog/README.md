@@ -18,7 +18,7 @@ uses
   DAF.Logging.Builder;
 
 // 1. Define a target
-var ConsoleTarget := TNNLogConsoleTarget.Create;
+var ConsoleTarget := TConsoleTarget.Create;
 ConsoleTarget.Name   := 'console';
 ConsoleTarget.Layout := '${timestamp} [${level}] ${category} | ${message}';
 
@@ -82,10 +82,10 @@ uses DAF.Logging.Builder, DAF.NNLog, DAF.NNLog.Targets.Console;
 AddLogging(Services,
   procedure(Builder: ILoggingBuilder)
   var
-    Target : TNNLogConsoleTarget;
+    Target : TConsoleTarget;
     Rule   : TLogRule;
   begin
-    Target := TNNLogConsoleTarget.Create;
+    Target := TConsoleTarget.Create;
     Target.Name := 'console';
 
     Rule := TLogRule.Create;
