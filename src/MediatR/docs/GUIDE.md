@@ -12,7 +12,7 @@
 4. [IMediator API](#imediator-api)
 5. [IMediatorHelper — ARC responses](#imediatorhelper--arc-responses)
 6. [Registering handlers](#registering-handlers)
-7. [Auto-scan with AddMediatR](#auto-scan-with-addmediatr)
+7. [Registration and auto-scan](#registration-and-auto-scan)
 8. [MediatorAbstract attribute](#mediatorabstract-attribute)
 9. [Pipeline Behaviors](#pipeline-behaviors)
 10. [Base class reference](#base-class-reference)
@@ -119,17 +119,20 @@ end;
 
 ## IMediator API
 
+`IMediator` is a **record** wrapping the registered `IMediatorImpl`. Resolve the implementation and
+assign it: the implicit conversion hands you the record.
+
 ```pascal
-IMediator = interface
+IMediator = record
   // Command — no return value
-  procedure Send<TRequest: IRequest>(Request: TRequest); overload;
+  procedure Send<TRequest: class, IRequest>(Request: TRequest); overload;
 
   // Query — with return value
-  function Send<TResponse; TRequest: IRequest<TResponse>>(
+  function Send<TResponse; TRequest: class, IRequest<TResponse>>(
     Request: TRequest): TResponse; overload;
 
   // Notification — fan-out to all registered handlers
-  procedure Publish<TNotification: INotification>(
+  procedure Publish<TNotification: class, INotification>(
     Notification: TNotification);
 end;
 ```
@@ -137,7 +140,7 @@ end;
 Usage:
 
 ```pascal
-var Mediator := Provider.GetRequiredService<IMediator>;
+var Mediator: IMediator := Provider.GetRequiredService<IMediatorImpl>;
 
 // Command
 var Cmd := TDeleteUserCommand.Create;
@@ -159,19 +162,19 @@ Mediator.Publish<TUserDeletedEvent>(Evt);
 
 ## IMediatorHelper — ARC responses
 
-When the response is a reference-counted object, use `IMediatorHelper.SendARC` to receive it wrapped in `ARC<TResponse>`:
+`IMediatorHelper` is a **record helper** for `IMediator`, so `SendARC` sits on the mediator itself and there is nothing to resolve. It wraps a **class** response in `ARC<TResponse>`, released when it goes out of scope:
 
 ```pascal
-IMediatorHelper = interface(IMediator)
-  function SendARC<TResponse: IInterface; TRequest: IRequest<TResponse>>(
-    Request: TRequest): ARC<TResponse>;
+IMediatorHelper = record helper for IMediator
+  function SendARC<TResponse: class; TRequest: class, IRequest<TResponse>>(
+    const Request: TRequest): ARC<TResponse>;
 end;
 ```
 
 ```pascal
-var Helper := Provider.GetRequiredService<IMediatorHelper>;
-var ArcResult := Helper.SendARC<IOrderList, TGetOrdersQuery>(Q);
-// ArcResult is ARC<IOrderList> — auto-released when it goes out of scope
+var Q := TGetOrdersQuery.Create;
+var Orders := Mediator.SendARC<TOrderList, TGetOrdersQuery>(Q);
+// Orders is ARC<TOrderList> — the list is released when Orders goes out of scope
 ```
 
 ---
@@ -194,15 +197,19 @@ Services.AddTransient<INotificationHandler<TUserDeletedEvent>, TAuditLogHandler>
 
 ---
 
-## Auto-scan with AddMediatR
+## Registration and auto-scan
 
 ```pascal
-uses Daf.MediatR.DependencyInjection;
+uses Daf.Rtti, Daf.MediatR.DependencyInjection;
 
-Services.AddMediatR;
+Services.AddMediatR;                                     // the mediator itself
+Services.AddMediatRClasses(_T.PackageOf<TMyHandler>);    // handlers in that package
+Services.AddMediatRBehaviors(_T.PackageOf<TMyHandler>);  // and its pipeline behaviors
 ```
 
-`AddMediatR` registers `IMediator` and `IMediatorHelper` as singletons and scans all registered types for handler interfaces, registering them automatically. Handlers must still be in the DI container for the scan to pick them up.
+`AddMediatR` registers **`IMediatorImpl` as transient**, and only if nothing registered it before. It scans nothing: discovery is `AddMediatRClasses(Package)`, which walks that package's RTTI for handler interfaces and **registers what it finds** — the handlers do not have to be in the container first.
+
+⚠️ The three are `record helper` methods on `IServiceCollection`, and only one helper per type is in scope. Where another `uses` shadows it, the same calls live on the `MediatR` class: `MediatR.AddTo(Services)` and `MediatR.AddTo(Services, Package)`.
 
 ---
 

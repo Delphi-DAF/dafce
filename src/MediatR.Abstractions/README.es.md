@@ -38,23 +38,23 @@ end;
 ### IMediator
 
 ```pascal
-IMediator = interface
-  procedure Send<TRequest: IRequest>(Request: TRequest); overload;
-  function  Send<TResponse; TRequest: IRequest<TResponse>>(
+IMediator = record            // un record, no una interfaz: envuelve un IMediatorImpl
+  procedure Send<TRequest: class, IRequest>(Request: TRequest); overload;
+  function  Send<TResponse; TRequest: class, IRequest<TResponse>>(
               Request: TRequest): TResponse; overload;
-  procedure Publish<TNotification: INotification>(
+  procedure Publish<TNotification: class, INotification>(
               Notification: TNotification);
 end;
 ```
 
 ### IMediatorHelper
 
-Extiende `IMediator` con `SendARC` — devuelve la respuesta envuelta en `ARC<TResponse>` para una propiedad con conteo de referencias segura.
+Un **record helper** de `IMediator`, así que `SendARC` está sobre el propio mediador. Envuelve una respuesta de **clase** en `ARC<TResponse>`, que se libera al salir del scope.
 
 ```pascal
-IMediatorHelper = interface(IMediator)
-  function SendARC<TResponse: IInterface; TRequest: IRequest<TResponse>>(
-             Request: TRequest): ARC<TResponse>;
+IMediatorHelper = record helper for IMediator
+  function SendARC<TResponse: class; TRequest: class, IRequest<TResponse>>(
+             const Request: TRequest): ARC<TResponse>;
 end;
 ```
 

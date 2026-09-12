@@ -79,9 +79,10 @@ Mediator.Publish<TOrderCreatedEvent>(Evt);
 ## Registro en DI
 
 ```pascal
-uses Daf.MediatR.DependencyInjection;
+uses Daf.Rtti, Daf.MediatR.DependencyInjection;
 
-Services.AddMediatR;   // registra el singleton IMediator + escanea handlers
+Services.AddMediatR;                                   // registra IMediatorImpl como transient
+Services.AddMediatRClasses(_T.PackageOf<TMyHandler>);  // descubre y registra los handlers
 ```
 
 O manualmente por handler:
