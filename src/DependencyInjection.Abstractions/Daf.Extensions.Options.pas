@@ -17,7 +17,7 @@ uses
 
 type
   /// <summary>
-  ///   Unos ajustes ya construidos, validados, y CON DUENO.
+  ///   Unos ajustes ya construidos, validados, y CON DUEÑO.
   /// </summary>
   /// <remarks>
   ///   La contrapartida, que es la trampa del patron en un lenguaje sin recolector: Value
