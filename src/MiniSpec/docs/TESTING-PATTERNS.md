@@ -4,6 +4,8 @@
 
 This guide complements the [User Guide](GUIDE.md) by showing how to adapt BDD to different testing levels. Although BDD was born to capture business requirements, its expressive vocabulary is useful at any level of the test pyramid.
 
+⚠️ **The file names in this guide are a suggestion for your project, not DAF's own convention.** Here the suffix carries the test level: `.Spec.pas` for a class, `.Feat.pas` for a feature. DAF's own tree names every spec `[Feature].Feat.pas` and every step file `[Feature].Steps.pas`, whatever the level.
+
 ---
 
 ## Table of Contents
