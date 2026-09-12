@@ -20,7 +20,7 @@ type
     function GetServices: IServiceProvider;
     /// <summary>
     /// Crea el formulario principal y DELEGA en Vcl.Forms.Application, que es quien tiene el
-    /// message loop. Aqui DAF no es dueno del proceso: lo era en CLI y en Web, donde Run era
+    /// message loop. Aqui DAF no es dueño del proceso: lo era en CLI y en Web, donde Run era
     /// arrancar, trabajar y parar, y el .dpr acababa cuando Run acababa. Son dos contratos de
     /// ciclo de vida distintos, no cuatro variaciones de uno.
     /// </summary>

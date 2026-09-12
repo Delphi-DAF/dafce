@@ -46,13 +46,13 @@ Feature Pedir la parada de la aplicacion @hosting @lifetime
 
 .UseWorld<TShutdownWorld>
 
-.Rule('El camino de senal y el de codigo son el mismo')
+.Rule('El camino de señal y el de codigo son el mismo')
 
-  // En el linaje hay UNA sola senal de apagado: el manejador de consola llama a StopApplication,
+  // En el linaje hay UNA sola señal de apagado: el manejador de consola llama a StopApplication,
   // y quien espera la parada observa ApplicationStopping. Aqui el manejador invoca
   // TShutdownHook.OnShutdownRequested, asi que ese TProc es el punto donde las dos mitades se
   // unen -- o no se unen.
-  .Scenario('Un host arrancado reclama el camino de senal')
+  .Scenario('Un host arrancado reclama el camino de señal')
     .Given('un host arrancado',
       procedure(W: TShutdownWorld)
       begin

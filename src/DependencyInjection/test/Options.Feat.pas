@@ -60,7 +60,7 @@ type
 
   /// <summary>
   ///   El miembro de tipo objeto. Lleva su propio contador de vivos porque la regla que se
-  ///   afirma es que lo libera SU DUENO --los ajustes que lo contienen-- y no el patron.
+  ///   afirma es que lo libera SU DUEÑO --los ajustes que lo contienen-- y no el patron.
   /// </summary>
   TDbSection = class
   private
@@ -89,7 +89,7 @@ type
 
   /// <summary>
   ///   El servicio que pide sus ajustes por constructor. COPIA lo que necesita y no se guarda el
-  ///   objeto: Value devuelve un objeto crudo cuyo dueno es la opcion, asi que quedarselo y
+  ///   objeto: Value devuelve un objeto crudo cuyo dueño es la opcion, asi que quedarselo y
   ///   soltar la opcion dejaria un puntero colgando. La otra forma correcta es sostener la
   ///   opcion en un campo, que es lo que hace THolder mas abajo.
   /// </summary>

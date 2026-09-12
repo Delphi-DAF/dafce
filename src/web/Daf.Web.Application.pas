@@ -39,7 +39,7 @@ type
     /// </summary>
     procedure MapControllers;
     /// <summary>
-    /// DAF es dueno del proceso: arranca, sirve hasta que le digan que pare, y para. El .dpr
+    /// DAF es dueño del proceso: arranca, sirve hasta que le digan que pare, y para. El .dpr
     /// acaba cuando Run acaba -- al contrario que en VCL y FMX, donde el bucle es de la
     /// plataforma y la variante solo delega.
     /// </summary>

@@ -29,7 +29,7 @@ uses
   Daf.Configuration.CommandLine,
   Daf.Cli;
 
-// Una herramienta CLI de la familia, con gramatica de verdad. Lo que ensena es el BORDE del Run:
+// Una herramienta CLI de la familia, con gramatica de verdad. Lo que enseña es el BORDE del Run:
 // --version y --help los contesta el parse, una invocacion que no encaja sale con su propio
 // codigo, y lo que se escape aplica la politica declarada. Ninguna de esas cuatro lineas se
 // escribe en el .dpr: se declaran.

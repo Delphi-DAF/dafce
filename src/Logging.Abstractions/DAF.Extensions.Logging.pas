@@ -387,7 +387,7 @@ uses
 
 type
   // La cache de plantilla -> nombres. Las plantillas son literales del codigo, asi que el conjunto
-  // de plantillas distintas de un programa es pequeno y cerrado (D4): el regex corre una vez por
+  // de plantillas distintas de un programa es pequeño y cerrado (D4): el regex corre una vez por
   // plantilla en toda la vida del proceso, no una por linea ni una por hilo. Se cachea el RESULTADO
   // del analisis, no el TRegEx: un threadvar con un tipo gestionado dentro no se finaliza al morir
   // el hilo, y cada hilo que aparece y se va dejaria el suyo.
@@ -450,7 +450,7 @@ begin
   end;
   // El regex --lo caro-- corre FUERA del cerrojo: sostenerlo mientras se compila serializaria todo
   // el logging. Dos hilos que lleguen a la vez con la misma plantilla la analizan los dos una vez;
-  // el resultado es el mismo y el segundo pisa al primero sin dano.
+  // el resultado es el mismo y el segundo pisa al primero sin daño.
   Result := ParseTemplateNames(Template);
   TMonitor.Enter(FLock);
   try

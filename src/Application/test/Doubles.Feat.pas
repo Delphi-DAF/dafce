@@ -19,7 +19,7 @@ type
 
   /// Un IHost que anota lo que le piden y nunca bloquea. Existe por una razon concreta y no
   /// por gusto de doblar: THost.WaitForShutdown espera un Ctrl+C que nada dentro del proceso
-  /// puede senalar, asi que una spec que llamase al de verdad se colgaria en vez de ponerse
+  /// puede señalar, asi que una spec que llamase al de verdad se colgaria en vez de ponerse
   /// roja. Con el espia, "Run espero el apagado" es una traza que se compara.
   TSpyHost = class(TInterfacedObject, IHost)
   strict private
@@ -94,7 +94,7 @@ function SpecServiceProvider: IServiceProvider;
 begin
   var Services: IServiceCollection := TServiceCollection.Create;
   // TConfigurationBuilder es contado por referencia: encadenar sobre el Create deja el objeto
-  // sin dueno y se pierde. Se sostiene en una variable de interfaz a proposito.
+  // sin dueño y se pierde. Se sostiene en una variable de interfaz a proposito.
   var ConfigBuilder: IConfigurationBuilder := TConfigurationBuilder.Create;
   var Config: IConfiguration := ConfigBuilder.Build as IConfiguration;
   // El entorno SALE de la configuracion de host, asi que hay que darsela.

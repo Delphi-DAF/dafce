@@ -71,7 +71,7 @@ type
     FReleased: Boolean;
     procedure SetServiceProvider(const Services: IServiceProvider);
   public
-    /// <summary>El punto de entrada del host generico: entrega el componedor ya con dueno, asi que
+    /// <summary>El punto de entrada del host generico: entrega el componedor ya con dueño, asi que
     /// una sola variable lo posee y llega a Build.</summary>
     class function CreateBuilder(const Args: TArray<string> = nil): IGenericHostBuilder; static;
     constructor Create;
@@ -357,11 +357,11 @@ begin
     if Assigned(Lifetime) then
       (Lifetime as THostApplicationLifetime).NotifyStarted;
 
-    // UNA sola senal de apagado: el manejador de consola pide la parada por el mismo camino
+    // UNA sola señal de apagado: el manejador de consola pide la parada por el mismo camino
     // que la pide el codigo --StopApplication--, y quien la espera observa ApplicationStopping.
     //
     // El TProc es de clase, asi que con dos hosts vivos a la vez el ultimo en arrancar atiende
-    // la senal y el primero en pararse la libera. Un proceso con dos hosts es cosa de un arnes
+    // la señal y el primero en pararse la libera. Un proceso con dos hosts es cosa de un arnes
     // de specs, y el peor caso es un Ctrl+C que no para nada.
     TShutdownHook.OnShutdownRequested :=
       procedure
@@ -389,7 +389,7 @@ begin
       FStopped := True;
 
       // Antes de cualquier cosa que pueda lanzar: el TProc de clase sostiene el lifetime de
-      // este host, asi que dejarlo puesto deja un host parado atendiendo la senal.
+      // este host, asi que dejarlo puesto deja un host parado atendiendo la señal.
       TShutdownHook.OnShutdownRequested := nil;
 
       var Lifetime := GetServices.GetService<IHostApplicationLifetime>;

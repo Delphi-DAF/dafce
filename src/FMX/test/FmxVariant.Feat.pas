@@ -60,7 +60,7 @@ Feature La variante FMX de la familia @fmx @application-family
 
   Como quien escribe una aplicacion de escritorio
   Quiero que el arranque sea el mismo de la familia
-  Para que solo cambie quien es dueno del bucle
+  Para que solo cambie quien es dueño del bucle
 ''')
 
 .UseWorld<TFmxWorld>

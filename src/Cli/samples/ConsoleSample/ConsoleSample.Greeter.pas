@@ -26,7 +26,7 @@ type
     // ninguna seccion de configuracion ni libera nada.
     //
     // Y COPIA lo que necesita en vez de guardarse el objeto: Value devuelve un objeto crudo
-    // cuyo dueno es la opcion, asi que quedarselo y soltar la opcion dejaria un puntero
+    // cuyo dueño es la opcion, asi que quedarselo y soltar la opcion dejaria un puntero
     // colgando. La otra forma correcta es sostener la IOptions<T> en un campo.
     constructor Create(const Options: IOptions<TAppSettings>);
     procedure Greet;
@@ -40,7 +40,7 @@ type
     TWrapperAccessor pide un IWrapper --el record--, nadie registra IWrapper, y el contenedor lo
     construye resolviendo IWrapperImpl y aplicando IWrapper.Implicit.
 
-    De ahi sale el resto del diseno, que sin esto parece decoracion: los operadores Equal y
+    De ahi sale el resto del diseño, que sin esto parece decoracion: los operadores Equal y
     NotEqual contra Pointer existen para poder escribir `Wrapper <> nil` sobre un record que se
     comporta como una referencia de interfaz. Es el mismo patron con el que DAF envuelve su propio
     IServiceProvider.

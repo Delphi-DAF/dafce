@@ -934,7 +934,7 @@ begin
   inherited Create;
   FScopeFactory := Factory;
   // Comparador explicito y no el binario por defecto: TServiceIdentity tiene dos campos de
-  // tamanos distintos, asi que en 64 bits lleva relleno, y el relleno de un record sin
+  // tamaños distintos, asi que en 64 bits lleva relleno, y el relleno de un record sin
   // inicializar no vale como parte de una clave.
   FServiceInstances := TOrderedDictionary<TServiceIdentity, IInterface>.Create(
     TEqualityComparer<TServiceIdentity>.Construct(

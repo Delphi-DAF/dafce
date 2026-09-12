@@ -112,7 +112,7 @@ type
   end;
 
   /// <summary>
-  /// La aplicacion CLI. DAF es dueno del proceso: Run acaba y el .dpr con el.
+  /// La aplicacion CLI. DAF es dueño del proceso: Run acaba y el .dpr con el.
   /// </summary>
   /// <remarks>
   ///   NO ofrece acceso global ni a si misma ni a su proveedor de servicios, y eso es

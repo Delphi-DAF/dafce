@@ -427,7 +427,7 @@ type
 
   // --- Instancia ajena, la que el contenedor no construye ---
 
-  /// Ni interfaz ni registro: lo construye y lo destruye su dueno, como haria la plataforma con
+  /// Ni interfaz ni registro: lo construye y lo destruye su dueño, como haria la plataforma con
   /// un formulario.
   TGuest = class
   private

@@ -214,7 +214,7 @@ type
     function StorageName: string;
   end;
 
-  /// Una instancia que el contenedor NO construye: la cablea su dueno con InjectInto.
+  /// Una instancia que el contenedor NO construye: la cablea su dueño con InjectInto.
   TGuest = class
   strict private
     FStorage: IStorage;
@@ -1433,7 +1433,7 @@ Feature Keyed services @di @keyed
 .Rule('Decoration works on the keyless space, and says so when there is none')
 
   .Scenario('Decorating a type wraps only its keyless registrations')
-    // La pregunta abierta del diseno, contestada donde se ve: Decorate lee los descriptores SIN
+    // La pregunta abierta del diseño, contestada donde se ve: Decorate lee los descriptores SIN
     // clave y escribe SIN clave, asi que decorar por tipo sigue significando lo que significaba.
     .Given('IStorage registered with no key and also under blob and file',
       procedure(W: TKeyedWorld)

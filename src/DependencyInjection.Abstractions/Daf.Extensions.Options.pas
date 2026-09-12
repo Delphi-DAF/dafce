@@ -21,7 +21,7 @@ type
   /// </summary>
   /// <remarks>
   ///   La contrapartida, que es la trampa del patron en un lenguaje sin recolector: Value
-  ///   devuelve un objeto CRUDO, y su dueno es la opcion. Quien se guarde el objeto y suelte la
+  ///   devuelve un objeto CRUDO, y su dueño es la opcion. Quien se guarde el objeto y suelte la
   ///   opcion se queda con un puntero colgando. Las dos formas correctas de consumirlo son
   ///   sostener la IOptions&lt;T&gt; en un campo, o copiar en el constructor lo que se necesite.
   ///

@@ -64,7 +64,7 @@ begin
       Result := TOptions<T>.Create(
         function: T
         begin
-          // El enlazador construye el objeto y lo devuelve; a partir de aqui el dueno es la
+          // El enlazador construye el objeto y lo devuelve; a partir de aqui el dueño es la
           // opcion. Los miembros de tipo objeto que el enlazador construya dentro los libera el
           // POCO en su destructor: la opcion libera la raiz, y nada mas.
           Result := TConfigurationBinder.Bind<T>(Config, Path, Option);

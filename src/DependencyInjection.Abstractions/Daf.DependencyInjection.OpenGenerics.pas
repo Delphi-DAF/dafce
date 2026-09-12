@@ -11,7 +11,7 @@
   los argumentos viajando como referencia el codigo maquina es el mismo.
 
   Ese "con los argumentos viajando como referencia" es una precondicion, no una esperanza, y
-  aqui esta lo que la convierte en diseno: al resolver estan los DOS contratos delante y los
+  aqui esta lo que la convierte en diseño: al resolver estan los DOS contratos delante y los
   dos describen sus metodos, asi que se comparan uno a uno. Un cierre que no cumpla se
   rechaza nombrando el metodo. Sin esa comprobacion el caso invalido no da error: corrompe la
   pila en silencio.
@@ -79,7 +79,7 @@ type
 
     /// <summary>Que entregar la implementacion del registro sin fijar para este cierre sea
     /// seguro. Una vez por par y cacheado: recorrer los metodos de dos interfaces en cada
-    /// resolucion seria pagar por llamada, que es justo lo que este diseno evita.</summary>
+    /// resolucion seria pagar por llamada, que es justo lo que este diseño evita.</summary>
     /// <remarks>
     ///   Se llama al EMPAREJAR, no al construir, y por eso no esta dentro de Activate: que un
     ///   emparejamiento sea seguro es una propiedad del par contrato-abierto/cierre, y no

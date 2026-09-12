@@ -691,7 +691,7 @@ begin
 
   // Un modulo con configuracion no la puede recibir del contenedor —corre antes de que exista el
   // proveedor—, asi que la trae el llamante por la sobrecarga de instancia. Entregarlo como
-  // IAppModule es lo que le da un dueno.
+  // IAppModule es lo que le da un dueño.
   var Banner: IAppModule := TBannerModule.Create('Composicion por modulos');
   Services.AddModule(Banner);
 

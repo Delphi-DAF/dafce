@@ -135,7 +135,7 @@ begin
     begin
       Services.GetService<IGreeter>.Greet;
 
-      // CreateInstance devuelve un objeto NO contado: el dueno es quien llama. Sin este Free se
+      // CreateInstance devuelve un objeto NO contado: el dueño es quien llama. Sin este Free se
       // fugan DOS cosas, no una -- el accesor, y el IWrapperImpl que sostiene dentro, porque su
       // campo de interfaz no se finaliza nunca y el refcount no baja a cero.
       var WA := TActivatorUtilities.CreateInstance<TWrapperAccessor>(Services);
