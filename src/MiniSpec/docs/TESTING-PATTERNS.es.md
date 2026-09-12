@@ -15,6 +15,7 @@ Esta guía complementa la [Guía de Usuario](GUIDE.es.md) mostrando cómo adapta
 - [Tests Unitarios: Especificando Clases](#tests-unitarios-especificando-clases)
 - [Tests de Integración: Especificando APIs](#tests-de-integración-especificando-apis)
 - [Organizando por Tipo de Test](#organizando-por-tipo-de-test)
+- [Conclusión](#conclusión)
 
 ---
 
@@ -416,6 +417,15 @@ API: /users @integration @api
 end.
 ```
 
+### Convenciones para Tests de Integración
+
+| Elemento | Convención | Ejemplo |
+|----------|------------|---------|
+| Feature | Endpoint o recurso | `API: /users`, `GraphQL: User` |
+| Rule | Método HTTP + ruta | `GET /users`, `POST /users` |
+| Scenario | Caso de uso concreto | `Crear usuario con datos válidos` |
+| Tag | `@integration` o `@api` | `API: /users @integration @api` |
+
 ### Usando FeatureContext para Estado Compartido
 
 En tests de API, a menudo necesitas datos creados en un escenario para usarlos en otro:
@@ -484,7 +494,7 @@ end;
 
 Hay dos estrategias principales: **un solo ejecutable con tags** o **ejecutables separados por nivel**.
 
-### Opción A: Un Solo Ejecutable con Tags
+### Opción A: Un Solo Ejecutable con Tags (Recomendado)
 
 Todos los tests en un único proyecto, filtrados por tags en tiempo de ejecución.
 
@@ -542,6 +552,13 @@ AllSpecs.exe -f "~@slow"
 # Unit + Integration, sin E2E
 AllSpecs.exe -f "(@unit or @integration) and ~@e2e"
 ```
+
+**Convenciones de tags:**
+- `@unit` — tests unitarios (rápidos, sin dependencias)
+- `@integration` — tests de integración (necesitan servicios)
+- `@e2e` — tests de extremo a extremo (sistema completo)
+- `@slow` — tests lentos (base de datos, red)
+- `@pending` — todavía sin implementar
 
 **Ventajas:** Simple, un solo proyecto, filtrado flexible.  
 **Desventajas:** El ejecutable incluye todas las dependencias (incluso las de E2E).
