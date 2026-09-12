@@ -37,7 +37,7 @@ Imagine you're developing a calculator. Before writing code, you describe **how 
 This simple sentence is an **executable specification**. With MiniSpec, you write it almost literally:
 
 ```pascal
-unit Calculator.Add.Feat.pas;
+unit Calculator.Add.Feat;
 
 interface
 

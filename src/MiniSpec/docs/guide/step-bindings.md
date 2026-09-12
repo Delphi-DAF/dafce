@@ -19,7 +19,7 @@ As your specifications grow, you'll notice many steps repeat:
 **Step Bindings** solve this: define steps as class methods, using regex patterns:
 
 ```pascal
-unit Auth.Steps.pas;
+unit Auth.Steps;
 
 interface
 

@@ -89,7 +89,7 @@ Cuando el SUT es una **clase individual**, BDD sigue siendo útil. Piensa en fra
 ### El Patrón: Feature = Clase, Scenario = Método/Comportamiento
 
 ```pascal
-unit TStringBuilder.Spec.pas;
+unit TStringBuilder.Spec;
 
 interface
 
@@ -250,7 +250,7 @@ Cuando el SUT es un **API** (REST, GraphQL, gRPC...), cada **endpoint** o **oper
 ### El Patrón: Feature = Recurso/Endpoint, Scenario = Operación
 
 ```pascal
-unit API.Users.Spec.pas;
+unit API.Users.Spec;
 
 interface
 

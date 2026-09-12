@@ -19,7 +19,7 @@ Cuando tus especificaciones crecen, notarás que muchos pasos se repiten:
 Los **Step Bindings** resuelven esto: defines pasos como métodos de una clase, usando patrones regex:
 
 ```pascal
-unit Auth.Steps.pas;
+unit Auth.Steps;
 
 interface
 

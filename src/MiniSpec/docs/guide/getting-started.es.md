@@ -37,7 +37,7 @@ Imagina que estás desarrollando una calculadora. Antes de escribir código, des
 Esta frase simple es una **especificación ejecutable**. Con MiniSpec, la escribes casi literalmente:
 
 ```pascal
-unit Calculator.Add.Feat.pas;
+unit Calculator.Add.Feat;
 
 interface
 
