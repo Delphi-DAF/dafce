@@ -105,7 +105,7 @@ Aplicar a clases base abstractas de handlers para evitar que el mediador las res
 
 ```pascal
 [MediatorAbstract]
-TBaseHandler<T: TRequest> = class(TRequestHandler<T>);
+TBaseOrderHandler<T: TRequest> = class(TRequestHandler<T>);
 ```
 
 ---

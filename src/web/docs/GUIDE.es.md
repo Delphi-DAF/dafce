@@ -231,29 +231,34 @@ Services.AddScoped<IUserService, TUserService>;
 
 ## Action results personalizados
 
-Implementa `IActionResult`:
+Los helpers de arriba cubren los casos corrientes. Para un tipo de contenido que no producen, hereda de `TActionResult` — implementa `IActionResult` y deja `Execute` abstracto:
 
 ```pascal
 type
-  TJsonResult<T> = class(TInterfacedObject, IActionResult)
+  TCsvResult = class(TActionResult)
   private
-    FData: T;
-    FStatus: Integer;
+    FRows: TArray<string>;
   public
-    constructor Create(Data: T; Status: Integer = 200);
-    procedure Execute(Response: TWebResponse);
+    constructor Create(const Rows: TArray<string>);
+    procedure Execute(Response: TWebResponse); override;
   end;
 
-procedure TJsonResult<T>.Execute(Response: TWebResponse);
+constructor TCsvResult.Create(const Rows: TArray<string>);
 begin
-  Response.StatusCode   := FStatus;
-  Response.ContentType  := 'application/json; charset=utf-8';
-  Response.Content      := TJson.ObjectToJsonString(FData);
+  inherited Create;
+  FRows := Rows;
+end;
+
+procedure TCsvResult.Execute(Response: TWebResponse);
+begin
+  Response.StatusCode  := 200;
+  Response.ContentType := 'text/csv; charset=utf-8';
+  Response.Content     := string.Join(sLineBreak, FRows);
 end;
 ```
 
 Úsalo en cualquier controlador:
 
 ```pascal
-Result := TJsonResult<TMyRecord>.Create(MyData, 201);
+Result := TCsvResult.Create(Rows);
 ```
