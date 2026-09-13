@@ -23,8 +23,8 @@ var Proc := TSystemProcess.Builder
   .Timeout(30000)               // ms; without this call there is no deadline
   .KillAfterTimeout(True)
   .HideWindow(True)
-  .OnStdOut(procedure(Line: string) begin WriteLn(Line); end)
-  .OnStdErr(procedure(Line: string) begin WriteLn('ERR: ', Line); end)
+  .OnStdOut(procedure(Text: string) begin Write(Text); end)
+  .OnStdErr(procedure(Text: string) begin Write(Text); end)
   .OnCompleted(procedure(R: TProcessResult)
     begin
       WriteLn('Exit=', R.ExitCode, ' duration=', R.Duration.TotalMilliseconds, 'ms');
@@ -41,6 +41,10 @@ var Future := Proc.ExecuteAsync; // or asynchronous
 
 `Timeout` sets a deadline in milliseconds, and there is none unless you call it. `Timeout(0)` is a
 deadline of zero: it kills the process on the first poll, 250 ms in.
+
+`OnStdOut` and `OnStdErr` get whatever the pipe read returned — up to 2 KB at a time, **not one
+line**. A line can arrive split across two calls, or several lines in one; split them yourself if
+you need lines.
 
 ## TProcessResult
 

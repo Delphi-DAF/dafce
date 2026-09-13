@@ -23,8 +23,8 @@ var Proc := TSystemProcess.Builder
   .Timeout(30000)               // ms; sin esta llamada no hay plazo
   .KillAfterTimeout(True)
   .HideWindow(True)
-  .OnStdOut(procedure(Line: string) begin WriteLn(Line); end)
-  .OnStdErr(procedure(Line: string) begin WriteLn('ERR: ', Line); end)
+  .OnStdOut(procedure(Text: string) begin Write(Text); end)
+  .OnStdErr(procedure(Text: string) begin Write(Text); end)
   .OnCompleted(procedure(R: TProcessResult)
     begin
       WriteLn('Exit=', R.ExitCode, ' duration=', R.Duration.TotalMilliseconds, 'ms');
@@ -41,6 +41,10 @@ var Future := Proc.ExecuteAsync; // o asíncrono
 
 `Timeout` fija un plazo en milisegundos, y no hay ninguno mientras no se llame. `Timeout(0)` es un
 plazo de cero: mata el proceso en el primer sondeo, a los 250 ms.
+
+`OnStdOut` y `OnStdErr` reciben lo que devolvió cada lectura del canal — hasta 2 KB de golpe, y
+**no una línea**. Una línea puede llegar partida en dos llamadas, o varias en una; si necesitas
+líneas, pártelas tú.
 
 ## TProcessResult
 
