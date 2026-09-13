@@ -168,15 +168,9 @@ end;
 | `TNNLogProvider` | `DAF.NNLog` | Targets basados en reglas (fichero, consola, …) |
 | `TNullLoggerProvider` | `DAF.Extensions.Logging` | Descarta toda entrada — así se pide silencio a propósito |
 
-**No hay `Daf.Logging.Console` ni `Daf.Logging.Debug`, y no los va a haber.** NNLog ya trae `Console`,
-`Debug`, `File_` y `UDP`, con reglas de filtrado y layouts. Un `Daf.Logging.Debug` sería el mismo
-destino sin ninguna de las dos cosas — útil solo para quien quisiera menos.
-
-La analogía con `Microsoft.Extensions.Logging.Debug` no se sostiene al trasladarla. Ese paquete existe
-porque es el default de cero configuración del host genérico de .NET, no porque compita con NLog. DAF
-no tiene ese default, y el hueco que parecía justificarlo —que un fallo de arranque no llegue a
-nadie— ya lo cubre el canal de arranque, que escribe a la salida de error y a la de depuración del
-sistema sin configurar nada.
+**No hay `Daf.Logging.Console` ni `Daf.Logging.Debug`.** NNLog trae `Console`, `Debug`, `File_` y
+`UDP`, con reglas de filtrado y layouts. Y un fallo de arranque llega a alguien sin nada de eso: el
+canal de arranque escribe a la salida de error y a la de depuración del sistema sin configurar nada.
 
 ### Añadir un proveedor
 
@@ -218,10 +212,9 @@ AddLogging(Services,
 // ELoggingCompositionError
 ```
 
-La comprobación corre **una sola vez, donde se compone el pipeline** — dentro de `IHostBuilder.Build`,
-antes de que exista un solo servicio hospedado y antes de la primera entrada. Nunca al escribir: un
-error levantado ahí aparecería lejos del descuido y una vez por entrada, que es como un aviso se
-convierte en decorado.
+La comprobación corre **una sola vez, donde se compone el pipeline** — dentro del `Build` del builder
+del host, antes de que exista un solo servicio hospedado y antes de la primera entrada, y nunca al
+escribir.
 
 El silencio a propósito sigue estando bien. Solo hay que decirlo:
 
@@ -270,7 +263,7 @@ begin
 end;
 ```
 
-2. Implementa `ILogger` (generalmente derivando de `TLoggerBase`):
+2. Implementa `ILogger`:
 
 ```pascal
 type
