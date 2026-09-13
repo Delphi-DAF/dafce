@@ -27,9 +27,9 @@ App.Run(TMainForm);          // creates the form, then FMX.Forms.Application tak
 
 `Run` here is **not** the CLI's `Run`. In CLI and Web, DAF owns the process: `Run` starts, works and stops, and the `.dpr` ends when it ends. Here the message loop already exists and belongs to `FMX.Forms.Application`; the variant creates the main form and delegates to it. Two lifecycle contracts, not four variations of one.
 
-### The global, and why it exists here and not in CLI
+### The `DafApp` global
 
-`DafApp` returns the running application. It exists in VCL and FMX **only because the platform already has such a global and the user expects it** — denying it would force a worse mechanism for the form code the platform builds on its own, which nobody can inject into. In CLI and Web there is no such global, .NET has none either, and adding one would be a service locator with nothing to justify it.
+`DafApp` returns the running application. It exists in the VCL and FMX variants only — for the form code the platform builds on its own, which nobody can inject into. In CLI and Web there is no such global, and .NET has none either.
 
 Its name is deliberately **not** `Application`: in the same `.dpr` this one and the platform's coexist. **The preferred route is still injection** — `DafApp` is the way out for code the container never sees, not a way around the container.
 
@@ -48,15 +48,13 @@ begin
 end.
 ```
 
-Availability is answered by the platform, not by an `{$IFDEF}` someone keeps up to date by hand: `IsAvailable` asks `TPlatformServices` for `IFMXLoggingService` and reports what it got back. Where there is no such service the destination **declares itself unavailable**, instead of taking the report and losing it.
+Availability is answered by the platform: `IsAvailable` asks `TPlatformServices` for `IFMXLoggingService` and reports what it got back. Where there is no such service the destination **declares itself unavailable**, and `BootstrapLog` writes the line to its remaining destinations.
 
 ---
 
-## Why a package of its own
+## The FireMonkey boundary
 
-`Daf.Logging.Abstractions` is the contract package: everyone uses it and its constraint is to depend on nothing, so FireMonkey would be worst placed there. `Daf.Logging` is required by whoever wants logging, not by whoever wants FireMonkey, so putting it there would drag FMX into every VCL application that uses the pipeline.
-
-A boundary earns its keep when an optional capability drags a dependency the rest do not need. This one does, and the rule is checked rather than trusted: `eng/check-packages.py` fails the build if any package other than this one links `FMX.*`, whether by `requires` or by implicit import.
+`Daf.FMX` is the only package of the framework that links FireMonkey, by `requires` or by implicit import. `Daf.Logging.Abstractions` is the contract package and depends on nothing; `Daf.Logging` is what whoever wants logging requires. Neither carries FMX, so a VCL application using DAF's logging pipeline does not link FireMonkey — referencing `Daf.FMX` is how you ask for it.
 
 ---
 

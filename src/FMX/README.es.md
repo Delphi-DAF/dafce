@@ -27,9 +27,9 @@ App.Run(TMainForm);          // crea el formulario, y a partir de ahí manda FMX
 
 Este `Run` **no** es el de la CLI. En CLI y en Web DAF es dueño del proceso: `Run` arranca, trabaja y para, y el `.dpr` acaba cuando él acaba. Aquí el message loop ya existe y es de `FMX.Forms.Application`; la variante crea el formulario principal y delega. Son dos contratos de ciclo de vida, no cuatro variaciones de uno.
 
-### El global, y por qué existe aquí y no en CLI
+### El global `DafApp`
 
-`DafApp` devuelve la aplicación en curso. Existe en VCL y en FMX **solo porque la plataforma ya tiene un global así y el usuario lo espera** — negárselo obligaría a inventar un mecanismo peor para el código de formulario que la plataforma construye por su cuenta, al que nadie le puede inyectar nada. En CLI y en Web no hay tal global, .NET tampoco lo tiene, y añadirlo sería un service locator sin nada que lo justifique.
+`DafApp` devuelve la aplicación en curso. Existe solo en las variantes VCL y FMX — para el código de formulario que la plataforma construye por su cuenta, al que nadie le puede inyectar nada. En CLI y en Web no hay tal global, y .NET tampoco lo tiene.
 
 Su nombre **no** es `Application` a propósito: en el mismo `.dpr` conviven éste y el de la plataforma. **La vía preferente sigue siendo la inyección** — `DafApp` es la salida para el código que el contenedor nunca ve, no un rodeo para evitarlo.
 
@@ -48,15 +48,13 @@ begin
 end.
 ```
 
-La disponibilidad la responde la plataforma, no un `{$IFDEF}` que alguien mantiene a mano: `IsAvailable` le pide `IFMXLoggingService` a `TPlatformServices` y dice lo que le contestaron. Donde no hay ese servicio, el destino **se declara no disponible** en vez de aceptar el informe y perderlo.
+La disponibilidad la responde la plataforma: `IsAvailable` le pide `IFMXLoggingService` a `TPlatformServices` y dice lo que le contestaron. Donde no hay ese servicio, el destino **se declara no disponible**, y `BootstrapLog` escribe la línea en los destinos que le quedan.
 
 ---
 
-## Por qué un paquete propio
+## La frontera de FireMonkey
 
-`Daf.Logging.Abstractions` es el paquete de contratos: lo usa todo el mundo y su restricción es no depender de nada, así que FireMonkey estaría ahí en el peor sitio posible. `Daf.Logging` lo requiere quien quiere logging, no quien quiere FireMonkey, así que ponerlo ahí arrastraría FMX a toda aplicación VCL que use el pipeline.
-
-Una frontera se justifica cuando una capacidad opcional arrastra una dependencia que los demás no necesitan. Esta la arrastra, y la regla se comprueba en vez de confiarse: `eng/check-packages.py` falla la construcción si cualquier paquete que no sea este enlaza `FMX.*`, sea por `requires` o por importación implícita.
+`Daf.FMX` es el único paquete del framework que enlaza FireMonkey, sea por `requires` o por importación implícita. `Daf.Logging.Abstractions` es el paquete de contratos y no depende de nada; `Daf.Logging` lo requiere quien quiere logging. Ninguno de los dos arrastra FMX, así que una aplicación VCL que use el pipeline de logging de DAF no enlaza FireMonkey — referenciar `Daf.FMX` es la forma de pedirlo.
 
 ---
 

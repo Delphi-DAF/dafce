@@ -35,16 +35,15 @@ Es la línea que parte en dos las cuatro variantes, y conviene saberla antes de 
 | CLI, Web | **DAF.** `Run` arranca, trabaja y para; el `.dpr` acaba cuando `Run` acaba |
 | **VCL, FMX** | **La plataforma.** `Vcl.Forms.Application` ya existe y ya tiene el message loop; la variante crea el formulario principal y delega |
 
-Son dos contratos de ciclo de vida, no cuatro sobreescrituras de un mismo `Execute`. Tratarlas igual
-esconde esa diferencia justo donde más cuesta descubrirla.
+Son dos contratos de ciclo de vida, no cuatro sobreescrituras de un mismo `Execute`.
 
-`StartUpTo` es el mismo arranque **sin** entrar en el bucle. Existe para que la variante se pueda
-ejercitar desde un spec: llamar a `Run` en una suite entraría en el message loop y se quedaría ahí, y
-una spec colgada no es una spec roja.
+`StartUpTo` es el mismo arranque **sin** entrar en el bucle: arranca el host, inicializa la
+plataforma y crea el formulario principal, y vuelve. `Run` es `StartUpTo` más el bucle, así que no
+vuelve hasta que el bucle termina, y al salir para el host.
 
 ---
 
-## El global, y por qué esta variante tiene uno
+## El global `DafApp`
 
 ```pascal
 // En código de formulario, que la plataforma construye por su cuenta y al que nadie le puede
@@ -52,14 +51,13 @@ una spec colgada no es una spec roja.
 var Service := DafApp.Services.GetRequiredService<IMyService>;
 ```
 
-`DafApp` existe en VCL y en FMX **solo porque la plataforma ya tiene un global así y el usuario lo
-espera**. Negárselo obligaría a inventar un mecanismo peor para justo el código al que no se le puede
-inyectar. En CLI y en Web no hay tal global, .NET tampoco lo tiene, y añadirlo sería un service
-locator sin nada que lo justifique.
+`DafApp` devuelve la aplicación en curso, y existe solo en las variantes VCL y FMX — para justo el
+código que el contenedor nunca llega a construir. En CLI y en Web no hay tal global, y .NET tampoco
+lo tiene.
 
-Su nombre **no** es `Application` a propósito: en el mismo `.dpr` conviven éste y
-`Vcl.Forms.Application`, y el choque no es hipotético — un sample del propio módulo de aplicación
-escribía `Application.Run` refiriéndose al de la VCL.
+Su nombre **no** es `Application` porque en el mismo `.dpr` conviven éste y
+`Vcl.Forms.Application`: ahí un `Application` sin cualificar es el de la VCL, y el de DAF hay que
+escribirlo `DafApp`.
 
 **La vía preferente sigue siendo la inyección.** `DafApp` es la salida para el código que el
 contenedor nunca ve, no un rodeo para evitarlo.
@@ -76,7 +74,6 @@ contenedor nunca ve, no un rodeo para evitarlo.
 
 ## Dónde diverge de .NET
 
-El miembro de escritorio de .NET es `MauiAppBuilder`, y el precedente se sostiene: es un tipo aparte y
-no un flag sobre el host genérico, por esta misma razón. La divergencia aquí es `Run(TFormClass)` en
-vez de `Run<TForm>` — **una interfaz de Delphi no admite métodos genéricos**, el mismo límite que deja
-`ConfigureContainer` sin portar.
+El miembro de escritorio de .NET es `MauiAppBuilder`, un tipo aparte y no un flag sobre el host
+genérico. La divergencia aquí es `Run(TFormClass)`: **una interfaz de Delphi no admite métodos
+genéricos**, así que no hay `Run<TForm>` — el mismo límite que deja `ConfigureContainer` sin portar.
