@@ -256,8 +256,8 @@ TVersionInfo = record
 end;
 ```
 
-`TDafApplication.VersionRequested` is a class function that answers whether the first command-line
-argument is `--version`, for printing it and exiting before anything is built.
+There is no `TDafApplication.VersionRequested`: the hand-written check was retired rather than
+moved, and `--version` is answered by the grammar through `ICommandLineParseResult.VersionRequested`.
 
 ---
 
@@ -274,7 +274,8 @@ if App.Environment.IsDevelopment then
 ```
 
 `IConfiguration` returns the empty string both for a key that is absent and for one whose value is
-empty; only a provider's `TryGet` tells the two apart.
+empty. To tell the two apart, ask: `Exists(Key): Boolean`, or `Find(Key): TNullable<string>`, which
+answers presence and value in one lookup.
 
 ---
 

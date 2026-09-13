@@ -67,7 +67,7 @@ var V := TDafApplication.App.VersionInfo;
 ## Singleton global
 
 ```pascal
-TDafApplication.App  // propiedad de clase — disponible después de Build
+TDafApplication.App  // función de clase — disponible después de Build
 ```
 
 ---
