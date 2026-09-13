@@ -71,7 +71,7 @@ Convention for grouping service registrations:
 ```pascal
 type
   IAppModule = interface(IInvokable)
-    procedure AddServices(const Services: IServiceCollection);
+    procedure AddServices(const ServiceCollection: IServiceCollection);
   end;
 ```
 
