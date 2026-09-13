@@ -179,8 +179,10 @@ Services.AddHostedService<TOrderProcessor>;
 ```
 
 - `Start` is called for each hosted service when `Host.Start` runs, **in registration order**.
-- `Stop` is called in **reverse registration order** during shutdown.
-- Hosted services are Singletons — you can inject them as `IOrderProcessor` too if needed.
+- `Stop` is called in the **same** order during shutdown, not the reverse of it.
+- `AddHostedService<T>` registers `T` under `IHostedService` and nothing else. To reach the same
+  instance as `IOrderProcessor`, register that too and have the hosted-service registration
+  resolve it.
 
 ---
 
@@ -275,17 +277,17 @@ var Lifetime := Services.GetRequiredService<IHostApplicationLifetime>;
 
 // Fired after all hosted services have started
 Lifetime.ApplicationStarted.Register(procedure begin
-  Logger.LogInfo('Application ready');
+  Logger.LogInformation('Application ready');
 end);
 
 // Fired when a shutdown has been requested (before services stop)
 Lifetime.ApplicationStopping.Register(procedure begin
-  Logger.LogInfo('Shutdown initiated');
+  Logger.LogInformation('Shutdown initiated');
 end);
 
 // Fired after all hosted services have stopped
 Lifetime.ApplicationStopped.Register(procedure begin
-  Logger.LogInfo('Application stopped');
+  Logger.LogInformation('Application stopped');
 end);
 
 // Request a graceful shutdown programmatically
@@ -329,8 +331,9 @@ end;
 `Host.WaitForShutdown` blocks until the process receives a shutdown signal (`Ctrl+C`, `SIGTERM`, or `Lifetime.StopApplication`). The shutdown sequence is:
 
 1. `IHostApplicationLifetime.ApplicationStopping` callbacks fire
-2. `IHostedService.Stop` called for each service (reverse order)
-3. DI container disposes Singleton instances (reverse creation order)
+2. `IHostedService.Stop` called for each service, in registration order
+3. The DI container releases each Singleton once nothing but itself holds it, so a service goes
+   after everything that depends on it
 4. `IHostApplicationLifetime.ApplicationStopped` callbacks fire
 
 `WaitForShutdown` integrates with the OS signal handler via `TShutdownHook`.

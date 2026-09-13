@@ -179,8 +179,10 @@ Services.AddHostedService<TOrderProcessor>;
 ```
 
 - `Start` se llama para cada hosted service cuando se ejecuta `Host.Start`, **en orden de registro**.
-- `Stop` se llama en **orden inverso de registro** durante el apagado.
-- Los hosted services son Singletons — también puedes inyectarlos como `IOrderProcessor` si es necesario.
+- `Stop` se llama en el **mismo** orden durante el apagado, no en el inverso.
+- `AddHostedService<T>` registra `T` bajo `IHostedService` y nada más. Para llegar a esa misma
+  instancia como `IOrderProcessor`, regístralo también y que el registro del hosted service lo
+  resuelva.
 
 ---
 
@@ -275,17 +277,17 @@ var Lifetime := Services.GetRequiredService<IHostApplicationLifetime>;
 
 // Se dispara cuando todos los hosted services han arrancado
 Lifetime.ApplicationStarted.Register(procedure begin
-  Logger.LogInfo('Aplicación lista');
+  Logger.LogInformation('Aplicación lista');
 end);
 
 // Se dispara cuando se solicita un apagado (antes de que paren los servicios)
 Lifetime.ApplicationStopping.Register(procedure begin
-  Logger.LogInfo('Apagado iniciado');
+  Logger.LogInformation('Apagado iniciado');
 end);
 
 // Se dispara cuando todos los hosted services han parado
 Lifetime.ApplicationStopped.Register(procedure begin
-  Logger.LogInfo('Aplicación detenida');
+  Logger.LogInformation('Aplicación detenida');
 end);
 
 // Solicitar apagado elegante por programa
@@ -329,8 +331,9 @@ end;
 `Host.WaitForShutdown` bloquea hasta que el proceso recibe una señal de apagado (`Ctrl+C`, `SIGTERM` o `Lifetime.StopApplication`). La secuencia de apagado es:
 
 1. Se disparan los callbacks de `IHostApplicationLifetime.ApplicationStopping`
-2. Se llama a `IHostedService.Stop` para cada servicio (en orden inverso)
-3. El contenedor DI libera las instancias Singleton (en orden inverso de creación)
+2. Se llama a `IHostedService.Stop` para cada servicio, en orden de registro
+3. El contenedor DI suelta cada Singleton cuando ya no lo sostiene nadie más que él, así que un
+   servicio cae después de todo lo que depende de él
 4. Se disparan los callbacks de `IHostApplicationLifetime.ApplicationStopped`
 
 `WaitForShutdown` se integra con el manejador de señales del SO mediante `TShutdownHook`.

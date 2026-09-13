@@ -146,5 +146,7 @@ See [Application](../Application/README.md) for the full Application module docs
 - 📖 [Usage Guide](docs/GUIDE.md) — configuration pipeline, scoped services, hosted services, lifetime hooks
 - 📖 [Startup composition](../DependencyInjection/docs/STARTUP-COMPOSITION.md) — `IStartupTask` vs `IHostedService`, and the two phases of startup
 - 📁 [HostQuickStart](samples/HostQuickStart/README.md) — compose, build, start and stop, with no application variant around it
-- 📁 [ConsoleSample](../Cli/samples/ConsoleSample/README.md) — the pipeline end to end: configuration, services and a hosted service in one console program
+- 📁 [StartupReport](samples/StartupReport/README.md) — where the startup record goes, and what a startup that does not complete shows
+- 📁 [ConsoleSample](../Cli/samples/ConsoleSample/README.md) — configuration and the options pattern in one console program
+- 📁 [HostedService](../samples/HostedService/) — background workers with `AddHostedService`
 - 📁 [PackageInit](../Cli/samples/PackageInit/README.md) — an `IStartupTask` contributed from a package, without the `.dpr` naming it

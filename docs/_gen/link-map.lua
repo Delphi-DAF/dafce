@@ -194,9 +194,11 @@ return {
       ["../Cli/samples/PackageInit/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/Cli/samples/PackageInit/README.md",
       ["../DependencyInjection/docs/STARTUP-COMPOSITION.md"] = "/en/docs/startup-composition.qmd",
       ["../Hosting/README.md"] = "/en/modules/hosting.qmd",
+      ["../samples/HostedService/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/samples/HostedService",
       ["README.es.md"] = "/es/modules/hosting.qmd",
       ["docs/GUIDE.md"] = "/en/modules/hosting-guide.qmd",
       ["samples/HostQuickStart/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/Hosting/samples/HostQuickStart/README.md",
+      ["samples/StartupReport/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/Hosting/samples/StartupReport/README.md",
     },
     ["en/modules/linq.qmd"] = {
       ["../../legal/LICENSE.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/legal/LICENSE.md",
@@ -544,9 +546,11 @@ return {
       ["../Cli/samples/PackageInit/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/Cli/samples/PackageInit/README.md",
       ["../DependencyInjection/docs/STARTUP-COMPOSITION.es.md"] = "/es/docs/startup-composition.qmd",
       ["../Hosting/README.es.md"] = "/es/modules/hosting.qmd",
+      ["../samples/HostedService/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/samples/HostedService",
       ["README.md"] = "/en/modules/hosting.qmd",
       ["docs/GUIDE.es.md"] = "/es/modules/hosting-guide.qmd",
       ["samples/HostQuickStart/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/Hosting/samples/HostQuickStart/README.md",
+      ["samples/StartupReport/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/Hosting/samples/StartupReport/README.md",
     },
     ["es/modules/linq.qmd"] = {
       ["../../legal/LICENSE.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/legal/LICENSE.md",
