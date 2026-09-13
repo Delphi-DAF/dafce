@@ -16,7 +16,7 @@ the point where the platform takes over the loop.
 uses Daf.Extensions.DependencyInjection, Daf.VCL.Application;
 
 var B := TVclApplication.CreateBuilder;
-B.Services.AddModule<TTicTacToeModule>;
+B.Services.AddSingleton<IMyService, TMyService>;
 var App := B.Build;
 App.Run(TMainForm);          // creates the form, then Vcl.Forms.Application takes over
 ```
@@ -63,6 +63,14 @@ coexist, and the clash is not hypothetical — a sample of the application modul
 
 **The preferred route is still injection.** `DafApp` is the way out for code the container never
 sees, not a way around the container.
+
+---
+
+## Sample
+
+- [`TicTacToeApp`](samples/TicTacToeApp/) — the whole variant in one `.dpr`: the container wires
+  the view model, `Vcl.Forms.Application` gets the loop, and the form reaches the provider through
+  `DafApp`. Its `Specs/` folder runs the domain under MiniSpec.
 
 ---
 

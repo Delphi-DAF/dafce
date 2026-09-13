@@ -418,6 +418,7 @@ return {
     ["en/modules/vcl.qmd"] = {
       ["../../legal/LICENSE.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/legal/LICENSE.md",
       ["README.es.md"] = "/es/modules/vcl.qmd",
+      ["samples/TicTacToeApp/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/VCL/samples/TicTacToeApp",
     },
     ["en/modules/web-guide.qmd"] = {
       ["../README.md"] = "/en/modules/web.qmd",
@@ -766,6 +767,7 @@ return {
     ["es/modules/vcl.qmd"] = {
       ["../../legal/LICENSE.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/legal/LICENSE.md",
       ["README.md"] = "/en/modules/vcl.qmd",
+      ["samples/TicTacToeApp/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/VCL/samples/TicTacToeApp",
     },
     ["es/modules/web-guide.qmd"] = {
       ["../README.es.md"] = "/es/modules/web.qmd",

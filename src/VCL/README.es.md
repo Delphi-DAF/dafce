@@ -16,7 +16,7 @@ Web, hasta el punto en que la plataforma se queda con el bucle.
 uses Daf.Extensions.DependencyInjection, Daf.VCL.Application;
 
 var B := TVclApplication.CreateBuilder;
-B.Services.AddModule<TTicTacToeModule>;
+B.Services.AddSingleton<IMyService, TMyService>;
 var App := B.Build;
 App.Run(TMainForm);          // crea el formulario, y a partir de ahí manda Vcl.Forms.Application
 ```
@@ -63,6 +63,14 @@ escribía `Application.Run` refiriéndose al de la VCL.
 
 **La vía preferente sigue siendo la inyección.** `DafApp` es la salida para el código que el
 contenedor nunca ve, no un rodeo para evitarlo.
+
+---
+
+## Sample
+
+- [`TicTacToeApp`](samples/TicTacToeApp/) — la variante entera en un `.dpr`: el contenedor cablea
+  el view model, `Vcl.Forms.Application` se queda con el bucle, y el formulario llega al proveedor
+  por `DafApp`. Su carpeta `Specs/` ejercita el dominio con MiniSpec.
 
 ---
 
