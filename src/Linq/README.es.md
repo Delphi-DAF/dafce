@@ -50,7 +50,7 @@ for var P in Adultos do                        // nada se ejecutó hasta esta l�
 | `Skip(N)` | perezoso | Descarta los primeros `N` |
 | `Zip<TOther, TResult>` | perezoso | Empareja con otra secuencia elemento a elemento hasta que una termina |
 | `Distinct(Comparer)` | con buffer | Elimina duplicados por valor; pasa un comparador consciente de NULL para semántica SQL |
-| `OrderBy(Comparer)` | con buffer | Ordena mediante un `IComparer<T>` |
+| `OrderBy(Comparer)` | con buffer | Ordena mediante un `IComparer<T>`. Descendente es un comparador invertido: no hay `OrderByDescending` |
 | `GroupBy<TKey>(KeySelector)` | con buffer | Devuelve `IEnumerable<IGrouping<TKey, T>>`, preservando el orden de las claves |
 | `IsEmpty` | terminal | True si no produce nada; se detiene en el primer elemento |
 | `Any(Spec)` | terminal | True si algún elemento cumple; se detiene en la primera coincidencia |
@@ -77,7 +77,7 @@ La contrapartida es que cada llamada a un terminal **vuelve a recorrer la fuente
 
 ```pascal
 Usuarios.Where(EmailEs(X)).SingleOrDefault;   // un email duplicado es un bug → lanza
-Log.OrderByDesc(Fecha).FirstOrDefault;        // se esperan muchos → coge el más reciente
+Entradas.OrderBy(MasRecientePrimero).FirstOrDefault;  // se esperan muchos → coge el más reciente
 ```
 
 `TryFirst` / `TrySingle` son las formas que no lanzan. `TryFirst` es además la única manera de distinguir una secuencia vacía de una cuyo primer elemento vale justo `Default(T)` — algo que `FirstOrDefault` no puede expresar en tipos valor.

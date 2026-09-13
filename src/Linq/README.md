@@ -50,7 +50,7 @@ for var P in Adults do                        // nothing ran until this line
 | `Skip(N)` | lazy | Drops the first `N` |
 | `Zip<TOther, TResult>` | lazy | Pairs with another sequence element-wise until either ends |
 | `Distinct(Comparer)` | buffered | De-duplicates by value; pass a NULL-aware comparer for SQL semantics |
-| `OrderBy(Comparer)` | buffered | Sorts by an `IComparer<T>` |
+| `OrderBy(Comparer)` | buffered | Sorts by an `IComparer<T>`. Descending is an inverted comparer: there is no `OrderByDescending` |
 | `GroupBy<TKey>(KeySelector)` | buffered | Yields `IEnumerable<IGrouping<TKey, T>>`, key order preserved |
 | `IsEmpty` | terminal | True when nothing is produced; stops at the first element |
 | `Any(Spec)` | terminal | True when some element matches; stops at the first match |
@@ -77,7 +77,7 @@ The flip side is that each terminal call **re-enumerates the source**. With an e
 
 ```pascal
 Users.Where(EmailIs(X)).SingleOrDefault;   // a duplicate email is a bug → raise
-Log.OrderByDesc(Stamp).FirstOrDefault;     // many entries expected → take the newest
+Entries.OrderBy(NewestFirst).FirstOrDefault;  // many entries expected → take the newest
 ```
 
 `TryFirst` / `TrySingle` are the non-raising forms. `TryFirst` is also the only way to tell an empty sequence from one whose first element happens to equal `Default(T)` — something `FirstOrDefault` cannot express for value types.
