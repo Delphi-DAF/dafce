@@ -288,6 +288,7 @@ Todo lo que el motor no puede ejecutar fielmente lanza `EInMemoryQueryError` en 
 | `INSERT` / `UPDATE` / `DELETE` | el back-end es de solo lectura; el DML sigue siendo de SQL |
 | `FROM` crudo, `ORDER BY` crudo, `ON` crudo de JOIN, `CombineRaw` | el texto SQL crudo no tiene significado en memoria |
 | `WITH` (CTE), JOIN sobre subconsulta | no soportado |
+| `WhereDate`, `WhereTime`, `WhereDatePart` y sus `Or*` | los casts de fecha son propios de cada dialecto; solo SQL |
 | columnas `SELECT` crudas o con subconsulta | no soportado |
 | una consulta multi-fuente ejecutada con una sola lista | necesita un contexto |
 | una consulta con proyección vía `Elements<T>` | usa `Rows` o `Project` |

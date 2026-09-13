@@ -110,7 +110,7 @@ El motor en memoria sigue la semántica ANSI para que ambos back-ends respondan 
 - **DISTINCT** deduplica sobre las columnas *de salida*, por valor, y los NULL se comparan como iguales.
 - **Los agregados** ignoran los NULL (`COUNT(col)`, `SUM`, `AVG`, `MIN`, `MAX`); `COUNT(*)` cuenta filas.
 - **GROUP BY** agrupa todas las claves NULL en un único grupo.
-- **ORDER BY** trata NULL como el valor más pequeño: nulls primero en ascendente, al final en descendente.
+- **ORDER BY** trata NULL como el valor más pequeño **por defecto** —nulls primero en ascendente, al final en descendente— y una consulta lo cambia por columna con `NullsFirst` / `NullsLast`, que el plan respeta.
 
 Las reglas completas, con ejemplos, están en la [guía de uso](docs/GUIDE.es.md).
 
@@ -118,7 +118,7 @@ Las reglas completas, con ejemplos, están en la [guía de uso](docs/GUIDE.es.md
 
 ## Limitaciones
 
-El back-end es **de solo lectura** — el DML (`INSERT`/`UPDATE`/`DELETE`) sigue siendo exclusivo de SQL. Lo comprueba por el **tipo declarado** de la consulta, no detectando una cláusula de DML: todo lo que no sea una recuperación se rechaza nombrando el tipo que es. Por eso la guarda ya cubre un tipo de sentencia que todavía no existe — uno nuevo se rechaza igual, sin una lista negra cláusula a cláusula que haya que acordarse de actualizar. Los fragmentos de SQL crudo (`FROM` crudo, `ORDER BY` crudo, `ON` crudo de JOIN, `CombineRaw`), las CTE (`WITH`) y los JOIN sobre subconsulta no pueden evaluarse en memoria y lanzan `EInMemoryQueryError`. La ejecución es un recorrido ingenuo — sin índices ni optimización.
+El back-end es **de solo lectura** — el DML (`INSERT`/`UPDATE`/`DELETE`) sigue siendo exclusivo de SQL. Lo comprueba por el **tipo declarado** de la consulta, no detectando una cláusula de DML: todo lo que no sea una recuperación se rechaza nombrando el tipo que es. Por eso la guarda ya cubre un tipo de sentencia que todavía no existe — uno nuevo se rechaza igual, sin una lista negra cláusula a cláusula que haya que acordarse de actualizar. Los fragmentos de SQL crudo (`FROM` crudo, `ORDER BY` crudo, `ON` crudo de JOIN, `CombineRaw`), las CTE (`WITH`), los JOIN sobre subconsulta y los predicados de fecha (`WhereDate`, `WhereTime`, `WhereDatePart`) no pueden evaluarse en memoria y lanzan `EInMemoryQueryError`. La ejecución es un recorrido ingenuo — sin índices ni optimización.
 
 ---
 

@@ -105,3 +105,5 @@ var R := TMySqlCompiler.Create.Compile(
 | Firebird | `EXTRACT(YEAR FROM col)` | `EXTRACT(MONTH FROM col)` | `EXTRACT(DAY FROM col)` | `EXTRACT(HOUR FROM col)` |
 
 > Pasa valores de fecha como cadenas (`'2024-06-15'`) o como valores `TDateTime` de Delphi — el driver de base de datos gestiona la conversión de tipo desde el binding `Variant`.
+
+⚠️ **Estos predicados son solo de SQL.** El cast es propio de cada dialecto, así que [`SQLCute.InMemory`](../../../SQLCute.InMemory/README.es.md) los rechaza con `EInMemoryQueryError` en vez de aproximarlos. Una consulta pensada para los dos back-ends filtra fechas con un `Where` corriente sobre una columna comparable.

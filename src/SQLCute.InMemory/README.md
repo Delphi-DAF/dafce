@@ -110,7 +110,7 @@ The in-memory engine follows ANSI semantics so both back-ends answer the same qu
 - **DISTINCT** de-duplicates over the *output* columns, by value, with NULLs comparing equal.
 - **Aggregates** skip NULLs (`COUNT(col)`, `SUM`, `AVG`, `MIN`, `MAX`); `COUNT(*)` counts rows.
 - **GROUP BY** puts all NULL keys in one group.
-- **ORDER BY** treats NULL as the smallest value: nulls-first ascending, nulls-last descending.
+- **ORDER BY** treats NULL as the smallest value by default — nulls-first ascending, nulls-last descending — and a query overrides that per column with `NullsFirst` / `NullsLast`, which the plan honors.
 
 The full rules, with examples, are in the [usage guide](docs/GUIDE.md).
 
@@ -118,7 +118,7 @@ The full rules, with examples, are in the [usage guide](docs/GUIDE.md).
 
 ## Limitations
 
-The back-end is **read-only** — DML (`INSERT`/`UPDATE`/`DELETE`) stays SQL-only. It checks this by the query's **declared kind**, not by spotting a DML clause: anything that is not a retrieval is rejected naming the kind it is. That is why the guard already covers a statement kind that does not exist yet — a new one is refused the same way, without a clause-by-clause blacklist to remember to update. Raw SQL fragments (raw `FROM`, raw `ORDER BY`, raw JOIN `ON`, `CombineRaw`), CTEs (`WITH`) and subquery JOINs cannot be evaluated in memory and raise `EInMemoryQueryError`. Execution is a naive scan — no indexing or optimization.
+The back-end is **read-only** — DML (`INSERT`/`UPDATE`/`DELETE`) stays SQL-only. It checks this by the query's **declared kind**, not by spotting a DML clause: anything that is not a retrieval is rejected naming the kind it is. That is why the guard already covers a statement kind that does not exist yet — a new one is refused the same way, without a clause-by-clause blacklist to remember to update. Raw SQL fragments (raw `FROM`, raw `ORDER BY`, raw JOIN `ON`, `CombineRaw`), CTEs (`WITH`), subquery JOINs and the date predicates (`WhereDate`, `WhereTime`, `WhereDatePart`) cannot be evaluated in memory and raise `EInMemoryQueryError`. Execution is a naive scan — no indexing or optimization.
 
 ---
 

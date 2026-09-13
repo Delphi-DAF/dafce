@@ -288,6 +288,7 @@ Everything the engine cannot faithfully execute raises `EInMemoryQueryError` at 
 | `INSERT` / `UPDATE` / `DELETE` | the back-end is read-only; DML stays SQL-only |
 | raw `FROM`, raw `ORDER BY`, raw JOIN `ON`, `CombineRaw` | raw SQL text has no in-memory meaning |
 | `WITH` (CTEs), subquery JOINs | not supported |
+| `WhereDate`, `WhereTime`, `WhereDatePart` and their `Or*` | the date casts are dialect-specific; SQL-only |
 | raw / subquery `SELECT` columns | not supported |
 | a multi-source query run with a single list | needs a context |
 | a projecting query run through `Elements<T>` | use `Rows` or `Project` |
