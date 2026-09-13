@@ -1,360 +1,46 @@
-# Ejemplo de Servicio Hospedado en DAF
+# HostedService — componer el log desde la configuración, y un worker inyectado
 
-Este ejemplo demuestra cómo implementar y utilizar servicios hospedados en DAF (Delphi Application Framework), mostrando diferentes patrones de servicios en segundo plano y su ciclo de vida.
+Un sample de la edición y no de un módulo: combina `Daf.Cli` y `Daf.NNLog`, y ningún paquete declara
+los dos, así que no hay módulo bajo el que archivarlo.
 
-## Estructura del Proyecto
+## Qué enseña
 
-El proyecto está organizado en varios archivos que muestran diferentes tipos de servicios hospedados:
+- **El builder responde antes de construir nada.** `B.Environment.BinPath` y
+  `B.Environment.ApplicationName` componen la ruta del `appsettings.json` ahí mismo, y el proveedor
+  de log se compone leyendo lo que se acaba de añadir:
+  `B.Logging.AddProvider(TNNLogLoader.BuildProvider(B.Environment, B.Configuration.GetSection('Logging:NLog')))`.
+- **El fichero de log configura tres destinos y dos reglas**: consola con `layout` y color, fichero
+  bajo `${binPath}logs/`, y UDP. Las tres unidades de destino —`DAF.NNLog.Targets.Console`,
+  `.File_` y `.UDP`— están en el `uses` del `.dpr` porque el cargador las resuelve por RTTI y el
+  enlazador descarta lo que nadie nombra. Por lo mismo está `{$STRONGLINKTYPES ON}`.
+- **El worker se construye por inyección**: `THostedWorker.Create(const LoggerFactory: ILoggerFactory;
+  const Lifetime: IHostApplicationLifetime)`, y el contenedor resuelve los dos.
+- **La parada es cooperativa.** El worker se registra en `Lifetime.ApplicationStopping` para avisar,
+  y su bucle espera con `Token.WaitFor(1000) = wrTimeout` en vez de dormir: así la cancelación se
+  atiende en cuanto llega y no al final del segundo.
+- **Ámbitos de log anidados**: `BeginScope('working with guid {guid}', […])` envuelve el bucle
+  entero, y dentro `BeginScope('scope {number}', [Idx], procedure …)` envuelve cada vuelta.
 
-- `HostedService.dpr`: Punto de entrada de la aplicación
-- `HostedWorker.pas`: Implementación de servicios hospedados
-- `Files/`: Directorio con archivos de configuración
-- `HostedServiceWithTimer.dpr`: Ejemplo adicional con temporizador
+## Sin trabajo declarado, el host arranca y para
 
-## Tipos de Servicios Hospedados
-
-### 1. Servicio de Ejecución Continua
-```pascal
-TBackgroundWorker = class(TInterfacedObject, IHostedService)
-  // Servicio que se ejecuta continuamente en segundo plano
-  // Implementa un bucle de procesamiento
-end;
-```
-
-### 2. Servicio con Temporizador
-```pascal
-TTimerHostedService = class(TInterfacedObject, IHostedService)
-  // Servicio que se ejecuta en intervalos regulares
-  // Utiliza un temporizador para programar tareas
-end;
-```
-
-## Características Implementadas
-
-### 1. Ciclo de Vida de Servicios
-- Inicialización ordenada
-- Ejecución controlada
-- Finalización graceful
-- Manejo de cancelación
-
-### 2. Patrones de Ejecución
-- Ejecución continua
-- Ejecución programada
-- Ejecución con temporizador
-- Manejo de errores
-
-### 3. Integración con el Host
-- Registro de servicios
-- Control de dependencias
-- Configuración
-- Logging
-
-## Ejemplo de Implementación
-
-```pascal
-// Servicio de ejecución continua
-type
-  TBackgroundWorker = class(TInterfacedObject, IHostedService)
-  private
-    FStopping: Boolean;
-  public
-    procedure Start;
-    procedure Stop;
-  end;
-
-// Servicio con temporizador
-type
-  TTimerHostedService = class(TInterfacedObject, IHostedService)
-  private
-    FTimer: TTimer;
-  public
-    procedure Start;
-    procedure Stop;
-  end;
-```
-
-## Configuración del Host
-
-```pascal
-var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
-
-// El entorno ya responde al volver del constructor: no hace falta un callback para leerlo.
-var JsonFilePath := TPath.Combine(B.Environment.BinPath, B.Environment.ApplicationName,
-                                  'appsettings.json');
-JsonConfig.AddFile(B.Configuration, JsonFilePath);
-
-// Registrar servicios hospedados
-B.Services.AddHostedService<TBackgroundWorker>;
-B.Services.AddHostedService<TTimerHostedService>;
-
-// El proveedor de log se compone leyendo la configuración que se acaba de añadir.
-B.Logging.AddProvider(TNNLogLoader.BuildProvider(
-  B.Environment, B.Configuration.GetSection('Logging:NLog')));
-
-ExitCode := B.Build.Run;
-```
-
-## El programa completo
-
-Lo de arriba es el fragmento que explica la forma. Este es el `.dpr` que compila, íntegro:
-
-<!-- quickstart: src/samples/HostedService/HostedService.dpr -->
-
-```pascal
-program HostedService;
-
-{$APPTYPE CONSOLE}
-{$STRONGLINKTYPES ON}
-uses
-  System.SysUtils,
-  System.IOUtils,
-  Daf.Extensions.Logging,
-  Daf.Logging.Provider,
-  Daf.NNLog.Loader,
-  Daf.NNLog.Targets.Console,
-  Daf.NNLog.Targets.File_,
-  Daf.NNLog.Targets.UDP,
-  Daf.Extensions.DependencyInjection,
-  // Por AddHostedService, que es metodo del record helper que declara esta unit.
-  Daf.Extensions.Hosting,
-  Daf.Extensions.Configuration,
-  Daf.Configuration.Json,
-  Daf.CommandLine,
-  Daf.Configuration.CommandLine,
-  Daf.Cli,
-  HostedWorker in 'HostedWorker.pas';
-
-begin
-  ReportMemoryLeaksOnShutdown := True;
-  try
-    var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
-
-    // El builder expone el entorno antes de construir el host, asi que la ruta del
-    // appsettings se resuelve aqui mismo.
-    var JsonFilePath := TPath.Combine(B.Environment.BinPath, B.Environment.ApplicationName, 'appsettings.json');
-    JsonConfig.AddFile(B.Configuration, JsonFilePath);
-
-    // Y la configuracion tambien: el proveedor de log se compone leyendo lo que se acaba de anadir.
-    B.Logging.AddProvider(TNNLogLoader.BuildProvider(B.Environment, B.Configuration.GetSection('Logging:NLog')));
-
-    B.Services.AddHostedService<THostedWorker>;
-
-    ExitCode := B.Build.Run;
-  except
-    on E: Exception do
-    begin
-      Write(E.Message);
-      ReadLn;
-    end;
-  end;
-end.
-```
-
-## Flujo de Ejecución
-
-1. **Inicio del Servicio**:
-   - Inicialización de recursos
-   - Configuración del servicio
-   - Inicio de la ejecución
-
-2. **Ejecución**:
-   - Procesamiento de tareas
-   - Manejo de errores
-   - Registro de eventos
-
-3. **Detención**:
-   - Señal de detención
-   - Finalización de tareas en curso
-   - Liberación de recursos
-
-## Beneficios del Diseño
-
-1. **Confiabilidad**: Manejo robusto de errores y recuperación
-2. **Mantenibilidad**: Separación clara de responsabilidades
-3. **Escalabilidad**: Fácil adición de nuevos servicios
-4. **Testabilidad**: Servicios aislados y verificables
-
-## Ejecución del Ejemplo
-
-1. Compilar y ejecutar la aplicación
-2. Los servicios mostrarán:
-   - Mensajes de inicio/detención
-   - Progreso de ejecución
-   - Eventos y errores
-
-## Consideraciones para Producción
-
-### 1. Manejo de Errores
-- Implementar reintentos
-- Logging detallado
-- Notificaciones de error
-- Recuperación automática
-
-### 2. Monitoreo
-- Health checks
-- Métricas de rendimiento
-- Estado del servicio
-- Uso de recursos
-
-### 3. Configuración
-- Parámetros ajustables
-- Diferentes entornos
-- Secretos y credenciales
-- Timeouts y límites
-
-## Notas Adicionales
-
-- Los servicios pueden ser utilizados en aplicaciones de consola o servicios de Windows
-- Es posible implementar servicios distribuidos
-- Se pueden agregar mecanismos de coordinación entre servicios
-- El diseño permite fácil migración a contenedores
-- Considerar el uso de patrones como Circuit Breaker o Retry
-
-## Mejores Prácticas
-
-1. **Diseño de Servicios**:
-   - Mantener servicios pequeños y enfocados
-   - Implementar interfaces claras
-   - Documentar comportamiento esperado
-   - Considerar concurrencia
-
-2. **Manejo de Recursos**:
-   - Liberar recursos apropiadamente
-   - Implementar timeouts
-   - Manejar conexiones eficientemente
-   - Monitorear uso de memoria
-
-3. **Logging y Diagnóstico**:
-   - Usar niveles de log apropiados
-   - Incluir contexto relevante
-   - Implementar trazas distribuidas
-   - Facilitar debugging
-
-# HostedServiceWithTimer Sample
-
-Este ejemplo muestra cómo implementar un `IHostedService` con un bucle controlado por temporizador usando `TThread` y `TEvent`.
-
-## Objetivo
-
-- Ejecutar una tarea periódica en segundo plano
-- Detenerla limpiamente cuando la aplicación finaliza
-
-
-## Resultado esperado
+El `.dpr` no declara `OnExecute` ni registra un `ICliHandler`, y para `TCliApplication` eso es un
+desenlace válido: la aplicación *son* sus tareas de arranque y sus servicios alojados, así que `Run`
+arranca el host, no encuentra trabajo y lo para. El apagado señaliza `ApplicationStopping` antes de
+llamar a `Stop`, de modo que **el bucle del worker no llega a dar una vuelta**:
 
 ```
-🟢 TTimedWorker.Start called
-[10:32:01] TTimedWorker running...
-[10:32:02] TTimedWorker running...
-...
-🔴 TTimedWorker.Stop called
+INFO [HostedWorker.THostedWorker] THostedWorker.Start called
+WARN [HostedWorker.THostedWorker] El host se está apagando, THostedWorker preparando su salida...
+INFO [HostedWorker.THostedWorker] Servicio finalizó correctamente
+INFO [HostedWorker.THostedWorker] THostedWorker.Stop called
 ```
 
-## Casos de uso
+Para ver el worker trabajando hace falta darle al `.dpr` algo que espere — un `OnExecute` que
+bloquee hasta la señal de apagado.
 
-- Workers periódicos
-- Monitores de sistema
-- Polling de APIs, colas, etc.
+## Ejecutar
 
-## Requisitos
-
-- Delphi
-- DAF con soporte para `IHostedService`
-- 
-# 🗭 DAF – ¿Cuándo usar `HostedService` y cuándo usar `MediatR`?
-
-Una de las decisiones clave al desarrollar aplicaciones modernas con DAF es elegir **el patrón adecuado para ejecutar lógica de infraestructura o negocio**. Esta guía te ayuda a decidir entre usar un `HostedService` o un `MediatR Handler`.
-
----
-
-## 🗱 HostedService
-
-Un `HostedService` representa un **servicio de infraestructura de larga duración**, que:
-
-- Se **inicia automáticamente** al arrancar la aplicación.
-- Tiene **ciclo de vida propio** (`Start` / `Stop`).
-- Puede ejecutarse en **hilo de fondo** (con `TTask`) o directamente.
-
-### ✅ Cuándo usarlo
-
-- Polling de base de datos, colas o servicios externos.
-- Timers recurrentes (por ejemplo: cada 5 segundos).
-- Servicios que necesitan vivir toda la vida de la app (caches, watchdogs).
-- Tareas programadas o automáticas que no dependen de un trigger de dominio.
-
-### 📌 Ejemplo
-
-```delphi
-type
-  TEmailSyncWorker = class(TInterfacedObject, IHostedService)
-  private
-    procedure DoWork(const Token: ICancellationToken);
-  public
-    procedure Start;
-    procedure Stop;
-  end;
 ```
-
----
-
-## 🎯 MediatR
-
-`MediatR` implementa un patrón de mensajería para representar **acciones discretas o eventos del dominio**. Es ideal para modelar:
-
-- Intenciones del usuario o sistema → `IRequest` (comandos).
-- Notificaciones de eventos → `INotification`.
-
-### ✅ Cuándo usarlo
-
-- Cuando una acción debe ejecutarse **una vez y de forma explícita**.
-- Si forma parte de la **capa de aplicación o dominio**.
-- Cuando se dispara a raíz de un controlador, un cambio de estado o un evento.
-- Para separar lógica de infraestructura del negocio.
-
-### 📌 Ejemplo
-
-```delphi
-type
-  TRefreshCacheCommand = class(TInterfacedObject, IRequest)
-  end;
-
-type
-  TRefreshCacheHandler = class(TInterfacedObject, IRequestHandler<TRefreshCacheCommand>)
-    procedure Handle(const Request: TRefreshCacheCommand);
-  end;
+BDS make --project:src/samples/HostedService/HostedService.dproj
+out\Win32\samples\bin\HostedService.exe
 ```
-
----
-
-## 🧠 Reglas prácticas
-
-| Si... | Usa... |
-|-------|--------|
-| Necesita ejecutarse periódicamente | `HostedService` |
-| Necesita hilo de fondo o cancelación por token | `HostedService` |
-| Es una acción explícita disparada por la app | `MediatR Command` |
-| Es una reacción a un evento | `MediatR Notification` |
-| Se ejecuta solo una vez | `MediatR` |
-| Necesita iniciarse automáticamente | `HostedService` |
-
----
-
-## 📄 Consejo Delphi
-
-Delphi no tiene `async/await` como en .NET, así que los `HostedServices` con `TTask.Run` deben:
-- Capturar excepciones (`try..except`)
-- Cancelarse con `ICancellationToken`
-- Llamar a `Wait` en `Stop` para garantizar limpieza
-
----
-
-## 📂 Conclusión
-
-Usar correctamente `HostedService` y `MediatR` mejora:
-
-- La claridad del diseño.
-- El mantenimiento de la solución.
-- La testabilidad de cada componente.
-
-Ambos son herramientas potentes dentro de DAF. Elegir bien cuál aplicar hace tu código más limpio y tu arquitectura más robusta.
-
