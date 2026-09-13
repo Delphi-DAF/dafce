@@ -17,12 +17,13 @@ Todos los tipos se encuentran en `Daf.Extensions.Configuration`.
 
 | Interfaz | Rol |
 |----------|-----|
-| `IConfiguration` | Almacén clave-valor con navegación por secciones |
+| `IConfiguration` | Almacén clave-valor con navegación por secciones; `Exists` y `Find` contestan la presencia |
 | `IConfigurationSection` | Subárbol nombrado de `IConfiguration` — añade `Key`, `Path`, `Value`, `HasChildren` |
 | `IConfigurationRoot` | Raíz del árbol — añade `Reload` y `Providers` |
 | `IConfigurationBuilder` | Constructor fluido: añade fuentes y llama a `Build` |
 | `IConfigurationProvider` | Implementación de una fuente: `TryGet`, `Set`, `Load`, `GetChildKeys` |
 | `IConfigurationSource` | Factoría de un proveedor: `Build(Builder): IConfigurationProvider` |
+| `IConfigurationManager` | Constructor **y** lectura sobre un solo objeto: se lee mientras se está construyendo |
 
 ### Acceso a claves
 
@@ -38,7 +39,7 @@ El separador de claves es `:`. Las secciones exponen `GetChildren` para iterar l
 Clase de utilidades para manipulación de rutas:
 
 ```pascal
-TConfigurationPath.Combine('Database', 'Host')    // 'Database:Host'
+TConfigurationPath.Combine(['Database', 'Host'])  // 'Database:Host'
 TConfigurationPath.GetSectionKey('Database:Host') // 'Host'
 TConfigurationPath.GetParentPath('Database:Host') // 'Database'
 ```
@@ -53,6 +54,6 @@ type TConfigurationSourceOption = (csoOptional, csoReloadOnChange);
 
 ## Dependencias
 
-Sin dependencias de otros módulos DAF. Solo RTL de Delphi.
+Solo `Daf.Commons`, por el `TNullable<T>` que devuelve `Find` y el RTTI con el que el enlazador recorre los tipos.
 
 La implementación está en [`Configuration`](../Configuration/README.es.md).

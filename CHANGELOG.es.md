@@ -33,6 +33,8 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 - **Logging**: `Builder.AddNullProvider` — descartar las entradas a propósito, dicho al componer
 - **Configuration**: Cuarto proveedor, la línea de comandos — `CommandLineConfig.AddArgs`, en `Daf.Configuration.CommandLine`, lee los argumentos del proceso como claves. Las formas admitidas, en el README
 - **Configuration**: `ConfigOptions.Bind<T>` — una sección llega tipada y con dueño a quien la necesita, y el servicio deja de nombrar su sección: la decide el arranque
+- ⚠️ **Configuration**: `IConfiguration.Exists` y `Find` — la presencia se **pregunta**, no se deduce de que el valor esté vacío; `Find` contesta presencia y valor en una sola consulta, como `TNullable<string>`. El indexador sigue siendo `string`. **Rompe** a quien implemente `IConfiguration` sin heredar de `TConfigurationRoot`
+- **Configuration**: `IConfigurationManager` — constructor y lectura sobre el mismo objeto, así que la configuración se lee mientras se está componiendo. Cada `Add` construye y carga solo el proveedor nuevo
 - **Hosting**: `IStartupTask` y `AddStartupTask<T>` — inicialización que corre una vez al arrancar, con el proveedor ya construido y antes de los `IHostedService`. Si una falla, el arranque aborta
 - **Hosting**: `THost.CreateBuilder` e `IGenericHostBuilder` — el punto de entrada del host genérico, en la forma de la familia: `var Builder := THost.CreateBuilder;`. `THostBuilder.Create` sigue existiendo, y encadenar sobre él sigue fugando la instancia
 - **Application**: La familia de aplicaciones — `TCliApplication` (`Daf.Cli`), `TVclApplication` (`Daf.VCL`), `TFmxApplication` (`Daf.FMX`) y `TWebApplication` (`Daf.Web`): el mismo arranque hasta que la plataforma toma el bucle, y alrededor de `Run` el código de salida y los metadatos de versión. FMX no añade targets: siguen siendo Win32 y Win64
@@ -116,6 +118,7 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 - **MediatR**: Componer dos veces en un mismo proceso da el mismo resultado; la contabilidad de paquetes ya escaneados era estado global de unit
 - **SQLCute**: `WhereIn` con un conjunto de valores **vacío** emitía `col IN ()`, inválido en casi cualquier motor; ahora no casa ninguna fila y `WhereNotIn` las casa todas, igual en los dos back-ends. Afecta también a `OrWhereIn` / `OrWhereNotIn` y a `IsIn([])`
 - **Application**: `TVersionInfo.Tag` estaba **siempre vacío**, y `GetFrom` sobre una clase sin atributo devolvía lo que hubiera en la memoria del destino
+- **Configuration**: Una clave encadenada cuyo valor **es** la cadena vacía ya no desaparece al atravesar la cadena: `TChainedConfigurationProvider` pregunta la presencia en vez de deducirla del valor
 - **Commons**: `TMacrosList.GetValueFromIndex` devolvía cadena vacía en toda lectura de macro
 - **Docs**: El arranque que enseñaba la documentación **no compilaba**, la guía describía una superficie de `IDafApplication` que no era la real, y la de Hosting seguía prometiendo el descubrimiento automático de los `IAppModule`. Ahora enseña `AddModule<T>`
 

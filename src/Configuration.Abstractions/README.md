@@ -17,12 +17,13 @@ All types live in `Daf.Extensions.Configuration`.
 
 | Interface | Role |
 |-----------|------|
-| `IConfiguration` | Read/write key-value store with section navigation |
+| `IConfiguration` | Read/write key-value store with section navigation; `Exists` and `Find` answer presence |
 | `IConfigurationSection` | A named subtree of `IConfiguration` — adds `Key`, `Path`, `Value`, `HasChildren` |
 | `IConfigurationRoot` | Root of the tree — adds `Reload` and `Providers` |
 | `IConfigurationBuilder` | Fluent builder: add sources, then call `Build` |
 | `IConfigurationProvider` | Single source implementation: `TryGet`, `Set`, `Load`, `GetChildKeys` |
 | `IConfigurationSource` | Factory for a provider: `Build(Builder): IConfigurationProvider` |
+| `IConfigurationManager` | Builder **and** reader on one object: it is read while it is still being built |
 
 ### Key access
 
@@ -38,7 +39,7 @@ Key separator is `:`. Sections expose `GetChildren` to iterate sub-keys.
 Utility class for path manipulation:
 
 ```pascal
-TConfigurationPath.Combine('Database', 'Host')  // 'Database:Host'
+TConfigurationPath.Combine(['Database', 'Host']) // 'Database:Host'
 TConfigurationPath.GetSectionKey('Database:Host') // 'Host'
 TConfigurationPath.GetParentPath('Database:Host') // 'Database'
 ```
@@ -53,6 +54,6 @@ type TConfigurationSourceOption = (csoOptional, csoReloadOnChange);
 
 ## Dependencies
 
-No dependencies on other DAF modules. Delphi RTL only.
+`Daf.Commons` only, for the `TNullable<T>` that `Find` returns and the RTTI the binder walks types with.
 
 The implementation is in [`Configuration`](../Configuration/README.md).

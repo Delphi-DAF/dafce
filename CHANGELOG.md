@@ -34,6 +34,8 @@ The changes that break compilation are collected, with their example diff, in `M
 - **Logging**: `Builder.AddNullProvider` — discarding entries on purpose, stated while composing
 - **Configuration**: A fourth provider, the command line — `CommandLineConfig.AddArgs`, in `Daf.Configuration.CommandLine`, reads the process arguments as keys. The accepted forms, in the README
 - **Configuration**: `ConfigOptions.Bind<T>` — a section arrives typed and owned to whoever needs it, and the service stops naming its section: startup decides it
+- ⚠️ **Configuration**: `IConfiguration.Exists` and `Find` — presence is **asked**, not inferred from an empty value; `Find` answers presence and value in one lookup, as a `TNullable<string>`. The indexer stays a `string`. **Breaks** whoever implements `IConfiguration` without inheriting from `TConfigurationRoot`
+- **Configuration**: `IConfigurationManager` — builder and reader on the same object, so configuration can be read while it is still being composed. Each `Add` builds and loads only the new provider
 - **Hosting**: `IStartupTask` and `AddStartupTask<T>` — initialization that runs once at startup, with the provider already built and before the `IHostedService`s. If one fails, startup aborts
 - **Hosting**: `THost.CreateBuilder` and `IGenericHostBuilder` — the generic host's entry point, in the family's shape: `var Builder := THost.CreateBuilder;`. `THostBuilder.Create` still exists, and chaining off it still leaks the instance
 - **Application**: The application family — `TCliApplication` (`Daf.Cli`), `TVclApplication` (`Daf.VCL`), `TFmxApplication` (`Daf.FMX`) and `TWebApplication` (`Daf.Web`): the same startup up to where the platform takes over the loop, and around `Run` the exit code and the version metadata. FMX adds no targets: they are still Win32 and Win64
@@ -117,6 +119,7 @@ The changes that break compilation are collected, with their example diff, in `M
 - **MediatR**: Composing twice in the same process gives the same result; the accounting of already-scanned packages was unit-global state
 - **SQLCute**: `WhereIn` with an **empty** set of values emitted `col IN ()`, invalid on almost any engine; it now matches no row and `WhereNotIn` matches them all, alike on both back-ends. It also affects `OrWhereIn` / `OrWhereNotIn` and `IsIn([])`
 - **Application**: `TVersionInfo.Tag` was **always empty**, and `GetFrom` on a class with no attribute returned whatever was in the target's memory
+- **Configuration**: A chained key whose value **is** the empty string no longer disappears on its way through the chain: `TChainedConfigurationProvider` asks for presence instead of inferring it from the value
 - **Commons**: `TMacrosList.GetValueFromIndex` returned an empty string on every macro read
 - **Docs**: The startup the documentation taught **did not compile**, the guide described a surface of `IDafApplication` that was not the real one, and Hosting's still promised automatic discovery of `IAppModule`s. It now teaches `AddModule<T>`
 
