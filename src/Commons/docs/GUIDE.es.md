@@ -178,22 +178,29 @@ enumerador **nuevo**, con su propio estado.
 
 ### IInterfaceList\<T\>
 
-Lista con tipo seguro de referencias a interfaces, con soporte `GetEnumerator`.
+La `TInterfaceList` de la RTL con un `GetEnumerator` tipado encima, que es todo lo que añade: la
+variable del bucle es una `T` y no una `IInterface`.
 
 ```pascal
 var Lista := TInterfaceList<IMyService>.Create;
 Lista.Add(ServicioA);
 Lista.Add(ServicioB);
 
-if not Lista.IsEmpty then
-  for var Svc in Lista do
-    Svc.Execute;
+for var Svc in Lista do         // Svc es IMyService
+  Svc.Execute;
+```
 
-// Buscar por predicado
+`IsEmpty`, `TryFind`, `First`, `Last` e `ItemType` están en la `TInterfaceList` **no genérica** que
+esta unit también declara, no en la genérica:
+
+```pascal
+var Cualquiera := TInterfaceList.Create;
+Cualquiera.Add(ServicioA);
+
 var Encontrado: IMyService;
-if Lista.TryFind(
+if not Cualquiera.IsEmpty and Cualquiera.TryFind(
     function(I: IInterface): Boolean
-    begin Result := (I as IMyService).Name = 'objetivo'; end,
+    begin Result := Supports(I, IMyService); end,
     Encontrado) then
   Encontrado.Execute;
 ```

@@ -177,22 +177,29 @@ enumerator, with its own state.
 
 ### IInterfaceList\<T\>
 
-Type-safe list of interface references, with `GetEnumerator` support.
+The RTL's `TInterfaceList` with a typed `GetEnumerator` on top, which is all it adds: the loop
+variable is a `T`, not an `IInterface`.
 
 ```pascal
 var List := TInterfaceList<IMyService>.Create;
 List.Add(ServiceA);
 List.Add(ServiceB);
 
-if not List.IsEmpty then
-  for var Svc in List do
-    Svc.Execute;
+for var Svc in List do          // Svc is IMyService
+  Svc.Execute;
+```
 
-// Search by predicate
+`IsEmpty`, `TryFind`, `First`, `Last` and `ItemType` are on the **non-generic** `TInterfaceList`
+this unit also declares, not on the generic one:
+
+```pascal
+var Any := TInterfaceList.Create;
+Any.Add(ServiceA);
+
 var Found: IMyService;
-if List.TryFind(
+if not Any.IsEmpty and Any.TryFind(
     function(I: IInterface): Boolean
-    begin Result := (I as IMyService).Name = 'target'; end,
+    begin Result := Supports(I, IMyService); end,
     Found) then
   Found.Execute;
 ```
@@ -209,7 +216,7 @@ uses Daf.Rtti;
 // Type names and GUIDs
 var Name := _T.NameOf<IMyService>;            // 'IMyService'
 var Guid := _T.GUID<IMyService>;              // TGUID
-var Unit := _T.UnitNameOf<IMyService>;        // 'MyUnit'
+var UnitName := _T.UnitNameOf<IMyService>;    // 'MyUnit'
 
 // Check interface hierarchy (PTypeInfo overloads)
 if _T.Extends(TypeInfo(IChildService), TypeInfo(IMyService)) then
