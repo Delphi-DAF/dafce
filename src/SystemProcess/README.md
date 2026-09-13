@@ -20,7 +20,7 @@ var Proc := TSystemProcess.Builder
   .Command('git')
   .CmdArgs(['log', '--oneline', '-10'])
   .WorkingDir('C:\MyRepo')
-  .Timeout(30000)               // ms, 0 = INFINITE
+  .Timeout(30000)               // ms; without this call there is no deadline
   .KillAfterTimeout(True)
   .HideWindow(True)
   .OnStdOut(procedure(Line: string) begin WriteLn(Line); end)
@@ -39,15 +39,30 @@ var Result := Proc.Execute;      // synchronous
 var Future := Proc.ExecuteAsync; // or asynchronous
 ```
 
+`Timeout` sets a deadline in milliseconds, and there is none unless you call it. `Timeout(0)` is a
+deadline of zero: it kills the process on the first poll, 250 ms in.
+
 ## TProcessResult
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `Status` | `TStatus` | `Completed`, `Failed`, `Timeout`, `Canceled`, `Killed` |
-| `ExitCode` | `DWORD` | Process exit code |
+| `Status` | `TStatus` | `Failed`, `Timeout`, `Running`, `Completed`, `Canceled` — see below |
+| `ExitCode` | `DWORD` | The process exit code when `Completed`; `GetLastError` when `Failed`; 0 otherwise |
 | `Duration` | `TTimeSpan` | Wall-clock execution time |
-| `LastError` | `string` | Error description (failed / killed cases) |
+| `LastError` | `string` | Error description. Only `Failed` fills it in |
 | `Succeeded` | `function: Boolean` | `Status = Completed` and `ExitCode = 0` |
+
+`TStatus` is scoped, so its values are written `TProcessResult.TStatus.Completed`:
+
+| Value | When |
+|-------|------|
+| `Running` | the process is alive — the value `OnIdle` gets on every poll |
+| `Completed` | it exited on its own; `ExitCode` is the process's |
+| `Failed` | it could not be launched, or the wait ended without it signalling |
+| `Timeout` | the deadline expired, or `Kill` was called; the process is killed in both cases |
+| `Canceled` | the cancellation token was signalled and the process is killed. `Failed` if the kill does not succeed |
+
+There is no `Killed` value: a `Kill` and an expired deadline both land on `Timeout`.
 
 ## Cooperating with shutdown
 

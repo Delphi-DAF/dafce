@@ -20,7 +20,7 @@ var Proc := TSystemProcess.Builder
   .Command('git')
   .CmdArgs(['log', '--oneline', '-10'])
   .WorkingDir('C:\MyRepo')
-  .Timeout(30000)               // ms, 0 = INFINITO
+  .Timeout(30000)               // ms; sin esta llamada no hay plazo
   .KillAfterTimeout(True)
   .HideWindow(True)
   .OnStdOut(procedure(Line: string) begin WriteLn(Line); end)
@@ -39,15 +39,30 @@ var Result := Proc.Execute;      // síncrono
 var Future := Proc.ExecuteAsync; // o asíncrono
 ```
 
+`Timeout` fija un plazo en milisegundos, y no hay ninguno mientras no se llame. `Timeout(0)` es un
+plazo de cero: mata el proceso en el primer sondeo, a los 250 ms.
+
 ## TProcessResult
 
 | Campo | Tipo | Descripción |
 |-------|------|-------------|
-| `Status` | `TStatus` | `Completed`, `Failed`, `Timeout`, `Canceled`, `Killed` |
-| `ExitCode` | `DWORD` | Código de salida del proceso |
+| `Status` | `TStatus` | `Failed`, `Timeout`, `Running`, `Completed`, `Canceled` — ver abajo |
+| `ExitCode` | `DWORD` | El código de salida del proceso si `Completed`; `GetLastError` si `Failed`; 0 en el resto |
 | `Duration` | `TTimeSpan` | Tiempo de ejecución de reloj |
-| `LastError` | `string` | Descripción del error (casos fallido / matado) |
+| `LastError` | `string` | Descripción del error. Solo `Failed` lo rellena |
 | `Succeeded` | `function: Boolean` | `Status = Completed` y `ExitCode = 0` |
+
+`TStatus` es de ámbito, así que sus valores se escriben `TProcessResult.TStatus.Completed`:
+
+| Valor | Cuándo |
+|-------|--------|
+| `Running` | el proceso sigue vivo — es el valor que recibe `OnIdle` en cada sondeo |
+| `Completed` | terminó por su cuenta; `ExitCode` es el del proceso |
+| `Failed` | no se pudo lanzar, o la espera acabó sin que el proceso señalizara |
+| `Timeout` | venció el plazo, o se llamó a `Kill`; en los dos casos el proceso muere |
+| `Canceled` | el token de cancelación se señalizó y el proceso muere. `Failed` si matarlo no sale bien |
+
+No hay valor `Killed`: tanto un `Kill` como un plazo vencido caen en `Timeout`.
 
 ## Cooperar con el apagado
 
