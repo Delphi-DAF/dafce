@@ -107,4 +107,4 @@ var Service := TCatalogService.Create(Repo);
 
 The in-memory adapter is not a test stub. Running several rules over one already-loaded collection is a production path — load once, then resolve N specifications against the loaded set, with the same specification type that would go to a database. That is why the "one rule, two back-ends" symmetry has a concrete motive rather than an aesthetic one.
 
-A database-backed adapter — SQL execution, driver, row materialization — is a separate change. Defining a port and shipping one adapter is how hexagonal architecture is meant to proceed; you do not wait for the database to define the port.
+There is no database-backed adapter: SQL execution, driver and row materialization are not part of this package or of `Daf.SQLCute.Specification`.

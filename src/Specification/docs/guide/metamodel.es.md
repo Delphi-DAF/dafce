@@ -54,7 +54,7 @@ begin
 end;
 ```
 
-Ojo a la consecuencia del `class constructor`: corre durante la inicialización de la unidad, así que un metamodelo obsoleto falla al arrancar y no a mitad de una consulta. Esa es la intención. Si quieres dispararlo a propósito en un test, usa un `class procedure` como inicializador — un class constructor que lanza se llevaría por delante al ejecutor entero antes de que corriera un solo escenario.
+Ojo a la consecuencia del `class constructor`: corre durante la inicialización de la unidad, así que un metamodelo obsoleto falla al arrancar y no a mitad de una consulta, y se lleva por delante al ejecutor entero antes de que corra un solo escenario. Para dispararlo a propósito en un test, usa un `class procedure` como inicializador.
 
 ---
 
@@ -71,7 +71,7 @@ var Runtime := TEntityExpr<TProduct>.Create(nil);
 (ProductMeta.Price > 100) and (Runtime.Prop('Active') = True)      // compone con normalidad
 ```
 
-Así que adoptar un metamodelo para una entidad caliente, o abandonarlo más tarde, es una edición local y no una migración. Si alguna capacidad fuera exclusiva del metamodelo, la opción se habría convertido en un requisito.
+Así que adoptar un metamodelo para una entidad caliente, o abandonarlo más tarde, es una edición local y no una migración.
 
 ---
 
@@ -79,4 +79,3 @@ Así que adoptar un metamodelo para una entidad caliente, o abandonarlo más tar
 
 A grandes rasgos: para entidades consultadas desde muchos sitios, donde un renombrado o una errata los encontraría un test de integración fallido en lugar del compilador. Para una entidad que se consulta una vez desde un servicio, `Prop('Price')` dentro de un `TEntityExpr<T>` ya valida el nombre, y el metamodelo añade un fichero que mantener sincronizado a cambio de poco.
 
-La generación queda fuera del alcance. Si algún día llega, su verdadero beneficio no son los nombres — es adjuntar un accesor tipado a la hoja, para el cual el nodo ya reserva sitio.

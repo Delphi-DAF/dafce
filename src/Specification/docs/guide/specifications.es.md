@@ -107,4 +107,4 @@ var Service := TCatalogService.Create(Repo);
 
 El adaptador en memoria no es un doble de test. Ejecutar varias reglas sobre una colección ya cargada es un camino de producción — cargar una vez y resolver N especificaciones contra el conjunto cargado, con el mismo tipo de especificación que iría a una base de datos. Por eso la simetría "una regla, dos back-ends" tiene un motivo concreto y no estético.
 
-Un adaptador respaldado por base de datos — ejecución SQL, driver, materialización de filas — es un cambio aparte. Definir un puerto y entregar un adaptador es como se supone que avanza la arquitectura hexagonal; no se espera a la base de datos para definir el puerto.
+No hay adaptador respaldado por base de datos: la ejecución SQL, el driver y la materialización de filas no están ni en este paquete ni en `Daf.SQLCute.Specification`.

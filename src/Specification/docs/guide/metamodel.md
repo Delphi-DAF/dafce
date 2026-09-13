@@ -45,7 +45,7 @@ ProductMeta.Price.Between(10, 200)
 | Discoverability | **Yes** — code completion lists the members |
 | Rename-safety | **No** — the field holds a string, so renaming `Price` still compiles |
 
-Being honest about the third matters, because it is the one people assume they are buying. What converts a stale name from a late failure into an early loud one is **self-validation**: the leaf is generic over the entity, so it checks the name when the class initializes — which is the first time a test touches it.
+What converts a stale name from a late failure into an early loud one is **self-validation**: the leaf is generic over the entity, so it checks the name when the class initializes — which is the first time a test touches it.
 
 ```pascal
 class constructor StaleMeta.Create;
@@ -54,7 +54,7 @@ begin
 end;
 ```
 
-Note the consequence of `class constructor`: it runs during unit initialization, so a stale metamodel fails at startup rather than mid-query. That is the intent. If you want to trigger it deliberately in a test, use a `class procedure` initializer instead — a raising class constructor would take the whole runner down before any scenario ran.
+Note the consequence of `class constructor`: it runs during unit initialization, so a stale metamodel fails at startup rather than mid-query, and it takes the whole runner down before any scenario runs. To trigger the failure deliberately in a test, use a `class procedure` initializer instead.
 
 ---
 
@@ -71,7 +71,7 @@ var Runtime := TEntityExpr<TProduct>.Create(nil);
 (ProductMeta.Price > 100) and (Runtime.Prop('Active') = True)      // composes normally
 ```
 
-So adopting a metamodel for a hot entity, or dropping one later, is a local edit rather than a migration. If any capability were metamodel-only, the option would have become a requirement.
+So adopting a metamodel for a hot entity, or dropping one later, is a local edit rather than a migration.
 
 ---
 
@@ -79,4 +79,3 @@ So adopting a metamodel for a hot entity, or dropping one later, is a local edit
 
 Roughly: for entities queried from many places, where a rename or a typo would otherwise be found by a failing integration test rather than by the compiler. For an entity queried once from one service, `Prop('Price')` inside a `TEntityExpr<T>` already validates the name, and the metamodel adds a file to keep in sync for little in return.
 
-Generation is out of scope. If it ever arrives, its real payoff is not the names — it is attaching a typed accessor to the leaf, which the node already reserves room for.

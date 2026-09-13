@@ -87,7 +87,7 @@ Prop('Id') = SomeGuid                        // sobrecarga tipada → GUIDToStri
 Prop('Id') = TExprValue.From(SomeGuid)       // la misma conversión, explícita
 ```
 
-Eso importa más de lo que parece. Una hoja con un `TGUID` real dejaría al carril en memoria comparando un registro mientras SQL compara su texto — divergencia en el único punto donde este diseño promete paridad. Estrechar en el borde hace que ambos carriles vean el mismo valor canónico.
+Estrechar en el borde es lo que hace que los dos carriles vean el mismo valor canónico, que es donde este diseño promete paridad.
 
 ---
 

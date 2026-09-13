@@ -68,7 +68,7 @@ Prop('Id')  = SomeGuid                       // sobrecarga tipada → cadena can
 Prop('Age') = TExprValue.From<Integer>(N)    // TNullable → su valor, o Null
 ```
 
-El estrechamiento ocurre **donde se escribe**, nunca dentro de la emisión: una hoja con un valor más rico dejaría al carril en memoria comparando un registro mientras SQL compara su texto.
+El estrechamiento ocurre **donde se escribe**, nunca dentro de la emisión, así que los dos carriles ven el mismo valor canónico.
 
 ---
 
@@ -112,9 +112,9 @@ INameResolver.ColumnFor(EntityType, Member)   // por defecto: el nombre del miem
 INameResolver.TableFor(EntityType)            // por defecto: el nombre del tipo sin la T inicial
 ```
 
-El valor por defecto de la tabla quita la `T` solo cuando le sigue una mayúscula, así que `TProduct` → `Product` mientras `Thing` se deja en paz. Sin pluralización y sin conversión de caso: eso es *política* de nombres, y adivinarla chocaría con lo que decida el ORM mientras parece una funcionalidad.
+El valor por defecto de la tabla quita la `T` solo cuando le sigue una mayúscula, así que `TProduct` → `Product` mientras `Thing` se deja en paz. Sin pluralización y sin conversión de caso: eso es *política* de nombres, y esta capa no tiene ninguna.
 
-Claves, columnas de bloqueo, atributos y DML dirigido por instancia (`Update(Instance)`) están **ausentes** deliberadamente. El ORM aún no está diseñado; esta capa se compromete con la costura, no con el mapeo.
+Claves, columnas de bloqueo, atributos y DML dirigido por instancia (`Update(Instance)`) están **ausentes**: esta capa se compromete con la costura, no con el mapeo.
 
 ---
 

@@ -78,7 +78,7 @@ Prop('Name').Like('%son%', True)
 
 ## Values
 
-A value leaf carries a single `Variant`. That is the representation SQLCute clauses already hold, so nothing is reimplemented — and nothing is lost: the parameter models this replaces had the same ceiling, wrapped in dozens of typed accessors whose only extra contribution was a driver hint.
+A value leaf carries a single `Variant`, which is the representation SQLCute clauses already hold.
 
 A type with no direct `Variant` form is narrowed **where you write it**:
 
@@ -87,7 +87,7 @@ Prop('Id') = SomeGuid                        // typed overload → GUIDToString
 Prop('Id') = TExprValue.From(SomeGuid)       // the same conversion, explicitly
 ```
 
-That matters more than it looks. A leaf holding a real `TGUID` would leave the in-memory lane comparing a record while SQL compares its text — divergence in the one place this design promises parity. Narrowing at the edge means both lanes see the same canonical value.
+Narrowing at the edge is what makes both lanes see the same canonical value, which is where this design promises parity.
 
 ---
 

@@ -68,7 +68,7 @@ Prop('Id')  = SomeGuid                       // typed overload → canonical str
 Prop('Age') = TExprValue.From<Integer>(N)    // TNullable → its value, or Null
 ```
 
-Narrowing happens **where you write it**, never inside the emission: a leaf holding a richer value would leave the in-memory lane comparing a record while SQL compares its text.
+Narrowing happens **where you write it**, never inside the emission, so both lanes see the same canonical value.
 
 ---
 
@@ -112,9 +112,9 @@ INameResolver.ColumnFor(EntityType, Member)   // default: the member name
 INameResolver.TableFor(EntityType)            // default: type name minus a leading T
 ```
 
-The table default strips `T` only when an upper-case letter follows, so `TProduct` → `Product` while `Thing` is left alone. No pluralization, no case conversion — those are naming *policy*, and guessing them would collide with whatever the ORM decides while looking like a feature.
+The table default strips `T` only when an upper-case letter follows, so `TProduct` → `Product` while `Thing` is left alone. No pluralization and no case conversion: those are naming *policy*, and this layer has none.
 
-Keys, lock columns, attributes and instance-driven DML (`Update(Instance)`) are deliberately **absent**. The ORM is not designed yet; this layer commits to the seam, not the mapping.
+Keys, lock columns, attributes and instance-driven DML (`Update(Instance)`) are **absent**: this layer commits to the seam, not to the mapping.
 
 ---
 
