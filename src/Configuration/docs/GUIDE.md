@@ -69,8 +69,8 @@ Key paths use `:` as the hierarchy separator. Arrays use zero-based numeric suff
 
 ## Telling an absent key from an empty one
 
-`IConfiguration` answers presence with two members that .NET does not have, and the reason is worth
-knowing: **there, the distinction is carried by nullability** — the indexer is `string? this[key]`,
+`IConfiguration` answers presence with two members that .NET does not have, because **there the
+distinction is carried by nullability** — the indexer is `string? this[key]`,
 with `null` for absent and `''` for present-but-empty. A Delphi string cannot be nil, so what the
 `?` does there needs a member of its own here.
 
@@ -87,11 +87,8 @@ that only groups — the one holding `Logging:Level` and its siblings — has no
 answering that it is not there while its children are being read is a false answer about the shape
 of the document.
 
-**The indexer deliberately still returns a `string`**, and that is measured rather than assumed. A
-nullable return converts implicitly, and that conversion is applied in the comparison, so
-`C['absent'] = ''` and `C['empty'] = ''` both stay `True`. It would not fix the defect — it would
-hide it behind a type that promises to fix it, which is worse than a plain string that promises
-nothing. Naming `Find` is what closes that hole: the presence can only be read by asking the type
+**The indexer returns a `string`**, so `C['absent'] = ''` and `C['empty'] = ''` are both `True`.
+Having to name `Find` is what closes the hole — the presence can only be read by asking the type
 for it.
 
 This matters most while a configuration is being **composed**, because a key read before the source
@@ -251,7 +248,9 @@ To reload all providers (e.g., after a file change):
 
 ## Binding to Objects
 
-`TConfigurationBinder` maps a section's keys to a class's published/public fields using RTTI:
+`TConfigurationBinder` maps a section's keys onto a class through RTTI. Which members it writes
+is the `TBindOption` argument: `boProperties`, the default, reads published properties;
+`boFields`, public fields — which is what this example has:
 
 ```pascal
 uses Daf.Configuration.Binder;
@@ -265,8 +264,11 @@ type
     MaxPoolSize: Integer;
   end;
 
-var Opts := TDatabaseOptions.Create;
-TConfigurationBinder.Bind(Config.GetSection('Database'), Opts);
+// The generic overload builds the object and hands it over; the caller frees it.
+var Opts := TConfigurationBinder.Bind<TDatabaseOptions>(Config, 'Database', boFields);
+
+// To fill an instance you already have, the other overload takes all four arguments:
+//   TConfigurationBinder.Bind(Config, 'Database', Opts, boFields);
 
 WriteLn(Opts.Host);         // 'localhost'
 WriteLn(Opts.Port);         // 5432
@@ -303,11 +305,9 @@ begin
 end;
 ```
 
-Without that destructor the nested object leaks, silently and whoever owns the root. It is the rule
-the framework's own nested settings class already follows; what was missing was the place where it
-is written down.
+Without that destructor the nested object leaks, silently and whoever owns the root.
 
-Two more things measured about nested binding, worth knowing before being surprised by them:
+Two more things about nested binding, worth knowing before being surprised by them:
 
 - binding the same section separately gives an **independent instance**, not the one nested inside
   the parent — the same as in .NET

@@ -69,8 +69,8 @@ Las rutas de clave usan `:` como separador de jerarquía. Los arrays usan sufijo
 
 ## Distinguir una clave ausente de una vacía
 
-`IConfiguration` responde a la presencia con dos miembros que .NET no tiene, y conviene saber por
-qué: **allí la distinción la lleva la anulabilidad** — el indexador es `string? this[key]`, con
+`IConfiguration` responde a la presencia con dos miembros que .NET no tiene, porque **allí la
+distinción la lleva la anulabilidad** — el indexador es `string? this[key]`, con
 `null` para ausente y `''` para presente y vacía. Una cadena de Delphi no puede ser nula, así que
 lo que allí hace el `?` aquí necesita un miembro propio.
 
@@ -86,11 +86,8 @@ incluida**: una sección existe cuando tiene valor propio **o** tiene claves por
 que solo agrupa —la que contiene `Logging:Level` y hermanas— no tiene valor propio, y contestar que
 no existe mientras se le leen los hijos es una respuesta falsa sobre la forma del documento.
 
-**El indexador sigue devolviendo `string` a propósito**, y eso está medido, no supuesto. Un retorno
-anulable convierte de forma implícita, y esa conversión se aplica en la comparación, así que
-`C['ausente'] = ''` y `C['vacía'] = ''` siguen dando las dos `True`. No arreglaría el defecto: lo
-escondería tras un tipo que promete arreglarlo, que es peor que una cadena que no promete nada.
-Que `Find` haya que nombrarlo es lo que cierra ese agujero: la presencia solo se puede leer
+**El indexador devuelve `string`**, así que `C['ausente'] = ''` y `C['vacía'] = ''` dan las dos
+`True`. Que `Find` haya que nombrarlo es lo que cierra ese agujero: la presencia solo se puede leer
 preguntándosela al tipo.
 
 Esto muerde sobre todo mientras la configuración se está **componiendo**, porque una clave leída
@@ -251,7 +248,9 @@ Para recargar todos los proveedores (p. ej., tras un cambio de fichero):
 
 ## Binding a objetos
 
-`TConfigurationBinder` mapea las claves de una sección a los campos públicos de una clase mediante RTTI:
+`TConfigurationBinder` mapea las claves de una sección sobre una clase mediante RTTI. Qué miembros
+escribe lo dice el argumento `TBindOption`: `boProperties`, que es el de por defecto, lee
+propiedades publicadas; `boFields`, campos públicos — que es lo que tiene este ejemplo:
 
 ```pascal
 uses Daf.Configuration.Binder;
@@ -265,8 +264,11 @@ type
     MaxPoolSize: Integer;
   end;
 
-var Opts := TDatabaseOptions.Create;
-TConfigurationBinder.Bind(Config.GetSection('Database'), Opts);
+// La sobrecarga genérica construye el objeto y lo entrega; lo libera quien llama.
+var Opts := TConfigurationBinder.Bind<TDatabaseOptions>(Config, 'Database', boFields);
+
+// Para rellenar una instancia que ya tienes, la otra sobrecarga toma los cuatro argumentos:
+//   TConfigurationBinder.Bind(Config, 'Database', Opts, boFields);
 
 WriteLn(Opts.Host);         // 'localhost'
 WriteLn(Opts.Port);         // 5432
@@ -303,11 +305,9 @@ begin
 end;
 ```
 
-Sin ese destructor el objeto anidado se fuga, en silencio y a cuenta de quien posea la raíz. Es la
-regla que ya cumple la única clase de ajustes anidados del framework; lo que faltaba era el sitio
-donde está escrita.
+Sin ese destructor el objeto anidado se fuga, en silencio y a cuenta de quien posea la raíz.
 
-Dos cosas más, medidas, sobre el enlace de anidados, y conviene saberlas antes de tropezar con ellas:
+Dos cosas más sobre el enlace de anidados, y conviene saberlas antes de tropezar con ellas:
 
 - enlazar la misma sección por separado da una **instancia independiente**, no la que está anidada
   dentro del padre — igual que en .NET

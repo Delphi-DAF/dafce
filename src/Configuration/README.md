@@ -51,15 +51,14 @@ var Read := Config.Find('Database:Password');         // presence AND value, one
 
 ## Absent is not empty
 
-Two members that .NET does not have, and the reason is that **there the distinction is carried by
-nullability**: the indexer is `string? this[key]`, `null` for absent and `''` for present-but-empty.
-A Delphi string cannot be nil, so what the `?` does there needs a member of its own here — `Exists`
-for the presence, `Find` for presence and value in a single lookup.
+Two members that .NET does not have, because **there the distinction is carried by nullability**:
+the indexer is `string? this[key]`, `null` for absent and `''` for present-but-empty. A Delphi
+string cannot be nil, so what the `?` does there needs a member of its own here — `Exists` for the
+presence, `Find` for presence and value in a single lookup.
 
-The indexer deliberately still returns a `string`. A nullable return converts implicitly and that
-conversion applies in the comparison, so `C['absent'] = ''` and `C['empty'] = ''` would both stay
-`True` — it would hide the defect behind a type that promises to fix it. [The guide](docs/GUIDE.md#telling-an-absent-key-from-an-empty-one)
-has the measurement.
+The indexer returns a `string`, so `C['absent'] = ''` and `C['empty'] = ''` are both `True`.
+[The guide](docs/GUIDE.md#telling-an-absent-key-from-an-empty-one) has the section semantics of
+`Exists`, and when the distinction bites hardest.
 
 
 ---
@@ -136,8 +135,7 @@ CommandLineConfig.AddArgs(Builder, ['-v', 'Debug'],
 
 ⚠️ **One deliberate difference from .NET.** There, a single-dash switch with no alias declared and an
 equals sign — `-x=1` — raises a `FormatException`. Here it is ignored, like every other argument that
-names no key: reading the command line should not be able to stop an application from starting
-because of one extra dash.
+names no key.
 
 ### Not to be confused with `Daf.CommandLine`
 
@@ -163,8 +161,9 @@ type
     Name: string;
   end;
 
-var Opts := TDatabaseOptions.Create;
-TConfigurationBinder.Bind(Config.GetSection('Database'), Opts);
+// Builds the object and binds it in one call. `boFields` because this class exposes public
+// fields; the default, `boProperties`, reads published properties instead.
+var Opts := TConfigurationBinder.Bind<TDatabaseOptions>(Config, 'Database', boFields);
 // Opts.Host, Opts.Port, Opts.Name are now populated
 ```
 
@@ -207,10 +206,8 @@ and what happens with settings nobody registered — is in
 ### A photograph, not a mirror
 
 The section is read **once**, when the value is built, and changing the configuration afterwards
-does **not** change it. This is said out loud because it is the opposite of what people expect from
-having seen the pattern elsewhere: without change notification in the providers, re-reading on every
-access would give two reads of the same object two different answers and nobody a way to know when
-it changed. A view that follows live configuration is a separate piece, and it does not exist yet.
+does **not** change it. The providers report no change, so what a service holds is the state of the
+section at the moment its settings were built.
 
 ---
 

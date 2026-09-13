@@ -51,15 +51,14 @@ var Read := Config.Find('Database:Password');         // presencia Y valor, una 
 
 ## Ausente no es vacío
 
-Dos miembros que .NET no tiene, y la razón es que **allí la distinción la lleva la anulabilidad**:
-el indexador es `string? this[key]`, `null` para ausente y `''` para presente y vacía. Una cadena
-de Delphi no puede ser nula, así que lo que allí hace el `?` aquí necesita un miembro propio —
+Dos miembros que .NET no tiene, porque **allí la distinción la lleva la anulabilidad**: el
+indexador es `string? this[key]`, `null` para ausente y `''` para presente y vacía. Una cadena de
+Delphi no puede ser nula, así que lo que allí hace el `?` aquí necesita un miembro propio —
 `Exists` para la presencia, `Find` para presencia y valor en una sola lectura.
 
-El indexador sigue devolviendo `string` a propósito. Un retorno anulable convierte de forma
-implícita y esa conversión se aplica en la comparación, así que `C['ausente'] = ''` y
-`C['vacía'] = ''` seguirían dando las dos `True` — escondería el defecto tras un tipo que promete
-arreglarlo. [La guía](docs/GUIDE.es.md#distinguir-una-clave-ausente-de-una-vacía) tiene la medida.
+El indexador devuelve `string`, así que `C['ausente'] = ''` y `C['vacía'] = ''` dan las dos `True`.
+[La guía](docs/GUIDE.es.md#distinguir-una-clave-ausente-de-una-vacía) tiene la semántica de sección
+de `Exists`, y dónde muerde más la distinción.
 
 
 ---
@@ -137,8 +136,7 @@ CommandLineConfig.AddArgs(Builder, ['-v', 'Debug'],
 
 ⚠️ **Una diferencia deliberada con .NET.** Allí, un modificador de un solo guion sin alias declarado
 y con signo igual —`-x=1`— lanza una `FormatException`. Aquí se ignora, como cualquier otro argumento
-que no nombra una clave: leer la línea de comandos no debería poder impedir que una aplicación
-arranque por un guion de más.
+que no nombra una clave.
 
 ### No confundir con `Daf.CommandLine`
 
@@ -164,8 +162,9 @@ type
     Name: string;
   end;
 
-var Opts := TDatabaseOptions.Create;
-TConfigurationBinder.Bind(Config.GetSection('Database'), Opts);
+// Construye el objeto y lo enlaza de una vez. `boFields` porque esta clase expone campos
+// públicos; lo que lee por defecto, `boProperties`, son propiedades publicadas.
+var Opts := TConfigurationBinder.Bind<TDatabaseOptions>(Config, 'Database', boFields);
 // Opts.Host, Opts.Port, Opts.Name quedan poblados
 ```
 
@@ -207,10 +206,8 @@ construcción perezosa, la validación y qué pasa con unos ajustes que nadie re
 ### Una foto, no un espejo
 
 La sección se lee **una sola vez**, al construirse el valor, y cambiar la configuración después
-**no** lo cambia. Se dice en voz alta porque es lo contrario de lo que espera quien ha visto el
-patrón en otro sitio: sin notificación de cambio en los proveedores, releer en cada acceso daría a
-dos lecturas del mismo objeto dos respuestas distintas y a nadie forma de saber cuándo cambió. La
-vista que sigue a la configuración viva es otra pieza, y todavía no existe.
+**no** lo cambia. Los proveedores no notifican cambios, así que lo que un servicio sostiene es el
+estado de la sección en el momento en que se construyeron sus ajustes.
 
 ---
 
