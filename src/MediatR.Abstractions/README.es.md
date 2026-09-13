@@ -4,6 +4,8 @@
 
 Interfaces y clases base fundamentales para la mensajería en proceso MediatR de DAFce. Referencia estas desde el código de aplicación y las implementaciones de handlers sin depender del mediador concreto.
 
+Todos los tipos se encuentran en `Daf.MediatR.Contracts` — el paquete es `Daf.MediatR.Abstractions`, que no es una unit y no vale en un `uses`.
+
 ---
 
 ## Interfaces

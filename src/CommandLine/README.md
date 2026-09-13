@@ -91,7 +91,7 @@ var Path  := OutOpt.ValueIn(Parsed);        // one value, statically typed
 var Files := FilesOpt.ValuesIn(Parsed);     // TArray<string>, for an arity that admits many
 ```
 
-`IParseResult.WasProvided` tells **absent** from **present but empty**: `--file ''` is not the same
+`ICommandLineParseResult.WasProvided` tells **absent** from **present but empty**: `--file ''` is not the same
 answer as no `--file` at all.
 
 ---

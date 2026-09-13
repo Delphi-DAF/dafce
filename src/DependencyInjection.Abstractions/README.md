@@ -13,10 +13,10 @@ Core contracts (interfaces and types) for the DAF Dependency Injection system. T
 
 | Unit | Contents |
 |------|----------|
-| `Daf.Extensions.DependencyInjection` | `IServiceCollection`, `IServiceProvider`, `IServiceScope`, lifetimes, `Factory`, `TDuckDecorator<T>`, `Lazy` |
+| `Daf.Extensions.DependencyInjection` | `IServiceCollection`, `IServiceProvider`, `IServiceScope`, `IAppModule`, lifetimes, `Factory`, `TDuckDecorator<T>`, `Lazy` |
 | `Daf.Extensions.Options` | `IOptions<T>`, `TOptionsValidator<T>`, `EOptionsValidationError` — the options pattern contract |
 | `Daf.Options` | `TOptions<T>` and `AppOptions` — settings registered with code |
-| `Daf.AppModule` | `IAppModule` — module registration pattern |
+| `Daf.AppModule` | **Compatibility alias** for `IAppModule`: the contract moved next to `AddModule<T>`, which is a method of the `IServiceCollection` record and cannot depend on this unit. An existing `uses Daf.AppModule` keeps working |
 | `Daf.DependencyInjection.ActivatorUtilities` | Helpers to construct objects via RTTI with DI-resolved arguments, and `InjectInto` to wire an instance the container did not build |
 | `Daf.DependencyInjection.OpenGenerics` | Matching, checking and activation for registrations whose type arguments are left open |
 

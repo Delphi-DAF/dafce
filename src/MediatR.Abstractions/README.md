@@ -4,6 +4,8 @@
 
 Core interfaces and base classes for the DAFce MediatR in-process messaging. Reference these from application code and handler implementations without taking a dependency on the concrete mediator.
 
+All types live in `Daf.MediatR.Contracts` — the package is `Daf.MediatR.Abstractions`, which is not a unit and cannot be used in a `uses` clause.
+
 ---
 
 ## Interfaces

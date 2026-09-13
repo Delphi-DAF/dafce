@@ -91,7 +91,7 @@ var Path  := OutOpt.ValueIn(Parsed);        // un valor, con su tipo estático
 var Files := FilesOpt.ValuesIn(Parsed);     // TArray<string>, para una aridad que admite varios
 ```
 
-`IParseResult.WasProvided` distingue **ausente** de **presente pero vacía**: `--file ''` no es la
+`ICommandLineParseResult.WasProvided` distingue **ausente** de **presente pero vacía**: `--file ''` no es la
 misma respuesta que no pasar `--file`.
 
 ---

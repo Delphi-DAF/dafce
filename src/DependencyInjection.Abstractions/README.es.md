@@ -13,10 +13,10 @@ Contratos principales (interfaces y tipos) del sistema de Inyección de Dependen
 
 | Unidad | Contenido |
 |--------|-----------|
-| `Daf.Extensions.DependencyInjection` | `IServiceCollection`, `IServiceProvider`, `IServiceScope`, tiempos de vida, `Factory`, `TDuckDecorator<T>`, `Lazy` |
+| `Daf.Extensions.DependencyInjection` | `IServiceCollection`, `IServiceProvider`, `IServiceScope`, `IAppModule`, tiempos de vida, `Factory`, `TDuckDecorator<T>`, `Lazy` |
 | `Daf.Extensions.Options` | `IOptions<T>`, `TOptionsValidator<T>`, `EOptionsValidationError` — el contrato del patrón de opciones |
 | `Daf.Options` | `TOptions<T>` y `AppOptions` — ajustes registrados con código |
-| `Daf.AppModule` | `IAppModule` — patrón de registro por módulo |
+| `Daf.AppModule` | **Alias de compatibilidad** de `IAppModule`: el contrato se mudó junto a `AddModule<T>`, que es método del record `IServiceCollection` y no puede depender de esta unit. Un `uses Daf.AppModule` que ya existiera sigue valiendo |
 | `Daf.DependencyInjection.ActivatorUtilities` | Helpers para construir objetos mediante RTTI con argumentos resueltos por DI, e `InjectInto` para cablear una instancia que el contenedor no construyó |
 | `Daf.DependencyInjection.OpenGenerics` | Emparejamiento, comprobaciones y activación de los registros que dejan sus argumentos de tipo sin fijar |
 
