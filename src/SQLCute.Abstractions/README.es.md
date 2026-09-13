@@ -15,8 +15,8 @@ Dos units, y el orden importa — `Daf.SQLCute` usa `Daf.SQLCute.Clauses`:
 
 | Unit | Contiene |
 |------|----------|
-| `Daf.SQLCute.Clauses` | Los nodos de cláusula — `TAbstractClause` y sus 22 descendientes — y los enumerados que llevan |
-| `Daf.SQLCute` | `IQuery`, `IQueryCompiler`, `TSQLResult`, `TQueryKind`, la factoría `TQuery` y dos helpers |
+| `Daf.SQLCute.Clauses` | Los nodos de cláusula — `TAbstractClause` y 21 de sus 22 descendientes — y los enumerados que llevan |
+| `Daf.SQLCute` | `IQuery`, `IQueryCompiler`, `TSQLResult`, `TQueryKind`, la factoría `TQuery`, dos helpers, y el vigesimosegundo nodo de cláusula — `TFromSubqueryClause`, que necesita `IQuery` |
 
 Las dos units son `{$SCOPEDENUMS ON}`, así que cada valor de enumerado va cualificado: `TWhereOp.Equal`, `TSortDir.Desc`, `TJoinType.Left`.
 

@@ -44,12 +44,17 @@ TDafEnvVars.CONTENT_ROOT  // 'DAF_CONTENT_ROOT'
 
 ### Helper
 
-`IServiceCollectionHelper` adds `AddHostedService<T>` directly on `IServiceCollection`:
+`IServiceCollectionHelper` adds `AddHostedService<T>` and `AddStartupTask<T>` directly on
+`IServiceCollection`:
 
 ```pascal
-Services.AddHostedService<TMyWorker>;
-// equivalent to Services.AddSingleton<IHostedService, TMyWorker>
+Services.AddHostedService<TMyWorker>;   // = AddSingleton<IHostedService, TMyWorker>
+Services.AddStartupTask<TMySeeder>;     // = AddSingleton<IStartupTask, TMySeeder>
 ```
+
+Only one `record helper` per type is in scope in Delphi, so a unit bringing a second one for
+`IServiceCollection` hides this one. The `Hosting` class facade is the way through, and it takes the
+implementation as a metaclass: `Hosting.AddHostedService(Services, TMyWorker)`.
 
 ---
 

@@ -15,8 +15,8 @@ Two units, and the order matters — `Daf.SQLCute` uses `Daf.SQLCute.Clauses`:
 
 | Unit | Holds |
 |------|-------|
-| `Daf.SQLCute.Clauses` | The clause nodes — `TAbstractClause` and its 22 descendants — and the enums they carry |
-| `Daf.SQLCute` | `IQuery`, `IQueryCompiler`, `TSQLResult`, `TQueryKind`, the `TQuery` factory and two helpers |
+| `Daf.SQLCute.Clauses` | The clause nodes — `TAbstractClause` and 21 of its 22 descendants — and the enums they carry |
+| `Daf.SQLCute` | `IQuery`, `IQueryCompiler`, `TSQLResult`, `TQueryKind`, the `TQuery` factory, two helpers, and the twenty-second clause node — `TFromSubqueryClause`, which needs `IQuery` |
 
 Both units are `{$SCOPEDENUMS ON}`, so every enum value is qualified: `TWhereOp.Equal`, `TSortDir.Desc`, `TJoinType.Left`.
 
