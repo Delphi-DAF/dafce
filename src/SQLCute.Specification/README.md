@@ -107,7 +107,7 @@ Going through that surface is also why the empty set needs no special case here:
 Prop('Price').IsIn([])           // → WHERE (Price IS NULL AND Price IS NOT NULL)
 ```
 
-`x IN (a, b)` is `x = a OR x = b`, so an empty list is the empty disjunction — false without consulting the column, and true for `IsNotIn`. SQLCute's builder resolves that where the condition is added, so this layer emits `IsIn([])` through the same call every other operator uses. No arity floor, no error, no branch of its own.
+`x IN (a, b)` is `x = a OR x = b`, so an empty list is the empty disjunction — false without consulting the column, and true for `NotIn`. SQLCute's builder resolves that where the condition is added, so this layer emits `IsIn([])` through the same call every other operator uses. No arity floor, no error, no branch of its own.
 
 ---
 

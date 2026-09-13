@@ -107,7 +107,7 @@ Pasar por esa superficie es también la razón de que el conjunto vacío no nece
 Prop('Price').IsIn([])           // → WHERE (Price IS NULL AND Price IS NOT NULL)
 ```
 
-`x IN (a, b)` es `x = a OR x = b`, así que una lista vacía es la disyunción vacía — falsa sin consultar la columna, y verdadera para `IsNotIn`. El constructor de SQLCute resuelve eso al añadir la condición, de modo que esta capa emite `IsIn([])` con la misma llamada que usa cualquier otro operador. Sin aridad mínima, sin error y sin rama propia.
+`x IN (a, b)` es `x = a OR x = b`, así que una lista vacía es la disyunción vacía — falsa sin consultar la columna, y verdadera para `NotIn`. El constructor de SQLCute resuelve eso al añadir la condición, de modo que esta capa emite `IsIn([])` con la misma llamada que usa cualquier otro operador. Sin aridad mínima, sin error y sin rama propia.
 
 ---
 
