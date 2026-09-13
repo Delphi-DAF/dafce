@@ -86,6 +86,10 @@ The changes that break compilation are collected, with their example diff, in `M
 - **Logging**: A bootstrap-channel sink that cannot write **declares itself unavailable** instead of accepting the report and losing it, and one that raises is left out without taking startup down. `BootstrapLog.HasAvailableSink` tells them apart
 - **Samples**: Every sample is filed under the module that declares what it uses: `ConsoleSample` to `src/Cli/samples/`, `TicTacToeApp` to `src/VCL/samples/`, and `HostedService` to `src/samples/`
 
+### Deprecated
+
+- **SQLCute**: The free `RegisterIQueryFactory`, in favour of `TQuery.RegisterFactory`. It forwards, so the two are indistinguishable, and it goes in the next major
+
 ### Removed
 
 - ⚠️ **Hosting**: `IHostBuilder`, and with it the deferred style: the `ConfigureServices`, `ConfigureAppConfiguration` and `ConfigureHostConfiguration` callbacks, plus `TConfigureServicesAction`. One style is left, the immediate one; the entry point is `THost.CreateBuilder` or the family's variant

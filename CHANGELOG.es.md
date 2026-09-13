@@ -85,6 +85,10 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 - **Logging**: Un destino del canal de arranque que no puede escribir **se declara no disponible** en lugar de aceptar el informe y perderlo, y uno que lanza queda fuera sin tumbar el arranque. `BootstrapLog.HasAvailableSink` lo distingue
 - **Samples**: Cada sample se archiva bajo el módulo que declara lo que usa: `ConsoleSample` a `src/Cli/samples/`, `TicTacToeApp` a `src/VCL/samples/`, y `HostedService` a `src/samples/`
 
+### Deprecated
+
+- **SQLCute**: La `RegisterIQueryFactory` suelta, en favor de `TQuery.RegisterFactory`. Reenvía, así que las dos son indistinguibles, y se va en el próximo major
+
 ### Removed
 
 - ⚠️ **Hosting**: `IHostBuilder`, y con él el estilo diferido: los callbacks `ConfigureServices`, `ConfigureAppConfiguration` y `ConfigureHostConfiguration`, más `TConfigureServicesAction`. Queda un solo estilo, el inmediato; el punto de entrada es `THost.CreateBuilder` o la variante de la familia
