@@ -224,25 +224,13 @@ Para coincidencia flexible de argumentos en stubs y mocks.
 uses Daf.MiniSpec.Doubles;
 
 // Coincidir cualquier valor
-.Setup('Process').WithArgs([Arg.Any<Integer>]).Returns(True)
+.Setup('Process').WithArgs([Arg.Any]).Returns(True)
 
 // Coincidir no-nulo/no-vacío
 .Setup('Save').WithArgs([Arg.NotNull]).Returns(True)
 
 // Coincidir string que contiene substring
 .Setup('Log').WithArgs([Arg.Contains('error')]).Returns(nil)
-
-// Coincidir valor en rango
-.Setup('SetVolume').WithArgs([Arg.InRange<Integer>(0, 100)]).Returns(nil)
-
-// Predicado personalizado
-.Setup('Validate').WithArgs([
-  Arg.Matching<string>(
-    function(S: string): Boolean
-    begin
-      Result := Length(S) >= 5;
-    end)
-]).Returns(True)
 ```
 
 ### Ejemplo con Matchers
@@ -250,7 +238,7 @@ uses Daf.MiniSpec.Doubles;
 ```pascal
 var EmailService := Stub<IEmailService>
   .Setup('Send')
-    .WithArgs([Arg.Contains('@admin'), Arg.Any<string>])
+    .WithArgs([Arg.Contains('@admin'), Arg.Any])
     .Raises(ESecurityException.Create('No se puede enviar email a admins'))
   .Setup('Send')
     .WithArgs([Arg.NotNull, Arg.NotNull])

@@ -224,25 +224,13 @@ For flexible argument matching in stubs and mocks.
 uses Daf.MiniSpec.Doubles;
 
 // Match any value
-.Setup('Process').WithArgs([Arg.Any<Integer>]).Returns(True)
+.Setup('Process').WithArgs([Arg.Any]).Returns(True)
 
 // Match non-null/non-empty
 .Setup('Save').WithArgs([Arg.NotNull]).Returns(True)
 
 // Match string containing substring
 .Setup('Log').WithArgs([Arg.Contains('error')]).Returns(nil)
-
-// Match value in range
-.Setup('SetVolume').WithArgs([Arg.InRange<Integer>(0, 100)]).Returns(nil)
-
-// Custom predicate
-.Setup('Validate').WithArgs([
-  Arg.Matching<string>(
-    function(S: string): Boolean
-    begin
-      Result := Length(S) >= 5;
-    end)
-]).Returns(True)
 ```
 
 ### Example with Matchers
@@ -250,7 +238,7 @@ uses Daf.MiniSpec.Doubles;
 ```pascal
 var EmailService := Stub<IEmailService>
   .Setup('Send')
-    .WithArgs([Arg.Contains('@admin'), Arg.Any<string>])
+    .WithArgs([Arg.Contains('@admin'), Arg.Any])
     .Raises(ESecurityException.Create('Cannot email admins'))
   .Setup('Send')
     .WithArgs([Arg.NotNull, Arg.NotNull])
