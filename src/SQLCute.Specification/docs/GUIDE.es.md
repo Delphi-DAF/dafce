@@ -91,7 +91,7 @@ Las hojas de expresión llevan nombres de propiedad, nunca de columna. La column
 (Prop('a') = 1 or Prop('b') = 1) and (Prop('c') = 1)
 ```
 
-emite un **grupo anidado** para la disyunción más una cláusula plana, y normaliza de vuelta a la conjunción de `(a or b)` con `c`. Ponerla en línea habría producido `a OR (b AND c)` — un predicado distinto en el que los dos back-ends habrían coincidido.
+emite un **grupo anidado** para la disyunción más una cláusula plana, y normaliza de vuelta a la conjunción de `(a or b)` con `c`. En línea, esas mismas tres cláusulas normalizan a `a OR (b AND c)` — un predicado distinto, y en el que los dos back-ends coinciden.
 
 Donde el emisor *no* anida:
 
@@ -114,7 +114,7 @@ La última emite `NOT (…)` alrededor de la forma escrita. No hay pasada de De 
 La sensibilidad a mayúsculas viaja con la familia LIKE:
 
 ```pascal
-Prop('Name').Like('%son%')         // LOWER(Name) LIKE LOWER(?)
+Prop('Name').Like('%Son%')         // LOWER(Name) LIKE ?   binding: '%son%'
 Prop('Name').Like('%son%', True)   // Name LIKE ?
 ```
 
@@ -143,7 +143,7 @@ var Tools := TQuery.New.From('Product').Where('kind', 'tool');
 var Repo: IRepository<TProduct> := TInMemoryRepository<TProduct>.Create(Loaded, Tools);
 ```
 
-La propiedad `Compiled` de la clase concreta informa de cuántos planes se han construido, que es lo que convierte la reutilización de planes en una spec y no en un comentario.
+La propiedad `Compiled` de la clase concreta informa de cuántos planes se han construido.
 
 ---
 
@@ -151,11 +151,11 @@ La propiedad `Compiled` de la clase concreta informa de cuántos planes se han c
 
 | Situación | Qué ocurre |
 |-----------|------------|
-| Un nombre de miembro que no resuelve a nada | `EExprMemberError`, donde se escribe la expresión (en `Daf.Specification`) |
+| Un nombre de miembro que no resuelve a nada | `EExprMemberError`, donde se escribe la hoja — `TEntityExpr<T>.Prop`, una hoja de metamodelo `TPropExpr<T>`, o `TSpecification<T>.OrderBy` / `OrderByDesc`. El `Prop(...)` suelto no valida: su nombre llega a la consulta tal cual |
 | Un nodo que no es predicado donde va una condición | `EExprEmissionError` al emitir |
 | Un operador con el número de operandos equivocado | `EExprEmissionError` al emitir |
 | Una consulta que el carril en memoria no puede ejecutar | `EInMemoryQueryError` al compilar el plan |
 
-Nada se omite y nada degrada. Una cláusula descartada en silencio durante la emisión *ensancharía* la consulta, que es el peor modo de fallo de un filtro — así que un nodo que el emisor no entiende lanza.
+Nada se omite y nada degrada: un nodo que el emisor no entiende lanza en vez de descartar la cláusula.
 
 Y la asimetría que conviene repetir: **traducible no es lo mismo que ejecutable en memoria.** Las condiciones con subconsulta o `EXISTS`, `GROUP BY`/`HAVING`, los joins y las operaciones de conjuntos compilan a SQL pero lanzan en el carril de lista única. El adaptador nunca captura ese error y nunca filtra la colección en Delphi en su lugar.

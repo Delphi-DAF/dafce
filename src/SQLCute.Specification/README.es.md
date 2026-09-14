@@ -42,7 +42,7 @@ Los dos back-ends ya están aguas abajo del AST de SQLCute:
         texto SQL     ejecución en memoria
 ```
 
-Así que "una consulta, dos back-ends" es una propiedad que este paquete **hereda**, no una que implemente. Una segunda emisión a un predicado de `Daf.Linq` reimplementaría el compilador en memoria con otra forma y convertiría la paridad entre back-ends en una carga de tests permanente. Aquí no hay tal traductor, y nunca debería haberlo.
+Así que "una consulta, dos back-ends" es una propiedad que este paquete **hereda**, no una que implemente. Aquí no hay traductor de expresión a `Daf.Linq`: al carril en memoria se llega por el mismo `IQuery`.
 
 ---
 
@@ -60,8 +60,6 @@ Así que "una consulta, dos back-ends" es una propiedad que este paquete **hered
 ---
 
 ## La emisión conserva lo que escribiste
-
-Este es el único riesgo de corrección que el resto de la arquitectura no puede absorber, así que conviene decirlo claro.
 
 `TWhereTree.Build` **reconstruye** un árbol booleano desde una lista plana de cláusulas; no lo conserva. Lee esa lista como OR-de-tramos-AND, una gramática con exactamente un nivel de alternancia. Emite `(a or b) and c` como la lista plana `[a AND, b OR, c AND]` y el normalizador lo agrupa como `a OR (b AND c)` — un predicado distinto. Y como los dos back-ends consumen ese mismo árbol normalizado, **los tests de paridad no pueden verlo**: SQL y memoria coinciden, en la respuesta equivocada.
 
@@ -83,7 +81,7 @@ La negación se emite, nunca se reescribe:
 
 **No hay pasada de De Morgan.** El SQL se lee como la forma que escribiste, no como un equivalente distribuido.
 
-La spec que guarda todo esto es semántica, no estructural: sobre tres formas de expresión, las 3⁴ asignaciones de *Cierto* / *Falso* / *Desconocido* a cuatro hojas deben evaluar igual en el árbol escrito y en la lista de cláusulas normalizada. Comparar árboles sería el test equivocado, porque poner en línea los tramos asociativos cambia legítimamente la forma.
+La garantía es semántica, no estructural: la lista de cláusulas normalizada y el árbol escrito evalúan igual bajo lógica de tres valores, para cualquier asignación de *Cierto* / *Falso* / *Desconocido* a las hojas.
 
 **La precedencia no se implementa aquí.** `a and b or c and d` se emite como cuatro cláusulas planas sin ningún grupo propio del emisor, y el normalizador compartido lo agrupa como `(a and b) or (c and d)`.
 
@@ -124,7 +122,7 @@ Repo.List(TSpecification<TProduct>.New
   .Take(10));
 ```
 
-La fuente se referencia, nunca se posee ni se copia, y los planes se cachean por la clave de la regla — así que N reglas sobre una colección cargada compilan N planes y no recargan nada. Ahí está el punto: **esto no es un doble de test.** Ejecutar varias reglas sobre un conjunto ya cargado es un camino de producción, con el mismo tipo de especificación que iría a una base de datos.
+La fuente se referencia, nunca se posee ni se copia, y los planes se cachean por la clave de la regla — así que N reglas sobre una colección cargada compilan N planes y no recargan nada. **Esto no es un doble de test:** ejecutar varias reglas sobre un conjunto ya cargado es un camino de producción, con el mismo tipo de especificación que va a una base de datos.
 
 Una consulta base acota el repositorio a un subconjunto, y se clona por regla para no mutar nunca la consulta del llamante:
 
@@ -138,7 +136,7 @@ TInMemoryRepository<TProduct>.Create(Loaded, TQuery.New.From('Product').Where('k
 
 **Traducible no es lo mismo que ejecutable en memoria.** Las cláusulas que el carril en memoria no ha implementado — condiciones con subconsulta o `EXISTS`, `GROUP BY`/`HAVING`, joins, operaciones de conjuntos — compilan a SQL pero lanzan `EInMemoryQueryError` en el carril de lista única.
 
-Ese fallo es **ruidoso y en el momento de compilar el plan**. El adaptador nunca lo captura y nunca filtra la colección en Delphi en su lugar: un recurso silencioso de evaluación en el cliente es fácil de añadir, invisible cuando funciona y catastrófico cuando esconde una consulta que debería haberse reescrito. EF Core lo llevó y lo quitó en la 3.0.
+Ese fallo es **ruidoso y en el momento de compilar el plan**. El adaptador nunca lo captura y nunca filtra la colección en Delphi en su lugar — no hay evaluación de respaldo en el cliente.
 
 Nótese que una especificación no puede llegar a ese camino por sí sola — el modelo de expresión no tiene `EXISTS` ni operador de SQL crudo, por diseño. Hace falta una consulta base para llegar ahí.
 

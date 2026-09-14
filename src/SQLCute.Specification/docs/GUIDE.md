@@ -91,7 +91,7 @@ Expression leaves carry property names, never column names. The column is decide
 (Prop('a') = 1 or Prop('b') = 1) and (Prop('c') = 1)
 ```
 
-emits a **nested group** for the disjunction plus one plain clause, and normalizes back to the conjunction of `(a or b)` with `c`. Inlining it would have produced `a OR (b AND c)` — a different predicate that both back-ends would have agreed on.
+emits a **nested group** for the disjunction plus one plain clause, and normalizes back to the conjunction of `(a or b)` with `c`. Inlined, the same three clauses normalize to `a OR (b AND c)` — a different predicate, and one both back-ends agree on.
 
 Where the emitter does *not* nest:
 
@@ -114,8 +114,8 @@ The last one emits `NOT (…)` around the authored shape. There is no De Morgan 
 Case sensitivity travels with the LIKE family:
 
 ```pascal
-Prop('Name').Like('%son%')         // LOWER(Name) LIKE LOWER(?)
-Prop('Name').Like('%son%', True)   // Name LIKE ?
+Prop('Name').Like('%Son%')         // LOWER(Name) LIKE ?   binding: '%son%'
+Prop('Name').Like('%Son%', True)   // Name LIKE ?          binding: '%Son%'
 ```
 
 ---
@@ -143,7 +143,7 @@ var Tools := TQuery.New.From('Product').Where('kind', 'tool');
 var Repo: IRepository<TProduct> := TInMemoryRepository<TProduct>.Create(Loaded, Tools);
 ```
 
-The `Compiled` property on the concrete class reports how many plans have been built, which is how the plan-reuse claim is a spec rather than a comment.
+The `Compiled` property on the concrete class reports how many plans have been built.
 
 ---
 
@@ -151,11 +151,11 @@ The `Compiled` property on the concrete class reports how many plans have been b
 
 | Situation | What happens |
 |-----------|--------------|
-| A member name that resolves to nothing | `EExprMemberError`, where the expression is authored (in `Daf.Specification`) |
+| A member name that resolves to nothing | `EExprMemberError`, where the leaf is authored — `TEntityExpr<T>.Prop`, a `TPropExpr<T>` metamodel leaf, or `TSpecification<T>.OrderBy` / `OrderByDesc`. The bare `Prop(...)` does not validate: its name reaches the query verbatim |
 | A non-predicate node where a condition belongs | `EExprEmissionError` at emission time |
 | An operator given the wrong number of operands | `EExprEmissionError` at emission time |
 | A query the in-memory lane cannot execute | `EInMemoryQueryError` when the plan is compiled |
 
-Nothing is skipped and nothing degrades. A clause silently dropped during emission would *widen* the query, which is the worst failure mode a filter has — so a node the emitter does not understand raises instead.
+Nothing is skipped and nothing degrades: a node the emitter does not understand raises rather than dropping the clause.
 
 And the asymmetry worth repeating: **translatable is not the same as in-memory-executable.** Subquery/`EXISTS` conditions, `GROUP BY`/`HAVING`, joins and set operations compile to SQL but raise on the single-list lane. The adapter never catches that error and never filters the collection in Delphi instead.
