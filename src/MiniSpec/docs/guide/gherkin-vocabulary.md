@@ -26,6 +26,33 @@ Complete reference of Gherkin vocabulary in MiniSpec:
 
 > 💡 The `&` before `Then` and `And` is required because they are reserved words in Delphi.
 
+## What each phase claims
+
+A scenario states the behaviour of **one event**. The three phases are that claim, split up — so
+each one has a job, and a piece that does not belong to it:
+
+| Phase | Claims | Does **not** do |
+|---|---|---|
+| `Given` | the state the event needs to make sense | trigger the event |
+| `When` | the event, one and named | verify anything |
+| `Then` | what can be observed afterwards | trigger anything |
+
+**The test, scenario by scenario: name the event.** Which action's behaviour am I claiming here? If
+you can name it, it belongs in the `When`. If you cannot, the scenario has no subject — and that is
+not fixed by moving the code to another phase.
+
+⚠️ **A scenario whose event sits outside the `When` still passes and fails**, so nothing turns red to
+tell you. What you lose instead is this:
+
+- **Event in the `Given`** — a failure of the event is reported as a setup failure, sending the
+  reader to the wrong place. And the `Then` can only compare what the `Given` left behind, so the
+  assertion measures the setup rather than the subject.
+- **Event in the `Then`** — the failure is reported as a failed assertion. With several `Then`
+  steps, either each one repeats the event — making them different events rather than one observed
+  twice — or only the first runs it.
+
+See [Pending and NoAction](pending-noaction.md) for what it means to leave a phase empty.
+
 ## Features with Narrative
 
 A Feature can include a narrative that explains the **why**:
