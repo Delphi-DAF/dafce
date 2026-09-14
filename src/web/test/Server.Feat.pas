@@ -14,7 +14,7 @@ interface
 
 uses
   Daf.Extensions.HttpServer,
-  Doubles.Feat;
+  Web.Doubles;
 
 type
   TServerWorld = class

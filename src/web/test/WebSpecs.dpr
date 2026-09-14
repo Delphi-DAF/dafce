@@ -21,7 +21,7 @@ uses
   Daf.Web.Controller,
   Daf.Web.Render,
   Daf.Web.ActionResult,
-  Doubles.Feat in 'Doubles.Feat.pas',
+  Web.Doubles in 'Web.Doubles.pas',
   Routing.Feat in 'Routing.Feat.pas',
   ActionResults.Feat in 'ActionResults.Feat.pas',
   Server.Feat in 'Server.Feat.pas',

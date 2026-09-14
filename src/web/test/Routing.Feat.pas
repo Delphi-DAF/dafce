@@ -18,7 +18,7 @@ uses
   Daf.DependencyInjection,
   Daf.Web.Router,
   Daf.Web.Controller,
-  Doubles.Feat;
+  Web.Doubles;
 
 type
   IGreeter = interface(IInvokable)

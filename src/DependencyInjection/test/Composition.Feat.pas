@@ -19,7 +19,7 @@ uses
   System.SysUtils,
   System.TypInfo,
   Daf.MiniSpec,
-  Doubles.Feat;
+  DependencyInjection.Doubles;
 
 function AddWrappedFoo(const Services: IServiceCollection; const Mark: string): IServiceCollection;
 begin

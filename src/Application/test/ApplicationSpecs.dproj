@@ -96,7 +96,7 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
-        <DCCReference Include="Doubles.Feat.pas"/>
+        <DCCReference Include="Application.Doubles.pas"/>
         <DCCReference Include="Startup.Feat.pas"/>
         <DCCReference Include="Version.Feat.pas"/>
         <BuildConfiguration Include="Base">

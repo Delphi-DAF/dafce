@@ -117,7 +117,7 @@ uses
   System.TypInfo,
   Daf.MiniSpec,
   Daf.DependencyInjection,
-  Doubles.Feat,
+  DependencyInjection.Doubles,
   PropertyInjection.Feat;
 
 constructor TFirstBroken.Create(const Missing: IMissing);

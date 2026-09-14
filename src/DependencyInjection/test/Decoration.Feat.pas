@@ -9,7 +9,7 @@ uses
   System.TypInfo,
   Daf.MiniSpec,
   Daf.Extensions.DependencyInjection,
-  Doubles.Feat;
+  DependencyInjection.Doubles;
 
 initialization
 

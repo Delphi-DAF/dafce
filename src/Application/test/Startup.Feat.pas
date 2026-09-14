@@ -20,7 +20,7 @@ uses
   Daf.Extensions.Hosting,
   Daf.Extensions.DependencyInjection,
   Daf.Application.Builder,
-  Doubles.Feat;
+  Application.Doubles;
 
 type
   /// Una aplicacion propia, que es como se usa la capa: CreateHostBuilder toma la clase del

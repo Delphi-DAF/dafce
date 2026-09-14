@@ -5,7 +5,7 @@ interface
 uses
   Daf.Extensions.DependencyInjection,
   Daf.AppModule.DependencyInjection,
-  Doubles.Feat;
+  DependencyInjection.Doubles;
 
 type
   /// Los modulos se declaran en la interface para que el linker no los descarte: un tipo

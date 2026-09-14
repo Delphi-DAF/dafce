@@ -16,7 +16,7 @@ interface
 
 uses
   Daf.Web.Controller,
-  Doubles.Feat;
+  Web.Doubles;
 
 type
   TSpecPayload = class

@@ -5,7 +5,7 @@
 
 uses
   Daf.MiniSpec,
-  Doubles.Feat in 'Doubles.Feat.pas',
+  Application.Doubles in 'Application.Doubles.pas',
   Startup.Feat in 'Startup.Feat.pas',
   Version.Feat in 'Version.Feat.pas';
 

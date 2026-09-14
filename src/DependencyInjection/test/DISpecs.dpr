@@ -7,7 +7,7 @@ uses
   Daf.MiniSpec,
   DependencyInjection.Feat in 'DependencyInjection.Feat.pas',
   DependencyInjection.Steps in 'DependencyInjection.Steps.pas',
-  Doubles.Feat in 'Doubles.Feat.pas',
+  DependencyInjection.Doubles in 'DependencyInjection.Doubles.pas',
   Composition.Feat in 'Composition.Feat.pas',
   Decoration.Feat in 'Decoration.Feat.pas',
   Modules.Feat in 'Modules.Feat.pas',

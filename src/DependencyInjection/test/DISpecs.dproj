@@ -98,7 +98,7 @@
         </DelphiCompile>
         <DCCReference Include="DependencyInjection.Feat.pas"/>
         <DCCReference Include="DependencyInjection.Steps.pas"/>
-        <DCCReference Include="Doubles.Feat.pas"/>
+        <DCCReference Include="DependencyInjection.Doubles.pas"/>
         <DCCReference Include="Composition.Feat.pas"/>
         <DCCReference Include="Decoration.Feat.pas"/>
         <DCCReference Include="Modules.Feat.pas"/>

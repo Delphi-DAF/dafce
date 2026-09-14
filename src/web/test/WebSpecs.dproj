@@ -98,7 +98,7 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
-        <DCCReference Include="Doubles.Feat.pas"/>
+        <DCCReference Include="Web.Doubles.pas"/>
         <DCCReference Include="Routing.Feat.pas"/>
         <DCCReference Include="ActionResults.Feat.pas"/>
         <DCCReference Include="Server.Feat.pas"/>

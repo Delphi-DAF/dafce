@@ -10,7 +10,7 @@ interface
 uses
   Daf.Extensions.DependencyInjection,
   Daf.AppModule.DependencyInjection,
-  Doubles.Feat;
+  DependencyInjection.Doubles;
 
 type
   /// Un modulo como cualquier otro, declarado bajo la RTTI recortada de esta unit.
