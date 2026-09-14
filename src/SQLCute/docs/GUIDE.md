@@ -9,7 +9,7 @@
 SQLCute builds parameterized SQL through a fluent method chain. The entry point is always `TQuery.New`:
 
 ```pascal
-uses Daf.SQLCute;
+uses Daf.SQLCute, Daf.SQLCute.Compiler;
 
 var Q := TQuery.New          // IQuery — ref-counted, no Free needed
   .From('products')
@@ -17,7 +17,8 @@ var Q := TQuery.New          // IQuery — ref-counted, no Free needed
   .OrderBy('name')
   .Limit(50);
 
-var R := TAnsiSqlCompiler.Create.Compile(Q);
+var Compiler: IQueryCompiler := TAnsiSqlCompiler.Create;  // ref-counted: it needs an owner
+var R := Compiler.Compile(Q);
 // R.SQL      → 'SELECT * FROM products WHERE active = ? ORDER BY name LIMIT 50'
 // R.Bindings → [True]
 ```
@@ -58,7 +59,8 @@ uses Daf.SQLCute.Compiler.Postgres;    // TPostgresCompiler
 uses Daf.SQLCute.Compiler.MySql;       // TMySqlCompiler
 // … etc.
 
-var R := TPostgresCompiler.Create.Compile(Q);
+var Compiler: IQueryCompiler := TPostgresCompiler.Create;  // ref-counted: it needs an owner
+var R := Compiler.Compile(Q);
 ```
 
 You can also call `Q.Compile(MyCompiler)` as a shorthand when you have a compiler instance.

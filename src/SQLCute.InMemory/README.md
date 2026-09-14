@@ -29,7 +29,7 @@ Results are `IEnumerable<T>` from [`Daf.Linq`](../Linq/README.md) — deferred, 
 ## Quick Start
 
 ```pascal
-uses Daf.SQLCute, Daf.SQLCute.InMemory;
+uses Daf.SQLCute, Daf.SQLCute.Compiler, Daf.SQLCute.InMemory;
 
 var Q := TQuery.New.From('people')
   .Where('age', '>', 18)
@@ -37,7 +37,8 @@ var Q := TQuery.New.From('people')
   .Limit(10);
 
 // A database…
-var R := TAnsiSqlCompiler.Create.Compile(Q);       // SQL + bindings
+var Compiler: IQueryCompiler := TAnsiSqlCompiler.Create;  // ref-counted: it needs an owner
+var R := Compiler.Compile(Q);       // SQL + bindings
 
 // …or the list you already loaded — same query object.
 for var P in TInMemory.Elements<TPerson>(Q, People) do

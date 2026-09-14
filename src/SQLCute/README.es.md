@@ -23,7 +23,7 @@ Construye consultas SQL con una API fluida, segura en tipos. Sin concatenación 
 ## Inicio Rápido
 
 ```pascal
-uses Daf.SQLCute;
+uses Daf.SQLCute, Daf.SQLCute.Compiler;
 
 var Q := TQuery.New
   .From('pedidos')
@@ -33,7 +33,8 @@ var Q := TQuery.New
   .OrderByDesc('creado_en')
   .Limit(20);
 
-var R := TAnsiSqlCompiler.Create.Compile(Q);
+var Compiler: IQueryCompiler := TAnsiSqlCompiler.Create;  // el compilador es contado: ha de tener dueño
+var R := Compiler.Compile(Q);
 // R.SQL      → 'SELECT id, total, estado FROM pedidos WHERE estado = ? AND total > ? ORDER BY creado_en DESC LIMIT 20'
 // R.Bindings → ['pendiente', 100]
 ```
@@ -105,7 +106,8 @@ TQuery.New.From('users').AsInsert(['name'], ['Ann']).AsDelete;
 ```pascal
 uses Daf.SQLCute.Compiler.Postgres;
 
-var R := TPostgresCompiler.Create.Compile(Q);
+var Compiler: IQueryCompiler := TPostgresCompiler.Create;  // contado por referencia: ha de tener dueño
+var R := Compiler.Compile(Q);
 // identificadores entrecomillados con "", marcadores $1 $2 …
 ```
 

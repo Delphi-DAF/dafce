@@ -5,13 +5,14 @@
 The SQL-side half. It takes a specification authored with [`Daf.Specification`](../Specification/README.md) and lowers it onto a SQLCute `IQuery`: the filter becomes WHERE, the ordering ORDER BY, the page LIMIT/OFFSET. That `IQuery` is the only thing it produces.
 
 ```pascal
-uses Daf.SQLCute, Daf.Specification, Daf.SQLCute.Specification;
+uses Daf.SQLCute, Daf.SQLCute.Compiler, Daf.Specification, Daf.SQLCute.Specification;
 
 var Q := TExprEmitter.Where(TQuery.New.From('Product'),
   (Prop('Price') > 100) and (Prop('Active') = True));
 
 // …a database:
-var Sql := TAnsiSqlCompiler.Create.Compile(Q);
+var Compiler: IQueryCompiler := TAnsiSqlCompiler.Create;  // ref-counted: it needs an owner
+var Sql := Compiler.Compile(Q);
 // …or the list you already loaded — same query object:
 for var P in TInMemory.Elements<TProduct>(Q, Loaded) do ...
 ```

@@ -73,9 +73,10 @@ Each dialect compiler overrides the cast expression for `WhereDate`:
 ### PostgreSQL example
 
 ```pascal
-uses Daf.SQLCute.Compiler.Postgres;
+uses Daf.SQLCute, Daf.SQLCute.Compiler.Postgres;
 
-var R := TPostgresCompiler.Create.Compile(
+var Compiler: IQueryCompiler := TPostgresCompiler.Create;  // ref-counted: it needs an owner
+var R := Compiler.Compile(
   TQuery.New.From('t').WhereDate('d', '2024-01-01'));
 // → WHERE "d"::date = $1
 ```
@@ -83,9 +84,10 @@ var R := TPostgresCompiler.Create.Compile(
 ### MySQL example
 
 ```pascal
-uses Daf.SQLCute.Compiler.MySql;
+uses Daf.SQLCute, Daf.SQLCute.Compiler.MySql;
 
-var R := TMySqlCompiler.Create.Compile(
+var Compiler: IQueryCompiler := TMySqlCompiler.Create;  // ref-counted: it needs an owner
+var R := Compiler.Compile(
   TQuery.New.From('t').WhereDate('d', '2024-01-01'));
 // → WHERE DATE(`d`) = ?
 ```

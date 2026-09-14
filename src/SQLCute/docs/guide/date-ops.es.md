@@ -73,9 +73,10 @@ Cada compilador de dialecto sobreescribe la expresión de conversión para `Wher
 ### Ejemplo PostgreSQL
 
 ```pascal
-uses Daf.SQLCute.Compiler.Postgres;
+uses Daf.SQLCute, Daf.SQLCute.Compiler.Postgres;
 
-var R := TPostgresCompiler.Create.Compile(
+var Compiler: IQueryCompiler := TPostgresCompiler.Create;  // contado por referencia: ha de tener dueño
+var R := Compiler.Compile(
   TQuery.New.From('t').WhereDate('d', '2024-01-01'));
 // → WHERE "d"::date = $1
 ```
@@ -83,9 +84,10 @@ var R := TPostgresCompiler.Create.Compile(
 ### Ejemplo MySQL
 
 ```pascal
-uses Daf.SQLCute.Compiler.MySql;
+uses Daf.SQLCute, Daf.SQLCute.Compiler.MySql;
 
-var R := TMySqlCompiler.Create.Compile(
+var Compiler: IQueryCompiler := TMySqlCompiler.Create;  // contado por referencia: ha de tener dueño
+var R := Compiler.Compile(
   TQuery.New.From('t').WhereDate('d', '2024-01-01'));
 // → WHERE DATE(`d`) = ?
 ```

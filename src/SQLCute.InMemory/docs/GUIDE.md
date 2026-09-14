@@ -20,7 +20,8 @@ uses Daf.SQLCute, Daf.SQLCute.Compiler, Daf.SQLCute.InMemory;
 
 var Q := TQuery.New.From('people').Where('age', '>', 18).OrderBy('name');
 
-var Sql := TAnsiSqlCompiler.Create.Compile(Q);       // → SQL + bindings
+var Compiler: IQueryCompiler := TAnsiSqlCompiler.Create;  // ref-counted: it needs an owner
+var Sql := Compiler.Compile(Q);       // → SQL + bindings
 var Rows := TInMemory.Elements<TPerson>(Q, People); // → IEnumerable<TPerson>
 ```
 

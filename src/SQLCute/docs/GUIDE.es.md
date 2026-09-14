@@ -9,7 +9,7 @@
 SQLCute construye SQL parametrizado mediante una cadena fluida de métodos. El punto de entrada siempre es `TQuery.New`:
 
 ```pascal
-uses Daf.SQLCute;
+uses Daf.SQLCute, Daf.SQLCute.Compiler;
 
 var Q := TQuery.New          // IQuery — con conteo de referencias, sin Free
   .From('productos')
@@ -17,7 +17,8 @@ var Q := TQuery.New          // IQuery — con conteo de referencias, sin Free
   .OrderBy('nombre')
   .Limit(50);
 
-var R := TAnsiSqlCompiler.Create.Compile(Q);
+var Compiler: IQueryCompiler := TAnsiSqlCompiler.Create;  // el compilador es contado: ha de tener dueño
+var R := Compiler.Compile(Q);
 // R.SQL      → 'SELECT * FROM productos WHERE activo = ? ORDER BY nombre LIMIT 50'
 // R.Bindings → [True]
 ```
@@ -58,7 +59,8 @@ uses Daf.SQLCute.Compiler.Postgres;    // TPostgresCompiler
 uses Daf.SQLCute.Compiler.MySql;       // TMySqlCompiler
 // … etc.
 
-var R := TPostgresCompiler.Create.Compile(Q);
+var Compiler: IQueryCompiler := TPostgresCompiler.Create;  // contado por referencia: ha de tener dueño
+var R := Compiler.Compile(Q);
 ```
 
 También puedes usar el atajo `Q.Compile(MiCompilador)` cuando tienes una instancia del compilador.

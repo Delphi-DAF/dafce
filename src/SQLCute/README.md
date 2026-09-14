@@ -23,7 +23,7 @@ Build SQL queries with a clean, type-safe fluent API. No string concatenation, n
 ## Quick Start
 
 ```pascal
-uses Daf.SQLCute;
+uses Daf.SQLCute, Daf.SQLCute.Compiler;
 
 var Q := TQuery.New
   .From('orders')
@@ -33,7 +33,8 @@ var Q := TQuery.New
   .OrderByDesc('created_at')
   .Limit(20);
 
-var R := TAnsiSqlCompiler.Create.Compile(Q);
+var Compiler: IQueryCompiler := TAnsiSqlCompiler.Create;  // ref-counted: it needs an owner
+var R := Compiler.Compile(Q);
 // R.SQL      → 'SELECT id, total, status FROM orders WHERE status = ? AND total > ? ORDER BY created_at DESC LIMIT 20'
 // R.Bindings → ['pending', 100]
 ```
@@ -105,7 +106,8 @@ TQuery.New.From('users').AsInsert(['name'], ['Ann']).AsDelete;
 ```pascal
 uses Daf.SQLCute.Compiler.Postgres;
 
-var R := TPostgresCompiler.Create.Compile(Q);
+var Compiler: IQueryCompiler := TPostgresCompiler.Create;  // ref-counted: it needs an owner
+var R := Compiler.Compile(Q);
 // identifiers quoted with "", placeholders $1 $2 …
 ```
 
