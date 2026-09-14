@@ -8,7 +8,7 @@
 
 ## Overview
 
-All string-match methods wrap the value in `LIKE` patterns. By default (`CaseSensitive = False`) SQLCute wraps both column and value in `LOWER(…)` to achieve case-insensitive matching. Pass `True` as the last argument to skip the `LOWER` wrapping.
+All string-match methods wrap the value in `LIKE` patterns. By default (`CaseSensitive = False`) SQLCute wraps the column in `LOWER(…)` and lower-cases the pattern, which travels as a binding. Pass `True` as the last argument to emit a plain `LIKE` with the pattern as you wrote it.
 
 ---
 
@@ -17,13 +17,13 @@ All string-match methods wrap the value in `LIKE` patterns. By default (`CaseSen
 Supply the full LIKE pattern yourself:
 
 ```pascal
-.WhereLike('name', '%john%')
+.WhereLike('name', '%John%')
 // Case-insensitive (default):
-// → WHERE LOWER(name) LIKE lower('%john%')
+// → WHERE LOWER(name) LIKE ?      binding: '%john%'
 
 .WhereLike('code', 'ABC-%', True)
 // Case-sensitive:
-// → WHERE code LIKE 'ABC-%'
+// → WHERE code LIKE ?             binding: 'ABC-%'
 ```
 
 Variants: `WhereNotLike`, `OrWhereLike`, `OrWhereNotLike`.
@@ -34,7 +34,7 @@ Variants: `WhereNotLike`, `OrWhereLike`, `OrWhereNotLike`.
 
 ```pascal
 .WhereStarts('email', 'admin')
-// → WHERE LOWER(email) LIKE lower('admin%')
+// → WHERE LOWER(email) LIKE ?     binding: 'admin%'
 ```
 
 Variants: `WhereNotStarts`, `OrWhereStarts`, `OrWhereNotStarts`.
@@ -45,7 +45,7 @@ Variants: `WhereNotStarts`, `OrWhereStarts`, `OrWhereNotStarts`.
 
 ```pascal
 .WhereEnds('filename', '.pdf')
-// → WHERE LOWER(filename) LIKE lower('%.pdf')
+// → WHERE LOWER(filename) LIKE ?  binding: '%.pdf'
 ```
 
 Variants: `WhereNotEnds`, `OrWhereEnds`, `OrWhereNotEnds`.
@@ -56,7 +56,7 @@ Variants: `WhereNotEnds`, `OrWhereEnds`, `OrWhereNotEnds`.
 
 ```pascal
 .WhereContains('description', 'urgent')
-// → WHERE LOWER(description) LIKE lower('%urgent%')
+// → WHERE LOWER(description) LIKE ?   binding: '%urgent%'
 ```
 
 Variants: `WhereNotContains`, `OrWhereContains`, `OrWhereNotContains`.
@@ -67,13 +67,18 @@ Variants: `WhereNotContains`, `OrWhereContains`, `OrWhereNotContains`.
 
 ```pascal
 TQuery.New.From('products')
-  .WhereContains('name', 'coffee')
-  .OrWhereContains('tags', 'coffee')
+  .Where(function(Q: IQuery): IQuery
+    begin
+      Result := Q.WhereContains('name', 'coffee')
+                 .OrWhereContains('tags', 'coffee');
+    end)
   .WhereNotStarts('sku', 'DISC-')
-// → WHERE (LOWER(name) LIKE lower('%coffee%')
-//          OR LOWER(tags) LIKE lower('%coffee%'))
-//     AND NOT (LOWER(sku) LIKE lower('DISC-%'))
+// → WHERE (LOWER(name) LIKE ? OR LOWER(tags) LIKE ?)
+//     AND LOWER(sku) NOT LIKE ?
+//   bindings: '%coffee%', '%coffee%', 'disc-%'
 ```
+
+Chaining the two `OR` terms without that group means something else: a flat list is read as OR-of-AND-runs, so `WhereContains … OrWhereContains … WhereNotStarts` groups as `name OR (tags AND sku)`. Nest the alternation you mean.
 
 ---
 

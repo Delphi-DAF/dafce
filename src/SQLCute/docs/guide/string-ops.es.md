@@ -8,7 +8,7 @@
 
 ## Resumen
 
-Todos los métodos de coincidencia de cadenas envuelven el valor en patrones `LIKE`. Por defecto (`CaseSensitive = False`), SQLCute envuelve tanto la columna como el valor en `LOWER(…)` para conseguir coincidencia insensible a mayúsculas. Pasa `True` como último argumento para omitir el envoltorio `LOWER`.
+Todos los métodos de coincidencia de cadenas envuelven el valor en patrones `LIKE`. Por defecto (`CaseSensitive = False`), SQLCute envuelve la columna en `LOWER(…)` y pasa el patrón a minúsculas, que viaja como binding. Pasa `True` como último argumento para emitir un `LIKE` llano con el patrón tal y como lo escribiste.
 
 ---
 
@@ -17,13 +17,13 @@ Todos los métodos de coincidencia de cadenas envuelven el valor en patrones `LI
 Proporciona el patrón LIKE completo:
 
 ```pascal
-.WhereLike('nombre', '%juan%')
+.WhereLike('nombre', '%Juan%')
 // Insensible a mayúsculas (por defecto):
-// → WHERE LOWER(nombre) LIKE lower('%juan%')
+// → WHERE LOWER(nombre) LIKE ?      binding: '%juan%'
 
 .WhereLike('codigo', 'ABC-%', True)
 // Sensible a mayúsculas:
-// → WHERE codigo LIKE 'ABC-%'
+// → WHERE codigo LIKE ?             binding: 'ABC-%'
 ```
 
 Variantes: `WhereNotLike`, `OrWhereLike`, `OrWhereNotLike`.
@@ -34,7 +34,7 @@ Variantes: `WhereNotLike`, `OrWhereLike`, `OrWhereNotLike`.
 
 ```pascal
 .WhereStarts('email', 'admin')
-// → WHERE LOWER(email) LIKE lower('admin%')
+// → WHERE LOWER(email) LIKE ?     binding: 'admin%'
 ```
 
 Variantes: `WhereNotStarts`, `OrWhereStarts`, `OrWhereNotStarts`.
@@ -45,7 +45,7 @@ Variantes: `WhereNotStarts`, `OrWhereStarts`, `OrWhereNotStarts`.
 
 ```pascal
 .WhereEnds('archivo', '.pdf')
-// → WHERE LOWER(archivo) LIKE lower('%.pdf')
+// → WHERE LOWER(archivo) LIKE ?   binding: '%.pdf'
 ```
 
 Variantes: `WhereNotEnds`, `OrWhereEnds`, `OrWhereNotEnds`.
@@ -56,7 +56,7 @@ Variantes: `WhereNotEnds`, `OrWhereEnds`, `OrWhereNotEnds`.
 
 ```pascal
 .WhereContains('descripcion', 'urgente')
-// → WHERE LOWER(descripcion) LIKE lower('%urgente%')
+// → WHERE LOWER(descripcion) LIKE ?   binding: '%urgente%'
 ```
 
 Variantes: `WhereNotContains`, `OrWhereContains`, `OrWhereNotContains`.
@@ -67,13 +67,18 @@ Variantes: `WhereNotContains`, `OrWhereContains`, `OrWhereNotContains`.
 
 ```pascal
 TQuery.New.From('productos')
-  .WhereContains('nombre', 'cafe')
-  .OrWhereContains('etiquetas', 'cafe')
+  .Where(function(Q: IQuery): IQuery
+    begin
+      Result := Q.WhereContains('nombre', 'cafe')
+                 .OrWhereContains('etiquetas', 'cafe');
+    end)
   .WhereNotStarts('sku', 'DESC-')
-// → WHERE (LOWER(nombre) LIKE lower('%cafe%')
-//          OR LOWER(etiquetas) LIKE lower('%cafe%'))
-//     AND NOT (LOWER(sku) LIKE lower('DESC-%'))
+// → WHERE (LOWER(nombre) LIKE ? OR LOWER(etiquetas) LIKE ?)
+//     AND LOWER(sku) NOT LIKE ?
+//   bindings: '%cafe%', '%cafe%', 'desc-%'
 ```
+
+Encadenar los dos términos `OR` sin ese grupo significa otra cosa: una lista plana se lee como OR-de-tramos-AND, así que `WhereContains … OrWhereContains … WhereNotStarts` agrupa como `nombre OR (etiquetas AND sku)`. Anida la alternancia que quieres decir.
 
 ---
 
