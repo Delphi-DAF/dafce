@@ -310,6 +310,7 @@ return {
       ["../../legal/LICENSE.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/legal/LICENSE.md",
       ["README.es.md"] = "/es/modules/nnlog.qmd",
       ["docs/GUIDE.md"] = "/en/modules/nnlog-guide.qmd",
+      ["docs/GUIDE.md#layout-tokens"] = "/en/modules/nnlog-guide.qmd#layout-tokens",
     },
     ["en/modules/specification-guide.qmd"] = {
       ["../../../Linq/README.md"] = "/en/modules/linq.qmd",
@@ -663,6 +664,7 @@ return {
       ["../../legal/LICENSE.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/legal/LICENSE.md",
       ["README.md"] = "/en/modules/nnlog.qmd",
       ["docs/GUIDE.es.md"] = "/es/modules/nnlog-guide.qmd",
+      ["docs/GUIDE.es.md#tokens-de-layout"] = "/es/modules/nnlog-guide.qmd#tokens-de-layout",
     },
     ["es/modules/specification-guide.qmd"] = {
       ["../../../Linq/README.es.md"] = "/es/modules/linq.qmd",

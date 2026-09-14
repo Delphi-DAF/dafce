@@ -7,14 +7,16 @@
 ## Table of Contents
 
 1. [Architecture](#architecture)
-2. [TLogRule](#tlogrule)
-3. [TTarget](#ttarget)
-4. [Layout tokens](#layout-tokens)
-5. [TNNLogProvider](#tnnlogprovider)
-6. [Built-in targets](#built-in-targets)
-7. [Multiple targets and rules](#multiple-targets-and-rules)
-8. [Creating a custom target](#creating-a-custom-target)
-9. [Integration with ILoggingBuilder](#integration-with-iloggingbuilder)
+2. [Composing a provider](#composing-a-provider)
+3. [Configuration](#configuration)
+4. [TLogRule](#tlogrule)
+5. [Category patterns](#category-patterns)
+6. [TTarget](#ttarget)
+7. [Layout tokens](#layout-tokens)
+8. [Built-in targets](#built-in-targets)
+9. [Several targets and rules](#several-targets-and-rules)
+10. [Creating a custom target](#creating-a-custom-target)
+11. [Integration with ILoggingBuilder](#integration-with-iloggingbuilder)
 
 ---
 
@@ -26,13 +28,125 @@ ILogger.LogXxx(...)
         ▼
   TNNLogLogger (per category)
         │
-        │  for each TLogRule that matches:
+        │  for each of ITS rules that accepts the level:
         ├─► Target A  (Console)
         ├─► Target B  (File)
         └─► Target C  (Custom)
 ```
 
-Each `TNNLogLogger` evaluates every rule in order. When a rule matches — category pattern + log level — it writes the `TLogEntry` to **all** targets listed in `Rule.WriteTo`. If a rule has `IsFinal = True`, evaluation stops after it fires.
+The category is matched **once**, when `TNNLogProvider.CreateLogger` builds the logger: the logger
+keeps only the rules whose pattern matches its category. Per log entry what remains is the level
+check — `MinLevel`, `MaxLevel`, `Levels` — and `Enabled`.
+
+A rule that accepts the entry writes it to **all** the targets in its `WriteTo`. With
+`IsFinal = True` the logger stops after that rule; otherwise it goes on to the next one, so one
+entry can reach several rules.
+
+`ILogger.IsEnabled(Level)` answers with the same predicate the write uses: it is `True` when some
+enabled rule of that logger accepts the level.
+
+---
+
+## Composing a provider
+
+`TNNLogLoader` builds the provider from settings, and it is the entry point for every route:
+
+```pascal
+uses
+  Daf.Extensions.Logging,
+  DAF.NNLog.Loader;
+
+// From a configuration section
+Provider := TNNLogLoader.BuildProvider(Environment, Config.GetSection('Logging:NLog'));
+
+// From a host builder context, naming the section
+Provider := TNNLogLoader.BuildProvider(Context, 'Logging:NLog');
+
+// From settings assembled in code
+Provider := TNNLogLoader.BuildProvider(Environment, Settings);
+```
+
+The first two read and own their settings. The third takes a `TNNLogConfiguration` that stays the
+caller's — `BuildProvider` does not free it.
+
+`BuildProvider` is what registers the layout renderers, resolves target types, applies the
+defaults of every rule field, and reports a composition failure. **`TNNLogProvider.Create` skips
+all of it**: no renderer is registered, so every `${…}` token renders as the empty string, and the
+rule fields keep the values of a freshly created object — `Enabled = False` and
+`MaxLevel = Trace`, which accept nothing. To build a provider that writes, go through
+`TNNLogLoader`.
+
+---
+
+## Configuration
+
+```json
+{
+  "Logging": {
+    "NLog": {
+      "targets": {
+        "console": {
+          "targetType": "Console",
+          "layout": "${level} [${category}] ${message}",
+          "UseColors": "true"
+        },
+        "file": {
+          "targetType": "File",
+          "fileName": "${binPath}logs/app.log"
+        },
+        "udp": {
+          "targetType": "UDP",
+          "host": "localhost",
+          "port": 2020
+        }
+      },
+      "rules": [
+        { "name": "*", "writeTo": "console", "minLevel": "Trace", "isFinal": false },
+        { "name": "*", "writeTo": "udp,file", "minLevel": "Information", "isFinal": false }
+      ]
+    }
+  }
+}
+```
+
+### Target keys
+
+`targetType` picks the class; every other key is set on the target as a property of that name, so a
+target's configurable surface is its writable properties. Keys are matched without regard to case.
+
+`targetType` resolves by RTTI to `DAF.NNLog.Targets.<Type>.T<Type>Target`, **and this lookup is
+case-sensitive**: `Console` finds `TConsoleTarget`, `console` does not. `File` is the one exception
+to the unit name — `file` is a reserved word, so the unit is `DAF.NNLog.Targets.File_`. A
+`targetType` with no class behind it is a composition failure:
+`DAF.NNLog Error: Unknown target type <Type>`.
+
+The type has to survive smart linking for RTTI to find it — the built-in targets included. Add
+`{$STRONGLINKTYPES ON}` to the `.dpr` and name every target unit you configure in its `uses`:
+
+```pascal
+{$STRONGLINKTYPES ON}
+uses
+  DAF.NNLog.Loader,
+  DAF.NNLog.Targets.Console,
+  DAF.NNLog.Targets.File_,
+  DAF.NNLog.Targets.UDP;
+```
+
+### Rule keys
+
+| Key | Value | Absent |
+|-----|-------|--------|
+| `name` | category pattern | matches every category |
+| `minLevel` | lowest level accepted | `Trace` |
+| `maxLevel` | highest level accepted | `Critical` |
+| `levels` | comma-separated list of levels | no list |
+| `writeTo` | comma-separated list of target names | the rule writes nowhere |
+| `isFinal` | `true` stops evaluation after this rule | `false` |
+| `enabled` | `false` — and only that literal — disables the rule | the rule is enabled |
+
+The names in `writeTo` are the keys of the `targets` section, matched **exactly**: both the case and
+the absence of spaces around the comma matter, and a name with no target behind it is dropped in
+silence. `"udp,file"` reaches two targets; `"udp, file"` reaches one.
 
 ---
 
@@ -40,55 +154,97 @@ Each `TNNLogLogger` evaluates every rule in order. When a rule matches — categ
 
 ```pascal
 TLogRule = class
-  Name     : string;               // category name pattern (* and ? wildcards)
-  MinLevel : TLogLevel;            // lowest level that matches (default Trace)
-  MaxLevel : TLogLevel;            // highest level that matches (default Critical)
-  Levels   : TArray<TLogLevel>;    // explicit level list (overrides Min/Max when set)
-  WriteTo  : TArray<TTarget>;      // targets to write to
-  Enabled  : Boolean;              // default True
-  IsFinal  : Boolean;              // stop evaluating after this rule fires
+  property Name: string;                  // category pattern; '' and '*' match every category
+  property MinLevel: TLogLevel;           // lowest level accepted
+  property MaxLevel: TLogLevel;           // highest level accepted
+  property Levels: TArray<TLogLevel>;     // when not empty, the level must also be in the list
+  property WriteTo: TArray<TTarget>;      // targets this rule writes to
+  property Enabled: Boolean;              // a disabled rule accepts nothing
+  property IsFinal: Boolean;              // stop evaluating after this rule accepts
+  function Matches(const Category: string; const Level: TLogLevel): Boolean;
 end;
 ```
 
-### Pattern matching
+The three level fields are a **conjunction**, not a precedence: the entry's level has to be within
+`MinLevel`..`MaxLevel` **and**, when `Levels` is not empty, be one of its members. `MinLevel` of
+`Warning` with `Levels` of `Debug` accepts nothing.
+
+The defaults in [Rule keys](#rule-keys) are the ones `TNNLogLoader` applies to an absent key. A `TLogRule`
+built with `TLogRule.Create` starts from the values of a new object, so `Enabled` is `False` and
+`MaxLevel` is `Trace`.
+
+---
+
+## Category patterns
+
+A rule's `Name` is a **regular expression anchored to the whole category**: the pattern has to match
+the category from end to end.
 
 | Pattern | Matches |
 |---------|---------|
-| `*` | All categories |
-| `MyApp.*` | Any category starting with `MyApp.` |
-| `MyApp.Services.UserService` | Exact match |
-| `*Repository` | Any category ending with `Repository` |
+| `*`, and an absent or empty name | every category |
+| `MyApp\..*` | `MyApp.` followed by anything |
+| `MyApp\.Services\.UserService` | that category, and only it |
+| `.*Repository` | every category ending in `Repository` |
+| `(?i)myapp\..*` | the same as the second row, ignoring case |
+
+Case is decided by the pattern itself, with an inline `(?i)`; by default it is case-sensitive. An
+unescaped `.` is the regex wildcard, so `MyApp.Services` also matches `MyAppXServices`.
+
+A `Name` that is not a valid regular expression is a composition failure, reported when the
+configuration loads and naming the rule and the pattern:
+`DAF.NNLog Error: rule #0 has an invalid category pattern "*Repository": …`.
 
 ---
 
 ## TTarget
 
-Abstract base class for all NNLog output destinations.
+Base class for every NNLog destination.
 
 ```pascal
-TTarget = class abstract
-  Name   : string;
-  Layout : string;
+TTarget = class
+  const DefaultLayout = '${timestamp} #${pid}:${thread} [${level}] ${category} | ${message} ${exception}';
+  constructor Create; virtual;
   procedure Write(const Entry: TLogEntry); virtual; abstract;
+  function RenderEvent(Entry: TLogEntry): string;   // protected
+  property Name: string;
+  property Layout: string;
 end;
 ```
 
-Override `Write` to produce any output format or destination.
+A subclass overrides `Write` and calls `RenderEvent` to turn the entry into a line using its own
+`Layout`. `Name` is what a rule's `writeTo` refers to.
 
 ---
 
 ## Layout tokens
 
+A layout is text with `${token}` placeholders; a token may carry an argument after a colon. Token
+names are matched without regard to case, and **a token with no renderer behind it becomes the empty
+string**.
+
 | Token | Value |
 |-------|-------|
-| `${timestamp}` | Entry timestamp (`yyyy-mm-dd hh:nn:ss.zzz`) |
-| `${pid}` | Current process ID |
-| `${thread}` | Current thread ID |
-| `${level}` | Level name (`TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`) |
-| `${category}` | Logger category string |
-| `${message}` | Rendered message body |
-| `${exception}` | `ExceptionClass: Message` — empty string when `Entry.Exception = nil` |
-| `${scope}` | Rendered scope chain (empty when no scope active) |
+| `${timestamp}` | the moment the line is rendered, as `yyyy-MM-dd HH:mm:ss.zzz` |
+| `${date}`, `${date:format}` | render time, formatted; `yyyy-MM-dd` without an argument |
+| `${level}` | level name: `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `CRIT` |
+| `${category}` | the logger's category |
+| `${message}` | the rendered message |
+| `${exception}` | `ExceptionClass: Message`, empty when the entry carries no exception |
+| `${exception:stacktrace}` | the exception's stack trace |
+| `${pid}` | current process id |
+| `${thread}` | current thread id |
+| `${newline}` | a line break |
+| `${env:NAME}` | the `NAME` environment variable |
+| `${event-properties:key}` | `key` from the entry's state, empty when it carries no such key |
+| `${environment}` | `IHostEnvironment.EnvironmentName` |
+| `${contentRootPath}` | `IHostEnvironment.ContentRootPath` |
+| `${binPath}` | `IHostEnvironment.BinPath` |
+| `${ApplicationName}` | `IHostEnvironment.ApplicationName` |
+| `${uppercase:text}`, `${lowercase:text}` | the literal argument, recased |
+
+Tokens do not nest: the argument of a token is taken literally, so `${uppercase:${level}}` does not
+recase the level name.
 
 ### Default layout
 
@@ -96,119 +252,153 @@ Override `Write` to produce any output format or destination.
 ${timestamp} #${pid}:${thread} [${level}] ${category} | ${message} ${exception}
 ```
 
----
-
-## TNNLogProvider
-
-```pascal
-TNNLogProvider = class(TInterfacedObject, ILoggerProvider)
-  constructor Create(Targets: TArray<TTarget>; Rules: TArray<TLogRule>);
-  function CreateLogger(const Category: string): ILogger;
-end;
-```
-
-`TNNLogProvider` owns all `TTarget` and `TLogRule` instances passed to it.
+`TFileTarget.FileName` goes through the same engine, so `${binPath}`, `${date}` and the rest work
+in a path.
 
 ---
 
 ## Built-in targets
 
-| Class | Unit | Output |
-|-------|------|--------|
-| `TConsoleTarget` | `DAF.NNLog.Targets.Console` | `stdout` with ANSI colour coding by level |
-| `TFileTarget` | `DAF.NNLog.Targets.File_` | Rolling or fixed log file |
-| `TDebugTarget` | `DAF.NNLog.Targets.Debug` | The system debug output |
-| `TUDPTarget` | `DAF.NNLog.Targets.UDP` | A UDP endpoint: `Host` and `Port` |
+| Class | `targetType` | Unit | Output |
+|-------|--------------|------|--------|
+| `TConsoleTarget` | `Console` | `DAF.NNLog.Targets.Console` | standard output |
+| `TFileTarget` | `File` | `DAF.NNLog.Targets.File_` | a log file, with rotation |
+| `TDebugTarget` | `Debug` | `DAF.NNLog.Targets.Debug` | the system debug output, on Windows |
+| `TUDPTarget` | `UDP` | `DAF.NNLog.Targets.UDP` | a UDP endpoint |
+
+### TConsoleTarget
+
+| Property | Default | Meaning |
+|----------|---------|---------|
+| `UseColors` | `False` | colour each line by level — Win32 console attributes on Windows, ANSI escapes elsewhere |
+
+### TFileTarget
+
+| Property | Default | Meaning |
+|----------|---------|---------|
+| `FileName` | — | path of the current file; resolved as a layout |
+| `RotationPolicy` | `None` | `None`, `hourly`, `Daily`, `Days`, `Monthly`, `Size` |
+| `MaxFileSize` | `0` | size in bytes that triggers rotation under the `Size` policy |
+| `MaxFileAge` | `0` | age in days that triggers rotation under the `Days` policy |
+| `MaxArchivedFiles` | `0` | how many rotated files to keep; older ones are removed |
+| `CompressOnRotate` | `False` | zip the rotated file |
+| `AutoFlush` | `True` | flush after every entry |
+
+Rotated files go to a `history` directory beside the current one. The `Days` and `Size`
+policies compare against `MaxFileAge` and `MaxFileSize`, so each one needs its threshold set:
+left at `0` they rotate on every entry.
+
+An enumeration value the loader does not recognise becomes the enumeration's first value, so a
+misspelled `rotationPolicy` reads as `None`.
+
+### TUDPTarget
+
+| Property | Default | Meaning |
+|----------|---------|---------|
+| `Host` | `127.0.0.1` | destination host |
+| `Port` | `12201` | destination port — Graylog's GELF default |
 
 ---
 
-## Multiple targets and rules
+## Several targets and rules
 
-```pascal
-var File := TFileTarget.Create;
-File.Name     := 'file';
-File.FileName := 'app.log';
-File.Layout   := '${timestamp} [${level}] ${message} ${exception}';
-
-var Console := TConsoleTarget.Create;
-Console.Name := 'console';
-
-// Rule 1: debug+ to file only
-var R1 := TLogRule.Create;
-R1.Name     := '*';
-R1.MinLevel := TLogLevel.Debug;
-R1.WriteTo  := [File];
-
-// Rule 2: warnings+ also to console (IsFinal stops further evaluation)
-var R2 := TLogRule.Create;
-R2.Name     := '*';
-R2.MinLevel := TLogLevel.Warning;
-R2.WriteTo  := [Console];
-R2.IsFinal  := True;
-
-var Provider := TNNLogProvider.Create([File, Console], [R1, R2]);
+```json
+"rules": [
+  { "name": "*", "writeTo": "file", "minLevel": "Debug" },
+  { "name": "*", "writeTo": "console", "minLevel": "Warning", "isFinal": true }
+]
 ```
+
+A `Debug` entry is accepted by the first rule only and reaches the file. A `Warning` entry is
+accepted by both: it reaches the file, then the console, and evaluation stops there because the
+second rule is final.
+
+Order matters twice over — rules are evaluated in the order the section lists them, and `isFinal`
+cuts the rest off.
 
 ---
 
 ## Creating a custom target
 
-1. Inherit from `TTarget`:
+Inherit from `TTarget` and override `Write`:
 
 ```pascal
+unit DAF.NNLog.Targets.Slack;
+
+interface
+
+uses
+  Daf.Extensions.Logging,
+  DAF.NNLog;
+
 type
   TSlackTarget = class(TTarget)
   private
     FWebhookUrl: string;
   public
-    constructor Create(const WebhookUrl: string);
     procedure Write(const Entry: TLogEntry); override;
+    property WebhookUrl: string read FWebhookUrl write FWebhookUrl;
   end;
 
+implementation
+
+uses
+  System.SysUtils;
+
 procedure TSlackTarget.Write(const Entry: TLogEntry);
-var Payload: string;
 begin
-  if Entry.Level < TLogLevel.Warning then Exit;
-  Payload := Format('{"text": "%s"}', [RenderLayout(Entry)]);
-  // HTTP POST to FWebhookUrl
+  if Entry.Level < TLogLevel.Warning then
+    Exit;
+  var Payload := Format('{"text": "%s"}', [RenderEvent(Entry)]);
+  // HTTP POST of Payload to WebhookUrl
 end;
+
+end.
 ```
 
-2. Register like any other target:
+To be reachable from configuration a custom target follows the loader's convention: the unit is
+`DAF.NNLog.Targets.<Type>` and the class `T<Type>Target`, and every configurable value is a
+writable property. Then it is named like any other target:
 
-```pascal
-var Slack := TSlackTarget.Create('https://hooks.slack.com/…');
-Slack.Name := 'slack';
-
-var Rule := TLogRule.Create;
-Rule.Name     := '*';
-Rule.MinLevel := TLogLevel.Error;
-Rule.WriteTo  := [Slack];
-
-Provider := TNNLogProvider.Create([Slack], [Rule]);
+```json
+"targets": {
+  "slack": { "targetType": "Slack", "webhookUrl": "https://hooks.slack.com/…" }
+}
 ```
+
+Its unit needs naming in the program's `uses` like any other target unit, for the reason given
+under [Target keys](#target-keys).
+
+Configuration passes strings, so a property the loader is to set must be of a type
+`Daf.Configuration.Binder` can convert to — a string, a number, a boolean, or an enumeration named
+by one of its values. A target needing anything else exposes a string property and parses it itself.
 
 ---
 
 ## Integration with ILoggingBuilder
 
 ```pascal
-uses DAF.Extensions.Logging, DAF.Logging.Builder, DAF.NNLog, DAF.NNLog.Targets.Console;
+uses
+  Daf.Extensions.Logging,
+  DAF.Logging.Builder,
+  DAF.NNLog.Loader;
 
 AddLogging(Services,
   procedure(Builder: ILoggingBuilder)
-  var
-    Target : TConsoleTarget;
-    Rule   : TLogRule;
   begin
-    Target           := TConsoleTarget.Create;
-    Target.Name      := 'console';
-
-    Rule          := TLogRule.Create;
-    Rule.Name     := '*';
-    Rule.MinLevel := TLogLevel.Information;
-    Rule.WriteTo  := [Target];
-
-    Builder.AddProvider(TNNLogProvider.Create([Target], [Rule]));
+    Builder.AddProvider(TNNLogLoader.BuildProvider(Env, Config.GetSection('Logging:NLog')));
   end);
 ```
+
+The application builder exposes the environment and the configuration, which is the shape a
+console application uses:
+
+```pascal
+var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
+B.Logging.AddProvider(TNNLogLoader.BuildProvider(B.Environment, B.Configuration.GetSection('Logging:NLog')));
+```
+
+`Daf.Hosting` registers an `IHostBuilderContext` carrying both, which is what the
+`BuildProvider(Context, ConfigKey)` overload takes.
+
+The provider owns every target and rule it was given, and frees them when the factory releases it.

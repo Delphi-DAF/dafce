@@ -2,7 +2,9 @@
 
 **🌍 Idioma: [English](README.md) | Español**
 
-Proveedor de logging basado en reglas para DAFce. Se conecta al pipeline `ILoggerFactory` mediante `ILoggerProvider` y enruta las entradas de log a uno o más **targets** (consola, fichero, …) según **reglas** configurables.
+Proveedor de logging basado en reglas — un porte de NLog («NNLog is Not NLog»). Se conecta al
+pipeline `ILoggerFactory` mediante `ILoggerProvider` y enruta las entradas de log a uno o más
+**targets** (consola, fichero, UDP, salida de depuración) según **reglas** configurables.
 
 [![Delphi 12+](https://img.shields.io/badge/Delphi-12%2B-red.svg)](https://www.embarcadero.com/products/delphi)
 [![Licencia](https://img.shields.io/badge/licencia-MIT-blue.svg)](../../legal/LICENSE.md)
@@ -11,28 +13,43 @@ Proveedor de logging basado en reglas para DAFce. Se conecta al pipeline `ILogge
 
 ## Inicio rápido
 
+Los targets y las reglas salen de una sección de configuración:
+
+```json
+{
+  "Logging": {
+    "NLog": {
+      "targets": {
+        "console": {
+          "targetType": "Console",
+          "layout": "${timestamp} [${level}] ${category} | ${message}",
+          "UseColors": "true"
+        }
+      },
+      "rules": [
+        { "name": "*", "writeTo": "console", "minLevel": "Debug" }
+      ]
+    }
+  }
+}
+```
+
+`TNNLogLoader` lee la sección y construye el proveedor:
+
 ```pascal
 uses
-  DAF.NNLog,
-  DAF.NNLog.Targets.Console,
-  DAF.Logging.Builder,
-  DAF.Extensions.Logging;
+  Daf.Cli,
+  Daf.Configuration.CommandLine,
+  Daf.Extensions.Configuration,
+  Daf.Extensions.Logging,
+  DAF.NNLog.Loader;
 
-// 1. Definir un target
-var ConsoleTarget := TConsoleTarget.Create;
-ConsoleTarget.Name   := 'console';
-ConsoleTarget.Layout := '${timestamp} [${level}] ${category} | ${message}';
-
-// 2. Definir reglas
-var Rule := TLogRule.Create;
-Rule.Name    := '*';             // coincide con todas las categorías
-Rule.MinLevel := TLogLevel.Debug;
-Rule.WriteTo  := [ConsoleTarget];
-
-// 3. Crear el proveedor y conectarlo a la factory
-var Provider := TNNLogProvider.Create([ConsoleTarget], [Rule]);
-Factory.AddProvider(Provider);
+var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
+B.Logging.AddProvider(TNNLogLoader.BuildProvider(B.Environment, B.Configuration.GetSection('Logging:NLog')));
 ```
+
+`BuildProvider` acepta también un `TNNLogConfiguration` montado con código, para unos ajustes que no
+vienen de un fichero.
 
 ---
 
@@ -40,16 +57,21 @@ Factory.AddProvider(Provider);
 
 | Token | Descripción |
 |-------|-------------|
-| `${timestamp}` | Timestamp ISO-8601 |
+| `${timestamp}` | el momento de renderizar, como `yyyy-MM-dd HH:mm:ss.zzz` |
+| `${date:formato}` | el momento de renderizar, con formato |
 | `${pid}` | ID del proceso |
 | `${thread}` | ID del hilo |
-| `${level}` | Nombre del nivel de log |
-| `${category}` | Categoría del logger |
-| `${message}` | Mensaje renderizado |
-| `${exception}` | Clase + mensaje de excepción (vacío si no hay) |
-| `${scope}` | Cadena del scope activo |
+| `${level}` | nombre del nivel: `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `CRIT` |
+| `${category}` | categoría del logger |
+| `${message}` | mensaje renderizado |
+| `${exception}` | clase + mensaje de la excepción, vacío si no hay |
+| `${env:NOMBRE}` | variable de entorno |
+| `${event-properties:clave}` | un valor del estado de la entrada |
+| `${binPath}`, `${contentRootPath}`, `${environment}`, `${ApplicationName}` | de `IHostEnvironment` |
 
 Layout por defecto: `${timestamp} #${pid}:${thread} [${level}] ${category} | ${message} ${exception}`
+
+La tabla completa, con el argumento que acepta cada token, está en la [guía](docs/GUIDE.es.md#tokens-de-layout).
 
 ---
 
@@ -64,44 +86,40 @@ Una regla elige a qué loggers se aplica por **categoría**, mediante su `name`:
 - La caja (mayúsculas/minúsculas) la decide el propio patrón, con un `(?i)` en línea; por defecto
   distingue mayúsculas.
 
-Es una **divergencia deliberada de NLog**, donde `name` es un glob de dos comodines (`*` y `?`). Un
-regex es estrictamente más expresivo, ya viene en la RTL, y lleva la decisión de la caja al patrón en
-vez de esconderla en el código. `Daf.*` sigue funcionando (`.*` y `*` coinciden ahí); un comodín `?`
-hay que escribirlo como `.`.
+Es una **divergencia de NLog**, donde `name` es un glob de dos comodines (`*` y `?`). `Daf.*` sigue
+funcionando, porque `.*` y `*` coinciden ahí; un comodín `?` se escribe como `.`, y un punto literal
+como `\.`.
 
 Un `name` que no sea una expresión regular válida es un **error de composición**: la configuración
-falla al cargar, nombrando la regla y el patrón, en vez de dejar el fallo para el primer registro.
+falla al cargar, nombrando la regla y el patrón.
 
 Una regla está **activa salvo que su configuración diga lo contrario**: `enabled` vale `true` por
 defecto, y solo el literal `false` la desactiva — la semántica que documenta NLog.
 
+Qué niveles acepta una regla es la conjunción de `minLevel`, `maxLevel` y `levels`. Ausentes, valen
+`Trace`, `Critical` y ninguna lista, así que una regla con `name` y `writeTo` lo acepta todo.
+
 ---
 
-## Integración con DI / Hosting
+## Targets incluidos
 
-```pascal
-uses DAF.Extensions.Logging, DAF.Logging.Builder, DAF.NNLog, DAF.NNLog.Targets.Console;
+| `targetType` | Clase | Salida |
+|--------------|-------|--------|
+| `Console` | `TConsoleTarget` | salida estándar, con color por nivel si se pide |
+| `File` | `TFileTarget` | un fichero de log, con rotación por fecha, edad, mes o tamaño |
+| `Debug` | `TDebugTarget` | la salida de depuración del sistema, en Windows |
+| `UDP` | `TUDPTarget` | un endpoint UDP |
 
-AddLogging(Services,
-  procedure(Builder: ILoggingBuilder)
-  var
-    Target : TConsoleTarget;
-    Rule   : TLogRule;
-  begin
-    Target := TConsoleTarget.Create;
-    Target.Name := 'console';
+`targetType` se resuelve por RTTI a `DAF.NNLog.Targets.<Tipo>.T<Tipo>Target`, que es también cómo se
+alcanza un target propio desde la configuración. Cualquier otra clave de la sección de un target se
+asigna al target como una propiedad escribible de ese nombre.
 
-    Rule := TLogRule.Create;
-    Rule.Name     := '*';
-    Rule.MinLevel := TLogLevel.Information;
-    Rule.WriteTo  := [Target];
-
-    Builder.AddProvider(TNNLogProvider.Create([Target], [Rule]));
-  end);
-```
+El tipo tiene que sobrevivir al enlazado inteligente para que la búsqueda lo encuentre: `{$STRONGLINKTYPES ON}` en el
+`.dpr`, y cada unit de target que configure nombrada en su `uses`. Un `targetType` cuya unit no está
+enlazada da `Unknown target type`.
 
 ---
 
 ## Documentación
 
-- 📖 [Guía de uso](docs/GUIDE.es.md) — reglas, targets, layout, múltiples targets, targets personalizados
+- 📖 [Guía de uso](docs/GUIDE.es.md) — composición, configuración, reglas, targets, layout, targets personalizados
