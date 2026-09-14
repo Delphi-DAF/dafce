@@ -45,9 +45,11 @@ end;
 ## Starting the server
 
 ```pascal
-uses Daf.HttpServer;
+uses
+  Daf.Extensions.HttpServer,   // IDafHttpServer
+  Daf.HttpServer;              // TDafHttpServer
 
-var Server := TDafHttpServer.Create(TWebModule1, Config, LoggerFactory);
+var Server: IDafHttpServer := TDafHttpServer.Create(TWebModule1, Config, LoggerFactory);
 Server.Port := 8080;
 Server.Start;
 WriteLn('Listening on :8080');
@@ -55,7 +57,13 @@ ReadLn;
 Server.Stop;
 ```
 
-`Config['Port']` sets the port at construction; assigning `Port` afterwards, as above, overrides it.
+⚠️ **Hold it in an `IDafHttpServer`.** `TDafHttpServer` is reference counted, so a variable of the
+class type leaves nobody owning it and the server leaks.
+
+`Config['Port']` sets the port at construction and is **required**: with the key missing the indexer
+returns the empty string and the constructor fails converting it. Assigning `Port` afterwards, as
+above, overrides it. Composing through the application variant instead of by hand seeds the port for
+you — see the [guide](docs/GUIDE.md#the-web-application-variant).
 
 ---
 

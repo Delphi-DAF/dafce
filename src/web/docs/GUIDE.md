@@ -11,9 +11,10 @@
 3. [Routing attributes](#routing-attributes)
 4. [Parameter binding](#parameter-binding)
 5. [Action results reference](#action-results-reference)
-6. [TDafHttpServer](#tdafhttpserver)
-7. [DI integration](#di-integration)
-8. [Custom action results](#custom-action-results)
+6. [The Web application variant](#the-web-application-variant)
+7. [TDafHttpServer](#tdafhttpserver)
+8. [DI integration](#di-integration)
+9. [Custom action results](#custom-action-results)
 
 ---
 
@@ -166,6 +167,53 @@ An action may also return a plain `string`, which is sent as `text/plain`.
 
 ---
 
+## The Web application variant
+
+`Daf.Web` is one of the application family, and its entry point is `TWebApplication`. Composing the
+host, the server and the routing is four lines:
+
+```pascal
+uses
+  Daf.Extensions.DependencyInjection,   // IServiceCollection, AddScoped
+  Daf.Web.Application;                  // TWebApplication, Web
+
+begin
+  var Builder := TWebApplication.CreateBuilder;
+  Builder.Services.AddScoped<IUserService, TUserService>;
+
+  Web.AddHttpServer(Builder.Services);
+
+  var App := Builder.Build;
+  App.MapControllers;
+  ExitCode := App.Run;
+end.
+```
+
+- **`Web.AddHttpServer`** registers the router and the server. It is a facade of `Daf.Web` rather
+  than a member of the shared builder, so the generic package names no variant and the package graph
+  stays one-way.
+- **`MapControllers`** resolves the router, and resolving it **is** the discovery: the router scans
+  the RTTI for `[WebRoute]` as it is built.
+- **`Run`** starts the host, starts the server, waits for shutdown and stops both. The loop belongs
+  to DAF here, so the `.dpr` ends when `Run` ends — unlike VCL and FMX, where the loop is the
+  platform's.
+
+### The port
+
+The variant **seeds** `Web:Port` with `8080` before handing the configuration over, so an argument
+or an environment variable read afterwards wins:
+
+```
+MyApp --Web:Port=9000
+```
+
+`AddHttpServer` hands the server the `Web` **section**, which is why the key is `Web:Port` from
+outside and plain `Port` inside `TDafHttpServer.Create`.
+
+See [Application](../../Application/docs/GUIDE.md) for what the four variants share.
+
+---
+
 ## TDafHttpServer
 
 ```pascal
@@ -186,32 +234,27 @@ end;
 
 `Create` reads the port from `Config['Port']`. `Start` refuses to bind a port already in use: it fires `OnError` with a message naming the port and aborts, rather than letting a socket error escape from inside the server. `CanBindPort` answers the same question ahead of time, and releases whatever it bound.
 
-### Minimal setup
+### Driving it yourself
+
+`Web.AddHttpServer` registers it for you, and that is the route to take. Building one by hand is for
+a process that is not a DAF application — a spec harness, an existing program taking DAF in piece by
+piece:
 
 ```pascal
-uses Daf.HttpServer;
+uses
+  Daf.Extensions.HttpServer,   // IDafHttpServer
+  Daf.HttpServer;              // TDafHttpServer
 
-var Srv := TDafHttpServer.Create(TMyWebModule, AppConfig, LogFactory);
+var Srv: IDafHttpServer := TDafHttpServer.Create(TMyWebModule, AppConfig, LogFactory);
 Srv.Port := 8080;
 Srv.Start;
 ```
 
-### With Hosting
+⚠️ **The variable is an `IDafHttpServer` and not the class.** `TDafHttpServer` is reference counted,
+so holding it by its class type leaves nobody owning it.
 
-```pascal
-// While composing startup:
-Builder.Services.AddSingleton<IDafHttpServer>(
-  function(P: IServiceProvider): IDafHttpServer
-  begin
-    Result := TDafHttpServer.Create(TMyWebModule,
-                P.GetService<IConfiguration>,
-                P.GetService<ILoggerFactory>);
-  end);
-
-// In a hosted service:
-FServer.Port := 8080;
-FServer.Start;
-```
+⚠️ **What you pass as `AppConfig` is read with the key `Port`, not `Web:Port`.** The facade hands
+the server `GetSection('Web')`; a configuration passed straight in is read at its root.
 
 The server is not an `IHostedService` yet — see the note in the [README](../README.md).
 

@@ -11,9 +11,10 @@
 3. [Atributos de enrutamiento](#atributos-de-enrutamiento)
 4. [Binding de parámetros](#binding-de-parámetros)
 5. [Referencia de action results](#referencia-de-action-results)
-6. [TDafHttpServer](#tdafhttpserver)
-7. [Integración con DI](#integración-con-di)
-8. [Action results personalizados](#action-results-personalizados)
+6. [La variante de aplicación Web](#la-variante-de-aplicación-web)
+7. [TDafHttpServer](#tdafhttpserver)
+8. [Integración con DI](#integración-con-di)
+9. [Action results personalizados](#action-results-personalizados)
 
 ---
 
@@ -166,6 +167,53 @@ Una acción también puede devolver un `string` a secas, que se envía como `tex
 
 ---
 
+## La variante de aplicación Web
+
+`Daf.Web` es una de la familia de aplicaciones, y su punto de entrada es `TWebApplication`. Componer
+el host, el servidor y el enrutado son cuatro líneas:
+
+```pascal
+uses
+  Daf.Extensions.DependencyInjection,   // IServiceCollection, AddScoped
+  Daf.Web.Application;                  // TWebApplication, Web
+
+begin
+  var Builder := TWebApplication.CreateBuilder;
+  Builder.Services.AddScoped<IUserService, TUserService>;
+
+  Web.AddHttpServer(Builder.Services);
+
+  var App := Builder.Build;
+  App.MapControllers;
+  ExitCode := App.Run;
+end.
+```
+
+- **`Web.AddHttpServer`** registra el router y el servidor. Es una fachada de `Daf.Web` y no un
+  miembro del componedor común, así que el paquete genérico no nombra a ninguna variante y el grafo
+  de paquetes va en un solo sentido.
+- **`MapControllers`** resuelve el router, y resolverlo **es** el descubrimiento: el router recorre
+  la RTTI buscando `[WebRoute]` al construirse.
+- **`Run`** arranca el host, arranca el servidor, espera al apagado y para los dos. Aquí el bucle es
+  de DAF, así que el `.dpr` acaba cuando acaba `Run` —al contrario que en VCL y FMX, donde el bucle
+  es de la plataforma—.
+
+### El puerto
+
+La variante **siembra** `Web:Port` con `8080` antes de entregar la configuración, así que un
+argumento o una variable de entorno leídos después lo pisan:
+
+```
+MyApp --Web:Port=9000
+```
+
+`AddHttpServer` le entrega al servidor la **sección** `Web`, y por eso la clave es `Web:Port` desde
+fuera y `Port` a secas dentro de `TDafHttpServer.Create`.
+
+Ver [Application](../../Application/docs/GUIDE.es.md) para lo que comparten las cuatro variantes.
+
+---
+
 ## TDafHttpServer
 
 ```pascal
@@ -186,32 +234,26 @@ end;
 
 `Create` lee el puerto de `Config['Port']`. `Start` se niega a arrancar sobre un puerto ocupado: dispara `OnError` con un mensaje que nombra el puerto y aborta, en vez de dejar escapar un error de socket desde dentro del servidor. `CanBindPort` responde a lo mismo por adelantado, y suelta lo que haya reservado.
 
-### Montaje mínimo
+### Manejarlo tú
+
+`Web.AddHttpServer` lo registra por ti, y esa es la vía. Construirlo a mano es para un proceso que no
+es una aplicación DAF —un banco de specs, un programa existente que adopta DAF a trozos—:
 
 ```pascal
-uses Daf.HttpServer;
+uses
+  Daf.Extensions.HttpServer,   // IDafHttpServer
+  Daf.HttpServer;              // TDafHttpServer
 
-var Srv := TDafHttpServer.Create(TMyWebModule, AppConfig, LogFactory);
+var Srv: IDafHttpServer := TDafHttpServer.Create(TMyWebModule, AppConfig, LogFactory);
 Srv.Port := 8080;
 Srv.Start;
 ```
 
-### Con Hosting
+⚠️ **La variable es una `IDafHttpServer` y no la clase.** `TDafHttpServer` lleva contador de
+referencias, así que sostenerlo por su tipo de clase lo deja sin dueño.
 
-```pascal
-// Al componer el arranque:
-Builder.Services.AddSingleton<IDafHttpServer>(
-  function(P: IServiceProvider): IDafHttpServer
-  begin
-    Result := TDafHttpServer.Create(TMyWebModule,
-                P.GetService<IConfiguration>,
-                P.GetService<ILoggerFactory>);
-  end);
-
-// En un hosted service:
-FServer.Port := 8080;
-FServer.Start;
-```
+⚠️ **Lo que pases como `AppConfig` se lee con la clave `Port`, no `Web:Port`.** La fachada le entrega
+al servidor `GetSection('Web')`; una configuración pasada directamente se lee en su raíz.
 
 El servidor todavía no es un `IHostedService` — ver la nota del [README](../README.es.md).
 

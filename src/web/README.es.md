@@ -45,9 +45,11 @@ end;
 ## Arrancar el servidor
 
 ```pascal
-uses Daf.HttpServer;
+uses
+  Daf.Extensions.HttpServer,   // IDafHttpServer
+  Daf.HttpServer;              // TDafHttpServer
 
-var Server := TDafHttpServer.Create(TWebModule1, Config, LoggerFactory);
+var Server: IDafHttpServer := TDafHttpServer.Create(TWebModule1, Config, LoggerFactory);
 Server.Port := 8080;
 Server.Start;
 WriteLn('Escuchando en :8080');
@@ -55,7 +57,13 @@ ReadLn;
 Server.Stop;
 ```
 
-`Config['Port']` fija el puerto al construir; asignar `Port` después, como arriba, lo sustituye.
+⚠️ **Sostenlo en una `IDafHttpServer`.** `TDafHttpServer` lleva contador de referencias, así que una
+variable del tipo de la clase deja el servidor sin dueño y se fuga.
+
+`Config['Port']` fija el puerto al construir y es **obligatoria**: si la clave falta, el indexador
+devuelve la cadena vacía y el constructor falla al convertirla. Asignar `Port` después, como arriba,
+lo sustituye. Componer por la variante de aplicación en vez de a mano siembra el puerto por ti —ver
+la [guía](docs/GUIDE.es.md#la-variante-de-aplicación-web)—.
 
 ---
 

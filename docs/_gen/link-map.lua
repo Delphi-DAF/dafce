@@ -423,6 +423,7 @@ return {
       ["samples/TicTacToeApp/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/VCL/samples/TicTacToeApp",
     },
     ["en/modules/web-guide.qmd"] = {
+      ["../../Application/docs/GUIDE.md"] = "/en/modules/application-guide.qmd",
       ["../README.md"] = "/en/modules/web.qmd",
       ["GUIDE.es.md"] = "/es/modules/web-guide.qmd",
     },
@@ -430,6 +431,7 @@ return {
       ["../../legal/LICENSE.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/legal/LICENSE.md",
       ["README.es.md"] = "/es/modules/web.qmd",
       ["docs/GUIDE.md"] = "/en/modules/web-guide.qmd",
+      ["docs/GUIDE.md#the-web-application-variant"] = "/en/modules/web-guide.qmd#the-web-application-variant",
     },
     ["es/docs/startup-composition.qmd"] = {
       ["#net--daf"] = "#net-daf",
@@ -774,6 +776,7 @@ return {
       ["samples/TicTacToeApp/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/VCL/samples/TicTacToeApp",
     },
     ["es/modules/web-guide.qmd"] = {
+      ["../../Application/docs/GUIDE.es.md"] = "/es/modules/application-guide.qmd",
       ["../README.es.md"] = "/es/modules/web.qmd",
       ["GUIDE.md"] = "/en/modules/web-guide.qmd",
     },
@@ -781,6 +784,7 @@ return {
       ["../../legal/LICENSE.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/legal/LICENSE.md",
       ["README.md"] = "/en/modules/web.qmd",
       ["docs/GUIDE.es.md"] = "/es/modules/web-guide.qmd",
+      ["docs/GUIDE.es.md#la-variante-de-aplicación-web"] = "/es/modules/web-guide.qmd#la-variante-de-aplicación-web",
     },
   },
 }
