@@ -55,6 +55,12 @@ MyApp.exe -f "(Feat:Login or @auth) and ~@slow"
 
 > ⚠️ Tags **must** start with `@`. Writing `--filter unit` will error; use `--filter @unit`.
 
+⚠️ **The text after `Feat:`, `Scen:`, `Rule:` or `Cat:` is a single word, and there is no
+quoting.** The expression is split on spaces, so `-f "Scen:releases one reference"` reads
+`Scen:releases` and then aborts on the next word with
+`Token inesperado en expresión de filtro: one` — zero specs run, which in a script reads exactly
+like a suite that passed. Pick one word the description contains.
+
 ---
 
 [← Step Bindings](step-bindings.md) | [Next: Assertions →](assertions.md)

@@ -46,17 +46,21 @@ Indica que un step es puramente descriptivo y no requiere código. El step pasa 
     end)
 ```
 
-## Restricción
+## Dónde cae
 
-`.NoAction` solo es válido para steps Given y When. Los steps Then siempre deben contener verificaciones (assertions), por lo que usar `.NoAction` en Then lanzará una excepción.
+`.NoAction` sustituye el cuerpo del **último step declarado**, sea del tipo que sea:
 
 ```pascal
-// ✓ Válido
 .Given('contexto descriptivo').NoAction
 .When('acción implícita').NoAction
+```
 
-// ✗ Error en tiempo de ejecución
-.&Then('verificación').NoAction  // Lanza excepción
+⚠️ **Nada impide ponerlo en un `Then`, y nada avisa.** El step pasa a ser un cuerpo que no hace
+nada y que pasa, así que el escenario se queda con un `Then` que no verifica nada y sigue en verde
+— que es peor que un fallo, porque parece cobertura.
+
+```pascal
+.&Then('verificación').NoAction  // compila, se ejecuta, no verifica nada
 ```
 
 ---

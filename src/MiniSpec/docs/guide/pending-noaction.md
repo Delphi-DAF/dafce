@@ -46,17 +46,21 @@ Indicates a step is purely descriptive and requires no code. The step passes aut
     end)
 ```
 
-## Restriction
+## Where it lands
 
-`.NoAction` is only valid for Given and When steps. Then steps must always contain verifications (assertions), so using `.NoAction` on Then will raise an exception.
+`.NoAction` replaces the body of the **last declared step**, whatever its kind:
 
 ```pascal
-// ✓ Valid
 .Given('descriptive context').NoAction
 .When('implicit action').NoAction
+```
 
-// ✗ Runtime error
-.&Then('verification').NoAction  // Raises exception
+⚠️ **Nothing stops you from putting it on a `Then`, and nothing warns you.** The step becomes a
+body that does nothing and passes, so the scenario keeps a `Then` that verifies nothing and stays
+green — which is worse than a failure, because it looks like coverage.
+
+```pascal
+.&Then('verification').NoAction  // compiles, runs, verifies nothing
 ```
 
 ---
