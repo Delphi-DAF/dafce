@@ -184,7 +184,7 @@ Factory.AddProvider(TNNLogProvider.Create(Targets, Rules));
 ## Dependency Injection Integration
 
 ```pascal
-uses DAF.Logging.Builder, DAF.NNLog;
+uses Daf.Extensions.Logging, DAF.Logging.Builder, DAF.NNLog;
 
 // While composing startup, on the builder's Services:
 AddLogging(Builder.Services,

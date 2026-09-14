@@ -27,6 +27,7 @@ uses
   Daf.Extensions.Logging,
   Daf.Logging,
   DAF.Logging.Builder,
+  DAF.Logging.Provider,
   DAF.NNLog; // any provider
 
 // Standalone (no DI)
@@ -70,7 +71,7 @@ The template and arguments are kept together in `TLogState`, letting providers f
 ## Integration with DI and Hosting
 
 ```pascal
-uses DAF.Logging.Builder, DAF.NNLog;
+uses Daf.Extensions.Logging, DAF.Logging.Builder, DAF.NNLog;
 
 // While composing startup, on the builder's Services:
 AddLogging(Builder.Services, procedure(Log: ILoggingBuilder)

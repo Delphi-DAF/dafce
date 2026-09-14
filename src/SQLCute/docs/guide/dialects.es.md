@@ -92,7 +92,7 @@ end;
 Extiende `TAnsiSqlCompiler` y sobreescribe solo lo que difiere:
 
 ```pascal
-uses Daf.SQLCute.Compiler;
+uses Daf.SQLCute, Daf.SQLCute.Compiler;
 
 type
   TMiDbCompilador = class(TAnsiSqlCompiler)

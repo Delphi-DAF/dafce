@@ -200,7 +200,7 @@ sembrar un builder desde una configuración que te entregaron: la fuente en memo
 diccionario de cadenas, no un `IConfiguration`.
 
 ```pascal
-uses Daf.Configuration.Chained;
+uses Daf.Extensions.Configuration, Daf.Configuration.Builder, Daf.Configuration.Chained;
 
 // Una configuración que resolvió otro y te dio -- un anfitrión de plugins, un arnés de specs,
 // una librería que compone sus propios valores por defecto.

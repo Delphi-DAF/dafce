@@ -183,7 +183,7 @@ Factory.AddProvider(TNNLogProvider.Create(Targets, Rules));
 ## Integración con DI
 
 ```pascal
-uses DAF.Logging.Builder, DAF.NNLog;
+uses Daf.Extensions.Logging, DAF.Logging.Builder, DAF.NNLog;
 
 // Al componer el arranque, sobre los Services del builder:
 AddLogging(Builder.Services,

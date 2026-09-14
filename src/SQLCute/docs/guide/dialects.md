@@ -92,7 +92,7 @@ end;
 Extend `TAnsiSqlCompiler` and override only what differs:
 
 ```pascal
-uses Daf.SQLCute.Compiler;
+uses Daf.SQLCute, Daf.SQLCute.Compiler;
 
 type
   TMyDbCompiler = class(TAnsiSqlCompiler)

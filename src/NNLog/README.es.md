@@ -15,7 +15,8 @@ Proveedor de logging basado en reglas para DAFce. Se conecta al pipeline `ILogge
 uses
   DAF.NNLog,
   DAF.NNLog.Targets.Console,
-  DAF.Logging.Builder;
+  DAF.Logging.Builder,
+  DAF.Extensions.Logging;
 
 // 1. Definir un target
 var ConsoleTarget := TConsoleTarget.Create;
@@ -79,7 +80,7 @@ defecto, y solo el literal `false` la desactiva — la semántica que documenta 
 ## Integración con DI / Hosting
 
 ```pascal
-uses DAF.Logging.Builder, DAF.NNLog, DAF.NNLog.Targets.Console;
+uses DAF.Extensions.Logging, DAF.Logging.Builder, DAF.NNLog, DAF.NNLog.Targets.Console;
 
 AddLogging(Services,
   procedure(Builder: ILoggingBuilder)

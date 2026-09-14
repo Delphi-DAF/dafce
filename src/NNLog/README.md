@@ -15,7 +15,8 @@ Rule-based logging provider for DAFce. Connects to the `ILoggerFactory` pipeline
 uses
   DAF.NNLog,
   DAF.NNLog.Targets.Console,
-  DAF.Logging.Builder;
+  DAF.Logging.Builder,
+  DAF.Extensions.Logging;
 
 // 1. Define a target
 var ConsoleTarget := TConsoleTarget.Create;
@@ -77,7 +78,7 @@ the literal `false` disables it — the semantics NLog documents.
 ## Integration with DI / Hosting
 
 ```pascal
-uses DAF.Logging.Builder, DAF.NNLog, DAF.NNLog.Targets.Console;
+uses DAF.Extensions.Logging, DAF.Logging.Builder, DAF.NNLog, DAF.NNLog.Targets.Console;
 
 AddLogging(Services,
   procedure(Builder: ILoggingBuilder)

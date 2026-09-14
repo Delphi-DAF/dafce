@@ -193,7 +193,7 @@ Provider := TNNLogProvider.Create([Slack], [Rule]);
 ## Integration with ILoggingBuilder
 
 ```pascal
-uses DAF.Logging.Builder, DAF.NNLog, DAF.NNLog.Targets.Console;
+uses DAF.Extensions.Logging, DAF.Logging.Builder, DAF.NNLog, DAF.NNLog.Targets.Console;
 
 AddLogging(Services,
   procedure(Builder: ILoggingBuilder)
