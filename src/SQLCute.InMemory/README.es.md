@@ -119,7 +119,7 @@ Las reglas completas, con ejemplos, están en la [guía de uso](docs/GUIDE.es.md
 
 ## Limitaciones
 
-El back-end es **de solo lectura** — el DML (`INSERT`/`UPDATE`/`DELETE`) sigue siendo exclusivo de SQL. Lo comprueba por el **tipo declarado** de la consulta, no detectando una cláusula de DML: todo lo que no sea una recuperación se rechaza nombrando el tipo que es. Por eso la guarda ya cubre un tipo de sentencia que todavía no existe — uno nuevo se rechaza igual, sin una lista negra cláusula a cláusula que haya que acordarse de actualizar. Los fragmentos de SQL crudo (`FROM` crudo, `ORDER BY` crudo, `ON` crudo de JOIN, `CombineRaw`), las CTE (`WITH`), los JOIN sobre subconsulta y los predicados de fecha (`WhereDate`, `WhereTime`, `WhereDatePart`) no pueden evaluarse en memoria y lanzan `EInMemoryQueryError`. La ejecución es un recorrido ingenuo — sin índices ni optimización.
+El back-end es **de solo lectura** — el DML (`INSERT`/`UPDATE`/`DELETE`) sigue siendo exclusivo de SQL. Lo comprueba por el **tipo declarado** de la consulta: todo lo que no sea una recuperación se rechaza nombrando el tipo que es — `The in-memory backend is read-only; it cannot execute a Delete statement.` Los fragmentos de SQL crudo (`FROM` crudo, `ORDER BY` crudo, `ON` crudo de JOIN, `CombineRaw`), las CTE (`WITH`), los JOIN sobre subconsulta y los predicados de fecha (`WhereDate`, `WhereTime`, `WhereDatePart`) no pueden evaluarse en memoria y lanzan `EInMemoryQueryError`. La ejecución es un recorrido ingenuo — sin índices ni optimización.
 
 ---
 

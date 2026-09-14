@@ -174,12 +174,12 @@ Predicate evaluation is three-valued. A comparison with a NULL operand is *unkno
 | **false** | true | false | unknown |
 | **unknown** | true | unknown | unknown |
 
-This is why a two-valued "NULL means false" model would be wrong:
+A negated comparison over a NULL column shows the effect:
 
 ```pascal
 TQuery.New.From('people').WhereNot('age', '>', 18)
 // age = NULL → (age > 18) is unknown → NOT unknown is unknown → row excluded.
-// A two-valued model would wrongly include it.
+// A database excludes it too.
 ```
 
 `WhereNull` / `WhereNotNull` test presence explicitly and always answer true or false.
@@ -209,7 +209,7 @@ TInMemory.Elements<TPerson>(
 
 Both fluent forms work (`NullsFirst` / `NullsLast`, or the `OrderBy(col, TNullsOrder.Last)` overload); the compiler reads the clause's option into `TOrderSpec.Nulls`.
 
-> **The one place the two back-ends can still disagree.** An *unqualified* sort over a nullable column follows each side's own default: NULL-is-smallest in memory, whatever the dialect does in SQL — and Postgres and Oracle do the opposite (nulls last ascending). This lane has no notion of a dialect and acquiring one would couple the back-ends, so the default stays as it is. **Qualifying the sort is the supported way to get identical results from both**, which is exactly what the symmetry harness pins.
+> **The one place the two back-ends can still disagree.** An *unqualified* sort over a nullable column follows each side's own default: NULL-is-smallest in memory, whatever the dialect does in SQL — and Postgres and Oracle do the opposite (nulls last ascending). This lane has no notion of a dialect. **Qualify the sort — `NullsFirst` / `NullsLast` — to get identical results from both.**
 
 ### Materialization
 
@@ -230,7 +230,7 @@ TQuery.New.From('people').Select('country').Distinct
 // one row per distinct country, not one per person
 ```
 
-In the fast typed lane with no projection, "every column" means every RTTI-visible public/published member of `T`, compared by value — two distinct `TPerson` instances holding equal values are one row.
+In the fast typed lane with no projection, "every column" means every readable public or published property of `T` when `T` is a class, and every field when `T` is a record — a public field of a class does not count. They are compared by value, so two distinct `TPerson` instances holding equal values are one row.
 
 ---
 
@@ -272,7 +272,7 @@ TQuery.New.From('people')
 // rows: (country, n)
 ```
 
-Underneath, the sequence library's `GroupBy` yields the richer `IGrouping<TKey, T>` (key plus members); the flat SQL shape is layered on top of it, not baked into it.
+The sequence library's own `GroupBy` yields the richer `IGrouping<TKey, T>` — the key plus its members — for code that goes through [`Daf.Linq`](../../Linq/README.md) directly.
 
 ### Subqueries and set operations
 
@@ -294,7 +294,7 @@ Everything the engine cannot faithfully execute raises `EInMemoryQueryError` at 
 | a multi-source query run with a single list | needs a context |
 | a projecting query run through `Elements<T>` | use `Rows` or `Project` |
 
-Execution is a naive full scan — no indexes, no optimizer. That is deliberate for the collection sizes this targets.
+Execution is a naive full scan — no indexes, no optimizer.
 
 ---
 
@@ -302,4 +302,4 @@ Execution is a naive full scan — no indexes, no optimizer. That is deliberate 
 
 `Parity.Feat.pas` in this module's `test/` folder is the symmetry harness: a shared query set is pushed through the SQL compiler and through all three in-memory lanes over one seeded dataset, and every lane must reproduce the same declared result set. It also asserts that neither back-end mutates the AST, that bindings match their placeholders, and that the emitted SQL carries the very precedence parentheses the in-memory predicate was built from.
 
-If you extend the engine, add the query to that set — it is the guard on the "one query, two back-ends" promise.
+That set is the guard on the "one query, two back-ends" promise.

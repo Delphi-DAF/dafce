@@ -137,7 +137,7 @@ function CompareOp(Op: TWhereOp; const L, R: TValue): TTriState;
 /// <summary>
 ///   Builds a tri-state predicate from a flat WHERE/ON clause list via the shared
 ///   <c>Daf.SQLCute.WhereTree</c> (nil when there are no conditions). Reused by the
-///   multi-source engine for JOIN ON callbacks and future HAVING.
+///   multi-source engine for JOIN ON callbacks.
 /// </summary>
 function WherePredicate(const Clauses: TArray<TAbstractClause>): TValuePredicate;
 /// <summary>

@@ -174,12 +174,12 @@ La evaluación de predicados es de tres valores. Una comparación con un operand
 | **falso** | verdadero | falso | desconocido |
 | **desconocido** | verdadero | desconocido | desconocido |
 
-Por esto un modelo de dos valores ("NULL significa falso") sería incorrecto:
+Una comparación negada sobre una columna NULL muestra el efecto:
 
 ```pascal
 TQuery.New.From('people').WhereNot('age', '>', 18)
 // age = NULL → (age > 18) es desconocido → NOT desconocido es desconocido → fila excluida.
-// Un modelo de dos valores la incluiría por error.
+// Una base de datos también la excluye.
 ```
 
 `WhereNull` / `WhereNotNull` comprueban la presencia explícitamente y siempre responden verdadero o falso.
@@ -209,7 +209,7 @@ TInMemory.Elements<TPersona>(
 
 Sirven ambas formas fluidas (`NullsFirst` / `NullsLast`, o la sobrecarga `OrderBy(col, TNullsOrder.Last)`); el compilador lee la opción de la cláusula en `TOrderSpec.Nulls`.
 
-> **El único punto donde los dos back-ends aún pueden discrepar.** Una ordenación *sin cualificar* sobre una columna nullable sigue el valor por omisión de cada lado: NULL-es-el-menor en memoria, y lo que haga el dialecto en SQL — donde Postgres y Oracle hacen lo contrario (nulls al final en ascendente). Este carril no conoce dialectos y dárselos acoplaría los back-ends, así que el valor por omisión se queda como está. **Cualificar la ordenación es la forma soportada de obtener resultados idénticos en ambos**, que es precisamente lo que fija el arnés de simetría.
+> **El único punto donde los dos back-ends aún pueden discrepar.** Una ordenación *sin cualificar* sobre una columna nullable sigue el valor por omisión de cada lado: NULL-es-el-menor en memoria, y lo que haga el dialecto en SQL — donde Postgres y Oracle hacen lo contrario (nulls al final en ascendente). Este carril no conoce dialectos. **Cualifica la ordenación —`NullsFirst` / `NullsLast`— para obtener resultados idénticos en ambos.**
 
 ### Materialización
 
@@ -230,7 +230,7 @@ TQuery.New.From('people').Select('country').Distinct
 // una fila por país distinto, no una por persona
 ```
 
-En el carril rápido tipado sin proyección, "todas las columnas" significa todos los miembros públicos o publicados visibles por RTTI de `T`, comparados por valor — dos instancias distintas de `TPersona` con valores iguales son una sola fila.
+En el carril rápido tipado sin proyección, "todas las columnas" significa todas las propiedades legibles públicas o publicadas de `T` cuando `T` es una clase, y todos los campos cuando `T` es un record — un campo público de una clase no cuenta. Se comparan por valor, así que dos instancias distintas de `TPersona` con valores iguales son una sola fila.
 
 ---
 
@@ -272,7 +272,7 @@ TQuery.New.From('people')
 // filas: (country, n)
 ```
 
-Por debajo, el `GroupBy` de la biblioteca de secuencias produce el `IGrouping<TKey, T>` más rico (clave y miembros); la forma plana de SQL se superpone a él, no lo sustituye.
+El `GroupBy` de la propia biblioteca de secuencias produce el `IGrouping<TKey, T>` más rico —la clave y sus miembros— para el código que pasa por [`Daf.Linq`](../../Linq/README.es.md) directamente.
 
 ### Subconsultas y operaciones de conjuntos
 
@@ -294,7 +294,7 @@ Todo lo que el motor no puede ejecutar fielmente lanza `EInMemoryQueryError` en 
 | una consulta multi-fuente ejecutada con una sola lista | necesita un contexto |
 | una consulta con proyección vía `Elements<T>` | usa `Rows` o `Project` |
 
-La ejecución es un recorrido completo ingenuo — sin índices ni optimizador. Es deliberado para los tamaños de colección a los que apunta.
+La ejecución es un recorrido completo ingenuo — sin índices ni optimizador.
 
 ---
 
@@ -302,4 +302,4 @@ La ejecución es un recorrido completo ingenuo — sin índices ni optimizador. 
 
 `Parity.Feat.pas`, en la carpeta `test/` de este módulo, es el arnés de simetría: un conjunto de consultas compartido pasa por el compilador SQL y por los tres carriles en memoria sobre un mismo juego de datos sembrado, y todos deben reproducir el mismo conjunto de resultados declarado. También verifica que ningún back-end modifica el AST, que los bindings casan con sus marcadores, y que el SQL emitido lleva exactamente los paréntesis de precedencia con los que se construyó el predicado en memoria.
 
-Si extiendes el motor, añade la consulta a ese conjunto — es la guardia de la promesa "una consulta, dos back-ends".
+Ese conjunto es la guardia de la promesa "una consulta, dos back-ends".
