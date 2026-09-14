@@ -77,8 +77,13 @@ Feature('''
 TQuery — WHERE @unit @sqlcute
 
   TQuery builds parameterised WHERE clauses via a fluent API.
-  These specs cover all Where* methods, IN / NOT IN lists
+  These specs cover the general Where* methods -- comparisons, IN / NOT IN lists
   and EXISTS / NOT EXISTS subquery conditions.
+
+  The string-matching family (WhereLike, WhereStarts, WhereEnds, WhereContains
+  and their Not/Or variants) lives in SQLCute.StringOps.Feat.pas: it grew large
+  enough to read on its own, and it compiles through a different path -- one that
+  wraps the column in LOWER() unless asked not to.
 ''')
 .UseWorld<TSQLCuteWorld>
 
@@ -114,6 +119,8 @@ TQuery — WHERE @unit @sqlcute
     .&Then('SQL is "SELECT * FROM events WHERE seats <= ?"')
     .&Then('has 1 binding')
 
+  // LIKE written as the operator of the general Where, which is NOT WhereLike:
+  // this path emits the column as it stands, with no LOWER() around it.
   .Scenario('WHERE column LIKE pattern')
     .Given('a query from "users" where "email" LIKE %example%')
     .When('I compile with ANSI')

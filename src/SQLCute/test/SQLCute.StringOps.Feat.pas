@@ -23,6 +23,11 @@ TQuery — String / LIKE operations @unit @sqlcute @f3
   By default all methods are case-insensitive: the compiler wraps the column
   in LOWER() and lowercases the binding value. Pass CaseSensitive=True to
   bypass this and emit a plain LIKE.
+
+  Starts, Ends and Contains all delegate to Like, so they emit the SAME SQL and
+  differ only in where the % lands -- which travels in the binding, not in the
+  statement. That is why every scenario here asserts the binding: a Then that
+  only reads the SQL cannot tell a prefix match from a suffix one.
 ''')
 .UseWorld<TSQLCuteWorld>
 
@@ -80,13 +85,25 @@ TQuery — String / LIKE operations @unit @sqlcute @f3
     .Given('a WhereStarts case-insensitive query')
     .When('I compile with ANSI')
     .&Then('SQL is "SELECT * FROM t WHERE LOWER(code) LIKE ?"')
-    .&Then('has 1 binding')
+    .&Then('bindings in order are "abc%"')
 
   .Scenario('Case-sensitive WhereStarts keeps original case and emits plain LIKE')
     .Given('a WhereStarts case-sensitive query')
     .When('I compile with ANSI')
     .&Then('SQL is "SELECT * FROM t WHERE code LIKE ?"')
-    .&Then('has 1 binding')
+    .&Then('bindings in order are "ABC%"')
+
+  .Scenario('WhereNotStarts negates the prefix match')
+    .Given('a WhereNotStarts query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM t WHERE LOWER(code) NOT LIKE ?"')
+    .&Then('bindings in order are "tmp%"')
+
+  .Scenario('OrWhereNotStarts connects the negated prefix with OR')
+    .Given('an OrWhereNotStarts query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM t WHERE active = ? OR LOWER(code) NOT LIKE ?"')
+    .&Then('bindings in order are "True, tmp%"')
 
 // -------------------------------------------------------------------------
 
@@ -96,7 +113,25 @@ TQuery — String / LIKE operations @unit @sqlcute @f3
     .Given('a WhereEnds query')
     .When('I compile with ANSI')
     .&Then('SQL is "SELECT * FROM t WHERE LOWER(email) LIKE ?"')
-    .&Then('has 1 binding')
+    .&Then('bindings in order are "%@corp.com"')
+
+  .Scenario('WhereNotEnds negates the suffix match')
+    .Given('a WhereNotEnds query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM t WHERE LOWER(file) NOT LIKE ?"')
+    .&Then('bindings in order are "%.bak"')
+
+  .Scenario('OrWhereEnds connects the suffix match with OR')
+    .Given('an OrWhereEnds query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM t WHERE active = ? OR LOWER(file) LIKE ?"')
+    .&Then('bindings in order are "True, %.pdf"')
+
+  .Scenario('OrWhereNotEnds connects the negated suffix with OR')
+    .Given('an OrWhereNotEnds query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM t WHERE active = ? OR LOWER(file) NOT LIKE ?"')
+    .&Then('bindings in order are "True, %.bak"')
 
 // -------------------------------------------------------------------------
 
@@ -106,7 +141,13 @@ TQuery — String / LIKE operations @unit @sqlcute @f3
     .Given('a WhereContains query')
     .When('I compile with ANSI')
     .&Then('SQL is "SELECT * FROM t WHERE LOWER(bio) LIKE ?"')
-    .&Then('has 1 binding')
+    .&Then('bindings in order are "%engineer%"')
+
+  .Scenario('OrWhereContains connects the substring match with OR')
+    .Given('an OrWhereContains query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM t WHERE active = ? OR LOWER(bio) LIKE ?"')
+    .&Then('bindings in order are "True, %engineer%"')
 
 // -------------------------------------------------------------------------
 
@@ -116,7 +157,13 @@ TQuery — String / LIKE operations @unit @sqlcute @f3
     .Given('a WhereNotContains query')
     .When('I compile with ANSI')
     .&Then('SQL is "SELECT * FROM t WHERE LOWER(title) NOT LIKE ?"')
-    .&Then('has 1 binding')
+    .&Then('bindings in order are "%spam%"')
+
+  .Scenario('OrWhereNotContains connects the negated substring with OR')
+    .Given('an OrWhereNotContains query')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM t WHERE active = ? OR LOWER(title) NOT LIKE ?"')
+    .&Then('bindings in order are "True, %spam%"')
 
 // -------------------------------------------------------------------------
 
@@ -126,7 +173,7 @@ TQuery — String / LIKE operations @unit @sqlcute @f3
     .Given('an OrWhereStarts query')
     .When('I compile with ANSI')
     .&Then('SQL is "SELECT * FROM t WHERE active = ? OR LOWER(name) LIKE ?"')
-    .&Then('has 2 bindings')
+    .&Then('bindings in order are "True, super%"')
 
 ;
 

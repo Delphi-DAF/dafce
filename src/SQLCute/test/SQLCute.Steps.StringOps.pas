@@ -52,6 +52,27 @@ type
     [Given('an OrWhereStarts query')]
     procedure GivenOrWhereStarts(W: TSQLCuteWorld);
 
+    [Given('a WhereNotStarts query')]
+    procedure GivenWhereNotStarts(W: TSQLCuteWorld);
+
+    [Given('an OrWhereNotStarts query')]
+    procedure GivenOrWhereNotStarts(W: TSQLCuteWorld);
+
+    [Given('a WhereNotEnds query')]
+    procedure GivenWhereNotEnds(W: TSQLCuteWorld);
+
+    [Given('an OrWhereEnds query')]
+    procedure GivenOrWhereEnds(W: TSQLCuteWorld);
+
+    [Given('an OrWhereNotEnds query')]
+    procedure GivenOrWhereNotEnds(W: TSQLCuteWorld);
+
+    [Given('an OrWhereContains query')]
+    procedure GivenOrWhereContains(W: TSQLCuteWorld);
+
+    [Given('an OrWhereNotContains query')]
+    procedure GivenOrWhereNotContains(W: TSQLCuteWorld);
+
   end;
 
 // -----------------------------------------------------------------------
@@ -111,6 +132,41 @@ end;
 procedure TSQLCuteStepsStringOps.GivenOrWhereStarts(W: TSQLCuteWorld);
 begin
   W.Query := TQuery.New.From('t').Where('active', True).OrWhereStarts('name', 'super');
+end;
+
+procedure TSQLCuteStepsStringOps.GivenWhereNotStarts(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('t').WhereNotStarts('code', 'TMP');
+end;
+
+procedure TSQLCuteStepsStringOps.GivenOrWhereNotStarts(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('t').Where('active', True).OrWhereNotStarts('code', 'TMP');
+end;
+
+procedure TSQLCuteStepsStringOps.GivenWhereNotEnds(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('t').WhereNotEnds('file', '.BAK');
+end;
+
+procedure TSQLCuteStepsStringOps.GivenOrWhereEnds(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('t').Where('active', True).OrWhereEnds('file', '.PDF');
+end;
+
+procedure TSQLCuteStepsStringOps.GivenOrWhereNotEnds(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('t').Where('active', True).OrWhereNotEnds('file', '.BAK');
+end;
+
+procedure TSQLCuteStepsStringOps.GivenOrWhereContains(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('t').Where('active', True).OrWhereContains('bio', 'ENGINEER');
+end;
+
+procedure TSQLCuteStepsStringOps.GivenOrWhereNotContains(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('t').Where('active', True).OrWhereNotContains('title', 'SPAM');
 end;
 
 
