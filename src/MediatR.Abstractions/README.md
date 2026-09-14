@@ -63,23 +63,26 @@ end;
 ### IRequestHandler\<TRequest\>
 
 ```pascal
-IRequestHandler<TRequest: IRequest> = interface
+IRequestHandler<TRequest: class, IRequest> = interface
   procedure Handle(Request: TRequest);
 end;
 ```
 
-### IResponseHandler\<TResponse, TRequest\>
+### IRequestHandler\<TResponse, TRequest\>
+
+The same name, two generic parameters: Delphi tells the two overloads apart by arity. The response
+comes back through an `out` parameter, not as the function result.
 
 ```pascal
-IResponseHandler<TResponse; TRequest: IRequest<TResponse>> = interface
-  function Handle(Request: TRequest): TResponse;
+IRequestHandler<TResponse; TRequest: class, IRequest<TResponse>> = interface
+  procedure Handle(Request: TRequest; out Result: TResponse);
 end;
 ```
 
 ### INotificationHandler\<TNotification\>
 
 ```pascal
-INotificationHandler<TNotification: INotification> = interface
+INotificationHandler<TNotification: class, INotification> = interface
   procedure Handle(Notification: TNotification);
 end;
 ```
@@ -103,7 +106,9 @@ end;
 
 ### [MediatorAbstract]
 
-Apply to abstract handler base classes to prevent the mediator from resolving them directly:
+Apply to abstract handler base classes so the DI scan skips them: `AddMediatRClasses` and
+`AddMediatRBehaviors` never register a class carrying it, which is what keeps the container
+from being asked to instantiate an abstract class. Without a scan the attribute does nothing.
 
 ```pascal
 [MediatorAbstract]

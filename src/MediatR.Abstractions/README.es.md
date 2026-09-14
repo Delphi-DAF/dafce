@@ -63,23 +63,26 @@ end;
 ### IRequestHandler\<TRequest\>
 
 ```pascal
-IRequestHandler<TRequest: IRequest> = interface
+IRequestHandler<TRequest: class, IRequest> = interface
   procedure Handle(Request: TRequest);
 end;
 ```
 
-### IResponseHandler\<TResponse, TRequest\>
+### IRequestHandler\<TResponse, TRequest\>
+
+El mismo nombre con dos parámetros genéricos: Delphi distingue las dos sobrecargas por aridad. La
+respuesta vuelve por un parámetro `out`, no como resultado de la función.
 
 ```pascal
-IResponseHandler<TResponse; TRequest: IRequest<TResponse>> = interface
-  function Handle(Request: TRequest): TResponse;
+IRequestHandler<TResponse; TRequest: class, IRequest<TResponse>> = interface
+  procedure Handle(Request: TRequest; out Result: TResponse);
 end;
 ```
 
 ### INotificationHandler\<TNotification\>
 
 ```pascal
-INotificationHandler<TNotification: INotification> = interface
+INotificationHandler<TNotification: class, INotification> = interface
   procedure Handle(Notification: TNotification);
 end;
 ```
@@ -103,7 +106,9 @@ end;
 
 ### [MediatorAbstract]
 
-Aplicar a clases base abstractas de handlers para evitar que el mediador las resuelva directamente:
+Aplicar a clases base abstractas de handlers para que el escaneo de DI las salte:
+`AddMediatRClasses` y `AddMediatRBehaviors` no registran nunca una clase que lo lleve, que es
+lo que evita pedirle al contenedor una clase abstracta. Sin escaneo, el atributo no hace nada.
 
 ```pascal
 [MediatorAbstract]

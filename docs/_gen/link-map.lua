@@ -588,6 +588,7 @@ return {
       ["../MediatR/docs/GUIDE.es.md"] = "/es/modules/mediator-guide.qmd",
       ["README.md"] = "/en/modules/mediator.qmd",
       ["docs/GUIDE.es.md"] = "/es/modules/mediator-guide.qmd",
+      ["samples/MediatRSample/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/MediatR/samples/MediatRSample/README.md",
     },
     ["es/modules/minispec-guide.qmd"] = {
       ["../../README.md"] = "/en/modules/minispec.qmd",

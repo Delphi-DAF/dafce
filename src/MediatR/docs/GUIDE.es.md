@@ -24,7 +24,7 @@
 | Interfaz | Clase base | Interfaz handler | Clase base handler |
 |----------|-----------|------------------|--------------------|
 | `IRequest` | `TRequest` | `IRequestHandler<T>` | `TRequestHandler<T>` |
-| `IRequest<TResponse>` | `TRequest<TResponse>` | `IResponseHandler<TRes,TReq>` | `TResponseHandler<TRes,TReq>` |
+| `IRequest<TResponse>` | `TRequest<TResponse>` | `IRequestHandler<TRes,TReq>` | `TResponseHandler<TRes,TReq>` |
 | `INotification` | `TNotification` | `INotificationHandler<T>` | `TNotificacionHandler<T>` |
 
 ---
@@ -92,14 +92,17 @@ type
     FRepo: IUserRepository;
   public
     constructor Create(Repo: IUserRepository);
-    function Handle(Request: TGetUserQuery): TUserDTO; override;
+    procedure Handle(Request: TGetUserQuery; out Result: TUserDTO); override;
   end;
 
-function TGetUserHandler.Handle(Request: TGetUserQuery): TUserDTO;
+procedure TGetUserHandler.Handle(Request: TGetUserQuery; out Result: TUserDTO);
 begin
   Result := FRepo.FindById(Request.UserId);
 end;
 ```
+
+La respuesta sale por un parámetro `out`, no como resultado de la función — de ahí la recoge el
+mediador.
 
 ### Handler de notificación
 
@@ -188,7 +191,7 @@ Cada handler se registra como servicio transitorio en DI:
 Services.AddTransient<IRequestHandler<TDeleteUserCommand>, TDeleteUserHandler>;
 
 // Handler de consulta
-Services.AddTransient<IResponseHandler<TUserDTO, TGetUserQuery>, TGetUserHandler>;
+Services.AddTransient<IRequestHandler<TUserDTO, TGetUserQuery>, TGetUserHandler>;
 
 // Handler de notificación (se soportan múltiples handlers)
 Services.AddTransient<INotificationHandler<TUserDeletedEvent>, TEmailOnUserDeleted>;
@@ -209,13 +212,16 @@ Services.AddMediatRBehaviors(_T.PackageOf<TMyHandler>);  // y sus behaviors de p
 
 `AddMediatR` registra **`IMediatorImpl` como transient**, y solo si no lo había registrado nadie antes. No escanea nada: el descubrimiento es `AddMediatRClasses(Package)`, que recorre el RTTI de ese paquete buscando interfaces handler y **registra lo que encuentra** — los handlers no tienen que estar antes en el contenedor.
 
-⚠️ Los tres son métodos de un `record helper` sobre `IServiceCollection`, y solo un helper por tipo está en alcance. Si otro `uses` lo ensombrece, las mismas llamadas viven en la clase `MediatR`: `MediatR.AddTo(Services)` y `MediatR.AddTo(Services, Package)`.
+⚠️ Los tres son métodos de un `record helper` sobre `IServiceCollection`, y solo un helper por tipo está en alcance. Si otro `uses` lo ensombrece, la clase `MediatR` cubre los dos primeros —`MediatR.AddTo(Services)` y `MediatR.AddTo(Services, Package)`— y los behaviors van de uno en uno por `MediatR.AddBehavior(Services, TMiBehavior)`. No hay equivalente de clase para `AddMediatRBehaviors`.
 
 ---
 
 ## Atributo MediatorAbstract
 
-Marca las clases base de handler abstractas con `[MediatorAbstract]` para que el mediador no intente resolverlas:
+Marca las clases base de handler abstractas con `[MediatorAbstract]` para que el escaneo de DI
+las salte: `AddMediatRClasses` y `AddMediatRBehaviors` no registran nunca una clase que lo lleve,
+que es lo que evita pedirle al contenedor una clase abstracta. El registro a mano ignora el
+atributo — solo lo leen los escaneos.
 
 ```pascal
 [MediatorAbstract]
@@ -353,12 +359,16 @@ end;
 
 ```pascal
 // Auto-descubrimiento (omite clases marcadas [MediatorAbstract])
-MediatR.AddTo(ServiceCollection, _T.PackageOf<TMyClass>);
+ServiceCollection.AddMediatRBehaviors(_T.PackageOf<TMyClass>);
 
 // Manual
 MediatR.AddBehavior(ServiceCollection, TLoggingBehavior);
 MediatR.AddBehavior(ServiceCollection, TValidatePingBehavior);
 ```
+
+⚠️ El escaneo de behaviors es `AddMediatRBehaviors`, y `AddMediatRClasses` no lo es: este descubre
+solo handlers, así que un paquete registrado únicamente con él no aporta ningún behavior — y sin
+error que lo delate, porque una request sin behaviors registrados va directa a su handler.
 
 Los behaviors se ejecutan en orden de registro — el primero registrado es el más externo. Para behaviors que solo registras manualmente, márcalos con `[MediatorAbstract]` para excluirlos del auto-descubrimiento.
 

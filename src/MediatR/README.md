@@ -49,7 +49,7 @@ Mediator.Send<TCreateOrderCommand>(Cmd);
 type
   TGetOrderQuery    = class(TRequest<TOrderDTO>);
   TGetOrderHandler  = class(TResponseHandler<TOrderDTO, TGetOrderQuery>)
-    function Handle(Request: TGetOrderQuery): TOrderDTO; override;
+    procedure Handle(Request: TGetOrderQuery; out Result: TOrderDTO); override;
   end;
 
 var DTO := Mediator.Send<TOrderDTO, TGetOrderQuery>(Query);
@@ -161,12 +161,16 @@ The framework uses RTTI to detect the concrete request type of `Handle` and skip
 
 ```pascal
 // Auto-discovery (scans package, skips [MediatorAbstract])
-MediatR.AddTo(ServiceCollection, _T.PackageOf<TMyClass>);
+ServiceCollection.AddMediatRBehaviors(_T.PackageOf<TMyClass>);
 
 // Manual
 MediatR.AddBehavior(ServiceCollection, TLoggingBehavior);
 MediatR.AddBehavior(ServiceCollection, TValidationBehavior);
 ```
+
+Behaviors have their own scan: `AddMediatRClasses` discovers handlers and nothing else, so a package
+registered only through it contributes no behavior at all — and nothing reports it, because a request
+with no behaviors registered goes straight to its handler.
 
 ### Execution order
 

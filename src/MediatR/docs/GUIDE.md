@@ -24,7 +24,7 @@
 | Interface | Base class | Handler interface | Base handler class |
 |-----------|-----------|-------------------|--------------------|
 | `IRequest` | `TRequest` | `IRequestHandler<T>` | `TRequestHandler<T>` |
-| `IRequest<TResponse>` | `TRequest<TResponse>` | `IResponseHandler<TRes,TReq>` | `TResponseHandler<TRes,TReq>` |
+| `IRequest<TResponse>` | `TRequest<TResponse>` | `IRequestHandler<TRes,TReq>` | `TResponseHandler<TRes,TReq>` |
 | `INotification` | `TNotification` | `INotificationHandler<T>` | `TNotificacionHandler<T>` |
 
 ---
@@ -92,14 +92,17 @@ type
     FRepo: IUserRepository;
   public
     constructor Create(Repo: IUserRepository);
-    function Handle(Request: TGetUserQuery): TUserDTO; override;
+    procedure Handle(Request: TGetUserQuery; out Result: TUserDTO); override;
   end;
 
-function TGetUserHandler.Handle(Request: TGetUserQuery): TUserDTO;
+procedure TGetUserHandler.Handle(Request: TGetUserQuery; out Result: TUserDTO);
 begin
   Result := FRepo.FindById(Request.UserId);
 end;
 ```
+
+The response leaves through an `out` parameter, not as the function result — the mediator reads it
+back from there.
 
 ### Notification handler
 
@@ -188,7 +191,7 @@ Each handler is registered as a transient service in DI:
 Services.AddTransient<IRequestHandler<TDeleteUserCommand>, TDeleteUserHandler>;
 
 // Query handler
-Services.AddTransient<IResponseHandler<TUserDTO, TGetUserQuery>, TGetUserHandler>;
+Services.AddTransient<IRequestHandler<TUserDTO, TGetUserQuery>, TGetUserHandler>;
 
 // Notification handler (multiple handlers supported)
 Services.AddTransient<INotificationHandler<TUserDeletedEvent>, TEmailOnUserDeleted>;
@@ -209,13 +212,16 @@ Services.AddMediatRBehaviors(_T.PackageOf<TMyHandler>);  // and its pipeline beh
 
 `AddMediatR` registers **`IMediatorImpl` as transient**, and only if nothing registered it before. It scans nothing: discovery is `AddMediatRClasses(Package)`, which walks that package's RTTI for handler interfaces and **registers what it finds** — the handlers do not have to be in the container first.
 
-⚠️ The three are `record helper` methods on `IServiceCollection`, and only one helper per type is in scope. Where another `uses` shadows it, the same calls live on the `MediatR` class: `MediatR.AddTo(Services)` and `MediatR.AddTo(Services, Package)`.
+⚠️ The three are `record helper` methods on `IServiceCollection`, and only one helper per type is in scope. Where another `uses` shadows it, the `MediatR` class covers the first two — `MediatR.AddTo(Services)` and `MediatR.AddTo(Services, Package)` — and behaviors go one at a time through `MediatR.AddBehavior(Services, TMyBehavior)`. There is no class-side equivalent of `AddMediatRBehaviors`.
 
 ---
 
 ## MediatorAbstract attribute
 
-Mark abstract base handler classes with `[MediatorAbstract]` so the mediator does not attempt to resolve them:
+Mark abstract base handler classes with `[MediatorAbstract]` so the DI scan skips them:
+`AddMediatRClasses` and `AddMediatRBehaviors` never register a class carrying it, which is what
+keeps the container from being asked to instantiate an abstract class. Registering by hand
+ignores the attribute — only the scans read it.
 
 ```pascal
 [MediatorAbstract]
@@ -353,12 +359,16 @@ end;
 
 ```pascal
 // Auto-discovery (skips classes marked [MediatorAbstract])
-MediatR.AddTo(ServiceCollection, _T.PackageOf<TMyClass>);
+ServiceCollection.AddMediatRBehaviors(_T.PackageOf<TMyClass>);
 
 // Manual
 MediatR.AddBehavior(ServiceCollection, TLoggingBehavior);
 MediatR.AddBehavior(ServiceCollection, TValidatePingBehavior);
 ```
+
+⚠️ `AddMediatRBehaviors` is the behavior scan, and `AddMediatRClasses` is not: the latter discovers
+handlers only, so a package registered through it alone contributes no behavior — with no error to
+show for it, because a request with no behaviors registered goes straight to its handler.
 
 Behaviors execute in registration order — first registered is outermost. For behaviors you only register manually, mark them `[MediatorAbstract]` to exclude them from auto-discovery.
 

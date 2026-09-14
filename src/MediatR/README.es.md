@@ -49,7 +49,7 @@ Mediator.Send<TCreateOrderCommand>(Cmd);
 type
   TGetOrderQuery    = class(TRequest<TOrderDTO>);
   TGetOrderHandler  = class(TResponseHandler<TOrderDTO, TGetOrderQuery>)
-    function Handle(Request: TGetOrderQuery): TOrderDTO; override;
+    procedure Handle(Request: TGetOrderQuery; out Result: TOrderDTO); override;
   end;
 
 var DTO := Mediator.Send<TOrderDTO, TGetOrderQuery>(Query);
@@ -161,12 +161,16 @@ El framework usa RTTI para detectar el tipo concreto de request en `Handle` y om
 
 ```pascal
 // Auto-descubrimiento (omite [MediatorAbstract])
-MediatR.AddTo(ServiceCollection, _T.PackageOf<TMyClass>);
+ServiceCollection.AddMediatRBehaviors(_T.PackageOf<TMyClass>);
 
 // Manual
 MediatR.AddBehavior(ServiceCollection, TLoggingBehavior);
 MediatR.AddBehavior(ServiceCollection, TValidationBehavior);
 ```
+
+Los behaviors tienen su propio escaneo: `AddMediatRClasses` descubre handlers y nada más, así que un
+paquete registrado solo con él no aporta ningún behavior — y nadie lo avisa, porque una request sin
+behaviors registrados va directa a su handler.
 
 Usa `[MediatorAbstract]` en behaviors que solo registres manualmente para excluirlos del auto-descubrimiento.
 
@@ -187,8 +191,49 @@ begin
 end;
 ```
 
+### Manejo de excepciones
+
+Envuelve `Next.Call` en un `try/except` para capturar las excepciones del handler y de los behaviors
+internos:
+
+```pascal
+function TErrorBehavior.Handle(Request: TObject; Next: TNextValue): TValue;
+begin
+  try
+    Result := Next.Call;
+  except on E: Exception do
+  begin
+    Log('Error: ' + E.Message);
+    Result := Default(TValue);
+  end;
+  end;
+end;
+```
+
+### Inyección de dependencias
+
+Los behaviors se resuelven del contenedor de DI. Los parámetros del constructor se inyectan
+automáticamente:
+
+```pascal
+type
+  TLoggingBehavior = class(TPipelineBehavior)
+  private
+    FLogger: ILogger;
+  public
+    constructor Create(const Logger: ILogger);
+    function Handle(Request: TObject; Next: TNextValue): TValue; override;
+  end;
+```
+
+### Compatibilidad hacia atrás
+
+Los behaviors de pipeline son opcionales. Si no hay ninguno registrado, `Send` invoca el handler
+directamente y sin coste adicional.
+
 ---
 
 ## Documentación
 
 - 📖 [Guía de uso](docs/GUIDE.es.md) — IMediatorHelper, respuestas ARC, pipeline, [MediatorAbstract], escaneo de DI
+- 📁 [MediatRSample](samples/MediatRSample/README.md) — comandos, consultas y notificaciones en un solo programa
