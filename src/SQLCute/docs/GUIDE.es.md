@@ -54,6 +54,7 @@ Pasa `R.SQL` y `R.Bindings` a tu driver de base de datos — SQLCute nunca ejecu
 Todo `IQuery` es agnóstico al compilador. Eliges el dialecto en el momento de compilar:
 
 ```pascal
+uses Daf.SQLCute;                      // IQueryCompiler
 uses Daf.SQLCute.Compiler;             // TAnsiSqlCompiler (por defecto)
 uses Daf.SQLCute.Compiler.Postgres;    // TPostgresCompiler
 uses Daf.SQLCute.Compiler.MySql;       // TMySqlCompiler

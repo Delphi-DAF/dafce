@@ -5,7 +5,8 @@
 La mitad de SQL. Toma una especificación escrita con [`Daf.Specification`](../Specification/README.es.md) y la baja a un `IQuery` de SQLCute: el filtro pasa a WHERE, el orden a ORDER BY y la página a LIMIT/OFFSET. Ese `IQuery` es lo único que produce.
 
 ```pascal
-uses Daf.SQLCute, Daf.SQLCute.Compiler, Daf.Specification, Daf.SQLCute.Specification;
+uses Daf.SQLCute, Daf.SQLCute.Compiler, Daf.SQLCute.InMemory,
+     Daf.Specification, Daf.SQLCute.Specification;
 
 var Q := TExprEmitter.Where(TQuery.New.From('Product'),
   (Prop('Price') > 100) and (Prop('Active') = True));

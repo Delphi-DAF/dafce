@@ -104,7 +104,7 @@ TQuery.New.From('users').AsInsert(['name'], ['Ann']).AsDelete;
 ### Dialect compiler
 
 ```pascal
-uses Daf.SQLCute.Compiler.Postgres;
+uses Daf.SQLCute, Daf.SQLCute.Compiler.Postgres;
 
 var Compiler: IQueryCompiler := TPostgresCompiler.Create;  // ref-counted: it needs an owner
 var R := Compiler.Compile(Q);
