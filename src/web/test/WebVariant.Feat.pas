@@ -5,7 +5,9 @@ interface
 uses
   System.SysUtils,
   Daf.Extensions.DependencyInjection,
-  Daf.Extensions.Hosting;
+  Daf.Extensions.Hosting,
+  Daf.Cli,
+  Daf.Web.Application;
 
 type
   // En la seccion de interfaz por obligacion: el contenedor resuelve por RTTI.
@@ -26,9 +28,20 @@ type
     class procedure AddTo(const Services: IServiceCollection);
   end;
 
+  /// El estado que el Given deja montado y el When usa. Sostenerlo aqui es lo que permite que
+  /// el When haga LA ACCION: con un World de solo texto, el Given tiene que ejecutarla para
+  /// poder dejar escrito su resultado, y entonces el escenario ya no comprueba comportamiento
+  /// sino la cadena que el propio Given acaba de componer.
   TWebVariantWorld = class
   public
+    CliBuilder: ICliApplicationBuilder;
+    WebBuilder: IWebApplicationBuilder;
+    WebBuilderWithArg: IWebApplicationBuilder;
+    CliServices: IServiceProvider;
+    WebServices: IServiceProvider;
+    App: IWebApplication;
     Report: string;
+    destructor Destroy; override;
   end;
 
 implementation
@@ -37,9 +50,19 @@ uses
   Daf.MiniSpec,
   Daf.Extensions.Configuration,
   Daf.Extensions.HttpServer,
-  Daf.Web.Router,
-  Daf.Web.Application,
-  Daf.Cli;
+  Daf.Web.Router;
+
+destructor TWebVariantWorld.Destroy;
+begin
+  // Un proveedor construido a mano retiene sus singletons hasta que se le cierra. Sin esto el
+  // runner acaba con una fuga que no es del codigo medido sino del montaje del escenario, y una
+  // fuga en el informe se lee igual la ponga quien la ponga.
+  if CliServices <> nil then
+    CliServices.ShutDown;
+  if WebServices <> nil then
+    WebServices.ShutDown;
+  inherited;
+end;
 
 function TShared.Name: string;
 begin
@@ -71,19 +94,22 @@ Feature La variante Web de la familia @web @application-family
     .Given('el arranque de una CLI y el de una web, escritos con las mismas llamadas',
       procedure(W: TWebVariantWorld)
       begin
-        var Cli := TCliApplication.CreateBuilder;
-        Cli.Services.AddSingleton<IShared, TShared>;
-        Cli.Configuration['App:Name'] := 'cli';
+        W.CliBuilder := TCliApplication.CreateBuilder;
+        W.CliBuilder.Services.AddSingleton<IShared, TShared>;
+        W.CliBuilder.Configuration['App:Name'] := 'cli';
 
-        var Web := TWebApplication.CreateBuilder;
-        Web.Services.AddSingleton<IShared, TShared>;
-        Web.Configuration['App:Name'] := 'web';
-
-        W.Report := Format('%s/%s env=%s',
-          [Cli.Configuration['App:Name'], Web.Configuration['App:Name'],
-           BoolToStr(Cli.Environment.EnvironmentName = Web.Environment.EnvironmentName, True)]);
+        W.WebBuilder := TWebApplication.CreateBuilder;
+        W.WebBuilder.Services.AddSingleton<IShared, TShared>;
+        W.WebBuilder.Configuration['App:Name'] := 'web';
       end)
-    .When('se comparan').NoAction
+    .When('se le pregunta a cada uno por lo que se le escribio',
+      procedure(W: TWebVariantWorld)
+      begin
+        W.Report := Format('%s/%s env=%s',
+          [W.CliBuilder.Configuration['App:Name'], W.WebBuilder.Configuration['App:Name'],
+           BoolToStr(W.CliBuilder.Environment.EnvironmentName =
+                     W.WebBuilder.Environment.EnvironmentName, True)]);
+      end)
     .&Then('las tres cosas se escriben igual y responden igual',
       procedure(W: TWebVariantWorld)
       begin
@@ -93,26 +119,28 @@ Feature La variante Web de la familia @web @application-family
   // La razon de que el contrato comun exista: sin el, un paquete tendria que ofrecer una via
   // por variante, o el consumidor elegir la suya.
   .Scenario('Un paquete que aporta registros de arranque sirve a cualquier variante')
-    .Given('un paquete que solo conoce IServiceCollection',
+    .Given('el arranque de dos variantes distintas',
       procedure(W: TWebVariantWorld)
       begin
-        var Cli := TCliApplication.CreateBuilder;
-        TSharedModule.AddTo(Cli.Services);
-
-        var Web := TWebApplication.CreateBuilder;
-        TSharedModule.AddTo(Web.Services);
-
-        // Y por el contrato comun, sin saber cual es cual.
-        var AsCommon: IHostApplicationBuilder := Web;
-        TSharedModule.AddTo(AsCommon.Services);
-
-        W.Report := 'registrado en las dos sin preguntar cual es';
+        W.CliBuilder := TCliApplication.CreateBuilder;
+        W.WebBuilder := TWebApplication.CreateBuilder;
       end)
-    .When('lo consume cada una').NoAction
-    .&Then('no necesita saber cual es',
+    .When('un paquete que solo conoce IServiceCollection registra en los dos',
       procedure(W: TWebVariantWorld)
       begin
-        Expect(W.Report).ToEqual('registrado en las dos sin preguntar cual es');
+        // Por el contrato comun y sin preguntar cual es cual, que es lo que hace de las dos
+        // variantes una familia.
+        for var Builder in TArray<IHostApplicationBuilder>.Create(W.CliBuilder, W.WebBuilder) do
+          TSharedModule.AddTo(Builder.Services);
+
+        W.CliServices := W.CliBuilder.Services.BuildServiceProvider;
+        W.WebServices := W.WebBuilder.Services.BuildServiceProvider;
+      end)
+    .&Then('lo que registro se resuelve en las dos',
+      procedure(W: TWebVariantWorld)
+      begin
+        Expect(W.CliServices.GetRequiredService<IShared>.Name + '/' +
+               W.WebServices.GetRequiredService<IShared>.Name).ToEqual('shared/shared');
       end)
 
 .Rule('Lo que la variante Web aporta')
@@ -120,15 +148,19 @@ Feature La variante Web de la familia @web @application-family
   // El puerto se SIEMBRA en el manager antes de entregarlo, asi que un argumento posterior lo
   // pisa. Si la variante lo anadiera despues, llegaria tarde.
   .Scenario('El puerto por defecto se puede pisar por linea de comandos')
-    .Given('una aplicacion web arrancada con el puerto por argumento',
+    .Given('dos arranques web, uno tal cual y otro con el puerto por argumento',
       procedure(W: TWebVariantWorld)
       begin
-        var Plain := TWebApplication.CreateBuilder;
-        var Given := TWebApplication.CreateBuilder(['--Web:Port=9000']);
-        W.Report := Format('defecto=%s dado=%s',
-          [Plain.Configuration[TWebDefaults.PortKey], Given.Configuration[TWebDefaults.PortKey]]);
+        W.WebBuilder := TWebApplication.CreateBuilder;
+        W.WebBuilderWithArg := TWebApplication.CreateBuilder(['--Web:Port=9000']);
       end)
-    .When('se lee la configuracion').NoAction
+    .When('se lee el puerto de la configuracion de cada uno',
+      procedure(W: TWebVariantWorld)
+      begin
+        W.Report := Format('defecto=%s dado=%s',
+          [W.WebBuilder.Configuration[TWebDefaults.PortKey],
+           W.WebBuilderWithArg.Configuration[TWebDefaults.PortKey]]);
+      end)
     .&Then('el argumento gana al valor sembrado',
       procedure(W: TWebVariantWorld)
       begin
@@ -138,26 +170,28 @@ Feature La variante Web de la familia @web @application-family
   // La fachada la aporta Daf.Web, y el componedor generico no la nombra: es lo que evita que
   // el grafo de paquetes se invierta.
   .Scenario('El servidor se aporta por fachada, no por miembro del componedor generico')
-    .Given('un arranque web que anade el servidor http',
+    .Given('un arranque web con el servidor http anadido por la fachada',
       procedure(W: TWebVariantWorld)
       begin
-        var B := TWebApplication.CreateBuilder;
-        Web.AddHttpServer(B.Services);
-        var App := B.Build;
-        App.MapControllers;
-
-        // Assigned pide una variable, no el resultado de una llamada: sobre la llamada da E2036
-        // y el error sale en la linea siguiente, lejos de la causa.
-        var Server: IDafHttpServer := App.Server;
-        var Router: IWebRouter := App.Services.GetService<IWebRouter>;
-        W.Report := Format('server=%s router=%s',
-          [BoolToStr(Assigned(Server), True), BoolToStr(Assigned(Router), True)]);
+        W.WebBuilder := TWebApplication.CreateBuilder;
+        Web.AddHttpServer(W.WebBuilder.Services);
       end)
-    .When('se construye').NoAction
+    .When('se construye la aplicacion y se mapean los controladores',
+      procedure(W: TWebVariantWorld)
+      begin
+        W.App := W.WebBuilder.Build;
+        W.App.MapControllers;
+      end)
     .&Then('el servidor y el enrutado quedan resueltos por el contenedor',
       procedure(W: TWebVariantWorld)
       begin
-        Expect(W.Report).ToEqual('server=True router=True');
+        // Assigned pide una variable, no el resultado de una llamada: sobre la llamada da E2036
+        // y el error sale en la linea siguiente, lejos de la causa.
+        var Server: IDafHttpServer := W.App.Server;
+        var Router: IWebRouter := W.App.Services.GetService<IWebRouter>;
+        Expect(Format('server=%s router=%s',
+          [BoolToStr(Assigned(Server), True), BoolToStr(Assigned(Router), True)]))
+          .ToEqual('server=True router=True');
       end)
 
   // src/web no tiene un solo .dpr fuera de sus specs: este escenario es lo unico que se daria
@@ -166,20 +200,22 @@ Feature La variante Web de la familia @web @application-family
     .Given('una aplicacion web compuesta de punta a punta',
       procedure(W: TWebVariantWorld)
       begin
-        var B := TWebApplication.CreateBuilder(['--Web:Port=8099']);
-        Web.AddHttpServer(B.Services);
-        var App := B.Build;
-        App.MapControllers;
-
-        App.Server.Start;
+        W.WebBuilder := TWebApplication.CreateBuilder(['--Web:Port=8099']);
+        Web.AddHttpServer(W.WebBuilder.Services);
+        W.App := W.WebBuilder.Build;
+        W.App.MapControllers;
+      end)
+    .When('se arranca el servidor, se mira, y se para',
+      procedure(W: TWebVariantWorld)
+      begin
+        W.App.Server.Start;
         try
           W.Report := Format('port=%d active=%s',
-            [App.Server.Port, BoolToStr(App.Server.Active, True)]);
+            [W.App.Server.Port, BoolToStr(W.App.Server.Active, True)]);
         finally
-          App.Server.Stop;
+          W.App.Server.Stop;
         end;
       end)
-    .When('se arranca el servidor y se para').NoAction
     .&Then('escucho en el puerto que dijo la configuracion',
       procedure(W: TWebVariantWorld)
       begin
