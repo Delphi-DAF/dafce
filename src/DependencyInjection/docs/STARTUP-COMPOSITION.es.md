@@ -391,11 +391,12 @@ var Provider := Services.BuildServiceProvider(TServiceProviderOptions.Create(Tru
 ```
 
 - `ValidateOnBuild` comprueba, por cada descriptor registrado **por clase**, que el
-  constructor elegido se puede satisfacer. Reporta **todos** los fallos juntos, no el primero:
-  un arranque mal cableado suele tener varios, y descubrirlos de uno en uno cuesta un ciclo de
-  compilación por cada uno.
+  constructor elegido se puede satisfacer **y que toda propiedad marcada se puede rellenar**.
+  Reporta **todos** los fallos juntos, no el primero: un arranque mal cableado suele tener
+  varios, y descubrirlos de uno en uno cuesta un ciclo de compilación por cada uno.
 - `ValidateScopes` rechaza que un Singleton dependa de un Scoped (*captured dependency*),
-  nombrando los dos servicios.
+  nombrando los dos servicios. Lee las dos vías por igual: la dependencia capturada por una
+  propiedad marcada se caza como la que entra por el constructor.
 
 Ambos son calcados de `ServiceProviderOptions`, y ambos son **opt-in**. En Delphi esto vale
 más que en .NET: sin stack traces cómodos, la diferencia está entre un mensaje al arrancar y

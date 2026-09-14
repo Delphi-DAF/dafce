@@ -54,8 +54,8 @@ type
     procedure AddServices(const ServiceCollection: IServiceCollection); override;
   end;
 
-  // Su registro resuelve IClock desde el proveedor, asi que necesita que el modulo que lo aporta
-  // se haya aplicado antes.
+  // Su registro resuelve IClock cuando alguien pide el greeter, no al componer: para entonces
+  // estan aplicados los tres modulos, asi que el orden entre este y el que aporta IClock da igual.
   TDomainModule = class(TAppModule)
   public
     procedure AddServices(const ServiceCollection: IServiceCollection); override;

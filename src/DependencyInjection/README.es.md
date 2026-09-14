@@ -17,7 +17,7 @@ Contenedor IoC/DI para Delphi con una API fluida inspirada en `Microsoft.Extensi
 - 🏭 **Registro flexible** — Por clase, por lambda de factoría o por instancia existente
 - 💤 **Resolución diferida** — `Lazy.From<T>()` pospone la creación hasta el primer uso
 - 🦆 **Duck Typing** — `TDuckDecorator<T>` envuelve cualquier objeto que implemente la misma forma de interfaz
-- 📦 **Sin dependencias externas** — Solo depende de `DependencyInjection.Abstractions`
+- 📦 **Sin dependencias externas** — `DependencyInjection.Abstractions` y `Commons`, las dos de DAF
 
 ---
 
@@ -183,7 +183,8 @@ emparejamientos no se combinan, y el registro se rechaza en el acto.
 - **Una instancia que el contenedor no construye.** Un formulario lo construye la plataforma, así que
   no hay constructor que el contenedor pueda elegir.
 
-La clase declara que participa, y cada propiedad se declara a sí misma:
+Cada propiedad se declara a sí misma, y una clase participa por tener alguna: no hay nada
+más que declarar:
 
 ```pascal
 type

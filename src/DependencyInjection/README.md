@@ -17,7 +17,7 @@ IoC/DI container for Delphi with a fluent API inspired by .NET's `Microsoft.Exte
 - 🏭 **Flexible registration** — By class, by factory lambda, or by existing instance
 - 💤 **Lazy resolution** — `Lazy.From<T>()` defers creation until first use
 - 🦆 **Duck Typing** — `TDuckDecorator<T>` wraps any object implementing the same interface shape
-- 📦 **Zero external deps** — Depends only on `DependencyInjection.Abstractions`
+- 📦 **Zero external deps** — `DependencyInjection.Abstractions` and `Commons`, both DAF's own
 
 ---
 
@@ -183,7 +183,8 @@ combined, and the registration is rejected on the spot.
 - **An instance the container does not build.** A form is built by the platform, so there is no
   constructor for the container to choose.
 
-The class declares that it takes part, and each property declares itself:
+Each property declares itself, and a class takes part by having one — there is nothing
+else to declare:
 
 ```pascal
 type

@@ -46,7 +46,33 @@ Services.AddTransient<IMyService, TMyServiceImpl>;
 Services.AddScoped<IMyService, TMyServiceImpl>;
 ```
 
-El contenedor usa RTTI para construir `TMyServiceImpl`. Debe tener un constructor público sin parámetros, o bien utiliza una factoría.
+El contenedor construye `TMyServiceImpl` por RTTI y **resuelve los argumentos de su
+constructor**. Eso es inyección por constructor, y es la vía por defecto:
+
+```pascal
+type
+  TMyServiceImpl = class(TInterfacedObject, IMyService)
+  public
+    constructor Create(const Config: IConfig; const Audit: IAuditLog);
+  end;
+
+Services.AddSingleton<IConfig, TFileConfig>;
+Services.AddSingleton<IAuditLog, TDbAuditLog>;
+Services.AddSingleton<IMyService, TMyServiceImpl>;   // los dos argumentos se resuelven
+```
+
+Qué constructor elige:
+
+- Los candidatos son los constructores **públicos** que la clase declara. La que no declara
+  ninguno usa el de su ancestro.
+- Entre los que el contenedor puede satisfacer gana el que toma **más parámetros**.
+- `[ActivatorUtilitiesConstructor]` sobre uno de ellos zanja la elección, y ningún otro se
+  pondera. Vive en `Daf.DependencyInjection.ActivatorUtilities`.
+- Un parámetro que nadie registró descarta su constructor. Cuando eso no deja ninguno, la
+  resolución falla nombrando el parámetro, su tipo y la clase.
+
+Un parámetro puede pedir una clave —ver [Keyed Services](#keyed-services)— y una dependencia que
+cerraría un ciclo entra por propiedad; ver [Property Injection](#property-injection).
 
 ### Por lambda de factoría
 
@@ -75,7 +101,7 @@ Services.AddSingleton<IMyRepository>(Repo);
 Cuando los genéricos no están disponibles:
 
 ```pascal
-Services.Add(TypeInfo(IMyService), TServiceLifeTime.Transient,
+Services.Add(TServiceLifeTime.Transient, TypeInfo(IMyService),
   function(P: IServiceProvider): IInterface
   begin
     Result := TMyServiceImpl.Create;
@@ -582,8 +608,8 @@ type
     procedure AddServices(const ServiceCollection: IServiceCollection); override;
   end;
 
-  // Su registro resuelve IClock desde el proveedor, asi que necesita que el modulo que lo aporta
-  // se haya aplicado antes.
+  // Su registro resuelve IClock cuando alguien pide el greeter, no al componer: para entonces
+  // estan aplicados los tres modulos, asi que el orden entre este y el que aporta IClock da igual.
   TDomainModule = class(TAppModule)
   public
     procedure AddServices(const ServiceCollection: IServiceCollection); override;
@@ -751,6 +777,8 @@ El proxy devuelto implementa `IExpensiveService` mediante `TVirtualInterface`. L
 `TDuckDecorator<T>` envuelve cualquier objeto e intercepta todas las llamadas a métodos. Úsalo para añadir comportamiento transversal (logging, caché, métricas) sin herencia:
 
 ```pascal
+uses System.SysUtils; // Supports
+
 type
   TLoggingDecorator = class(TDuckDecorator<IMyService>)
   protected
@@ -765,12 +793,13 @@ begin
   Logger.Log('Llamando: ' + Method.Name);
 end;
 
-// Registrar como decorador
+// Registrar como decorador. El decorador es un TVirtualInterface: implementa la
+// interfaz en ejecución, así que se entrega con Supports y no se asigna.
 Services.AddTransient<IMyService>(
   function(P: IServiceProvider): IMyService
   begin
     var Inner: IMyService := TMyServiceImpl.Create;
-    Result := TLoggingDecorator.Create(Inner);
+    Supports(TLoggingDecorator.Create(Inner), IMyService, Result);
   end);
 ```
 

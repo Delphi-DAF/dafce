@@ -386,11 +386,12 @@ var Provider := Services.BuildServiceProvider(TServiceProviderOptions.Create(Tru
 ```
 
 - `ValidateOnBuild` checks, for every descriptor registered **by class**, that the chosen
-  constructor can be satisfied. It reports **all** the failures at once, not the first one: a
-  miswired startup usually has several, and finding them one at a time costs a compile cycle
-  each.
+  constructor can be satisfied **and that every marked property can be filled**. It reports
+  **all** the failures at once, not the first one: a miswired startup usually has several, and
+  finding them one at a time costs a compile cycle each.
 - `ValidateScopes` rejects a Singleton depending on a Scoped (*captured dependency*), naming
-  both services.
+  both services. It reads the same two routes: the dependency captured through a marked
+  property is caught like the one taken by the constructor.
 
 Both are calqued from `ServiceProviderOptions`, and both are **opt-in**. In Delphi this is
 worth more than in .NET: without comfortable stack traces, the difference is between a
