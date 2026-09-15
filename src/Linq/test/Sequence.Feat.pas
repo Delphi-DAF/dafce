@@ -61,7 +61,16 @@ Feature Linq @linq
 .Rule('the sequence is a for..in-able, deferred IEnumerable<T>')
 
   .Scenario('for..in over a queryable yields every element')
-    .Given('a queryable over a list [10,20,30]').NoAction
+    .Given('a queryable over a list [10,20,30]',
+      procedure(W: TLinqWorld)
+      begin
+        // El World construye la lista; lo que al Given le toca es afirmar que es la que el
+        // escenario supone. Sin esto, cambiarla dejaria al Then hablando de otra cosa.
+        var Seen := '';
+        for var X in W.Source do
+          Seen := Seen + IntToStr(X) + ',';
+        Expect(Seen).ToEqual('10,20,30,');
+      end)
     .When('it is iterated with for..in',
       procedure(W: TLinqWorld)
       begin
