@@ -150,9 +150,15 @@ SpecContext Demo @meta
 
 // El control del anterior: sin este, un SpecContext.Rule que nunca fuera nil pasaria aquel igual.
 .Scenario('Outside every scenario there is no Rule at all')
+  // El evento ocurrio fuera del escenario: el hook de feature ya pregunto por la Rule antes de
+  // que ningun escenario empezara, asi que aqui solo cabe leer lo que dejo escrito.
+  .When('what the feature hook found is read', procedure(Ctx: TScenarioContext)
+    begin
+      Ctx.SeenRule := GRuleInFeatureHook;
+    end)
   .&Then('the feature hook found none', procedure(Ctx: TScenarioContext)
     begin
-      Expect(GRuleInFeatureHook).ToEqual('none');
+      Expect(Ctx.SeenRule).ToEqual('none');
     end)
 
 .Rule('An explicit rule')
