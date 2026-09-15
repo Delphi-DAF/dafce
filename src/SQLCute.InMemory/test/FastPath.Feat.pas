@@ -11,7 +11,8 @@
 interface
 
 uses
-  System.Generics.Collections;
+  System.Generics.Collections,
+  Daf.SQLCute;
 
 type
   /// <summary>A person whose Age is Variant so it can carry SQL NULL in the fast lane.</summary>
@@ -44,6 +45,9 @@ type
     Names: TArray<string>;
     Count: Integer;
     SecondCount: Integer;
+    /// The query the fast lane cannot take, and what it answered when handed it.
+    Query: IQuery;
+    Outcome: string;
     constructor Create;
     destructor Destroy; override;
   end;
@@ -54,7 +58,6 @@ uses
   System.SysUtils,
   System.Variants,
   Daf.MiniSpec,
-  Daf.SQLCute,
   Daf.SQLCute.InMemory,
   Daf.SQLCute.InMemory.Compiler;   // EInMemoryQueryError
 
@@ -443,16 +446,26 @@ Feature SQLCute in-memory fast path @inmemory @fastpath
       end)
 
   .Scenario('A join query executed with a single list is rejected')
+    .Given('a JOIN query, and the single list the fast lane takes',
+      procedure(W: TFastPathWorld)
+      begin
+        W.Query := TQuery.New.From('people').Join('orders', 'people.id', 'orders.person_id');
+      end)
+    .When('it is executed over that one list',
+      procedure(W: TFastPathWorld)
+      begin
+        try
+          TInMemory.Elements<TPerson>(W.Query, W.People);
+          W.Outcome := '<the fast lane took the join>';
+        except
+          on E: Exception do
+            W.Outcome := E.ClassName + ': ' + E.Message;
+        end;
+      end)
     .&Then('compiling a JOIN for the fast lane raises a descriptive error',
       procedure(W: TFastPathWorld)
       begin
-        ExpectException(
-          procedure
-          begin
-            TInMemory.Elements<TPerson>(
-              TQuery.New.From('people').Join('orders', 'people.id', 'orders.person_id'),
-              W.People);
-          end).ToBe(EInMemoryQueryError);
+        Expect(W.Outcome).ToStartWith('EInMemoryQueryError');
       end);
 
 end.

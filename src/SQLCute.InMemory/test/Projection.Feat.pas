@@ -11,7 +11,8 @@ interface
 
 uses
   System.Generics.Collections,
-  Daf.Nullable;
+  Daf.Nullable,
+  Daf.SQLCute;
 
 type
   TPerson = class
@@ -61,6 +62,9 @@ type
     Count: Integer;
     Flag1, Flag2: Boolean;
     Str1: string;
+    /// The projecting query the preserve-T lane refuses, and what it answered.
+    Query: IQuery;
+    Outcome: string;
     constructor Create;
     destructor Destroy; override;
   end;
@@ -72,7 +76,6 @@ uses
   System.Variants,
   System.Rtti,
   Daf.MiniSpec,
-  Daf.SQLCute,
   Daf.SQLCute.InMemory,
   Daf.SQLCute.InMemory.Rows,
   Daf.SQLCute.InMemory.Compiler;
@@ -192,15 +195,26 @@ Feature SQLCute in-memory row model & projection @inmemory @projection
       end)
 
   .Scenario('Elements rejects a projecting query')
+    .Given('a query that projects a pair of columns',
+      procedure(W: TProjWorld)
+      begin
+        W.Query := TQuery.New.From('people').Select(['name', 'age']);
+      end)
+    .When('it is run on the preserve-T lane',
+      procedure(W: TProjWorld)
+      begin
+        try
+          TInMemory.Elements<TPerson>(W.Query, W.People);
+          W.Outcome := '<the lane projected onto T>';
+        except
+          on E: Exception do
+            W.Outcome := E.ClassName + ': ' + E.Message;
+        end;
+      end)
     .&Then('a SELECT projection on the preserve-T lane raises',
       procedure(W: TProjWorld)
       begin
-        ExpectException(
-          procedure
-          begin
-            TInMemory.Elements<TPerson>(
-              TQuery.New.From('people').Select(['name', 'age']), W.People);
-          end).ToBe(EInMemoryQueryError);
+        Expect(W.Outcome).ToStartWith('EInMemoryQueryError');
       end)
 
   .Scenario('Without a result class, projection yields IRow carrying the selected columns')

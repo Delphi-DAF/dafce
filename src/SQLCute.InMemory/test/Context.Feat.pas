@@ -10,7 +10,9 @@
 interface
 
 uses
-  System.Generics.Collections;
+  System.Generics.Collections,
+  Daf.SQLCute,
+  Daf.SQLCute.InMemory;
 
 type
   /// <summary>Age is Variant so one person can carry SQL NULL (NULL ordering).</summary>
@@ -53,6 +55,11 @@ type
     GroupCountry: string;
     GroupCount: Integer;
     Countries: TArray<string>;
+    /// The context with the deliberate gap in it, the query that walks into the gap, and what
+    /// running the one over the other answered.
+    Ctx: TQueryContext;
+    Query: IQuery;
+    Outcome: string;
     constructor Create;
     destructor Destroy; override;
   end;
@@ -63,8 +70,6 @@ uses
   System.SysUtils,
   System.Variants,
   Daf.MiniSpec,
-  Daf.SQLCute,
-  Daf.SQLCute.InMemory,
   Daf.SQLCute.InMemory.Rows,
   Daf.SQLCute.InMemory.Compiler;
 
@@ -107,6 +112,9 @@ end;
 
 destructor TCtxWorld.Destroy;
 begin
+  // What the World holds, the World closes: the context outlives the Given now that the Given is
+  // where it is built.
+  Ctx.Free;
   Orders.Free;
   People.Free;
   inherited;
@@ -193,22 +201,29 @@ Feature SQLCute in-memory multi-source @inmemory @context
       end)
 
   .Scenario('A query referencing an unmapped source fails fast')
+    .Given('a context that maps people and not orders, and a query that joins orders',
+      procedure(W: TCtxWorld)
+      begin
+        W.Ctx := TQueryContext.Create;
+        W.Ctx.Map<TPerson>('people', W.People);   // 'orders' intentionally unmapped
+        W.Query := TQuery.New.From('people').Join('orders', 'people.id', 'orders.user_id');
+      end)
+    .When('the query is run over that context',
+      procedure(W: TCtxWorld)
+      begin
+        try
+          for var R in TInMemory.Rows(W.Query, W.Ctx) do
+            ;
+          W.Outcome := '<it ran with the source unmapped>';
+        except
+          on E: Exception do
+            W.Outcome := E.ClassName + ': ' + E.Message;
+        end;
+      end)
     .&Then('joining orders without mapping it raises a descriptive error',
       procedure(W: TCtxWorld)
       begin
-        ExpectException(
-          procedure
-          begin
-            var Ctx := TQueryContext.Create;
-            try
-              Ctx.Map<TPerson>('people', W.People);   // 'orders' intentionally unmapped
-              for var R in TInMemory.Rows(
-                TQuery.New.From('people').Join('orders', 'people.id', 'orders.user_id'), Ctx) do
-                ;
-            finally
-              Ctx.Free;
-            end;
-          end).ToBe(EInMemoryQueryError);
+        Expect(W.Outcome).ToStartWith('EInMemoryQueryError');
       end)
 
 .Rule('GROUP BY with aggregates and HAVING emits flat rows')
