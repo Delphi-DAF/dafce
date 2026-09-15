@@ -15,6 +15,8 @@ uses
   // Por AddHostedService, que es metodo del record helper que declara esta unit.
   Daf.Extensions.Hosting,
   Daf.Extensions.Configuration,
+  // Por TShutdownHook, que es lo que espera a que pidan parar.
+  Daf.Threading,
   Daf.Configuration.Json,
   Daf.CommandLine,
   Daf.Configuration.CommandLine,
@@ -35,6 +37,16 @@ begin
     B.Logging.AddProvider(TNNLogLoader.BuildProvider(B.Environment, B.Configuration.GetSection('Logging:NLog')));
 
     B.Services.AddHostedService<THostedWorker>;
+
+    // El trabajo de esta herramienta es estar levantada hasta que pidan parar, asi que eso es lo
+    // que espera aqui. Al volver, Run para el host y con el al worker.
+    TShutdownHook.PresCtlCMsg := 'Pulse Ctrl+C para parar el servicio...';
+    B.OnExecute(
+      function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+      begin
+        TShutdownHook.WaitForShutdown;
+        Result := TCliExit.Ok;
+      end);
 
     ExitCode := B.Build.Run;
   except

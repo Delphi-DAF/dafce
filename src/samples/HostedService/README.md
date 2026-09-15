@@ -21,22 +21,41 @@ los dos, así que no hay módulo bajo el que archivarlo.
 - **Ámbitos de log anidados**: `BeginScope('working with guid {guid}', […])` envuelve el bucle
   entero, y dentro `BeginScope('scope {number}', [Idx], procedure …)` envuelve cada vuelta.
 
-## Sin trabajo declarado, el host arranca y para
+## El trabajo declarado es esperar
 
-El `.dpr` no declara `OnExecute` ni registra un `ICliHandler`, y para `TCliApplication` eso es un
-desenlace válido: la aplicación *son* sus tareas de arranque y sus servicios alojados, así que `Run`
-arranca el host, no encuentra trabajo y lo para. El apagado señaliza `ApplicationStopping` antes de
-llamar a `Stop`, de modo que **el bucle del worker no llega a dar una vuelta**:
+Una aplicación CLI puede no declarar trabajo, y para `TCliApplication` eso es un desenlace válido: la
+aplicación *son* sus tareas de arranque y sus servicios alojados. Pero entonces `Run` arranca el
+host, no encuentra trabajo y lo para, y como el apagado señaliza `ApplicationStopping` antes de
+llamar a `Stop`, **un servicio alojado no llega a dar una vuelta**. Por eso este `.dpr` declara su
+trabajo, y su trabajo es esperar:
+
+```pascal
+TShutdownHook.PresCtlCMsg := 'Pulse Ctrl+C para parar el servicio...';
+B.OnExecute(
+  function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+  begin
+    TShutdownHook.WaitForShutdown;
+    Result := TCliExit.Ok;
+  end);
+```
+
+`WaitForShutdown` imprime ese mensaje y bloquea hasta Ctrl+C. Al volver, `Run` para el host y con él
+al worker.
+
+## Qué se ve
+
+Una línea por segundo, con los dos ámbitos anidados a la derecha:
 
 ```
-INFO [HostedWorker.THostedWorker] THostedWorker.Start called
-WARN [HostedWorker.THostedWorker] El host se está apagando, THostedWorker preparando su salida...
-INFO [HostedWorker.THostedWorker] Servicio finalizó correctamente
-INFO [HostedWorker.THostedWorker] THostedWorker.Stop called
+INFO [HostedWorker.THostedWorker] 🟢 THostedWorker.Start called
+Pulse Ctrl+C para parar el servicio...
+INFO [HostedWorker.THostedWorker] I'm working at [12:17:06] ... | scope 1 | working with guid {1F7EA5E5-…}
+INFO [HostedWorker.THostedWorker] I'm working at [12:17:07] ... | scope 2 | working with guid {1F7EA5E5-…}
 ```
 
-Para ver el worker trabajando hace falta darle al `.dpr` algo que espere — un `OnExecute` que
-bloquee hasta la señal de apagado.
+Ctrl+C libera la espera: el worker avisa por su registro en `ApplicationStopping`, `Stop` espera a
+que su tarea termine y el `OnExecute` devuelve `TCliExit.Ok`. ⚠️ El gancho atiende **Ctrl+C** y nada
+más: cerrar la ventana de la consola no recorre esa parada.
 
 ## Ejecutar
 
