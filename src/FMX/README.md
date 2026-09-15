@@ -40,7 +40,7 @@ Its name is deliberately **not** `Application`: in the same `.dpr` this one and 
 The bootstrap channel takes its destinations before the host is built, and this one is not registered for you — referencing the package is how you ask for it:
 
 ```pascal
-uses DAF.Extensions.Logging, Daf.FMX.BootstrapSink;
+uses Daf.Extensions.Logging, Daf.FMX.BootstrapSink;
 
 begin
   BootstrapLog.AddSink(TPlatformLogBootstrapSink.Create);

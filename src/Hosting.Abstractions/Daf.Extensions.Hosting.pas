@@ -9,8 +9,8 @@ uses
   System.Generics.Collections,
   System.Rtti,
   Daf.Threading,
-  DAF.Extensions.DependencyInjection,
-  DAF.Extensions.Logging,
+  Daf.Extensions.DependencyInjection,
+  Daf.Extensions.Logging,
   Daf.Extensions.Configuration;
 
 type

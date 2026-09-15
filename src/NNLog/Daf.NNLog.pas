@@ -1,4 +1,4 @@
-﻿unit DAF.NNLog;
+﻿unit Daf.NNLog;
 
 interface
 
@@ -10,7 +10,7 @@ uses
   System.RegularExpressions,
   Daf.Extensions.Logging,
   Daf.Logging,
-  DAF.Logging.Provider,
+  Daf.Logging.Provider,
   Daf.NNLog.Configuration;
 
 type
@@ -78,7 +78,7 @@ type
 
 implementation
 uses
-  DAF.NNLog.Layout;
+  Daf.NNLog.Layout;
 
 { TLogRule }
 

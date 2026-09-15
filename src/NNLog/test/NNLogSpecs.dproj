@@ -96,7 +96,7 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
-        <DCCReference Include="DAF.NNLog.Targets.Probe.pas"/>
+        <DCCReference Include="Daf.NNLog.Targets.Probe.pas"/>
         <DCCReference Include="RuleSelection.Feat.pas"/>
         <DCCReference Include="CodeConfig.Feat.pas"/>
         <BuildConfiguration Include="Base">

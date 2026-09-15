@@ -1,7 +1,7 @@
-﻿unit DAF.NNLog.Targets.Probe;
+﻿unit Daf.NNLog.Targets.Probe;
 
 // Un destino de prueba, con el nombre que la convención del loader espera para encontrarlo por
-// RTTI: DAF.NNLog.Targets.<Tipo>.T<Tipo>Target. Con targetType "Probe" el loader lo construye
+// RTTI: Daf.NNLog.Targets.<Tipo>.T<Tipo>Target. Con targetType "Probe" el loader lo construye
 // como a cualquier otro, así que las specs recorren el camino real —bind, construcción de reglas,
 // creación del logger— y no un atajo.
 //
@@ -15,7 +15,7 @@ interface
 uses
   System.SysUtils,
   Daf.Extensions.Logging,
-  DAF.NNLog;
+  Daf.NNLog;
 
 type
   TProbeRecorder = class

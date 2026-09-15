@@ -41,13 +41,13 @@ requires
   Daf.Hosting.Abstractions;
 
 contains
-  DAF.NNLog.Targets.Console in 'Targets\DAF.NNLog.Targets.Console.pas',
-  DAF.NNLog.Configuration in 'DAF.NNLog.Configuration.pas',
-  DAF.NNLog.Targets.Debug in 'Targets\DAF.NNLog.Targets.Debug.pas',
-  DAF.NNLog.Layout in 'DAF.NNLog.Layout.pas',
-  DAF.NNLog.Loader in 'DAF.NNLog.Loader.pas',
+  Daf.NNLog.Targets.Console in 'Targets\Daf.NNLog.Targets.Console.pas',
+  Daf.NNLog.Configuration in 'Daf.NNLog.Configuration.pas',
+  Daf.NNLog.Targets.Debug in 'Targets\Daf.NNLog.Targets.Debug.pas',
+  Daf.NNLog.Layout in 'Daf.NNLog.Layout.pas',
+  Daf.NNLog.Loader in 'Daf.NNLog.Loader.pas',
   Daf.NNLog in 'Daf.NNLog.pas',
-  DAF.NNLog.Targets.UDP in 'Targets\DAF.NNLog.Targets.UDP.pas',
-  DAF.NNLog.Targets.File_ in 'Targets\DAF.NNLog.Targets.File_.pas';
+  Daf.NNLog.Targets.UDP in 'Targets\Daf.NNLog.Targets.UDP.pas',
+  Daf.NNLog.Targets.File_ in 'Targets\Daf.NNLog.Targets.File_.pas';
 
 end.

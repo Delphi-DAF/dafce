@@ -26,9 +26,9 @@ Structured logging infrastructure for Delphi inspired by .NET's `Microsoft.Exten
 uses
   Daf.Extensions.Logging,
   Daf.Logging,
-  DAF.Logging.Builder,
-  DAF.Logging.Provider,
-  DAF.NNLog; // any provider
+  Daf.Logging.Builder,
+  Daf.Logging.Provider,
+  Daf.NNLog; // any provider
 
 // Standalone (no DI)
 var Factory := TMultiProviderLoggerFactory.Create;
@@ -71,7 +71,7 @@ The template and arguments are kept together in `TLogState`, letting providers f
 ## Integration with DI and Hosting
 
 ```pascal
-uses Daf.Extensions.Logging, DAF.Logging.Builder, DAF.NNLog;
+uses Daf.Extensions.Logging, Daf.Logging.Builder, Daf.NNLog;
 
 // While composing startup, on the builder's Services:
 AddLogging(Builder.Services, procedure(Log: ILoggingBuilder)

@@ -40,7 +40,7 @@ Su nombre **no** es `Application` a propósito: en el mismo `.dpr` conviven ést
 El canal de arranque recibe sus destinos antes de construir el host, y este no va registrado de serie — referenciar el paquete es la forma de pedirlo:
 
 ```pascal
-uses DAF.Extensions.Logging, Daf.FMX.BootstrapSink;
+uses Daf.Extensions.Logging, Daf.FMX.BootstrapSink;
 
 begin
   BootstrapLog.AddSink(TPlatformLogBootstrapSink.Create);

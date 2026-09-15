@@ -62,7 +62,7 @@ implementation as a metaclass: `Hosting.AddHostedService(Services, TMyWorker)`.
 
 - `Daf.Extensions.DependencyInjection` (DependencyInjection.Abstractions)
 - `Daf.Extensions.Configuration` (Configuration.Abstractions)
-- `DAF.Extensions.Logging` (Logging.Abstractions) — for the `ILoggingBuilder` the family contract
+- `Daf.Extensions.Logging` (Logging.Abstractions) — for the `ILoggingBuilder` the family contract
   exposes as a property
 - `Daf.Commons`
 

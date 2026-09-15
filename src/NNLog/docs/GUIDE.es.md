@@ -54,7 +54,7 @@ alguna regla activa de ese logger acepta el nivel.
 ```pascal
 uses
   Daf.Extensions.Logging,
-  DAF.NNLog.Loader;
+  Daf.NNLog.Loader;
 
 // Desde una sección de configuración
 Provider := TNNLogLoader.BuildProvider(Environment, Config.GetSection('Logging:NLog'));
@@ -115,11 +115,11 @@ proveedor que escriba, pasar por `TNNLogLoader`.
 nombre, así que la superficie configurable de un target son sus propiedades escribibles. Las claves
 se emparejan sin distinguir mayúsculas.
 
-`targetType` se resuelve por RTTI a `DAF.NNLog.Targets.<Tipo>.T<Tipo>Target`, **y esa búsqueda sí
+`targetType` se resuelve por RTTI a `Daf.NNLog.Targets.<Tipo>.T<Tipo>Target`, **y esa búsqueda sí
 distingue mayúsculas**: `Console` encuentra `TConsoleTarget`, `console` no. `File` es la única
 excepción en el nombre de la unit — `file` es palabra reservada, así que la unit es
-`DAF.NNLog.Targets.File_`. Un `targetType` sin clase detrás es un fallo de composición:
-`DAF.NNLog Error: Unknown target type <Tipo>`.
+`Daf.NNLog.Targets.File_`. Un `targetType` sin clase detrás es un fallo de composición:
+`Daf.NNLog Error: Unknown target type <Tipo>`.
 
 El tipo tiene que sobrevivir al enlazado inteligente para que el RTTI lo encuentre — también los
 targets incluidos. Añadir `{$STRONGLINKTYPES ON}` al `.dpr` y nombrar en su `uses` cada unit de target que
@@ -128,10 +128,10 @@ se configure:
 ```pascal
 {$STRONGLINKTYPES ON}
 uses
-  DAF.NNLog.Loader,
-  DAF.NNLog.Targets.Console,
-  DAF.NNLog.Targets.File_,
-  DAF.NNLog.Targets.UDP;
+  Daf.NNLog.Loader,
+  Daf.NNLog.Targets.Console,
+  Daf.NNLog.Targets.File_,
+  Daf.NNLog.Targets.UDP;
 ```
 
 ### Claves de una regla
@@ -196,7 +196,7 @@ sin escapar es el comodín del regex, así que `MyApp.Services` empareja tambié
 
 Un `Name` que no sea una expresión regular válida es un fallo de composición, y se dice al cargar la
 configuración, nombrando la regla y el patrón:
-`DAF.NNLog Error: rule #0 has an invalid category pattern "*Repository": …`.
+`Daf.NNLog Error: rule #0 has an invalid category pattern "*Repository": …`.
 
 ---
 
@@ -264,10 +264,10 @@ funcionan dentro de una ruta.
 
 | Clase | `targetType` | Unit | Salida |
 |-------|--------------|------|--------|
-| `TConsoleTarget` | `Console` | `DAF.NNLog.Targets.Console` | salida estándar |
-| `TFileTarget` | `File` | `DAF.NNLog.Targets.File_` | un fichero de log, con rotación |
-| `TDebugTarget` | `Debug` | `DAF.NNLog.Targets.Debug` | la salida de depuración del sistema, en Windows |
-| `TUDPTarget` | `UDP` | `DAF.NNLog.Targets.UDP` | un endpoint UDP |
+| `TConsoleTarget` | `Console` | `Daf.NNLog.Targets.Console` | salida estándar |
+| `TFileTarget` | `File` | `Daf.NNLog.Targets.File_` | un fichero de log, con rotación |
+| `TDebugTarget` | `Debug` | `Daf.NNLog.Targets.Debug` | la salida de depuración del sistema, en Windows |
+| `TUDPTarget` | `UDP` | `Daf.NNLog.Targets.UDP` | un endpoint UDP |
 
 ### TConsoleTarget
 
@@ -326,13 +326,13 @@ El orden importa por dos motivos — las reglas se evalúan en el orden en que l
 Heredar de `TTarget` y sobrescribir `Write`:
 
 ```pascal
-unit DAF.NNLog.Targets.Slack;
+unit Daf.NNLog.Targets.Slack;
 
 interface
 
 uses
   Daf.Extensions.Logging,
-  DAF.NNLog;
+  Daf.NNLog;
 
 type
   TSlackTarget = class(TTarget)
@@ -360,7 +360,7 @@ end.
 ```
 
 Para que se pueda alcanzar desde la configuración, un target propio sigue la convención del loader:
-la unit es `DAF.NNLog.Targets.<Tipo>` y la clase `T<Tipo>Target`, y cada valor configurable es una
+la unit es `Daf.NNLog.Targets.<Tipo>` y la clase `T<Tipo>Target`, y cada valor configurable es una
 propiedad escribible. Entonces se nombra como cualquier otro target:
 
 ```json
@@ -384,8 +384,8 @@ tipo cadena y la interpreta él.
 ```pascal
 uses
   Daf.Extensions.Logging,
-  DAF.Logging.Builder,
-  DAF.NNLog.Loader;
+  Daf.Logging.Builder,
+  Daf.NNLog.Loader;
 
 AddLogging(Services,
   procedure(Builder: ILoggingBuilder)

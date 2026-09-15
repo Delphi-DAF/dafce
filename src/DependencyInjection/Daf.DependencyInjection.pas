@@ -9,7 +9,7 @@ uses
   System.SyncObjs,
   System.Generics.Collections,
   Daf.Enumerable,
-  DAF.Extensions.DependencyInjection;
+  Daf.Extensions.DependencyInjection;
 
 type
 {$REGION 'from unit System.Rtti implem;'}

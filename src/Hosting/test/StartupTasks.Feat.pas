@@ -6,7 +6,7 @@ uses
   System.SysUtils,
   Daf.Extensions.DependencyInjection,
   Daf.Extensions.Hosting,
-  DAF.Extensions.Logging;
+  Daf.Extensions.Logging;
 
 type
   /// Deja constancia del orden en que ocurren las cosas al arrancar, que es lo que estas

@@ -10,7 +10,7 @@ los dos, así que no hay módulo bajo el que archivarlo.
   de log se compone leyendo lo que se acaba de añadir:
   `B.Logging.AddProvider(TNNLogLoader.BuildProvider(B.Environment, B.Configuration.GetSection('Logging:NLog')))`.
 - **El fichero de log configura tres destinos y dos reglas**: consola con `layout` y color, fichero
-  bajo `${binPath}logs/`, y UDP. Las tres unidades de destino —`DAF.NNLog.Targets.Console`,
+  bajo `${binPath}logs/`, y UDP. Las tres unidades de destino —`Daf.NNLog.Targets.Console`,
   `.File_` y `.UDP`— están en el `uses` del `.dpr` porque el cargador las resuelve por RTTI y el
   enlazador descarta lo que nadie nombra. Por lo mismo está `{$STRONGLINKTYPES ON}`.
 - **El worker se construye por inyección**: `THostedWorker.Create(const LoggerFactory: ILoggerFactory;

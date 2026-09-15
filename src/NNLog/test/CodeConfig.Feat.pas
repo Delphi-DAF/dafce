@@ -14,8 +14,8 @@ interface
 uses
   Daf.Extensions.Logging,
   Daf.Extensions.Hosting,
-  DAF.NNLog.Configuration,
-  DAF.NNLog.Targets.Probe;
+  Daf.NNLog.Configuration,
+  Daf.NNLog.Targets.Probe;
 
 type
   TCodeConfigWorld = class
@@ -50,7 +50,7 @@ uses
   Daf.Configuration.Builder,
   Daf.Configuration.Memory,
   Daf.Hosting,
-  DAF.NNLog.Loader,
+  Daf.NNLog.Loader,
   Daf.MiniSpec;
 
 { TCodeConfigWorld }

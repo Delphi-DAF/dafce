@@ -5,7 +5,7 @@
 
 uses
   Daf.MiniSpec,
-  DAF.NNLog.Targets.Probe in 'DAF.NNLog.Targets.Probe.pas',
+  Daf.NNLog.Targets.Probe in 'Daf.NNLog.Targets.Probe.pas',
   RuleSelection.Feat in 'RuleSelection.Feat.pas',
   CodeConfig.Feat in 'CodeConfig.Feat.pas';
 

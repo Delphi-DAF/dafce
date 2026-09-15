@@ -4,7 +4,7 @@
 
 Core contracts for the DAFce logging infrastructure. Reference these interfaces when building components that emit log entries or when implementing custom log providers — without taking a dependency on any concrete logging implementation.
 
-All types live in `DAF.Extensions.Logging`.
+All types live in `Daf.Extensions.Logging`.
 
 ---
 

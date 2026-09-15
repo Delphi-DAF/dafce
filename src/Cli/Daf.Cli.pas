@@ -9,7 +9,7 @@ uses
   Daf.Extensions.Configuration,
   Daf.Extensions.DependencyInjection,
   Daf.Extensions.Hosting,
-  DAF.Extensions.Logging,
+  Daf.Extensions.Logging,
   Daf.CommandLine,
   Daf.Hosting;
 

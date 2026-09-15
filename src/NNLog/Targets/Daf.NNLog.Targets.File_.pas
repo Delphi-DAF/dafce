@@ -1,13 +1,13 @@
-﻿unit DAF.NNLog.Targets.File_;
+﻿unit Daf.NNLog.Targets.File_;
 
 interface
 
 uses
   System.Classes,
   System.DateUtils,
-  DAF.Extensions.Logging,
-  DAF.NNLog,
-  DAF.NNLog.Layout;
+  Daf.Extensions.Logging,
+  Daf.NNLog,
+  Daf.NNLog.Layout;
 
 type
   TRotationPolicy = (None, hourly, Daily, Days, Monthly, Size);

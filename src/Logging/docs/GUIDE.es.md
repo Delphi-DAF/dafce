@@ -169,8 +169,8 @@ end;
 
 | Proveedor | Unidad | Descripción |
 |-----------|--------|-------------|
-| `TNNLogProvider` | `DAF.NNLog` | Targets basados en reglas (fichero, consola, …) |
-| `TNullLoggerProvider` | `DAF.Extensions.Logging` | Descarta toda entrada — así se pide silencio a propósito |
+| `TNNLogProvider` | `Daf.NNLog` | Targets basados en reglas (fichero, consola, …) |
+| `TNullLoggerProvider` | `Daf.Extensions.Logging` | Descarta toda entrada — así se pide silencio a propósito |
 
 **No hay `Daf.Logging.Console` ni `Daf.Logging.Debug`.** NNLog trae `Console`, `Debug`, `File_` y
 `UDP`, con reglas de filtrado y layouts. Y un fallo de arranque llega a alguien sin nada de eso: el
@@ -187,7 +187,7 @@ Factory.AddProvider(TNNLogProvider.Create(Targets, Rules));
 ## Integración con DI
 
 ```pascal
-uses Daf.Extensions.Logging, DAF.Logging.Builder, DAF.NNLog;
+uses Daf.Extensions.Logging, Daf.Logging.Builder, Daf.NNLog;
 
 // Al componer el arranque, sobre los Services del builder:
 AddLogging(Builder.Services,

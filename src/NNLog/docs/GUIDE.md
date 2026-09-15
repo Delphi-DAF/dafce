@@ -54,7 +54,7 @@ enabled rule of that logger accepts the level.
 ```pascal
 uses
   Daf.Extensions.Logging,
-  DAF.NNLog.Loader;
+  Daf.NNLog.Loader;
 
 // From a configuration section
 Provider := TNNLogLoader.BuildProvider(Environment, Config.GetSection('Logging:NLog'));
@@ -114,11 +114,11 @@ rule fields keep the values of a freshly created object — `Enabled = False` an
 `targetType` picks the class; every other key is set on the target as a property of that name, so a
 target's configurable surface is its writable properties. Keys are matched without regard to case.
 
-`targetType` resolves by RTTI to `DAF.NNLog.Targets.<Type>.T<Type>Target`, **and this lookup is
+`targetType` resolves by RTTI to `Daf.NNLog.Targets.<Type>.T<Type>Target`, **and this lookup is
 case-sensitive**: `Console` finds `TConsoleTarget`, `console` does not. `File` is the one exception
-to the unit name — `file` is a reserved word, so the unit is `DAF.NNLog.Targets.File_`. A
+to the unit name — `file` is a reserved word, so the unit is `Daf.NNLog.Targets.File_`. A
 `targetType` with no class behind it is a composition failure:
-`DAF.NNLog Error: Unknown target type <Type>`.
+`Daf.NNLog Error: Unknown target type <Type>`.
 
 The type has to survive smart linking for RTTI to find it — the built-in targets included. Add
 `{$STRONGLINKTYPES ON}` to the `.dpr` and name every target unit you configure in its `uses`:
@@ -126,10 +126,10 @@ The type has to survive smart linking for RTTI to find it — the built-in targe
 ```pascal
 {$STRONGLINKTYPES ON}
 uses
-  DAF.NNLog.Loader,
-  DAF.NNLog.Targets.Console,
-  DAF.NNLog.Targets.File_,
-  DAF.NNLog.Targets.UDP;
+  Daf.NNLog.Loader,
+  Daf.NNLog.Targets.Console,
+  Daf.NNLog.Targets.File_,
+  Daf.NNLog.Targets.UDP;
 ```
 
 ### Rule keys
@@ -193,7 +193,7 @@ unescaped `.` is the regex wildcard, so `MyApp.Services` also matches `MyAppXSer
 
 A `Name` that is not a valid regular expression is a composition failure, reported when the
 configuration loads and naming the rule and the pattern:
-`DAF.NNLog Error: rule #0 has an invalid category pattern "*Repository": …`.
+`Daf.NNLog Error: rule #0 has an invalid category pattern "*Repository": …`.
 
 ---
 
@@ -261,10 +261,10 @@ in a path.
 
 | Class | `targetType` | Unit | Output |
 |-------|--------------|------|--------|
-| `TConsoleTarget` | `Console` | `DAF.NNLog.Targets.Console` | standard output |
-| `TFileTarget` | `File` | `DAF.NNLog.Targets.File_` | a log file, with rotation |
-| `TDebugTarget` | `Debug` | `DAF.NNLog.Targets.Debug` | the system debug output, on Windows |
-| `TUDPTarget` | `UDP` | `DAF.NNLog.Targets.UDP` | a UDP endpoint |
+| `TConsoleTarget` | `Console` | `Daf.NNLog.Targets.Console` | standard output |
+| `TFileTarget` | `File` | `Daf.NNLog.Targets.File_` | a log file, with rotation |
+| `TDebugTarget` | `Debug` | `Daf.NNLog.Targets.Debug` | the system debug output, on Windows |
+| `TUDPTarget` | `UDP` | `Daf.NNLog.Targets.UDP` | a UDP endpoint |
 
 ### TConsoleTarget
 
@@ -323,13 +323,13 @@ cuts the rest off.
 Inherit from `TTarget` and override `Write`:
 
 ```pascal
-unit DAF.NNLog.Targets.Slack;
+unit Daf.NNLog.Targets.Slack;
 
 interface
 
 uses
   Daf.Extensions.Logging,
-  DAF.NNLog;
+  Daf.NNLog;
 
 type
   TSlackTarget = class(TTarget)
@@ -357,7 +357,7 @@ end.
 ```
 
 To be reachable from configuration a custom target follows the loader's convention: the unit is
-`DAF.NNLog.Targets.<Type>` and the class `T<Type>Target`, and every configurable value is a
+`Daf.NNLog.Targets.<Type>` and the class `T<Type>Target`, and every configurable value is a
 writable property. Then it is named like any other target:
 
 ```json
@@ -380,8 +380,8 @@ by one of its values. A target needing anything else exposes a string property a
 ```pascal
 uses
   Daf.Extensions.Logging,
-  DAF.Logging.Builder,
-  DAF.NNLog.Loader;
+  Daf.Logging.Builder,
+  Daf.NNLog.Loader;
 
 AddLogging(Services,
   procedure(Builder: ILoggingBuilder)

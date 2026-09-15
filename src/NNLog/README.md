@@ -42,7 +42,7 @@ uses
   Daf.Configuration.CommandLine,
   Daf.Extensions.Configuration,
   Daf.Extensions.Logging,
-  DAF.NNLog.Loader;
+  Daf.NNLog.Loader;
 
 var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
 B.Logging.AddProvider(TNNLogLoader.BuildProvider(B.Environment, B.Configuration.GetSection('Logging:NLog')));
@@ -109,7 +109,7 @@ everything.
 | `Debug` | `TDebugTarget` | the system debug output, on Windows |
 | `UDP` | `TUDPTarget` | a UDP endpoint |
 
-`targetType` resolves by RTTI to `DAF.NNLog.Targets.<Type>.T<Type>Target`, which is also how a
+`targetType` resolves by RTTI to `Daf.NNLog.Targets.<Type>.T<Type>Target`, which is also how a
 custom target is reached from configuration. Every other key in a target's section is set on the
 target as a writable property of that name.
 

@@ -77,7 +77,7 @@ uses
   System.TypInfo,
   Daf.MiniSpec,
   Daf.Logging,
-  DAF.Logging.Builder,
+  Daf.Logging.Builder,
   Daf.DependencyInjection;
 
 type

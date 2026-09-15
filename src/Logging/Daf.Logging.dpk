@@ -35,8 +35,8 @@ requires
   Daf.Logging.Abstractions;
 
 contains
-  DAF.Logging.Builder in 'DAF.Logging.Builder.pas',
-  DAF.Logging.Provider in 'DAF.Logging.Provider.pas',
+  Daf.Logging.Builder in 'Daf.Logging.Builder.pas',
+  Daf.Logging.Provider in 'Daf.Logging.Provider.pas',
   Daf.Logging in 'Daf.Logging.pas';
 
 end.

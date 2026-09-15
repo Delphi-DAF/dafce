@@ -16,7 +16,7 @@ uses
   System.Generics.Collections,
   Daf.Extensions.Logging,
   Daf.Extensions.Hosting,
-  DAF.NNLog.Targets.Probe;
+  Daf.NNLog.Targets.Probe;
 
 type
   /// El mundo de cada escenario: acumula targets y reglas como pares de configuración, arma la
@@ -51,7 +51,7 @@ uses
   Daf.Configuration.Builder,
   Daf.Configuration.Memory,
   Daf.Hosting,
-  DAF.NNLog.Loader,
+  Daf.NNLog.Loader,
   Daf.MiniSpec;
 
 { TRuleWorld }

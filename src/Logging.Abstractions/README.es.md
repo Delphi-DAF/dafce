@@ -4,7 +4,7 @@
 
 Contratos fundamentales de la infraestructura de logging de DAFce. Referencia estas interfaces al construir componentes que emiten entradas de log o al implementar proveedores personalizados — sin depender de ninguna implementación concreta de logging.
 
-Todos los tipos se encuentran en `DAF.Extensions.Logging`.
+Todos los tipos se encuentran en `Daf.Extensions.Logging`.
 
 ---
 

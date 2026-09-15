@@ -33,6 +33,6 @@ requires
   Daf.Commons;
 
 contains
-  DAF.Extensions.Logging in 'DAF.Extensions.Logging.pas';
+  Daf.Extensions.Logging in 'Daf.Extensions.Logging.pas';
 
 end.

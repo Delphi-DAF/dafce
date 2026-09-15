@@ -11,7 +11,7 @@ uses
   Daf.Extensions.Configuration,
   Daf.Extensions.Logging,
   // TLoggingBuilder es campo del componedor, asi que la unit concreta hace falta ya aqui.
-  DAF.Logging.Builder,
+  Daf.Logging.Builder,
   Daf.Extensions.DependencyInjection;
 
 type

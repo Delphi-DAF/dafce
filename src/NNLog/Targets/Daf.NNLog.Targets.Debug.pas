@@ -1,11 +1,11 @@
-﻿unit DAF.NNLog.Targets.Debug;
+﻿unit Daf.NNLog.Targets.Debug;
 
 interface
 
 uses
   System.SysUtils,
   Daf.Extensions.Logging,
-  DAF.NNLog;
+  Daf.NNLog;
 
 type
   TDebugTarget = class(TTarget)

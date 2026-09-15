@@ -2,7 +2,7 @@
 
 interface
 uses
-  DAF.Extensions.DependencyInjection;
+  Daf.Extensions.DependencyInjection;
 
 type
   // IAppModule se declara en Daf.Extensions.DependencyInjection, porque AddModule<T> es un

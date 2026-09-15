@@ -3,7 +3,7 @@
 interface
 
 uses
-  DAF.Extensions.Logging;
+  Daf.Extensions.Logging;
 
 type
   /// Un destino que se queda con lo que le llega. Es la unica forma de mirar dentro del canal sin

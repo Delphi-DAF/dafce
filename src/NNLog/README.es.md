@@ -42,7 +42,7 @@ uses
   Daf.Configuration.CommandLine,
   Daf.Extensions.Configuration,
   Daf.Extensions.Logging,
-  DAF.NNLog.Loader;
+  Daf.NNLog.Loader;
 
 var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
 B.Logging.AddProvider(TNNLogLoader.BuildProvider(B.Environment, B.Configuration.GetSection('Logging:NLog')));
@@ -110,7 +110,7 @@ Qué niveles acepta una regla es la conjunción de `minLevel`, `maxLevel` y `lev
 | `Debug` | `TDebugTarget` | la salida de depuración del sistema, en Windows |
 | `UDP` | `TUDPTarget` | un endpoint UDP |
 
-`targetType` se resuelve por RTTI a `DAF.NNLog.Targets.<Tipo>.T<Tipo>Target`, que es también cómo se
+`targetType` se resuelve por RTTI a `Daf.NNLog.Targets.<Tipo>.T<Tipo>Target`, que es también cómo se
 alcanza un target propio desde la configuración. Cualquier otra clave de la sección de un target se
 asigna al target como una propiedad escribible de ese nombre.
 

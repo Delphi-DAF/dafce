@@ -21,7 +21,7 @@
 interface
 
 uses
-  DAF.Extensions.Logging;
+  Daf.Extensions.Logging;
 
 type
   TPlatformLogBootstrapSink = class(TInterfacedObject, IBootstrapSink)

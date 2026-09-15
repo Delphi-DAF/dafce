@@ -169,8 +169,8 @@ end;
 
 | Provider | Unit | Description |
 |----------|------|-------------|
-| `TNNLogProvider` | `DAF.NNLog` | Rule-based targets (file, console, …) |
-| `TNullLoggerProvider` | `DAF.Extensions.Logging` | Drops every entry — how to ask for silence on purpose |
+| `TNNLogProvider` | `Daf.NNLog` | Rule-based targets (file, console, …) |
+| `TNullLoggerProvider` | `Daf.Extensions.Logging` | Drops every entry — how to ask for silence on purpose |
 
 **There is no `Daf.Logging.Console` and no `Daf.Logging.Debug`.** NNLog brings `Console`, `Debug`,
 `File_` and `UDP`, with filtering rules and layouts. And a startup failure reaches somebody without
@@ -188,7 +188,7 @@ Factory.AddProvider(TNNLogProvider.Create(Targets, Rules));
 ## Dependency Injection Integration
 
 ```pascal
-uses Daf.Extensions.Logging, DAF.Logging.Builder, DAF.NNLog;
+uses Daf.Extensions.Logging, Daf.Logging.Builder, Daf.NNLog;
 
 // While composing startup, on the builder's Services:
 AddLogging(Builder.Services,

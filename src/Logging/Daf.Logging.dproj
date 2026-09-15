@@ -100,8 +100,8 @@
         <DCCReference Include="Daf.DependencyInjection.Abstractions.dcp"/>
         <DCCReference Include="Daf.Logging.Abstractions.dcp"/>
         <DCCReference Include="Daf.Commons.dcp"/>
-        <DCCReference Include="DAF.Logging.Builder.pas"/>
-        <DCCReference Include="DAF.Logging.Provider.pas"/>
+        <DCCReference Include="Daf.Logging.Builder.pas"/>
+        <DCCReference Include="Daf.Logging.Provider.pas"/>
         <DCCReference Include="Daf.Logging.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

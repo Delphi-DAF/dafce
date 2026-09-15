@@ -8,7 +8,7 @@ uses
   Daf.Logging,
   Daf.Extensions.DependencyInjection,
   Daf.DependencyInjection,
-  DAF.Logging.Builder,
+  Daf.Logging.Builder,
   BootstrapChannel.Feat;
 
 type

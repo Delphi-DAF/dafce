@@ -1,10 +1,10 @@
-﻿unit DAF.NNLog.Targets.UDP;
+﻿unit Daf.NNLog.Targets.UDP;
 
 interface
 
 uses
   System.SysUtils, System.Classes, IdUDPClient,
-  Daf.Extensions.Logging, DAF.NNLog;
+  Daf.Extensions.Logging, Daf.NNLog;
 
 type
   TUDPTarget = class(TTarget)

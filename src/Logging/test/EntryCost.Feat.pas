@@ -14,7 +14,7 @@ uses
   System.Rtti,
   Daf.Extensions.Logging,
   Daf.Extensions.DependencyInjection,
-  DAF.Logging.Builder;
+  Daf.Logging.Builder;
 
 type
   /// Un proveedor de prueba cuyo logger (a) contesta IsEnabled desde un suelo de nivel configurable

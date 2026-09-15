@@ -103,14 +103,14 @@
         <DCCReference Include="Daf.Logging.dcp"/>
         <DCCReference Include="Daf.Hosting.Abstractions.dcp"/>
         <DCCReference Include="Daf.Configuration.dcp"/>
-        <DCCReference Include="Targets\DAF.NNLog.Targets.Console.pas"/>
-        <DCCReference Include="DAF.NNLog.Configuration.pas"/>
-        <DCCReference Include="Targets\DAF.NNLog.Targets.Debug.pas"/>
-        <DCCReference Include="DAF.NNLog.Layout.pas"/>
-        <DCCReference Include="DAF.NNLog.Loader.pas"/>
+        <DCCReference Include="Targets\Daf.NNLog.Targets.Console.pas"/>
+        <DCCReference Include="Daf.NNLog.Configuration.pas"/>
+        <DCCReference Include="Targets\Daf.NNLog.Targets.Debug.pas"/>
+        <DCCReference Include="Daf.NNLog.Layout.pas"/>
+        <DCCReference Include="Daf.NNLog.Loader.pas"/>
         <DCCReference Include="Daf.NNLog.pas"/>
-        <DCCReference Include="Targets\DAF.NNLog.Targets.UDP.pas"/>
-        <DCCReference Include="Targets\DAF.NNLog.Targets.File_.pas"/>
+        <DCCReference Include="Targets\Daf.NNLog.Targets.UDP.pas"/>
+        <DCCReference Include="Targets\Daf.NNLog.Targets.File_.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\source.optset</DependentOn>

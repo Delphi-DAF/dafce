@@ -5,7 +5,7 @@ interface
 uses
   System.SysUtils,
   Daf.Extensions.Hosting,
-  DAF.Extensions.Logging;
+  Daf.Extensions.Logging;
 
 type
   /// Donde acaba cada informe. El canal de arranque y el pipeline de ILogger escriben fuera del
@@ -44,7 +44,7 @@ uses
   Daf.Configuration.Json,
   Daf.Hosting,
   Daf.Logging,
-  DAF.Logging.Builder,
+  Daf.Logging.Builder,
   Daf.MiniSpec,
   StartupTasks.Feat;
 

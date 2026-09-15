@@ -1,13 +1,13 @@
-﻿unit DAF.Logging.Builder;
+﻿unit Daf.Logging.Builder;
 
 interface
 
 uses
   System.Generics.Collections,
   System.SysUtils,
-  DAF.Extensions.DependencyInjection,
+  Daf.Extensions.DependencyInjection,
   Daf.Extensions.Logging,
-  DAF.Logging.Provider;
+  Daf.Logging.Provider;
 
 type
   // Componer el pipeline sin un solo destino. No es un fallo al escribir --el pipeline nunca falla

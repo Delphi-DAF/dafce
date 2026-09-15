@@ -98,7 +98,7 @@
         </DelphiCompile>
         <DCCReference Include="rtl.dcp"/>
         <DCCReference Include="Daf.Commons.dcp"/>
-        <DCCReference Include="DAF.Extensions.Logging.pas"/>
+        <DCCReference Include="Daf.Extensions.Logging.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\source.optset</DependentOn>

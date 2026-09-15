@@ -1,10 +1,10 @@
-﻿unit DAF.NNLog.Targets.Console;
+﻿unit Daf.NNLog.Targets.Console;
 
 interface
 
 uses
   Daf.Extensions.Logging,
-  DAF.NNLog;
+  Daf.NNLog;
 
 type
   TConsoleTarget = class(TTarget)

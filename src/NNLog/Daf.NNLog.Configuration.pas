@@ -1,4 +1,4 @@
-﻿unit DAF.NNLog.Configuration;
+﻿unit Daf.NNLog.Configuration;
 
 interface
 

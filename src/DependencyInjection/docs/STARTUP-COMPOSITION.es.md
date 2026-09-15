@@ -349,7 +349,7 @@ program StartupReport;
 uses
   System.IOUtils,
   System.SysUtils,
-  DAF.Extensions.Logging,
+  Daf.Extensions.Logging,
   Daf.Extensions.Hosting,
   Daf.Hosting,
   StartupReport.Payroll in 'StartupReport.Payroll.pas';
