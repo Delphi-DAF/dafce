@@ -99,7 +99,7 @@ Esa unidad no enlaza ni SQLCute ni ningún adaptador. Es comprobable con un dobl
 Este paquete define el puerto; [`Daf.SQLCute.Specification`](../../../SQLCute.Specification/README.es.md) trae el de memoria:
 
 ```pascal
-uses Daf.SQLCute.Specification;
+uses Daf.Specification, Daf.SQLCute.Specification;
 
 var Repo: IRepository<TProduct> := TInMemoryRepository<TProduct>.Create(Loaded);
 var Service := TCatalogService.Create(Repo);

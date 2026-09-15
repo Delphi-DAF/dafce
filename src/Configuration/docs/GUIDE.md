@@ -201,7 +201,8 @@ to seed a builder from a configuration you were handed: the in-memory source tak
 strings, not an `IConfiguration`.
 
 ```pascal
-uses Daf.Extensions.Configuration, Daf.Configuration.Builder, Daf.Configuration.Chained;
+uses Daf.Extensions.Configuration, Daf.Configuration.Builder, Daf.Configuration.Chained,
+     Daf.Configuration.Json;
 
 // A configuration somebody else resolved and handed to you -- a plugin host, a test harness,
 // a library that composes its own defaults.
