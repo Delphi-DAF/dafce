@@ -111,7 +111,7 @@ Feature Command line grammar @commandline @grammar
       begin
         Expect(W.ReadFile).ToEqual('none');
       end)
-    .&And('absent and present-but-empty are told apart, which the parked module could not do',
+    .&And('absent and present-but-empty are told apart',
       procedure(W: TGrammarWorld)
       begin
         Expect(W.Parsed.WasProvided(W.FileOpt)).ToBeFalse;
@@ -246,7 +246,7 @@ Feature Command line grammar @commandline @grammar
         Expect(W.ReadVerbose).ToBeTrue;
       end)
 
-.Rule('the value engine does not inherit the defects of the parked module')
+.Rule('a conversion consumes the whole token or fails')
 
   .Scenario('A negative integer')
     .Given('an integer argument declared',
@@ -288,7 +288,7 @@ Feature Command line grammar @commandline @grammar
         Expect(W.Parsed.ErrorText).ToContain('80xyz');
         Expect(W.Parsed.ErrorText).ToContain('--amount');
       end)
-    .&And('80 is not accepted -- the parked module read it as 80, a value invented from an invalid invocation',
+    .&And('80 is not accepted: an invalid invocation does not produce a value',
       procedure(W: TGrammarWorld)
       begin
         Expect(W.ReadAmount).ToNotEqual(80);

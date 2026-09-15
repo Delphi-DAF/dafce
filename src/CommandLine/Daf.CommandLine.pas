@@ -254,8 +254,7 @@ type
     function WasProvided(const Symbol: ISymbol): Boolean;
     /// <summary>
     ///   The raw text bound to a symbol; absent when the invocation did not carry it.
-    ///   Absent and present-but-empty are different answers, which the parked module
-    ///   could not tell apart.
+    ///   Absent and present-but-empty are different answers.
     /// </summary>
     function RawOf(const Symbol: ISymbol): TNullable<string>;
     /// <summary>Every raw value bound to a symbol, for an arity that admits many.</summary>
@@ -843,8 +842,8 @@ begin
   begin
     Result := FParser(Raw, Value, Error);
     if not Result and (Error = '') then
-      // A conversion of its own that refuses without saying why leaves the caller where
-      // the parked module left them: a refusal with nothing to act on.
+      // A conversion of its own that refuses without saying why leaves the caller with
+      // nothing to act on, so the engine supplies the message.
       Error := Format('"%s" is not a valid %s for %s', [Raw, TypeName, Name]);
     Exit;
   end;

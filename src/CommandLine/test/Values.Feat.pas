@@ -198,8 +198,8 @@ Feature Command line values @commandline @values
     .&And('it does not quietly settle on either of the two values',
       procedure(W: TValuesWorld)
       begin
-        // The parked behaviour was to keep the last one and say nothing, which is the
-        // same sin as reading 80xyz as 80.
+        // 2 is the value the invocation gave last, so this is what separates "the parse
+        // failed" from "the parse failed and no value was settled on anyway".
         Expect(W.ReadPort).ToNotEqual(2);
       end)
 

@@ -239,8 +239,8 @@ begin
 
   if TypeInf = System.TypeInfo(Integer) then
   begin
-    // TryStrToInt converts the whole token or fails. That is the anchoring at both
-    // ends the parked engine lacked: -5 parses, 80xyz does not become 80.
+    // TryStrToInt converts the whole token or fails, anchored at both ends: -5 parses,
+    // and 80xyz does not become 80.
     if not TryStrToInt(Raw, IntValue) then
       Exit(False);
     Value := TValue.From<Integer>(IntValue);
