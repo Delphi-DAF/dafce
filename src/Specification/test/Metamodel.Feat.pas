@@ -47,6 +47,10 @@ type
     RuntimeAccessorIsNil: Boolean;
     MetamodelAccessorIsNil: Boolean;
     Mixed: IExpr;
+    /// What initializing the stale metamodel answered, and the names the valid one holds.
+    Outcome: string;
+    PriceName: string;
+    ActiveName: string;
   end;
 
 implementation
@@ -142,22 +146,41 @@ Feature Optional typed metamodel @expressions @metamodel
 .Rule('A metamodel validates itself')
 
   .Scenario('StaleMetamodelMemberRaisesOnInitialize')
+    // Nothing to build: the stale metamodel is a declaration, and its initializer is a class
+    // procedure precisely so that nothing runs it before this scenario does.
+    .Given('a metamodel declaring a member the type no longer has').NoAction
+    .When('it is initialized',
+      procedure(W: TMetamodelWorld)
+      begin
+        try
+          StaleProductMeta.Initialize;
+          W.Outcome := '<it initialized without complaining>';
+        except
+          on E: Exception do
+            W.Outcome := E.ClassName + ': ' + E.Message;
+        end;
+      end)
     .&Then('initializing a metamodel whose member no longer resolves raises there',
       procedure(W: TMetamodelWorld)
       begin
-        ExpectException(
-          procedure
-          begin
-            StaleProductMeta.Initialize;
-          end).ToBe(EExprMemberError);
+        Expect(W.Outcome).ToStartWith('EExprMemberError');
       end)
 
   .Scenario('A valid metamodel initialized fine, which is why this suite runs')
+    // Nothing to build: its class constructor ran during unit initialization, which is the
+    // event this scenario looks back at -- the suite starting at all is half the assertion.
+    .Given('a metamodel whose class constructor already ran').NoAction
+    .When('its members are asked for the names they carry',
+      procedure(W: TMetamodelWorld)
+      begin
+        W.PriceName := (ProductMeta.Price.Node as IMemberExpr).Name;
+        W.ActiveName := (ProductMeta.Active.Node as IMemberExpr).Name;
+      end)
     .&Then('its members hold the property names RTTI spells',
       procedure(W: TMetamodelWorld)
       begin
-        Expect((ProductMeta.Price.Node as IMemberExpr).Name).ToEqual('Price');
-        Expect((ProductMeta.Active.Node as IMemberExpr).Name).ToEqual('Active');
+        Expect(W.PriceName).ToEqual('Price');
+        Expect(W.ActiveName).ToEqual('Active');
       end);
 
 end.

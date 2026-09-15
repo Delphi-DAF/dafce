@@ -47,6 +47,13 @@ type
     RecordRepo: IRepository<TProductRec>;
     ServiceResult: Integer;
     KeySeenByService: string;
+    /// Two rules written the same way and a third with a different page, and their keys.
+    SpecA: TSpecification<TProduct>;
+    SpecB: TSpecification<TProduct>;
+    SpecC: TSpecification<TProduct>;
+    KeyA: string;
+    KeyB: string;
+    KeyC: string;
   end;
 
 implementation
@@ -118,14 +125,25 @@ Feature Specifications and the repository port @expressions @specification
       end)
 
   .Scenario('The whole rule has one canonical key')
+    .Given('two rules written the same way, and a third that differs only in its page',
+      procedure(W: TSpecificationWorld)
+      begin
+        W.SpecA := TSpecification<TProduct>.New.Where(Prop('Price') > 100).Take(5);
+        W.SpecB := TSpecification<TProduct>.New.Where(Prop('Price') > 100).Take(5);
+        W.SpecC := TSpecification<TProduct>.New.Where(Prop('Price') > 100).Take(6);
+      end)
+    .When('each one is asked for its key',
+      procedure(W: TSpecificationWorld)
+      begin
+        W.KeyA := W.SpecA.Key;
+        W.KeyB := W.SpecB.Key;
+        W.KeyC := W.SpecC.Key;
+      end)
     .&Then('two rules written the same way agree, and a different page does not',
       procedure(W: TSpecificationWorld)
       begin
-        var A := TSpecification<TProduct>.New.Where(Prop('Price') > 100).Take(5);
-        var B := TSpecification<TProduct>.New.Where(Prop('Price') > 100).Take(5);
-        var C := TSpecification<TProduct>.New.Where(Prop('Price') > 100).Take(6);
-        Expect(A.Key).ToEqual(B.Key);
-        Expect(A.Key).ToNotEqual(C.Key);
+        Expect(W.KeyA).ToEqual(W.KeyB);
+        Expect(W.KeyA).ToNotEqual(W.KeyC);
       end)
 
 .Rule('The port imposes no base class, and no SQL')

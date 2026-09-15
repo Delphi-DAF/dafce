@@ -58,6 +58,15 @@ type
     DefaultTable: string;
     UnprefixedTable: string;
     MappedTable: string;
+    /// What authoring an unresolvable leaf answered: the exception class with its message, or
+    /// the mark that none was raised.
+    Outcome: string;
+    /// The shared default resolver, read twice, and the answers it and a no-strategy proxy give.
+    Shared: INameResolver;
+    SecondRead: INameResolver;
+    ProxyTable: string;
+    SharedTable: string;
+    SharedColumn: string;
   end;
 
 implementation
@@ -173,24 +182,26 @@ Feature Expression authoring @expressions @authoring
 .Rule('A member that resolves to nothing fails where it is written')
 
   .Scenario('UnresolvableMemberRaisesAtAuthoring')
+    // Nothing to build: the member name that does not exist is the argument, and the type it
+    // does not exist on is compiled in.
+    .Given('a member name TProduct does not have').NoAction
+    .When('a leaf is authored with it',
+      procedure(W: TAuthoringWorld)
+      begin
+        try
+          TEntityExpr<TProduct>.Create(nil).Prop('Pricee');
+          W.Outcome := '<the leaf was authored>';
+        except
+          on E: Exception do
+            W.Outcome := E.ClassName + ': ' + E.Message;
+        end;
+      end)
     .&Then('authoring the leaf raises, naming both the member and the type',
       procedure(W: TAuthoringWorld)
       begin
-        ExpectException(
-          procedure
-          begin
-            TEntityExpr<TProduct>.Create(nil).Prop('Pricee');
-          end).ToBe(EExprMemberError);
-        ExpectException(
-          procedure
-          begin
-            TEntityExpr<TProduct>.Create(nil).Prop('Pricee');
-          end).ToHaveMessage('Pricee');
-        ExpectException(
-          procedure
-          begin
-            TEntityExpr<TProduct>.Create(nil).Prop('Pricee');
-          end).ToHaveMessage('TProduct');
+        Expect(W.Outcome).ToStartWith('EExprMemberError');
+        Expect(W.Outcome).ToContain('Pricee');
+        Expect(W.Outcome).ToContain('TProduct');
       end)
 
 // The default strategy carries no state, so duplicating it would be waste — but
@@ -200,19 +211,30 @@ Feature Expression authoring @expressions @authoring
 .Rule('The default resolver is owned by its own type')
 
   .Scenario('DefaultResolverIsOneSharedInstance')
+    .Given('the default resolver, read once',
+      procedure(W: TAuthoringWorld)
+      begin
+        W.Shared := TDefaultNameResolver.Instance;
+      end)
+    .When('it is read again, and a proxy built with no strategy is asked the same questions',
+      procedure(W: TAuthoringWorld)
+      begin
+        W.SecondRead := TDefaultNameResolver.Instance;
+        W.ProxyTable := TEntityExpr<TProduct>.Create(nil).Table;
+        W.SharedTable := W.Shared.TableFor(TypeInfo(TProduct));
+        W.SharedColumn := W.Shared.ColumnFor(TypeInfo(TProduct), 'Price');
+      end)
     .&Then('reading Instance twice yields the same object',
       procedure(W: TAuthoringWorld)
       begin
-        Expect(TDefaultNameResolver.Instance = TDefaultNameResolver.Instance).ToBeTrue;
+        Expect(W.SecondRead = W.Shared).ToBeTrue;
       end)
     .&Then('and a proxy built with no strategy resolves through that same instance',
       procedure(W: TAuthoringWorld)
       begin
         // Same answers as the shared instance, on both questions it owns.
-        var Shared := TDefaultNameResolver.Instance;
-        Expect(TEntityExpr<TProduct>.Create(nil).Table)
-          .ToEqual(Shared.TableFor(TypeInfo(TProduct)));
-        Expect(Shared.ColumnFor(TypeInfo(TProduct), 'Price')).ToEqual('Price');
+        Expect(W.ProxyTable).ToEqual(W.SharedTable);
+        Expect(W.SharedColumn).ToEqual('Price');
       end);
 
 end.
