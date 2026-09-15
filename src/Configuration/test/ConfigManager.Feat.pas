@@ -114,7 +114,14 @@ Feature Configuration manager @configuration @manager
 .Rule('Reading while building')
 
   .Scenario('What is added is read straight afterwards')
-    .Given('a configuration manager').NoAction
+    .Given('a configuration manager with nothing in it yet',
+      procedure(W: TManagerWorld)
+      begin
+        // El World construye el manager; lo que al Given le toca es afirmar el estado que el
+        // escenario supone, que es que la clave todavia no esta -- si estuviera, el Then no
+        // diria que la puso el When.
+        Expect(W.Manager.Exists('Features:Beta')).ToBeFalse;
+      end)
     .When('I add a source',
       procedure(W: TManagerWorld)
       begin
