@@ -36,6 +36,11 @@ type
     CompiledCount: Integer;
     KeyFirst: string;
     KeyRepeat: string;
+    /// The untranslatable query and the repository scoped to it, plus what each lane answered.
+    WithExists: IQuery;
+    Scoped: IRepository<TProduct>;
+    Outcome: string;
+    Sql: string;
     constructor Create;
     destructor Destroy; override;
   end;
@@ -157,23 +162,37 @@ Feature In-memory repository adapter @expressions @repository
 .Rule('What the lane cannot execute is reported, never worked around')
 
   .Scenario('UntranslatableSpecificationFailsLoudly')
-    .&Then('an EXISTS-carrying query raises when the plan is compiled',
+    .Given('a repository scoped to an EXISTS-carrying base query',
       procedure(W: TRepositoryWorld)
       begin
         // The expression model cannot say EXISTS. So
         // the untranslatable query arrives the only way it can: as the base query
         // this repository is scoped to.
-        var WithExists := TQuery.New.From('Product')
+        W.WithExists := TQuery.New.From('Product')
           .WhereExists(TQuery.New.From('Order').Where('total', '>', 0));
 
-        var Scoped: IRepository<TProduct> :=
-          TInMemoryRepository<TProduct>.Create(W.Products, WithExists);
+        W.Scoped := TInMemoryRepository<TProduct>.Create(W.Products, W.WithExists);
+      end)
+    .When('the same query is compiled to SQL, and then listed through the in-memory lane',
+      procedure(W: TRepositoryWorld)
+      begin
+        // Compiled first, so what the second half asserts is this very query and not a
+        // look-alike built again three lines further down.
+        var Compiler: IQueryCompiler := TAnsiSqlCompiler.Create;
+        W.Sql := W.WithExists.Compile(Compiler).SQL;
 
-        ExpectException(
-          procedure
-          begin
-            Scoped.List(TSpecification<TProduct>.New.Where(Prop('Active') = True));
-          end).ToBe(EInMemoryQueryError);
+        try
+          W.Scoped.List(TSpecification<TProduct>.New.Where(Prop('Active') = True));
+          W.Outcome := '<the lane executed it>';
+        except
+          on E: Exception do
+            W.Outcome := E.ClassName + ': ' + E.Message;
+        end;
+      end)
+    .&Then('an EXISTS-carrying query raises when the plan is compiled',
+      procedure(W: TRepositoryWorld)
+      begin
+        Expect(W.Outcome).ToStartWith('EInMemoryQueryError');
       end)
 
     .&Then('and the same query still compiles to SQL, which is the documented asymmetry',
@@ -181,11 +200,7 @@ Feature In-memory repository adapter @expressions @repository
       begin
         // Translatable is not the same as in-memory-executable. The failure above
         // is the lane's, not the emission's — and it is loud at plan-compile time.
-        var Compiler: IQueryCompiler := TAnsiSqlCompiler.Create;
-        var Sql := TQuery.New.From('Product')
-          .WhereExists(TQuery.New.From('Order').Where('total', '>', 0))
-          .Compile(Compiler).SQL;
-        Expect(Sql).ToContain('EXISTS');
+        Expect(W.Sql).ToContain('EXISTS');
       end);
 
 end.

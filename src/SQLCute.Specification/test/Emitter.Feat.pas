@@ -35,6 +35,14 @@ type
     /// For the scenarios that run the emitted query rather than only read it.
     Products: TObjectList<TProduct>;
     Names: TArray<string>;
+    /// The malformed expressions the refusal scenarios set up, and what emitting them said.
+    /// They live here so the Given can build them and the When can emit them: with the emission
+    /// inside an ExpectException, the montage travelled with the event and any exception coming
+    /// out of the setup counted as the expected one.
+    BadNode: IExpr;
+    OtherBadNode: IExpr;
+    Outcome: string;
+    OtherOutcome: string;
     destructor Destroy; override;
   end;
 
@@ -45,6 +53,20 @@ uses
   Daf.MiniSpec,
   Daf.SQLCute.Clauses,
   Daf.SQLCute.Specification;
+
+/// Emits and answers what happened, as text: the exception class with its message, or the mark
+/// that none was raised. That is what lets the When run the event and the Then describe what it
+/// left behind.
+function EmitOutcome(const E: IExpr): string;
+begin
+  try
+    Emit(E);
+    Result := '<emitted without refusing>';
+  except
+    on Ex: Exception do
+      Result := Ex.ClassName + ': ' + Ex.Message;
+  end;
+end;
 
 destructor TEmitterWorld.Destroy;
 begin
@@ -392,102 +414,130 @@ Feature Emitting an expression to WHERE clauses @expressions @emitter
 .Rule('Emission refuses what it cannot express')
 
   .Scenario('NonMemberComparisonSidesAreRefused')
-    .&Then('a comparison whose left-hand side is not a member reference raises',
+    .Given('two comparisons whose sides do not name a column where one is needed',
       procedure(W: TEmitterWorld)
       begin
         // Value = Value: nothing here names a column, so there is no condition
         // to emit and no defensible clause to emit instead.
-        var Bad := TNode.Compare(TCompareOp.Equal, TNode.Value(1), [TNode.Value(1)]);
-        ExpectException(
-          procedure
-          begin
-            Emit(Bad);
-          end).ToBe(EExprEmissionError);
+        W.BadNode := TNode.Compare(TCompareOp.Equal, TNode.Value(1), [TNode.Value(1)]);
+        W.OtherBadNode := TNode.Compare(TCompareOp.Equal, TNode.Member('Price'),
+                                        [TNode.Member('Name')]);
+      end)
+    .When('each one is emitted',
+      procedure(W: TEmitterWorld)
+      begin
+        W.Outcome := EmitOutcome(W.BadNode);
+        W.OtherOutcome := EmitOutcome(W.OtherBadNode);
+      end)
+    .&Then('a comparison whose left-hand side is not a member reference raises',
+      procedure(W: TEmitterWorld)
+      begin
+        Expect(W.Outcome).ToStartWith('EExprEmissionError');
       end)
     .&Then('and a comparison whose right-hand side is neither value nor parameter raises',
       procedure(W: TEmitterWorld)
       begin
-        var Bad := TNode.Compare(TCompareOp.Equal, TNode.Member('Price'),
-                                 [TNode.Member('Name')]);
-        ExpectException(
-          procedure
-          begin
-            Emit(Bad);
-          end).ToBe(EExprEmissionError);
+        Expect(W.OtherOutcome).ToStartWith('EExprEmissionError');
       end)
 
   .Scenario('WrongArityIsRefused')
+    .Given('a BETWEEN given one operand, and an IS NULL given one it does not take',
+      procedure(W: TEmitterWorld)
+      begin
+        W.BadNode := TNode.Compare(TCompareOp.&Between, TNode.Member('Price'),
+                                   [TNode.Value(10)]);
+        W.OtherBadNode := TNode.Compare(TCompareOp.IsNull, TNode.Member('Price'),
+                                        [TNode.Value(10)]);
+      end)
+    .When('each one is emitted',
+      procedure(W: TEmitterWorld)
+      begin
+        W.Outcome := EmitOutcome(W.BadNode);
+        W.OtherOutcome := EmitOutcome(W.OtherBadNode);
+      end)
     .&Then('BETWEEN given one operand raises, naming operator and arity',
       procedure(W: TEmitterWorld)
       begin
-        var Bad := TNode.Compare(TCompareOp.&Between, TNode.Member('Price'),
-                                 [TNode.Value(10)]);
-        ExpectException(
-          procedure
-          begin
-            Emit(Bad);
-          end).ToMatchMessage('Between.*2.*1');
+        Expect(W.Outcome).ToMatch('Between.*2.*1');
       end)
     .&Then('and IS NULL given an operand raises too — arity is checked in both directions',
       procedure(W: TEmitterWorld)
       begin
-        var Bad := TNode.Compare(TCompareOp.IsNull, TNode.Member('Price'),
-                                 [TNode.Value(10)]);
-        ExpectException(
-          procedure
-          begin
-            Emit(Bad);
-          end).ToBe(EExprEmissionError);
+        Expect(W.OtherOutcome).ToStartWith('EExprEmissionError');
       end)
 
   .Scenario('ANodeThatIsNotAPredicateIsRefused')
-    .&Then('a bare member where a condition belongs raises, naming the node kind',
+    .Given('a bare member where a condition belongs',
       procedure(W: TEmitterWorld)
       begin
         // `Prop('Active')` on its own is a column reference, not a condition.
         // Emitting it as `Active = True` would be the emitter guessing.
-        ExpectException(
-          procedure
-          begin
-            Emit(TNode.Member('Active'));
-          end).ToMatchMessage('Member');
+        W.BadNode := TNode.Member('Active');
+      end)
+    .When('it is emitted',
+      procedure(W: TEmitterWorld)
+      begin
+        W.Outcome := EmitOutcome(W.BadNode);
+      end)
+    .&Then('a bare member where a condition belongs raises, naming the node kind',
+      procedure(W: TEmitterWorld)
+      begin
+        Expect(W.Outcome).ToMatch('Member');
       end)
 
   // Two things look alike here and must not be confused, because the difference
   // is between an unfiltered rule and a widened one.
   .Scenario('NoFilterIsNotTheSameAsABrokenOne')
-    .&Then('a whole expression that is absent leaves the query unfiltered, deliberately',
+    .Given('no expression at all, and one with a hole in it',
       procedure(W: TEmitterWorld)
       begin
         // Apply<T> hands Spec.Filter straight through, and that is nil for a rule
-        // built with only an ordering or a page. Emitting nothing is what such a
-        // rule means, so this is a contract and not an oversight.
-        var Q := Emit(nil);
-        Expect(Length(WhereClausesOf(Q))).ToEqual(0);
+        // built with only an ordering or a page: the absent expression IS one of
+        // the two cases, not the lack of a case.
+        W.BadNode := nil;
+        // Here the caller did ask for a condition. Skipping the missing operand
+        // would emit `b` alone in place of `a AND b` — strictly more rows than
+        // were asked for, on both back-ends, with nothing said.
+        W.OtherBadNode := TNode.Logical(TLogicalOp.opAnd, nil, Leaf('b'));
+      end)
+    .When('each one is emitted',
+      procedure(W: TEmitterWorld)
+      begin
+        W.Query := Emit(W.BadNode);
+        W.OtherOutcome := EmitOutcome(W.OtherBadNode);
+      end)
+    .&Then('a whole expression that is absent leaves the query unfiltered, deliberately',
+      procedure(W: TEmitterWorld)
+      begin
+        Expect(Length(WhereClausesOf(W.Query))).ToEqual(0);
       end)
     .&Then('but an expression with a hole in it raises rather than emitting the rest',
       procedure(W: TEmitterWorld)
       begin
-        // Here the caller did ask for a condition. Skipping the missing operand
-        // would emit `b` alone in place of `a AND b` — strictly more rows than
-        // were asked for, on both back-ends, with nothing said.
-        var Holed := TNode.Logical(TLogicalOp.opAnd, nil, Leaf('b'));
-        ExpectException(
-          procedure
-          begin
-            Emit(Holed);
-          end).ToBe(EExprEmissionError);
+        Expect(W.OtherOutcome).ToStartWith('EExprEmissionError');
       end)
 
   .Scenario('EmissionNeedsAQueryToEmitOnto')
+    .Given('a perfectly good condition, and no query to emit it onto',
+      procedure(W: TEmitterWorld)
+      begin
+        W.Authored := Prop('Price') > 100;
+      end)
+    .When('it is emitted onto nothing',
+      procedure(W: TEmitterWorld)
+      begin
+        try
+          TExprEmitter.Where(nil, W.Authored);
+          W.Outcome := '<emitted without refusing>';
+        except
+          on Ex: Exception do
+            W.Outcome := Ex.ClassName + ': ' + Ex.Message;
+        end;
+      end)
     .&Then('emitting onto no query raises rather than inventing one',
       procedure(W: TEmitterWorld)
       begin
-        ExpectException(
-          procedure
-          begin
-            TExprEmitter.Where(nil, Prop('Price') > 100);
-          end).ToBe(EExprEmissionError);
+        Expect(W.Outcome).ToStartWith('EExprEmissionError');
       end);
 
 end.
