@@ -212,11 +212,15 @@ Feature Configuration key presence @configuration @presence
         Seed(W, ['Logging:Level', 'Info']);
         W.Config := W.Builder.Build;
       end)
-    .When('I ask for a section name nobody wrote').NoAction
+    .When('I ask for a section name nobody wrote',
+      procedure(W: TPresenceWorld)
+      begin
+        W.Report := BoolToStr(W.Config.Exists('Database'), True);
+      end)
     .&Then('it answers no',
       procedure(W: TPresenceWorld)
       begin
-        Expect(W.Config.Exists('Database')).ToBeFalse;
+        Expect(W.Report).ToEqual('False');
       end)
 
   .Scenario('A leaf with a value exists as a section')
@@ -226,11 +230,15 @@ Feature Configuration key presence @configuration @presence
         Seed(W, ['Timeout', '30']);
         W.Config := W.Builder.Build;
       end)
-    .When('I ask whether it exists as a section').NoAction
+    .When('I ask whether it exists as a section',
+      procedure(W: TPresenceWorld)
+      begin
+        W.Report := BoolToStr(W.Config.Exists('Timeout'), True);
+      end)
     .&Then('it answers yes',
       procedure(W: TPresenceWorld)
       begin
-        Expect(W.Config.Exists('Timeout')).ToBeTrue;
+        Expect(W.Report).ToEqual('True');
       end)
 
 .Rule('The indexer stays a string')

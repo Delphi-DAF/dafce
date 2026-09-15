@@ -20,6 +20,8 @@ type
     Config: IConfigurationRoot;
     BoundObj: TMyConfig;
     Path: string;
+    SectionKey: string;
+    ParentPath: string;
     constructor Create;
     destructor Destroy; override;
   end;
@@ -140,16 +142,21 @@ Feature Configuration @configuration
       begin
         W.Path := TConfigurationPath.Combine(['parent', 'child']);
       end)
-    .When('I take the path apart').NoAction
+    .When('I take the path apart',
+      procedure(W: TConfigWorld)
+      begin
+        W.SectionKey := TConfigurationPath.GetSectionKey(W.Path);
+        W.ParentPath := TConfigurationPath.GetParentPath(W.Path);
+      end)
     .&Then('the section key is the last segment',
       procedure(W: TConfigWorld)
       begin
-        Expect(TConfigurationPath.GetSectionKey(W.Path)).ToEqual('child');
+        Expect(W.SectionKey).ToEqual('child');
       end)
     .&And('the parent path is everything before it',
       procedure(W: TConfigWorld)
       begin
-        Expect(TConfigurationPath.GetParentPath(W.Path)).ToEqual('parent');
+        Expect(W.ParentPath).ToEqual('parent');
       end)
 
 .Rule('ConfigurationBinder')

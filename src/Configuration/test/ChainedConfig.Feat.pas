@@ -121,16 +121,26 @@ Feature Chained configuration source @configuration @chained
       end)
 
   .Scenario('Chaining nothing is refused when composing')
-    .Given('a builder').NoAction
-    .When('I try to chain an unassigned configuration').NoAction
+    .Given('a builder with nothing chained into it yet',
+      procedure(W: TChainedWorld)
+      begin
+        Expect(Assigned(W.Builder)).ToBeTrue;
+      end)
+    .When('I try to chain an unassigned configuration',
+      procedure(W: TChainedWorld)
+      begin
+        try
+          AddChainedConfiguration(W.Builder, nil);
+          W.Report := '<the builder accepted nil>';
+        except
+          on E: Exception do
+            W.Report := E.Message;
+        end;
+      end)
     .&Then('it fails on the spot, naming the problem',
       procedure(W: TChainedWorld)
       begin
-        ExpectException(
-          procedure
-          begin
-            AddChainedConfiguration(W.Builder, nil);
-          end).ToMatchMessage('Cannot chain a nil IConfiguration');
+        Expect(W.Report).ToContain('Cannot chain a nil IConfiguration');
       end)
 
 .Rule('The chained source tells an absent key from an empty one')
