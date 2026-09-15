@@ -42,6 +42,7 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 - **MiniSpec**: `--allow-undefined` — un step undefined deja de fijar el código de salida; `MiniSpec.AllowUndefined(True)` lo declara en la suite. Por defecto rompe
 - **MiniSpec**: `SpecContext.ScenarioContext` devuelve el World del escenario, y un `[MiniInject]` de su tipo lo recibe
 - **NNLog**: `TNNLogLoader.BuildProvider` acepta un `TNNLogConfiguration` — los ajustes escritos con código, y no solo leídos de una sección
+- **NNLog**: Token de layout `${scope}` — los ámbitos que abre `BeginScope` llegan a la línea escrita; se añade al `layout` de un destino
 - **SQLCute**: Mejoras en el constructor de consultas
   - `WhereNot(Callback)` y `OrWhereNot(Callback)` — grupos WHERE negados como una unidad, `NOT (…)`
   - Orden de NULL por columna — `OrderBy` / `OrderByDesc` con `TNullsOrder`, y `NullsFirst` / `NullsLast`
@@ -87,6 +88,10 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 
 - **MediatR**: La clase base de un handler de notificación es `TNotificationHandler<T>`. La grafía anterior, `TNotificacionHandler<T>`, sigue compilando
 
+- ⚠️ **NNLog**: Un destino implementa `DoWrite` en vez de sobrescribir `Write`. `TTarget.Write` toma una sección crítica de esa instancia de destino y lo llama, así que las escrituras de varios hilos por un mismo destino dejan de solaparse — todos los loggers de un proceso comparten las mismas instancias de destino. **Rompe** a quien escribiera un destino propio
+- ⚠️ **NNLog**: Un destino que no puede escribir deja de lanzar hacia quien registró; informa por el canal de arranque, nombrando el destino. **Cambio observable**: un fallo del log deja de tumbar al código que solo quería registrar
+- **NNLog**: Un token de layout sin renderer detrás se queda sin sustituir en vez de convertirse en cadena vacía, así que un `${mesage}` mal escrito sale en la línea
+
 ### Deprecated
 
 - **MediatR**: `TNotificacionHandler<T>`, en favor de `TNotificationHandler<T>`. Es una subclase suya, así que lo que ya hereda de ella sigue funcionando, y se va en el próximo major
@@ -122,6 +127,10 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 - **Hosting**: `IHostApplicationLifetime.StopApplication` para de verdad la aplicación: cancelaba `ApplicationStopping` en vez de pedir la parada, así que `WaitForShutdown` seguía bloqueado y los `IHostedService` no se paraban nunca
 - **Hosting**: Un proceso puede construir más de un host: «Build already called» y el «ya parado» eran estado de clase, así que un arnés que monta y desmonta hosts solo podía montar el primero
 - **NNLog**: `enabled` y `name` de una regla se ignoraban en silencio: `enabled` ausente vale **activada** —solo el literal `false` la desactiva— y `name` filtra de verdad. **Cambio observable**: un config con alguna regla de `name` distinto de `*` deja de recibirlo todo
+- **NNLog**: `TFileTarget` podía quedar en un estado donde toda escritura posterior fallaba el resto del proceso: una apertura fallida dejaba la ruta fijada sin stream, y la guarda ya no volvía a abrir. Ahora reintenta
+- **NNLog**: El nombre del fichero rotado doblaba el punto antes de la extensión (`app_<marca>..log`) y llevaba el instante de rotar en vez de la fecha del contenido que archiva
+- **NNLog**: Comprimir el archivo o limpiar el histórico ya no cuesta la línea que provocó la rotación, ni deja el destino inutilizable cuando falla
+- **NNLog**: Una regla construida en código llegaba desactivada, con su nivel máximo en el más bajo de todos, y reventaba al emparejar una categoría. `TLogRule.Create` fija ahora los mismos valores por defecto que escribe el cargador
 - **MediatR**: Componer dos veces en un mismo proceso da el mismo resultado; la contabilidad de paquetes ya escaneados era estado global de unit
 - **SQLCute**: `WhereIn` con un conjunto de valores **vacío** emitía `col IN ()`, inválido en casi cualquier motor; ahora no casa ninguna fila y `WhereNotIn` las casa todas, igual en los dos back-ends. Afecta también a `OrWhereIn` / `OrWhereNotIn` y a `IsIn([])`
 - **Application**: `TVersionInfo.Tag` estaba **siempre vacío**, y `GetFrom` sobre una clase sin atributo devolvía lo que hubiera en la memoria del destino

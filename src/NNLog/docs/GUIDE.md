@@ -205,23 +205,34 @@ Base class for every NNLog destination.
 TTarget = class
   const DefaultLayout = '${timestamp} #${pid}:${thread} [${level}] ${category} | ${message} ${exception}';
   constructor Create; virtual;
-  procedure Write(const Entry: TLogEntry); virtual; abstract;
+  destructor Destroy; override;
+  procedure Write(const Entry: TLogEntry);          // takes the lock, then calls DoWrite
+  procedure DoWrite(const Entry: TLogEntry); virtual; abstract;   // protected
   function RenderEvent(Entry: TLogEntry): string;   // protected
   property Name: string;
   property Layout: string;
 end;
 ```
 
-A subclass overrides `Write` and calls `RenderEvent` to turn the entry into a line using its own
+A subclass overrides `DoWrite` and calls `RenderEvent` to turn the entry into a line using its own
 `Layout`. `Name` is what a rule's `writeTo` refers to.
+
+`Write` is not virtual: it takes a critical section held by that target instance and then calls
+`DoWrite`, so a target written today is serialized without its author doing anything. Every logger
+in the process shares the same target instances, so the target is where concurrent writes meet.
+
+The lock is **per target instance**, so two targets never wait for each other, and it is **within
+one process**: two runs of the same program writing to one file can still interleave, and sharing a
+log file between processes is not covered.
 
 ---
 
 ## Layout tokens
 
 A layout is text with `${token}` placeholders; a token may carry an argument after a colon. Token
-names are matched without regard to case, and **a token with no renderer behind it becomes the empty
-string**.
+names are matched without regard to case, and **a token with no renderer behind it is left
+unsubstituted**, so a misspelled `${mesage}` shows up in the line instead of silently costing a
+column.
 
 | Token | Value |
 |-------|-------|
@@ -229,6 +240,7 @@ string**.
 | `${date}`, `${date:format}` | render time, formatted; `yyyy-MM-dd` without an argument |
 | `${level}` | level name: `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `CRIT` |
 | `${category}` | the logger's category |
+| `${scope}` | the scopes open around the entry, innermost last, each prefixed with ` \| ` |
 | `${message}` | the rendered message |
 | `${exception}` | `ExceptionClass: Message`, empty when the entry carries no exception |
 | `${exception:stacktrace}` | the exception's stack trace |
@@ -335,8 +347,9 @@ type
   TSlackTarget = class(TTarget)
   private
     FWebhookUrl: string;
+  protected
+    procedure DoWrite(const Entry: TLogEntry); override;
   public
-    procedure Write(const Entry: TLogEntry); override;
     property WebhookUrl: string read FWebhookUrl write FWebhookUrl;
   end;
 
@@ -345,7 +358,7 @@ implementation
 uses
   System.SysUtils;
 
-procedure TSlackTarget.Write(const Entry: TLogEntry);
+procedure TSlackTarget.DoWrite(const Entry: TLogEntry);
 begin
   if Entry.Level < TLogLevel.Warning then
     Exit;

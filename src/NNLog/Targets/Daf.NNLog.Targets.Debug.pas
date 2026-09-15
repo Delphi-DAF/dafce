@@ -9,9 +9,10 @@ uses
 
 type
   TDebugTarget = class(TTarget)
+  protected
+    procedure DoWrite(const Entry: TLogEntry); override;
   public
     constructor Create; override;
-    procedure Write(const Entry: TLogEntry); override;
   end;
 
 implementation
@@ -29,7 +30,7 @@ begin
 
 end;
 
-procedure TDebugTarget.Write(const Entry: TLogEntry);
+procedure TDebugTarget.DoWrite(const Entry: TLogEntry);
 begin
   var Msg := RenderEvent(Entry);
 {$IFDEF MSWINDOWS}

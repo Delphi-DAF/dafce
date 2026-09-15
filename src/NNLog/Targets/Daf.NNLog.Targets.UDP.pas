@@ -14,10 +14,11 @@ type
     procedure SetPort(const Value: Integer);
     function GetHost: string;
     function GetPort: Integer;
+  protected
+    procedure DoWrite(const Entry: TLogEntry); override;
   public
     constructor Create; override;
     destructor Destroy; override;
-    procedure Write(const Entry: TLogEntry); override;
 
     property Host: string read GetHost write SetHost;
     property Port: Integer read GetPort write SetPort;
@@ -61,7 +62,7 @@ begin
   FClient.Port := Value;
 end;
 
-procedure TUDPTarget.Write(const Entry: TLogEntry);
+procedure TUDPTarget.DoWrite(const Entry: TLogEntry);
 begin
   var Line := RenderEvent(Entry);
   FClient.Send(Line);

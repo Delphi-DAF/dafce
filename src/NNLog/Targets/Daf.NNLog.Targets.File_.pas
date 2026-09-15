@@ -29,10 +29,11 @@ type
     procedure CleanupHistory(const HistoryDir: string);
     procedure MoveToHistory(const Path, RotatedPath: string);
     function RotateCurrentFileIfNeeded(const Path: string): Boolean;
+  protected
+    procedure DoWrite(const Entry: TLogEntry); override;
   public
     constructor Create; override;
     destructor Destroy; override;
-    procedure Write(const Entry: TLogEntry); override;
     property FileName: string read FFileName write SetFileName;
     property RotationPolicy: TRotationPolicy read FRotationPolicy write FRotationPolicy;
     property MaxArchivedFiles: Byte read FMaxArchivedFiles write FMaxArchivedFiles;
@@ -108,10 +109,14 @@ const
 
 class function TRotationStrategy.BuildRotatePath(const Path: string; const FileDate: TDateTime): string;
 begin
+  // GetExtension devuelve la extension CON su punto, asi que concatenar otro daba "app_....log".
   var Ext := TPath.GetExtension(Path);
   var Dir := TPath.GetDirectoryName(Path);
-  var FName := TPath.GetFileNameWithoutExtension(Path) + '_' + FormatDateTime('yyyy-mm-dd_hhnnsszzz', Now);
-  Result := TPath.Combine(Dir, FName) + '.' + Ext;
+  // La marca es la del fichero que se archiva y no la del instante de rotar: una rotacion diaria
+  // que salta pasada la medianoche archiva el log del dia anterior, y quien lo busque por su nombre
+  // busca ese dia. Las cinco estrategias ya calculan esa fecha y la pasan aqui.
+  var FName := TPath.GetFileNameWithoutExtension(Path) + '_' + FormatDateTime('yyyy-mm-dd_hhnnsszzz', FileDate);
+  Result := TPath.Combine(Dir, FName) + Ext;
 end;
 
 { TRotationNone }
@@ -200,7 +205,7 @@ begin
   inherited;
 end;
 
-procedure TFileTarget.Write(const Entry: TLogEntry);
+procedure TFileTarget.DoWrite(const Entry: TLogEntry);
 begin
   var Path := ResolveFileName(Entry);
   EnsureStreamFor(Path);
@@ -210,32 +215,38 @@ end;
 
 procedure TFileTarget.EnsureStreamFor(const Path: string);
 begin
-  if  RotateCurrentFileIfNeeded(Path) then
-    FCurrentPath := ''; // we  need a new stream
+  if RotateCurrentFileIfNeeded(Path) then
+    FCurrentPath := EmptyStr; // hace falta un stream nuevo
 
-  if (FCurrentPath = Path) then Exit;
-  var FileStream: TFileStream := nil;
+  // Las DOS cosas. Con solo la ruta, un destino que quedo sin stream --por una apertura que fallo o
+  // por una rotacion que lanzo-- sale por aqui y deriva nil en la linea siguiente, y ya nunca vuelve
+  // a intentar abrir: el estado es absorbente y se lleva por delante todo el log del proceso.
+  if (FCurrentPath = Path) and Assigned(FStream) then
+    Exit;
+
+  ForceDirectories(TPath.GetDirectoryName(Path));
+  var FileStream: TFileStream;
+  if FileExists(Path) then
+    FileStream := TFileStream.Create(Path, fmOpenWrite or fmShareDenyWrite)
+  else
+    FileStream := TFileStream.Create(Path, fmCreate or fmShareDenyWrite);
+
+  var NewWriter: TStreamWriter;
   try
-    FCurrentPath := Path;
-    FreeAndNil(FStream);
-
-    ForceDirectories(TPath.GetDirectoryName(FCurrentPath));
-    if FileExists(FCurrentPath) then
-      FileStream := TFileStream.Create(FCurrentPath, fmOpenWrite or fmShareDenyWrite)
-    else
-      FileStream := TFileStream.Create(FCurrentPath, fmCreate or fmShareDenyWrite);
     FileStream.Seek(0, soEnd);
-
-    FStream := TStreamWriter.Create(FileStream);
-    FStream.OwnStream;
-    FStream.AutoFlush := FAutoFlush;
+    NewWriter := TStreamWriter.Create(FileStream);
   except
-    on E: Exception do
-    begin
-      FileStream.Free;
-      raise;
-    end;
+    FileStream.Free;
+    raise;
   end;
+  NewWriter.OwnStream;
+  NewWriter.AutoFlush := FAutoFlush;
+
+  // Se publica al final, cuando ya no puede fallar: hasta aqui el objeto conserva el stream que
+  // tenia, asi que una apertura fallida no se lleva por delante el destino que estaba sirviendo.
+  FreeAndNil(FStream);
+  FStream := NewWriter;
+  FCurrentPath := Path;
 end;
 
 function TFileTarget.RotateCurrentFileIfNeeded(const Path: string): Boolean;
@@ -257,21 +268,41 @@ end;
 
 procedure TFileTarget.MoveToHistory(const Path: string; const RotatedPath: string);
 begin
+  // Soltar el fichero es obligado para moverlo: el archivo conserva el nombre del original, asi que
+  // no hay un segundo fichero que abrir antes. Lo que NO es obligado es que archivar pueda costar la
+  // linea que provoco la rotacion -- comprimir un log de varios megas tarda, y limpiar el historico
+  // falla si otro tiene un archivo abierto. Ninguna de las dos es parte de escribir esa linea.
   FreeAndNil(FStream);
-  TFile.Move(Path, RotatedPath);
-  if CompressOnRotate then
-  begin
-    var Zip := TZipFile.Create;
-    try
-      Zip.Open(RotatedPath + '.zip', zmWrite);
-      Zip.Add(RotatedPath, TPath.GetFileName(RotatedPath));
-      Zip.Close;
-    finally
-      Zip.Free;
+  try
+    TFile.Move(Path, RotatedPath);
+  except
+    on E: Exception do
+    begin
+      // Sin rotar. El llamante reabre el mismo fichero y la linea se escribe igual, al final del
+      // que ya habia: peor que rotar, mejor que perderla y quedarse sin destino.
+      BootstrapLog.LoggerFor(ClassName).LogError(E, Format('el destino "%s" no pudo archivar su fichero', [Name]));
+      Exit;
     end;
-    TFile.Delete(RotatedPath);
   end;
-  CleanupHistory(TPath.GetDirectoryName(RotatedPath));
+
+  try
+    if CompressOnRotate then
+    begin
+      var Zip := TZipFile.Create;
+      try
+        Zip.Open(RotatedPath + '.zip', zmWrite);
+        Zip.Add(RotatedPath, TPath.GetFileName(RotatedPath));
+        Zip.Close;
+      finally
+        Zip.Free;
+      end;
+      TFile.Delete(RotatedPath);
+    end;
+    CleanupHistory(TPath.GetDirectoryName(RotatedPath));
+  except
+    on E: Exception do
+      BootstrapLog.LoggerFor(ClassName).LogError(E, Format('el destino "%s" roto, pero no pudo comprimir o limpiar el historico', [Name]));
+  end;
 end;
 
 procedure TFileTarget.CleanupHistory(const HistoryDir: string);

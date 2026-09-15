@@ -208,23 +208,35 @@ Clase base de todo destino de NNLog.
 TTarget = class
   const DefaultLayout = '${timestamp} #${pid}:${thread} [${level}] ${category} | ${message} ${exception}';
   constructor Create; virtual;
-  procedure Write(const Entry: TLogEntry); virtual; abstract;
+  destructor Destroy; override;
+  procedure Write(const Entry: TLogEntry);          // toma el candado y llama a DoWrite
+  procedure DoWrite(const Entry: TLogEntry); virtual; abstract;   // protected
   function RenderEvent(Entry: TLogEntry): string;   // protected
   property Name: string;
   property Layout: string;
 end;
 ```
 
-Una subclase sobrescribe `Write` y llama a `RenderEvent` para convertir la entrada en una línea con
+Una subclase sobrescribe `DoWrite` y llama a `RenderEvent` para convertir la entrada en una línea con
 su propio `Layout`. `Name` es a lo que se refiere el `writeTo` de una regla.
+
+`Write` no es virtual: toma una sección crítica de esa instancia de destino y llama a `DoWrite`, así
+que un destino escrito hoy queda serializado sin que su autor haga nada. Todos los loggers del
+proceso comparten las mismas instancias de destino, así que el destino es donde se encuentran las
+escrituras concurrentes.
+
+El candado es **por instancia de destino**, así que dos destinos nunca se esperan, y es **dentro de
+un proceso**: dos ejecuciones del mismo programa escribiendo en un fichero pueden entrelazarse
+igual, y compartir fichero de log entre procesos no está cubierto.
 
 ---
 
 ## Tokens de layout
 
 Un layout es texto con marcas `${token}`; un token puede llevar un argumento tras dos puntos. Los
-nombres de token se emparejan sin distinguir mayúsculas, y **un token sin renderer detrás se
-convierte en cadena vacía**.
+nombres de token se emparejan sin distinguir mayúsculas, y **un token sin renderer detrás se queda
+sin sustituir**, así que un `${mesage}` mal escrito sale en la línea en vez de costar una columna en
+silencio.
 
 | Token | Valor |
 |-------|-------|
@@ -232,6 +244,7 @@ convierte en cadena vacía**.
 | `${date}`, `${date:formato}` | el momento de renderizar, con formato; `yyyy-MM-dd` sin argumento |
 | `${level}` | nombre del nivel: `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `CRIT` |
 | `${category}` | la categoría del logger |
+| `${scope}` | los ámbitos abiertos alrededor de la entrada, el más interno el último, cada uno precedido de ` \| ` |
 | `${message}` | el mensaje renderizado |
 | `${exception}` | `ClaseExcepción: Mensaje`, vacío cuando la entrada no trae excepción |
 | `${exception:stacktrace}` | la pila de la excepción |
@@ -338,8 +351,9 @@ type
   TSlackTarget = class(TTarget)
   private
     FWebhookUrl: string;
+  protected
+    procedure DoWrite(const Entry: TLogEntry); override;
   public
-    procedure Write(const Entry: TLogEntry); override;
     property WebhookUrl: string read FWebhookUrl write FWebhookUrl;
   end;
 
@@ -348,7 +362,7 @@ implementation
 uses
   System.SysUtils;
 
-procedure TSlackTarget.Write(const Entry: TLogEntry);
+procedure TSlackTarget.DoWrite(const Entry: TLogEntry);
 begin
   if Entry.Level < TLogLevel.Warning then
     Exit;

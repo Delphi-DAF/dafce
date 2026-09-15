@@ -99,6 +99,10 @@
         <DCCReference Include="Daf.NNLog.Targets.Probe.pas"/>
         <DCCReference Include="RuleSelection.Feat.pas"/>
         <DCCReference Include="CodeConfig.Feat.pas"/>
+        <DCCReference Include="TargetConcurrency.Feat.pas"/>
+        <DCCReference Include="TargetRecovery.Feat.pas"/>
+        <DCCReference Include="FileRotation.Feat.pas"/>
+        <DCCReference Include="LayoutTokens.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>

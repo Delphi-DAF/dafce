@@ -63,7 +63,11 @@ begin
   if Assigned(RendererMap) and RendererMap.TryGetValue(Name, Renderer) then
     Result := Renderer(Arg, Entry)
   else
-    Result := '';
+    // Sin sustituir, a proposito. Resolverlo a vacio deja el fallo invisible por los dos lados: un
+    // token mal escrito pierde una columna entera sin decirlo, y un destino usado antes de que el
+    // host registre los renderers escribe lineas sin contenido mientras todo lo observable --escribe,
+    // rota, no lanza-- dice que funciona.
+    Result := '${' + Token + '}';
   Renderer := nil;
 end;
 
@@ -132,6 +136,15 @@ begin
     function(const Arg: string; const Entry: TLogEntry): string
     begin
       Result := Entry.Category;
+    end);
+
+  // El pipeline rellena Scope en cada entrada que compone. Sin este renderer el campo no lo leia
+  // nadie, asi que BeginScope adjuntaba un contexto que ningun destino podia enseñar. Sale tal cual
+  // lo compone TLogger.GetScopeMessage, que ya trae su propio separador delante.
+  TLogLayoutEngine.RegisterRenderer('scope',
+    function(const Arg: string; const Entry: TLogEntry): string
+    begin
+      Result := Entry.Scope;
     end);
 
   TLogLayoutEngine.RegisterRenderer('message',

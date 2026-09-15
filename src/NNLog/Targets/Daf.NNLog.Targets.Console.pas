@@ -11,9 +11,10 @@ type
   private
     FUseColors: Boolean;
     procedure ColoredWrite(const Entry: TLogEntry);
+  protected
+    procedure DoWrite(const Entry: TLogEntry); override;
   public
     constructor Create; override;
-    procedure Write(const Entry: TLogEntry); override;
     property UseColors: Boolean read FUseColors write FUseColors;
   end;
 
@@ -25,6 +26,23 @@ uses
   {$ENDIF}
   System.SysUtils;
 
+{$IFNDEF MSWINDOWS}
+const
+  // Vive aqui y no dentro del metodo porque un const EN LINEA solo admite constantes simples: una
+  // constante tipada como este array da E2003 en su propia linea de declaracion (medido con
+  // dcclinux64 37.0). El array cubre TLogLevel entero -- son siete valores, no seis.
+  AnsiReset = #27'[0m';
+  AnsiColors: array[TLogLevel] of string = (
+    #27'[90m',    // Trace = gris
+    #27'[36m',    // Debug = cyan
+    #27'[32m',    // Information = verde
+    #27'[33m',    // Warning = amarillo
+    #27'[31m',    // Error = rojo
+    #27'[41;97m', // Critical = blanco sobre rojo
+    ''            // None: el nivel que apaga, asi que no se compone ninguna linea con el
+  );
+{$ENDIF}
+
 { TConsoleTarget }
 
 constructor TConsoleTarget.Create;
@@ -33,7 +51,7 @@ begin
   UseColors := False;
 end;
 
-procedure TConsoleTarget.Write(const Entry: TLogEntry);
+procedure TConsoleTarget.DoWrite(const Entry: TLogEntry);
 begin
   if UseColors then
     ColoredWrite(Entry)
@@ -70,17 +88,7 @@ begin
 
   {$ELSE}
   // En plataformas no Windows: colores ANSI (sólo en consolas compatibles)
-  const
-    RESET = #27'[0m';
-    COLORS: array[TLogLevel] of string = (
-      #27'[90m', // Trace = gris
-      #27'[36m', // Debug = cyan
-      #27'[32m', // Info = verde
-      #27'[33m', // Warn = amarillo
-      #27'[31m', // Error = rojo
-      #27'[41;97m' // Critical = blanco sobre rojo
-    );
-  WriteLn(COLORS[Event.Level] + Msg + RESET);
+  WriteLn(AnsiColors[Entry.Level] + Msg + AnsiReset);
   {$ENDIF}
 end;
 

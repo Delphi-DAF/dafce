@@ -31,8 +31,8 @@ type
   end;
 
   TProbeTarget = class(TTarget)
-  public
-    procedure Write(const Entry: TLogEntry); override;
+  protected
+    procedure DoWrite(const Entry: TLogEntry); override;
   end;
 
 // Grabador global, de proceso: cada escenario lo limpia al empezar (TRuleWorld.Create). Es global
@@ -95,7 +95,7 @@ end;
 
 { TProbeTarget }
 
-procedure TProbeTarget.Write(const Entry: TLogEntry);
+procedure TProbeTarget.DoWrite(const Entry: TLogEntry);
 begin
   NNLogProbe.Took(Self.Name, Entry.Category, Entry.Level);
 end;

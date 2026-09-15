@@ -40,6 +40,10 @@ type
     procedure AddRuleDisabled(const NamePattern, WriteTo: string);
     procedure Compose;
     procedure WriteInfoFrom(const Category: string);
+    /// Sin pasar por el cargador: una regla recien construida y un logger montado con ella. Es el
+    /// camino que el tipo ofrece --TLogRule es publico-- y el unico donde se ve con que valores
+    /// nace, porque por configuracion los escribe el cargador antes de entregarla.
+    procedure WriteThroughCodeBuiltRule(const Category: string);
     function Probe: TProbeRecorder;
   end;
 
@@ -51,6 +55,7 @@ uses
   Daf.Configuration.Builder,
   Daf.Configuration.Memory,
   Daf.Hosting,
+  Daf.NNLog,
   Daf.NNLog.Loader,
   Daf.MiniSpec;
 
@@ -141,6 +146,34 @@ end;
 procedure TRuleWorld.WriteInfoFrom(const Category: string);
 begin
   FProvider.CreateLogger(Category).LogInformation('linea');
+end;
+
+procedure TRuleWorld.WriteThroughCodeBuiltRule(const Category: string);
+begin
+  Failure := '';
+  FailureClass := '';
+  var Target := TProbeTarget.Create;
+  try
+    try
+      Target.Name := 'probe';
+      var Rule := TLogRule.Create;
+      try
+        Rule.WriteTo := [Target];
+        var Logger: ILogger := TNNLogLogger.Create(Category, [Rule]);
+        Logger.LogInformation('linea');
+      finally
+        Rule.Free;
+      end;
+    except
+      on E: Exception do
+      begin
+        Failure := E.Message;
+        FailureClass := E.ClassName;
+      end;
+    end;
+  finally
+    Target.Free;
+  end;
 end;
 
 function TRuleWorld.Probe: TProbeRecorder;
@@ -272,6 +305,28 @@ Feature Una regla de NNLog hace lo que su configuración dice @nnlog @rules
       procedure(W: TRuleWorld)
       begin
         Expect(W.Probe.ReceivedFrom('probe', 'Cualquiera')).ToBeTrue;
+      end)
+
+  .Scenario('Una regla construida en código nace con los mismos valores por defecto')
+    .Given('una regla construida directamente, sin pasar por el cargador de configuración',
+      procedure(W: TRuleWorld)
+      begin
+        Expect(W.Probe.Count).ToEqual(0);
+      end)
+    .When('se monta un logger con ella y se escribe una línea',
+      procedure(W: TRuleWorld)
+      begin
+        W.WriteThroughCodeBuiltRule('Cualquier.Cosa');
+      end)
+    .&Then('no falla por el camino',
+      procedure(W: TRuleWorld)
+      begin
+        Expect(W.FailureClass).ToEqual('');
+      end)
+    .&And('y el destino la recibe, igual que si la hubiera construido el cargador sin declarar nada',
+      procedure(W: TRuleWorld)
+      begin
+        Expect(W.Probe.ReceivedFrom('probe', 'Cualquier.Cosa')).ToBeTrue;
       end)
 
   .Scenario('La regla desactivada a propósito no escribe')

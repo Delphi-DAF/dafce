@@ -63,6 +63,7 @@ from a file.
 | `${thread}` | thread id |
 | `${level}` | level name: `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `CRIT` |
 | `${category}` | logger category |
+| `${scope}` | the scopes open around the entry |
 | `${message}` | rendered message |
 | `${exception}` | exception class + message, empty when there is none |
 | `${env:NAME}` | environment variable |
@@ -112,6 +113,10 @@ everything.
 `targetType` resolves by RTTI to `Daf.NNLog.Targets.<Type>.T<Type>Target`, which is also how a
 custom target is reached from configuration. Every other key in a target's section is set on the
 target as a writable property of that name.
+
+A custom target overrides `DoWrite`, not `Write`: `TTarget.Write` takes a lock held by that target
+instance and then calls it, so writes from several threads through one target never overlap. The
+guarantee is within one process — two processes writing to the same log file are not covered.
 
 The type has to survive smart linking for the lookup to find it: `{$STRONGLINKTYPES ON}` in the
 `.dpr`, and each target unit it configures named in its `uses`. A `targetType` whose unit is not

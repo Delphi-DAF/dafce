@@ -4,6 +4,7 @@ interface
 
 uses
   System.SysUtils,
+  System.SyncObjs,
   System.TypInfo,
   System.IOUtils,
   System.Generics.Collections,
@@ -20,12 +21,20 @@ type
   private
     FName: string;
     FLayout: string;
+    // Por instancia, no global: dos destinos no comparten estado, y hacerles esperar el uno por el
+    // otro cambiaria una corrupcion por un cuello de botella.
+    FLock: TCriticalSection;
   protected
     function RenderEvent(Entry: TLogEntry): string;
+    // Lo que implementa cada destino. La escritura publica ya no es virtual: el candado no es cosa
+    // de quien escribe un destino, porque el recurso compartido es el destino mismo -- una regla
+    // guarda sus destinos y todos los loggers despachan por ellos.
+    procedure DoWrite(const Entry: TLogEntry); virtual; abstract;
   public
     const DefaultLayout = '${timestamp} #${pid}:${thread} [${level}] ${category} | ${message} ${exception}';
     constructor Create;virtual;
-    procedure Write(const Entry: TLogEntry);virtual;abstract;
+    destructor Destroy; override;
+    procedure Write(const Entry: TLogEntry);
     property Layout: string read FLayout write FLayout;
     property Name: string read FName write FName;
   end;
@@ -44,6 +53,7 @@ type
     procedure SetName(const Value: string);
     function NameMatch(const Category: string): Boolean;
   public
+    constructor Create;
     function Matches(const Category: string; const Level: TLogLevel): Boolean;
     procedure Log(const LogEntry: TLogEntry);
     property Name: string read FName write SetName;
@@ -81,6 +91,20 @@ uses
   Daf.NNLog.Layout;
 
 { TLogRule }
+
+constructor TLogRule.Create;
+begin
+  inherited Create;
+  // Los mismos tres valores que el cargador escribe a mano antes de entregar la regla, y estan aqui
+  // porque son del TIPO. Sin constructor, una regla construida en codigo --y TLogRule es publico--
+  // nacia con el cero de TObject, que no es "desactivada por defecto": es una regla que ni siquiera
+  // puede contestar. Al no pasar por el setter de Name, FMatchAll se queda en False y el regex de
+  // categoria sin construir, asi que NameMatch deriva un TRegEx vacio y revienta.
+  Name := EmptyStr;
+  Enabled := True;
+  MinLevel := Low(TLogLevel);
+  MaxLevel := Pred(High(TLogLevel));
+end;
 
 procedure TLogRule.Log(const LogEntry: TLogEntry);
 begin
@@ -186,6 +210,32 @@ constructor TTarget.Create;
 begin
   inherited Create;
   FLayout := DefaultLayout;
+  FLock := TCriticalSection.Create;
+end;
+
+destructor TTarget.Destroy;
+begin
+  FLock.Free;
+  inherited;
+end;
+
+procedure TTarget.Write(const Entry: TLogEntry);
+begin
+  FLock.Enter;
+  try
+    try
+      DoWrite(Entry);
+    except
+      // Un logger que lanza convierte un problema de observabilidad en una caida, y se auto-envenena:
+      // el manejador de errores de quien registra tambien registra, asi que vuelve a fallar dentro
+      // del camino de error. El fallo no se pierde -- sale por el canal de arranque, que es el que
+      // existe para cuando el logging es justo lo que no funciona.
+      on E: Exception do
+        BootstrapLog.LoggerFor(ClassName).LogError(E, Format('el destino "%s" no pudo escribir', [Name]));
+    end;
+  finally
+    FLock.Leave;
+  end;
 end;
 
 function TTarget.RenderEvent(Entry: TLogEntry): string;

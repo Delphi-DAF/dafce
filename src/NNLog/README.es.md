@@ -63,6 +63,7 @@ vienen de un fichero.
 | `${thread}` | ID del hilo |
 | `${level}` | nombre del nivel: `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `CRIT` |
 | `${category}` | categoría del logger |
+| `${scope}` | los ámbitos abiertos alrededor de la entrada |
 | `${message}` | mensaje renderizado |
 | `${exception}` | clase + mensaje de la excepción, vacío si no hay |
 | `${env:NOMBRE}` | variable de entorno |
@@ -113,6 +114,11 @@ Qué niveles acepta una regla es la conjunción de `minLevel`, `maxLevel` y `lev
 `targetType` se resuelve por RTTI a `Daf.NNLog.Targets.<Tipo>.T<Tipo>Target`, que es también cómo se
 alcanza un target propio desde la configuración. Cualquier otra clave de la sección de un target se
 asigna al target como una propiedad escribible de ese nombre.
+
+Un target propio sobrescribe `DoWrite`, no `Write`: `TTarget.Write` toma un candado de esa instancia
+de destino y lo llama, así que las escrituras de varios hilos por un mismo destino nunca se solapan.
+La garantía es dentro de un proceso — dos procesos escribiendo en el mismo fichero de log no están
+cubiertos.
 
 El tipo tiene que sobrevivir al enlazado inteligente para que la búsqueda lo encuentre: `{$STRONGLINKTYPES ON}` en el
 `.dpr`, y cada unit de target que configure nombrada en su `uses`. Un `targetType` cuya unit no está
