@@ -31,6 +31,14 @@ type
     Second: IRecordingSink;
     Unavailable: IRecordingSink;
     Thrower: IThrowingSink;
+    /// Lo que cada escenario pregunta al canal, guardado entre el When y el Then.
+    LoggerAssigned: Boolean;
+    SinkCount: Integer;
+    /// Texto y no Boolean a proposito: un campo Boolean sin asignar vale False, asi que un
+    /// ToBeFalse pasaria igual si el When no llegara a correr -- el verde coincidiria con el
+    /// modo de fallo. Sin asignar, esto vale '' y no casa con nada.
+    ReportBefore: string;
+    ReportAfter: string;
     constructor Create;
     destructor Destroy; override;
     /// Los destinos por defecto, tal y como estaban antes de que este escenario tocara nada.
@@ -198,11 +206,20 @@ Feature Startup reports reach someone @logging @bootstrap
       end)
 
   .Scenario('The channel is there without building anything to use it')
+    // Nada que montar, y eso es justo lo que el escenario afirma: mide lo que hay ANTES de que
+    // se componga nada.
+    .Given('un proceso donde no se ha compuesto nada').NoAction
+    .When('se pide el logger de arranque y se cuentan los destinos',
+      procedure(W: TChannelWorld)
+      begin
+        W.LoggerAssigned := Assigned(BootstrapLog.LoggerFor('DAF'));
+        W.SinkCount := Length(W.DefaultSinks);
+      end)
     .&Then('the startup logger exists from the moment the process starts',
       procedure(W: TChannelWorld)
       begin
-        Expect(Assigned(BootstrapLog.LoggerFor('DAF'))).ToBeTrue;
-        Expect(Length(W.DefaultSinks)).ToBeGreaterThan(0);
+        Expect(W.LoggerAssigned).ToBeTrue;
+        Expect(W.SinkCount).ToBeGreaterThan(0);
       end)
 
 .Rule('A destination that fails takes down neither the startup nor the others')
@@ -346,18 +363,28 @@ Feature Startup reports reach someone @logging @bootstrap
       begin
         W.OnlySinks([W.Unavailable]);
       end)
+    .When('se le pregunta al canal, se anade un destino que si puede, y se le vuelve a preguntar',
+      procedure(W: TChannelWorld)
+      begin
+        W.ReportBefore := Format('has=%s count=%d',
+          [BoolToStr(BootstrapLog.HasAvailableSink, True),
+           Length(BootstrapLog.AvailableSinks)]);
+
+        BootstrapLog.AddSink(W.Recorder);
+
+        W.ReportAfter := Format('has=%s count=%d',
+          [BoolToStr(BootstrapLog.HasAvailableSink, True),
+           Length(BootstrapLog.AvailableSinks)]);
+      end)
     .&Then('the channel says so instead of looking like it reported',
       procedure(W: TChannelWorld)
       begin
-        Expect(BootstrapLog.HasAvailableSink).ToBeFalse;
-        Expect(Length(BootstrapLog.AvailableSinks)).ToEqual(0);
+        Expect(W.ReportBefore).ToEqual('has=False count=0');
       end)
     .&And('with one available destination it says so too',
       procedure(W: TChannelWorld)
       begin
-        BootstrapLog.AddSink(W.Recorder);
-        Expect(BootstrapLog.HasAvailableSink).ToBeTrue;
-        Expect(Length(BootstrapLog.AvailableSinks)).ToEqual(1);
+        Expect(W.ReportAfter).ToEqual('has=True count=1');
       end);
 
 end.

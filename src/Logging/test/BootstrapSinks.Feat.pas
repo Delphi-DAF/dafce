@@ -19,6 +19,15 @@ type
     Captured: string;
     PlatformSink: IBootstrapSink;
     PlatformAvailable: Boolean;
+    /// Lo que cada escenario pregunta, guardado entre el When que lo pregunta y el Then que lo
+    /// describe.
+    Found: Boolean;
+    MissingPath: string;
+    FileSink: IBootstrapSink;
+    /// Texto y no Boolean a proposito donde lo esperado es False: un campo sin asignar YA vale
+    /// False, asi que un ToBeFalse pasaria igual si el When no llegara a correr.
+    ChannelAvailable: string;
+    FileReport: string;
     constructor Create;
     destructor Destroy; override;
     function DefaultSinks: TArray<IBootstrapSink>;
@@ -145,13 +154,20 @@ Feature Startup destinations do not have to be guessed @logging @bootstrap @sink
       end)
 
   .Scenario('The debug output destination is kept')
+    // Nada que montar: lo que el escenario mide es el juego de destinos con el que arranco el
+    // proceso, que el World guardo antes de que ningun escenario tocara nada.
+    .Given('los destinos con los que arranco el proceso').NoAction
+    .When('se buscan entre ellos la salida de depuracion del sistema',
+      procedure(W: TSinksWorld)
+      begin
+        W.Found := False;
+        for var Sink in W.DefaultSinks do
+          W.Found := W.Found or ((Sink as TObject) is TDebugOutputBootstrapSink);
+      end)
     .&Then('the process starts with the system debug output among its destinations',
       procedure(W: TSinksWorld)
       begin
-        var Found := False;
-        for var Sink in W.DefaultSinks do
-          Found := Found or ((Sink as TObject) is TDebugOutputBootstrapSink);
-        Expect(Found).ToBeTrue;
+        Expect(W.Found).ToBeTrue;
       end)
 
   .Scenario('The platform is the one that answers whether a destination can write')
@@ -163,10 +179,15 @@ Feature Startup destinations do not have to be guessed @logging @bootstrap @sink
         W.PlatformAvailable := W.PlatformSink.IsAvailable;
         W.OnlySinks([W.PlatformSink]);
       end)
+    .When('se le pregunta al canal si tiene algun destino disponible',
+      procedure(W: TSinksWorld)
+      begin
+        W.ChannelAvailable := BoolToStr(BootstrapLog.HasAvailableSink, True);
+      end)
     .&Then('what the channel reports as available is what the platform answered',
       procedure(W: TSinksWorld)
       begin
-        Expect(BootstrapLog.HasAvailableSink).ToEqual(W.PlatformAvailable);
+        Expect(W.ChannelAvailable).ToEqual(BoolToStr(W.PlatformAvailable, True));
       end)
     .&And('where it has no service to answer, it does not take the report and lose it',
       procedure(W: TSinksWorld)
@@ -232,13 +253,23 @@ Feature Startup destinations do not have to be guessed @logging @bootstrap @sink
       end)
 
   .Scenario('A destination pointing nowhere declares itself unavailable')
+    .Given('un destino de fichero que apunta bajo una carpeta que no existe',
+      procedure(W: TSinksWorld)
+      begin
+        W.MissingPath := TPath.Combine(TPath.Combine(W.Folder, 'not-there'), 'startup.log');
+        W.FileSink := TFileBootstrapSink.Create(W.MissingPath);
+      end)
+    .When('se le pregunta si puede escribir',
+      procedure(W: TSinksWorld)
+      begin
+        W.FileReport := Format('available=%s folder=%s',
+          [BoolToStr(W.FileSink.IsAvailable, True),
+           BoolToStr(TDirectory.Exists(TPath.GetDirectoryName(W.MissingPath)), True)]);
+      end)
     .&Then('a file destination under a folder that does not exist says so, instead of creating it',
       procedure(W: TSinksWorld)
       begin
-        var Missing := TPath.Combine(TPath.Combine(W.Folder, 'not-there'), 'startup.log');
-        var FileSink: IBootstrapSink := TFileBootstrapSink.Create(Missing);
-        Expect(FileSink.IsAvailable).ToBeFalse;
-        Expect(TDirectory.Exists(TPath.GetDirectoryName(Missing))).ToBeFalse;
+        Expect(W.FileReport).ToEqual('available=False folder=False');
       end);
 
 end.
