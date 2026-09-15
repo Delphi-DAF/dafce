@@ -123,13 +123,26 @@ This is what the layer adds over the host, and what every console tool used to r
 | Member | What it decides | When |
 |---|---|---|
 | `SingleInstance(Id)` | Whether the process starts at all | **Before** the container is built |
-| `OnUnhandled(Policy)` | What happens to what escapes, and with which exit code | Around `Run` |
+| `OnUnhandled(Policy)` | What happens to what escapes, and with which exit code. Without it, `ExitPolicy.LogAndFail` | Around `Run` |
 | `OnExecute(Handler)` | The work, written in place | Inside `Run` |
 | `ICliHandler` registered in `Services` | The work, resolved from the container | Inside `Run` |
 | `RootCommand` | The grammar that owns `argv` | At `Build` |
 
 Declaring the work **both** ways raises `ECliCompositionError`. Two ways of saying the same thing is
 a precedence rule nobody remembers.
+
+### The policies that come as standard
+
+`OnUnhandled` takes any callback, and three are already written:
+
+| | What it does |
+|---|---|
+| `ExitPolicy.LogAndFail` | reports through the startup channel and returns `TCliExit.Failure`. **This is the one that applies when `OnUnhandled` is not called** |
+| `ExitPolicy.Rethrow` | lets the exception out of `Run`, for whoever called it. The host is stopped either way — the shutdown is in the `finally` |
+| `ExitPolicy.Silent` | returns `TCliExit.Failure` and says nothing |
+
+`ExitPolicy` is a `class` and its three members are `virtual`, so a suite of applications can derive
+from it to group its own.
 
 ### Exit codes
 
@@ -142,6 +155,18 @@ a precedence rule nobody remembers.
 
 `Run` returns an `Integer` and that is not decoration: a CLI application that cannot tell the system
 how it ended is not usable in a script.
+
+### When there is no container
+
+`Services` is the container, and it answers **between `Build` and `Run`**. It is `nil` in two cases:
+
+- The invocation was settled without building one: `--version`, `--help`, an invocation that does not
+  fit the grammar, or another instance already holding the single-instance id.
+- After `Run` has returned, always — `Stop` releases the host.
+
+So whatever a program needs from the container once the work has run, it keeps from inside the work:
+`OnExecute` receives the `IServiceProvider`, and an `ICliHandler` takes its dependencies by
+constructor.
 
 ---
 

@@ -124,13 +124,26 @@ Esto es lo que la capa añade sobre el host, y lo que cada herramienta de consol
 | Miembro | Qué decide | Cuándo |
 |---|---|---|
 | `SingleInstance(Id)` | Si el proceso llega a arrancar | **Antes** de construir el contenedor |
-| `OnUnhandled(Policy)` | Qué pasa con lo que se escapa, y con qué código de salida | Alrededor del `Run` |
+| `OnUnhandled(Policy)` | Qué pasa con lo que se escapa, y con qué código de salida. Sin ella, `ExitPolicy.LogAndFail` | Alrededor del `Run` |
 | `OnExecute(Handler)` | El trabajo, escrito en el sitio | Dentro del `Run` |
 | `ICliHandler` registrado en `Services` | El trabajo, resuelto del contenedor | Dentro del `Run` |
 | `RootCommand` | La gramática, dueña de `argv` | En el `Build` |
 
 Declarar el trabajo por las **dos** vías levanta `ECliCompositionError`. Dos formas de decir lo mismo
 son una regla de precedencia que nadie recuerda.
+
+### Las políticas que vienen de serie
+
+`OnUnhandled` acepta cualquier callback, y tres están ya escritas:
+
+| | Qué hace |
+|---|---|
+| `ExitPolicy.LogAndFail` | informa por el canal de arranque y devuelve `TCliExit.Failure`. **Es la que se aplica si no se llama a `OnUnhandled`** |
+| `ExitPolicy.Rethrow` | deja salir la excepción del `Run`, para quien lo llamó. El host se para igual — la parada está en el `finally` |
+| `ExitPolicy.Silent` | devuelve `TCliExit.Failure` y no dice nada |
+
+`ExitPolicy` es una `class` y sus tres miembros son `virtual`, así que una suite de aplicaciones
+puede derivar de ella para agrupar las suyas.
 
 ### Códigos de salida
 
@@ -143,6 +156,18 @@ son una regla de precedencia que nadie recuerda.
 
 `Run` devuelve un `Integer`, y no es adorno: una aplicación CLI que no puede decirle al sistema cómo
 terminó no sirve en un script.
+
+### Cuando no hay contenedor
+
+`Services` es el contenedor, y responde **entre el `Build` y el `Run`**. Vale `nil` en dos casos:
+
+- La invocación se resolvió sin construirlo: `--version`, `--help`, una invocación que no encaja con
+  la gramática, u otra instancia que ya sostiene el identificador de instancia única.
+- Después de que `Run` haya vuelto, siempre — `Stop` libera el host.
+
+Así que lo que un programa necesite del contenedor una vez corrido el trabajo lo sostiene desde
+dentro del trabajo: `OnExecute` recibe el `IServiceProvider`, y un `ICliHandler` toma sus
+dependencias por constructor.
 
 ---
 
