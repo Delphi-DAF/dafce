@@ -124,6 +124,10 @@ Logger.BeginScope('Processing order {OrderId}', [OrderId],
 
 Scopes are stack-based — nested scope data accumulates. On exit the scope is popped automatically.
 
+The scope text reaches the entry as `TLogEntry.Scope`, and a provider decides how to show it. With
+NNLog the token is `${scope}`: adding it to a target's layout puts the open scopes on every line
+written inside them.
+
 ---
 
 ## ILoggerFactory

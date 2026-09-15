@@ -66,6 +66,14 @@ end;
 
 procedure TCompositeLogger.Log(const Entry: TLogEntry);
 begin
+  // Este candado NO serializa el pipeline, y conviene saberlo antes de apoyarse en el: FLock se
+  // construye en CreateLogger, asi que cada logger tiene el suyo. Dos hilos que piden su logger
+  // tienen dos candados distintos y los mismos destinos detras. Solo protege a dos hilos que
+  // compartan ESTA instancia.
+  // Lo que serializa de verdad es el destino, que es donde esta el estado compartido: TTarget.Write
+  // toma un candado por instancia de destino. Aqui se queda porque un proveedor de terceros --uno
+  // que no sea NNLog-- no tiene por que tenerlo, y quitarlo le retiraria la unica garantia que hoy
+  // recibe. Subirlo a un candado unico serializaria destinos que no comparten nada.
   TMonitor.Enter(FLock);
   try
     try

@@ -124,6 +124,10 @@ Logger.BeginScope('Procesando pedido {OrderId}', [OrderId],
 
 Los scopes están basados en pila — los datos de scopes anidados se acumulan. Al salir, el scope se extrae automáticamente.
 
+El texto del scope llega a la entrada como `TLogEntry.Scope`, y cada proveedor decide cómo
+enseñarlo. En NNLog el token es `${scope}`: añadirlo al layout de un destino pone los scopes
+abiertos en cada línea escrita dentro de ellos.
+
 ---
 
 ## ILoggerFactory
