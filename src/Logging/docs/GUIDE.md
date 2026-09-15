@@ -42,24 +42,24 @@ A single `ILogger` delegates every write to **all registered providers**. Each p
 ## ILogger API
 
 ```pascal
-ILogger = interface
+ILogger = interface(IInvokable)
   // Core write
-  procedure Log(Level: TLogLevel; const Msg: string; const Args: array of const); overload;
-  procedure Log(Level: TLogLevel; E: Exception; const Msg: string; const Args: array of const); overload;
+  procedure Log(const Level: TLogLevel; const Msg: string; const Args: TArray<TValue> = nil); overload;
+  procedure Log(const Level: TLogLevel; const Ex: Exception; const Msg: string; const Args: TArray<TValue> = nil); overload;
 
   // Convenience wrappers
-  procedure LogTrace      (const Msg: string; const Args: array of const); overload;
-  procedure LogDebug      (const Msg: string; const Args: array of const); overload;
-  procedure LogInformation(const Msg: string; const Args: array of const); overload;
-  procedure LogWarning    (const Msg: string; const Args: array of const); overload;
-  procedure LogError      (const Msg: string; const Args: array of const); overload;
-  procedure LogError      (E: Exception; const Msg: string; const Args: array of const); overload;
-  procedure LogCritical   (const Msg: string; const Args: array of const); overload;
-  procedure LogCritical   (E: Exception; const Msg: string; const Args: array of const); overload;
+  procedure LogTrace      (const Msg: string; const Args: TArray<TValue> = nil); overload;
+  procedure LogDebug      (const Msg: string; const Args: TArray<TValue> = nil); overload;
+  procedure LogInformation(const Msg: string; const Args: TArray<TValue> = nil); overload;
+  procedure LogWarning    (const Msg: string; const Args: TArray<TValue> = nil); overload;
+  procedure LogError      (const Msg: string; const Args: TArray<TValue> = nil); overload;
+  procedure LogError      (const Ex: Exception; const Msg: string = ''; const Args: TArray<TValue> = nil); overload;
+  procedure LogCritical   (const Msg: string; const Args: TArray<TValue> = nil); overload;
+  procedure LogCritical   (const Ex: Exception; const Msg: string; const Args: TArray<TValue> = nil); overload;
 
   // Scopes
-  function BeginScope(const Msg: string; const Args: array of const;
-                      ScopedProc: TProc): ILogScopeVoid; overload;
+  function BeginScope(const Msg: string; const Args: TArray<TValue>;
+                      const ScopedProc: TProc = nil): ILogScopeVoid; overload;
 end;
 ```
 
@@ -98,9 +98,11 @@ Internally, `TLogState` holds the template string and the argument array. Provid
 
 ```pascal
 TLogState = record
-  Template: string;          // '{UserId} logged in from {IP}'
-  Args: TArray<TVarRec>;     // positional values
-  function Format: string;   // renders the final string
+  property Template: string;                             // '{UserId} logged in from {IP}'
+  property Arguments: TArray<TValue>;                    // in the order they were passed
+  property KeyValuePairs: TArray<TPair<string, TValue>>; // ('UserId', ...), ('IP', ...)
+  property Formatter: TLogFormatter;                     // what renders the final line
+  function TryGetValue(const Key: string; out Value: TValue): Boolean;
 end;
 ```
 
@@ -127,19 +129,21 @@ Scopes are stack-based — nested scope data accumulates. On exit the scope is p
 ## ILoggerFactory
 
 ```pascal
-ILoggerFactory = interface
-  function  CreateLogger(const Category: string): ILogger; overload;
-  function  CreateLogger(AClass: TClass): ILogger; overload;
-  function  CreateLogger(TypeInfo: PTypeInfo): ILogger; overload;
-  procedure AddProvider(Provider: ILoggerProvider);
+ILoggerFactory = interface(IInvokable)
+  function CreateLogger(const Category: string): ILogger; overload;
+  function CreateLogger(const AClass: TClass): ILogger; overload;
+  function CreateLogger(const AType: PTypeInfo): ILogger; overload;
 end;
 ```
 
 ### Generic helper
 
+On the **concrete** factory, not on the contract: a Delphi interface cannot declare a parameterized
+method. Through `ILoggerFactory` the same result is `CreateLogger(TMyService)`.
+
 ```pascal
-// Returns a logger categorised by class name
-var Logger := Factory.CreateLogger<TMyService>;
+var Factory := TMultiProviderLoggerFactory.Create;
+var Logger  := Factory.CreateLogger<TMyService>;
 ```
 
 ### Direct instantiation (no DI)
@@ -268,8 +272,8 @@ end;
 ```pascal
 type
   TMyLogger = class(TInterfacedObject, ILogger)
-    procedure Log(Level: TLogLevel; const Msg: string;
-                  const Args: array of const); overload;
+    procedure Log(const Level: TLogLevel; const Msg: string;
+                  const Args: TArray<TValue> = nil); overload;
     // … other overloads delegate to this one
   end;
 ```
@@ -289,12 +293,14 @@ Factory.AddProvider(TMyProvider.Create);
 TLogEntry = record
   Level     : TLogLevel;
   Category  : string;
-  EventId   : Integer;
+  EventId   : TEventId;
   Exception : Exception;      // nil when no exception
   Scope     : string;         // rendered scope chain
-  State     : TLogState;      // template + args
-  Message   : string;         // pre-rendered string
+  State     : TLogState;      // template + values
+  Formatter : TLogFormatter;  // what turns State into the line
 end;
 ```
 
-All fields are populated before `Write(Entry)` is called on a `TTarget`.
+Every field is populated before `Write(Entry)` is called on a `TTarget`. `Message` is not among them:
+it is a read-only property, and the first read runs `Formatter` over `State`, appends `Scope` and
+keeps the result — so a target that renders its own layout out of `State` never pays for it.
