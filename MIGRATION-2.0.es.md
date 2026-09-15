@@ -436,6 +436,12 @@ hermanos, en vez de deducirse de las cláusulas presentes.
   compatibles. Compila, y recibe otra instancia que antes — el ganador anterior dependía del orden
   del hash, así que nunca fue una decisión. Nombra el tipo exacto que quieres, o deja uno de los dos.
 
+### 16. `csoReloadOnChange` desaparece
+
+`TConfigurationSourceOption` se queda con `csoOptional`. El valor retirado no lo leía ningún proveedor, así que no cambia nada de lo que una fuente hacía.
+
+- **Qué rompe**: nombrarlo. Quítalo del conjunto — `[csoOptional, csoReloadOnChange]` pasa a `[csoOptional]`, y un conjunto que solo lo llevaba pasa a `[]`.
+
 ## Cómo hacerlo
 
 1. Compila. Lo que falte sale como error del compilador, no como comportamiento raro en

@@ -58,7 +58,7 @@ type
     function Build(const Builder: IConfigurationBuilder): IConfigurationProvider;
   end;
 
-  TConfigurationSourceOption = (csoOptional, csoReloadOnChange);
+  TConfigurationSourceOption = (csoOptional);
   TConfigurationSourceOptions = set of TConfigurationSourceOption;
 
 

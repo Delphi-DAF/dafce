@@ -433,6 +433,12 @@ their siblings, instead of being deduced from the clauses present.
   compiles, and it gets a different instance than before — the old winner depended on hash order,
   so it was never a decision. Name the exact type you want, or keep one of the two.
 
+### 16. `csoReloadOnChange` is gone
+
+`TConfigurationSourceOption` is left with `csoOptional`. The withdrawn value was never read by any provider, so nothing that a source did changes.
+
+- **What breaks**: naming it. Drop it from the set — `[csoOptional, csoReloadOnChange]` becomes `[csoOptional]`, and a set that only carried it becomes `[]`.
+
 ## How to do it
 
 1. Compile. Whatever is missing comes out as a compiler error, not as odd behaviour at run time.

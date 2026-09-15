@@ -69,13 +69,13 @@ TConfigurationPath.GetParentPath('Database:Host') // 'Database'
 
 ```pascal
 type
-  TConfigurationSourceOption  = (csoOptional, csoReloadOnChange);
+  TConfigurationSourceOption  = (csoOptional);
   TConfigurationSourceOptions = set of TConfigurationSourceOption;
 ```
 
 Lo que recibe una fuente es el **conjunto**, y `csoOptional` es el valor que cambia lo que pasa: sin
 él, un fichero que no está aborta la carga con `File "<nombre>" not Found`; con él, la fuente avisa y
-no aporta nada. Ningún proveedor lee `csoReloadOnChange`.
+no aporta nada.
 
 ### `ConfigurationKeyName`
 

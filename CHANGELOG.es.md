@@ -103,6 +103,7 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 - ⚠️ **Hosting**: `IHostBuilder`, y con él el estilo diferido: los callbacks `ConfigureServices`, `ConfigureAppConfiguration` y `ConfigureHostConfiguration`, más `TConfigureServicesAction`. Queda un solo estilo, el inmediato; el punto de entrada es `THost.CreateBuilder` o la variante de la familia
 - ⚠️ **DependencyInjection**: `AddModules(Package)`, el descubrimiento por RTTI de los `IAppModule`. El sustituto es `AddModule<T>`, una llamada por módulo y en el orden que la aplicación quiera; `IAppModule` y `TAppModule` no cambian
 - **Logging**: La global `DAFInternalLogger`, sustituida por `BootstrapLog.LoggerFor(<categoría>)`
+- ⚠️ **Configuration**: `csoReloadOnChange`, un valor de `TConfigurationSourceOption` que ningún proveedor leyó nunca. `csoOptional` no cambia
 - **Hosting**: Restos del estilo fluido y del andamiaje del builder
   - `THostBuilder.AddHostedService<T>` — la vía es `Builder.Services.AddHostedService<T>`; la fachada `Hosting.AddHostedService(Services, TClass)` **se queda**
   - `UseProperty` — `Properties`, en `IHostApplicationBuilder`, hace lo mismo
