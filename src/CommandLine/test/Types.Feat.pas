@@ -34,6 +34,10 @@ type
     FilesOpt: IOption<TArray<string>>;
 
     Parsed: ICommandLineParseResult;
+    Report: string;
+    ReadArityMin: Integer;
+    ReadArityMax: Integer;
+    ReadAllowsMany: Boolean;
     ReadVersion: TSemVer;
     ReadSince: TDateTime;
     ReadId: TGUID;
@@ -302,19 +306,29 @@ Feature Command line types @commandline @types
 .Rule('a type with neither support nor a conversion is refused where it is declared')
 
   .Scenario('A type of the application, declared with no conversion')
+    // Nothing to build and nothing to assert: TSemVer is a compiled type, and whether the
+    // engine knows it cannot be asked before a symbol is declared with it.
     .Given('a type the engine does not know').NoAction
-    .When('an option is declared with it and no conversion for it').NoAction
-    .&Then('the declaration itself is refused, naming the symbol and the type',
+    .When('an option is declared with it and no conversion for it',
       procedure(W: TTypesWorld)
       begin
         // The limit moved -- the engine covers more types now -- but it did not
         // disappear, and this is where it is: the check stays at declaration, which is
         // the only place it is worth anything.
-        ExpectException(
-          procedure
-          begin
-            CommandLine.Option<TSemVer>('--min', 'Lowest version accepted');
-          end).ToBe<ECommandLine>;
+        try
+          CommandLine.Option<TSemVer>('--min', 'Lowest version accepted');
+          W.Report := '<the declaration was accepted>';
+        except
+          on E: Exception do
+            W.Report := E.ClassName + ': ' + E.Message;
+        end;
+      end)
+    .&Then('the declaration itself is refused, naming the symbol and the type',
+      procedure(W: TTypesWorld)
+      begin
+        Expect(W.Report).ToStartWith('ECommandLine: ');
+        Expect(W.Report).ToContain('--min');
+        Expect(W.Report).ToContain('TSemVer');
       end)
 
 .Rule('a collection is a declared type, and its arity comes from it')
@@ -325,13 +339,19 @@ Feature Command line types @commandline @types
       begin
         W.BuildCollection;
       end)
-    .When('its arity is inspected').NoAction
+    .When('its arity is inspected',
+      procedure(W: TTypesWorld)
+      begin
+        W.ReadArityMin := W.FilesOpt.Arity.Min;
+        W.ReadArityMax := W.FilesOpt.Arity.Max;
+        W.ReadAllowsMany := W.FilesOpt.Arity.AllowsMany;
+      end)
     .&Then('it admits any number of values, as in .NET',
       procedure(W: TTypesWorld)
       begin
-        Expect(W.FilesOpt.Arity.Min).ToEqual(0);
-        Expect(W.FilesOpt.Arity.Max).ToEqual(TArity.Unbounded);
-        Expect(W.FilesOpt.Arity.AllowsMany).ToBeTrue;
+        Expect(W.ReadArityMin).ToEqual(0);
+        Expect(W.ReadArityMax).ToEqual(TArity.Unbounded);
+        Expect(W.ReadAllowsMany).ToBeTrue;
       end)
 
   .Scenario('A collection reads every value it was given')

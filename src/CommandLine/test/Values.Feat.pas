@@ -44,6 +44,10 @@ type
     VerboseOpt: IOption<Boolean>;
 
     Parsed: ICommandLineParseResult;
+    ReadPortMin: Integer;
+    ReadPortMax: Integer;
+    ReadFlagMin: Integer;
+    ReadFlagMax: Integer;
     ReadPort: Integer;
     ReadFiles: TArray<string>;
     ReadFlag: Boolean;
@@ -250,14 +254,21 @@ Feature Command line values @commandline @values
       begin
         W.BuildArity;
       end)
-    .When('each arity is inspected').NoAction
+    .When('each arity is inspected',
+      procedure(W: TValuesWorld)
+      begin
+        W.ReadPortMin := W.PortOpt.Arity.Min;
+        W.ReadPortMax := W.PortOpt.Arity.Max;
+        W.ReadFlagMin := W.FlagOpt.Arity.Min;
+        W.ReadFlagMax := W.FlagOpt.Arity.Max;
+      end)
     .&Then('the integer demands exactly one value and the boolean admits none or one',
       procedure(W: TValuesWorld)
       begin
-        Expect(W.PortOpt.Arity.Min).ToEqual(1);
-        Expect(W.PortOpt.Arity.Max).ToEqual(1);
-        Expect(W.FlagOpt.Arity.Min).ToEqual(0);
-        Expect(W.FlagOpt.Arity.Max).ToEqual(1);
+        Expect(W.ReadPortMin).ToEqual(1);
+        Expect(W.ReadPortMax).ToEqual(1);
+        Expect(W.ReadFlagMin).ToEqual(0);
+        Expect(W.ReadFlagMax).ToEqual(1);
       end)
 
 .Rule('a required symbol that does not come makes the parse fail')
