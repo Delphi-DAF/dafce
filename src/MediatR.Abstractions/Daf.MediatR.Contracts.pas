@@ -183,7 +183,7 @@ type
   end;
 
   [MediatorAbstract]
-  TNotificacionHandler<TNotification: class, INotification> = class abstract(TBaseHandler, INotificationHandler<TNotification>)
+  TNotificationHandler<TNotification: class, INotification> = class abstract(TBaseHandler, INotificationHandler<TNotification>)
   strict private
     FMediator: IMediator;
     FNotification: TNotification;
@@ -194,6 +194,10 @@ type
     procedure Handle(Notification: TNotification); virtual;
     property Notification: TNotification read FRequest;
   end;
+
+  [MediatorAbstract]
+  TNotificacionHandler<TNotification: class, INotification> = class abstract(TNotificationHandler<TNotification>)
+  end deprecated 'Use TNotificationHandler';
 
   [MediatorAbstract]
   TRequest<TResponse> = class abstract(TInterfacedObject, IRequest<TResponse>)
@@ -293,15 +297,15 @@ begin
   Result := Default (TResponse);
 end;
 
-{ TNotificacionHandler<TNotification> }
+{ TNotificationHandler<TNotification> }
 
-constructor TNotificacionHandler<TNotification>.Create(const Mediator: IMediatorImpl);
+constructor TNotificationHandler<TNotification>.Create(const Mediator: IMediatorImpl);
 begin
   inherited Create;
   FMediator := Mediator;
 end;
 
-procedure TNotificacionHandler<TNotification>.Handle(Notification: TNotification);
+procedure TNotificationHandler<TNotification>.Handle(Notification: TNotification);
 begin
   FNotification := Notification;
 end;

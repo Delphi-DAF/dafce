@@ -85,8 +85,11 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 - **Logging**: Un destino del canal de arranque que no puede escribir **se declara no disponible** en lugar de aceptar el informe y perderlo, y uno que lanza queda fuera sin tumbar el arranque. `BootstrapLog.HasAvailableSink` lo distingue
 - **Samples**: Cada sample se archiva bajo el módulo que declara lo que usa: `ConsoleSample` a `src/Cli/samples/`, `TicTacToeApp` a `src/VCL/samples/`, y `HostedService` a `src/samples/`
 
+- **MediatR**: La clase base de un handler de notificación es `TNotificationHandler<T>`. La grafía anterior, `TNotificacionHandler<T>`, sigue compilando
+
 ### Deprecated
 
+- **MediatR**: `TNotificacionHandler<T>`, en favor de `TNotificationHandler<T>`. Es una subclase suya, así que lo que ya hereda de ella sigue funcionando, y se va en el próximo major
 - **SQLCute**: La `RegisterIQueryFactory` suelta, en favor de `TQuery.RegisterFactory`. Reenvía, así que las dos son indistinguibles, y se va en el próximo major
 
 ### Removed

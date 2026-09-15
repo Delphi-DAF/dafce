@@ -25,7 +25,7 @@
 |----------|-----------|------------------|--------------------|
 | `IRequest` | `TRequest` | `IRequestHandler<T>` | `TRequestHandler<T>` |
 | `IRequest<TResponse>` | `TRequest<TResponse>` | `IRequestHandler<TRes,TReq>` | `TResponseHandler<TRes,TReq>` |
-| `INotification` | `TNotification` | `INotificationHandler<T>` | `TNotificacionHandler<T>` |
+| `INotification` | `TNotification` | `INotificationHandler<T>` | `TNotificationHandler<T>` |
 
 ---
 
@@ -108,7 +108,7 @@ mediador.
 
 ```pascal
 type
-  TEmailOnUserDeleted = class(TNotificacionHandler<TUserDeletedEvent>)
+  TEmailOnUserDeleted = class(TNotificationHandler<TUserDeletedEvent>)
     procedure Handle(Notification: TUserDeletedEvent); override;
   end;
 
@@ -380,7 +380,7 @@ Los behaviors se ejecutan en orden de registro — el primero registrado es el m
 |------------|--------------|---------------------|
 | `TRequestHandler<TReq>` | `procedure Handle(Request: TReq)` | No |
 | `TResponseHandler<TRes, TReq>` | `procedure Handle(Request: TReq; out Result: TRes)` | No |
-| `TNotificacionHandler<TNot>` | `procedure Handle(Notification: TNot)` | No |
+| `TNotificationHandler<TNot>` | `procedure Handle(Notification: TNot)` | No |
 | `TRequest` | — | Hereda `IRequest` |
 | `TRequest<TResponse>` | — | Hereda `IRequest<TResponse>` |
 | `TNotification` | — | Hereda `INotification` |

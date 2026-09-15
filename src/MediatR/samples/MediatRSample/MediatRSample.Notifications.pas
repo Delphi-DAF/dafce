@@ -13,7 +13,7 @@ uses
   MediatRSample.Requests;
 
 type
-  TCustomerAddedAuditHandler = class(TNotificacionHandler<TCustomerAddedEvent>)
+  TCustomerAddedAuditHandler = class(TNotificationHandler<TCustomerAddedEvent>)
   private
     FLog: IAppLog;
   public
@@ -21,7 +21,7 @@ type
     procedure Handle(Notification: TCustomerAddedEvent); override;
   end;
 
-  TCustomerRemovedAuditHandler = class(TNotificacionHandler<TCustomerRemovedEvent>)
+  TCustomerRemovedAuditHandler = class(TNotificationHandler<TCustomerRemovedEvent>)
   private
     FLog: IAppLog;
   public

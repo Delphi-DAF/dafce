@@ -98,7 +98,7 @@ end;
 | `TNotification` | Hereda para definir un evento |
 | `TRequestHandler<TReq>` | Hereda para manejar un comando — sobreescribe `Handle` |
 | `TResponseHandler<TRes,TReq>` | Hereda para manejar una consulta — sobreescribe `Handle` |
-| `TNotificacionHandler<TNot>` | Hereda para manejar un evento — sobreescribe `Handle` |
+| `TNotificationHandler<TNot>` | Hereda para manejar un evento — sobreescribe `Handle` |
 
 ---
 

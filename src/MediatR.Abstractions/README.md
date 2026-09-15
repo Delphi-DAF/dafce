@@ -98,7 +98,7 @@ end;
 | `TNotification` | Inherit to define an event |
 | `TRequestHandler<TReq>` | Inherit to handle a command — override `Handle` |
 | `TResponseHandler<TRes,TReq>` | Inherit to handle a query — override `Handle` |
-| `TNotificacionHandler<TNot>` | Inherit to handle an event — override `Handle` |
+| `TNotificationHandler<TNot>` | Inherit to handle an event — override `Handle` |
 
 ---
 

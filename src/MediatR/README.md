@@ -62,7 +62,7 @@ var DTO := Mediator.Send<TOrderDTO, TGetOrderQuery>(Query);
 ```pascal
 type
   TOrderCreatedEvent    = class(TNotification);
-  TEmailNotifyHandler   = class(TNotificacionHandler<TOrderCreatedEvent>)
+  TEmailNotifyHandler   = class(TNotificationHandler<TOrderCreatedEvent>)
     procedure Handle(Notification: TOrderCreatedEvent); override;
   end;
 

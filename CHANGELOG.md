@@ -86,8 +86,11 @@ The changes that break compilation are collected, with their example diff, in `M
 - **Logging**: A bootstrap-channel sink that cannot write **declares itself unavailable** instead of accepting the report and losing it, and one that raises is left out without taking startup down. `BootstrapLog.HasAvailableSink` tells them apart
 - **Samples**: Every sample is filed under the module that declares what it uses: `ConsoleSample` to `src/Cli/samples/`, `TicTacToeApp` to `src/VCL/samples/`, and `HostedService` to `src/samples/`
 
+- **MediatR**: The base class for a notification handler is `TNotificationHandler<T>`. The previous spelling, `TNotificacionHandler<T>`, still compiles
+
 ### Deprecated
 
+- **MediatR**: `TNotificacionHandler<T>`, in favour of `TNotificationHandler<T>`. It is a subclass of it, so what already inherits from it keeps working, and it goes in the next major
 - **SQLCute**: The free `RegisterIQueryFactory`, in favour of `TQuery.RegisterFactory`. It forwards, so the two are indistinguishable, and it goes in the next major
 
 ### Removed
