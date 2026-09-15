@@ -109,7 +109,9 @@ return {
     ["en/modules/cli.qmd"] = {
       ["../../legal/LICENSE.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/legal/LICENSE.md",
       ["README.es.md"] = "/es/modules/cli.qmd",
+      ["samples/ConsoleSample/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/Cli/samples/ConsoleSample",
       ["samples/GreetTool/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/Cli/samples/GreetTool",
+      ["samples/PackageInit/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/Cli/samples/PackageInit",
       ["samples/QuickStart/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/Cli/samples/QuickStart",
       ["samples/ServiceWiring/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/Cli/samples/ServiceWiring",
     },
@@ -464,7 +466,9 @@ return {
     ["es/modules/cli.qmd"] = {
       ["../../legal/LICENSE.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/legal/LICENSE.md",
       ["README.md"] = "/en/modules/cli.qmd",
+      ["samples/ConsoleSample/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/Cli/samples/ConsoleSample",
       ["samples/GreetTool/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/Cli/samples/GreetTool",
+      ["samples/PackageInit/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/Cli/samples/PackageInit",
       ["samples/QuickStart/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/Cli/samples/QuickStart",
       ["samples/ServiceWiring/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/Cli/samples/ServiceWiring",
     },

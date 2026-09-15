@@ -77,18 +77,21 @@ begin
 end.
 ```
 
-`--version`, `--help` and a mistyped option are already handled: the **grammar** answers them, and
-`Run` turns each outcome into an exit code. None of those four lines is written in the `.dpr`.
+`--version`, `--help`, a mistyped option and whatever escapes the work are already covered: the
+**grammar** answers the first three, the declared policy takes the last, and `Run` turns each
+outcome into an exit code. None of those four lines is written in the `.dpr`.
 
 ---
 
-## The three samples
+## The samples
 
 | Sample | What it uses |
 |---|---|
 | [`QuickStart`](samples/QuickStart/) | the builder, the work, the exit code — nothing else |
 | [`ServiceWiring`](samples/ServiceWiring/) | the same, plus a service registered and resolved |
 | [`GreetTool`](samples/GreetTool/) | the grammar, `--help`, exit codes by policy — the block above |
+| [`ConsoleSample`](samples/ConsoleSample/) | the immediate style: the environment composes the settings path before anything is built, and `IOptions<T>` reaches a service by constructor |
+| [`PackageInit`](samples/PackageInit/) | a package that registers its own `IStartupTask`, so the composition root names neither the task nor what it does |
 
 ---
 
@@ -171,16 +174,15 @@ with there.
 | `IHostApplicationBuilder.Metrics` | **Not ported** | There is no equivalent piece in DAF to point at |
 | `ConfigureContainer<T>` | **Not ported** | A generic method is not expressible in a Delphi interface — not rejected, unrepresentable |
 | Handler dispatch inside `System.CommandLine` | `OnExecute` / `ICliHandler` | `Daf.CommandLine` parses and does not dispatch, on purpose: the outcome of an invocation is data |
-| No app-global | Same | In console there is no `Application` global the user expects, so adding one would be a service locator with nothing to justify it |
+| No app-global | Same | In console there is no `Application` global the user expects: the work receives the `IServiceProvider` it needs, and a registered `ICliHandler` takes its dependencies by constructor |
 
 The last row is the one that separates this variant from the desktop ones: **VCL and FMX do offer a
-global**, because their platform already has one and denying it forces a worse mechanism.
+global**, because their platform already has one.
 
 ---
 
 ## Package dependencies
 
-`Daf.Cli` requires `Daf.Hosting` and `Daf.CommandLine`. The parser is **not optional** here: an
-application that did not opt in would be left without `--version`, and covering that inside `Daf.Cli`
-anyway would mean implementing it twice. The cost is that every CLI application of the family links
+`Daf.Cli` requires `Daf.Hosting` and `Daf.CommandLine`. The parser is **not optional** here:
+`--version` and `--help` are answered by the grammar, so every CLI application of the family links
 the parser — the same price .NET pays.

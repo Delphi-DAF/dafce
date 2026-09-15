@@ -23,6 +23,6 @@ Dos detalles del mismo ejemplo:
   hacer falta.
 
 ```
-BDS make --project:src/Hosting/samples/PackageInit/PackageInit.dproj
+BDS make --project:src/Cli/samples/PackageInit/PackageInit.dproj
 out\Win32\samples\bin\PackageInit.exe
 ```
