@@ -27,6 +27,8 @@ type
     SecondSql: string;
     Bindings: Integer;
     SecondBindings: Integer;
+    /// What the modifier answered when there was no column for it to qualify.
+    Outcome: string;
     constructor Create;
   end;
 
@@ -148,25 +150,49 @@ TQuery — ORDER BY NULL ordering @unit @sqlcute
       end)
 
   .Scenario('A modifier with no column to qualify fails fast')
+    .Given('a query with no ordered column at all',
+      procedure(W: TOrderByNullsWorld)
+      begin
+        W.Query := TQuery.New.From('people');
+      end)
+    .When('NullsLast is applied to it',
+      procedure(W: TOrderByNullsWorld)
+      begin
+        try
+          W.Query.NullsLast;
+          W.Outcome := '<the modifier was accepted>';
+        except
+          on E: Exception do
+            W.Outcome := E.ClassName + ': ' + E.Message;
+        end;
+      end)
     .&Then('NullsLast on a query with no ordered column raises',
       procedure(W: TOrderByNullsWorld)
       begin
-        ExpectException(
-          procedure
-          begin
-            TQuery.New.From('people').NullsLast;
-          end).ToBe(EInvalidOpException);
+        Expect(W.Outcome).ToStartWith('EInvalidOpException');
       end)
 
   .Scenario('A raw ORDER BY is not a column a modifier can qualify')
+    .Given('a query whose only ordering is a raw ORDER BY',
+      procedure(W: TOrderByNullsWorld)
+      begin
+        W.Query := TQuery.New.From('people').OrderByRaw('FIELD(status, ''a'', ''b'')');
+      end)
+    .When('NullsFirst is applied to it',
+      procedure(W: TOrderByNullsWorld)
+      begin
+        try
+          W.Query.NullsFirst;
+          W.Outcome := '<the modifier was accepted>';
+        except
+          on E: Exception do
+            W.Outcome := E.ClassName + ': ' + E.Message;
+        end;
+      end)
     .&Then('NullsFirst after only an OrderByRaw raises',
       procedure(W: TOrderByNullsWorld)
       begin
-        ExpectException(
-          procedure
-          begin
-            TQuery.New.From('people').OrderByRaw('FIELD(status, ''a'', ''b'')').NullsFirst;
-          end).ToBe(EInvalidOpException);
+        Expect(W.Outcome).ToStartWith('EInvalidOpException');
       end)
 
 // -------------------------------------------------------------------------
