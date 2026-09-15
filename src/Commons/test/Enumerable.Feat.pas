@@ -18,8 +18,11 @@ type
     Seq: IEnumerable<Integer>;
     Collected: TArray<Integer>;
     SecondCount: Integer;
+    FirstPassCalls: Integer;
     Records: TArray<TKV>;
     Nullables: TArray<TNullable<Integer>>;
+    Enumerator: IEnumerator<Integer>;
+    Report: string;
   end;
 
 implementation
@@ -44,7 +47,7 @@ Feature Enumerable @enumerable @commons
 .Rule('Deferred, re-iterable generation')
 
   .Scenario('A deferred enumerable does not run until iterated')
-    .Given('a deferred enumerable over a lazy 1..3 generator',
+    .Given('a deferred enumerable over a lazy 1..3 generator whose factory has not run yet',
       procedure(W: TEnumerableWorld)
       begin
         W.FactoryCalls := 0;
@@ -66,19 +69,26 @@ Feature Enumerable @enumerable @commons
                 end;
               end);
           end);
-      end)
-    .&Then('the factory has not run yet',
-      procedure(W: TEnumerableWorld)
-      begin
+        // Building the sequence is not iterating it: this is the half of the claim that says
+        // the factory does NOT run, and it belongs where the state is set up.
         Expect(W.FactoryCalls).ToEqual(0);
       end)
-    .&And('iterating yields 1,2,3 and runs the factory exactly once',
+    .When('it is iterated twice',
       procedure(W: TEnumerableWorld)
       begin
         W.Collected := nil;
         for var X in W.Seq do
           W.Collected := W.Collected + [X];
-        Expect(W.FactoryCalls).ToEqual(1);
+        W.FirstPassCalls := W.FactoryCalls;
+
+        W.SecondCount := 0;
+        for var X in W.Seq do
+          Inc(W.SecondCount);
+      end)
+    .&Then('iterating yields 1,2,3 and runs the factory exactly once',
+      procedure(W: TEnumerableWorld)
+      begin
+        Expect(W.FirstPassCalls).ToEqual(1);
         Expect(Length(W.Collected)).ToEqual(3);
         Expect(W.Collected[0]).ToEqual(1);
         Expect(W.Collected[1]).ToEqual(2);
@@ -87,9 +97,6 @@ Feature Enumerable @enumerable @commons
     .&And('iterating a second time re-runs the factory and yields the same values',
       procedure(W: TEnumerableWorld)
       begin
-        W.SecondCount := 0;
-        for var X in W.Seq do
-          Inc(W.SecondCount);
         Expect(W.FactoryCalls).ToEqual(2);
         Expect(W.SecondCount).ToEqual(3);
       end)
@@ -177,21 +184,30 @@ Feature Enumerable @enumerable @commons
       end)
 
   .Scenario('Reset is unsupported on lazy enumerators')
+    .Given('a lazy enumerator over an empty generator',
+      procedure(W: TEnumerableWorld)
+      begin
+        W.Enumerator := TGeneratorEnumerator<Integer>.Create(
+          function(var C: Integer): Boolean
+          begin
+            Result := False;
+          end);
+      end)
+    .When('Reset is called on it',
+      procedure(W: TEnumerableWorld)
+      begin
+        try
+          W.Enumerator.Reset;
+          W.Report := '<Reset was accepted>';
+        except
+          on E: Exception do
+            W.Report := E.ClassName;
+        end;
+      end)
     .&Then('calling Reset raises ENotImplemented',
       procedure(W: TEnumerableWorld)
       begin
-        ExpectException(
-          procedure
-          var
-            E: IEnumerator<Integer>;
-          begin
-            E := TGeneratorEnumerator<Integer>.Create(
-              function(var C: Integer): Boolean
-              begin
-                Result := False;
-              end);
-            E.Reset;
-          end).ToBe(ENotImplemented);
+        Expect(W.Report).ToEqual('ENotImplemented');
       end);
 
 end.

@@ -12,11 +12,14 @@ type
     IntZero: TNullable<Integer>;
     Materialized: TNullable<Integer>;
     RoundTrip: Integer;
+    Report: string;
+    Fallback: Integer;
   end;
 
 implementation
 
 uses
+  System.SysUtils,
   Daf.MiniSpec;
 
 initialization
@@ -40,27 +43,36 @@ Feature Nullable @nullable @commons
         W.IntNull := TNullable<Integer>.Null;
         W.IntZero := 0;
       end)
-    .&Then('the null one reports IsNull True and HasValue False',
+    .When('each one is asked about its presence',
       procedure(W: TNullableWorld)
       begin
-        Expect(W.IntNull.IsNull).ToBeTrue;
-        Expect(W.IntNull.HasValue).ToBeFalse;
+        W.Report := Format('null: IsNull=%s HasValue=%s | zero: IsNull=%s HasValue=%s Value=%d',
+          [BoolToStr(W.IntNull.IsNull, True), BoolToStr(W.IntNull.HasValue, True),
+           BoolToStr(W.IntZero.IsNull, True), BoolToStr(W.IntZero.HasValue, True),
+           W.IntZero.Value]);
       end)
-    .&And('the zero one reports IsNull False, HasValue True and Value 0',
+    .&Then('the null one reports IsNull True and HasValue False, and the zero one the opposite',
       procedure(W: TNullableWorld)
       begin
-        Expect(W.IntZero.IsNull).ToBeFalse;
-        Expect(W.IntZero.HasValue).ToBeTrue;
-        Expect(W.IntZero.Value).ToEqual(0);
+        Expect(W.Report).ToEqual(
+          'null: IsNull=True HasValue=False | zero: IsNull=False HasValue=True Value=0');
       end)
 
   .Scenario('A freshly declared nullable is null')
-    .Given('a default-initialized nullable').NoAction
-    .&Then('it reports IsNull True',
+    // Nothing to prepare: the declaration IS the subject. It stays inside the When and not in
+    // the World, because a field is zero-filled when the object is created, so it would report
+    // IsNull True even with no Initialize operator at all.
+    .Given('nothing declared yet').NoAction
+    .When('a nullable is declared and asked about its presence',
       procedure(W: TNullableWorld)
       begin
         var N: TNullable<Integer>;
-        Expect(N.IsNull).ToBeTrue;
+        W.Report := BoolToStr(N.IsNull, True);
+      end)
+    .&Then('it reports IsNull True',
+      procedure(W: TNullableWorld)
+      begin
+        Expect(W.Report).ToEqual('True');
       end)
 
 .Rule('Implicit conversions')
@@ -101,10 +113,15 @@ Feature Nullable @nullable @commons
       begin
         W.IntNull := TNullable<Integer>.Null;
       end)
-    .&Then('GetValueOrDefault returns the supplied fallback',
+    .When('GetValueOrDefault is called with a fallback',
       procedure(W: TNullableWorld)
       begin
-        Expect(W.IntNull.GetValueOrDefault(99)).ToEqual(99);
+        W.Fallback := W.IntNull.GetValueOrDefault(99);
+      end)
+    .&Then('it returns the supplied fallback',
+      procedure(W: TNullableWorld)
+      begin
+        Expect(W.Fallback).ToEqual(99);
       end);
 
 end.

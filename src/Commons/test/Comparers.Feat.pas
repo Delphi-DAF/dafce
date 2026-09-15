@@ -3,22 +3,29 @@
 interface
 
 uses
-  System.Rtti;
+  System.Rtti,
+  System.Generics.Defaults,
+  Daf.Nullable;
 
 type
   TComparersWorld = class
   public
     Values: TArray<TValue>;
     DistinctCount: Integer;
+    Cmp: IComparer<TValue>;
+    Eq: IEqualityComparer<TValue>;
+    NCmp: IComparer<TNullable<Integer>>;
+    NEq: IEqualityComparer<TNullable<Integer>>;
+    Report: string;
   end;
 
 implementation
 
 uses
-  System.Generics.Defaults,
+  System.SysUtils,
+  System.Math,
   System.Generics.Collections,
   Daf.MiniSpec,
-  Daf.Nullable,
   Daf.Comparers;
 
 initialization
@@ -36,14 +43,26 @@ Feature Comparers @comparers @commons
 .Rule('TValue ordering — NULL is smallest')
 
   .Scenario('NULL sorts before any non-NULL value')
+    .Given('the ordinal comparer for TValue',
+      procedure(W: TComparersWorld)
+      begin
+        W.Cmp := TValueComparers.Ordinal;
+      end)
+    .When('NULL is compared with a value both ways, with NULL, and two values with each other',
+      procedure(W: TComparersWorld)
+      begin
+        // Sign and not the raw result: a comparer owes a side, not a magnitude, and comparing
+        // the side is what the four assertions said one by one.
+        W.Report := Format('%d %d %d %d',
+          [Sign(W.Cmp.Compare(TValue.Empty, TValue.From<Integer>(5))),
+           Sign(W.Cmp.Compare(TValue.From<Integer>(5), TValue.Empty)),
+           Sign(W.Cmp.Compare(TValue.Empty, TValue.Empty)),
+           Sign(W.Cmp.Compare(TValue.From<Integer>(3), TValue.From<Integer>(5)))]);
+      end)
     .&Then('the ordinal comparer ranks NULL below values and equal to NULL',
       procedure(W: TComparersWorld)
       begin
-        var Cmp := TValueComparers.Ordinal;
-        Expect(Cmp.Compare(TValue.Empty, TValue.From<Integer>(5))).ToBeLessThan(0);
-        Expect(Cmp.Compare(TValue.From<Integer>(5), TValue.Empty)).ToBeGreaterThan(0);
-        Expect(Cmp.Compare(TValue.Empty, TValue.Empty)).ToEqual(0);
-        Expect(Cmp.Compare(TValue.From<Integer>(3), TValue.From<Integer>(5))).ToBeLessThan(0);
+        Expect(W.Report).ToEqual('-1 1 0 -1');
       end)
 
   .Scenario('Sorting places NULLs first then ascending values')
@@ -67,14 +86,24 @@ Feature Comparers @comparers @commons
 .Rule('TValue equality — NULLs are equal')
 
   .Scenario('NULLs compare equal; NULL and a value do not')
+    .Given('the equality comparer for TValue',
+      procedure(W: TComparersWorld)
+      begin
+        W.Eq := TValueComparers.Equality;
+      end)
+    .When('two NULLs, two equal values, two different ones and a mixed pair are compared',
+      procedure(W: TComparersWorld)
+      begin
+        W.Report := Format('%s %s %s %s',
+          [BoolToStr(W.Eq.Equals(TValue.Empty, TValue.Empty), True),
+           BoolToStr(W.Eq.Equals(TValue.From<Integer>(5), TValue.From<Integer>(5)), True),
+           BoolToStr(W.Eq.Equals(TValue.From<Integer>(5), TValue.From<Integer>(6)), True),
+           BoolToStr(W.Eq.Equals(TValue.Empty, TValue.From<Integer>(5)), True)]);
+      end)
     .&Then('the equality comparer treats NULLs as equal',
       procedure(W: TComparersWorld)
       begin
-        var Eq := TValueComparers.Equality;
-        Expect(Eq.Equals(TValue.Empty, TValue.Empty)).ToBeTrue;
-        Expect(Eq.Equals(TValue.From<Integer>(5), TValue.From<Integer>(5))).ToBeTrue;
-        Expect(Eq.Equals(TValue.From<Integer>(5), TValue.From<Integer>(6))).ToBeFalse;
-        Expect(Eq.Equals(TValue.Empty, TValue.From<Integer>(5))).ToBeFalse;
+        Expect(W.Report).ToEqual('True True False False');
       end)
 
   .Scenario('DISTINCT collapses duplicate NULLs')
@@ -101,16 +130,26 @@ Feature Comparers @comparers @commons
 .Rule('TNullable comparers')
 
   .Scenario('An absent TNullable sorts smallest and equals another absent')
+    .Given('the two comparers TNullable declares, ordinal and equality',
+      procedure(W: TComparersWorld)
+      begin
+        W.NCmp := TNullableComparers.Ordinal<Integer>;
+        W.NEq := TNullableComparers.Equality<Integer>;
+      end)
+    .When('an absent is compared with a present, and absents and presents with each other',
+      procedure(W: TComparersWorld)
+      begin
+        W.Report := Format('%d %d %s %s %s',
+          [Sign(W.NCmp.Compare(TNullable<Integer>.Null, TNullable<Integer>.From(1))),
+           Sign(W.NCmp.Compare(TNullable<Integer>.From(1), TNullable<Integer>.Null)),
+           BoolToStr(W.NEq.Equals(TNullable<Integer>.Null, TNullable<Integer>.Null), True),
+           BoolToStr(W.NEq.Equals(TNullable<Integer>.From(1), TNullable<Integer>.From(1)), True),
+           BoolToStr(W.NEq.Equals(TNullable<Integer>.From(1), TNullable<Integer>.From(2)), True)]);
+      end)
     .&Then('ordinal ranks Null below present, equality treats Nulls as equal',
       procedure(W: TComparersWorld)
       begin
-        var C := TNullableComparers.Ordinal<Integer>;
-        Expect(C.Compare(TNullable<Integer>.Null, TNullable<Integer>.From(1))).ToBeLessThan(0);
-        Expect(C.Compare(TNullable<Integer>.From(1), TNullable<Integer>.Null)).ToBeGreaterThan(0);
-        var E := TNullableComparers.Equality<Integer>;
-        Expect(E.Equals(TNullable<Integer>.Null, TNullable<Integer>.Null)).ToBeTrue;
-        Expect(E.Equals(TNullable<Integer>.From(1), TNullable<Integer>.From(1))).ToBeTrue;
-        Expect(E.Equals(TNullable<Integer>.From(1), TNullable<Integer>.From(2))).ToBeFalse;
+        Expect(W.Report).ToEqual('-1 1 True True False');
       end);
 
 end.
