@@ -52,8 +52,8 @@ var Settings := TConfigurationBinder.Bind<TAppSettings>(Config, 'AppSettings');
 `boProperties`, the default, or `boFields`.
 
 Binding needs this package and nothing else: the binder works over any `IConfiguration` and knows
-nothing about JSON, INI or the environment. What it does with nested objects, collections and a
-member it cannot convert is in the [`Configuration` guide](../Configuration/docs/GUIDE.md).
+nothing about JSON, INI or the environment. What it does with an absent key, nested objects,
+collections and a member it cannot convert is in the [`Configuration` guide](../Configuration/docs/GUIDE.md).
 
 ### `TConfigurationPath`
 

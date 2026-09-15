@@ -94,8 +94,9 @@ como `\.`.
 Un `name` que no sea una expresión regular válida es un **error de composición**: la configuración
 falla al cargar, nombrando la regla y el patrón.
 
-Una regla está **activa salvo que su configuración diga lo contrario**: `enabled` vale `true` por
-defecto, y solo el literal `false` la desactiva — la semántica que documenta NLog.
+Una regla está **activa salvo que su configuración diga lo contrario**: una regla que no declara
+`enabled` está activa. `enabled` toma los literales `true` y `false`, con cualquier caja — los
+valores que documenta NLog; cualquier otro valor desactiva la regla.
 
 Qué niveles acepta una regla es la conjunción de `minLevel`, `maxLevel` y `levels`. Ausentes, valen
 `Trace`, `Critical` y ninguna lista, así que una regla con `name` y `writeTo` lo acepta todo.

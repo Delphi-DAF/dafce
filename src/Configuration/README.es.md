@@ -168,6 +168,9 @@ var Opts := TConfigurationBinder.Bind<TDatabaseOptions>(Config, 'Database', boFi
 // Opts.Host, Opts.Port, Opts.Name quedan poblados
 ```
 
+Una clave que ninguna fuente menciona no se escribe, así que un defecto puesto en el constructor
+sobrevive al enlace.
+
 ---
 
 ## Ajustes con dueño

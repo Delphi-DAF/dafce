@@ -92,10 +92,7 @@ class function TNNLogLoader.BuildRule(const TargetMap: TDictionary<string, TTarg
 begin
   Result := TLogRule.Create;
   try
-    // enabled se resuelve como sus tres vecinos (minLevel, maxLevel, levels): una cadena que
-    // se interpreta con su defecto. El defecto es ACTIVADA --lo que dice NLog y la cabecera
-    // del modulo--: solo el literal `false` la desactiva (D1).
-    Result.Enabled := not SameText(Trim(RuleCfg.Enabled), 'false');
+    Result.Enabled := RuleCfg.Enabled;
     Result.MinLevel := TLogLevel.Parse(RuleCfg.MinLevel, Low(TLogLEvel));
     Result.Levels :=  TLogLevel.ParseList(RuleCfg.Levels);
     Result.MaxLevel := TLogLevel.Parse(RuleCfg.MaxLevel, Pred(High(TLogLevel)));

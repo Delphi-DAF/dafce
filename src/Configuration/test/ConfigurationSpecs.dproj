@@ -101,6 +101,7 @@
         <DCCReference Include="CommandLine.Feat.pas"/>
         <DCCReference Include="CommandLine.Steps.pas"/>
         <DCCReference Include="KeyPresence.Feat.pas"/>
+        <DCCReference Include="BinderAbsence.Feat.pas"/>
         <DCCReference Include="ConfigManager.Feat.pas"/>
         <DCCReference Include="ChainedConfig.Feat.pas"/>
         <DCCReference Include="OptionsBinding.Feat.pas"/>

@@ -273,10 +273,47 @@ var Opts := TConfigurationBinder.Bind<TDatabaseOptions>(Config, 'Database', boFi
 
 WriteLn(Opts.Host);         // 'localhost'
 WriteLn(Opts.Port);         // 5432
-WriteLn(Opts.MaxPoolSize);  // 0 if not present in config
+WriteLn(Opts.MaxPoolSize);  // 0: this class sets no default and the config does not mention it
 ```
 
 Type conversion from `string` is handled automatically for `Integer`, `Boolean`, `Double`, and `string`.
+
+### A key the configuration does not mention is not written
+
+Binding writes what the configuration says. A key that no source mentions leaves the member as it
+was, with the value its constructor put there or the one an earlier bind left:
+
+```pascal
+type
+  TServerOptions = class
+  public
+    Name: string;
+    Port: Integer;
+    constructor Create;
+  end;
+
+constructor TServerOptions.Create;
+begin
+  inherited Create;
+  Name := 'default';
+  Port := 8080;
+end;
+
+// Neither key appears in any source:
+var Opts := TConfigurationBinder.Bind<TServerOptions>(Config, 'Server', boFields);
+
+WriteLn(Opts.Name);   // 'default'
+WriteLn(Opts.Port);   // 8080
+```
+
+A key that **is** present with an empty value is written: the member becomes the empty string,
+because the configuration said so. `Exists` and `Find` answer that same distinction on a read.
+
+A composite member — a nested class, a list, a dictionary or an array — is built even when its
+section appears nowhere, so reading one never needs a `nil` check. The limit that comes with it:
+for a composite, "the section is not there" and "the section has no children" give the same object,
+and `Config.Exists('Server')` is what tells them apart. An array member is replaced by a new one,
+where a collection that already had elements is reused and added to.
 
 ### The settings class frees its object members
 

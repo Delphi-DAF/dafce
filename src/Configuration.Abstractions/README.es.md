@@ -52,8 +52,8 @@ recibe un `Instance: TObject` rellena uno que ya existe. `TBindOption` dice qué
 `boProperties`, que es el valor por defecto, o `boFields`.
 
 Para enlazar basta este paquete: el enlazador trabaja sobre cualquier `IConfiguration` y no sabe
-nada de JSON, INI ni del entorno. Qué hace con objetos anidados, colecciones y un miembro que no
-puede convertir está en la [guía de `Configuration`](../Configuration/docs/GUIDE.es.md).
+nada de JSON, INI ni del entorno. Qué hace con una clave ausente, objetos anidados, colecciones y
+un miembro que no puede convertir está en la [guía de `Configuration`](../Configuration/docs/GUIDE.es.md).
 
 ### `TConfigurationPath`
 

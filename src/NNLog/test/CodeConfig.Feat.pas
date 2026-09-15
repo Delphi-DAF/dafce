@@ -93,7 +93,7 @@ begin
 
   var Rule := TLogRuleConfig.Create;
   Rule.Name := 'Alpha.*';
-  Rule.Enabled := 'true';
+  Rule.Enabled := True;
   Rule.MinLevel := 'Trace';
   Rule.WriteTo := 'probe';
   FSettings.Rules := [Rule];

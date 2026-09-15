@@ -25,12 +25,18 @@ type
   TLogRuleConfig = class
   public
     Name: string;
-    Enabled: string;
+    Enabled: Boolean;
     MinLevel: string;
     Levels: string; // comma separate  list
     MaxLevel: string;
     WriteTo: string; // comma separate list
     IsFinal: Boolean;
+    /// <summary>
+    ///   Los defectos de una regla que la configuracion no menciona. Enabled arranca en True
+    ///   porque una regla sin `enabled` esta activada; IsFinal arranca en False, que ademas de
+    ///   ser su defecto correcto es el cero de su tipo, asi que no hace falta escribirlo.
+    /// </summary>
+    constructor Create;
   end;
 
   TTargetConfig = class(TDictionary<string, string>)
@@ -54,6 +60,14 @@ type
 
 implementation
 uses System.Generics.Defaults;
+
+{ TLogRuleConfig }
+
+constructor TLogRuleConfig.Create;
+begin
+  inherited Create;
+  Enabled := True;
+end;
 
 { TTargetConfig }
 

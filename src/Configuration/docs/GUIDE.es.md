@@ -273,10 +273,47 @@ var Opts := TConfigurationBinder.Bind<TDatabaseOptions>(Config, 'Database', boFi
 
 WriteLn(Opts.Host);         // 'localhost'
 WriteLn(Opts.Port);         // 5432
-WriteLn(Opts.MaxPoolSize);  // 0 si no está en la config
+WriteLn(Opts.MaxPoolSize);  // 0: esta clase no pone defecto y la config no la menciona
 ```
 
 La conversión de tipos desde `string` se gestiona automáticamente para `Integer`, `Boolean`, `Double` y `string`.
+
+### Una clave que la configuración no menciona no se escribe
+
+El enlace escribe lo que la configuración dice. Una clave que ninguna fuente menciona deja el
+miembro como estaba, con el valor que puso su constructor o el que dejó un enlace anterior:
+
+```pascal
+type
+  TServerOptions = class
+  public
+    Name: string;
+    Port: Integer;
+    constructor Create;
+  end;
+
+constructor TServerOptions.Create;
+begin
+  inherited Create;
+  Name := 'por-defecto';
+  Port := 8080;
+end;
+
+// Ninguna de las dos claves aparece en ninguna fuente:
+var Opts := TConfigurationBinder.Bind<TServerOptions>(Config, 'Server', boFields);
+
+WriteLn(Opts.Name);   // 'por-defecto'
+WriteLn(Opts.Port);   // 8080
+```
+
+Una clave que **sí** está con valor vacío se escribe: el miembro queda con la cadena vacía, porque
+la configuración lo dijo. `Exists` y `Find` contestan esa misma distinción en una lectura.
+
+Un miembro compuesto —una clase anidada, una lista, un diccionario o un array— se construye aunque
+su sección no aparezca en ninguna parte, así que leerlo nunca necesita comprobar `nil`. El límite
+que eso trae: para un compuesto, «la sección no está» y «la sección no tiene hijos» dan el mismo
+objeto, y quien los separa es `Config.Exists('Server')`. Un miembro de array se sustituye por uno
+nuevo, mientras que una colección que ya tenía elementos se reutiliza y el enlace añade sobre ella.
 
 ### La clase de ajustes libera sus miembros objeto
 

@@ -127,7 +127,7 @@ The changes that break compilation are collected, with their example diff, in `M
   - A generic in a step's description —`AsType<T>`, `TList<T>`— was read as a Scenario Outline placeholder and failed with `T not found in World`
 - **Hosting**: `IHostApplicationLifetime.StopApplication` really stops the application: it cancelled `ApplicationStopping` instead of requesting the stop, so `WaitForShutdown` stayed blocked and the `IHostedService`s were never stopped
 - **Hosting**: A process can build more than one host: "Build already called" and the "already stopped" flag were class state, so a harness that sets hosts up and tears them down could only set the first one up
-- **NNLog**: A rule's `enabled` and `name` were silently ignored: a missing `enabled` now means **enabled** —only the literal `false` disables it— and `name` really filters. **Observable change**: a config with any rule whose `name` is not `*` stops receiving everything
+- **NNLog**: A rule's `enabled` and `name` were silently ignored: a missing `enabled` now means **enabled** and `name` really filters. Only the literal `true`, in any case, keeps a rule enabled; any other value disables it. **Observable change**: a config with any rule whose `name` is not `*` stops receiving everything
 - **NNLog**: `TFileTarget` could reach a state where every later write failed for the rest of the process: a failed open left the path set with no stream, and the guard then refused to reopen. It retries instead
 - **NNLog**: The rotated file's name doubled the dot before the extension (`app_<mark>..log`) and carried the moment of rotation instead of the date of the content it archives
 - **NNLog**: Compressing the archive or cleaning the history no longer costs the line that triggered the rotation, nor leaves the target unusable when it fails
@@ -135,6 +135,7 @@ The changes that break compilation are collected, with their example diff, in `M
 - **MediatR**: Composing twice in the same process gives the same result; the accounting of already-scanned packages was unit-global state
 - **SQLCute**: `WhereIn` with an **empty** set of values emitted `col IN ()`, invalid on almost any engine; it now matches no row and `WhereNotIn` matches them all, alike on both back-ends. It also affects `OrWhereIn` / `OrWhereNotIn` and `IsIn([])`
 - **Application**: `TVersionInfo.Tag` was **always empty**, and `GetFrom` on a class with no attribute returned whatever was in the target's memory
+- **Configuration**: Binding no longer writes a member whose key no source mentions: a default set in the constructor survives the bind, and a second bind does not erase what the first one brought. A key present with an empty value is still written
 - **Configuration**: A chained key whose value **is** the empty string no longer disappears on its way through the chain: `TChainedConfigurationProvider` asks for presence instead of inferring it from the value
 - **Commons**: `TMacrosList.GetValueFromIndex` returned an empty string on every macro read
 - **Docs**: The startup the documentation taught **did not compile**, the guide described a surface of `IDafApplication` that was not the real one, and Hosting's still promised automatic discovery of `IAppModule`s. It now teaches `AddModule<T>`

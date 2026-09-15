@@ -142,7 +142,7 @@ uses
 | `levels` | comma-separated list of levels | no list |
 | `writeTo` | comma-separated list of target names | the rule writes nowhere |
 | `isFinal` | `true` stops evaluation after this rule | `false` |
-| `enabled` | `false` — and only that literal — disables the rule | the rule is enabled |
+| `enabled` | `true`, in any case, keeps the rule enabled; any other value disables it | the rule is enabled |
 
 The names in `writeTo` are the keys of the `targets` section, matched **exactly**: both the case and
 the absence of spaces around the comma matter, and a name with no target behind it is dropped in

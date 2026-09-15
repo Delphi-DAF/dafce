@@ -144,7 +144,7 @@ uses
 | `levels` | lista de niveles separados por comas | ninguna lista |
 | `writeTo` | lista de nombres de target separados por comas | la regla no escribe en ningún sitio |
 | `isFinal` | `true` detiene la evaluación tras esta regla | `false` |
-| `enabled` | `false` —y solo ese literal— desactiva la regla | la regla está activa |
+| `enabled` | `true`, con cualquier caja, mantiene la regla activa; cualquier otro valor la desactiva | la regla está activa |
 
 Los nombres de `writeTo` son las claves de la sección `targets`, emparejados **exactamente**:
 importan la caja y la ausencia de espacios alrededor de la coma, y un nombre sin target detrás se

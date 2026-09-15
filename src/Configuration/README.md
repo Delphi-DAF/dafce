@@ -167,6 +167,8 @@ var Opts := TConfigurationBinder.Bind<TDatabaseOptions>(Config, 'Database', boFi
 // Opts.Host, Opts.Port, Opts.Name are now populated
 ```
 
+A key that no source mentions is not written, so a default set in the constructor survives the bind.
+
 ---
 
 ## Settings with an owner

@@ -126,7 +126,7 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
   - Un genérico en la descripción de un step —`AsType<T>`, `TList<T>`— se leía como placeholder de Scenario Outline y fallaba con `T not found in World`
 - **Hosting**: `IHostApplicationLifetime.StopApplication` para de verdad la aplicación: cancelaba `ApplicationStopping` en vez de pedir la parada, así que `WaitForShutdown` seguía bloqueado y los `IHostedService` no se paraban nunca
 - **Hosting**: Un proceso puede construir más de un host: «Build already called» y el «ya parado» eran estado de clase, así que un arnés que monta y desmonta hosts solo podía montar el primero
-- **NNLog**: `enabled` y `name` de una regla se ignoraban en silencio: `enabled` ausente vale **activada** —solo el literal `false` la desactiva— y `name` filtra de verdad. **Cambio observable**: un config con alguna regla de `name` distinto de `*` deja de recibirlo todo
+- **NNLog**: `enabled` y `name` de una regla se ignoraban en silencio: `enabled` ausente vale **activada** y `name` filtra de verdad. Solo el literal `true`, con cualquier caja, mantiene activada una regla; cualquier otro valor la desactiva. **Cambio observable**: un config con alguna regla de `name` distinto de `*` deja de recibirlo todo
 - **NNLog**: `TFileTarget` podía quedar en un estado donde toda escritura posterior fallaba el resto del proceso: una apertura fallida dejaba la ruta fijada sin stream, y la guarda ya no volvía a abrir. Ahora reintenta
 - **NNLog**: El nombre del fichero rotado doblaba el punto antes de la extensión (`app_<marca>..log`) y llevaba el instante de rotar en vez de la fecha del contenido que archiva
 - **NNLog**: Comprimir el archivo o limpiar el histórico ya no cuesta la línea que provocó la rotación, ni deja el destino inutilizable cuando falla
@@ -134,6 +134,7 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 - **MediatR**: Componer dos veces en un mismo proceso da el mismo resultado; la contabilidad de paquetes ya escaneados era estado global de unit
 - **SQLCute**: `WhereIn` con un conjunto de valores **vacío** emitía `col IN ()`, inválido en casi cualquier motor; ahora no casa ninguna fila y `WhereNotIn` las casa todas, igual en los dos back-ends. Afecta también a `OrWhereIn` / `OrWhereNotIn` y a `IsIn([])`
 - **Application**: `TVersionInfo.Tag` estaba **siempre vacío**, y `GetFrom` sobre una clase sin atributo devolvía lo que hubiera en la memoria del destino
+- **Configuration**: El enlace ya no escribe un miembro cuya clave no menciona ninguna fuente: un defecto puesto en el constructor sobrevive al enlace, y un segundo enlace no borra lo que trajo el primero. Una clave presente con valor vacío se sigue escribiendo
 - **Configuration**: Una clave encadenada cuyo valor **es** la cadena vacía ya no desaparece al atravesar la cadena: `TChainedConfigurationProvider` pregunta la presencia en vez de deducirla del valor
 - **Commons**: `TMacrosList.GetValueFromIndex` devolvía cadena vacía en toda lectura de macro
 - **Docs**: El arranque que enseñaba la documentación **no compilaba**, la guía describía una superficie de `IDafApplication` que no era la real, y la de Hosting seguía prometiendo el descubrimiento automático de los `IAppModule`. Ahora enseña `AddModule<T>`

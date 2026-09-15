@@ -92,8 +92,9 @@ dot as `\.`.
 A `name` that is not a valid regular expression is a **composition error**: the configuration fails
 to load, naming the rule and the pattern.
 
-A rule is **active unless its configuration says otherwise**: `enabled` defaults to `true`, and only
-the literal `false` disables it — the semantics NLog documents.
+A rule is **active unless its configuration says otherwise**: a rule that does not declare `enabled`
+is enabled. `enabled` takes the literals `true` and `false`, in any case — the values NLog
+documents; any other value disables the rule.
 
 Which levels a rule accepts is the conjunction of `minLevel`, `maxLevel` and `levels`. Absent, they
 default to `Trace`, `Critical` and no list, so a rule with a `name` and a `writeTo` accepts

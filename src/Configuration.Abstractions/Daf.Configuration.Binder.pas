@@ -152,6 +152,11 @@ begin
   for var Member in GetMembers(Typ) do
   begin
     var Key := IfThen(Path = '', Member.Name, TConfigurationPath.Combine([Path, Member.Name]));
+    // Un miembro plano consume el valor PROPIO de la clave, asi que quien responde por su ausencia
+    // es Find y no Exists: una seccion que solo agrupa existe y no tiene nada que escribir en un
+    // Integer. Sin dato, el miembro se queda con lo que ya tenia. Un compuesto se asigna siempre:
+    // se construye aunque su seccion no aparezca, y sus miembros se rigen por esta misma regla.
+    if IsPlain(Member.DataType) and not FConfig.Find(Key).HasValue then Continue;
     Member.SetValue(Instance, BindDataType(Key, Member.DataType, Member.GetValue(Instance)));
   end;
 end;
