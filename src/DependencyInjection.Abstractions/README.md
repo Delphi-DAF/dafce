@@ -17,7 +17,7 @@ Core contracts (interfaces and types) for the DAF Dependency Injection system. T
 | `Daf.Extensions.Options` | `IOptions<T>`, `TOptionsValidator<T>`, `EOptionsValidationError` — the options pattern contract |
 | `Daf.Options` | `TOptions<T>` and `AppOptions` — settings registered with code |
 | `Daf.AppModule` | **Compatibility alias** for `IAppModule`: the contract moved next to `AddModule<T>`, which is a method of the `IServiceCollection` record and cannot depend on this unit. An existing `uses Daf.AppModule` keeps working |
-| `Daf.DependencyInjection.ActivatorUtilities` | Helpers to construct objects via RTTI with DI-resolved arguments, and `InjectInto` to wire an instance the container did not build |
+| `Daf.DependencyInjection.ActivatorUtilities` | `TActivatorUtilities`: build an object with its constructor arguments resolved, and `InjectInto` to wire an instance the container did not build |
 | `Daf.DependencyInjection.OpenGenerics` | Matching, checking and activation for registrations whose type arguments are left open |
 
 ---
@@ -180,8 +180,42 @@ Base class for wrapping a service with pre/post-call logic without inheritance. 
 ### `Lazy`
 
 ```pascal
-Result := Lazy.From<IHeavy>(Provider, function(P): IHeavy begin Result := THeavy.Create end);
+Result := Lazy.From<IHeavy>(Provider,
+  function(P: IServiceProvider): IHeavy
+  begin
+    Result := THeavy.Create;
+  end);
 ```
+
+### `TActivatorUtilities`
+
+Building an object the container does not have registered, with its constructor arguments resolved:
+
+```pascal
+uses Daf.DependencyInjection.ActivatorUtilities;
+
+var Builder := TActivatorUtilities.CreateInstance<TReportBuilder>(Provider);
+try
+  Builder.Run;
+finally
+  Builder.Free;   // not a registered service: the caller owns it
+end;
+```
+
+Among the public constructors whose arguments the provider can satisfy, the one with the **most
+parameters** is used. A mark settles it:
+
+```pascal
+[ActivatorUtilitiesConstructor]
+constructor Create(const Storage: IStorage);
+```
+
+⚠️ A marked constructor whose arguments cannot all be resolved is skipped like any other, and the
+choice falls back to the rest.
+
+`InjectInto(Provider, Instance)` fills the `[DafInject]` properties of an instance the container did
+not build — a form the platform creates, for one. It takes **no ownership**: closing the container
+neither destroys that instance nor clears its properties.
 
 ---
 
@@ -423,6 +457,8 @@ resolves as usual; registered open, it serves the same object to every closure.
 
 ## Dependency
 
-This module has **no dependencies** on other DAF modules. It depends only on the Delphi RTL (`System.Rtti`, `System.Generics.Collections`).
+`Daf.Commons` only: `Daf.Rtti` for the `_` placeholder and the RTTI helpers, `Daf.Activator` for the
+`TActivator.CreateInstance` named above, and `Daf.Enumerable` for the `IInterfaceList<T>` that
+`GetServices` hands back.
 
 The implementation is in [`DependencyInjection`](../DependencyInjection/README.md).
