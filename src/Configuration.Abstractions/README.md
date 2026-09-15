@@ -11,7 +11,12 @@ Core contracts for the DAF configuration system. This module defines **interface
 
 ## What's in this module
 
-All types live in `Daf.Extensions.Configuration`.
+**Two units, and which one declares a type is what goes in your `uses`:**
+
+| Unit | What it declares |
+|---|---|
+| `Daf.Extensions.Configuration` | the contracts below, `TConfigurationPath` and `TConfigurationSourceOption` |
+| `Daf.Configuration.Binder` | `TConfigurationBinder` and `TBindOption` |
 
 ### Core interfaces
 
@@ -34,6 +39,22 @@ Config.GetSection('Database')['Host'] // via section
 
 Key separator is `:`. Sections expose `GetChildren` to iterate sub-keys.
 
+### Binding a subtree onto an object
+
+```pascal
+uses Daf.Configuration.Binder;
+
+var Settings := TConfigurationBinder.Bind<TAppSettings>(Config, 'AppSettings');
+```
+
+`Bind<T>` constructs the instance and returns it, and **the caller owns it**. The overload taking an
+`Instance: TObject` fills one that already exists. `TBindOption` says what gets filled:
+`boProperties`, the default, or `boFields`.
+
+Binding needs this package and nothing else: the binder works over any `IConfiguration` and knows
+nothing about JSON, INI or the environment. What it does with nested objects, collections and a
+member it cannot convert is in the [`Configuration` guide](../Configuration/docs/GUIDE.md).
+
 ### `TConfigurationPath`
 
 Utility class for path manipulation:
@@ -47,8 +68,14 @@ TConfigurationPath.GetParentPath('Database:Host') // 'Database'
 ### `TConfigurationSourceOption`
 
 ```pascal
-type TConfigurationSourceOption = (csoOptional, csoReloadOnChange);
+type
+  TConfigurationSourceOption  = (csoOptional, csoReloadOnChange);
+  TConfigurationSourceOptions = set of TConfigurationSourceOption;
 ```
+
+What a source takes is the **set**, and `csoOptional` is the value that changes what happens: without
+it, a file that is not there aborts the load with `File "<name>" not Found`; with it, the source
+warns and contributes nothing. No provider reads `csoReloadOnChange`.
 
 ---
 

@@ -11,7 +11,12 @@ Contratos principales del sistema de configuración de DAF. Este módulo define 
 
 ## Qué hay en este módulo
 
-Todos los tipos se encuentran en `Daf.Extensions.Configuration`.
+**Dos units, y cuál declara cada tipo es lo que va en tu `uses`:**
+
+| Unit | Qué declara |
+|---|---|
+| `Daf.Extensions.Configuration` | los contratos de abajo, `TConfigurationPath` y `TConfigurationSourceOption` |
+| `Daf.Configuration.Binder` | `TConfigurationBinder` y `TBindOption` |
 
 ### Interfaces principales
 
@@ -34,6 +39,22 @@ Config.GetSection('Database')['Host']  // via sección
 
 El separador de claves es `:`. Las secciones exponen `GetChildren` para iterar las sub-claves.
 
+### Enlazar un subárbol sobre un objeto
+
+```pascal
+uses Daf.Configuration.Binder;
+
+var Settings := TConfigurationBinder.Bind<TAppSettings>(Config, 'AppSettings');
+```
+
+`Bind<T>` construye la instancia y la devuelve, y **el dueño es quien llama**. La sobrecarga que
+recibe un `Instance: TObject` rellena uno que ya existe. `TBindOption` dice qué se rellena:
+`boProperties`, que es el valor por defecto, o `boFields`.
+
+Para enlazar basta este paquete: el enlazador trabaja sobre cualquier `IConfiguration` y no sabe
+nada de JSON, INI ni del entorno. Qué hace con objetos anidados, colecciones y un miembro que no
+puede convertir está en la [guía de `Configuration`](../Configuration/docs/GUIDE.es.md).
+
 ### `TConfigurationPath`
 
 Clase de utilidades para manipulación de rutas:
@@ -47,8 +68,14 @@ TConfigurationPath.GetParentPath('Database:Host') // 'Database'
 ### `TConfigurationSourceOption`
 
 ```pascal
-type TConfigurationSourceOption = (csoOptional, csoReloadOnChange);
+type
+  TConfigurationSourceOption  = (csoOptional, csoReloadOnChange);
+  TConfigurationSourceOptions = set of TConfigurationSourceOption;
 ```
+
+Lo que recibe una fuente es el **conjunto**, y `csoOptional` es el valor que cambia lo que pasa: sin
+él, un fichero que no está aborta la carga con `File "<nombre>" not Found`; con él, la fuente avisa y
+no aporta nada. Ningún proveedor lee `csoReloadOnChange`.
 
 ---
 
