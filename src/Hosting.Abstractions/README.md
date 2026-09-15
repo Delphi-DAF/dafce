@@ -62,6 +62,8 @@ implementation as a metaclass: `Hosting.AddHostedService(Services, TMyWorker)`.
 
 - `Daf.Extensions.DependencyInjection` (DependencyInjection.Abstractions)
 - `Daf.Extensions.Configuration` (Configuration.Abstractions)
-- Delphi RTL only
+- `DAF.Extensions.Logging` (Logging.Abstractions) — for the `ILoggingBuilder` the family contract
+  exposes as a property
+- `Daf.Commons`
 
 The implementation is in [`Hosting`](../Hosting/README.md).
