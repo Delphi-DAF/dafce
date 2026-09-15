@@ -32,8 +32,19 @@ type
     function Execute(const Parsed: ICommandLineParseResult): Integer;
   end;
 
+  /// El estado que el Given deja montado y el When usa. Un World de solo texto obliga al Given
+  /// a ejecutar la accion para tener algo que dejar escrito, y entonces lo que el Then compara
+  /// es la cadena que el propio montaje acaba de componer, no el comportamiento.
   TCliWorld = class
   public
+    Builder: ICliApplicationBuilder;
+    App: ICliApplication;
+    /// La primera instancia vive aqui y no en el Given porque es ella quien sostiene el
+    /// cerrojo: si muriera al acabar el montaje, la segunda arrancaria tan tranquila.
+    Holder: ICliApplication;
+    Verbose: IOption<Boolean>;
+    FileArg: IArgument<string>;
+    Parsed: ICommandLineParseResult;
     ExitCode: Integer;
     Report: string;
     PolicySaw: string;
@@ -113,92 +124,103 @@ Feature La variante CLI de la familia @cli @application-family
     .Given('una gramatica con una bandera y un argumento posicional',
       procedure(W: TCliWorld)
       begin
-        var Verbose := CommandLine.Option<Boolean>('--verbose', 'Cuenta lo que hace');
-        var FileArg := CommandLine.Argument<string>('file', 'Que fichero');
+        W.Verbose := CommandLine.Option<Boolean>('--verbose', 'Cuenta lo que hace');
+        W.FileArg := CommandLine.Argument<string>('file', 'Que fichero');
 
-        var B := TCliApplication.CreateBuilder(['--verbose', 'informe.txt']);
-        B.RootCommand.Add([Verbose, FileArg]);
-        B.OnExecute(
+        W.Builder := TCliApplication.CreateBuilder(['--verbose', 'informe.txt']);
+        W.Builder.RootCommand.Add([W.Verbose, W.FileArg]);
+        W.Builder.OnExecute(
           function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
           begin
             Result := 0;
           end);
-
-        var Parsed := B.RootCommand.Parse(['--verbose', 'informe.txt']);
-        W.Report := Format('verbose=%s file=%s config=%s',
-          [BoolToStr(Verbose.ValueIn(Parsed), True), FileArg.ValueIn(Parsed),
-           BoolToStr(B.Configuration.Exists('verbose'), True)]);
       end)
-    .When('se invoca con la bandera y el posicional detras').NoAction
+    .When('se invoca con la bandera y el posicional detras',
+      procedure(W: TCliWorld)
+      begin
+        W.Parsed := W.Builder.RootCommand.Parse(['--verbose', 'informe.txt']);
+      end)
     .&Then('la gramatica liga los dos simbolos y la configuracion no ha inventado la clave',
       procedure(W: TCliWorld)
       begin
-        Expect(W.Report).ToEqual('verbose=True file=informe.txt config=False');
+        Expect(Format('verbose=%s file=%s config=%s',
+          [BoolToStr(W.Verbose.ValueIn(W.Parsed), True), W.FileArg.ValueIn(W.Parsed),
+           BoolToStr(W.Builder.Configuration.Exists('verbose'), True)]))
+          .ToEqual('verbose=True file=informe.txt config=False');
       end)
 
   .Scenario('Quien quiere los argumentos como configuracion los pide')
-    .Given('un arranque que anade los argumentos explicitamente',
+    .Given('un arranque de consola que todavia no ha mirado argv',
       procedure(W: TCliWorld)
       begin
-        var B := TCliApplication.CreateBuilder;
-        CommandLineConfig.AddArgs(B.Configuration, ['--Db:Server=localhost']);
-        W.Report := B.Configuration['Db:Server'];
+        W.Builder := TCliApplication.CreateBuilder;
+        Expect(W.Builder.Configuration.Exists('Db:Server')).ToBeFalse;
       end)
-    .When('se lee la configuracion').NoAction
+    .When('se anaden los argumentos explicitamente como fuente',
+      procedure(W: TCliWorld)
+      begin
+        CommandLineConfig.AddArgs(W.Builder.Configuration, ['--Db:Server=localhost']);
+      end)
     .&Then('sus claves se leen como las de cualquier otra fuente',
       procedure(W: TCliWorld)
       begin
-        Expect(W.Report).ToEqual('localhost');
+        Expect(W.Builder.Configuration['Db:Server']).ToEqual('localhost');
       end)
 
 .Rule('El borde del Run')
 
   .Scenario('Una aplicacion que decide no arrancar termina sin contenedor')
-    .Given('una instancia ya corriendo con ese identificador',
+    .Given('una instancia ya corriendo con ese identificador, y una segunda construida igual',
       procedure(W: TCliWorld)
       begin
         var First := TCliApplication.CreateBuilder;
         First.SingleInstance('daf-cli-spec');
-        var FirstApp := First.Build;
+        W.Holder := First.Build;
         // Se ejecuta: Stop es lo que suelta el contenedor, y una aplicacion construida y
         // abandonada lo deja vivo -- el informe de fugas lo dice. El cerrojo, en cambio, lo
-        // sigue sosteniendo FirstApp hasta que se destruya, que es lo que este escenario mide.
-        FirstApp.Run;
+        // sigue sosteniendo W.Holder hasta que se destruya, que es lo que este escenario mide.
+        W.Holder.Run;
 
-        var Second := TCliApplication.CreateBuilder;
-        Second.SingleInstance('daf-cli-spec');
-        var SecondApp := Second.Build;
-
-        W.ExitCode := SecondApp.Run;
-        // Sin contenedor: no se llego a construir nada.
-        W.Report := BoolToStr(SecondApp.Services = nil, True);
+        W.Builder := TCliApplication.CreateBuilder;
+        W.Builder.SingleInstance('daf-cli-spec');
+        W.App := W.Builder.Build;
       end)
-    .When('arranca la segunda').NoAction
+    .When('arranca la segunda',
+      procedure(W: TCliWorld)
+      begin
+        W.ExitCode := W.App.Run;
+      end)
     .&Then('termina sin haber construido el contenedor y lo dice por su codigo de salida',
       procedure(W: TCliWorld)
       begin
-        Expect(Format('%d/%s', [W.ExitCode, W.Report])).ToEqual('3/True');
+        // Sin contenedor: no se llego a construir nada.
+        Expect(Format('%d/%s', [W.ExitCode, BoolToStr(W.App.Services = nil, True)]))
+          .ToEqual('3/True');
       end)
 
   .Scenario('Una excepcion no capturada aplica la politica y sale distinto de cero')
-    .Given('una aplicacion cuya politica traduce a codigo de salida',
+    .Given('una aplicacion cuya politica traduce a codigo de salida y cuyo trabajo lanza',
       procedure(W: TCliWorld)
       begin
-        var B := TCliApplication.CreateBuilder;
-        B.OnUnhandled(
+        W.Builder := TCliApplication.CreateBuilder;
+        W.Builder.OnUnhandled(
           function(const E: Exception; const Services: IServiceProvider): Integer
           begin
             W.PolicySaw := E.Message;
             Result := 42;
           end);
-        B.OnExecute(
+        W.Builder.OnExecute(
           function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
           begin
             raise Exception.Create('el trabajo fallo');
           end);
-        W.ExitCode := B.Build.Run;
+        W.App := W.Builder.Build;
       end)
-    .When('el trabajo lanza').NoAction
+    .When('se ejecuta',
+      procedure(W: TCliWorld)
+      begin
+        W.ExitCode := W.App.Run;
+      end)
     .&Then('se aplica la politica declarada',
       procedure(W: TCliWorld)
       begin
@@ -214,28 +236,35 @@ Feature La variante CLI de la familia @cli @application-family
     .Given('una aplicacion invocada pidiendo la version',
       procedure(W: TCliWorld)
       begin
-        var B := TCliApplication.CreateBuilder(['--version']);
-        B.RootCommand.WithVersion('2.0.0');
-        var App := B.Build;
-        W.ExitCode := App.Run;
-        // Ni siquiera se construyo el contenedor: la gramatica contesto sola.
-        W.Report := BoolToStr(App.Services = nil, True);
+        W.Builder := TCliApplication.CreateBuilder(['--version']);
+        W.Builder.RootCommand.WithVersion('2.0.0');
+        W.App := W.Builder.Build;
       end)
-    .When('se ejecuta').NoAction
+    .When('se ejecuta',
+      procedure(W: TCliWorld)
+      begin
+        W.ExitCode := W.App.Run;
+      end)
     .&Then('contesta el parse y termina bien, sin levantar contenedor',
       procedure(W: TCliWorld)
       begin
-        Expect(Format('%d/%s', [W.ExitCode, W.Report])).ToEqual('0/True');
+        // Ni siquiera se construyo el contenedor: la gramatica contesto sola.
+        Expect(Format('%d/%s', [W.ExitCode, BoolToStr(W.App.Services = nil, True)]))
+          .ToEqual('0/True');
       end)
 
   .Scenario('Una invocacion que no encaja tiene su texto y su codigo')
     .Given('una invocacion con un token que la gramatica no reconoce',
       procedure(W: TCliWorld)
       begin
-        var B := TCliApplication.CreateBuilder(['--que-no-existe']);
-        W.ExitCode := B.Build.Run;
+        W.Builder := TCliApplication.CreateBuilder(['--que-no-existe']);
+        W.App := W.Builder.Build;
       end)
-    .When('se ejecuta').NoAction
+    .When('se ejecuta',
+      procedure(W: TCliWorld)
+      begin
+        W.ExitCode := W.App.Run;
+      end)
     .&Then('sale con el codigo de error de invocacion, distinto del de fallo del trabajo',
       procedure(W: TCliWorld)
       begin
@@ -246,12 +275,16 @@ Feature La variante CLI de la familia @cli @application-family
     .Given('un handler registrado como cualquier otro servicio',
       procedure(W: TCliWorld)
       begin
-        var B := TCliApplication.CreateBuilder;
-        B.Services.AddSingleton<IGreeter, TGreeter>;
-        B.Services.AddSingleton<ICliHandler, TGreetingHandler>;
-        W.ExitCode := B.Build.Run;
+        W.Builder := TCliApplication.CreateBuilder;
+        W.Builder.Services.AddSingleton<IGreeter, TGreeter>;
+        W.Builder.Services.AddSingleton<ICliHandler, TGreetingHandler>;
+        W.App := W.Builder.Build;
       end)
-    .When('se ejecuta').NoAction
+    .When('se ejecuta',
+      procedure(W: TCliWorld)
+      begin
+        W.ExitCode := W.App.Run;
+      end)
     .&Then('se resuelve con sus dependencias y su resultado es el codigo de salida',
       procedure(W: TCliWorld)
       begin
@@ -260,24 +293,34 @@ Feature La variante CLI de la familia @cli @application-family
 
   // Dos formas de decir lo mismo son el defecto, no una precedencia que haya que recordar.
   .Scenario('Declarar el trabajo dos veces es un error de composicion')
-    .Given('una aplicacion con OnExecute y con un ICliHandler registrado').NoAction
-    .When('se construye').NoAction
+    .Given('una aplicacion con OnExecute y con un ICliHandler registrado',
+      procedure(W: TCliWorld)
+      begin
+        W.Builder := TCliApplication.CreateBuilder;
+        W.Builder.Services.AddSingleton<IGreeter, TGreeter>;
+        W.Builder.Services.AddSingleton<ICliHandler, TGreetingHandler>;
+        W.Builder.OnExecute(
+          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          begin
+            Result := 0;
+          end);
+      end)
+    .When('se construye',
+      procedure(W: TCliWorld)
+      begin
+        try
+          W.App := W.Builder.Build;
+          W.Report := '<construyo sin protestar>';
+        except
+          on E: Exception do
+            W.Report := E.ClassName + ': ' + E.Message;
+        end;
+      end)
     .&Then('falla al componer, nombrando el problema',
       procedure(W: TCliWorld)
       begin
-        ExpectException(
-          procedure
-          begin
-            var B := TCliApplication.CreateBuilder;
-            B.Services.AddSingleton<IGreeter, TGreeter>;
-            B.Services.AddSingleton<ICliHandler, TGreetingHandler>;
-            B.OnExecute(
-              function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
-              begin
-                Result := 0;
-              end);
-            B.Build;
-          end).ToBe(ECliCompositionError);
+        Expect(W.Report).ToStartWith('ECliCompositionError: ');
+        Expect(W.Report).ToContain('declares its work twice');
       end)
 
 .Rule('Sin acceso global')
