@@ -4,7 +4,9 @@ interface
 
 uses
   System.SysUtils,
-  Daf.Extensions.DependencyInjection;
+  System.TypInfo,
+  Daf.Extensions.DependencyInjection,
+  Daf.FMX.Application;
 
 type
   IDesktopService = interface(IInvokable)
@@ -17,19 +19,34 @@ type
     function Name: string;
   end;
 
+  /// El estado que el Given deja montado y el When usa. Un World de solo texto obliga al Given a
+  /// ejecutar la accion para tener algo que dejar escrito, y entonces lo que el Then compara es la
+  /// cadena que el propio montaje acaba de componer, no el comportamiento.
   TFmxWorld = class
   public
+    Builder: IFmxApplicationBuilder;
+    App: IFmxApplication;
+    Info: PTypeInfo;
     Report: string;
+    destructor Destroy; override;
   end;
 
 implementation
 
 uses
   System.Rtti,
-  System.TypInfo,
   Daf.MiniSpec,
-  Daf.Extensions.Hosting,
-  Daf.FMX.Application;
+  Daf.Extensions.Hosting;
+
+destructor TFmxWorld.Destroy;
+begin
+  // Lo que el World sostiene lo cierra el World: una aplicacion construida y abandonada retiene
+  // su host y deja el global apuntandola. Stop es idempotente, asi que el escenario que ya la
+  // paro no paga por esto.
+  if App <> nil then
+    App.Stop;
+  inherited;
+end;
 
 /// Los metodos que la interfaz DECLARA, en orden. Es RTTI y no lectura del codigo porque una
 /// comprobacion escrita a mano no se pone roja el dia que las dos variantes divergen.
@@ -75,34 +92,39 @@ Feature La variante FMX de la familia @fmx @application-family
   // queda cubierto es todo lo anterior, mas que el contrato de esta variante no se separe del
   // de la VCL, que si llega hasta el formulario. Si las dos divergen, esto se pone rojo.
   .Scenario('Construye su builder y el contenedor responde')
-    .Given('una aplicacion FMX compuesta',
+    .Given('un componedor FMX con un servicio registrado',
       procedure(W: TFmxWorld)
       begin
-        var B := TFmxApplication.CreateBuilder;
-        B.Services.AddSingleton<IDesktopService, TDesktopService>;
-        var App := B.Build;
-        try
-          W.Report := Format('servicio=%s formulario=%s',
-            [App.Services.GetRequiredService<IDesktopService>.Name,
-             BoolToStr(App.MainForm = nil, True)]);
-        finally
-          App.Stop;
-        end;
+        W.Builder := TFmxApplication.CreateBuilder;
+        W.Builder.Services.AddSingleton<IDesktopService, TDesktopService>;
       end)
-    .When('se construye').NoAction
+    .When('se construye',
+      procedure(W: TFmxWorld)
+      begin
+        W.App := W.Builder.Build;
+      end)
     .&Then('el contenedor responde, y el formulario aun no existe',
       procedure(W: TFmxWorld)
       begin
-        Expect(W.Report).ToEqual('servicio=desktop formulario=True');
+        Expect(Format('servicio=%s formulario=%s',
+          [W.App.Services.GetRequiredService<IDesktopService>.Name,
+           BoolToStr(W.App.MainForm = nil, True)])).ToEqual('servicio=desktop formulario=True');
       end)
 
   .Scenario('El contrato de la variante FMX es el mismo que el de la VCL')
-    .Given('las dos interfaces de variante de escritorio',
+    .Given('la interfaz de variante de escritorio de FMX, con su RTTI en el binario',
       procedure(W: TFmxWorld)
       begin
-        W.Report := MembersOf(TypeInfo(IFmxApplication));
+        W.Info := TypeInfo(IFmxApplication);
+        // Lo que el escenario supone del entorno: sin RTTI del tipo, MembersOf devolveria vacio,
+        // y eso no seria "las dos variantes divergen" sino que no hay nada que comparar.
+        Expect(Assigned(W.Info)).ToBeTrue;
       end)
-    .When('se enumeran sus miembros').NoAction
+    .When('se enumeran sus miembros',
+      procedure(W: TFmxWorld)
+      begin
+        W.Report := MembersOf(W.Info);
+      end)
     .&Then('declara los mismos que la VCL, en el mismo orden',
       procedure(W: TFmxWorld)
       begin
@@ -119,19 +141,18 @@ Feature La variante FMX de la familia @fmx @application-family
     .Given('una aplicacion FMX construida',
       procedure(W: TFmxWorld)
       begin
-        var B := TFmxApplication.CreateBuilder;
-        B.Services.AddSingleton<IDesktopService, TDesktopService>;
-        var App := B.Build;
-        try
-          // Los dos en la misma expresion: el de DAF y el de la plataforma, y el nombre no los
-          // confunde.
-          W.Report := Format('daf=%s fmx=%s',
-            [BoolToStr(DafApp = App, True), 'TApplication']);
-        finally
-          App.Stop;
-        end;
+        W.Builder := TFmxApplication.CreateBuilder;
+        W.Builder.Services.AddSingleton<IDesktopService, TDesktopService>;
+        W.App := W.Builder.Build;
       end)
-    .When('se pide el global de la variante').NoAction
+    .When('se pide el global de la variante',
+      procedure(W: TFmxWorld)
+      begin
+        // Los dos en la misma expresion: el de DAF y el de la plataforma, y el nombre no los
+        // confunde.
+        W.Report := Format('daf=%s fmx=%s',
+          [BoolToStr(DafApp = W.App, True), 'TApplication']);
+      end)
     .&Then('devuelve la aplicacion DAF, y el de FireMonkey sigue siendo el suyo',
       procedure(W: TFmxWorld)
       begin
@@ -139,19 +160,24 @@ Feature La variante FMX de la familia @fmx @application-family
       end)
 
   .Scenario('Cuando la aplicacion se para, el global deja de apuntar a ella')
-    .Given('una aplicacion que ya se ha parado',
+    .Given('una aplicacion FMX construida, con el global apuntandola',
       procedure(W: TFmxWorld)
       begin
-        var B := TFmxApplication.CreateBuilder;
-        var App := B.Build;
-        App.Stop;
-        W.Report := BoolToStr(DafApp = nil, True);
+        W.Builder := TFmxApplication.CreateBuilder;
+        W.App := W.Builder.Build;
+        // Lo que el escenario supone: sin esto, un global que no hubiera apuntado nunca a nadie
+        // daria el mismo verde que el que deja de apuntar al pararse.
+        Expect(DafApp = W.App).ToBeTrue;
       end)
-    .When('se pide el global').NoAction
-    .&Then('no queda apuntando a una aplicacion muerta',
+    .When('se para la aplicacion',
       procedure(W: TFmxWorld)
       begin
-        Expect(W.Report).ToEqual('True');
+        W.App.Stop;
+      end)
+    .&Then('el global no queda apuntando a una aplicacion muerta',
+      procedure(W: TFmxWorld)
+      begin
+        Expect(DafApp = nil).ToBeTrue;
       end);
 
 end.
