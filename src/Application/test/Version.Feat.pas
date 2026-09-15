@@ -34,10 +34,15 @@ uses
   Daf.MiniSpec;
 
 type
+  /// El Given nombra la clase que se va a leer y el When la lee: con `GetFrom` en el Given, un
+  /// fallo de la lectura se informa como fallo del montaje, y el Then solo puede comparar lo que
+  /// la propia preparacion dejo escrito.
   TVersionWorld = class
   public
+    AppClass: TClass;
     Info: TVersionInfo;
     Empty: TVersionInfo;
+    ClassTag: string;
   end;
 
 initialization
@@ -55,10 +60,16 @@ Feature Los metadatos de version de una aplicacion @application @version
 .Rule('La version declarada es la que se informa')
 
   .Scenario('Tag devuelve el tag declarado en el atributo')
-    .Given('una aplicacion con su version declarada',
+    .Given('la clase de una aplicacion que declara su version',
       procedure(W: TVersionWorld)
       begin
-        W.Info := TVersionInfo.GetFrom(TVersionedApp);
+        W.AppClass := TVersionedApp;
+      end)
+    .When('se leen sus metadatos por las dos vias',
+      procedure(W: TVersionWorld)
+      begin
+        W.Info := TVersionInfo.GetFrom(W.AppClass);
+        W.ClassTag := TVersionedApp.VersionInfo.Tag;
       end)
     .&Then('Tag es exactamente lo que dice el atributo',
       procedure(W: TVersionWorld)
@@ -68,14 +79,19 @@ Feature Los metadatos de version de una aplicacion @application @version
     .&And('y VersionInfo de la clase de aplicacion dice lo mismo',
       procedure(W: TVersionWorld)
       begin
-        Expect(TVersionedApp.VersionInfo.Tag).ToEqual('1.2.3-rc.2+build.7');
+        Expect(W.ClassTag).ToEqual('1.2.3-rc.2+build.7');
       end)
 
   .Scenario('El semver declarado se parte en sus piezas')
-    .Given('una aplicacion con su version declarada',
+    .Given('la clase de una aplicacion que declara su version',
       procedure(W: TVersionWorld)
       begin
-        W.Info := TVersionInfo.GetFrom(TVersionedApp);
+        W.AppClass := TVersionedApp;
+      end)
+    .When('se leen sus metadatos de version',
+      procedure(W: TVersionWorld)
+      begin
+        W.Info := TVersionInfo.GetFrom(W.AppClass);
       end)
     .&Then('las piezas del semver son las del tag',
       procedure(W: TVersionWorld)
@@ -94,10 +110,15 @@ Feature Los metadatos de version de una aplicacion @application @version
       end)
 
   .Scenario('Tag y VersionTag cuentan la misma version')
-    .Given('una aplicacion con su version declarada',
+    .Given('la clase de una aplicacion que declara su version',
       procedure(W: TVersionWorld)
       begin
-        W.Info := TVersionInfo.GetFrom(TVersionedApp);
+        W.AppClass := TVersionedApp;
+      end)
+    .When('se leen sus metadatos de version',
+      procedure(W: TVersionWorld)
+      begin
+        W.Info := TVersionInfo.GetFrom(W.AppClass);
       end)
     .&Then('el tag declarado y el reconstruido coinciden',
       procedure(W: TVersionWorld)
@@ -112,10 +133,15 @@ Feature Los metadatos de version de una aplicacion @application @version
   // La guia afirma que sin atributo el record esta vacio. GetFrom deja Result intacto cuando no
   // hay atributo, asi que esto mide si esa afirmacion es cierta o solo probable.
   .Scenario('Sin atributo, el record esta vacio y no lleva basura')
-    .Given('una aplicacion sin version declarada',
+    .Given('la clase de una aplicacion que no declara version',
       procedure(W: TVersionWorld)
       begin
-        W.Empty := TVersionInfo.GetFrom(TUnversionedApp);
+        W.AppClass := TUnversionedApp;
+      end)
+    .When('se leen sus metadatos de version',
+      procedure(W: TVersionWorld)
+      begin
+        W.Empty := TVersionInfo.GetFrom(W.AppClass);
       end)
     .&Then('no hay tag, ni nombre, ni compania',
       procedure(W: TVersionWorld)
