@@ -41,9 +41,12 @@ Feature Registrar cuando el record helper esta ensombrecido @hosting @helpers
             Hosting.AddStartupTask(Services, TSeedingTask);
             Hosting.AddHostedService(Services, TConsumerService);
           end);
+      end)
+    .When('se arranca el host',
+      procedure(W: TStartupWorld)
+      begin
         W.StartHost;
       end)
-    .When('se arranca el host').NoAction
     // Un solo Expect cubre las dos fachadas y el orden: si alguna registrase bajo el contrato
     // equivocado, su paso no aparece, y el texto dice cual falta en vez de un booleano pelado.
     .&Then('la tarea corrio, y antes que el servicio',
@@ -63,9 +66,12 @@ Feature Registrar cuando el record helper esta ensombrecido @hosting @helpers
             Hosting.AddStartupTask(Services, TSeedingTask);
             Hosting.AddHostedService(Services, TConsumerService);
           end);
+      end)
+    .When('se arranca el host',
+      procedure(W: TStartupWorld)
+      begin
         W.StartHost;
       end)
-    .When('se consulta si la aplicacion se declaro arrancada').NoAction
     .&Then('lo esta, y sin fallo',
       procedure(W: TStartupWorld)
       begin

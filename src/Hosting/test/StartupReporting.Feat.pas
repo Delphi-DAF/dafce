@@ -29,7 +29,9 @@ type
     constructor Create;
     destructor Destroy; override;
     /// Un fichero de configuracion que no se puede leer: el fallo tipico de la fase en la que
-    /// todavia no hay proveedor.
+    /// todavia no hay proveedor. Escribirlo es el montaje; componer sobre el es el evento, y
+    /// por eso son dos.
+    procedure WriteBrokenConfig;
     procedure BuildWithBrokenConfig;
     procedure BuildWithFailingStartup(const WithLogging: Boolean);
     procedure StartHost;
@@ -126,12 +128,16 @@ begin
   inherited;
 end;
 
-procedure TReportingWorld.BuildWithBrokenConfig;
+procedure TReportingWorld.WriteBrokenConfig;
 begin
   FFolder := TPath.Combine(TPath.GetTempPath, 'daf-hostcfg-' + TGuid.NewGuid.ToString);
   TDirectory.CreateDirectory(FFolder);
   ConfigFile := TPath.Combine(FFolder, 'appsettings.json');
   TFile.WriteAllText(ConfigFile, '{ this is not json');
+end;
+
+procedure TReportingWorld.BuildWithBrokenConfig;
+begin
   var FileName := ConfigFile;
 
   // THostBuilder es maquinaria, no entrada publica: se sostiene por el contrato comun --que es
@@ -185,7 +191,12 @@ Feature The startup report changes hands when the provider exists @hosting @boot
 .Rule('Before the provider exists, the bootstrap channel reports')
 
   .Scenario('A failure reading the configuration is reported and then propagates')
-    .Given('a host whose application configuration points at a json file that cannot be parsed',
+    .Given('an application configuration pointing at a json file that cannot be parsed',
+      procedure(W: TReportingWorld)
+      begin
+        W.WriteBrokenConfig;
+      end)
+    .When('the host is composed over it',
       procedure(W: TReportingWorld)
       begin
         W.BuildWithBrokenConfig;

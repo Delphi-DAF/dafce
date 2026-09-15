@@ -2,10 +2,21 @@
 
 interface
 
+uses
+  Daf.Extensions.Hosting;
+
 type
+  /// El host vive aqui y no dentro de una funcion porque el escenario tiene que poder mirarlo
+  /// entre fases: con el host encerrado en un callback, tanto la consulta como la peticion de
+  /// parada tenian que ocurrir ahi dentro, que es donde estaba el Given.
   TShutdownWorld = class
   public
+    Host: IHost;
+    Lifetime: IHostApplicationLifetime;
     Report: string;
+    procedure BuildHost;
+    procedure StartHost;
+    destructor Destroy; override;
   end;
 
 implementation
@@ -15,23 +26,31 @@ uses
   Daf.MiniSpec,
   Daf.Threading,
   Daf.Extensions.DependencyInjection,
-  Daf.Extensions.Hosting,
   Daf.Hosting;
 
-/// Monta un host, lo arranca, deja que el llamador mire, y lo para. El Pointer(Host) := nil es
-/// porque Stop destruye el host --THost es TNoRefCountObject--, asi que el finalizador de la
-/// variable llamaria _Release sobre memoria ya devuelta.
-function WithStartedHost(const Inspect: TFunc<IHost, string>): string;
+{ TShutdownWorld }
+
+procedure TShutdownWorld.BuildHost;
 begin
   var Builder := THost.CreateBuilder;
-  var Host := Builder.Build;
+  Host := Builder.Build;
+end;
+
+procedure TShutdownWorld.StartHost;
+begin
   Host.Start;
-  try
-    Result := Inspect(Host);
-  finally
+end;
+
+destructor TShutdownWorld.Destroy;
+begin
+  if Host <> nil then
+  begin
     Host.Stop;
+    // Stop destruye el host --THost es TNoRefCountObject--, asi que la referencia se suelta sin
+    // pasar por _Release: el finalizador del campo lo llamaria sobre memoria ya devuelta.
     Pointer(Host) := nil;
   end;
+  inherited;
 end;
 
 initialization
@@ -53,48 +72,48 @@ Feature Pedir la parada de la aplicacion @hosting @lifetime
   // TShutdownHook.OnShutdownRequested, asi que ese TProc es el punto donde las dos mitades se
   // unen -- o no se unen.
   .Scenario('Un host arrancado reclama el camino de señal')
-    .Given('un host arrancado',
+    .Given('un host generico construido y todavia sin arrancar',
       procedure(W: TShutdownWorld)
       begin
-        W.Report := WithStartedHost(
-          function(Host: IHost): string
-          begin
-            Result := BoolToStr(Assigned(TShutdownHook.OnShutdownRequested), True);
-          end);
+        W.BuildHost;
       end)
-    .When('se pregunta quien atiende la peticion de parada').NoAction
-    .&Then('hay alguien atendiendola',
+    .When('se arranca',
+      procedure(W: TShutdownWorld)
+      begin
+        W.StartHost;
+        W.Report := BoolToStr(Assigned(TShutdownHook.OnShutdownRequested), True);
+      end)
+    .&Then('hay alguien atendiendo la peticion de parada',
       procedure(W: TShutdownWorld)
       begin
         Expect(W.Report).ToEqual('True');
       end)
 
   .Scenario('Pedir la parada por ese camino cancela ApplicationStopping')
-    .Given('un host arrancado al que se le pide la parada como lo haria un Ctrl+C',
+    .Given('un host arrancado, con su lifetime y su camino de señal en su sitio',
       procedure(W: TShutdownWorld)
       begin
-        W.Report := WithStartedHost(
-          function(Host: IHost): string
-          begin
-            var Lifetime: IHostApplicationLifetime :=
-              Host.Services.GetService<IHostApplicationLifetime>;
-            if not Assigned(Lifetime) then
-              Exit('sin IHostApplicationLifetime registrado');
-            // Llamar a un TProc sin asignar revienta, y una violacion de acceso no dice cual
-            // era el hueco. Nombrarlo si.
-            if not Assigned(TShutdownHook.OnShutdownRequested) then
-              Exit('OnShutdownRequested sin asignar: un Ctrl+C no pide la parada a nadie');
-            // Los parentesis no son adorno: un TProc a pelo es el valor, no la llamada,
-            // y da E2014 con la cascada dos lambdas mas abajo.
-            TShutdownHook.OnShutdownRequested();
-            Result := BoolToStr(Lifetime.ApplicationStopping.IsCancellationRequested, True);
-          end);
+        W.BuildHost;
+        W.StartHost;
+        W.Lifetime := W.Host.Services.GetService<IHostApplicationLifetime>;
+        // Lo que el escenario supone del montaje, afirmado aqui y no dentro del evento: sin
+        // esto, el When llamaria a un TProc sin asignar y la violacion de acceso no diria cual
+        // era el hueco.
+        Expect(Assigned(W.Lifetime)).ToBeTrue;
+        Expect(Assigned(TShutdownHook.OnShutdownRequested)).ToBeTrue;
+        Expect(W.Lifetime.ApplicationStopping.IsCancellationRequested).ToBeFalse;
       end)
-    .When('se consulta el token de parada').NoAction
-    .&Then('esta cancelado',
+    .When('se pide la parada por ese camino, como lo haria un Ctrl+C',
       procedure(W: TShutdownWorld)
       begin
-        Expect(W.Report).ToEqual('True');
+        // Los parentesis no son adorno: un TProc a pelo es el valor, no la llamada,
+        // y da E2014 con la cascada dos lambdas mas abajo.
+        TShutdownHook.OnShutdownRequested();
+      end)
+    .&Then('el token de parada esta cancelado',
+      procedure(W: TShutdownWorld)
+      begin
+        Expect(W.Lifetime.ApplicationStopping.IsCancellationRequested).ToBeTrue;
       end);
 
 end.

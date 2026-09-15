@@ -2,6 +2,9 @@
 
 interface
 
+uses
+  Daf.Hosting;
+
 type
   // In the interface section by obligation, not by taste: the container resolves through
   // RTTI, and a type declared only in the implementation section is not there to be found.
@@ -18,8 +21,15 @@ type
     function Name: string;
   end;
 
+  /// El estado que el Given deja montado y el When usa. Un World de solo texto obliga al Given a
+  /// ejecutar la accion para tener algo que dejar escrito, y entonces lo que el Then compara es la
+  /// cadena que el propio montaje acaba de componer, no el comportamiento.
   TOverlapWorld = class
   public
+    First: IGenericHostBuilder;
+    Second: IGenericHostBuilder;
+    Builder: IGenericHostBuilder;
+    Names: TArray<string>;
     Report: string;
   end;
 
@@ -31,8 +41,7 @@ uses
   Daf.MiniSpec,
   Daf.Extensions.Logging,
   Daf.Extensions.DependencyInjection,
-  Daf.Extensions.Hosting,
-  Daf.Hosting;
+  Daf.Extensions.Hosting;
 
 constructor TMarker.Create(const AName: string);
 begin
@@ -62,24 +71,25 @@ Feature Several startups in one process @hosting @builder-style
 .Rule('Overlapping startups')
 
   .Scenario('Two builders alive at once')
-    .Given('one builder that is not going to be released',
+    .Given('two builders alive at the same time, neither of them released',
       procedure(W: TOverlapWorld)
       begin
-        var First := THostBuilder.Create;
-        var FirstOwner: IHostApplicationBuilder := First;
-        First.Services.AddSingleton<IMarker>(TMarker.Create('first') as IMarker);
+        W.First := THostBuilder.Create;
+        W.First.Services.AddSingleton<IMarker>(TMarker.Create('first') as IMarker);
 
         // Created while the first one is still held: two builders, two environments and two
         // builder contexts alive at the same time.
-        var Second := THostBuilder.Create;
-        var SecondOwner: IHostApplicationBuilder := Second;
-        Second.Services.AddSingleton<IMarker>(TMarker.Create('second') as IMarker);
-
+        W.Second := THostBuilder.Create;
+        W.Second.Services.AddSingleton<IMarker>(TMarker.Create('second') as IMarker);
+      end)
+    .When('both are built and asked what they registered',
+      procedure(W: TOverlapWorld)
+      begin
         // Both hosts alive at the same time, not one after the other. Stop is what releases
         // the container -- and with it the host -- so both are stopped in the finally; a host
         // that is built and dropped keeps its provider alive and the leak report says so.
-        var FirstHost := First.Build;
-        var SecondHost := Second.Build;
+        var FirstHost := W.First.Build;
+        var SecondHost := W.Second.Build;
         FirstHost.Start;
         SecondHost.Start;
         try
@@ -95,7 +105,6 @@ Feature Several startups in one process @hosting @builder-style
           Pointer(SecondHost) := nil;
         end;
       end)
-    .When('both are built and asked what they registered').NoAction
     .&Then('each one answers with its own, and no uniqueness assertion fired',
       procedure(W: TOverlapWorld)
       begin
@@ -103,15 +112,18 @@ Feature Several startups in one process @hosting @builder-style
       end)
 
   .Scenario('A suite starts and stops several hosts')
-    .Given('three hosts built one after another in the same process',
+    .Given('three startups planned in the same process, each with its own state',
       procedure(W: TOverlapWorld)
       begin
-        W.Report := '';
-        for var I := 1 to 3 do
+        W.Names := ['h1', 'h2', 'h3'];
+      end)
+    .When('each one is started and stopped in turn',
+      procedure(W: TOverlapWorld)
+      begin
+        for var N in W.Names do
         begin
-          var Builder := THostBuilder.Create;
-          var Owner: IHostApplicationBuilder := Builder;
-          Builder.Services.AddSingleton<IMarker>(TMarker.Create('h' + I.ToString) as IMarker);
+          var Builder: IGenericHostBuilder := THostBuilder.Create;
+          Builder.Services.AddSingleton<IMarker>(TMarker.Create(N) as IMarker);
           var Host := Builder.Build;
           Host.Start;
           try
@@ -122,7 +134,6 @@ Feature Several startups in one process @hosting @builder-style
           end;
         end;
       end)
-    .When('each one is started and stopped in turn').NoAction
     .&Then('every one of them saw its own state',
       procedure(W: TOverlapWorld)
       begin
@@ -138,11 +149,13 @@ Feature Several startups in one process @hosting @builder-style
     .Given('un builder al que se le pasa el entorno como argumento',
       procedure(W: TOverlapWorld)
       begin
-        var Builder := THostBuilder.Create(['--DAF_APP_ENV=Development']);
-        var Owner: IHostApplicationBuilder := Builder;
-        W.Report := Builder.Environment.EnvironmentName;
+        W.Builder := THostBuilder.Create(['--DAF_APP_ENV=Development']);
       end)
-    .When('se lee su entorno').NoAction
+    .When('se lee su entorno',
+      procedure(W: TOverlapWorld)
+      begin
+        W.Report := W.Builder.Environment.EnvironmentName;
+      end)
     .&Then('responde con ese valor',
       procedure(W: TOverlapWorld)
       begin
@@ -158,14 +171,18 @@ Feature Several startups in one process @hosting @builder-style
         var VarName: string := TDafEnvVars.APP_ENV;
         Winapi.Windows.SetEnvironmentVariable(PChar(VarName), 'Staging');
         try
-          var Builder := THostBuilder.Create;
-          var Owner: IHostApplicationBuilder := Builder;
-          W.Report := Builder.Environment.EnvironmentName;
+          // El entorno se resuelve al construir, no al consultarlo, asi que queda fijado antes
+          // de que el finally quite la variable.
+          W.Builder := THostBuilder.Create;
         finally
           Winapi.Windows.SetEnvironmentVariable(PChar(VarName), nil);
         end;
       end)
-    .When('se lee su entorno').NoAction
+    .When('se lee su entorno',
+      procedure(W: TOverlapWorld)
+      begin
+        W.Report := W.Builder.Environment.EnvironmentName;
+      end)
     .&Then('responde con ese valor',
       procedure(W: TOverlapWorld)
       begin
@@ -179,12 +196,14 @@ Feature Several startups in one process @hosting @builder-style
     .Given('el entorno fijado a un valor distinto del predeterminado',
       procedure(W: TOverlapWorld)
       begin
-        var Builder := THostBuilder.Create(['--DAF_APP_ENV=Testing']);
-        var Owner: IHostApplicationBuilder := Builder;
-        W.Report := Builder.Environment.EnvironmentName + '/' +
-          BoolToStr(Builder.Environment.IsProduction, True);
+        W.Builder := THostBuilder.Create(['--DAF_APP_ENV=Testing']);
       end)
-    .When('se lee su entorno').NoAction
+    .When('se lee su entorno',
+      procedure(W: TOverlapWorld)
+      begin
+        W.Report := W.Builder.Environment.EnvironmentName + '/' +
+          BoolToStr(W.Builder.Environment.IsProduction, True);
+      end)
     .&Then('no es el predeterminado',
       procedure(W: TOverlapWorld)
       begin
@@ -195,11 +214,13 @@ Feature Several startups in one process @hosting @builder-style
     .Given('los dos fijados por argumento',
       procedure(W: TOverlapWorld)
       begin
-        var Builder := THostBuilder.Create(['--DAF_APP_NAME=mytool']);
-        var Owner: IHostApplicationBuilder := Builder;
-        W.Report := Builder.Environment.ApplicationName;
+        W.Builder := THostBuilder.Create(['--DAF_APP_NAME=mytool']);
       end)
-    .When('se leen').NoAction
+    .When('se leen',
+      procedure(W: TOverlapWorld)
+      begin
+        W.Report := W.Builder.Environment.ApplicationName;
+      end)
     .&Then('responden con lo que se les paso',
       procedure(W: TOverlapWorld)
       begin
@@ -214,10 +235,13 @@ Feature Several startups in one process @hosting @builder-style
     .Given('un builder al que nadie le pide la propiedad Logging',
       procedure(W: TOverlapWorld)
       begin
-        var Builder := THostBuilder.Create;
-        var Owner: IHostApplicationBuilder := Builder;
-        Builder.Services.AddSingleton<IMarker>(TMarker.Create('quiet') as IMarker);
-        var Host := Builder.Build;
+        W.Builder := THostBuilder.Create;
+        W.Builder.Services.AddSingleton<IMarker>(TMarker.Create('quiet') as IMarker);
+      end)
+    .When('se construye y se arranca',
+      procedure(W: TOverlapWorld)
+      begin
+        var Host := W.Builder.Build;
         Host.Start;
         try
           W.Report := Host.Services.GetService<IMarker>.Name;
@@ -225,7 +249,6 @@ Feature Several startups in one process @hosting @builder-style
           Host.Stop;
         end;
       end)
-    .When('se construye y se arranca').NoAction
     .&Then('llega hasta el final sin que nada levante un error de composicion',
       procedure(W: TOverlapWorld)
       begin
@@ -236,10 +259,13 @@ Feature Several startups in one process @hosting @builder-style
     .Given('un builder al que se le anade un proveedor de logging',
       procedure(W: TOverlapWorld)
       begin
-        var Builder := THostBuilder.Create;
-        var Owner: IHostApplicationBuilder := Builder;
-        Builder.Logging.AddNullProvider;
-        var Host := Builder.Build;
+        W.Builder := THostBuilder.Create;
+        W.Builder.Logging.AddNullProvider;
+      end)
+    .When('se construye y se arranca',
+      procedure(W: TOverlapWorld)
+      begin
+        var Host := W.Builder.Build;
         Host.Start;
         try
           // Assigned pide una variable, no el resultado de una llamada: sobre la llamada da
@@ -250,7 +276,6 @@ Feature Several startups in one process @hosting @builder-style
           Host.Stop;
         end;
       end)
-    .When('se construye y se arranca').NoAction
     .&Then('la factoria de loggers esta registrada',
       procedure(W: TOverlapWorld)
       begin
