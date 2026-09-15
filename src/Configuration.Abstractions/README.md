@@ -15,7 +15,7 @@ Core contracts for the DAF configuration system. This module defines **interface
 
 | Unit | What it declares |
 |---|---|
-| `Daf.Extensions.Configuration` | the contracts below, `TConfigurationPath` and `TConfigurationSourceOption` |
+| `Daf.Extensions.Configuration` | the contracts below, `TConfigurationPath`, `TConfigurationSourceOption` and `ConfigurationKeyName` |
 | `Daf.Configuration.Binder` | `TConfigurationBinder` and `TBindOption` |
 
 ### Core interfaces
@@ -76,6 +76,25 @@ type
 What a source takes is the **set**, and `csoOptional` is the value that changes what happens: without
 it, a file that is not there aborts the load with `File "<name>" not Found`; with it, the source
 warns and contributes nothing. No provider reads `csoReloadOnChange`.
+
+### `ConfigurationKeyName`
+
+```pascal
+type
+  TDbSettings = class
+  private
+    FConnectionString: string;
+  public
+    [ConfigurationKeyName('connection-string')]
+    property ConnectionString: string read FConnectionString write FConnectionString;
+  end;
+```
+
+The attribute names the key a member is read from, so a key a file writes as `connection-string`
+reaches a property Delphi cannot name that way. It **replaces** the member name: with the attribute
+there, a value under `ConnectionString` no longer answers for that member. On a member of object
+type it renames the whole section. It applies under `boProperties` and `boFields` alike, where
+.NET declares it for properties only.
 
 ---
 

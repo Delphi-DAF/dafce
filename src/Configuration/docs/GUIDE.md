@@ -278,6 +278,34 @@ WriteLn(Opts.MaxPoolSize);  // 0: this class sets no default and the config does
 
 Type conversion from `string` is handled automatically for `Integer`, `Boolean`, `Double`, and `string`.
 
+### A member can name the key it is read from
+
+`ConfigurationKeyName` gives a member the key it is bound from, which is how a key the file writes
+as `connection-string` reaches a property Delphi cannot name that way:
+
+```pascal
+uses Daf.Extensions.Configuration, Daf.Configuration.Binder;
+
+type
+  TDbSettings = class
+  private
+    FConnectionString: string;
+    FTimeout: Integer;
+  public
+    [ConfigurationKeyName('connection-string')]
+    property ConnectionString: string read FConnectionString write FConnectionString;
+    property Timeout: Integer read FTimeout write FTimeout;
+  end;
+
+// Reads 'Database:connection-string' and 'Database:Timeout'.
+var Opts := TConfigurationBinder.Bind<TDbSettings>(Config, 'Database');
+```
+
+The attribute **replaces** the member name rather than adding a second place to look: with it there,
+a value under `Database:ConnectionString` no longer answers for that member. A member without the
+attribute keeps being read by its own name. On a member of object type the attribute renames the
+whole section, so its children are read underneath the new name.
+
 ### A key the configuration does not mention is not written
 
 Binding writes what the configuration says. A key that no source mentions leaves the member as it

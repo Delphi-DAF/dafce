@@ -278,6 +278,34 @@ WriteLn(Opts.MaxPoolSize);  // 0: esta clase no pone defecto y la config no la m
 
 La conversión de tipos desde `string` se gestiona automáticamente para `Integer`, `Boolean`, `Double` y `string`.
 
+### Un miembro puede nombrar la clave por la que se lee
+
+`ConfigurationKeyName` le da a un miembro la clave desde la que se enlaza, que es como una clave que
+el fichero escribe como `connection-string` llega a una propiedad que Delphi no puede llamar así:
+
+```pascal
+uses Daf.Extensions.Configuration, Daf.Configuration.Binder;
+
+type
+  TDbSettings = class
+  private
+    FConnectionString: string;
+    FTimeout: Integer;
+  public
+    [ConfigurationKeyName('connection-string')]
+    property ConnectionString: string read FConnectionString write FConnectionString;
+    property Timeout: Integer read FTimeout write FTimeout;
+  end;
+
+// Lee 'Database:connection-string' y 'Database:Timeout'.
+var Opts := TConfigurationBinder.Bind<TDbSettings>(Config, 'Database');
+```
+
+El atributo **sustituye** al nombre del miembro en vez de añadir un segundo sitio donde mirar: puesto
+el atributo, un valor bajo `Database:ConnectionString` ya no responde por ese miembro. Un miembro sin
+atributo se sigue leyendo por su propio nombre. Sobre un miembro de tipo objeto el atributo renombra
+la sección entera, así que sus hijos se leen debajo del nombre nuevo.
+
 ### Una clave que la configuración no menciona no se escribe
 
 El enlace escribe lo que la configuración dice. Una clave que ninguna fuente menciona deja el

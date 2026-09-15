@@ -146,12 +146,23 @@ begin
     Result := CreateObject(DataType);
 end;
 
+// El atributo SUSTITUYE al nombre del miembro: no es un segundo sitio donde mirar, asi que un dato
+// bajo el nombre del miembro no responde por el. Es la paridad con ConfigurationKeyName de .NET.
+function KeyNameOf(const Member: TRttiDataMember): string;
+begin
+  for var Attr in Member.GetAttributes do
+    if Attr is ConfigurationKeyNameAttribute then
+      Exit(ConfigurationKeyNameAttribute(Attr).Name);
+  Result := Member.Name;
+end;
+
 procedure TBaseBinder.BindMembers(const Path: string; Instance: TObject);
 begin
   var Typ := Ctx.GetType(Instance.ClassType);
   for var Member in GetMembers(Typ) do
   begin
-    var Key := IfThen(Path = '', Member.Name, TConfigurationPath.Combine([Path, Member.Name]));
+    var Name := KeyNameOf(Member);
+    var Key := IfThen(Path = '', Name, TConfigurationPath.Combine([Path, Name]));
     // Un miembro plano consume el valor PROPIO de la clave, asi que quien responde por su ausencia
     // es Find y no Exists: una seccion que solo agrupa existe y no tiene nada que escribir en un
     // Integer. Sin dato, el miembro se queda con lo que ya tenia. Un compuesto se asigna siempre:

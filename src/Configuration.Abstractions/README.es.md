@@ -15,7 +15,7 @@ Contratos principales del sistema de configuración de DAF. Este módulo define 
 
 | Unit | Qué declara |
 |---|---|
-| `Daf.Extensions.Configuration` | los contratos de abajo, `TConfigurationPath` y `TConfigurationSourceOption` |
+| `Daf.Extensions.Configuration` | los contratos de abajo, `TConfigurationPath`, `TConfigurationSourceOption` y `ConfigurationKeyName` |
 | `Daf.Configuration.Binder` | `TConfigurationBinder` y `TBindOption` |
 
 ### Interfaces principales
@@ -76,6 +76,25 @@ type
 Lo que recibe una fuente es el **conjunto**, y `csoOptional` es el valor que cambia lo que pasa: sin
 él, un fichero que no está aborta la carga con `File "<nombre>" not Found`; con él, la fuente avisa y
 no aporta nada. Ningún proveedor lee `csoReloadOnChange`.
+
+### `ConfigurationKeyName`
+
+```pascal
+type
+  TDbSettings = class
+  private
+    FConnectionString: string;
+  public
+    [ConfigurationKeyName('connection-string')]
+    property ConnectionString: string read FConnectionString write FConnectionString;
+  end;
+```
+
+El atributo nombra la clave por la que se lee un miembro, así que una clave que el fichero escribe
+como `connection-string` llega a una propiedad que Delphi no puede llamar así. **Sustituye** al
+nombre del miembro: puesto el atributo, un valor bajo `ConnectionString` ya no responde por ese
+miembro. Sobre un miembro de tipo objeto renombra la sección entera. Vale igual con `boProperties`
+que con `boFields`, donde .NET lo declara solo para propiedades.
 
 ---
 
