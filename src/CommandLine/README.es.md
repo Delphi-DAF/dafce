@@ -216,7 +216,7 @@ CountOpt := CommandLine.Option<Integer>('--count', 'Cuántos hacer')
 Se pueden declarar varias; el primer rechazo es el error de ese valor. Una validación debería ser una
 pregunta pura sobre el valor.
 
-Dos vienen de serie, escritas sobre ese mismo gancho y no sobre un mecanismo aparte:
+Dos vienen de serie, escritas sobre ese mismo gancho:
 
 | | Qué pregunta |
 |---|---|

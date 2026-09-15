@@ -214,7 +214,7 @@ CountOpt := CommandLine.Option<Integer>('--count', 'How many to make')
 Several can be declared; the first refusal is the error for that value. A validation should be a pure
 question about the value.
 
-Two come as standard, written over that same hook rather than over a mechanism of their own:
+Two come as standard, written over that same hook:
 
 | | What it asks |
 |---|---|

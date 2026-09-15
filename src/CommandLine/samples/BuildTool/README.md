@@ -56,9 +56,8 @@ Everything lives in one class, `TBuildTool`, and each part answers a different q
   is what puts it on every leaf.
 
 - **`BindActions` maps each leaf to a handler, and keys it by the command *object*.**
-  `Parsed.Command = Action.Leaf`, never `Parsed.Command.Name = 'native'` — that would put a quoted
-  name back in the middle of the program, which is the mistake this module exists to remove. There is
-  no ladder of `if`s and no `case` on a string.
+  `Parsed.Command = Action.Leaf`, never `Parsed.Command.Name = 'native'` — that puts a quoted name
+  back in the middle of the program. There is no ladder of `if`s and no `case` on a string.
 
 - **That table is application code, and deliberately so.** `Daf.CommandLine` parses and hands back
   the leaf it reached; **it does not invoke anything**. Dispatch is a non-goal of the module, because a
