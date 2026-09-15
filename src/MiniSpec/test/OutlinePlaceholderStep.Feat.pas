@@ -64,9 +64,11 @@ A generic type in a step description is prose, not a placeholder @outline-placeh
 ''')
 .UseWorld<TGenericProseWorld>
 
+// [sin-When] el sujeto es la descripcion del propio paso, que el runner expande justo antes de
+// llamar a su lambda: no hay evento que se pueda separar en una fase aparte.
 .Scenario('AGenericTypeIsLeftAlone')
-  // Nada que montar: el estado que el escenario necesita es una propiedad del TIPO del World --no
-  // tiene ningun campo llamado T-- y eso esta compilado.
+  // Nada que montar tampoco: el estado que el escenario necesita es una propiedad del TIPO del
+  // World --no tiene ningun campo llamado T-- y eso esta compilado.
   .Given('a world with no field named T').NoAction
   // Cada paso comprueba SU PROPIA descripcion, que es el sujeto: TSpecItem.Run expande los
   // placeholders antes de llamar a la lambda, asi que lo que se lee aqui es el texto ya resuelto
@@ -95,6 +97,8 @@ A placeholder after a separator still expands @outline-placeholder
 ''')
 .UseWorld<TGenericProseWorld>
 
+// [sin-When] el sujeto es la descripcion del propio paso, que el runner expande justo antes de
+// llamar a su lambda: no hay evento que se pueda separar en una fase aparte.
 .Scenario('SeparatorsBeforeAPlaceholderStillCount')
   .Given('a world whose Count is 7', procedure(World: TGenericProseWorld)
     begin
