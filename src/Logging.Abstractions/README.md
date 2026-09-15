@@ -15,25 +15,28 @@ All types live in `DAF.Extensions.Logging`.
 Per-category façade that emits log entries.
 
 ```pascal
-ILogger = interface
-  procedure Log(Level: TLogLevel; const Msg: string; const Args: array of const); overload;
-  procedure Log(Level: TLogLevel; E: Exception; const Msg: string; const Args: array of const); overload;
+ILogger = interface(IInvokable)
+  function IsEnabled(const Level: TLogLevel): Boolean;
 
-  function IsEnabled(Level: TLogLevel): Boolean;
+  procedure Log(const Level: TLogLevel; const Msg: string; const Args: TArray<TValue> = nil); overload;
+  procedure Log(const Level: TLogLevel; const Ex: Exception; const Msg: string; const Args: TArray<TValue> = nil); overload;
 
-  procedure LogTrace      (const Msg: string; const Args: array of const); overload;
-  procedure LogDebug      (const Msg: string; const Args: array of const); overload;
-  procedure LogInformation(const Msg: string; const Args: array of const); overload;
-  procedure LogWarning    (const Msg: string; const Args: array of const); overload;
-  procedure LogError      (const Msg: string; const Args: array of const); overload;
-  procedure LogError      (E: Exception; const Msg: string; const Args: array of const); overload;
-  procedure LogCritical   (const Msg: string; const Args: array of const); overload;
-  procedure LogCritical   (E: Exception; const Msg: string; const Args: array of const); overload;
+  procedure LogTrace      (const Msg: string; const Args: TArray<TValue> = nil); overload;
+  procedure LogDebug      (const Msg: string; const Args: TArray<TValue> = nil); overload;
+  procedure LogInformation(const Msg: string; const Args: TArray<TValue> = nil); overload;
+  procedure LogWarning    (const Msg: string; const Args: TArray<TValue> = nil); overload;
+  procedure LogError      (const Msg: string; const Args: TArray<TValue> = nil); overload;
+  procedure LogError      (const Ex: Exception; const Msg: string = ''; const Args: TArray<TValue> = nil); overload;
+  procedure LogCritical   (const Msg: string; const Args: TArray<TValue> = nil); overload;
+  procedure LogCritical   (const Ex: Exception; const Msg: string; const Args: TArray<TValue> = nil); overload;
 
-  function BeginScope(const Msg: string; const Args: array of const;
-                      ScopedProc: TProc): ILogScopeVoid; overload;
+  function BeginScope(const Msg: string; const Args: TArray<TValue>;
+                      const ScopedProc: TProc = nil): ILogScopeVoid; overload;
 end;
 ```
+
+The arguments travel as `TArray<TValue>`, so `['a', 1, True]` keeps each value typed instead of
+flattening into a `TVarRec`. Every one of these has a further overload taking a `TEventId` first.
 
 `IsEnabled(Level)` answers whether an entry of that level would reach any destination. Ask it before
 building arguments that cost more than the line itself — a state dump, a query, a walk — because in
@@ -53,18 +56,18 @@ because dropping a line by not knowing is worse than composing one too many. Thi
 
 ### ILoggerFactory
 
-Creates `ILogger` instances and fans writes out to all registered providers.
+Creates `ILogger` instances; the logger it hands back writes to every registered provider.
 
 ```pascal
-ILoggerFactory = interface
-  function  CreateLogger(const Category: string): ILogger; overload;
-  function  CreateLogger(AClass: TClass): ILogger; overload;
-  function  CreateLogger(TypeInfo: PTypeInfo): ILogger; overload;
-  procedure AddProvider(Provider: ILoggerProvider);
+ILoggerFactory = interface(IInvokable)
+  function CreateLogger(const Category: string): ILogger; overload;
+  function CreateLogger(const AClass: TClass): ILogger; overload;
+  function CreateLogger(const AType: PTypeInfo): ILogger; overload;
 end;
 ```
 
-Generic helper: `Factory.CreateLogger<TMyClass>` — uses the class name as category.
+`CreateLogger(TMyClass)` takes the category from the class — its unit and its name. Providers are
+added through `ILoggingBuilder`, not here.
 
 ---
 
@@ -146,20 +149,40 @@ Represent an active logging scope. `ILogScopeVoid` is the version returned by `B
 ### TLogLevel
 
 ```pascal
+{$SCOPEDENUMS ON}
 TLogLevel = (Trace, Debug, Information, Warning, Error, Critical, None);
 ```
 
-### TLogState
-
-Holds a structured log message — template string plus positional args.
+Scoped, so it is written `TLogLevel.Debug`. Text goes in and comes out through a helper, which is
+what a level read from a configuration file needs:
 
 ```pascal
-TLogState = record
-  Template: string;
-  Args: TArray<TVarRec>;
-  function Format: string;
-end;
+S      := Level.ToString;
+Level  := TLogLevel.Parse('Debug');                     // raises: Invalid log level: <text>
+Level  := TLogLevel.Parse(Raw, TLogLevel.Information);  // or a fallback, and no exception
+Levels := TLogLevel.ParseList('Debug,Error');           // comma separated
+if TLogLevel.TryParse(Raw, Level) then ...
 ```
+
+⚠️ `ParseList` **drops silently** what it cannot read: a list of three with one typo comes back with
+two levels and no error.
+
+### TLogState
+
+The message an entry carries: the template as written, its arguments, and — when the template names
+them — the pairs it yields.
+
+| Member | What it gives |
+|---|---|
+| `Template` | the template as written, placeholders included |
+| `Arguments` | `TArray<TValue>`, in the order they were passed |
+| `KeyValuePairs` | `TArray<TPair<string, TValue>>`; empty when the template names nothing |
+| `TryGetValue(Key, out Value)` | the value of one named placeholder |
+| `Formatter` | the `TLogFormatter` that turns the state into a line |
+
+`LogInformation('user {User} ordered {Count}', [Name, N])` yields two pairs, and `TryGetValue` is how
+a layout resolves `{User}` — it is what NNLog's renderer calls. A template that names nothing yields
+no pairs, and `Arguments` still holds them in order, which is what a `'%s'` template uses.
 
 ### TLogEntry
 
@@ -169,13 +192,17 @@ Single log entry delivered to a provider's `Write` method.
 TLogEntry = record
   Level     : TLogLevel;
   Category  : string;
-  EventId   : Integer;
+  EventId   : TEventId;
   Exception : Exception;
   Scope     : string;
   State     : TLogState;
-  Message   : string;
+  Formatter : TLogFormatter;
 end;
 ```
+
+`Message` is a **read-only property**, not a field: the first read runs `Formatter` over `State`,
+appends `Scope`, and keeps the result. A provider that writes its own layout out of `State` never
+pays for it.
 
 ---
 
