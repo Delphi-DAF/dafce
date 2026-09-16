@@ -5,11 +5,10 @@ toc: false
 lang: es
 ---
 
-DAFce incluye **26 paquetes** en search paths independientes — añade solo los que necesites. La tabla lista los veinte que tienen página propia; los otros seis son los paquetes de contrato `.Abstractions`. Cuando un módulo porta un diseño de otra comunidad, la tabla dice cuál.
+DAFce incluye **25 paquetes** en search paths independientes — añade solo los que necesites. La tabla lista los diecinueve que tienen página propia; los otros seis son los paquetes de contrato `.Abstractions`. Cuando un módulo porta un diseño de otra comunidad, la tabla dice cuál.
 
 | Módulo | Paquete | Descripción |
 |--------|---------|-------------|
-| [Application](application.qmd) | `Daf.Application` | Raíz de composición de la familia de aplicaciones: metadatos de versión, `Run` y el accesor global |
 | [Cli](cli.qmd) | `Daf.Cli` | El **miembro CLI** de la familia de aplicaciones — porta la forma de `Host.CreateApplicationBuilder` de .NET, y su `Run` devuelve el código de salida |
 | [CommandLine](commandline.qmd) | `Daf.CommandLine` | Un porte de `System.CommandLine` de .NET, la librería sobre la que está construido el propio CLI de `dotnet`: comandos, subcomandos, opciones y argumentos |
 | [Commons](commons.qmd) | `Daf.Commons` | Smart pointers, RTTI, threading, arrays, valores nulables |

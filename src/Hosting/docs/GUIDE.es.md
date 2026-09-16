@@ -378,7 +378,7 @@ dueño, y es la única vía de pasarle configuración.
 
 **No hay descubrimiento automático.** `AddModules(Package)`, el escaneo por RTTI de los
 `IAppModule`, se retiró: escondía la declaración en un `uses`, dejaba el arranque ciego en
-silencio ante una RTTI recortada y ponía el orden de registro en manos de la reflexión. Una
-`TDafApplication` tampoco registra módulos por su cuenta — los suyos se declaran donde se
-compongan los servicios, igual que arriba. Las dos fases y las reglas de orden, en
+silencio ante una RTTI recortada y ponía el orden de registro en manos de la reflexión. Ninguna
+variante de la familia registra módulos por su cuenta — los suyos se declaran donde se compongan
+los servicios, igual que arriba. Las dos fases y las reglas de orden, en
 [Composición del arranque](../../DependencyInjection/docs/STARTUP-COMPOSITION.es.md).

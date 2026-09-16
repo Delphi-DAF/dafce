@@ -1,6 +1,7 @@
 ﻿program CommonsSpecs;
 
 {$APPTYPE CONSOLE}
+{$STRONGLINKTYPES ON}
 
 uses
   Daf.MiniSpec,
@@ -11,7 +12,8 @@ uses
   Comparers.Feat in 'Comparers.Feat.pas',
   Arrays.Feat in 'Arrays.Feat.pas',
   Macros.Feat in 'Macros.Feat.pas',
-  Rtti.Feat in 'Rtti.Feat.pas';
+  Rtti.Feat in 'Rtti.Feat.pas',
+  Version.Feat in 'Version.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

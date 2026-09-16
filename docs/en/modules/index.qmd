@@ -4,11 +4,10 @@ sidebar: modules
 toc: false
 ---
 
-DAFce ships **26 packages** in independent search paths — add only what you need. The table below lists the twenty with a page of their own; the other six are the `.Abstractions` contract packages. Where a module ports a design from another community, the table says which.
+DAFce ships **25 packages** in independent search paths — add only what you need. The table below lists the nineteen with a page of their own; the other six are the `.Abstractions` contract packages. Where a module ports a design from another community, the table says which.
 
 | Module | Package | Description |
 |--------|---------|-------------|
-| [Application](application.qmd) | `Daf.Application` | Composition root of the application family: version metadata, `Run` and the global accessor |
 | [Cli](cli.qmd) | `Daf.Cli` | The **CLI member** of the application family — ports the shape of .NET's `Host.CreateApplicationBuilder`, and `Run` returns the exit code |
 | [CommandLine](commandline.qmd) | `Daf.CommandLine` | A port of .NET's `System.CommandLine`, the library the `dotnet` CLI itself is built on: commands, subcommands, options and arguments |
 | [Commons](commons.qmd) | `Daf.Commons` | Smart pointers, RTTI, threading, arrays, nullable values |

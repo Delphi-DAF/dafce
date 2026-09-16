@@ -2,7 +2,6 @@
 
 ```{mermaid}
 graph TD
-  Application[Application]
   Cli[Cli]
   CommandLine[CommandLine]
   Commons[Commons]
@@ -34,7 +33,6 @@ graph TD
   RTinet[("inet")]
   RTinetstn[("inetstn")]
   RTvcl[("vcl")]
-  Application --> Hosting
   Cli --> CommandLine
   Cli --> Hosting
   CommandLine --> Commons
@@ -83,7 +81,7 @@ graph TD
   class RTIndy,RTRESTComponents,RTfmx,RTinet,RTinetstn,RTvcl rt;
 ```
 
-Dibujado como reducción transitiva: solo las aristas que no llegan ya por otro camino. `rtl` no se dibuja porque lo requieren los 26 paquetes; los de los runtimes ajenos van en un nodo por familia —Indy, RESTComponents, fmx, inet, inetstn y vcl— con los nombres reales en la etiqueta.
+Dibujado como reducción transitiva: solo las aristas que no llegan ya por otro camino. `rtl` no se dibuja porque lo requieren los 25 paquetes; los de los runtimes ajenos van en un nodo por familia —Indy, RESTComponents, fmx, inet, inetstn y vcl— con los nombres reales en la etiqueta.
 
 El borde de puntos marca un paquete de contrato (`.Abstractions`); los nodos redondeados a trazos son runtimes ajenos.
 
@@ -91,7 +89,6 @@ Instalables solos, sin depender de ningún otro paquete de DAF: `Commons`, `Mini
 
 | Paquete | Runtimes que arrastra |
 |---|---|
-| `Application` | `rtl` |
 | `Cli` | `rtl` |
 | `CommandLine` | `rtl` |
 | `Commons` | `rtl` |
@@ -118,4 +115,4 @@ Instalables solos, sin depender de ningún otro paquete de DAF: `Commons`, `Mini
 | `VCL` | `rtl` · `vcl` |
 | `Web` | `IndyCore` · `IndyProtocols` · `IndySystem` · `RESTComponents` · `inet` · `inetstn` · `rtl` |
 
-21 de 26 no piden más que `rtl`.
+20 de 25 no piden más que `rtl`.

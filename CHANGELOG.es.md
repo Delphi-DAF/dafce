@@ -101,6 +101,7 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 ### Removed
 
 - ⚠️ **Hosting**: `IHostBuilder`, y con él el estilo diferido: los callbacks `ConfigureServices`, `ConfigureAppConfiguration` y `ConfigureHostConfiguration`, más `TConfigureServicesAction`. Queda un solo estilo, el inmediato; el punto de entrada es `THost.CreateBuilder` o la variante de la familia
+- ⚠️ **Application**: El paquete `Daf.Application`, con `TDafApplication`, `TDafApplicationBuilder` e `IDafApplication`. El relevo es la variante de la familia de aplicaciones —`TCliApplication`, `TWebApplication`, `TVclApplication`, `TFmxApplication`— y `MIGRATION-2.0.es.md` dice dónde fue a parar cada miembro. `TVersionInfo` y `[Version]` no se tocan: se entregan en `Daf.Commons`
 - ⚠️ **DependencyInjection**: `AddModules(Package)`, el descubrimiento por RTTI de los `IAppModule`. El sustituto es `AddModule<T>`, una llamada por módulo y en el orden que la aplicación quiera; `IAppModule` y `TAppModule` no cambian
 - **Logging**: La global `DAFInternalLogger`, sustituida por `BootstrapLog.LoggerFor(<categoría>)`
 - ⚠️ **Configuration**: `csoReloadOnChange`, un valor de `TConfigurationSourceOption` que ningún proveedor leyó nunca. `csoOptional` no cambia
@@ -135,11 +136,11 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 - **NNLog**: Una regla construida en código llegaba desactivada, con su nivel máximo en el más bajo de todos, y reventaba al emparejar una categoría. `TLogRule.Create` fija ahora los mismos valores por defecto que escribe el cargador
 - **MediatR**: Componer dos veces en un mismo proceso da el mismo resultado; la contabilidad de paquetes ya escaneados era estado global de unit
 - **SQLCute**: `WhereIn` con un conjunto de valores **vacío** emitía `col IN ()`, inválido en casi cualquier motor; ahora no casa ninguna fila y `WhereNotIn` las casa todas, igual en los dos back-ends. Afecta también a `OrWhereIn` / `OrWhereNotIn` y a `IsIn([])`
-- **Application**: `TVersionInfo.Tag` estaba **siempre vacío**, y `GetFrom` sobre una clase sin atributo devolvía lo que hubiera en la memoria del destino
+- **Commons**: `TVersionInfo.Tag` estaba **siempre vacío**, y `GetFrom` sobre una clase sin atributo devolvía lo que hubiera en la memoria del destino
 - **Configuration**: El enlace ya no escribe un miembro cuya clave no menciona ninguna fuente: un defecto puesto en el constructor sobrevive al enlace, y un segundo enlace no borra lo que trajo el primero. Una clave presente con valor vacío se sigue escribiendo
 - **Configuration**: Una clave encadenada cuyo valor **es** la cadena vacía ya no desaparece al atravesar la cadena: `TChainedConfigurationProvider` pregunta la presencia en vez de deducirla del valor
 - **Commons**: `TMacrosList.GetValueFromIndex` devolvía cadena vacía en toda lectura de macro
-- **Docs**: El arranque que enseñaba la documentación **no compilaba**, la guía describía una superficie de `IDafApplication` que no era la real, y la de Hosting seguía prometiendo el descubrimiento automático de los `IAppModule`. Ahora enseña `AddModule<T>`
+- **Docs**: El arranque que enseñaba la documentación **no compilaba**, y la guía de Hosting seguía prometiendo el descubrimiento automático de los `IAppModule`. Ahora enseña `AddModule<T>`
 
 ## [1.6.0] - 2026-07-20
 

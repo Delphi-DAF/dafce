@@ -31,8 +31,10 @@ and naming the type in `AddModule<T>` already links its unit.
 untouched. What disappears is how they were found, not what they are.
 
 ⚠️ **If your application derives from `TDafApplication`, this affects you even if you never wrote
-`AddModules`.** `TDafApplicationBuilder` used to discover the modules of the application class's
-package on its own; now it registers none. Declare yours where you compose services:
+`AddModules`.** That builder used to discover the modules of the application class's package on
+its own. `TDafApplication` is **retired** in 2.0 — your entry point is your variant's builder,
+further down — and no variant registers a module for you. Declare yours where you compose
+services:
 
 ```pascal
 Builder.Services
@@ -269,10 +271,13 @@ This is the largest front of 2.0 for anything that had a `.dpr`.
   `Services`, `Configuration`, `Environment`, `Logging` and `Properties` through
   `IHostApplicationBuilder`.
 
-- **`TDafApplication` and `TDafApplicationBuilder` are deprecated**, not removed: they still
-  compile. `TDafApplication.VersionRequested` **is** removed — the grammar answers `--version`
-  through `ICommandLineParseResult.VersionRequested`. And `TDafApplication.App` becomes `DafApp`,
-  which exists **only in VCL and FMX**: in CLI and Web there is no application global on purpose.
+- **`TDafApplication` and `TDafApplicationBuilder` are retired**, and so is the `Daf.Application`
+  package. Their replacement is the variant from the entry above, and each member goes somewhere:
+  `CreateHostBuilder` becomes your variant's `CreateBuilder`; `IDafApplication` becomes the
+  `I…Application` that `Build` returns; `RunAsync` is `Run` under its own name;
+  `VersionRequested` is `ICommandLineParseResult.VersionRequested`, answered by the grammar; and
+  `App` becomes `DafApp`, which exists **only in VCL and FMX** — in CLI and Web there is no
+  application global on purpose.
 
 - **`Daf.Application.Version` moved to `Daf.Commons`**, unchanged. Add `Daf.Commons` to `requires`
   if you used `TVersionInfo` and did not already.

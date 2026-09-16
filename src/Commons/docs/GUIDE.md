@@ -14,7 +14,8 @@
 6. [Daf.Arrays](#dafarrays)
 7. [Daf.Nullable](#dafnullable)
 8. [Daf.Comparers](#dafcomparers)
-9. [Daf.Types](#daftypes)
+9. [Daf.Application.Version](#dafapplicationversion)
+10. [Daf.Types](#daftypes)
 
 `Daf.SystemProcess` and `Daf.CmdLn.Parser` used to be documented here. The first lives in a package
 of its own — see [SystemProcess](../../SystemProcess/README.md); the second has been withdrawn, and
@@ -391,6 +392,44 @@ var ByAge := TNullableComparers.Ordinal<Integer>;
 Over `TValue`, SQL NULL is modelled as an **empty** `TValue`, or a Variant-kind one holding `Null`
 or `Unassigned`. This is what `SQLCute.InMemory` builds its ANSI NULL semantics on — see
 [SQLCute.InMemory](../../SQLCute.InMemory/README.md).
+
+---
+
+## Daf.Application.Version
+
+### TVersionInfo / [Version]
+
+A class declares its version with the `[Version]` attribute — SemVer tag, application name and
+company — and `TVersionInfo.GetFrom` reads it back by RTTI:
+
+```pascal
+uses
+  Daf.Application.Version;
+
+type
+  [Version('1.2.3-rc.2+build.7', 'Invoicer', 'Acme')]
+  TInvoicerApp = class
+  end;
+
+var Info := TVersionInfo.GetFrom(TInvoicerApp);
+// Info.Major = 1, Info.Minor = 2, Info.Patch = 3
+// Info.PreRelease = 'rc.2', Info.Metadata = 'build.7'
+// Info.ApplicationName = 'Invoicer', Info.Company = 'Acme'
+```
+
+| Member | What it answers |
+|---|---|
+| `Tag` | the string the attribute declared, verbatim |
+| `VersionTag(WithCompiledMeta)` | the same version rebuilt from its parsed pieces; with the flag, the platform and bitness too |
+| `Major` / `Minor` / `Patch` / `PreRelease` / `Metadata` | the SemVer pieces |
+| `ApplicationName` / `Company` | the other two arguments of the attribute |
+| `ArchBits` / `Platform` / `Debug` | what the **compiler** saw: 32 or 64, the target platform, and whether `DEBUG` was defined |
+
+**A class with no attribute gives an empty record**, not an error: `Tag` and the two names come back
+as empty strings and the numeric pieces as zero.
+
+The attribute is read by RTTI, so the linker has to keep the class: a program that relies on this
+declares `STRONGLINKTYPES` and puts the class in its `interface` section.
 
 ---
 

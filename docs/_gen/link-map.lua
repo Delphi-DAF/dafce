@@ -3,10 +3,9 @@
 return {
   -- cuantos documentos incluye cada pagina (informativo)
   pages = {
+    ["en/docs/application-family.qmd"] = 1,
     ["en/docs/startup-composition.qmd"] = 1,
     ["en/migration/2.0.qmd"] = 1,
-    ["en/modules/application-guide.qmd"] = 1,
-    ["en/modules/application.qmd"] = 1,
     ["en/modules/cli.qmd"] = 1,
     ["en/modules/commandline.qmd"] = 1,
     ["en/modules/commons-guide.qmd"] = 1,
@@ -40,10 +39,9 @@ return {
     ["en/modules/vcl.qmd"] = 1,
     ["en/modules/web-guide.qmd"] = 1,
     ["en/modules/web.qmd"] = 1,
+    ["es/docs/application-family.qmd"] = 1,
     ["es/docs/startup-composition.qmd"] = 1,
     ["es/migration/2.0.qmd"] = 1,
-    ["es/modules/application-guide.qmd"] = 1,
-    ["es/modules/application.qmd"] = 1,
     ["es/modules/cli.qmd"] = 1,
     ["es/modules/commandline.qmd"] = 1,
     ["es/modules/commons-guide.qmd"] = 1,
@@ -79,6 +77,13 @@ return {
     ["es/modules/web.qmd"] = 1,
   },
   links = {
+    ["en/docs/application-family.qmd"] = {
+      ["#what-this-layer-is-in-net-terms"] = "#what-this-layer-is-in-.net-terms",
+      ["../../DependencyInjection/docs/STARTUP-COMPOSITION.md"] = "/en/docs/startup-composition.qmd",
+      ["../../VCL/samples/TicTacToeApp/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/VCL/samples/TicTacToeApp/README.md",
+      ["APPLICATION-FAMILY.es.md"] = "/es/docs/application-family.qmd",
+      ["GUIDE.md"] = "/en/modules/hosting-guide.qmd",
+    },
     ["en/docs/startup-composition.qmd"] = {
       ["#net--daf"] = "#net-daf",
       ["GUIDE.md"] = "/en/modules/di-guide.qmd",
@@ -86,25 +91,6 @@ return {
     },
     ["en/migration/2.0.qmd"] = {
       ["src/DependencyInjection.Abstractions/README.md#registering-a-generic-contract-once"] = "/en/modules/di.qmd#registering-a-generic-contract-once",
-    },
-    ["en/modules/application-guide.qmd"] = {
-      ["#tdafapplicationapp"] = "#tdafapplication.app",
-      ["#what-this-layer-is-in-net-terms"] = "#what-this-layer-is-in-.net-terms",
-      ["../../Cli/samples/QuickStart/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/Cli/samples/QuickStart",
-      ["../../Cli/samples/ServiceWiring/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/Cli/samples/ServiceWiring",
-      ["../../Hosting/docs/GUIDE.md"] = "/en/modules/hosting-guide.qmd",
-      ["../../Hosting/samples/HostQuickStart/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/Hosting/samples/HostQuickStart",
-      ["../../VCL/samples/TicTacToeApp/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/VCL/samples/TicTacToeApp/README.md",
-      ["GUIDE.es.md"] = "/es/modules/application-guide.qmd",
-    },
-    ["en/modules/application.qmd"] = {
-      ["../../legal/LICENSE.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/legal/LICENSE.md",
-      ["../Cli/samples/QuickStart/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/Cli/samples/QuickStart",
-      ["../Cli/samples/ServiceWiring/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/Cli/samples/ServiceWiring",
-      ["../Hosting/README.md"] = "/en/modules/hosting.qmd",
-      ["../Hosting/samples/HostQuickStart/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/Hosting/samples/HostQuickStart",
-      ["README.es.md"] = "/es/modules/application.qmd",
-      ["docs/GUIDE.md"] = "/en/modules/application-guide.qmd",
     },
     ["en/modules/cli.qmd"] = {
       ["../../legal/LICENSE.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/legal/LICENSE.md",
@@ -123,6 +109,7 @@ return {
     },
     ["en/modules/commons-guide.qmd"] = {
       ["#dafactivator"] = "#daf.activator",
+      ["#dafapplicationversion"] = "#daf.application.version",
       ["#dafarrays"] = "#daf.arrays",
       ["#dafcomparers"] = "#daf.comparers",
       ["#dafenumerable"] = "#daf.enumerable",
@@ -192,13 +179,13 @@ return {
     },
     ["en/modules/hosting.qmd"] = {
       ["../../legal/LICENSE.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/legal/LICENSE.md",
-      ["../Application/README.md"] = "/en/modules/application.qmd",
       ["../Cli/samples/ConsoleSample/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/Cli/samples/ConsoleSample/README.md",
       ["../Cli/samples/PackageInit/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/Cli/samples/PackageInit/README.md",
       ["../DependencyInjection/docs/STARTUP-COMPOSITION.md"] = "/en/docs/startup-composition.qmd",
       ["../Hosting/README.md"] = "/en/modules/hosting.qmd",
       ["../samples/HostedService/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/samples/HostedService",
       ["README.es.md"] = "/es/modules/hosting.qmd",
+      ["docs/APPLICATION-FAMILY.md"] = "/en/docs/application-family.qmd",
       ["docs/GUIDE.md"] = "/en/modules/hosting-guide.qmd",
       ["samples/HostQuickStart/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/Hosting/samples/HostQuickStart/README.md",
       ["samples/StartupReport/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/Hosting/samples/StartupReport/README.md",
@@ -427,7 +414,7 @@ return {
       ["samples/TicTacToeApp/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/VCL/samples/TicTacToeApp",
     },
     ["en/modules/web-guide.qmd"] = {
-      ["../../Application/docs/GUIDE.md"] = "/en/modules/application-guide.qmd",
+      ["../../Hosting/docs/APPLICATION-FAMILY.md"] = "/en/docs/application-family.qmd",
       ["../README.md"] = "/en/modules/web.qmd",
       ["GUIDE.es.md"] = "/es/modules/web-guide.qmd",
     },
@@ -437,6 +424,13 @@ return {
       ["docs/GUIDE.md"] = "/en/modules/web-guide.qmd",
       ["docs/GUIDE.md#the-web-application-variant"] = "/en/modules/web-guide.qmd#the-web-application-variant",
     },
+    ["es/docs/application-family.qmd"] = {
+      ["#qué-es-esta-capa-en-términos-de-net"] = "#qué-es-esta-capa-en-términos-de-.net",
+      ["../../DependencyInjection/docs/STARTUP-COMPOSITION.es.md"] = "/es/docs/startup-composition.qmd",
+      ["../../VCL/samples/TicTacToeApp/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/VCL/samples/TicTacToeApp/README.md",
+      ["APPLICATION-FAMILY.md"] = "/en/docs/application-family.qmd",
+      ["GUIDE.es.md"] = "/es/modules/hosting-guide.qmd",
+    },
     ["es/docs/startup-composition.qmd"] = {
       ["#net--daf"] = "#net-daf",
       ["GUIDE.es.md"] = "/es/modules/di-guide.qmd",
@@ -444,25 +438,6 @@ return {
     },
     ["es/migration/2.0.qmd"] = {
       ["src/DependencyInjection.Abstractions/README.es.md#registrar-un-contrato-genérico-una-sola-vez"] = "/es/modules/di.qmd#registrar-un-contrato-genérico-una-sola-vez",
-    },
-    ["es/modules/application-guide.qmd"] = {
-      ["#qué-es-esta-capa-en-términos-de-net"] = "#qué-es-esta-capa-en-términos-de-.net",
-      ["#tdafapplicationapp"] = "#tdafapplication.app",
-      ["../../Cli/samples/QuickStart/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/Cli/samples/QuickStart",
-      ["../../Cli/samples/ServiceWiring/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/Cli/samples/ServiceWiring",
-      ["../../Hosting/docs/GUIDE.es.md"] = "/es/modules/hosting-guide.qmd",
-      ["../../Hosting/samples/HostQuickStart/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/Hosting/samples/HostQuickStart",
-      ["../../VCL/samples/TicTacToeApp/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/VCL/samples/TicTacToeApp/README.md",
-      ["GUIDE.md"] = "/en/modules/application-guide.qmd",
-    },
-    ["es/modules/application.qmd"] = {
-      ["../../legal/LICENSE.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/legal/LICENSE.md",
-      ["../Cli/samples/QuickStart/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/Cli/samples/QuickStart",
-      ["../Cli/samples/ServiceWiring/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/Cli/samples/ServiceWiring",
-      ["../Hosting/README.es.md"] = "/es/modules/hosting.qmd",
-      ["../Hosting/samples/HostQuickStart/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/Hosting/samples/HostQuickStart",
-      ["README.md"] = "/en/modules/application.qmd",
-      ["docs/GUIDE.es.md"] = "/es/modules/application-guide.qmd",
     },
     ["es/modules/cli.qmd"] = {
       ["../../legal/LICENSE.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/legal/LICENSE.md",
@@ -481,6 +456,7 @@ return {
     },
     ["es/modules/commons-guide.qmd"] = {
       ["#dafactivator"] = "#daf.activator",
+      ["#dafapplicationversion"] = "#daf.application.version",
       ["#dafarrays"] = "#daf.arrays",
       ["#dafcomparers"] = "#daf.comparers",
       ["#dafenumerable"] = "#daf.enumerable",
@@ -550,13 +526,13 @@ return {
     },
     ["es/modules/hosting.qmd"] = {
       ["../../legal/LICENSE.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/legal/LICENSE.md",
-      ["../Application/README.es.md"] = "/es/modules/application.qmd",
       ["../Cli/samples/ConsoleSample/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/Cli/samples/ConsoleSample/README.md",
       ["../Cli/samples/PackageInit/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/Cli/samples/PackageInit/README.md",
       ["../DependencyInjection/docs/STARTUP-COMPOSITION.es.md"] = "/es/docs/startup-composition.qmd",
       ["../Hosting/README.es.md"] = "/es/modules/hosting.qmd",
       ["../samples/HostedService/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/samples/HostedService",
       ["README.md"] = "/en/modules/hosting.qmd",
+      ["docs/APPLICATION-FAMILY.es.md"] = "/es/docs/application-family.qmd",
       ["docs/GUIDE.es.md"] = "/es/modules/hosting-guide.qmd",
       ["samples/HostQuickStart/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/Hosting/samples/HostQuickStart/README.md",
       ["samples/StartupReport/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/Hosting/samples/StartupReport/README.md",
@@ -785,7 +761,7 @@ return {
       ["samples/TicTacToeApp/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/VCL/samples/TicTacToeApp",
     },
     ["es/modules/web-guide.qmd"] = {
-      ["../../Application/docs/GUIDE.es.md"] = "/es/modules/application-guide.qmd",
+      ["../../Hosting/docs/APPLICATION-FAMILY.es.md"] = "/es/docs/application-family.qmd",
       ["../README.es.md"] = "/es/modules/web.qmd",
       ["GUIDE.md"] = "/en/modules/web-guide.qmd",
     },

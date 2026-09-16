@@ -378,7 +378,7 @@ gives it an owner, and it is the only way to pass a module any configuration.
 
 **There is no automatic discovery.** `AddModules(Package)`, the RTTI scan for `IAppModule`, was
 removed: it hid the declaration in a `uses` clause, left startup silently blind to a trimmed
-RTTI, and put the registration order in the hands of reflection. A `TDafApplication` registers no
-module on its own either — its modules are declared wherever the services are composed, exactly
-as above. See [Startup composition](../../DependencyInjection/docs/STARTUP-COMPOSITION.md) for
+RTTI, and put the registration order in the hands of reflection. No variant of the application
+family registers a module on its own either — its modules are declared wherever the services are
+composed, exactly as above. See [Startup composition](../../DependencyInjection/docs/STARTUP-COMPOSITION.md) for
 the two phases and the ordering rules.

@@ -23,8 +23,6 @@ website:
           - text: "Overview"
             href: en/modules/index.qmd
           - text: "---"
-          - text: "Application"
-            href: en/modules/application.qmd
           - text: "Cli"
             href: en/modules/cli.qmd
           - text: "CommandLine"
@@ -91,6 +89,8 @@ website:
           href: en/docs/architecture.qmd
         - text: "Startup composition"
           href: en/docs/startup-composition.qmd
+        - text: "The application family"
+          href: en/docs/application-family.qmd
 
     - id: migration
       title: "Migration"
@@ -109,10 +109,6 @@ website:
           href: en/modules/index.qmd
         - section: "Foundation"
           contents:
-            - text: "Application"
-              href: en/modules/application.qmd
-            - text: "Application Guide"
-              href: en/modules/application-guide.qmd
             - text: "Hosting"
               href: en/modules/hosting.qmd
             - text: "Hosting Guide"
@@ -196,10 +192,6 @@ website:
           href: es/modules/index.qmd
         - section: "Fundación"
           contents:
-            - text: "Application"
-              href: es/modules/application.qmd
-            - text: "Guía Application"
-              href: es/modules/application-guide.qmd
             - text: "Hosting"
               href: es/modules/hosting.qmd
             - text: "Guía Hosting"
@@ -285,6 +277,8 @@ website:
           href: es/docs/architecture.qmd
         - text: "Composición del arranque"
           href: es/docs/startup-composition.qmd
+        - text: "La familia de aplicaciones"
+          href: es/docs/application-family.qmd
 
     - id: migration-es
       title: "Migración"

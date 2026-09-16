@@ -2,7 +2,6 @@
 
 ```{mermaid}
 graph TD
-  Application[Application]
   Cli[Cli]
   CommandLine[CommandLine]
   Commons[Commons]
@@ -34,7 +33,6 @@ graph TD
   RTinet[("inet")]
   RTinetstn[("inetstn")]
   RTvcl[("vcl")]
-  Application --> Hosting
   Cli --> CommandLine
   Cli --> Hosting
   CommandLine --> Commons
@@ -83,7 +81,7 @@ graph TD
   class RTIndy,RTRESTComponents,RTfmx,RTinet,RTinetstn,RTvcl rt;
 ```
 
-Drawn as a transitive reduction: only the edges that do not already arrive by another path. `rtl` is left out because all 26 packages require it; the third-party runtimes are drawn one node per family — Indy, RESTComponents, fmx, inet, inetstn and vcl — with the real names in the label.
+Drawn as a transitive reduction: only the edges that do not already arrive by another path. `rtl` is left out because all 25 packages require it; the third-party runtimes are drawn one node per family — Indy, RESTComponents, fmx, inet, inetstn and vcl — with the real names in the label.
 
 Dotted border marks a contract package (`.Abstractions`); the dashed rounded nodes are third-party runtimes.
 
@@ -91,7 +89,6 @@ Installable on their own, with no dependency on another DAF package: `Commons`, 
 
 | Package | Runtime packages it pulls in |
 |---|---|
-| `Application` | `rtl` |
 | `Cli` | `rtl` |
 | `CommandLine` | `rtl` |
 | `Commons` | `rtl` |
@@ -118,4 +115,4 @@ Installable on their own, with no dependency on another DAF package: `Commons`, 
 | `VCL` | `rtl` · `vcl` |
 | `Web` | `IndyCore` · `IndyProtocols` · `IndySystem` · `RESTComponents` · `inet` · `inetstn` · `rtl` |
 
-21 of 26 need nothing beyond `rtl`.
+20 of 25 need nothing beyond `rtl`.

@@ -102,6 +102,7 @@ The changes that break compilation are collected, with their example diff, in `M
 ### Removed
 
 - ⚠️ **Hosting**: `IHostBuilder`, and with it the deferred style: the `ConfigureServices`, `ConfigureAppConfiguration` and `ConfigureHostConfiguration` callbacks, plus `TConfigureServicesAction`. One style is left, the immediate one; the entry point is `THost.CreateBuilder` or the family's variant
+- ⚠️ **Application**: The `Daf.Application` package, with `TDafApplication`, `TDafApplicationBuilder` and `IDafApplication`. The replacement is the variant of the application family — `TCliApplication`, `TWebApplication`, `TVclApplication`, `TFmxApplication` — and `MIGRATION-2.0.md` says where each member went. `TVersionInfo` and `[Version]` are untouched: they ship in `Daf.Commons`
 - ⚠️ **DependencyInjection**: `AddModules(Package)`, the RTTI discovery of `IAppModule`s. The replacement is `AddModule<T>`, one call per module and in whatever order the application wants; `IAppModule` and `TAppModule` do not change
 - **Logging**: The global `DAFInternalLogger`, replaced by `BootstrapLog.LoggerFor(<category>)`
 - ⚠️ **Configuration**: `csoReloadOnChange`, a value of `TConfigurationSourceOption` that no provider ever read. `csoOptional` is untouched
@@ -136,11 +137,11 @@ The changes that break compilation are collected, with their example diff, in `M
 - **NNLog**: A rule built in code arrived disabled, with its maximum level at the lowest of all, and raised while matching a category. `TLogRule.Create` now sets the same defaults the loader writes
 - **MediatR**: Composing twice in the same process gives the same result; the accounting of already-scanned packages was unit-global state
 - **SQLCute**: `WhereIn` with an **empty** set of values emitted `col IN ()`, invalid on almost any engine; it now matches no row and `WhereNotIn` matches them all, alike on both back-ends. It also affects `OrWhereIn` / `OrWhereNotIn` and `IsIn([])`
-- **Application**: `TVersionInfo.Tag` was **always empty**, and `GetFrom` on a class with no attribute returned whatever was in the target's memory
+- **Commons**: `TVersionInfo.Tag` was **always empty**, and `GetFrom` on a class with no attribute returned whatever was in the target's memory
 - **Configuration**: Binding no longer writes a member whose key no source mentions: a default set in the constructor survives the bind, and a second bind does not erase what the first one brought. A key present with an empty value is still written
 - **Configuration**: A chained key whose value **is** the empty string no longer disappears on its way through the chain: `TChainedConfigurationProvider` asks for presence instead of inferring it from the value
 - **Commons**: `TMacrosList.GetValueFromIndex` returned an empty string on every macro read
-- **Docs**: The startup the documentation taught **did not compile**, the guide described a surface of `IDafApplication` that was not the real one, and Hosting's still promised automatic discovery of `IAppModule`s. It now teaches `AddModule<T>`
+- **Docs**: The startup the documentation taught **did not compile**, and Hosting's guide still promised automatic discovery of `IAppModule`s. It now teaches `AddModule<T>`
 
 ## [1.6.0] - 2026-07-20
 

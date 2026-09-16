@@ -137,13 +137,14 @@ B.Services.AddHostedService<TMyWorker>;
 ExitCode := B.Build.Run;
 ```
 
-See [Application](../Application/README.md) for the full Application module docs.
+See [The application family](docs/APPLICATION-FAMILY.md) for which entry point is yours and what the layer adds over the host.
 
 ---
 
 ## Documentation
 
 - 📖 [Usage Guide](docs/GUIDE.md) — configuration pipeline, scoped services, hosted services, lifetime hooks
+- 📖 [The application family](docs/APPLICATION-FAMILY.md) — which entry point is yours, what the layer adds over the host, and what it is in .NET terms
 - 📖 [Startup composition](../DependencyInjection/docs/STARTUP-COMPOSITION.md) — `IStartupTask` vs `IHostedService`, and the two phases of startup
 - 📁 [HostQuickStart](samples/HostQuickStart/README.md) — compose, build, start and stop, with no application variant around it
 - 📁 [StartupReport](samples/StartupReport/README.md) — where the startup record goes, and what a startup that does not complete shows

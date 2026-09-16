@@ -14,7 +14,8 @@
 6. [Daf.Arrays](#dafarrays)
 7. [Daf.Nullable](#dafnullable)
 8. [Daf.Comparers](#dafcomparers)
-9. [Daf.Types](#daftypes)
+9. [Daf.Application.Version](#dafapplicationversion)
+10. [Daf.Types](#daftypes)
 
 `Daf.SystemProcess` y `Daf.CmdLn.Parser` se documentaban aquí. La primera vive en un paquete propio
 —ver [SystemProcess](../../SystemProcess/README.es.md)—; la segunda se ha retirado, y la línea de
@@ -394,6 +395,44 @@ var PorEdad := TNullableComparers.Ordinal<Integer>;
 Sobre `TValue`, el NULL de SQL se modela como un `TValue` **vacío**, o uno de clase Variant con
 `Null` o `Unassigned`. Es sobre esto que `SQLCute.InMemory` construye su semántica ANSI de NULL —
 ver [SQLCute.InMemory](../../SQLCute.InMemory/README.es.md).
+
+---
+
+## Daf.Application.Version
+
+### TVersionInfo / [Version]
+
+Una clase declara su versión con el atributo `[Version]` —tag SemVer, nombre de aplicación y
+compañía— y `TVersionInfo.GetFrom` la lee de vuelta por RTTI:
+
+```pascal
+uses
+  Daf.Application.Version;
+
+type
+  [Version('1.2.3-rc.2+build.7', 'Invoicer', 'Acme')]
+  TInvoicerApp = class
+  end;
+
+var Info := TVersionInfo.GetFrom(TInvoicerApp);
+// Info.Major = 1, Info.Minor = 2, Info.Patch = 3
+// Info.PreRelease = 'rc.2', Info.Metadata = 'build.7'
+// Info.ApplicationName = 'Invoicer', Info.Company = 'Acme'
+```
+
+| Miembro | Qué contesta |
+|---|---|
+| `Tag` | la cadena que declaró el atributo, tal cual |
+| `VersionTag(WithCompiledMeta)` | la misma versión rearmada desde sus piezas parseadas; con el flag, además la plataforma y los bits |
+| `Major` / `Minor` / `Patch` / `PreRelease` / `Metadata` | las piezas del SemVer |
+| `ApplicationName` / `Company` | los otros dos argumentos del atributo |
+| `ArchBits` / `Platform` / `Debug` | lo que vio el **compilador**: 32 o 64, la plataforma destino y si `DEBUG` estaba definido |
+
+**Una clase sin atributo da un record vacío**, no un error: `Tag` y los dos nombres vuelven como
+cadena vacía y las piezas numéricas como cero.
+
+El atributo se lee por RTTI, así que el enlazador tiene que conservar la clase: un programa que se
+apoye en esto declara `STRONGLINKTYPES` y pone la clase en su sección `interface`.
 
 ---
 

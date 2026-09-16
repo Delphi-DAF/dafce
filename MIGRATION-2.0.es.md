@@ -31,8 +31,9 @@ módulo: nombrar el tipo en `AddModule<T>` ya enlaza su unit.
 toca una coma. Lo que desaparece es cómo se encontraban, no lo que son.
 
 ⚠️ **Si tu aplicación deriva de `TDafApplication`, esto te afecta aunque no hayas escrito nunca
-`AddModules`.** `TDafApplicationBuilder` descubría los módulos del paquete de la clase de
-aplicación por su cuenta; ahora no registra ninguno. Declara los tuyos donde compongas los
+`AddModules`.** Aquel builder descubría los módulos del paquete de la clase de aplicación por su
+cuenta. `TDafApplication` se **retira** en 2.0 —tu punto de entrada es el builder de tu variante,
+más abajo— y ninguna variante registra módulos por ti. Declara los tuyos donde compongas los
 servicios:
 
 ```pascal
@@ -271,11 +272,13 @@ Es el frente más grande de 2.0 para cualquier cosa que tuviera un `.dpr`.
   (`Daf.Web`), `TVclApplication` (`Daf.VCL`) y `TFmxApplication` (`Daf.FMX`). Comparten `Services`,
   `Configuration`, `Environment`, `Logging` y `Properties` por `IHostApplicationBuilder`.
 
-- **`TDafApplication` y `TDafApplicationBuilder` quedan deprecados**, no borrados: siguen
-  compilando. `TDafApplication.VersionRequested` **sí** se retira — la gramática contesta
-  `--version` por `ICommandLineParseResult.VersionRequested`. Y `TDafApplication.App` pasa a ser
-  `DafApp`, que existe **solo en VCL y FMX**: en CLI y en Web no hay global de aplicación a
-  propósito.
+- **`TDafApplication` y `TDafApplicationBuilder` se retiran**, y con ellos el paquete
+  `Daf.Application`. Su relevo es la variante de la entrada de arriba, y cada miembro tiene
+  destino: `CreateHostBuilder` pasa a ser el `CreateBuilder` de tu variante; `IDafApplication`,
+  la `I…Application` que devuelve `Build`; `RunAsync` es `Run` con su propio nombre;
+  `VersionRequested` es `ICommandLineParseResult.VersionRequested`, contestado por la gramática;
+  y `App` pasa a ser `DafApp`, que existe **solo en VCL y FMX** — en CLI y en Web no hay global
+  de aplicación a propósito.
 
 - **`Daf.Application.Version` se muda a `Daf.Commons`**, sin tocar. Añade `Daf.Commons` a
   `requires` si usabas `TVersionInfo` y no lo tenías ya.

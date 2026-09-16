@@ -210,7 +210,7 @@ MyApp --Web:Port=9000
 `AddHttpServer` le entrega al servidor la **sección** `Web`, y por eso la clave es `Web:Port` desde
 fuera y `Port` a secas dentro de `TDafHttpServer.Create`.
 
-Ver [Application](../../Application/docs/GUIDE.es.md) para lo que comparten las cuatro variantes.
+Ver [La familia de aplicaciones](../../Hosting/docs/APPLICATION-FAMILY.es.md) para lo que comparten las cuatro variantes.
 
 ---
 

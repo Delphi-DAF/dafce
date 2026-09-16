@@ -137,13 +137,14 @@ B.Services.AddHostedService<TMyWorker>;
 ExitCode := B.Build.Run;
 ```
 
-Consulta [Application](../Application/README.es.md) para la documentación completa del módulo Application.
+Consulta [La familia de aplicaciones](docs/APPLICATION-FAMILY.es.md) para saber cuál es tu punto de entrada y qué añade la capa sobre el host.
 
 ---
 
 ## Documentación
 
 - 📖 [Guía de uso](docs/GUIDE.es.md) — pipeline de configuración, servicios scoped, hosted services, hooks de ciclo de vida
+- 📖 [La familia de aplicaciones](docs/APPLICATION-FAMILY.es.md) — cuál es tu punto de entrada, qué añade la capa sobre el host y qué es en términos de .NET
 - 📖 [Composición del arranque](../DependencyInjection/docs/STARTUP-COMPOSITION.es.md) — `IStartupTask` frente a `IHostedService`, y las dos fases del arranque
 - 📁 [HostQuickStart](samples/HostQuickStart/README.md) — componer, construir, arrancar y parar, sin ninguna variante de aplicación alrededor
 - 📁 [StartupReport](samples/StartupReport/README.md) — dónde queda el registro del arranque, y qué enseña un arranque que no llega a completarse
