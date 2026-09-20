@@ -43,6 +43,7 @@ The changes that break compilation are collected, with their example diff, in `M
 - **MiniSpec**: `TSpecRun` — a run with its own suite, context, injector and runner, launchable inside another without disturbing its counts or its report
 - **MiniSpec**: `--allow-undefined` — an undefined step stops setting the exit code; `MiniSpec.AllowUndefined(True)` declares it in the suite. By default it breaks
 - **MiniSpec**: `SpecContext.ScenarioContext` returns the scenario's World, and a `[MiniInject]` of its type receives it
+- **MiniSpec**: `Arg.Matching<T>` — a matcher that takes the condition itself, so a range or any other check is written where the setup is. The argument reaches the predicate already converted to `T`; one of another type does not match
 - **NNLog**: `TNNLogLoader.BuildProvider` accepts a `TNNLogConfiguration` — settings written in code, not only read from a section
 - **NNLog**: `${scope}` layout token — the scopes that `BeginScope` opens reach the written line; add it to a target's `layout`
 - **SQLCute**: Improvements to the query builder

@@ -231,7 +231,18 @@ uses Daf.MiniSpec.Doubles;
 
 // Coincidir string que contiene substring
 .Setup('Log').WithArgs([Arg.Contains('error')]).Returns(nil)
+
+// Coincidir lo que acepte un predicado
+.Setup('Listen').WithArgs([Arg.Matching<Integer>(
+  function(Port: Integer): Boolean
+  begin
+    Result := (Port >= 1) and (Port <= 65535);
+  end)]).Returns(True)
 ```
+
+`Arg.Matching<T>` recibe la condición misma. El valor llega al predicado ya convertido a
+`T`, así que un rango es uno de estos y no un matcher aparte. Un argumento de otro tipo no
+casa, y al predicado no se le pregunta.
 
 ### Ejemplo con Matchers
 

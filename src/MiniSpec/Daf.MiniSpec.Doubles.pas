@@ -257,17 +257,19 @@ type
 {$REGION 'Argument Matchers'}
 
 type
-  TArgMatchKind = (amkExact, amkAny, amkNotNull, amkContains);
+  TArgMatchKind = (amkExact, amkAny, amkNotNull, amkContains, amkPredicate);
 
   TArgMatcher = record
     Kind: TArgMatchKind;
     Value: TValue;
     ExtraValue: TValue;
     function Matches(const Actual: TValue): Boolean;
+    function AsArg: TValue;
     class function CreateExact(const V: TValue): TArgMatcher; static;
     class function CreateAny: TArgMatcher; static;
     class function CreateNotNull: TArgMatcher; static;
     class function CreateContains(const SubStr: string): TArgMatcher; static;
+    class function CreatePredicate(const Predicate: TPredicate<TValue>): TArgMatcher; static;
   end;
 
   /// <summary>
@@ -277,6 +279,7 @@ type
     class function Any: TValue; static;
     class function NotNull: TValue; static;
     class function Contains(const SubStr: string): TValue; static;
+    class function Matching<T>(const Predicate: TPredicate<T>): TValue; static;
   end;
 
 {$ENDREGION}
@@ -522,6 +525,8 @@ end;
 { TArgMatcher }
 
 function TArgMatcher.Matches(const Actual: TValue): Boolean;
+var
+  Predicate: TPredicate<TValue>;
 begin
   case Kind of
     amkAny:
@@ -547,12 +552,23 @@ begin
         Result := Actual.AsString.Contains(ExtraValue.AsString);
       end;
 
+    amkPredicate:
+      begin
+        Predicate := Value.AsType<TPredicate<TValue>>();
+        Result := Predicate(Actual);
+      end;
+
     amkExact:
       Result := TValuesEqual(Actual, Value);
 
   else
     Result := False;
   end;
+end;
+
+function TArgMatcher.AsArg: TValue;
+begin
+  Result := TValue.From<IInterface>(TArgMatcherWrapper.Create(Self));
 end;
 
 class function TArgMatcher.CreateExact(const V: TValue): TArgMatcher;
@@ -579,6 +595,13 @@ begin
   Result := Default(TArgMatcher);
   Result.Kind := amkContains;
   Result.ExtraValue := TValue.From<string>(SubStr);
+end;
+
+class function TArgMatcher.CreatePredicate(const Predicate: TPredicate<TValue>): TArgMatcher;
+begin
+  Result := Default(TArgMatcher);
+  Result.Kind := amkPredicate;
+  Result.Value := TValue.From<TPredicate<TValue>>(Predicate);
 end;
 
 { TArgMatcherWrapper }
@@ -1301,17 +1324,35 @@ end;
 
 class function Arg.Any: TValue;
 begin
-  Result := TValue.From<IInterface>(TArgMatcherWrapper.Create(TArgMatcher.CreateAny));
+  Result := TArgMatcher.CreateAny.AsArg;
 end;
 
 class function Arg.NotNull: TValue;
 begin
-  Result := TValue.From<IInterface>(TArgMatcherWrapper.Create(TArgMatcher.CreateNotNull));
+  Result := TArgMatcher.CreateNotNull.AsArg;
 end;
 
 class function Arg.Contains(const SubStr: string): TValue;
 begin
-  Result := TValue.From<IInterface>(TArgMatcherWrapper.Create(TArgMatcher.CreateContains(SubStr)));
+  Result := TArgMatcher.CreateContains(SubStr).AsArg;
+end;
+
+class function Arg.Matching<T>(const Predicate: TPredicate<T>): TValue;
+var
+  OnValue: TPredicate<TValue>;
+begin
+  if not Assigned(Predicate) then
+    raise EDoubleError.Create('Arg.Matching requires a predicate');
+
+  OnValue :=
+    function(Actual: TValue): Boolean
+    begin
+      // An argument of another type is not a predicate that says no: it is a call the
+      // setup does not describe, and that answers the same as any other matcher, no match.
+      Result := Actual.IsType<T> and Predicate(Actual.AsType<T>);
+    end;
+
+  Result := TArgMatcher.CreatePredicate(OnValue).AsArg;
 end;
 
 end.

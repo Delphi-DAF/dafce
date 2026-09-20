@@ -231,7 +231,18 @@ uses Daf.MiniSpec.Doubles;
 
 // Match string containing substring
 .Setup('Log').WithArgs([Arg.Contains('error')]).Returns(nil)
+
+// Match whatever a predicate accepts
+.Setup('Listen').WithArgs([Arg.Matching<Integer>(
+  function(Port: Integer): Boolean
+  begin
+    Result := (Port >= 1) and (Port <= 65535);
+  end)]).Returns(True)
 ```
+
+`Arg.Matching<T>` takes the condition itself. The value reaches the predicate already
+converted to `T`, so a range is one of these and not a matcher of its own. An argument of
+another type does not match, and the predicate is not asked.
 
 ### Example with Matchers
 

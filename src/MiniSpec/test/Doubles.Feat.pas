@@ -98,6 +98,8 @@ type
     StrResult: string;
     IntResult: Integer;
     OtherResult: Integer;
+    OtherStr: string;
+    ExceptionRaised: Boolean;
   end;
 
   {$ENDREGION}
@@ -852,6 +854,73 @@ Feature('Arg matchers - Flexible argument matching @doubles @matchers')
       begin
         Expect(W.IntResult).ToEqual(1);
         Expect(W.OtherResult).ToEqual(9);
+      end)
+
+  .Scenario('Arg.Matching accepts exactly what its predicate accepts')
+    .Given('I create a stub whose setup demands an id within a range', procedure(W: TArgWorld)
+      begin
+        W.StubUser := Stub<IUserService>.New
+          .Setup('FindById').WithArgs([Arg.Matching<Integer>(
+            function(Id: Integer): Boolean
+            begin
+              Result := (Id >= 1) and (Id <= 10);
+            end)]).Returns('in range');
+        W.UserSvc := W.StubUser;
+      end)
+    .When('I call it with an id inside the range and one outside', procedure(W: TArgWorld)
+      begin
+        W.StrResult := W.UserSvc.FindById(7);
+        W.OtherStr := W.UserSvc.FindById(99);
+      end)
+    .&Then('only the one the predicate accepts matches', procedure(W: TArgWorld)
+      begin
+        // Both halves are the control: a predicate nobody calls leaves the first empty,
+        // and one whose answer is discarded answers the second one too.
+        Expect(W.StrResult).ToEqual('in range');
+        Expect(W.OtherStr).ToEqual('');
+      end)
+
+  .Scenario('A predicate declared over another type does not match')
+    .Given('I create a stub with a catch-all and a predicate over strings', procedure(W: TArgWorld)
+      begin
+        W.StubUser := Stub<IUserService>.New
+          .Setup('FindById').Returns('fallback')
+          .Setup('FindById').WithArgs([Arg.Matching<string>(
+            function(Name: string): Boolean
+            begin
+              Result := True;
+            end)]).Returns('matched');
+        W.UserSvc := W.StubUser;
+      end)
+    .When('I call the method, whose argument is an integer', procedure(W: TArgWorld)
+      begin
+        W.StrResult := W.UserSvc.FindById(7);
+      end)
+    .&Then('the catch-all answers, and the predicate is never asked', procedure(W: TArgWorld)
+      begin
+        // The predicate says yes to everything, so 'matched' is what comes back if the
+        // argument reaches it at all.
+        Expect(W.StrResult).ToEqual('fallback');
+      end)
+
+  .Scenario('A matcher handed no predicate is refused where it is declared')
+    .When('I ask for a matcher and give it nothing', procedure(W: TArgWorld)
+      begin
+        W.ExceptionRaised := False;
+        try
+          Arg.Matching<Integer>(nil);
+        except
+          on E: EDoubleError do
+          begin
+            W.ExceptionRaised := True;
+            W.StrResult := E.Message;
+          end;
+        end;
+      end)
+    .&Then('it breaks at the setup, and not on a call that would silently not match', procedure(W: TArgWorld)
+      begin
+        Expect(W.ExceptionRaised).ToBeTrue;
+        Expect(W.StrResult).ToContain('requires a predicate');
       end);
 
 {$ENDREGION}
