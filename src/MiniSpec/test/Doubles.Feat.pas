@@ -96,6 +96,8 @@ type
     Logger: ILogger;
     UserSvc: IUserService;
     StrResult: string;
+    IntResult: Integer;
+    OtherResult: Integer;
   end;
 
   {$ENDREGION}
@@ -775,6 +777,81 @@ Feature('Arg matchers - Flexible argument matching @doubles @matchers')
     .&Then('all calls match and return the configured value', procedure(W: TArgWorld)
       begin
         Expect(W.StrResult).ToEqual('AnyUser,AnyUser,AnyUser');
+      end)
+
+  .Scenario('Arg.NotNull refuses a value that is empty')
+    .Given('I create a stub whose setup demands a non-empty name', procedure(W: TArgWorld)
+      begin
+        W.StubUser := Stub<IUserService>.New
+          .Setup('FindByName').WithArgs([Arg.NotNull]).Returns(7);
+        W.UserSvc := W.StubUser;
+      end)
+    .When('I call it with a name and with an empty string', procedure(W: TArgWorld)
+      begin
+        W.IntResult := W.UserSvc.FindByName('ana');
+        W.OtherResult := W.UserSvc.FindByName('');
+      end)
+    .&Then('the name matches and the empty string is left to the default', procedure(W: TArgWorld)
+      begin
+        // Nothing matched the second call, so what comes back is the zero of the
+        // return type. That is also the control: a matcher that accepted everything
+        // would return 7 twice.
+        Expect(W.IntResult).ToEqual(7);
+        Expect(W.OtherResult).ToEqual(0);
+      end)
+
+  .Scenario('Arg.Contains matches on a substring')
+    .Given('I create a stub whose setup demands a substring', procedure(W: TArgWorld)
+      begin
+        W.StubUser := Stub<IUserService>.New
+          .Setup('FindByName').WithArgs([Arg.Contains('@admin')]).Returns(1);
+        W.UserSvc := W.StubUser;
+      end)
+    .When('I call it with a name that carries it and with one that does not', procedure(W: TArgWorld)
+      begin
+        W.IntResult := W.UserSvc.FindByName('root@admin.co');
+        W.OtherResult := W.UserSvc.FindByName('user@corp.co');
+      end)
+    .&Then('only the one carrying the substring matches', procedure(W: TArgWorld)
+      begin
+        Expect(W.IntResult).ToEqual(1);
+        Expect(W.OtherResult).ToEqual(0);
+      end)
+
+  .Scenario('The setup declared last is the one that answers')
+    .Given('I create a stub with two setups whose matchers both accept the value', procedure(W: TArgWorld)
+      begin
+        W.StubUser := Stub<IUserService>.New
+          .Setup('FindByName').WithArgs([Arg.Contains('@admin')]).Returns(1)
+          .Setup('FindByName').WithArgs([Arg.NotNull]).Returns(2);
+        W.UserSvc := W.StubUser;
+      end)
+    .When('I call it with a value both of them accept', procedure(W: TArgWorld)
+      begin
+        W.IntResult := W.UserSvc.FindByName('root@admin.co');
+      end)
+    .&Then('the later setup wins, and declaring the narrow one first does not protect it', procedure(W: TArgWorld)
+      begin
+        Expect(W.IntResult).ToEqual(2);
+      end)
+
+  .Scenario('A setup with matchers is preferred to one without')
+    .Given('I create a stub with a catch-all setup and a narrower one', procedure(W: TArgWorld)
+      begin
+        W.StubUser := Stub<IUserService>.New
+          .Setup('FindByName').Returns(9)
+          .Setup('FindByName').WithArgs([Arg.NotNull]).Returns(1);
+        W.UserSvc := W.StubUser;
+      end)
+    .When('I call it with a value the matcher accepts and with one it refuses', procedure(W: TArgWorld)
+      begin
+        W.IntResult := W.UserSvc.FindByName('ana');
+        W.OtherResult := W.UserSvc.FindByName('');
+      end)
+    .&Then('the matcher answers what it accepts and the catch-all takes the rest', procedure(W: TArgWorld)
+      begin
+        Expect(W.IntResult).ToEqual(1);
+        Expect(W.OtherResult).ToEqual(9);
       end);
 
 {$ENDREGION}
