@@ -3,9 +3,19 @@
 interface
 
 uses
-  Daf.CommandLine;
+  Daf.CommandLine,
+  Daf.Application.Version;
 
 type
+  // Las clases con atributo van en la interface: lo que se ejerce es una lectura por RTTI, y el
+  // enlazador deja fuera un tipo que no considere alcanzable.
+  [Version('4.5.6', 'AnnotatedTool', 'DAF')]
+  TAnnotatedTool = class
+  end;
+
+  TUnannotatedTool = class
+  end;
+
   THelpWorld = class
   public
     Root: IRootCommand;
@@ -26,6 +36,11 @@ type
     DefaultedOpt: IOption<string>;
     OwnVersionRoot: IRootCommand;
     OwnVersionOpt: IOption<Boolean>;
+    // Las tres vias de declarar la version, y la de no declararla.
+    NoVersionRoot: IRootCommand;
+    AnnotatedRoot: IRootCommand;
+    UnannotatedRoot: IRootCommand;
+    NamedRoot: IRootCommand;
     // A hidden option next to one that is not, which is the only way to tell "not
     // listed" from "nothing was listed".
     HiddenRoot: IRootCommand;
@@ -40,6 +55,7 @@ type
     procedure BuildOwnHelpGrammar;
     procedure BuildVersionGrammar;
     procedure BuildOwnVersionGrammar;
+    procedure BuildVersionSourcesGrammar;
     procedure BuildHiddenGrammar;
   end;
 
@@ -75,6 +91,14 @@ begin
   VersionBuild := CommandLine.Command('build', 'Build things').Add(DefaultedOpt);
   VersionRoot := CommandLine.Root('mytool', 'A tool with a version').WithVersion('1.2.3');
   VersionRoot.Add(VersionBuild);
+end;
+
+procedure THelpWorld.BuildVersionSourcesGrammar;
+begin
+  NoVersionRoot := CommandLine.Root('bare', 'Declares no version at all');
+  AnnotatedRoot := CommandLine.Root('annotated', 'Takes it from a class').WithVersion(TAnnotatedTool);
+  UnannotatedRoot := CommandLine.Root('unannotated', 'Names a class without it').WithVersion(TUnannotatedTool);
+  NamedRoot := CommandLine.Root('named', 'Declares text, name and company').WithVersion('7.8.9', 'NamedTool', 'DAF');
 end;
 
 procedure THelpWorld.BuildOwnVersionGrammar;
@@ -288,7 +312,10 @@ Feature Command line help @commandline @help
       procedure(W: THelpWorld)
       begin
         Expect(W.Parsed.VersionRequested).ToBeTrue;
-        Expect(W.Parsed.VersionText).ToEqual('1.2.3');
+        // Se afirma sobre las piezas y no sobre el texto compuesto: el render lleva la plataforma,
+        // y el mismo runner corre en Win32 y en Win64.
+        Expect(W.Parsed.VersionInfo.Tag).ToEqual('1.2.3');
+        Expect(W.Parsed.VersionInfo.Major).ToEqual(1);
       end)
     .&And('no invocation error is reported',
       procedure(W: THelpWorld)
@@ -332,6 +359,83 @@ Feature Command line help @commandline @help
         Expect(W.Parsed.WasProvided(W.OwnVersionOpt)).ToBeTrue;
         Expect(W.OwnVersionOpt.ValueIn(W.Parsed)).ToBeTrue;
         Expect(W.Parsed.Succeeded).ToBeTrue;
+      end)
+
+  .Scenario('A root command with no version does not advertise one')
+    .Given('a grammar whose root declares no version',
+      procedure(W: THelpWorld)
+      begin
+        W.BuildVersionSourcesGrammar;
+      end)
+    .When('its help is generated',
+      procedure(W: THelpWorld)
+      begin
+        W.Rendered := W.NoVersionRoot.HelpText;
+      end)
+    .&Then('--version is not among the listed options',
+      procedure(W: THelpWorld)
+      begin
+        // Que la version este fijada es lo que se pregunta aqui, y no puede deducirse de que su
+        // texto compuesto sea o no vacio: sobre una version vacia el render nunca da cadena vacia.
+        Expect(Pos('--version', W.Rendered)).ToEqual(0);
+      end)
+
+.Rule('the version can be declared from a class that carries it')
+
+  .Scenario('Declaring the version by naming an annotated class')
+    .Given('a grammar whose root takes its version from an annotated class',
+      procedure(W: THelpWorld)
+      begin
+        W.BuildVersionSourcesGrammar;
+      end)
+    .When('an invocation passing --version is parsed',
+      procedure(W: THelpWorld)
+      begin
+        W.Parsed := W.AnnotatedRoot.Parse(['--version']);
+      end)
+    .&Then('the annotation is what the result carries',
+      procedure(W: THelpWorld)
+      begin
+        Expect(W.Parsed.VersionRequested).ToBeTrue;
+        Expect(W.Parsed.VersionInfo.Tag).ToEqual('4.5.6');
+        Expect(W.Parsed.VersionInfo.ApplicationName).ToEqual('AnnotatedTool');
+      end)
+
+  .Scenario('A class without the annotation leaves the version empty')
+    .Given('a grammar whose root names a class that carries no version',
+      procedure(W: THelpWorld)
+      begin
+        W.BuildVersionSourcesGrammar;
+      end)
+    .When('its help is generated',
+      procedure(W: THelpWorld)
+      begin
+        W.Rendered := W.UnannotatedRoot.HelpText;
+      end)
+    .&Then('the version is empty and is not advertised',
+      procedure(W: THelpWorld)
+      begin
+        Expect(W.UnannotatedRoot.VersionInfo.IsEmpty).ToBeTrue;
+        Expect(Pos('--version', W.Rendered)).ToEqual(0);
+      end)
+
+  .Scenario('Declaring the version as text with a name and a company')
+    .Given('a grammar whose root declares the three',
+      procedure(W: THelpWorld)
+      begin
+        W.BuildVersionSourcesGrammar;
+      end)
+    .When('an invocation passing --version is parsed',
+      procedure(W: THelpWorld)
+      begin
+        W.Parsed := W.NamedRoot.Parse(['--version']);
+      end)
+    .&Then('the three travel together',
+      procedure(W: THelpWorld)
+      begin
+        Expect(W.Parsed.VersionInfo.Tag).ToEqual('7.8.9');
+        Expect(W.Parsed.VersionInfo.ApplicationName).ToEqual('NamedTool');
+        Expect(W.Parsed.VersionInfo.Company).ToEqual('DAF');
       end)
 
 .Rule('a hidden symbol does not appear in the help')

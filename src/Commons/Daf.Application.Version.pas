@@ -5,6 +5,12 @@ interface
 uses
   System.SysUtils;
 
+const
+  /// <summary>Formato por defecto: la version semver con la seccion de build que declare el tag.</summary>
+  VersionTemplate = '${Major}.${Minor}.${Patch}${PreRelease}${Build}';
+  /// <summary>El mismo con los datos de compilacion unidos dentro de esa unica seccion.</summary>
+  VersionTemplateWithBuild = '${Major}.${Minor}.${Patch}${PreRelease}${BuildFull}';
+
 type
   TVersionInfo = record
   strict private
@@ -19,6 +25,7 @@ type
     FArchBits: Integer;
     FPlatform: string;
     FDebug: Boolean;
+    FIsSemVer: Boolean;
     function CompiledPlatform: string;inline;
     function CompiledDebug: Boolean;inline;
     function CompiledArchBits: Integer;inline;
@@ -26,7 +33,16 @@ type
   public
     class function GetFrom(const AClass: TClass): TVersionInfo;static;
     constructor Create(SemVerTag: string; AppName: string; Company: string);
-    function VersionTag(const WithCompiledMeta: Boolean = False): string;
+    /// <summary>No se fijo ninguna version: es distinto de haberla fijado y no entenderla.</summary>
+    function IsEmpty: Boolean;
+    /// <summary>El tag fijado sigue la gramatica semver, y por tanto las piezas estan pobladas.</summary>
+    function IsSemVer: Boolean;
+    /// <summary>
+    ///   Formatea la version con una plantilla de marcadores <c>${...}</c>. Los de clase seccion
+    ///   --Build y BuildFull-- abren la seccion de build y son excluyentes entre si; los demas
+    ///   emiten su pieza cruda.
+    /// </summary>
+    function VersionTag(const Template: string = VersionTemplate): string;
     property Tag: string read FTag;
     property ApplicationName: string read FApplicationName;
     property Company: string read FCompany;
@@ -37,7 +53,8 @@ type
     property Metadata: string read FMetadata;
     property ArchBits: Integer read FArchBits;
     property Platform: string read FPlatform;
-    property Debug: Boolean read FDebug write FDebug;
+    /// <summary>Describe el binario que la informa, asi que se fija al construirse.</summary>
+    property Debug: Boolean read FDebug;
   end;
 
   VersionAttribute = class(TCustomAttribute)
@@ -52,7 +69,8 @@ implementation
 uses
   System.Rtti,
   System.StrUtils,
-  System.RegularExpressions;
+  System.RegularExpressions,
+  Daf.Types;
 
 { TVersionInfo }
 
@@ -85,6 +103,16 @@ begin
   FArchBits := CompiledArchBits;
   FPlatform := CompiledPlatform;
   FDebug := CompiledDebug;
+end;
+
+function TVersionInfo.IsEmpty: Boolean;
+begin
+  Result := FTag.IsEmpty;
+end;
+
+function TVersionInfo.IsSemVer: Boolean;
+begin
+  Result := FIsSemVer;
 end;
 
 function TVersionInfo.CompiledDebug: Boolean;
@@ -137,6 +165,7 @@ begin
   // usar la regex mencionada en la pagina para extraer los valores
   RegEx := TRegEx.Create(SemverRegEx, [roIgnoreCase]);
   Match := RegEx.Match(SemVerTag);
+  FIsSemVer := Match.Success;
   if Match.Success then
   begin
     Group := Match.Groups.Item['major'];
@@ -170,19 +199,44 @@ begin
   end;
 end;
 
-function TVersionInfo.VersionTag(const WithCompiledMeta: Boolean = False): string;
+function TVersionInfo.VersionTag(const Template: string = VersionTemplate): string;
 begin
-  Result := Format('%d.%d.%d', [FMajor, FMinor, FPatch]);
+  // Sin version fijada no hay nada que informar. Recomponer desde las piezas daria 0.0.0, que se
+  // lee como una version valida.
+  if IsEmpty then
+    Exit('');
 
-  if not FPreRelease.IsEmpty then
-    Result := Result + '-' + FPreRelease;
+  // Entender el tag sirve para poder responder por sus piezas, no para sustituirlo: el que no se
+  // entiende se informa tal cual, porque es lo que su autor escribio.
+  if not IsSemVer then
+    Exit(FTag);
 
-  if not FMetadata.IsEmpty then
-    Result := Result + '+' + FMetadata;
+  var Compiled := Format('%s%d%s', [Self.Platform, ArchBits, IfThen(Self.Debug, '.Dbg', '')]);
+  var Macros := TMacrosList.Create;
+  try
+    Macros['Major'] := FMajor.ToString;
+    Macros['Minor'] := FMinor.ToString;
+    Macros['Patch'] := FPatch.ToString;
+    Macros['Tag'] := FTag;
+    Macros['Platform'] := FPlatform;
+    Macros['ArchBits'] := FArchBits.ToString;
+    Macros['Metadata'] := FMetadata;
+    Macros['CompiledMeta'] := Compiled;
 
-  var CompiledMeta := Format('%s%d%s', [Self.Platform, ArchBits, IfThen(Self.Debug, '.Dbg', '')]);
-  if WithCompiledMeta and not CompiledMeta.IsEmpty then
-    Result := Result + '+' + CompiledMeta;
+    // Los que pueden faltar llevan dentro su separador: una plantilla plana no sabe omitirlo.
+    Macros['PreRelease'] := IfThen(FPreRelease.IsEmpty, '', '-' + FPreRelease);
+    Macros['Build'] := IfThen(FMetadata.IsEmpty, '', '+' + FMetadata);
+
+    // Semver admite UNA seccion de build: el '+' lo escribe quien la abre y el '.' une dentro.
+    if FMetadata.IsEmpty then
+      Macros['BuildFull'] := '+' + Compiled
+    else
+      Macros['BuildFull'] := '+' + FMetadata + '.' + Compiled;
+
+    Result := Macros.ResolveMacros(Template);
+  finally
+    Macros.Free;
+  end;
 end;
 
 { VersionAttribute }

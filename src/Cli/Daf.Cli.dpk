@@ -29,6 +29,8 @@
 
 requires
   rtl,
+  // Por TVersionInfo, que es lo que el borde del Run informa al contestar --version.
+  Daf.Commons,
   // La maquinaria comun del arranque, y el contrato de la familia.
   Daf.Hosting.Abstractions,
   Daf.Hosting,

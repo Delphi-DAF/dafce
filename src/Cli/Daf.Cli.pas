@@ -11,6 +11,7 @@ uses
   Daf.Extensions.Hosting,
   Daf.Extensions.Logging,
   Daf.CommandLine,
+  Daf.Application.Version,
   Daf.Hosting;
 
 type
@@ -399,7 +400,7 @@ begin
 
   if FParsed.VersionRequested then
   begin
-    Writeln(FParsed.VersionText);
+    Writeln(FParsed.VersionInfo.VersionTag(VersionTemplateWithBuild));
     Exit(TCliExit.Ok);
   end;
 

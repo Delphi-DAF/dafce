@@ -423,13 +423,31 @@ var Info := TVersionInfo.GetFrom(TInvoicerApp);
 | Miembro | Qué contesta |
 |---|---|
 | `Tag` | la cadena que declaró el atributo, tal cual |
-| `VersionTag(WithCompiledMeta)` | la misma versión rearmada desde sus piezas parseadas; con el flag, además la plataforma y los bits |
+| `VersionTag(Plantilla)` | la versión formateada con una plantilla de marcadores `${...}`; `VersionTemplate` es la de por defecto y `VersionTemplateWithBuild` añade lo que vio el compilador |
+| `IsEmpty` | si se fijó alguna versión |
+| `IsSemVer` | si el tag declarado sigue la gramática SemVer |
 | `Major` / `Minor` / `Patch` / `PreRelease` / `Metadata` | las piezas del SemVer |
 | `ApplicationName` / `Company` | los otros dos argumentos del atributo |
 | `ArchBits` / `Platform` / `Debug` | lo que vio el **compilador**: 32 o 64, la plataforma destino y si `DEBUG` estaba definido |
 
-**Una clase sin atributo da un record vacío**, no un error: `Tag` y los dos nombres vuelven como
-cadena vacía y las piezas numéricas como cero.
+**Una clase sin atributo da un record vacío**, no un error: `IsEmpty` responde `True`, `Tag` y los
+dos nombres vuelven como cadena vacía, las piezas numéricas como cero y `VersionTag` como cadena
+vacía.
+
+**Un tag que no es SemVer conserva su texto.** `IsSemVer` responde `False` y `VersionTag` informa la
+cadena declarada en vez de rearmarla desde piezas que nunca se llenaron.
+
+Los marcadores que una plantilla puede nombrar:
+
+| Marcador | Emite |
+|---|---|
+| `${Major}` `${Minor}` `${Patch}` `${Metadata}` `${Tag}` | las piezas del SemVer y la cadena declarada, crudas |
+| `${PreRelease}` | el pre-release con su propio `-`, o nada |
+| `${Platform}` `${ArchBits}` `${CompiledMeta}` | lo que vio el compilador |
+| `${Build}` / `${BuildFull}` | la sección de build, abierta con `+`. El primero lleva lo que declaró el tag; el segundo lo une con los datos de compilación dentro de esa única sección. Son alternativas: una plantilla nombra uno |
+
+SemVer admite una sola sección de build, así que `${BuildFull}` separa las dos fuentes con `.` en
+lugar de abrir un segundo `+`.
 
 El atributo se lee por RTTI, así que el enlazador tiene que conservar la clase: un programa que se
 apoye en esto declara `STRONGLINKTYPES` y pone la clase en su sección `interface`.

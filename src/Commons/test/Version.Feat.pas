@@ -18,9 +18,21 @@ type
   TUnversionedApp = class
   end;
 
+  // Un tag que no sigue la gramatica semver. Entender el texto sirve para poder responder por sus
+  // piezas, no para sustituirlo: lo que esta clase mide es que el texto declarado sobreviva.
+  [Version('v2.0.0', 'SpecApp', 'DAF')]
+  TOddlyVersionedApp = class
+  end;
+
+  // Semver sin seccion de metadatos: la otra mitad del par que mide como se compone el build.
+  [Version('2.0.0', 'SpecApp', 'DAF')]
+  TPlainVersionedApp = class
+  end;
+
 implementation
 
 uses
+  System.SysUtils,
   Daf.MiniSpec;
 
 type
@@ -91,6 +103,12 @@ Feature Los metadatos de version declarados en una clase @commons @version
         Expect(W.Info.ApplicationName).ToEqual('SpecApp');
         Expect(W.Info.Company).ToEqual('DAF');
       end)
+    .&And('y se declara semver, que es lo que hace fiables esas piezas',
+      procedure(W: TVersionWorld)
+      begin
+        Expect(W.Info.IsSemVer).ToBeTrue;
+        Expect(W.Info.IsEmpty).ToBeFalse;
+      end)
 
   .Scenario('Tag y VersionTag cuentan la misma version')
     .Given('una clase que declara su version',
@@ -139,6 +157,140 @@ Feature Los metadatos de version declarados en una clase @commons @version
         Expect(W.Empty.Major).ToEqual(0);
         Expect(W.Empty.Minor).ToEqual(0);
         Expect(W.Empty.Patch).ToEqual(0);
+      end)
+
+  .Scenario('Sin atributo, la version informada es vacia y no una version en ceros')
+    .Given('una clase que no declara version',
+      procedure(W: TVersionWorld)
+      begin
+        W.AppClass := TUnversionedApp;
+      end)
+    .When('se leen sus metadatos de version',
+      procedure(W: TVersionWorld)
+      begin
+        W.Empty := TVersionInfo.GetFrom(W.AppClass);
+      end)
+    .&Then('la version informada es la cadena vacia',
+      procedure(W: TVersionWorld)
+      begin
+        // "No hay version" y "la version es 0.0.0" son estados distintos, y quien lo lee tiene que
+        // poder separarlos: uno no se anuncia, el otro si.
+        Expect(W.Empty.VersionTag).ToEqual('');
+      end)
+    .&And('y se declara vacia, no semver',
+      procedure(W: TVersionWorld)
+      begin
+        Expect(W.Empty.IsEmpty).ToBeTrue;
+        Expect(W.Empty.IsSemVer).ToBeFalse;
+      end)
+
+.Rule('Un tag que no es semver se informa tal cual')
+
+  .Scenario('El texto declarado sobrevive aunque no se entienda')
+    .Given('una clase que declara una version que no sigue la gramatica semver',
+      procedure(W: TVersionWorld)
+      begin
+        W.AppClass := TOddlyVersionedApp;
+      end)
+    .When('se leen sus metadatos de version',
+      procedure(W: TVersionWorld)
+      begin
+        W.Info := TVersionInfo.GetFrom(W.AppClass);
+      end)
+    .&Then('el tag declarado y el informado coinciden',
+      procedure(W: TVersionWorld)
+      begin
+        // Es el gemelo de "Tag y VersionTag cuentan la misma version": alli el tag es valido y la
+        // igualdad se cumple sola. Aqui es donde la invariante se gana o se pierde.
+        Expect(W.Info.VersionTag).ToEqual(W.Info.Tag);
+      end)
+    .&And('y dice que no es semver, sin declararse vacia',
+      procedure(W: TVersionWorld)
+      begin
+        // Los dos estados se distinguen: hay version, y no se entendio.
+        Expect(W.Info.IsSemVer).ToBeFalse;
+        Expect(W.Info.IsEmpty).ToBeFalse;
+      end)
+
+.Rule('Los metadatos de build son una sola seccion')
+
+  .Scenario('Un tag sin metadatos abre la seccion con los de compilacion')
+    .Given('una clase cuya version no declara metadatos',
+      procedure(W: TVersionWorld)
+      begin
+        W.AppClass := TPlainVersionedApp;
+      end)
+    .When('se leen sus metadatos de version',
+      procedure(W: TVersionWorld)
+      begin
+        W.Info := TVersionInfo.GetFrom(W.AppClass);
+      end)
+    .&Then('hay exactamente una seccion de build',
+      procedure(W: TVersionWorld)
+      begin
+        // Se cuenta la seccion, no se fija su contenido: el mismo runner corre en Win32 y en
+        // Win64, y siempre en Debug, asi que la cadena completa seria distinta en cada pasada.
+        Expect(W.Info.VersionTag(VersionTemplateWithBuild).CountChar('+')).ToEqual(1);
+      end)
+
+  .Scenario('Un tag que ya trae metadatos no abre una segunda seccion')
+    .Given('una clase cuya version declara sus propios metadatos',
+      procedure(W: TVersionWorld)
+      begin
+        W.AppClass := TVersionedApp;
+      end)
+    .When('se leen sus metadatos de version',
+      procedure(W: TVersionWorld)
+      begin
+        W.Info := TVersionInfo.GetFrom(W.AppClass);
+      end)
+    .&Then('sigue habiendo exactamente una seccion de build',
+      procedure(W: TVersionWorld)
+      begin
+        Expect(W.Info.VersionTag(VersionTemplateWithBuild).CountChar('+')).ToEqual(1);
+      end)
+    .&And('y los declarados y los de compilacion van unidos dentro de ella',
+      procedure(W: TVersionWorld)
+      begin
+        // El punto es el separador interno de la seccion; lo que venga detras es la plataforma.
+        Expect(W.Info.VersionTag(VersionTemplateWithBuild)).ToContain('+build.7.');
+      end)
+
+.Rule('El formato del texto lo decide quien lo muestra')
+
+  .Scenario('Sin plantilla se usa la de por defecto')
+    .Given('una clase que declara su version',
+      procedure(W: TVersionWorld)
+      begin
+        W.AppClass := TVersionedApp;
+      end)
+    .When('se leen sus metadatos de version',
+      procedure(W: TVersionWorld)
+      begin
+        W.Info := TVersionInfo.GetFrom(W.AppClass);
+      end)
+    .&Then('informa lo mismo que pasando la plantilla por defecto a mano',
+      procedure(W: TVersionWorld)
+      begin
+        Expect(W.Info.VersionTag).ToEqual(W.Info.VersionTag(VersionTemplate));
+      end)
+
+  .Scenario('Una plantilla del llamante sustituye cada marcador por su pieza')
+    .Given('una clase que declara su version',
+      procedure(W: TVersionWorld)
+      begin
+        W.AppClass := TVersionedApp;
+      end)
+    .When('se leen sus metadatos de version',
+      procedure(W: TVersionWorld)
+      begin
+        W.Info := TVersionInfo.GetFrom(W.AppClass);
+      end)
+    .&Then('cada marcador trae la pieza que nombra',
+      procedure(W: TVersionWorld)
+      begin
+        // Las piezas crudas no llevan separador: quien escribe la plantilla compone.
+        Expect(W.Info.VersionTag('${Major}|${Minor}|${Patch}|${Metadata}')).ToEqual('1|2|3|build.7');
       end);
 
 end.

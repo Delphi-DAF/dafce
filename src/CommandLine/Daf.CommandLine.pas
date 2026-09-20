@@ -24,7 +24,8 @@ uses
   System.TypInfo,
   System.Rtti,
   Daf.CommandLine.Tokens,
-  Daf.Nullable;
+  Daf.Nullable,
+  Daf.Application.Version;
 
 type
   ECommandLine = class(Exception);
@@ -233,8 +234,16 @@ type
     ///   Declares the version this tool answers with. It lives on the ROOT and not on
     ///   each command, as in .NET: a version belongs to the tool, not to its orders.
     /// </summary>
-    function WithVersion(const Version: string): IRootCommand;
-    function VersionText: string;
+    function WithVersion(const Version: string): IRootCommand; overload;
+    /// <summary>The same, naming the application and its company, which the text alone cannot.</summary>
+    function WithVersion(const Version, AppName, Company: string): IRootCommand; overload;
+    /// <summary>
+    ///   Takes the version from a class annotated with it. The author picks which class carries
+    ///   the annotation: nothing has to be inherited for this to work.
+    /// </summary>
+    function WithVersion(const AClass: TClass): IRootCommand; overload;
+    /// <summary>What the tool answers with. Empty when no version was declared.</summary>
+    function VersionInfo: TVersionInfo;
   end;
 
   ICommandLineParseResult = interface
@@ -249,7 +258,8 @@ type
     function HelpText: string;
     /// <summary>True when the version was asked for. Also an outcome, not a failure.</summary>
     function VersionRequested: Boolean;
-    function VersionText: string;
+    /// <summary>The version the root declared. Formatting it is the caller's decision.</summary>
+    function VersionInfo: TVersionInfo;
     /// <summary>True when the invocation carried this symbol at all.</summary>
     function WasProvided(const Symbol: ISymbol): Boolean;
     /// <summary>
@@ -543,7 +553,6 @@ type
     FHelpRequested: Boolean;
     FHelpText: string;
     FVersionRequested: Boolean;
-    FVersionText: string;
     function IndexOf(const Symbol: ISymbol): Integer;
   public
     function Command: ICommand;
@@ -553,7 +562,7 @@ type
     function HelpRequested: Boolean;
     function HelpText: string;
     function VersionRequested: Boolean;
-    function VersionText: string;
+    function VersionInfo: TVersionInfo;
     function WasProvided(const Symbol: ISymbol): Boolean;
     function RawOf(const Symbol: ISymbol): TNullable<string>;
     function RawValuesOf(const Symbol: ISymbol): TArray<string>;
@@ -563,7 +572,7 @@ type
     procedure AddUnmatched(const Token: string);
     procedure SetCommand(const Value: ICommand);
     procedure RequestHelp(const ForCommand: ICommand);
-    procedure RequestVersion(const ForCommand: ICommand; const Version: string);
+    procedure RequestVersion(const ForCommand: ICommand);
   end;
 
   TCommand = class(TSymbol, ICommand)
@@ -597,12 +606,14 @@ type
 
   TRootCommand = class(TCommand, IRootCommand)
   private
-    FVersion: string;
+    FVersionInfo: TVersionInfo;
   public
     function Parse(const Args: TArray<string>): ICommandLineParseResult; overload;
     function Parse: ICommandLineParseResult; overload;
-    function WithVersion(const Version: string): IRootCommand;
-    function VersionText: string;
+    function WithVersion(const Version: string): IRootCommand; overload;
+    function WithVersion(const Version, AppName, Company: string): IRootCommand; overload;
+    function WithVersion(const AClass: TClass): IRootCommand; overload;
+    function VersionInfo: TVersionInfo;
   end;
 
   /// <summary>The grammar in scope, answering the three questions the rewriting asks.</summary>
@@ -1330,9 +1341,15 @@ begin
   Result := FVersionRequested;
 end;
 
-function TParseResult.VersionText: string;
+function TParseResult.VersionInfo: TVersionInfo;
+var
+  Root: IRootCommand;
 begin
-  Result := FVersionText;
+  // No se guarda una copia: el resultado ya tiene el comando que respondio, y la version es suya.
+  if Supports(FCommand, IRootCommand, Root) then
+    Result := Root.VersionInfo
+  else
+    Result := Default(TVersionInfo);
 end;
 
 function TParseResult.WasProvided(const Symbol: ISymbol): Boolean;
@@ -1403,11 +1420,10 @@ begin
   FHelpText := ForCommand.HelpText;
 end;
 
-procedure TParseResult.RequestVersion(const ForCommand: ICommand; const Version: string);
+procedure TParseResult.RequestVersion(const ForCommand: ICommand);
 begin
   FVersionRequested := True;
   FCommand := ForCommand;
-  FVersionText := Version;
 end;
 
 { TCommand }
@@ -1527,13 +1543,24 @@ end;
 
 function TRootCommand.WithVersion(const Version: string): IRootCommand;
 begin
-  FVersion := Version;
+  Result := WithVersion(Version, '', '');
+end;
+
+function TRootCommand.WithVersion(const Version, AppName, Company: string): IRootCommand;
+begin
+  FVersionInfo := TVersionInfo.Create(Version, AppName, Company);
   Result := Self;
 end;
 
-function TRootCommand.VersionText: string;
+function TRootCommand.WithVersion(const AClass: TClass): IRootCommand;
 begin
-  Result := FVersion;
+  FVersionInfo := TVersionInfo.GetFrom(AClass);
+  Result := Self;
+end;
+
+function TRootCommand.VersionInfo: TVersionInfo;
+begin
+  Result := FVersionInfo;
 end;
 
 function TRootCommand.Parse: ICommandLineParseResult;
@@ -1750,7 +1777,7 @@ begin
       if IsVersionToken(OptionName) and (Current.AsObject = Self) and
         (FindOption(Current, Available, OptionName) = nil) then
       begin
-        Outcome.RequestVersion(Current, FVersion);
+        Outcome.RequestVersion(Current);
         Exit;
       end;
     end;

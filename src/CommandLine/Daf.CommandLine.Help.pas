@@ -192,7 +192,7 @@ begin
     if not DeclaresOwnHelp(Command) then
       Lines.Add(Padded(HelpTokens[0] + ', ' + HelpTokens[1], 'Show help and usage information'));
     // The version is the root's, so only the root advertises it.
-    if Supports(Command, IRootCommand, Root) and (Root.VersionText <> '') and not DeclaresOwnVersion(Command) then
+    if Supports(Command, IRootCommand, Root) and not Root.VersionInfo.IsEmpty and not DeclaresOwnVersion(Command) then
       Lines.Add(Padded(VersionToken, 'Show version information'));
 
     Result := Lines.Text;

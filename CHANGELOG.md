@@ -60,6 +60,9 @@ The changes that break compilation are collected, with their example diff, in `M
 - **Daf.Web**: New package — a lightweight HTTP server over Indy and WebBroker, with controllers routed by `[WebRoute]` and built by the container. The package **links neither DataSnap nor DBX**
 - **Samples**: `QuickStart`, `ServiceWiring` and `PackageInit` (Cli); `HostQuickStart` and `StartupReport` (Hosting)
 - **Docs**: "Startup composition", the public AST of `SQLCute.Abstractions`, and the criterion behind splitting the logging packages (EN/ES)
+- **Commons**: `TVersionInfo.IsEmpty` and `IsSemVer` — «no version was set», «the tag was not understood» and «the version is this one» stop sharing a single representation that looked like a valid version
+- **Commons**: `VersionTag` takes a template of `${...}` markers, with `VersionTemplate` and `VersionTemplateWithBuild` as its two defaults. The marker list, in the GUIDE
+- **CommandLine**: `WithVersion` also takes the application name and its company, or a class carrying a `[Version]` annotation to read the three from
 
 ### Changed
 
@@ -93,6 +96,8 @@ The changes that break compilation are collected, with their example diff, in `M
 - ⚠️ **NNLog**: A target implements `DoWrite` instead of overriding `Write`. `TTarget.Write` takes a critical section held by that target instance and then calls it, so writes from several threads through one target no longer overlap — every logger in a process shares the same target instances. **Breaks** whoever wrote a custom target
 - ⚠️ **NNLog**: A target that cannot write no longer raises towards whoever logged; it reports on the bootstrap channel, naming the target. **Observable change**: a logging failure stops aborting the code that was only trying to log
 - **NNLog**: A layout token with no renderer behind it is left unsubstituted instead of becoming the empty string, so a misspelled `${mesage}` shows up in the line
+- ⚠️ **CommandLine**: `IRootCommand.VersionText` and `ICommandLineParseResult.VersionText` are now `VersionInfo` — the grammar hands over the version and formatting it is the caller's decision. **Breaks** whoever read `VersionText`
+- ⚠️ **Commons**: `VersionTag`'s `WithCompiledMeta` flag is now a template parameter, and `TVersionInfo.Debug` is read-only because it describes the binary that reports it. **Breaks** whoever passed the flag or assigned `Debug`
 
 ### Deprecated
 
@@ -142,6 +147,8 @@ The changes that break compilation are collected, with their example diff, in `M
 - **Configuration**: A chained key whose value **is** the empty string no longer disappears on its way through the chain: `TChainedConfigurationProvider` asks for presence instead of inferring it from the value
 - **Commons**: `TMacrosList.GetValueFromIndex` returned an empty string on every macro read
 - **Docs**: The startup the documentation taught **did not compile**, and Hosting's guide still promised automatic discovery of `IAppModule`s. It now teaches `AddModule<T>`
+- **Commons**: A version tag that is not SemVer was reported as `0.0.0`; the declared text now survives
+- **Commons**: A tag carrying its own build metadata produced two `+` sections, which SemVer does not admit; what the tag declares and what the compiler saw now share the one section
 
 ## [1.6.0] - 2026-07-20
 

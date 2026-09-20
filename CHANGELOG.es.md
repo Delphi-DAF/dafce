@@ -59,6 +59,9 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 - **Daf.Web**: Paquete nuevo — servidor HTTP ligero sobre Indy y WebBroker, con controladores enrutados por `[WebRoute]` y construidos por el contenedor. El paquete **no enlaza DataSnap ni DBX**
 - **Samples**: `QuickStart`, `ServiceWiring` y `PackageInit` (Cli); `HostQuickStart` y `StartupReport` (Hosting)
 - **Docs**: «Composición del arranque», el AST público de `SQLCute.Abstractions`, y el criterio de reparto de los paquetes de logging (EN/ES)
+- **Commons**: `TVersionInfo.IsEmpty` e `IsSemVer` — «no se fijó versión», «el tag no se entendió» y «la versión es esta» dejan de compartir una sola representación que parecía una versión válida
+- **Commons**: `VersionTag` toma una plantilla de marcadores `${...}`, con `VersionTemplate` y `VersionTemplateWithBuild` como sus dos plantillas por defecto. La lista de marcadores, en el GUIDE
+- **CommandLine**: `WithVersion` acepta también el nombre de la aplicación y su compañía, o una clase con una anotación `[Version]` de la que leer los tres
 
 ### Changed
 
@@ -92,6 +95,8 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 - ⚠️ **NNLog**: Un destino implementa `DoWrite` en vez de sobrescribir `Write`. `TTarget.Write` toma una sección crítica de esa instancia de destino y lo llama, así que las escrituras de varios hilos por un mismo destino dejan de solaparse — todos los loggers de un proceso comparten las mismas instancias de destino. **Rompe** a quien escribiera un destino propio
 - ⚠️ **NNLog**: Un destino que no puede escribir deja de lanzar hacia quien registró; informa por el canal de arranque, nombrando el destino. **Cambio observable**: un fallo del log deja de tumbar al código que solo quería registrar
 - **NNLog**: Un token de layout sin renderer detrás se queda sin sustituir en vez de convertirse en cadena vacía, así que un `${mesage}` mal escrito sale en la línea
+- ⚠️ **CommandLine**: `IRootCommand.VersionText` e `ICommandLineParseResult.VersionText` pasan a ser `VersionInfo` — la gramática entrega la versión y formatearla es decisión de quien la muestra. **Rompe** a quien leyera `VersionText`
+- ⚠️ **Commons**: el flag `WithCompiledMeta` de `VersionTag` pasa a ser un parámetro de plantilla, y `TVersionInfo.Debug` es de solo lectura porque describe el binario que lo informa. **Rompe** a quien pasara el flag o asignara `Debug`
 
 ### Deprecated
 
@@ -141,6 +146,8 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 - **Configuration**: Una clave encadenada cuyo valor **es** la cadena vacía ya no desaparece al atravesar la cadena: `TChainedConfigurationProvider` pregunta la presencia en vez de deducirla del valor
 - **Commons**: `TMacrosList.GetValueFromIndex` devolvía cadena vacía en toda lectura de macro
 - **Docs**: El arranque que enseñaba la documentación **no compilaba**, y la guía de Hosting seguía prometiendo el descubrimiento automático de los `IAppModule`. Ahora enseña `AddModule<T>`
+- **Commons**: un tag de versión que no es SemVer se informaba como `0.0.0`; ahora el texto declarado sobrevive
+- **Commons**: un tag con sus propios metadatos de build producía dos secciones `+`, que SemVer no admite; lo que declara el tag y lo que vio el compilador comparten ya la única sección
 
 ## [1.6.0] - 2026-07-20
 

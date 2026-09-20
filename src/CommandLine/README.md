@@ -80,7 +80,7 @@ initializer.
 | Bounded values | an enumerated `T`, or `.AcceptOnly(['fast', 'safe'])` |
 | Several values per mention | `.AllowMultipleArgumentsPerToken` — `--items a b c` without repeating the name |
 | Collecting what is not ours | `Command.AllowUnmatchedTokens`, read back as `UnmatchedTokens` |
-| Version | `.WithVersion('1.0.0')` on the root |
+| Version | `.WithVersion('1.0.0')` on the root; also `.WithVersion(tag, name, company)` or `.WithVersion(TSomeClass)` to take it from a `[Version]` annotation. `ICommandLineParseResult.VersionInfo` gives it back |
 
 ---
 

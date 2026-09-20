@@ -80,7 +80,7 @@ Root.Add([VerboseOpt, Build]);
 | Valores acotados | una `T` enumerada, o `.AcceptOnly(['fast', 'safe'])` |
 | Varios valores por mención | `.AllowMultipleArgumentsPerToken` — `--items a b c` sin repetir el nombre |
 | Recoger lo ajeno | `Comando.AllowUnmatchedTokens`, leído en `UnmatchedTokens` |
-| Versión | `.WithVersion('1.0.0')` en la raíz |
+| Versión | `.WithVersion('1.0.0')` en la raíz; también `.WithVersion(tag, nombre, compañía)` o `.WithVersion(TUnaClase)` para tomarla de una anotación `[Version]`. `ICommandLineParseResult.VersionInfo` la devuelve |
 
 ---
 

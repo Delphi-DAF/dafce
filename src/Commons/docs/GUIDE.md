@@ -420,13 +420,31 @@ var Info := TVersionInfo.GetFrom(TInvoicerApp);
 | Member | What it answers |
 |---|---|
 | `Tag` | the string the attribute declared, verbatim |
-| `VersionTag(WithCompiledMeta)` | the same version rebuilt from its parsed pieces; with the flag, the platform and bitness too |
+| `VersionTag(Template)` | the version formatted with a template of `${...}` markers; `VersionTemplate` is the default, `VersionTemplateWithBuild` adds what the compiler saw |
+| `IsEmpty` | whether a version was set at all |
+| `IsSemVer` | whether the declared tag follows the SemVer grammar |
 | `Major` / `Minor` / `Patch` / `PreRelease` / `Metadata` | the SemVer pieces |
 | `ApplicationName` / `Company` | the other two arguments of the attribute |
 | `ArchBits` / `Platform` / `Debug` | what the **compiler** saw: 32 or 64, the target platform, and whether `DEBUG` was defined |
 
-**A class with no attribute gives an empty record**, not an error: `Tag` and the two names come back
-as empty strings and the numeric pieces as zero.
+**A class with no attribute gives an empty record**, not an error: `IsEmpty` answers `True`, `Tag`
+and the two names come back as empty strings, the numeric pieces as zero, and `VersionTag` as the
+empty string.
+
+**A tag that is not SemVer keeps its text.** `IsSemVer` answers `False`, and `VersionTag` reports the
+declared string rather than rebuilding it from pieces that were never filled.
+
+The markers a template can name:
+
+| Marker | Emits |
+|---|---|
+| `${Major}` `${Minor}` `${Patch}` `${Metadata}` `${Tag}` | the SemVer pieces and the declared string, raw |
+| `${PreRelease}` | the pre-release with its own `-`, or nothing |
+| `${Platform}` `${ArchBits}` `${CompiledMeta}` | what the compiler saw |
+| `${Build}` / `${BuildFull}` | the build section, opened with `+`. The first carries what the tag declared; the second joins it with the compiled metadata inside that single section. They are alternatives: a template names one |
+
+SemVer admits one build section, so `${BuildFull}` separates the two sources with `.` rather than
+opening a second `+`.
 
 The attribute is read by RTTI, so the linker has to keep the class: a program that relies on this
 declares `STRONGLINKTYPES` and puts the class in its `interface` section.

@@ -37,7 +37,8 @@
 uses
   System.SysUtils,
   System.TypInfo,
-  Daf.CommandLine;
+  Daf.CommandLine,
+  Daf.Application.Version;
 
 type
   /// <summary>An enumerated type already names its own values, so nobody repeats them.</summary>
@@ -259,7 +260,7 @@ begin
 
   if Parsed.VersionRequested then
   begin
-    Writeln('  ', Parsed.VersionText);
+    Writeln('  ', Parsed.VersionInfo.VersionTag(VersionTemplateWithBuild));
     Writeln;
     Exit;
   end;
