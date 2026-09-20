@@ -257,7 +257,7 @@ type
 {$REGION 'Argument Matchers'}
 
 type
-  TArgMatchKind = (amkExact, amkAny, amkNotNull, amkContains, amkPredicate, amkRange);
+  TArgMatchKind = (amkExact, amkAny, amkNotNull, amkContains);
 
   TArgMatcher = record
     Kind: TArgMatchKind;
