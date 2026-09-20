@@ -83,30 +83,30 @@ type
   end;
 
   // Typed pipeline behavior for void requests
-  IPipelineBehavior<TRequest: class, IRequest> = interface(IPipelineBehavior)
+  IPipelineBehavior<TRequestType: class, IRequest> = interface(IPipelineBehavior)
     ['{375D7E25-BF87-433E-AF9B-BB056D4D2A7B}']
-    procedure Handle(Request: TRequest; Next: TNext);
+    procedure Handle(Request: TRequestType; Next: TNext);
   end;
 
   // Typed pipeline behavior for request/response handlers
-  IPipelineBehavior<TResponse; TRequest: class, IRequest<TResponse>> = interface(IPipelineBehavior)
+  IPipelineBehavior<TResponse; TRequestType: class, IRequest<TResponse>> = interface(IPipelineBehavior)
     ['{9BDE0B6A-2D89-4F26-A5ED-64C9CFB4A3B8}']
-    function Handle(Request: TRequest; Next: TNext<TResponse>): TResponse;
+    function Handle(Request: TRequestType; Next: TNext<TResponse>): TResponse;
   end;
 
-  IRequestHandler<TRequest: class, IRequest> = interface(IBaseRequesteHandler)
+  IRequestHandler<TRequestType: class, IRequest> = interface(IBaseRequesteHandler)
     ['{8618570D-30FB-49F1-8015-50E7E845975D}']
-    procedure Handle(Request: TRequest);
+    procedure Handle(Request: TRequestType);
   end;
 
-  IRequestHandler<TResponse;TRequest:class, IRequest<TResponse>> = interface(IBaseResponseHandler)
+  IRequestHandler<TResponse;TRequestType:class, IRequest<TResponse>> = interface(IBaseResponseHandler)
     ['{A1A470A0-DE1B-45E2-9C22-2BECBDCD5C73}']
-    procedure Handle(Request: TRequest; out Result: TResponse);
+    procedure Handle(Request: TRequestType; out Result: TResponse);
   end;
 
-  INotificationHandler<TNotification: class, INotification> = interface(IBaseHandler)
+  INotificationHandler<TNotificationType: class, INotification> = interface(IBaseHandler)
     ['{F7DB0B37-0CB7-4CBD-B11A-283B65E23DA1}']
-    procedure Handle(Notification: TNotification);
+    procedure Handle(Notification: TNotificationType);
   end;
 
   IMediator = record
@@ -118,9 +118,9 @@ type
     class operator Equal(Med: IMediator; P: Pointer): Boolean;
     class operator NotEqual(Med: IMediator; P: Pointer): Boolean;
 
-    procedure Send<TRequest: class, IRequest>(Request: TRequest);overload;
-    function Send<TResponse; TRequest: class, IRequest<TResponse>>(Request: TRequest): TResponse; overload;
-    procedure Publish<TNotification: class, INotification>(Notification: TNotification);
+    procedure Send<TRequestType: class, IRequest>(Request: TRequestType);overload;
+    function Send<TResponse; TRequestType: class, IRequest<TResponse>>(Request: TRequestType): TResponse; overload;
+    procedure Publish<TNotificationType: class, INotification>(Notification: TNotificationType);
   end;
 
   // Tell Mediator to consider some class as an abstract handler to ignore.
@@ -144,59 +144,59 @@ type
   end;
 
   [MediatorAbstract]
-  TPipelineBehavior<TRequest: class, IRequest> = class abstract(TPipelineBehavior, IPipelineBehavior<TRequest>)
+  TPipelineBehavior<TRequestType: class, IRequest> = class abstract(TPipelineBehavior, IPipelineBehavior<TRequestType>)
   public
     function Invoke(Request: TObject; Next: TFunc<TValue>): TValue; override;
-    procedure Handle(Request: TRequest; Next: TNext); reintroduce; virtual; abstract;
+    procedure Handle(Request: TRequestType; Next: TNext); reintroduce; virtual; abstract;
   end;
 
   [MediatorAbstract]
-  TPipelineBehavior<TResponse; TRequest: class, IRequest<TResponse>> = class abstract(TPipelineBehavior, IPipelineBehavior<TResponse, TRequest>)
+  TPipelineBehavior<TResponse; TRequestType: class, IRequest<TResponse>> = class abstract(TPipelineBehavior, IPipelineBehavior<TResponse, TRequestType>)
   public
     function Invoke(Request: TObject; Next: TFunc<TValue>): TValue; override;
-    function HandleBridge(Request: TRequest; Next: TFunc<TValue>): TResponse;
-    function Handle(Request: TRequest; Next: TNext<TResponse>): TResponse; reintroduce; virtual; abstract;
+    function HandleBridge(Request: TRequestType; Next: TFunc<TValue>): TResponse;
+    function Handle(Request: TRequestType; Next: TNext<TResponse>): TResponse; reintroduce; virtual; abstract;
   end;
 
   [MediatorAbstract]
-  TRequestHandler<TRequest: class, IRequest> = class abstract(TBaseHandler, IRequestHandler<TRequest>)
+  TRequestHandler<TRequestType: class, IRequest> = class abstract(TBaseHandler, IRequestHandler<TRequestType>)
   strict private
     FMediator: IMediator;
-    FRequest: TRequest;
+    FRequest: TRequestType;
   public
     constructor Create(const Mediator: IMediatorImpl);
-    procedure Handle(Request: TRequest);virtual;
+    procedure Handle(Request: TRequestType);virtual;
     property Mediator: IMediator read FMediator;
-    property Request: TRequest read FRequest;
+    property Request: TRequestType read FRequest;
   end;
 
   [MediatorAbstract]
-  TResponseHandler<TResponse;TRequest: class, IRequest<TResponse>> = class abstract(TBaseHandler, IRequestHandler<TResponse, TRequest>)
+  TResponseHandler<TResponse;TRequestType: class, IRequest<TResponse>> = class abstract(TBaseHandler, IRequestHandler<TResponse, TRequestType>)
     strict private
     FMediator: IMediator;
-    FRequest: TRequest;
+    FRequest: TRequestType;
   public
     constructor Create(const Mediator: IMediatorImpl);
-    procedure Handle(Request: TRequest; out Result: TResponse); virtual;
+    procedure Handle(Request: TRequestType; out Result: TResponse); virtual;
     property Mediator: IMediator read FMediator;
-    property Request: TRequest read FRequest;
+    property Request: TRequestType read FRequest;
   end;
 
   [MediatorAbstract]
-  TNotificationHandler<TNotification: class, INotification> = class abstract(TBaseHandler, INotificationHandler<TNotification>)
+  TNotificationHandler<TNotificationType: class, INotification> = class abstract(TBaseHandler, INotificationHandler<TNotificationType>)
   strict private
     FMediator: IMediator;
-    FNotification: TNotification;
+    FNotification: TNotificationType;
   private
-    FRequest: TNotification;
+    FRequest: TNotificationType;
   public
     constructor Create(const Mediator: IMediatorImpl);
-    procedure Handle(Notification: TNotification); virtual;
-    property Notification: TNotification read FRequest;
+    procedure Handle(Notification: TNotificationType); virtual;
+    property Notification: TNotificationType read FRequest;
   end;
 
   [MediatorAbstract]
-  TNotificacionHandler<TNotification: class, INotification> = class abstract(TNotificationHandler<TNotification>)
+  TNotificacionHandler<TNotificationType: class, INotification> = class abstract(TNotificationHandler<TNotificationType>)
   end deprecated 'Use TNotificationHandler';
 
   [MediatorAbstract]
@@ -213,14 +213,14 @@ type
 
   IMediatorHelper = record helper for IMediator
   public
-    function SendARC<TResponse: class; TRequest: class, IRequest<TResponse>>(const Request: TRequest): ARC<TResponse>;
+    function SendARC<TResponse: class; TRequestType: class, IRequest<TResponse>>(const Request: TRequestType): ARC<TResponse>;
   end;
 
 implementation
 
-function IMediatorHelper.SendARC<TResponse, TRequest>(const Request: TRequest): ARC<TResponse>;
+function IMediatorHelper.SendARC<TResponse, TRequestType>(const Request: TRequestType): ARC<TResponse>;
 begin
-  Result := ARC.From(Send<TResponse, TRequest>(Request))
+  Result := ARC.From(Send<TResponse, TRequestType>(Request))
 end;
 
 { IMediator }
@@ -245,67 +245,67 @@ begin
   Result := Med.FImpl;
 end;
 
-procedure IMediator.Publish<TNotification>(Notification: TNotification);
+procedure IMediator.Publish<TNotificationType>(Notification: TNotificationType);
 begin
   var
     Result: Nativeint;
   var
-  THandler := TypeInfo(INotificationHandler<TNotification>);
+  THandler := TypeInfo(INotificationHandler<TNotificationType>);
   FImpl.InvokeHandler(THandler, Notification, Result);
 end;
 
-procedure IMediator.Send<TRequest>(Request: TRequest);
+procedure IMediator.Send<TRequestType>(Request: TRequestType);
 begin
   var
     Result: NativeInt;
   var
-  THandler := TypeInfo(IRequestHandler<TRequest>);
+  THandler := TypeInfo(IRequestHandler<TRequestType>);
   FImpl.InvokeHandler(THandler, Request, Result);
 end;
 
-function IMediator.Send<TResponse, TRequest>(Request: TRequest): TResponse;
+function IMediator.Send<TResponse, TRequestType>(Request: TRequestType): TResponse;
 begin
   var
-  THandler := TypeInfo(IRequestHandler<TResponse, TRequest>);
+  THandler := TypeInfo(IRequestHandler<TResponse, TRequestType>);
   FImpl.InvokeHandler(THandler, Request, Result);
 end;
 
-{ TRequestHandler<TRequest> }
+{ TRequestHandler<TRequestType> }
 
-constructor TRequestHandler<TRequest>.Create(const Mediator: IMediatorImpl);
+constructor TRequestHandler<TRequestType>.Create(const Mediator: IMediatorImpl);
 begin
   inherited Create;
   FMediator := Mediator;
 end;
 
-procedure TRequestHandler<TRequest>.Handle(Request: TRequest);
+procedure TRequestHandler<TRequestType>.Handle(Request: TRequestType);
 begin
   FRequest := Request;
 end;
 
-{ TResponseHandler<TResponse, TRequest> }
+{ TResponseHandler<TResponse, TRequestType> }
 
-constructor TResponseHandler<TResponse, TRequest>.Create(const Mediator: IMediatorImpl);
+constructor TResponseHandler<TResponse, TRequestType>.Create(const Mediator: IMediatorImpl);
 begin
   inherited Create;
   FMediator := Mediator;
 end;
 
-procedure TResponseHandler<TResponse, TRequest>.Handle(Request: TRequest; out Result: TResponse);
+procedure TResponseHandler<TResponse, TRequestType>.Handle(Request: TRequestType; out Result: TResponse);
 begin
   FRequest := Request;
   Result := Default (TResponse);
 end;
 
-{ TNotificationHandler<TNotification> }
+{ TNotificationHandler<TNotificationType> }
 
-constructor TNotificationHandler<TNotification>.Create(const Mediator: IMediatorImpl);
+constructor TNotificationHandler<TNotificationType>.Create(const Mediator: IMediatorImpl);
 begin
   inherited Create;
   FMediator := Mediator;
 end;
 
-procedure TNotificationHandler<TNotification>.Handle(Notification: TNotification);
+procedure TNotificationHandler<TNotificationType>.Handle(Notification: TNotificationType);
 begin
   FNotification := Notification;
 end;
@@ -358,17 +358,17 @@ begin
   Result := Handle(Request, TNextValue.Create(Next));
 end;
 
-{ TPipelineBehavior<TRequest> }
+{ TPipelineBehavior<TRequestType> }
 
-function TPipelineBehavior<TRequest>.Invoke(Request: TObject; Next: TFunc<TValue>): TValue;
+function TPipelineBehavior<TRequestType>.Invoke(Request: TObject; Next: TFunc<TValue>): TValue;
 begin
-  Handle(TRequest(Request), TNext.Create(procedure begin Next(); end));
+  Handle(TRequestType(Request), TNext.Create(procedure begin Next(); end));
   Result := Default(TValue);
 end;
 
-{ TPipelineBehavior<TResponse, TRequest> }
+{ TPipelineBehavior<TResponse, TRequestType> }
 
-function TPipelineBehavior<TResponse, TRequest>.Invoke(Request: TObject; Next: TFunc<TValue>): TValue;
+function TPipelineBehavior<TResponse, TRequestType>.Invoke(Request: TObject; Next: TFunc<TValue>): TValue;
 var
   RC: TRttiContext;
   NextVal, RequestVal: TValue;
@@ -385,7 +385,7 @@ begin
   end;
 end;
 
-function TPipelineBehavior<TResponse, TRequest>.HandleBridge(Request: TRequest; Next: TFunc<TValue>): TResponse;
+function TPipelineBehavior<TResponse, TRequestType>.HandleBridge(Request: TRequestType; Next: TFunc<TValue>): TResponse;
 begin
   Result := Handle(Request, TNext<TResponse>.Create(Next));
 end;
