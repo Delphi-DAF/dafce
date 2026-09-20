@@ -1,0 +1,36 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{7B3E9C10-4D52-4A18-9F6E-2C8A1D0B5E77}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="test\SystemProcessSpecs.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="SystemProcessSpecs">
+        <MSBuild Projects="test\SystemProcessSpecs.dproj"/>
+    </Target>
+    <Target Name="SystemProcessSpecs:Clean">
+        <MSBuild Projects="test\SystemProcessSpecs.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="SystemProcessSpecs:Make">
+        <MSBuild Projects="test\SystemProcessSpecs.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="SystemProcessSpecs"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="SystemProcessSpecs:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="SystemProcessSpecs:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>
