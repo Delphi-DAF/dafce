@@ -235,19 +235,23 @@ uses Daf.MiniSpec.Doubles;
 
 ### Example with Matchers
 
+Setups are resolved **from the last declared backwards**, and one carrying matchers is
+preferred to one without. So the narrowest goes **last**: declaring it first does not protect
+it from a wider one declared after.
+
 ```pascal
 var EmailService := Stub<IEmailService>
   .Setup('Send')
-    .WithArgs([Arg.Contains('@admin'), Arg.Any])
-    .Raises(ESecurityException.Create('Cannot email admins'))
-  .Setup('Send')
     .WithArgs([Arg.NotNull, Arg.NotNull])
     .Returns(True)
+  .Setup('Send')
+    .WithArgs([Arg.Contains('@admin'), Arg.Any])
+    .Raises(ESecurityException.Create('Cannot email admins'))
   .Instance;
 
 // EmailService.Send('admin@co.com', 'Hi') → raises
 // EmailService.Send('user@co.com', 'Hi') → True
-// EmailService.Send('', 'Hi') → False (NotNull fails)
+// EmailService.Send('', 'Hi') → False: nothing matched, so the return type's zero comes back
 ```
 
 ---

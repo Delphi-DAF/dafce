@@ -235,19 +235,23 @@ uses Daf.MiniSpec.Doubles;
 
 ### Ejemplo con Matchers
 
+Los setups se resuelven **del último declarado hacia atrás**, y uno con matchers gana a uno
+sin ellos. Así que el más estrecho va **el último**: declararlo primero no lo protege de uno
+más amplio declarado después.
+
 ```pascal
 var EmailService := Stub<IEmailService>
   .Setup('Send')
-    .WithArgs([Arg.Contains('@admin'), Arg.Any])
-    .Raises(ESecurityException.Create('No se puede enviar email a admins'))
-  .Setup('Send')
     .WithArgs([Arg.NotNull, Arg.NotNull])
     .Returns(True)
+  .Setup('Send')
+    .WithArgs([Arg.Contains('@admin'), Arg.Any])
+    .Raises(ESecurityException.Create('No se puede enviar email a admins'))
   .Instance;
 
 // EmailService.Send('admin@co.com', 'Hola') → lanza excepción
 // EmailService.Send('user@co.com', 'Hola') → True
-// EmailService.Send('', 'Hola') → False (NotNull falla)
+// EmailService.Send('', 'Hola') → False: no casó ninguno, así que vuelve el cero del tipo
 ```
 
 ---
