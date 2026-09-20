@@ -10,6 +10,7 @@ uses
   System.SysUtils,
   System.Rtti,
   Daf.MiniSpec,
+  Daf.MiniSpec.Types,
   Daf.MiniSpec.Doubles;
 
 type
@@ -64,8 +65,7 @@ type
     UserSvc: IUserService;
     IntResult: Integer;
     StrResult: string;
-    ExceptionRaised: Boolean;
-    ExceptionMessage: string;
+    Captured: TCapturedRaise;
     CallbackExecuted: Boolean;
     CallbackArgs: TArray<TValue>;
   end;
@@ -77,8 +77,6 @@ type
     Calc: ICalculator;
     Logger: ILogger;
     IntResult: Integer;
-    VerifyPassed: Boolean;
-    VerifyError: string;
   end;
 
   TSpyWorld = class
@@ -99,7 +97,7 @@ type
     IntResult: Integer;
     OtherResult: Integer;
     OtherStr: string;
-    ExceptionRaised: Boolean;
+    Captured: TCapturedRaise;
   end;
 
   {$ENDREGION}
@@ -233,24 +231,17 @@ Feature('Stub<T> - Creating test stubs for interfaces @doubles @stub')
       end)
     .When('I call Divide', procedure(W: TStubWorld)
       begin
-        W.ExceptionRaised := False;
-        try
-          W.Calc.Divide(10, 0);
-        except
-          on E: EDivByZero do
-          begin
-            W.ExceptionRaised := True;
-            W.ExceptionMessage := E.Message;
-          end;
-        end;
+        W.Calc.Divide(10, 0);
       end)
     .&Then('it raises EDivByZero', procedure(W: TStubWorld)
       begin
-        Expect(W.ExceptionRaised).ToBeTrue;
+        // Raised consumes what the When left, so it is read once and held.
+        W.Captured := Raised;
+        ExpectException(W.Captured).ToBe(EDivByZero);
       end)
     .&And('the message is correct', procedure(W: TStubWorld)
       begin
-        Expect(W.ExceptionMessage).ToEqual('Cannot divide by zero');
+        ExpectException(W.Captured).ToMatchMessage('^Cannot divide by zero$');
       end)
 
 .Rule('Custom behavior with Executes')
@@ -398,13 +389,11 @@ Feature('Mock<T> - Creating mocks with expectations @doubles @mock')
       end)
     .&Then('Verify passes', procedure(W: TMockWorld)
       begin
-        W.VerifyPassed := True;
-        try
-          W.MockCalc.Verify;
-        except
-          W.VerifyPassed := False;
-        end;
-        Expect(W.VerifyPassed).ToBeTrue;
+        ExpectException(
+          procedure
+          begin
+            W.MockCalc.Verify;
+          end).ToBeNone;
       end)
 
   .Scenario('Expects method called once - fails when called twice')
@@ -421,17 +410,11 @@ Feature('Mock<T> - Creating mocks with expectations @doubles @mock')
       end)
     .&Then('Verify fails', procedure(W: TMockWorld)
       begin
-        W.VerifyPassed := True;
-        try
-          W.MockCalc.Verify;
-        except
-          on E: EExpectationFailed do
+        ExpectException(
+          procedure
           begin
-            W.VerifyPassed := False;
-            W.VerifyError := E.Message;
-          end;
-        end;
-        Expect(W.VerifyPassed).ToBeFalse;
+            W.MockCalc.Verify;
+          end).ToBe(EExpectationFailed);
       end)
 
 .Rule('Expectation: Never')
@@ -449,13 +432,11 @@ Feature('Mock<T> - Creating mocks with expectations @doubles @mock')
       end)
     .&Then('Verify passes', procedure(W: TMockWorld)
       begin
-        W.VerifyPassed := True;
-        try
-          W.MockCalc.Verify;
-        except
-          W.VerifyPassed := False;
-        end;
-        Expect(W.VerifyPassed).ToBeTrue;
+        ExpectException(
+          procedure
+          begin
+            W.MockCalc.Verify;
+          end).ToBeNone;
       end)
 
   .Scenario('Expects method never called - fails when called')
@@ -471,14 +452,11 @@ Feature('Mock<T> - Creating mocks with expectations @doubles @mock')
       end)
     .&Then('Verify fails', procedure(W: TMockWorld)
       begin
-        W.VerifyPassed := True;
-        try
-          W.MockCalc.Verify;
-        except
-          on E: EExpectationFailed do
-            W.VerifyPassed := False;
-        end;
-        Expect(W.VerifyPassed).ToBeFalse;
+        ExpectException(
+          procedure
+          begin
+            W.MockCalc.Verify;
+          end).ToBe(EExpectationFailed);
       end)
 
 .Rule('Expectation: AtLeastOnce')
@@ -498,13 +476,11 @@ Feature('Mock<T> - Creating mocks with expectations @doubles @mock')
       end)
     .&Then('Verify passes', procedure(W: TMockWorld)
       begin
-        W.VerifyPassed := True;
-        try
-          W.MockCalc.Verify;
-        except
-          W.VerifyPassed := False;
-        end;
-        Expect(W.VerifyPassed).ToBeTrue;
+        ExpectException(
+          procedure
+          begin
+            W.MockCalc.Verify;
+          end).ToBeNone;
       end)
 
 .Rule('Expectation: Exactly(N)')
@@ -524,13 +500,11 @@ Feature('Mock<T> - Creating mocks with expectations @doubles @mock')
       end)
     .&Then('Verify passes', procedure(W: TMockWorld)
       begin
-        W.VerifyPassed := True;
-        try
-          W.MockCalc.Verify;
-        except
-          W.VerifyPassed := False;
-        end;
-        Expect(W.VerifyPassed).ToBeTrue;
+        ExpectException(
+          procedure
+          begin
+            W.MockCalc.Verify;
+          end).ToBeNone;
       end)
 
   .Scenario('Expects method called exactly N times - fails with different count')
@@ -547,14 +521,11 @@ Feature('Mock<T> - Creating mocks with expectations @doubles @mock')
       end)
     .&Then('Verify fails', procedure(W: TMockWorld)
       begin
-        W.VerifyPassed := True;
-        try
-          W.MockCalc.Verify;
-        except
-          on E: EExpectationFailed do
-            W.VerifyPassed := False;
-        end;
-        Expect(W.VerifyPassed).ToBeFalse;
+        ExpectException(
+          procedure
+          begin
+            W.MockCalc.Verify;
+          end).ToBe(EExpectationFailed);
       end)
 
 .Rule('Combined Setup and Expectations')
@@ -577,13 +548,11 @@ Feature('Mock<T> - Creating mocks with expectations @doubles @mock')
       end)
     .&And('Verify passes', procedure(W: TMockWorld)
       begin
-        W.VerifyPassed := True;
-        try
-          W.MockCalc.Verify;
-        except
-          W.VerifyPassed := False;
-        end;
-        Expect(W.VerifyPassed).ToBeTrue;
+        ExpectException(
+          procedure
+          begin
+            W.MockCalc.Verify;
+          end).ToBeNone;
       end);
 
 {$ENDREGION}
@@ -906,21 +875,13 @@ Feature('Arg matchers - Flexible argument matching @doubles @matchers')
   .Scenario('A matcher handed no predicate is refused where it is declared')
     .When('I ask for a matcher and give it nothing', procedure(W: TArgWorld)
       begin
-        W.ExceptionRaised := False;
-        try
-          Arg.Matching<Integer>(nil);
-        except
-          on E: EDoubleError do
-          begin
-            W.ExceptionRaised := True;
-            W.StrResult := E.Message;
-          end;
-        end;
+        Arg.Matching<Integer>(nil);
       end)
     .&Then('it breaks at the setup, and not on a call that would silently not match', procedure(W: TArgWorld)
       begin
-        Expect(W.ExceptionRaised).ToBeTrue;
-        Expect(W.StrResult).ToContain('requires a predicate');
+        W.Captured := Raised;
+        ExpectException(W.Captured).ToBe(EDoubleError);
+        ExpectException(W.Captured).ToHaveMessage('requires a predicate');
       end);
 
 {$ENDREGION}
