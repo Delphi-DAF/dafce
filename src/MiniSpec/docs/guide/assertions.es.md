@@ -76,9 +76,21 @@ Un caso especial importante: verificar que el código lanza una excepción. Mini
 |--------|-------------|
 | `ExpectException(Raised).ToBeAny` | Se lanzó cualquier excepción |
 | `ExpectException(Raised).ToBe(EMyException)` | Se lanzó tipo específico |
+| `ExpectException(Raised).ToBe<EMyException>` | Lo mismo, escrito como argumento de tipo |
 | `ExpectException(Raised).ToHaveMessage('texto')` | Mensaje contiene substring |
 | `ExpectException(Raised).ToBeNone` | No se lanzó excepción |
 | `ExpectException(Raised).ToMatchMessage('re')` | El mensaje casa con una **expresión regular** |
+
+`Raised` es la excepción que escapó del step **When**. `ExpectException` recibe también la
+llamada misma, para una comprobación que no es el evento del escenario:
+
+```pascal
+ExpectException(
+  procedure
+  begin
+    World.Calculator.Divide(10, 0);
+  end).ToBe<EDivByZero>;
+```
 
 ⚠️ `ToMatchMessage` está en `TExpectException`, no en `TExpect`: llamarlo sobre un valor da
 `E2003 Undeclared identifier`. Y es una regex, así que `'*Between*2*1*'` no casa con nada donde

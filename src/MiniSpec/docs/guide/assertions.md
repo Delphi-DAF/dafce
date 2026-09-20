@@ -76,9 +76,21 @@ An important special case: verifying that code throws an exception. MiniSpec **a
 |--------|-------------|
 | `ExpectException(Raised).ToBeAny` | Any exception was raised |
 | `ExpectException(Raised).ToBe(EMyException)` | Specific type was raised |
+| `ExpectException(Raised).ToBe<EMyException>` | The same, written as a type argument |
 | `ExpectException(Raised).ToHaveMessage('text')` | Message contains substring |
 | `ExpectException(Raised).ToBeNone` | No exception was raised |
 | `ExpectException(Raised).ToMatchMessage('re')` | Message matches a **regular expression** |
+
+`Raised` is the exception that escaped the **When** step. `ExpectException` also takes the
+call itself, for a check that is not the scenario's event:
+
+```pascal
+ExpectException(
+  procedure
+  begin
+    World.Calculator.Divide(10, 0);
+  end).ToBe<EDivByZero>;
+```
 
 ⚠️ `ToMatchMessage` is on `TExpectException`, not on `TExpect`: calling it on a plain value gives
 `E2003 Undeclared identifier`. And it is a regex, so `'*Between*2*1*'` matches nothing where
