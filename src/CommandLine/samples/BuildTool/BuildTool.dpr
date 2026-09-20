@@ -13,7 +13,7 @@
       |   |                            --min-sdk    a type of this program's own
       |   +-- web    <target>          --minify
       |
-      +-- serve                        --port       default 8080
+      +-- serve                        --port       default 8080, from 1 to 65535
                                        --level      Quiet|Normal|Detailed
 
   `native`, `web` and `serve` are the leaves. `build` only groups, so `buildtool build`
@@ -22,7 +22,7 @@
   <target> is REQUIRED without anybody saying so: a string argument gets an arity of
   exactly one, and exactly one is what "required" means at the argument end.
 
-  Run it with no arguments and it walks a set of invocations, two of which fail on
+  Run it with no arguments and it walks a set of invocations, several of which fail on
   purpose. Run it with arguments and it parses those instead:
 
       BuildTool --help
@@ -135,7 +135,17 @@ begin
     .WithAlias('-v').Recursive;
   FOut := CommandLine.Option<string>('--out', 'Where the binary goes').WithDefault('bin\out.exe');
   FMinify := CommandLine.Option<Boolean>('--minify', 'Shrink the produced assets').WithAlias('-m');
-  FPort := CommandLine.Option<Integer>('--port', 'Port to listen on').WithDefault(8080);
+  // A range is a validation and not a mechanism of its own, which is also how
+  // System.CommandLine answers one. It receives the value already converted.
+  FPort := CommandLine.Option<Integer>('--port', 'Port to listen on').WithDefault(8080)
+    .Validate(
+    function(const Value: Integer; out Error: string): Boolean
+    begin
+      Error := '';
+      Result := (Value >= 1) and (Value <= 65535);
+      if not Result then
+        Error := Format('a port goes from 1 to 65535, and %d does not', [Value]);
+    end);
   // Nothing here lists the accepted values: the enumerated type does it, both in the
   // help and in the error when one is refused.
   FLevel := CommandLine.Option<TVerbosity>('--level', 'How much to say').WithDefault(TVerbosity.Normal);
@@ -288,6 +298,9 @@ begin
   // The value engine refuses a number with something left over instead of inventing
   // one out of it: this is NOT read as 80.
   Run(['serve', '--port', '80xyz']);
+  // A number the type admits and the application does not. The validation's refusal
+  // comes out through Errors, like every other invalid invocation.
+  Run(['serve', '--port', '70000']);
   // <target> is required by its arity: leaving it out is an incomplete invocation.
   Run(['build', 'native']);
   // The enumerated type refuses what is not one of its values, and says which are.

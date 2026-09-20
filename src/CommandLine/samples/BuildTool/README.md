@@ -14,7 +14,7 @@ buildtool                        --verbose, -v   recursive: every leaf inherits 
 |   |                            --min-sdk       a type of this program's own
 |   +-- web    <target>          --minify, -m
 |
-+-- serve                        --port          default 8080
++-- serve                        --port          default 8080, from 1 to 65535
 ```
 
 `native`, `web` and `serve` are the leaves. `build` only groups, so `buildtool build` is an
@@ -22,7 +22,7 @@ buildtool                        --verbose, -v   recursive: every leaf inherits 
 
 ## Running it
 
-With no arguments it walks a set of invocations, including the four that fail:
+With no arguments it walks a set of invocations, including the five that fail:
 
 ```
 out\Win32\samples\bin\BuildTool.exe
@@ -84,5 +84,6 @@ Everything lives in one class, `TBuildTool`, and each part answers a different q
 | `buildtool serve --port 80xyz` | The engine refuses the whole token, naming the option and the text, instead of quietly meaning `80` |
 | `buildtool serve --level shouting` | The enumerated type refuses what is not one of its values, and lists the ones it has |
 | `buildtool build native app.dpr --min-sdk 11.4` | The conversion declared with the option refuses it, with its own message |
+| `buildtool serve --port 70000` | A validation of the application's own: the type admits the number and the range does not, and a range is written over that same hook |
 
 And `--help` is never declared anywhere, yet answers.
