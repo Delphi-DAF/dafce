@@ -18,7 +18,11 @@ type
 {$SCOPEDENUMS ON}
   TProcessResult = record
   public type
-    TStatus = (Failed, Timeout, Running, Completed, Canceled);
+    /// <summary>
+    ///   <c>Timeout</c> es que venció el plazo; <c>Killed</c>, que alguien llamó a <c>Kill</c>.
+    ///   Los dos terminan con el hijo muerto, y quien lee el resultado necesita separarlos.
+    /// </summary>
+    TStatus = (Failed, Timeout, Running, Completed, Canceled, Killed);
   public
     Status: TStatus;
     ExitCode: DWord;
@@ -49,7 +53,6 @@ type
     function GetCommandLine: string;
     function GetWorkingDirectory: string;
     function GetTimeoutMS: Cardinal;
-    function GetKillAfterTimeout: Boolean;
     function GetHideWindow: Boolean;
     function GetOnStdOut: TProcessOutputProc;
     function GetOnStdErr: TProcessOutputProc;
@@ -66,7 +69,6 @@ type
     property CommandLine: string read GetCommandLine;
     property WorkingDirectory: string read GetWorkingDirectory;
     property TimeoutMS: Cardinal read GetTimeoutMS;
-    property KillAfterTimeout: Boolean read GetKillAfterTimeout;
     property HideWindow: Boolean read GetHideWindow;
     property OnStdOut: TProcessOutputProc read GetOnStdOut;
     property OnStdErr: TProcessOutputProc read GetOnStdErr;
@@ -87,7 +89,6 @@ type
     function CmdArgs(const Args: array of string): TBuilder;
     function WorkingDir(const Value: string): TBuilder;
     function Timeout(Milliseconds: Cardinal): TBuilder;
-    function KillAfterTimeout(Value: Boolean = True): TBuilder;
     function HideWindow(Value: Boolean = True): TBuilder;
     function OnStdOut(Proc: TProcessOutputProc): TBuilder;
     function OnStdErr(Proc: TProcessOutputProc): TBuilder;
@@ -107,7 +108,6 @@ type
     FCommandLine: string;
     FWorkingDirectory: string;
     FTimeoutMS: Cardinal;
-    FKillAfterTimeout: Boolean;
     FHideWindow: Boolean;
     FCustomEnvVars: TEnvironmentVariables;
 
@@ -137,7 +137,7 @@ type
     procedure DoProcessCompleted(var Result: TProcessResult);
     procedure DoProcessFailed(var Result: TProcessResult);
     procedure DoProcessCanceled(var Result: TProcessResult);
-    procedure DoProcessKilled(var Result: TProcessResult);
+    procedure DoProcessKilled(var Result: TProcessResult; const AStatus: TProcessResult.TStatus);
     procedure DoProcessIdle(var Result: TProcessResult);
 
     function TryCreateProcess(var ProcessResult: TProcessResult): Boolean;
@@ -146,7 +146,6 @@ type
     function GetCommandLine: string;
     function GetWorkingDirectory: string;
     function GetTimeoutMS: Cardinal;
-    function GetKillAfterTimeout: Boolean;
     function GetHideWindow: Boolean;
     function GetOnStdOut: TProcessOutputProc;
     function GetOnStdErr: TProcessOutputProc;
@@ -170,7 +169,6 @@ type
     property CommandLine: string read GetCommandLine;
     property WorkingDirectory: string read GetWorkingDirectory;
     property TimeoutMS: Cardinal read GetTimeoutMS;
-    property KillAfterTimeout: Boolean read GetKillAfterTimeout;
     property HideWindow: Boolean read GetHideWindow;
     property OnStdOut: TProcessOutputProc read GetOnStdOut;
     property OnStdErr: TProcessOutputProc read GetOnStdErr;
@@ -318,12 +316,6 @@ begin
   Result := Self;
 end;
 
-function TBuilder.KillAfterTimeout(Value: Boolean = True): TBuilder;
-begin
-  Result := Self;
-  FInstance.FKillAfterTimeout := Value;
-end;
-
 function TBuilder.HideWindow(Value: Boolean = True): TBuilder;
 begin
   Result := Self;
@@ -375,7 +367,6 @@ constructor TSystemProcess.Create;
 begin
   inherited Create;
   FTimeoutMS := INFINITE;
-  FKillAfterTimeout := False;
   FCustomEnvVars := TEnvironmentVariables.Create;
 end;
 
@@ -548,12 +539,15 @@ begin
     OnCancelled(Result);
 end;
 
-procedure TSystemProcess.DoProcessKilled(var Result: TProcessResult);
+procedure TSystemProcess.DoProcessKilled(var Result: TProcessResult;
+  const AStatus: TProcessResult.TStatus);
 begin
   Result.ExitCode := 0;
-  Result.Status := TProcessResult.TStatus.Timeout;
+  Result.Status := AStatus;
   Result.Duration := FStopWatch.Elapsed;
-  TProcess.KillById(FProcessInfo);
+  // Un Kill explicito ya mato al pedirlo; repetirlo aqui solo encontraria un muerto.
+  if not FKillRequested then
+    TProcess.KillById(FProcessInfo);
   if Assigned(FOnKilled) then
     OnKilled(Result);
 end;
@@ -636,9 +630,15 @@ begin
         Break;
       end;
 
-      if FKillRequested or ((FTimeoutMS <> INFINITE) and (FStopWatch.ElapsedMilliseconds >= FTimeoutMS)) then
+      if FKillRequested then
       begin
-        DoProcessKilled(Result);
+        DoProcessKilled(Result, TProcessResult.TStatus.Killed);
+        Break;
+      end;
+
+      if (FTimeoutMS <> INFINITE) and (FStopWatch.ElapsedMilliseconds >= FTimeoutMS) then
+      begin
+        DoProcessKilled(Result, TProcessResult.TStatus.Timeout);
         Break;
       end;
 
@@ -649,7 +649,7 @@ begin
     if Result.Status = TProcessResult.TStatus.Running then
     begin
       if FKillRequested then
-         DoProcessKilled(Result)
+         DoProcessKilled(Result, TProcessResult.TStatus.Killed)
       else
       if WaitRes = WAIT_OBJECT_0 then
         DoProcessCompleted(Result)
@@ -678,11 +678,6 @@ function TSystemProcess.GetIsRunning: Boolean;
 begin
   if FProcessInfo.hProcess = 0 then Exit(False);
   Result := not TProcess.HasExited(FProcessInfo);
-end;
-
-function TSystemProcess.GetKillAfterTimeout: Boolean;
-begin
-  Result := FKillAfterTimeout;
 end;
 
 function TSystemProcess.GetOnCancelled: TProcessNotifyProc;

@@ -62,6 +62,7 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 - **Commons**: `TVersionInfo.IsEmpty` e `IsSemVer` — «no se fijó versión», «el tag no se entendió» y «la versión es esta» dejan de compartir una sola representación que parecía una versión válida
 - **Commons**: `VersionTag` toma una plantilla de marcadores `${...}`, con `VersionTemplate` y `VersionTemplateWithBuild` como sus dos plantillas por defecto. La lista de marcadores, en el GUIDE
 - **CommandLine**: `WithVersion` acepta también el nombre de la aplicación y su compañía, o una clase con una anotación `[Version]` de la que leer los tres
+- **SystemProcess**: `TProcessResult.TStatus.Killed` — un `Kill` explícito y un plazo vencido dejan de compartir el valor `Timeout`, así que un resultado dice cuál de los dos cortó la ejecución
 
 ### Changed
 
@@ -119,6 +120,7 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
   - `&If.Exp<T>`, el ternario escrito como función: evaluaba las **dos** ramas, así que no cortocircuitaba. El operador ternario de Delphi 13 lo sustituye
   - `TBooleanExpresion`
   - La unidad `Daf.Expression`, disuelta en `Daf.FilterSpec` y `Daf.Types`
+- ⚠️ **SystemProcess**: `KillAfterTimeout`, de `ISystemProcess` y del builder. El plazo mata siempre, que es lo único que el flag llegó a hacer: `Execute` es dueño de la ejecución desde las tuberías hasta el desmontaje, así que es él quien lo hace valer. **Rompe** a quien llamara a `.KillAfterTimeout(...)`
 
 ### Fixed
 
@@ -148,6 +150,7 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 - **Docs**: El arranque que enseñaba la documentación **no compilaba**, y la guía de Hosting seguía prometiendo el descubrimiento automático de los `IAppModule`. Ahora enseña `AddModule<T>`
 - **Commons**: un tag de versión que no es SemVer se informaba como `0.0.0`; ahora el texto declarado sobrevive
 - **Commons**: un tag con sus propios metadatos de build producía dos secciones `+`, que SemVer no admite; lo que declara el tag y lo que vio el compilador comparten ya la única sección
+- **SystemProcess**: un `Kill` explícito se informaba como `Timeout`, y mataba al hijo dos veces —una al pedirlo y otra cuando el bucle de espera se enteraba—. Ahora informa `Killed` y mata una vez
 
 ## [1.6.0] - 2026-07-20
 

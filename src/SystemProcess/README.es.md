@@ -21,7 +21,6 @@ var Proc := TSystemProcess.Builder
   .CmdArgs(['log', '--oneline', '-10'])
   .WorkingDir('C:\MyRepo')
   .Timeout(30000)               // ms; sin esta llamada no hay plazo
-  .KillAfterTimeout(True)
   .HideWindow(True)
   .OnStdOut(procedure(Text: string) begin Write(Text); end)
   .OnStdErr(procedure(Text: string) begin Write(Text); end)
@@ -39,8 +38,16 @@ var Result := Proc.Execute;      // síncrono
 var Future := Proc.ExecuteAsync; // o asíncrono
 ```
 
-`Timeout` fija un plazo en milisegundos, y no hay ninguno mientras no se llame. `Timeout(0)` es un
-plazo de cero: mata el proceso en el primer sondeo, a los 250 ms.
+`Timeout` fija un plazo en milisegundos, y no hay ninguno mientras no se llame. **Al vencer, el
+proceso muere** y el resultado vuelve como `Timeout`. `Timeout(0)` es un plazo de cero: mata el
+proceso en el primer sondeo, a los 250 ms.
+
+Es en una sola llamada el par de `System.Diagnostics.Process`. Allí el plazo y la muerte son dos
+pasos que escribe quien llama —`WaitForExit(ms)` devuelve `false` y el `Kill()` es cosa tuya—,
+porque un `Process` es un objeto que retienes. Aquí `Execute` es dueño de la ejecución entera: abre
+las tuberías, espera y las desmonta, así que es él quien hace valer el plazo. Para parar al hijo por
+tu cuenta, llama a `Kill` desde otro hilo o desde un hook de apagado, y el resultado dice `Killed` y
+no `Timeout`.
 
 `OnStdOut` y `OnStdErr` reciben lo que devolvió cada lectura del canal — hasta 2 KB de golpe, y
 **no una línea**. Una línea puede llegar partida en dos llamadas, o varias en una; si necesitas
@@ -50,7 +57,7 @@ líneas, pártelas tú.
 
 | Campo | Tipo | Descripción |
 |-------|------|-------------|
-| `Status` | `TStatus` | `Failed`, `Timeout`, `Running`, `Completed`, `Canceled` — ver abajo |
+| `Status` | `TStatus` | `Failed`, `Timeout`, `Running`, `Completed`, `Canceled`, `Killed` — ver abajo |
 | `ExitCode` | `DWORD` | El código de salida del proceso si `Completed`; `GetLastError` si `Failed`; 0 en el resto |
 | `Duration` | `TTimeSpan` | Tiempo de ejecución de reloj |
 | `LastError` | `string` | Descripción del error. Solo `Failed` lo rellena |
@@ -63,10 +70,12 @@ líneas, pártelas tú.
 | `Running` | el proceso sigue vivo — es el valor que recibe `OnIdle` en cada sondeo |
 | `Completed` | terminó por su cuenta; `ExitCode` es el del proceso |
 | `Failed` | no se pudo lanzar, o la espera acabó sin que el proceso señalizara |
-| `Timeout` | venció el plazo, o se llamó a `Kill`; en los dos casos el proceso muere |
+| `Timeout` | venció el plazo y el proceso murió |
+| `Killed` | se llamó a `Kill`; el plazo no tuvo nada que ver |
 | `Canceled` | el token de cancelación se señalizó y el proceso muere. `Failed` si matarlo no sale bien |
 
-No hay valor `Killed`: tanto un `Kill` como un plazo vencido caen en `Timeout`.
+Las tres formas de acabar sin que el hijo salga por su pie —plazo, `Kill` y cancelación— tienen
+valor propio, así que un resultado dice **por qué** y no solo que se cortó.
 
 ## Cooperar con el apagado
 
