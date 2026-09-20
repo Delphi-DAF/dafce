@@ -143,18 +143,12 @@ A placeholder that names nothing is still an error @outline-placeholder
     end)
   .When('it is run', procedure(World: TGenericProseWorld)
     begin
-      try
-        World.Item.Run(World);
-        World.Report := '<the step ran without complaining>';
-      except
-        on E: Exception do
-          World.Report := E.Message;
-      end;
+      World.Item.Run(World);
     end)
   .&Then('running a step whose placeholder names nothing raises, naming both readings',
     procedure(World: TGenericProseWorld)
     begin
-      Expect(World.Report).ToMatch('NoSuchField.*generic|generic.*NoSuchField');
+      ExpectException(Raised).ToMatchMessage('NoSuchField.*generic|generic.*NoSuchField');
     end);
 
 end.

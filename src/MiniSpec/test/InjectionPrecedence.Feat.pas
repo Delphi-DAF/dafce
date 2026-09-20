@@ -158,19 +158,18 @@ Injection precedence @injection
   .Scenario('Nobody registered that type')
     .When('a World with an [MiniInject] property nothing satisfies is built', procedure(W: TInjWorld)
       begin
-        try
-          W.Injector.InjectInto(W.Needy);
-          W.Report := 'no error';
-        except
-          on E: EInjectionError do
-            W.Report := E.Message;
-        end;
+        W.Injector.InjectInto(W.Needy);
       end)
     .&Then('it fails naming the property, its type and the class that declares it', procedure(W: TInjWorld)
+      var
+        Captured: TCapturedRaise;
       begin
-        Expect(W.Report).ToContain('Missing');
-        Expect(W.Report).ToContain('TUnavailable');
-        Expect(W.Report).ToContain('TNeedy');
+        // Raised consumes what the When left, so it is read once and held.
+        Captured := Raised;
+        ExpectException(Captured).ToBe(EInjectionError);
+        ExpectException(Captured).ToHaveMessage('Missing');
+        ExpectException(Captured).ToHaveMessage('TUnavailable');
+        ExpectException(Captured).ToHaveMessage('TNeedy');
       end)
 
 .Rule('The registered contexts belong to their run')
