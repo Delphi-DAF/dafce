@@ -135,6 +135,7 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
   - `UseSuiteContext<T>` construye el contexto de suite: `SpecContext.SuiteContext` valía `nil` en todos los steps
   - Una feature que falla antes de sus escenarios sale en el informe y pone la suite roja; antes desaparecía y el proceso salía con 0
   - Un genérico en la descripción de un step —`AsType<T>`, `TList<T>`— se leía como placeholder de Scenario Outline y fallaba con `T not found in World`
+  - El fallo de una excepción que escapa de un step When nombraba un API que no existe; ahora nombra `ExpectException(Raised)`
 - **Hosting**: `IHostApplicationLifetime.StopApplication` para de verdad la aplicación: cancelaba `ApplicationStopping` en vez de pedir la parada, así que `WaitForShutdown` seguía bloqueado y los `IHostedService` no se paraban nunca
 - **Hosting**: Un proceso puede construir más de un host: «Build already called» y el «ya parado» eran estado de clase, así que un arnés que monta y desmonta hosts solo podía montar el primero
 - **NNLog**: `enabled` y `name` de una regla se ignoraban en silencio: `enabled` ausente vale **activada** y `name` filtra de verdad. Solo el literal `true`, con cualquier caja, mantiene activada una regla; cualquier otro valor la desactiva. **Cambio observable**: un config con alguna regla de `name` distinto de `*` deja de recibirlo todo

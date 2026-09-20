@@ -797,7 +797,7 @@ procedure PushSpecContext(const Context: ISpecContext);
 procedure PopSpecContext;
 
 /// <summary>
-/// Returns the currently executing scenario. Used by ExpectRaised to access pending exceptions.
+/// Returns the currently executing scenario. Used by Raised to access pending exceptions.
 /// </summary>
 function GetCurrentScenario: IScenario;
 
@@ -1217,7 +1217,7 @@ begin
     on E: Exception do
     begin
       // For When steps, capture exception info instead of marking as error
-      // The Then step will verify it with ExpectRaised
+      // The Then step will verify it with ExpectException(Raised)
       var Scenario := GetCurrentScenario;
       if (FKind = sikWhen) and Assigned(Scenario) then
       begin

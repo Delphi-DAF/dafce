@@ -136,6 +136,7 @@ The changes that break compilation are collected, with their example diff, in `M
   - `UseSuiteContext<T>` builds the suite context: `SpecContext.SuiteContext` was `nil` in every step
   - A feature that fails before its scenarios shows up in the report and turns the suite red; it used to vanish and the process exited with 0
   - A generic in a step's description —`AsType<T>`, `TList<T>`— was read as a Scenario Outline placeholder and failed with `T not found in World`
+  - The failure of an exception escaping a When step named an API that does not exist; it now names `ExpectException(Raised)`
 - **Hosting**: `IHostApplicationLifetime.StopApplication` really stops the application: it cancelled `ApplicationStopping` instead of requesting the stop, so `WaitForShutdown` stayed blocked and the `IHostedService`s were never stopped
 - **Hosting**: A process can build more than one host: "Build already called" and the "already stopped" flag were class state, so a harness that sets hosts up and tears them down could only set the first one up
 - **NNLog**: A rule's `enabled` and `name` were silently ignored: a missing `enabled` now means **enabled** and `name` really filters. Only the literal `true`, in any case, keeps a rule enabled; any other value disables it. **Observable change**: a config with any rule whose `name` is not `*` stops receiving everything
