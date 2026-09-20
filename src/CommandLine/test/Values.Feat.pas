@@ -34,6 +34,7 @@ type
     Checked: IRootCommand;
     CountOpt: IOption<Integer>;
     InputOpt: IOption<string>;
+    NameOpt: IOption<string>;
 
     Computed: IRootCommand;
     OutOpt: IOption<string>;
@@ -56,9 +57,11 @@ type
     ReadMsg: string;
     ReadCount: Integer;
     ReadInput: string;
+    ReadName: string;
     ReadOut: string;
     HelpText: string;
     SeedDefault: string;
+    Report: string;
     procedure BuildArity;
     procedure BuildRequiredOptions;
     procedure BuildRequiredArgument;
@@ -130,8 +133,11 @@ begin
   // Written over that same hook, not over a mechanism of its own. It does touch disk,
   // which is the conscious exception to a validation being a pure question.
   InputOpt := CommandLine.Option<string>('--in', 'Where to read from').AcceptExistingOnly;
+  // A NAME and not a path: the separators are refused too, which is what tells this
+  // validation from the one above it.
+  NameOpt := CommandLine.Option<string>('--name', 'What to call the report').AcceptLegalFileNamesOnly;
   Checked := CommandLine.Root('tool', 'A tool');
-  Checked.Add([CountOpt, InputOpt]);
+  Checked.Add([CountOpt, InputOpt, NameOpt]);
 end;
 
 procedure TValuesWorld.BuildComputed;
@@ -476,6 +482,94 @@ Feature Command line values @commandline @values
       begin
         Expect(W.Parsed.ErrorText).ToEqual('');
         Expect(W.ReadInput).ToEqual(ParamStr(0));
+      end)
+
+  .Scenario('A file name that carries a separator')
+    .Given('an option declared to accept only a legal file name',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildChecked;
+      end)
+    .When('the invocation passes a value with a separator in it',
+      procedure(W: TValuesWorld)
+      begin
+        W.Parsed := W.Checked.Parse(['--name', 'reports\march.txt']);
+      end)
+    .&Then('the parse fails naming the option and the value',
+      procedure(W: TValuesWorld)
+      begin
+        // The message is asserted and not only the failure: an option that expects a
+        // value and did not get one fails here too, and would leave this green.
+        Expect(W.Parsed.Succeeded).ToBeFalse;
+        Expect(W.Parsed.ErrorText).ToContain('is not a legal file name');
+        Expect(W.Parsed.ErrorText).ToContain('--name');
+        Expect(W.Parsed.ErrorText).ToContain('reports\march.txt');
+      end)
+
+  .Scenario('A file name with nothing illegal in it')
+    .Given('an option declared to accept only a legal file name',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildChecked;
+      end)
+    .When('the invocation passes a name the validation accepts',
+      procedure(W: TValuesWorld)
+      begin
+        W.Parsed := W.Checked.Parse(['--name', 'march.txt']);
+        W.ReadName := W.NameOpt.ValueIn(W.Parsed);
+      end)
+    .&Then('the parse succeeds and the name is read',
+      procedure(W: TValuesWorld)
+      begin
+        // The control the two refusing scenarios need: a validation that refused
+        // everything would leave both of them green.
+        Expect(W.Parsed.ErrorText).ToEqual('');
+        Expect(W.ReadName).ToEqual('march.txt');
+      end)
+
+  .Scenario('A file name with nothing in it')
+    .Given('an option declared to accept only a legal file name',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildChecked;
+      end)
+    .When('the invocation passes an empty value',
+      procedure(W: TValuesWorld)
+      begin
+        W.Parsed := W.Checked.Parse(['--name', '']);
+      end)
+    .&Then('the parse fails, because nothing is not a name either',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Parsed.Succeeded).ToBeFalse;
+        Expect(W.Parsed.ErrorText).ToContain('is not a legal file name');
+        Expect(W.Parsed.ErrorText).ToContain('--name');
+      end)
+
+.Rule('a validation that only fits a path is refused where it is declared')
+
+  .Scenario('A file-name validation on an option that is not a path')
+    // Nothing to build and nothing to assert yet: whether the validation fits its
+    // symbol cannot be asked before a symbol is declared with it.
+    .Given('an option whose type is not a path').NoAction
+    .When('a file-name validation is declared on it',
+      procedure(W: TValuesWorld)
+      begin
+        try
+          CommandLine.Option<Integer>('--retries', 'How many times to try').AcceptLegalFileNamesOnly;
+          W.Report := '<the declaration was accepted>';
+        except
+          on E: Exception do
+            W.Report := E.ClassName + ': ' + E.Message;
+        end;
+      end)
+    .&Then('the declaration itself is refused, naming the validation, the symbol and its type',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Report).ToStartWith('ECommandLine: ');
+        Expect(W.Report).ToContain('AcceptLegalFileNamesOnly');
+        Expect(W.Report).ToContain('--retries');
+        Expect(W.Report).ToContain('integer');
       end)
 
 .Rule('a default value can be a calculation instead of a constant')
