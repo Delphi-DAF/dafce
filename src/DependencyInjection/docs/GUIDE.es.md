@@ -750,6 +750,11 @@ función, en [Composición del arranque](STARTUP-COMPOSITION.es.md).
 
 ## Resolución diferida (Lazy)
 
+**Para qué está: dos servicios que se necesitan mutuamente.** Un ciclo por constructor no se puede
+construir — ninguno de los dos puede correr antes de que el otro termine. Cuando uno de los dos
+lados declara al otro como `ILazy<T>`, su constructor deja de esperar y el ciclo se cierra en el
+primer uso.
+
 **Lo pide el consumidor, y el registro no cambia.** Declara `ILazy<T>` en el constructor en vez de
 `T` y el contenedor lo entrega. El servicio se registra como cualquier otro, y otro consumidor que
 pida `T` lo sigue recibiendo construido.
@@ -784,20 +789,17 @@ Services.AddSingleton<IArchive, TArchive>;
 Services.AddSingleton<IReportService, TReportService>;
 ```
 
-Dos usos:
+**Qué hace `Value`: preguntarle al contenedor, cada vez.** Aquí no se guarda nada, así que el ciclo
+de vida es exactamente el que declaró el registro — un `Singleton` devuelve la misma instancia en
+cada `Value`, un `Transient` una nueva cada vez, un `Scoped` la de su ámbito. Guardar copia
+sostendría además al servicio a través de quien sostiene el proxy, que es justo el ciclo que esto
+existe para romper.
 
-- **El servicio es costoso y puede que no haga falta.** Construir a quien lo tiene deja de construirlo.
-- **Dos servicios se necesitan mutuamente.** Un ciclo por constructor no se puede construir; si uno
-  de los dos lados pide al otro perezoso, ningún constructor espera al otro. La alternativa, y la
-  que conviene cuando la dependencia se usa en todos los caminos, es la
-  [inyección por propiedad](#inyección-por-propiedad).
+**Una ganancia colateral:** un servicio costoso que puede que no haga falta deja de construirse solo
+para construir a quien lo tiene.
 
-⚠️ **El ciclo de vida es el del registro, y `Value` no guarda copia.** Sobre un `Singleton` vuelve
-siempre la misma instancia, porque la sostiene el contenedor; sobre un `Transient`, cada `Value` es
-una instancia nueva. Aquí se aparta del `Lazy<T>` de .NET, que cachea su valor: sin recolector, un
-proxy que sostuviera el servicio cerraría justo el ciclo que este mecanismo existe para romper —
-quien lo tiene sostiene al perezoso, el perezoso sostendría al servicio, y el servicio sostiene a
-quien lo tiene.
+La otra vía para romper un ciclo, y la que conviene cuando la dependencia se usa en todos los
+caminos, es la [inyección por propiedad](#inyección-por-propiedad).
 
 ⚠️ **Un servicio que no ha registrado nadie se rechaza donde se construye quien lo pide**, nombrando
 el parámetro y su clase — no en el primer `Value`, lejos de la causa. Aplazar la construcción no es

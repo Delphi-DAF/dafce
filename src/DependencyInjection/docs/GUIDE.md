@@ -745,6 +745,10 @@ with a function are in [Startup composition](STARTUP-COMPOSITION.md).
 
 ## Lazy Resolution
 
+**What it is for: two services that need each other.** A cycle by constructor is unbuildable —
+neither constructor can run before the other one finishes. When one of the two sides declares the
+other as `ILazy<T>`, its constructor stops waiting and the cycle closes on the first use instead.
+
 **The consumer asks for it, and the registration does not change.** Declare `ILazy<T>` in the
 constructor instead of `T`, and the container supplies it. The service is registered as any other,
 and another consumer that asks for `T` itself keeps receiving it built.
@@ -779,18 +783,17 @@ Services.AddSingleton<IArchive, TArchive>;
 Services.AddSingleton<IReportService, TReportService>;
 ```
 
-Two uses:
+**What `Value` does: it asks the container, every time.** Nothing is kept here, so the lifetime is
+exactly the one the registration declared — a `Singleton` gives back the same instance on every
+`Value`, a `Transient` a new one each time, a `Scoped` the one of its scope. Keeping a copy would
+also keep the service alive through the holder that keeps the proxy, which is the very cycle this
+exists to break.
 
-- **The service is expensive and may not be needed.** Building the holder no longer builds it.
-- **Two services need each other.** A cycle by constructor is unbuildable; if one of the two sides
-  asks for the other lazily, neither constructor waits for the other. The alternative, and the one
-  to reach for when the dependency is used in every path, is [property injection](#property-injection).
+**A collateral gain:** a service that is expensive and may not be needed is no longer built just to
+build whoever holds it.
 
-⚠️ **The lifetime is the registration's, and `Value` does not keep a copy.** On a `Singleton` the
-same instance comes back every time, because the container holds it; on a `Transient`, each `Value`
-is a new instance. It differs here from .NET's `Lazy<T>`, which caches its value: without a
-collector, a proxy holding the service would close the very cycle this mechanism exists to break —
-the holder keeps the lazy, the lazy would keep the service, and the service keeps the holder.
+The other way to break a cycle, and the one to reach for when the dependency is used in every path,
+is [property injection](#property-injection).
 
 ⚠️ **A service nobody registered is refused where the holder is built**, naming the parameter and
 its class — not on the first `Value`, far from the cause. Deferring the construction does not defer

@@ -15,7 +15,7 @@ IoC/DI container for Delphi with a fluent API inspired by .NET's `Microsoft.Exte
 - 🎯 **Generic & type-safe** — Compile-time verification via generics, no string tokens
 - ⚡ **Three lifetime modes** — Singleton, Scoped (per scope), Transient (new every time)
 - 🏭 **Flexible registration** — By class, by factory lambda, or by existing instance
-- 💤 **Lazy resolution** — the consumer declares `ILazy<T>` in its constructor and the service is built on first use, with its registration untouched
+- 💤 **Lazy resolution** — `ILazy<T>` in the consumer's constructor breaks a cycle between two services; the registration is untouched and `Value` asks the container on every use
 - 🦆 **Duck Typing** — `TDuckDecorator<T>` wraps any object implementing the same interface shape
 - 📦 **Zero external deps** — `DependencyInjection.Abstractions` and `Commons`, both DAF's own
 

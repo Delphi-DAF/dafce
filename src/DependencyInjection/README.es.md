@@ -15,7 +15,7 @@ Contenedor IoC/DI para Delphi con una API fluida inspirada en `Microsoft.Extensi
 - 🎯 **Genérico y type-safe** — Verificación en tiempo de compilación mediante genéricos, sin tokens de cadena
 - ⚡ **Tres modos de vida** — Singleton, Scoped (por scope) y Transient (nueva instancia siempre)
 - 🏭 **Registro flexible** — Por clase, por lambda de factoría o por instancia existente
-- 💤 **Resolución diferida** — el consumidor declara `ILazy<T>` en su constructor y el servicio se construye en el primer uso, sin tocar su registro
+- 💤 **Resolución diferida** — `ILazy<T>` en el constructor del consumidor rompe un ciclo entre dos servicios; el registro no se toca y `Value` pregunta al contenedor en cada uso
 - 🦆 **Duck Typing** — `TDuckDecorator<T>` envuelve cualquier objeto que implemente la misma forma de interfaz
 - 📦 **Sin dependencias externas** — `DependencyInjection.Abstractions` y `Commons`, las dos de DAF
 
