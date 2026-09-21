@@ -13,7 +13,7 @@ Core contracts (interfaces and types) for the DAF Dependency Injection system. T
 
 | Unit | Contents |
 |------|----------|
-| `Daf.Extensions.DependencyInjection` | `IServiceCollection`, `IServiceProvider`, `IServiceScope`, `IAppModule`, lifetimes, `Factory`, `TDuckDecorator<T>`, `Lazy` |
+| `Daf.Extensions.DependencyInjection` | `IServiceCollection`, `IServiceProvider`, `IServiceScope`, `IAppModule`, lifetimes, `Factory`, `TDuckDecorator<T>`, `ILazy<T>` y `Lazy` |
 | `Daf.Extensions.Options` | `IOptions<T>`, `TOptionsValidator<T>`, `EOptionsValidationError` — the options pattern contract |
 | `Daf.Options` | `TOptions<T>` and `AppOptions` — settings registered with code |
 | `Daf.AppModule` | **Compatibility alias** for `IAppModule`: the contract moved next to `AddModule<T>`, which is a method of the `IServiceCollection` record and cannot depend on this unit. An existing `uses Daf.AppModule` keeps working |
@@ -177,7 +177,17 @@ Services.Add(TypeInfo(IMyService), Singleton, Factory.From(TypeInfo(IMyService),
 
 Base class for wrapping a service with pre/post-call logic without inheritance. Override `BeforeCall` / `AfterCall`.
 
-### `Lazy`
+### `ILazy<T>` y `Lazy`
+
+The contract a consumer declares to defer one of its dependencies. The container supplies it; the
+service is registered as any other, and `Value` builds it on the first use.
+
+```pascal
+constructor TReportService.Create(const AArchive: ILazy<IArchive>);
+```
+
+`Lazy.From<T>` is the manual form, for what does not go through a constructor: it takes a factory
+and returns `T` itself.
 
 ```pascal
 Result := Lazy.From<IHeavy>(Provider,

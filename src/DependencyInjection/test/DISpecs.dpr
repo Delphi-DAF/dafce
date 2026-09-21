@@ -24,7 +24,8 @@ uses
   RequestedType.Feat in 'RequestedType.Feat.pas',
   OpenGenerics.Feat in 'OpenGenerics.Feat.pas',
   Options.Feat in 'Options.Feat.pas',
-  ScopeLifetime.Feat in 'ScopeLifetime.Feat.pas';
+  ScopeLifetime.Feat in 'ScopeLifetime.Feat.pas',
+  LazyResolution.Feat in 'LazyResolution.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

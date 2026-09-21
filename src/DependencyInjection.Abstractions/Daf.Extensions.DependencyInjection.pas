@@ -633,6 +633,16 @@ type
     procedure AddServices(const ServiceCollection: IServiceCollection);
   end;
 
+  /// Sirve el cierre que un parametro declara. NO es generica: TVirtualInterface implementa el
+  /// interfaz que le llega como PTypeInfo, asi que una sola clase cubre todos los cierres.
+  TLazyParameter = class(TVirtualInterface)
+  strict private
+    FProvider: IServiceProvider;
+    procedure DoInvoke(Method: TRttiMethod; const Args: TArray<TValue>; out Result: TValue);
+  public
+    constructor Create(const AProvider: IServiceProvider; ALazyType: PTypeInfo);
+  end;
+
   TLazy<T: IInvokable> = class(TVirtualInterface)
   private
     FServiceProvider: IServiceProvider;
@@ -646,8 +656,39 @@ type
     constructor Create(ServiceProvider: IServiceProvider; const Factory: TServiceFactory<T>);
   end;
 
+  /// <summary>
+  ///   Una dependencia que no se resuelve hasta su primer uso. La declara el CONSUMIDOR en su
+  ///   constructor —<c>constructor Create(const Repo: ILazy&lt;IRepo&gt;)</c>— y la fabrica el
+  ///   contenedor: el registro del servicio no se toca, y otro consumidor que pida el servicio a
+  ///   secas lo sigue recibiendo construido.
+  /// </summary>
+  /// <remarks>
+  ///   Es la relacion implicita de Autofac, no el <c>Lazy&lt;T&gt;</c> de la BCL de .NET: alli es
+  ///   un valor perezoso de proposito general y aqui es una resolucion perezosa del contenedor.
+  ///   Lo que comparten es la forma —<c>Value</c> construye la primera vez y despues devuelve lo
+  ///   mismo— y por eso se llama igual.
+  /// </remarks>
+  ILazy<T: IInvokable> = interface(IInvokable)
+    ['{6D3A8F14-2E57-4B09-A1C6-7F08B5D4E293}']
+    function Value: T;
+  end;
+
+const
+  /// El GUID que declara ILazy<>. Todos sus cierres lo comparten, y eso es lo que permite
+  /// reconocer uno sin leer su nombre.
+  LazyContractGUID: TGUID = '{6D3A8F14-2E57-4B09-A1C6-7F08B5D4E293}';
+
+type
   Lazy = record
     class function From<T: IInvokable>(Provider: IServiceProvider; const Factory: TServiceFactory<T>): T;static;
+    /// <summary>Un cierre de <c>ILazy&lt;&gt;</c>: todos comparten el GUID declarado, asi que se
+    /// reconoce sin leer su nombre.</summary>
+    class function IsLazyType(PInfo: PTypeInfo): Boolean; static;
+    /// <summary>El servicio que un cierre aplaza, leido del retorno de su <c>Value</c>.</summary>
+    class function ServiceTypeOf(LazyType: PTypeInfo): PTypeInfo; static;
+    /// <summary>Fabrica el cierre que un parametro declara. Lo llama el contenedor al resolver un
+    /// constructor; no hay que registrar nada.</summary>
+    class function ForParameter(const Provider: IServiceProvider; LazyType: PTypeInfo): IInterface; static;
   end;
 
   TDuckDecorator<T: IInvokable> = class(TVirtualInterface)
@@ -2176,5 +2217,57 @@ begin
   var FType: PTypeInfo := TypeInfo(T);
   Supports(Implementor, FType.TypeData.GUID, Result);
 end;
+
+class function Lazy.IsLazyType(PInfo: PTypeInfo): Boolean;
+begin
+  Result := (PInfo <> nil) and (PInfo.Kind = tkInterface) and
+            IsEqualGUID(GetTypeData(PInfo).GUID, LazyContractGUID);
+end;
+
+class function Lazy.ServiceTypeOf(LazyType: PTypeInfo): PTypeInfo;
+begin
+  Result := nil;
+  var Ctx := TRttiContext.Create;
+  try
+    var M := Ctx.GetType(LazyType).GetMethod('Value');
+    if (M <> nil) and (M.ReturnType <> nil) then
+      Result := M.ReturnType.Handle;
+  finally
+    Ctx.Free;
+  end;
+end;
+
+class function Lazy.ForParameter(const Provider: IServiceProvider; LazyType: PTypeInfo): IInterface;
+begin
+  Supports(TLazyParameter.Create(Provider, LazyType), GetTypeData(LazyType).GUID, Result);
+end;
+
+{ TLazyParameter }
+
+constructor TLazyParameter.Create(const AProvider: IServiceProvider; ALazyType: PTypeInfo);
+begin
+  inherited Create(ALazyType, DoInvoke);
+  FProvider := AProvider;
+end;
+
+procedure TLazyParameter.DoInvoke(Method: TRttiMethod; const Args: TArray<TValue>; out Result: TValue);
+begin
+  Result := TValue.Empty;
+  if not SameText(Method.Name, 'Value') then Exit;
+
+  // El proxy NO guarda lo resuelto, y esa es la decision: el dueño del ciclo de vida es el
+  // contenedor --un singleton se construye una vez lo pidan cuando lo pidan--, asi que cachear
+  // aqui solo añade una referencia de mas. Y esa referencia cierra el ciclo que este mecanismo
+  // existe para romper: A sostiene el perezoso, el perezoso sostendria a B, y B sostiene a A.
+  // Sin recolector eso no se deshace nunca. Sin estado tampoco hay check-then-act que proteger.
+  var Servicio: IInterface;
+  FProvider.TryGet(Method.ReturnType.Handle, Servicio);
+
+  // TryGet entrega el puntero del tipo que se le pide, asi que aqui no hace falta volver a
+  // preguntar: hacerlo seria una rama que nada puede alcanzar. Lo que SI hace falta es que el
+  // servicio este registrado, y eso se comprueba al elegir el constructor y no aqui.
+  TValue.Make(@Servicio, Method.ReturnType.Handle, Result);
+end;
+
 
 end.

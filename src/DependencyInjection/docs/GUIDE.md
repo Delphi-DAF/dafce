@@ -745,25 +745,62 @@ with a function are in [Startup composition](STARTUP-COMPOSITION.md).
 
 ## Lazy Resolution
 
-Use `Lazy.From<T>` to defer construction until first use. Useful when:
-- The service is expensive to create and may not be needed
-- Circular dependencies need to be broken
+**The consumer asks for it, and the registration does not change.** Declare `ILazy<T>` in the
+constructor instead of `T`, and the container supplies it. The service is registered as any other,
+and another consumer that asks for `T` itself keeps receiving it built.
 
 ```pascal
 uses Daf.Extensions.DependencyInjection;
 
-Services.AddTransient<IExpensiveService>(
-  function(P: IServiceProvider): IExpensiveService
-  begin
-    Result := Lazy.From<IExpensiveService>(P,
-      function(P2: IServiceProvider): IExpensiveService
-      begin
-        Result := TExpensiveService.Create;
-      end);
-  end);
+type
+  TReportService = class(TInterfacedObject, IReportService)
+  strict private
+    FArchive: ILazy<IArchive>;
+  public
+    constructor Create(const AArchive: ILazy<IArchive>);
+    procedure Publish;
+  end;
+
+constructor TReportService.Create(const AArchive: ILazy<IArchive>);
+begin
+  inherited Create;
+  FArchive := AArchive;     // nothing is built here
+end;
+
+procedure TReportService.Publish;
+begin
+  FArchive.Value.Store(BuildReport);   // it is built here, on the first use
+end;
 ```
 
-The returned proxy implements `IExpensiveService` via `TVirtualInterface`. The real instance is created on the first method call.
+```pascal
+// The archive is registered as any other service. Nothing says "lazy" here.
+Services.AddSingleton<IArchive, TArchive>;
+Services.AddSingleton<IReportService, TReportService>;
+```
+
+Two uses:
+
+- **The service is expensive and may not be needed.** Building the holder no longer builds it.
+- **Two services need each other.** A cycle by constructor is unbuildable; if one of the two sides
+  asks for the other lazily, neither constructor waits for the other. The alternative, and the one
+  to reach for when the dependency is used in every path, is [property injection](#property-injection).
+
+⚠️ **The lifetime is the registration's, and `Value` does not keep a copy.** On a `Singleton` the
+same instance comes back every time, because the container holds it; on a `Transient`, each `Value`
+is a new instance. It differs here from .NET's `Lazy<T>`, which caches its value: without a
+collector, a proxy holding the service would close the very cycle this mechanism exists to break —
+the holder keeps the lazy, the lazy would keep the service, and the service keeps the holder.
+
+⚠️ **A service nobody registered is refused where the holder is built**, naming the parameter and
+its class — not on the first `Value`, far from the cause. Deferring the construction does not defer
+the question.
+
+### `Lazy.From<T>`, the manual form
+
+`Lazy.From<T>` builds the same kind of proxy from a factory you write, and returns `T` itself
+rather than an `ILazy<T>`. It is the escape hatch for what does not go through a constructor; when
+there is a constructor, `ILazy<T>` says the same with less, and leaves the registration alone.
 
 ---
 

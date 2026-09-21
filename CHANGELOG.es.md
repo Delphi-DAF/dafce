@@ -27,6 +27,7 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
   - `Decorate<S>` — envuelve los registros existentes conservando su ciclo de vida
   - `AddModule<T>` y `AddModule(Module)` — registros agrupados en una clase, aplicados en el orden escrito
   - `IContainerAccess.OwnedInstanceCount` — cuántos objetos sigue poseyendo el contenedor, para afirmar «se liberó todo»
+- **DependencyInjection**: `ILazy<T>` — un consumidor difiere una de sus dependencias declarándola en su propio constructor; el registro del servicio no cambia, y otro consumidor que lo pida a secas lo sigue recibiendo construido. Rompe un ciclo por constructor, y `Value` sigue el ciclo de vida del registro en vez de guardar copia
 - **Logging**: `ILogger.IsEnabled(Level)` — preguntar si una entrada de ese nivel llegaría a algún destino antes de construir sus argumentos
 - **Logging**: `ILogger<T>` — un servicio lo pide por constructor y recibe un registrador con su propia categoría
 - **Logging**: Canal de arranque — un `ILogger` desde la primera línea del proceso, sin inyección de dependencias y sin configuración, para la fase anterior a `BuildServiceProvider`: informa con `BootstrapLog.LoggerFor` y añade destinos con `BootstrapLog.AddSink`. El catálogo de destinos, en el README

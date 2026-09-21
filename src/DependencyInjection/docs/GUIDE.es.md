@@ -750,25 +750,64 @@ función, en [Composición del arranque](STARTUP-COMPOSITION.es.md).
 
 ## Resolución diferida (Lazy)
 
-Usa `Lazy.From<T>` para diferir la construcción hasta el primer uso. Útil cuando:
-- El servicio es costoso de crear y puede que no se necesite
-- Hay que romper dependencias circulares
+**Lo pide el consumidor, y el registro no cambia.** Declara `ILazy<T>` en el constructor en vez de
+`T` y el contenedor lo entrega. El servicio se registra como cualquier otro, y otro consumidor que
+pida `T` lo sigue recibiendo construido.
 
 ```pascal
 uses Daf.Extensions.DependencyInjection;
 
-Services.AddTransient<IExpensiveService>(
-  function(P: IServiceProvider): IExpensiveService
-  begin
-    Result := Lazy.From<IExpensiveService>(P,
-      function(P2: IServiceProvider): IExpensiveService
-      begin
-        Result := TExpensiveService.Create;
-      end);
-  end);
+type
+  TReportService = class(TInterfacedObject, IReportService)
+  strict private
+    FArchive: ILazy<IArchive>;
+  public
+    constructor Create(const AArchive: ILazy<IArchive>);
+    procedure Publish;
+  end;
+
+constructor TReportService.Create(const AArchive: ILazy<IArchive>);
+begin
+  inherited Create;
+  FArchive := AArchive;     // aquí no se construye nada
+end;
+
+procedure TReportService.Publish;
+begin
+  FArchive.Value.Store(BuildReport);   // aquí sí, en el primer uso
+end;
 ```
 
-El proxy devuelto implementa `IExpensiveService` mediante `TVirtualInterface`. La instancia real se crea en la primera llamada a un método.
+```pascal
+// El archivo se registra como cualquier otro servicio. Aquí no se dice nada de pereza.
+Services.AddSingleton<IArchive, TArchive>;
+Services.AddSingleton<IReportService, TReportService>;
+```
+
+Dos usos:
+
+- **El servicio es costoso y puede que no haga falta.** Construir a quien lo tiene deja de construirlo.
+- **Dos servicios se necesitan mutuamente.** Un ciclo por constructor no se puede construir; si uno
+  de los dos lados pide al otro perezoso, ningún constructor espera al otro. La alternativa, y la
+  que conviene cuando la dependencia se usa en todos los caminos, es la
+  [inyección por propiedad](#inyección-por-propiedad).
+
+⚠️ **El ciclo de vida es el del registro, y `Value` no guarda copia.** Sobre un `Singleton` vuelve
+siempre la misma instancia, porque la sostiene el contenedor; sobre un `Transient`, cada `Value` es
+una instancia nueva. Aquí se aparta del `Lazy<T>` de .NET, que cachea su valor: sin recolector, un
+proxy que sostuviera el servicio cerraría justo el ciclo que este mecanismo existe para romper —
+quien lo tiene sostiene al perezoso, el perezoso sostendría al servicio, y el servicio sostiene a
+quien lo tiene.
+
+⚠️ **Un servicio que no ha registrado nadie se rechaza donde se construye quien lo pide**, nombrando
+el parámetro y su clase — no en el primer `Value`, lejos de la causa. Aplazar la construcción no es
+aplazar la pregunta.
+
+### `Lazy.From<T>`, la forma manual
+
+`Lazy.From<T>` construye un proxy de la misma clase a partir de una factoría que escribes tú, y
+devuelve la propia `T` en vez de un `ILazy<T>`. Es la vía para lo que no pasa por un constructor;
+cuando hay constructor, `ILazy<T>` dice lo mismo con menos y no toca el registro.
 
 ---
 

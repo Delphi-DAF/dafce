@@ -32,6 +32,11 @@ type
 
   TActivatorUtilities = class
   private
+    /// <summary>Lo que el contenedor entrega SIN que nadie lo registre. La lista vive aqui y en
+    /// ningun otro sitio: con <c>Provider</c> a nil solo reconoce, que es lo que necesita la
+    /// eleccion de constructor; con proveedor, ademas lo fabrica.</summary>
+    class function SupplyFromContainer(const Provider: IServiceProvider; PInfo: PTypeInfo;
+      const Construir: Boolean; out Aux: IInterface): Boolean; static;
     class function TryResolveArgs(Provider: IServiceProvider; Ctor: TRttiMethod; out Args: TArray<TValue>; out Failed: TRttiParameter): Boolean;
     class function GetResolvableCtors(const AClass: TClass; const Provider: IServiceProviderImpl = nil): TArray<TRttiMethod>;
     class function SelectBest(Ctors: TArray<TRttiMethod>): TRttiMethod;
@@ -208,8 +213,8 @@ begin
   for var idx := 0 to Length(Params) - 1 do
   begin
     var PInfo := Params[idx].ParamType.Handle;
-    if (PInfo = TypeInfo(IServiceProviderImpl)) then Continue;
-    if (PInfo = TypeInfo(IServiceProvider)) then Continue;
+    var Entregado: IInterface;
+    if SupplyFromContainer(Provider, PInfo, False, Entregado) then Continue;
     // La clave se lee AQUI tambien y no solo al construir (D6): esta es la pregunta que decide QUE
     // CONSTRUCTOR se elige, asi que uno cuyo parametro con clave no se pueda satisfacer tiene que
     // quedar descartado en este punto -- si no, se elige y falla despues.
@@ -290,6 +295,33 @@ begin
     CanResolveArgs(Provider, Ctor, Failed);
 end;
 
+class function TActivatorUtilities.SupplyFromContainer(const Provider: IServiceProvider;
+  PInfo: PTypeInfo; const Construir: Boolean; out Aux: IInterface): Boolean;
+begin
+  Aux := nil;
+  if (PInfo = TypeInfo(IServiceProviderImpl)) or (PInfo = TypeInfo(IServiceProvider)) then
+  begin
+    if Construir then Aux := Provider;
+    Exit(True);
+  end;
+  if Lazy.IsLazyType(PInfo) then
+  begin
+    // Al ELEGIR constructor se reconoce siempre: el contenedor sabe fabricar esto, y decir que no
+    // lo dejaria fuera para que se eligiese el Create sin parametros que trae TInterfacedObject
+    // --la clase se construye igual y el campo queda en nil, sin que nadie lo diga--.
+    if not Construir then Exit(True);
+    // Al RELLENAR si se pregunta: aplazar la construccion no es aplazar la pregunta. Si el
+    // servicio interno no lo sirve nadie se devuelve False y sigue el camino normal del parametro
+    // sin resolver, que falla nombrando el parametro y su clase.
+    var Interno := Lazy.ServiceTypeOf(PInfo);
+    if (Interno = nil) or not Provider.CanResolveKeyed(Interno, TValue.Empty) then
+      Exit(False);
+    Aux := Lazy.ForParameter(Provider, PInfo);
+    Exit(True);
+  end;
+  Result := False;
+end;
+
 class function TActivatorUtilities.TryResolveArgs(Provider: IServiceProvider; Ctor: TRttiMethod; out Args: TArray<TValue>; out Failed: TRttiParameter): Boolean;
 begin
   Result := True;
@@ -301,14 +333,12 @@ begin
     if not (Pinfo.Kind in [tkInterface, tkClass, tkRecord]) then Continue;
 
     var Aux: IInterface;
-    if (PInfo = TypeInfo(IServiceProviderImpl)) or (PInfo = TypeInfo(IServiceProvider)) then
-      Aux := Provider
-    else
-    if not Provider.TryGetKeyed(PInfo, KeyOfParameter(Params[idx]), Aux) and (Pinfo.Kind <> tkRecord) then
-    begin
-      Failed := Params[idx];
-      Exit(False);
-    end;
+    if not SupplyFromContainer(Provider, PInfo, True, Aux) then
+      if not Provider.TryGetKeyed(PInfo, KeyOfParameter(Params[idx]), Aux) and (Pinfo.Kind <> tkRecord) then
+      begin
+        Failed := Params[idx];
+        Exit(False);
+      end;
     TValue.Make(@Aux, PInfo, Args[idx]);
   end;
 end;

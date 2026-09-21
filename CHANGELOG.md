@@ -28,6 +28,7 @@ The changes that break compilation are collected, with their example diff, in `M
   - `Decorate<S>` — wraps the existing registrations keeping their lifetime
   - `AddModule<T>` and `AddModule(Module)` — registrations grouped in a class, applied in the order written
   - `IContainerAccess.OwnedInstanceCount` — how many objects the container still owns, to assert "everything was released"
+- **DependencyInjection**: `ILazy<T>` — a consumer defers one of its dependencies by declaring it in its own constructor; the service's registration does not change, and another consumer that asks for it plainly still gets it built. It breaks a cycle by constructor, and `Value` follows the registration's lifetime instead of keeping a copy
 - **Logging**: `ILogger.IsEnabled(Level)` — asking whether an entry of that level would reach any sink before building its arguments
 - **Logging**: `ILogger<T>` — a service asks for it by constructor and gets a logger carrying its own category
 - **Logging**: Bootstrap channel — an `ILogger` from the process's first line, with no dependency injection and no configuration, for the phase before `BuildServiceProvider`: report with `BootstrapLog.LoggerFor` and add sinks with `BootstrapLog.AddSink`. The sink catalogue, in the README

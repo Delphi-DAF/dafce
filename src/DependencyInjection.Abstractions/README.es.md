@@ -13,7 +13,7 @@ Contratos principales (interfaces y tipos) del sistema de Inyección de Dependen
 
 | Unidad | Contenido |
 |--------|-----------|
-| `Daf.Extensions.DependencyInjection` | `IServiceCollection`, `IServiceProvider`, `IServiceScope`, `IAppModule`, tiempos de vida, `Factory`, `TDuckDecorator<T>`, `Lazy` |
+| `Daf.Extensions.DependencyInjection` | `IServiceCollection`, `IServiceProvider`, `IServiceScope`, `IAppModule`, tiempos de vida, `Factory`, `TDuckDecorator<T>`, `ILazy<T>` y `Lazy` |
 | `Daf.Extensions.Options` | `IOptions<T>`, `TOptionsValidator<T>`, `EOptionsValidationError` — el contrato del patrón de opciones |
 | `Daf.Options` | `TOptions<T>` y `AppOptions` — ajustes registrados con código |
 | `Daf.AppModule` | **Alias de compatibilidad** de `IAppModule`: el contrato se mudó junto a `AddModule<T>`, que es método del record `IServiceCollection` y no puede depender de esta unit. Un `uses Daf.AppModule` que ya existiera sigue valiendo |
@@ -179,7 +179,17 @@ Services.Add(TypeInfo(IMyService), Singleton, Factory.From(TypeInfo(IMyService),
 
 Clase base para envolver un servicio con lógica pre/post-llamada sin herencia. Sobreescribe `BeforeCall` / `AfterCall`.
 
-### `Lazy`
+### `ILazy<T>` y `Lazy`
+
+El contrato que un consumidor declara para diferir una de sus dependencias. Lo entrega el
+contenedor; el servicio se registra como cualquier otro, y `Value` lo construye en el primer uso.
+
+```pascal
+constructor TReportService.Create(const AArchive: ILazy<IArchive>);
+```
+
+`Lazy.From<T>` es la forma manual, para lo que no pasa por un constructor: recibe una factoría y
+devuelve la propia `T`.
 
 ```pascal
 Result := Lazy.From<IHeavy>(Provider,
