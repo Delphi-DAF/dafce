@@ -444,6 +444,36 @@ their siblings, instead of being deduced from the clauses present.
 
 - **What breaks**: naming it. Drop it from the set — `[csoOptional, csoReloadOnChange]` becomes `[csoOptional]`, and a set that only carried it becomes `[]`.
 
+### 17. NNLog: a target that cannot write no longer raises
+
+A write that fails inside a target used to travel back to whoever logged. `TTarget.Write` now
+catches it and reports it on the bootstrap channel, under the target's class name and naming the
+target, so a line that never reaches its destination stops aborting the code that was only trying
+to log.
+
+- **What breaks**: a spec that asserts the propagation. It goes red, and that is the change
+  arriving rather than a regression — there is nothing to restore on your side.
+- **Where the failure shows now**: `BootstrapLog`, as a `LogError` carrying the exception and the
+  target's name. A target whose failures have to be seen is watched there.
+- **A custom target overrides `DoWrite`, not `Write`**, and this half the compiler does tell you:
+  `Write` is no longer virtual. Move the body across and drop your own locking — `TTarget.Write`
+  takes a critical section held by that target instance before calling `DoWrite`, so two threads
+  writing through one target no longer overlap.
+
+```pascal
+// before
+procedure TMyTarget.Write(const Entry: TLogEntry);
+begin
+  Send(RenderEvent(Entry));   // a failure here reached the caller
+end;
+
+// now
+procedure TMyTarget.DoWrite(const Entry: TLogEntry);
+begin
+  Send(RenderEvent(Entry));   // a failure here is reported on the bootstrap channel
+end;
+```
+
 ## How to do it
 
 1. Compile. Whatever is missing comes out as a compiler error, not as odd behaviour at run time.
@@ -453,6 +483,6 @@ their siblings, instead of being deduced from the clauses present.
 4. Rename the types and units from the tables above.
 5. Compile again and run your tests. `ValidateOnBuild` helps confirm the composition registers what
    it did before.
-6. Sections 10 to 13 and 15 are **run-time** changes: the compiler says nothing about them. Read them
+6. Sections 10 to 13, 15 and 17 are **run-time** changes: the compiler says nothing about them. Read them
    against your own composition — scope lifetimes, duplicate registrations, and anything a
    destructor reads.

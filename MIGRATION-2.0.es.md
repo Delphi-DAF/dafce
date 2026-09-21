@@ -445,6 +445,36 @@ hermanos, en vez de deducirse de las cláusulas presentes.
 
 - **Qué rompe**: nombrarlo. Quítalo del conjunto — `[csoOptional, csoReloadOnChange]` pasa a `[csoOptional]`, y un conjunto que solo lo llevaba pasa a `[]`.
 
+### 17. NNLog: un destino que no puede escribir ya no lanza
+
+Un fallo al escribir dentro de un destino llegaba hasta quien registraba. Ahora `TTarget.Write` lo
+captura y lo anota en el canal de arranque, bajo el nombre de clase del destino y nombrando el
+destino, así que una línea que no llega a donde iba deja de abortar el código que solo intentaba
+registrar.
+
+- **Qué rompe**: un spec que afirme la propagación. Se pone rojo, y eso es el cambio llegando y no
+  una regresión — no hay nada que restaurar de tu lado.
+- **Dónde sale ahora el fallo**: en `BootstrapLog`, como un `LogError` con la excepción y el nombre
+  del destino. Un destino cuyos fallos haya que ver se vigila ahí.
+- **Un destino propio sobrescribe `DoWrite`, no `Write`**, y de esta mitad sí avisa el compilador:
+  `Write` ya no es virtual. Pasa el cuerpo y quita tu propio candado — `TTarget.Write` toma una
+  sección crítica propia de esa instancia antes de llamar a `DoWrite`, así que dos hilos que
+  escriban por un mismo destino ya no se solapan.
+
+```pascal
+// before
+procedure TMyTarget.Write(const Entry: TLogEntry);
+begin
+  Send(RenderEvent(Entry));   // un fallo aquí llegaba al llamante
+end;
+
+// now
+procedure TMyTarget.DoWrite(const Entry: TLogEntry);
+begin
+  Send(RenderEvent(Entry));   // un fallo aquí se anota en el canal de arranque
+end;
+```
+
 ## Cómo hacerlo
 
 1. Compila. Lo que falte sale como error del compilador, no como comportamiento raro en
@@ -456,6 +486,6 @@ hermanos, en vez de deducirse de las cláusulas presentes.
 4. Renombra los tipos y unidades de las tablas de arriba.
 5. Vuelve a compilar y pasa tus tests. `ValidateOnBuild` ayuda a confirmar que la composición
    registra lo mismo que antes.
-6. Las secciones 10 a 13 y la 15 son cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
+6. Las secciones 10 a 13, la 15 y la 17 son cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
    contra tu propia composición — la vida de los ámbitos, los registros repetidos, y lo que lea
    un destructor.
