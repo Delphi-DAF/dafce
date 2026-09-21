@@ -15,6 +15,8 @@ type
   public
     Constant: string;
     FromThunk: string;
+    FirstRead: string;
+    SecondRead: string;
     Resolved: string;
     Count: Integer;
     Has: Boolean;
@@ -85,6 +87,32 @@ Feature Commons macro expressions @commons @macros
       procedure(W: TMacrosWorld)
       begin
         Expect(W.FromThunk).ToEqual('after');
+      end)
+
+  .Scenario('A thunk is evaluated again on every read, and never memoised')
+    .When('the same macro is read twice with its source changed in between',
+      procedure(W: TMacrosWorld)
+      begin
+        var Source := 'first';
+        var Macros := TMacrosList.Create;
+        try
+          Macros['dyn'] := TFunc<string>(
+            function: string
+            begin
+              Result := Source;
+            end);
+          W.FirstRead := Macros['dyn'];
+          Source := 'second';
+          W.SecondRead := Macros['dyn'];
+        finally
+          Macros.Free;
+        end;
+      end)
+    .&Then('the two reads differ, which is what tells a deferred value from a memoised one',
+      procedure(W: TMacrosWorld)
+      begin
+        Expect(W.FirstRead).ToEqual('first');
+        Expect(W.SecondRead).ToEqual('second');
       end)
 
   .Scenario('Macros resolve inside a template')
