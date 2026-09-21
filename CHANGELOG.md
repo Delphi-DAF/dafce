@@ -133,6 +133,7 @@ The changes that break compilation are collected, with their example diff, in `M
   - Resolving from several threads gives **a single instance per registration** and its constructor runs once; it used to run once per thread and most of them failed with `EListError`. Composing the collection is still single-threaded
   - A cycle the container cannot break **stops killing the process**: resolution fails naming the path, instead of exhausting the stack with no exception and no message
   - Resolving after `ShutDown` raises `EContainerShutDownError` naming the service, instead of `EAccessViolation`. Closing twice stops breaking
+  - `Lazy.From<T>` builds its service once even when several threads reach it at the same time —eight threads used to build eight—, and a factory that returns nothing fails naming the contract instead of answering the zero of the return type
 - **MiniSpec**: Fixes
   - The injection marker works **on a field**: the sweep only walked properties, so the field stayed `nil` with no warning
   - `UseSuiteContext<T>` builds the suite context: `SpecContext.SuiteContext` was `nil` in every step

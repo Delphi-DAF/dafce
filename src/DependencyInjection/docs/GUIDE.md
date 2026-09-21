@@ -805,6 +805,11 @@ the question.
 rather than an `ILazy<T>`. It is the escape hatch for what does not go through a constructor; when
 there is a constructor, `ILazy<T>` says the same with less, and leaves the registration alone.
 
+⚠️ **This one does keep what it built**, unlike the one the container supplies: the factory is
+yours and may cost whatever it costs, so running it on every method call would be a different
+thing. It runs once even under several threads, and a factory that gives back nothing fails naming
+the contract instead of answering the zero of the return type.
+
 ---
 
 ## Duck Typing Decorator

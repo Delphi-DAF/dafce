@@ -18,6 +18,8 @@ interface
 
 uses
   System.SysUtils,
+  System.Classes,
+  System.SyncObjs,
   Daf.Extensions.DependencyInjection;
 
 type
@@ -105,9 +107,15 @@ type
     Provider: IServiceProvider;
     Told: string;
     Other: string;
+    Manual: IArchive;
+    BuiltBefore: Integer;
+    TimedOut: Boolean;
     constructor Create;
     destructor Destroy; override;
     procedure Build;
+    /// Suelta N hilos a la vez sobre el mismo cuerpo. Con compuerta y con timeout: un cerrojo mal
+    /// puesto se cuelga en vez de fallar, y un runner colgado no dice qué aserción se rompió.
+    procedure Race(const Count: Integer; const Body: TProc);
   end;
 
 implementation
@@ -199,6 +207,7 @@ end;
 
 destructor TLazyWorld.Destroy;
 begin
+  Manual := nil;
   if Provider <> nil then
     Provider.ShutDown;
   inherited;
@@ -208,6 +217,30 @@ procedure TLazyWorld.Build;
 begin
   if Provider = nil then
     Provider := Services.BuildServiceProvider;
+end;
+
+procedure TLazyWorld.Race(const Count: Integer; const Body: TProc);
+begin
+  var Gate := TCountdownEvent.Create(1);
+  var Done := TCountdownEvent.Create(Count);
+  try
+    for var I := 0 to Count - 1 do
+      TThread.CreateAnonymousThread(
+        procedure
+        begin
+          try
+            Gate.WaitFor;
+            Body;
+          finally
+            Done.Signal;
+          end;
+        end).Start;
+    Gate.Signal;
+    TimedOut := Done.WaitFor(30000) <> wrSignaled;
+  finally
+    Gate.Free;
+    Done.Free;
+  end;
 end;
 
 initialization
@@ -344,6 +377,81 @@ Feature A dependency the consumer asks for lazily @di @lazy
         // Que llegue a 'beta' prueba las dos mitades: el ciclo se rompio al construir, y lo que
         // Value devolvio es un IBeta de verdad y no un puntero que solo lo parece.
         Expect(W.Told).ToEqual('alpha->beta');
+      end)
+
+.Rule('The manual form, Lazy.From<T>')
+
+  .Scenario('It defers until the first call, and then keeps what it built')
+    .Given('a lazy built from a factory of its own', procedure(W: TLazyWorld)
+      begin
+        W.Build;
+        W.Manual := Lazy.From<IArchive>(W.Provider,
+          function(P: IServiceProvider): IArchive
+          begin
+            Result := TArchive.Create;
+          end);
+        W.BuiltBefore := TArchive.Built;
+      end)
+    .When('it is read twice', procedure(W: TLazyWorld)
+      begin
+        W.Told := W.Manual.Name + ',' + W.Manual.Name;
+      end)
+    .&Then('nothing was built until the first read, and the second reused it',
+      procedure(W: TLazyWorld)
+      begin
+        // Aqui SI guarda, al reves que el ILazy<> del contenedor: la factoria la escribe quien
+        // llama y puede costar lo que sea, asi que repetirla en cada metodo seria otra cosa.
+        Expect(W.BuiltBefore).ToEqual(0);
+        Expect(W.Told).ToEqual('archive,archive');
+        Expect(TArchive.Built).ToEqual(1);
+      end)
+
+  .Scenario('Several threads reading at once build it once')
+    .Given('a lazy whose factory takes its time', procedure(W: TLazyWorld)
+      begin
+        W.Build;
+        W.Manual := Lazy.From<IArchive>(W.Provider,
+          function(P: IServiceProvider): IArchive
+          begin
+            // El retardo ensancha la ventana a proposito: sin el, dos hilos casi nunca se cruzan
+            // dentro del comprobar-y-construir y el escenario pasaria con el cerrojo quitado.
+            TThread.Sleep(50);
+            Result := TArchive.Create;
+          end);
+      end)
+    .When('eight threads read it at the same time', procedure(W: TLazyWorld)
+      begin
+        W.Race(8,
+          procedure
+          begin
+            W.Manual.Name;
+          end);
+      end)
+    .&Then('the factory ran once, and nobody was left waiting', procedure(W: TLazyWorld)
+      begin
+        Expect(W.TimedOut).ToBeFalse;
+        Expect(TArchive.Built).ToEqual(1);
+      end)
+
+  .Scenario('A factory that returns nothing fails, naming the contract')
+    .Given('a lazy whose factory gives back nil', procedure(W: TLazyWorld)
+      begin
+        W.Build;
+        W.Manual := Lazy.From<IArchive>(W.Provider,
+          function(P: IServiceProvider): IArchive
+          begin
+            Result := nil;
+          end);
+      end)
+    .When('it is read', procedure(W: TLazyWorld)
+      begin
+        W.Manual.Name;
+      end)
+    .&Then('it says so instead of answering the zero of the return type', procedure(W: TLazyWorld)
+      begin
+        // Devolver '' se lee como un resultado, y quien lo recibe esta lejos de la factoria que lo
+        // causo: la escribio al registrar, no en esta llamada.
+        ExpectException(Raised).ToHaveMessage('IArchive');
       end)
 
 .Rule('Deferring the construction does not defer the question')

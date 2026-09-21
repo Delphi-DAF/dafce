@@ -811,6 +811,11 @@ aplazar la pregunta.
 devuelve la propia `T` en vez de un `ILazy<T>`. Es la vía para lo que no pasa por un constructor;
 cuando hay constructor, `ILazy<T>` dice lo mismo con menos y no toca el registro.
 
+⚠️ **Esta sí guarda lo que construyó**, al revés que la que entrega el contenedor: la factoría es
+tuya y puede costar lo que sea, así que correrla en cada llamada a un método sería otra cosa. Corre
+una sola vez aunque entren varios hilos, y una factoría que no devuelve nada falla nombrando el
+contrato en vez de contestar el cero del tipo de retorno.
+
 ---
 
 ## Decorador Duck Typing

@@ -2177,8 +2177,17 @@ end;
 
 procedure TLazy<T>.CheckDelegatedReady;
 begin
-  if Assigned(FDelegated) then Exit;
-  FDelegated := FFactory(FServiceProvider);
+  // Aqui SI se guarda lo construido --a diferencia del ILazy<> que fabrica el contenedor--, porque
+  // la factoria la escribe quien llama y puede costar lo que sea: repetirla en cada metodo seria
+  // otra cosa. Y por eso hace falta el cerrojo: comprobar y construir sin el deja que dos hilos
+  // entren a la vez y la corran dos veces.
+  TMonitor.Enter(Self);
+  try
+    if Assigned(FDelegated) then Exit;
+    FDelegated := FFactory(FServiceProvider);
+  finally
+    TMonitor.Exit(Self);
+  end;
 end;
 
 procedure TLazy<T>.CallDelegated(Method: TRttiMethod; const Args: TArray<TValue>; var Result: TValue);
@@ -2189,9 +2198,16 @@ var
   CallConv: TCallConv;
 begin
   CheckDelegatedReady;
-  if not Assigned(FDelegated) then Exit;
+  // Los dos fallos se dicen en vez de devolver el cero del tipo de retorno: un metodo que no hace
+  // nada y contesta vacio se lee como un resultado, y quien lo recibe esta lejos de la factoria
+  // que lo causo --la escribio al registrar, no aqui--.
+  if not Assigned(FDelegated) then
+    raise EServiceProviderError.CreateFmt(
+      'la factoria perezosa de %s no devolvio nada', [string(FType.Name)]);
   var Intf: Pointer;
-  if not Supports(FDelegated, FType.TypeData.GUID, Intf) then Exit;
+  if not Supports(FDelegated, FType.TypeData.GUID, Intf) then
+    raise EServiceProviderError.CreateFmt(
+      'lo que la factoria perezosa devolvio no implementa %s', [string(FType.Name)]);
 
   VTable := PPVtable(IInterface(Intf));
   Code := VTable^^[Method.VirtualIndex];

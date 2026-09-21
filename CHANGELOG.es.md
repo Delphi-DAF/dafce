@@ -132,6 +132,7 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
   - Resolver desde varios hilos entrega **una sola instancia por registro** y su constructor corre una vez; antes corría una vez por hilo y la mayoría fallaban con `EListError`. Componer la colección sigue siendo de un solo hilo
   - Un ciclo que el contenedor no puede romper **deja de matar el proceso**: la resolución falla nombrando el camino, en vez de agotar la pila sin excepción ni mensaje
   - Resolver después de `ShutDown` lanza `EContainerShutDownError` nombrando el servicio, en vez de `EAccessViolation`. Cerrar dos veces deja de romper
+  - `Lazy.From<T>` construye su servicio una sola vez aunque varios hilos lleguen a la vez —ocho hilos construían ocho—, y una factoría que no devuelve nada falla nombrando el contrato en vez de contestar el cero del tipo de retorno
 - **MiniSpec**: Correcciones
   - La marca de inyección funciona **sobre un campo**: el barrido solo recorría propiedades, así que el campo se quedaba en `nil` sin aviso
   - `UseSuiteContext<T>` construye el contexto de suite: `SpecContext.SuiteContext` valía `nil` en todos los steps
