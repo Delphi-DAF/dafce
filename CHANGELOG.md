@@ -61,6 +61,7 @@ The changes that break compilation are collected, with their example diff, in `M
 - **SQLCute.Specification**: New module — lowers a whole `Specification` onto an `IQuery`, so the same rule goes to the database or to a loaded collection
 - **Daf.Web**: New package — a lightweight HTTP server over Indy and WebBroker, with controllers routed by `[WebRoute]` and built by the container. The package **links neither DataSnap nor DBX**
 - **Samples**: `QuickStart`, `ServiceWiring` and `PackageInit` (Cli); `HostQuickStart` and `StartupReport` (Hosting)
+- **Samples**: `LinqPipeline` (Linq), `SpecAuthoring` (Specification), `CustomProvider` (Logging), `NNLogTargets` (NNLog), `MiniApi` (web) and `FmxQuickStart` (FMX)
 - **Docs**: "Startup composition", the public AST of `SQLCute.Abstractions`, and the criterion behind splitting the logging packages (EN/ES)
 - **Commons**: `TVersionInfo.IsEmpty` and `IsSemVer` — «no version was set», «the tag was not understood» and «the version is this one» stop sharing a single representation that looked like a valid version
 - **Commons**: `VersionTag` takes a template of `${...}` markers, with `VersionTemplate` and `VersionTemplateWithBuild` as its two defaults. The marker list, in the GUIDE
