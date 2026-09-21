@@ -88,6 +88,7 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 - **SQLCute**: De **5 paquetes a 4**: los seis compiladores de dialecto se integran en `Daf.SQLCute` y `Daf.SQLCute.Compilers` desaparece. Las unidades no cambian; quien lo referenciara en un `requires` o un `DCCReference` debe usar `Daf.SQLCute`
 - **SQLCute**: `CompileWhere` y `CompileHaving` emiten paréntesis explícitos de precedencia
 - **Hosting**: `THost.Start` y `THost.Stop` informan por el pipeline de `ILogger` —el canal de arranque queda de respaldo—, y los informes de DAF salen bajo la categoría de la clase que informa en vez de bajo `DAF`
+- ⚠️ **Hosting**: Los `IHostedService` se paran en el **orden inverso al de su registro**, el mismo en que libera el contenedor: un servicio arrancado después puede estar usando lo que suelta al parar uno arrancado antes. Antes se paraban en orden de registro
 - **Logging**: Componer el pipeline sin un solo proveedor **falla al construir el host**, con `ELoggingCompositionError`, en vez de entregar un `ILogger` que acepta todo y no escribe nada. El silencio deliberado se declara con `AddNullProvider`
 - **Logging**: Un destino del canal de arranque que no puede escribir **se declara no disponible** en lugar de aceptar el informe y perderlo, y uno que lanza queda fuera sin tumbar el arranque. `BootstrapLog.HasAvailableSink` lo distingue
 - **Samples**: Cada sample se archiva bajo el módulo que declara lo que usa: `ConsoleSample` a `src/Cli/samples/`, `TicTacToeApp` a `src/VCL/samples/`, y `HostedService` a `src/samples/`

@@ -397,8 +397,10 @@ begin
       if Assigned(Lifetime) then
         (Lifetime as THostApplicationLifetime).NotifyStopping;
 
-      for var HostedService in FHostedServices do
-        HostedService.Stop;
+      // LIFO, el mismo orden en que cierra el contenedor: un servicio arrancado despues puede
+      // estar usando lo que suelta al parar uno arrancado antes.
+      for var Idx := FHostedServices.Count - 1 downto 0 do
+        FHostedServices[Idx].Stop;
       FHostedServices.Clear;
 
       if Assigned(Lifetime) then

@@ -55,6 +55,20 @@ type
     procedure Stop;
   end;
 
+  /// Dejan constancia de su arranque y de su parada, que es lo que necesita una spec sobre
+  /// el orden: con uno solo, un orden y su inverso dan la misma traza.
+  TFirstService = class(TInterfacedObject, IHostedService)
+  public
+    procedure Start;
+    procedure Stop;
+  end;
+
+  TSecondService = class(TInterfacedObject, IHostedService)
+  public
+    procedure Start;
+    procedure Stop;
+  end;
+
   TStartupWorld = class
   strict private
     // Hay escenarios que fallan a proposito, y ese fallo sale por la salida de error del arnes.
@@ -160,6 +174,30 @@ end;
 
 procedure TConsumerService.Stop;
 begin
+end;
+
+{ TFirstService }
+
+procedure TFirstService.Start;
+begin
+  TTrace.Add('up:1');
+end;
+
+procedure TFirstService.Stop;
+begin
+  TTrace.Add('down:1');
+end;
+
+{ TSecondService }
+
+procedure TSecondService.Start;
+begin
+  TTrace.Add('up:2');
+end;
+
+procedure TSecondService.Stop;
+begin
+  TTrace.Add('down:2');
 end;
 
 { TGreetingTask }
