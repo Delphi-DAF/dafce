@@ -256,7 +256,7 @@ begin
   Letter := Body.Chars[0];
 
   // The glued value is tried BEFORE bundling, and that order is fixed here by a spec
-  // rather than by the order of these ifs (design, Open Questions). An option that
+  // rather than by the order of these ifs. An option that
   // takes a value swallows the rest of its own token, exactly as getopt does with
   // `-ovalue`; trying to bundle first would read `-vquiet` as five flags on any grammar
   // that happened to declare q, u, i, e and t.

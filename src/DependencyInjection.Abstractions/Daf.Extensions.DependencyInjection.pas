@@ -259,7 +259,7 @@ type
     ///   Baja una factoria consciente del tipo pedido a una de un solo parametro, capturando el
     ///   tipo que se le entregara. Es la UNICA forma de que una consciente llegue a llamarse: nunca
     ///   se invoca directa, siempre envuelta asi. Se llama con el tipo del servicio al registrar uno
-    ///   corriente (D4), y con el cierre al cerrar un registro sin fijar (D3).
+    ///   corriente, y con el cierre al cerrar un registro sin fijar.
     /// </summary>
     class function ForRequestedType(const RequestedType: PTypeInfo;
       const Aware: TServiceFactoryEx): TServiceFactory;
@@ -336,9 +336,9 @@ type
     FImplementationClass: TClass;
     FIdentity: TServiceIdentity;
     // La factoria consciente del tipo pedido, si el registro se hizo con una; nil si no.
-    // Es lo que ForClosedType necesita para volver a bajarla con el cierre concreto (D3).
+    // Es lo que ForClosedType necesita para volver a bajarla con el cierre concreto.
     FRequestedFactory: TServiceFactoryEx;
-    // La clave con la que se registro: vacia en el espacio sin clave (D4).
+    // La clave con la que se registro: vacia en el espacio sin clave.
     FKey: TValue;
     // La factoria consciente de la clave, si el registro se hizo con una; nil si no. Es lo que
     // ForServedKey necesita para volver a bajarla con la clave que el comodin acaba de atender.
@@ -1027,10 +1027,9 @@ begin
     Inner := Daf.Extensions.DependencyInjection.Factory.FromOpen(
       FTypeInfo, AClosedType, FImplementationClass)
   else if Assigned(FRequestedFactory) then
-    // D3: una factoria consciente se baja aqui, el unico punto que conoce el cierre, a una de las
+    // Una factoria consciente se baja aqui, el unico punto que conoce el cierre, a una de las
     // de siempre que le pasa ESE cierre como tipo pedido. FFactory llevaba la bajada con el tipo del
-    // registro (el abierto); esta la sustituye con el cierre concreto. Es un brazo mas de la
-    // bifurcacion que ya estaba aqui, no un if en el camino de resolucion.
+    // registro (el abierto); esta la sustituye con el cierre concreto.
     Inner := Daf.Extensions.DependencyInjection.Factory.ForRequestedType(AClosedType, FRequestedFactory);
   // Y la comprobacion del emparejamiento, sobre la que haya de las dos: es una propiedad del
   // par contrato-abierto/cierre, no de quien fabrique el objeto.
@@ -1404,8 +1403,8 @@ end;
 function IServiceCollection.AddAwareDescriptor(const LifeTime: TServiceLifeTime; const Slot: TServiceSlot;
   const Aware: TServiceFactoryEx): IServiceCollection;
 begin
-  // D4: la factoria consciente se baja AQUI, con el tipo del servicio ya conocido, a una de un solo
-  // parametro; y se guarda aparte para que ForClosedType pueda volver a bajarla con el cierre (D3).
+  // La factoria consciente se baja AQUI, con el tipo del servicio ya conocido, a una de un solo
+  // parametro; y se guarda aparte para que ForClosedType pueda volver a bajarla con el cierre.
   // Asi hay una sola forma de que una consciente llegue a llamarse: envuelta, nunca directa.
   Result := AddDescriptor(LifeTime, Slot, Factory.ForRequestedType(Slot.ServiceType, Aware), nil, Aware);
 end;

@@ -215,7 +215,7 @@ begin
     var PInfo := Params[idx].ParamType.Handle;
     var Entregado: IInterface;
     if SupplyFromContainer(Provider, PInfo, False, Entregado) then Continue;
-    // La clave se lee AQUI tambien y no solo al construir (D6): esta es la pregunta que decide QUE
+    // La clave se lee AQUI tambien y no solo al construir: esta es la pregunta que decide QUE
     // CONSTRUCTOR se elige, asi que uno cuyo parametro con clave no se pueda satisfacer tiene que
     // quedar descartado en este punto -- si no, se elige y falla despues.
     var Key: TValue;

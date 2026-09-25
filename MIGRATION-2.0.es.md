@@ -21,7 +21,7 @@ ServiceCollection.AddModules(_T.PackageOf<TAlgo>);
 ServiceCollection
   .AddModule<TEntornoModule>
   .AddModule<TEvaluationModule>
-  .AddModule<TCGSuiteModule>;
+  .AddModule<TSuiteModule>;
 ```
 
 Y se van con él los `uses` marcados `// force-link:` que solo estaban para que la RTTI viera el

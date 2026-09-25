@@ -188,7 +188,7 @@ constructor TWebApplicationBuilder.Create(const Args: TArray<string>);
 begin
   inherited Create;
 
-  // D9: la variante aporta sus fuentes SEMBRANDO el manager y entregandolo ya sembrado, no
+  // La variante aporta sus fuentes SEMBRANDO el manager y entregandolo ya sembrado, no
   // encadenando una segunda configuracion. Si el componedor comun lo fabricase y acto seguido
   // derivase el entorno de el, lo que se anadiera despues llegaria tarde para el entorno.
   var Manager: IConfigurationManager := TConfigurationManager.Create;

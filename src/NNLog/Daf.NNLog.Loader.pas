@@ -99,7 +99,7 @@ begin
     Result.WriteTo :=  ParseWriteTo(TargetMap, RuleCfg.WriteTo);
     Result.IsFinal := RuleCfg.IsFinal;
     // El patron se compila al asignar Name. Un patron que no se puede interpretar es un error
-    // de composicion y se dice al cargar, nombrando la regla y el patron (D4).
+    // de composicion y se dice al cargar, nombrando la regla y el patron.
     try
       Result.Name := RuleCfg.Name;
     except
