@@ -56,19 +56,6 @@ type
     /// contenedor. Reintroduce porque TWebController.Create no toma parametros.
     constructor Create(const Catalog: ICatalog); reintroduce;
 
-    // EL ORDEN IMPORTA, y no hay precedencia de lo literal sobre lo parametrico: el
-    // router prueba los matchers en el orden en que declaro los metodos, y se queda con
-    // el primero que acepta. Con /{Id} declarado antes, /api/products/search casaria con
-    // el y fallaria al convertir 'search' a Integer.
-
-    /// GET /api/products/search?q=taladro -- de la cadena de consulta.
-    [WebRoute(mtGet, '/search')]
-    function Search([FromQuery] Q: string): IActionResult;
-
-    /// GET /api/products/health -- mtAny, asi que contesta a cualquier verbo.
-    [WebRoute(mtAny, '/health')]
-    function Health: IActionResult;
-
     /// GET /api/products/42 -- el segmento {Id} entra por nombre en el parametro.
     [WebRoute(mtGet, '/{Id}')]
     function GetById(Id: Integer): IActionResult;
@@ -76,6 +63,15 @@ type
     /// DELETE /api/products/42 -- la ruta casa, el verbo decide otra accion.
     [WebRoute(mtDelete, '/{Id}')]
     function Remove(Id: Integer): IActionResult;
+
+    /// GET /api/products/search?q=taladro -- de la cadena de consulta. Declarada despues
+    /// de /{Id}, y la gana igual: un segmento literal se prueba antes que un parametro.
+    [WebRoute(mtGet, '/search')]
+    function Search([FromQuery] Q: string): IActionResult;
+
+    /// GET /api/products/health -- mtAny, asi que contesta a cualquier verbo.
+    [WebRoute(mtAny, '/health')]
+    function Health: IActionResult;
   end;
 
 implementation

@@ -112,6 +112,11 @@ Applied to an action method. The verb is a `TMethodType`, not a string — the c
 
 Route segments written `{name}` are path parameters — matched into method parameters by name.
 
+A literal segment is tried before a parameter in the same position, whatever order the actions are
+declared in: with `/{id}` and `/me` on the same prefix, `/api/users/me` reaches the `/me` action. Two
+routes a path matches alike — `/{id}` and `/{name}` on the same verb — are not an error: the first one
+the router discovered takes the request.
+
 A request whose path matches but whose verb no action declares is **not** dispatched to an action of another verb: the router leaves it unhandled and WebBroker answers.
 
 ---

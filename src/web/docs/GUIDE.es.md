@@ -112,6 +112,11 @@ Se aplica a un método de acción. El verbo es un `TMethodType`, no una cadena �
 
 Los segmentos escritos `{nombre}` son parámetros de ruta — se casan por nombre con los parámetros del método.
 
+Un segmento literal se prueba antes que un parámetro en la misma posición, se declaren las acciones en
+el orden que se declaren: con `/{id}` y `/me` en el mismo prefijo, `/api/usuarios/me` llega a la acción
+de `/me`. Dos rutas que casan igual con un path —`/{id}` y `/{nombre}` en el mismo verbo— no son un
+error: se queda la petición la primera que el router descubrió.
+
 Una petición cuyo path casa pero cuyo verbo no declara ninguna acción **no** se despacha a una acción de otro verbo: el router la deja sin atender y responde WebBroker.
 
 ---
