@@ -64,6 +64,7 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 - **Docs**: «Composición del arranque», el AST público de `SQLCute.Abstractions`, y el criterio de reparto de los paquetes de logging (EN/ES)
 - **Commons**: `TVersionInfo.IsEmpty` e `IsSemVer` — «no se fijó versión», «el tag no se entendió» y «la versión es esta» dejan de compartir una sola representación que parecía una versión válida
 - **Commons**: `VersionTag` toma una plantilla de marcadores `${...}`, con `VersionTemplate` y `VersionTemplateWithBuild` como sus dos plantillas por defecto. La lista de marcadores, en el GUIDE
+- **Commons**: `TMacrosList.MissingMacroPolicy` y `OnMissingMacro` deciden en qué se convierte una referencia a una macro que no está registrada: se queda como está escrita, toma un valor de reserva o lanza `EMacroNotFound`. Sin configurar nada sigue resolviéndose como vacía
 - **CommandLine**: `WithVersion` acepta también el nombre de la aplicación y su compañía, o una clase con una anotación `[Version]` de la que leer los tres
 - **SystemProcess**: `TProcessResult.TStatus.Killed` — un `Kill` explícito y un plazo vencido dejan de compartir el valor `Timeout`, así que un resultado dice cuál de los dos cortó la ejecución
 

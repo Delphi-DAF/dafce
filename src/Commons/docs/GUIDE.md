@@ -510,6 +510,26 @@ end;
 | `Contains(Key)` `Count` | What is registered |
 | `Keys[I]` `ValueFromIndex[I]` | Registration order is kept: the list is an ordered dictionary |
 
+#### A macro that is not registered
+
+Out of the box, a reference to a macro that is not registered resolves to the empty string.
+`MissingMacroPolicy` changes that, and `OnMissingMacro` is asked first:
+
+```pascal
+Macros.MissingMacroPolicy := mmpError;
+Macros.ResolveMacros('${root}/charts');
+// EMacroNotFound: No macro is registered with the name "root"
+```
+
+| Member | Answers |
+|--------|---------|
+| `MissingMacroPolicy` | `mmpReturnDefault`, the default, substitutes `MissingMacroValue`, which is empty unless set · `mmpKeepToken` leaves `${name}` in the result · `mmpError` raises `EMacroNotFound` |
+| `OnMissingMacro` | Called for each reference to a macro that is not registered, before the policy. It sets `Value` and `Handled` to resolve it, or leaves `Handled` False to hand it to the policy |
+| `MissingMacroError(Name)` | The exception `mmpError` raises. A hook that has to fail raises this one: `raise TMacrosList(Sender).MissingMacroError(Name)` |
+
+The policy applies to `ResolveMacros` only: reading `Macros['name']` of a macro that is not
+registered answers empty whatever the policy. `Contains` asks whether it is there.
+
 ### TEnvVars
 
 The process's environment variables read into a dictionary, and written back out as the

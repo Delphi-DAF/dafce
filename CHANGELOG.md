@@ -65,6 +65,7 @@ The changes that break compilation are collected, with their example diff, in `M
 - **Docs**: "Startup composition", the public AST of `SQLCute.Abstractions`, and the criterion behind splitting the logging packages (EN/ES)
 - **Commons**: `TVersionInfo.IsEmpty` and `IsSemVer` — «no version was set», «the tag was not understood» and «the version is this one» stop sharing a single representation that looked like a valid version
 - **Commons**: `VersionTag` takes a template of `${...}` markers, with `VersionTemplate` and `VersionTemplateWithBuild` as its two defaults. The marker list, in the GUIDE
+- **Commons**: `TMacrosList.MissingMacroPolicy` and `OnMissingMacro` decide what a reference to a macro that is not registered becomes: kept as written, a fallback value, or `EMacroNotFound`. With nothing configured it still resolves to empty
 - **CommandLine**: `WithVersion` also takes the application name and its company, or a class carrying a `[Version]` annotation to read the three from
 - **SystemProcess**: `TProcessResult.TStatus.Killed` — an explicit `Kill` and an expired deadline stop sharing the `Timeout` value, so a result says which of the two cut the run short
 
