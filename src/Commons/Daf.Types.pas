@@ -34,9 +34,45 @@ type
   end;
 
   TMacroExpression = TDeferred<string>;
+
+  /// <summary>
+  ///   Raised by <c>TMacrosList.ResolveMacros</c> for a macro that is not registered, when
+  ///   <c>MissingMacroPolicy</c> is <c>mmpError</c>. <c>TMacrosList.MissingMacroError</c>
+  ///   builds it.
+  /// </summary>
+  EMacroNotFound = class(Exception);
+
+  /// <summary>
+  ///   What <c>TMacrosList.ResolveMacros</c> does with a reference to a macro that is not
+  ///   registered.
+  /// </summary>
+  TMissingMacroPolicy = (
+    /// <summary>Substitutes <c>MissingMacroValue</c>, which is empty unless set.</summary>
+    mmpReturnDefault,
+    /// <summary>
+    ///   Leaves the reference in the result as it was written, so the string shows which
+    ///   macro was missing.
+    /// </summary>
+    mmpKeepToken,
+    /// <summary>Raises the exception <c>MissingMacroError</c> builds.</summary>
+    mmpError);
+
+  /// <summary>
+  ///   Resolves a macro that is not registered before the policy applies. Set <c>Value</c>
+  ///   and <c>Handled</c> to substitute it, or leave <c>Handled</c> False to hand it to
+  ///   <c>MissingMacroPolicy</c>. To fail, raise
+  ///   <c>TMacrosList(Sender).MissingMacroError(Name)</c>: it is the exception
+  ///   <c>mmpError</c> raises.
+  /// </summary>
+  TMissingMacroEvent = reference to procedure(Sender: TObject; const Name: string;
+    var Value: string; var Handled: Boolean);
+
   TMacrosList = class
   strict private
     FExpresions: TOrderedDictionary<string, TMacroExpression>;
+    FOnMissingMacro: TMissingMacroEvent;
+    FMissingMacroPolicy: TMissingMacroPolicy;
+    FMissingMacroValue: string;
   private
     function GetKeys(Index: Integer):string;
     function GetValueFromIndex(Index: Integer):string;
@@ -53,6 +89,24 @@ type
     property Keys[Index: Integer]:string read GetKeys;
     property Value[const Name:string]: TMacroExpression read GetExpression write SetExpression;default;
     property ValueFromIndex[Index: Integer]:string read GetValueFromIndex;
+    /// <summary>
+    ///   The exception for a macro that is not registered, built in one place so that the
+    ///   policy and a hook fail alike. The caller owns it until it raises it.
+    /// </summary>
+    function MissingMacroError(const Name: string): Exception;
+    /// <summary>
+    ///   Called for each reference to a macro that is not registered, before the policy.
+    /// </summary>
+    property OnMissingMacro: TMissingMacroEvent read FOnMissingMacro write FOnMissingMacro;
+    /// <summary>
+    ///   What becomes of a reference that no hook resolved: <c>mmpReturnDefault</c> unless
+    ///   set. It applies to <c>ResolveMacros</c> only. Reading <c>Value[Name]</c> of a macro
+    ///   that is not registered answers empty whatever the policy, and <c>Contains</c> is
+    ///   how to ask.
+    /// </summary>
+    property MissingMacroPolicy: TMissingMacroPolicy read FMissingMacroPolicy write FMissingMacroPolicy;
+    /// <summary>What <c>mmpReturnDefault</c> substitutes. Empty unless set.</summary>
+    property MissingMacroValue: string read FMissingMacroValue write FMissingMacroValue;
   end;
 
   /// <summary>
@@ -266,10 +320,36 @@ begin
   for var Match in Matches do
   begin
     var Token := Match.Groups[1].Value;
-    var Resolved := Self[Token];
-    Result := Result.Replace(Match.Value, Resolved);
+    var idx := IndexOf(Token);
+    if idx >= 0 then
+    begin
+      Result := Result.Replace(Match.Value, ValueFromIndex[idx]);
+      Continue;
+    end;
+
+    var Value := '';
+    var Handled := False;
+    if Assigned(FOnMissingMacro) then
+      FOnMissingMacro(Self, Token, Value, Handled);
+    if Handled then
+      Result := Result.Replace(Match.Value, Value)
+    else
+      case FMissingMacroPolicy of
+        mmpReturnDefault: Result := Result.Replace(Match.Value, FMissingMacroValue);
+        mmpKeepToken: ;
+        mmpError: raise MissingMacroError(Token);
+      end;
   end;
+  // A pass that changed nothing leaves nothing the next one could resolve: without this,
+  // a reference kept by mmpKeepToken would be scanned again on every recursion level.
+  if Result = Source then
+    Exit;
   Result := ResolveMacros(Result, MaxRecursionLevel - 1);
+end;
+
+function TMacrosList.MissingMacroError(const Name: string): Exception;
+begin
+  Result := EMacroNotFound.CreateFmt('No macro is registered with the name "%s"', [Name]);
 end;
 
 function TMacrosList.GetValueFromIndex(Index: Integer):string;
