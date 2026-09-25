@@ -2203,16 +2203,16 @@ begin
   if not Assigned(FDelegated) then
     raise EServiceProviderError.CreateFmt(
       'la factoria perezosa de %s no devolvio nada', [string(FType.Name)]);
-  var Intf: Pointer;
+  var Intf: IInterface;
   if not Supports(FDelegated, FType.TypeData.GUID, Intf) then
     raise EServiceProviderError.CreateFmt(
       'lo que la factoria perezosa devolvio no implementa %s', [string(FType.Name)]);
 
-  VTable := PPVtable(IInterface(Intf));
+  VTable := PPVtable(Intf);
   Code := VTable^^[Method.VirtualIndex];
   ArgList := Args;
   CallConv := Method.CallingConvention;
-  ArgList[0] := TValue.From(IInterface(Intf));
+  ArgList[0] := TValue.From(Intf);
 
   if Method.ReturnType <> nil then Result := System.Rtti.Invoke(Code, ArgList, CallConv, Method.ReturnType.Handle)
   else Result := System.Rtti.Invoke(Code, ArgList, CallConv, nil);
