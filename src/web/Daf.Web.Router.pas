@@ -374,8 +374,10 @@ end;
 function TWebRouteMatcher.GetServiceValue(Param: TRttiParameter; const Services: IServiceProvider): TValue;
 begin
   var Intf: IInterface;
-  Services.GetService(Param.ParamType.Handle, Intf);
-  Result := TValue.From(Intf);
+  Services.GetRequiredService(Param.ParamType.Handle, Intf);
+  // Typed as the parameter: Invoke does not cast a TValue of IInterface to the interface the
+  // action declares.
+  TValue.Make(@Intf, Param.ParamType.Handle, Result);
 end;
 
 function TWebRouteMatcher.GetRouteValue(Param: TRttiParameter): TValue;

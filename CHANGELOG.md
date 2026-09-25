@@ -160,6 +160,7 @@ The changes that break compilation are collected, with their example diff, in `M
 - **Commons**: A tag carrying its own build metadata produced two `+` sections, which SemVer does not admit; what the tag declares and what the compiler saw now share the one section
 - **SystemProcess**: An explicit `Kill` reported `Timeout`, and killed the child twice — once when asked and again when the wait loop noticed. It now reports `Killed` and kills once
 - **Web**: A literal route segment is tried before a parameter in the same position; the action declared first used to win, so `/items/search` could land on `/items/{Id}`
+- **Web**: A `[FromServices]` parameter receives its service. With the service registered the request failed with `EInvalidCast`, and without it the action received `nil` with no warning; that case now fails the request naming the service
 
 ## [1.6.0] - 2026-07-20
 

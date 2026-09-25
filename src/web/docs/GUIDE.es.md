@@ -128,9 +128,12 @@ Una petición cuyo path casa pero cuyo verbo no declara ninguna acción **no** s
 | *(ninguno)* | Segmento de path | `[WebRoute(mtGet,'/{id}')] function Get(Id: Integer)` |
 | `[FromQuery]` | Query string | `function Search([FromQuery] Q: string)` |
 | `[FromBody]` | Cuerpo de la petición (JSON) | `function Create([FromBody] Cmd: TCreateUserCmd)` |
-| `[FromServices]` | Contenedor DI | `function Ping([FromServices] Logger: ILogger)` |
+| `[FromServices]` | Contenedor DI | `function Ping([FromServices] Clock: IClock)` |
 
 Un parámetro de tipo `TWebRequest` o `TWebResponse` recibe la propia petición o respuesta, sin necesidad de atributo.
+
+Un parámetro `[FromServices]` es una interfaz y se resuelve del ámbito de la petición. Un servicio que
+nadie registró hace fallar la petición nombrando el servicio: la acción no recibe nunca un `nil`.
 
 ---
 

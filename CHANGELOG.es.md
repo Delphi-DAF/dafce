@@ -159,6 +159,7 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 - **Commons**: un tag con sus propios metadatos de build producía dos secciones `+`, que SemVer no admite; lo que declara el tag y lo que vio el compilador comparten ya la única sección
 - **SystemProcess**: un `Kill` explícito se informaba como `Timeout`, y mataba al hijo dos veces —una al pedirlo y otra cuando el bucle de espera se enteraba—. Ahora informa `Killed` y mata una vez
 - **Web**: Un segmento literal de ruta se prueba antes que un parámetro en la misma posición; antes ganaba la acción declarada primero, así que `/items/search` podía caer en `/items/{Id}`
+- **Web**: Un parámetro `[FromServices]` recibe su servicio. Con el servicio registrado la petición fallaba con `EInvalidCast`, y sin él la acción recibía `nil` sin aviso; ese caso hace fallar ahora la petición nombrando el servicio
 
 ## [1.6.0] - 2026-07-20
 

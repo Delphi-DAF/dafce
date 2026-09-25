@@ -26,7 +26,8 @@ uses
   ActionResults.Feat in 'ActionResults.Feat.pas',
   Server.Feat in 'Server.Feat.pas',
   Daf.Web.Application,
-  WebVariant.Feat in 'WebVariant.Feat.pas';
+  WebVariant.Feat in 'WebVariant.Feat.pas',
+  Binding.Feat in 'Binding.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

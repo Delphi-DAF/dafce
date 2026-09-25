@@ -128,9 +128,12 @@ A request whose path matches but whose verb no action declares is **not** dispat
 | *(none)* | Path segment | `[WebRoute(mtGet,'/{id}')] function Get(Id: Integer)` |
 | `[FromQuery]` | Query string | `function Search([FromQuery] Q: string)` |
 | `[FromBody]` | Request body (JSON) | `function Create([FromBody] Cmd: TCreateUserCmd)` |
-| `[FromServices]` | DI container | `function Ping([FromServices] Logger: ILogger)` |
+| `[FromServices]` | DI container | `function Ping([FromServices] Clock: IClock)` |
 
 A parameter typed `TWebRequest` or `TWebResponse` receives the request or the response itself, with no attribute needed.
+
+A `[FromServices]` parameter is an interface, resolved from the request's scope. A service nobody
+registered fails the request naming the service: the action never receives a `nil`.
 
 ---
 
