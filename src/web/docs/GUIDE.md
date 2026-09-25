@@ -117,7 +117,7 @@ declared in: with `/{id}` and `/me` on the same prefix, `/api/users/me` reaches 
 routes a path matches alike — `/{id}` and `/{name}` on the same verb — are not an error: the first one
 the router discovered takes the request.
 
-A request whose path matches but whose verb no action declares is **not** dispatched to an action of another verb: the router leaves it unhandled and WebBroker answers.
+A request whose path matches but whose verb no action declares is **not** dispatched to an action of another verb: the router leaves it unhandled, and the variant's web module answers `404 Not found`, as it does for a path no action declares. A web module of your own passed to `Web.AddHttpServer` answers those requests as it decides.
 
 ---
 

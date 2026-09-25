@@ -14,6 +14,9 @@ código y el cuerpo de cada respuesta. No hay que creerse lo que enseña: sale p
 - **Un segmento `{Id}` entra por nombre en el parámetro**, convertido al tipo que el parámetro
   declare. `[FromQuery]` toma el valor de la cadena de consulta, y un parámetro ausente llega
   vacío — decidir si eso es un `400` es de la acción.
+- **Una ruta que ningún controlador declara contesta `404 Not found`.** No lo contesta una acción
+  sino el módulo web de la variante, así que `/api/products/99` —que sí casa, y cuya acción decide—
+  y `/api/nothing-declared` dan el mismo código por caminos distintos.
 - **`mtAny` contesta a cualquier verbo**, y dos acciones con la misma ruta y distinto verbo son dos
   acciones: `GET /api/products/42` devuelve el producto y `DELETE /api/products/42` devuelve 204.
 - **`Ok(TObject)` serializa a JSON y no se queda con el objeto.** `TJsonResult` lo convierte a
@@ -46,6 +49,7 @@ escuchando en http://127.0.0.1:8099
 
 == Lo que no existe contesta 404, y lo dice
   GET    /api/products/99             -> 404 no hay producto 99
+  GET    /api/nothing-declared        -> 404 Not found
 
 == De la cadena de consulta, con FromQuery
   GET    /api/products/search?q=taladro -> 200 buscando "taladro" entre 2 producto(s)

@@ -125,18 +125,36 @@ var
   MappedRouter: IWebRouter = nil;
 
 type
-  /// El modulo web que la variante registra por defecto: se engancha al enrutado en cuanto
-  /// WebBroker lo crea, que es una vez por peticion.
-  TDafWebModule = class(TWebModule)
+  /// El modulo web que la variante registra por defecto: se engancha al enrutado cuando WebBroker
+  /// lo construye, y contesta 404 a lo que el enrutado declina.
+  /// Desciende de TCustomWebDispatcher y no de TWebModule porque su constructor no busca un .dfm,
+  /// y TWebModule.Create lo exige. CreateNew no sirve de atajo: se salta el constructor del
+  /// despachador y deja sin crear las Actions que DispatchAction recorre en cuanto el enrutado
+  /// declina una peticion.
+  TDafWebModule = class(TCustomWebDispatcher)
+  private
+    procedure NotFound(Sender: TObject; Request: TWebRequest; Response: TWebResponse;
+      var Handled: Boolean);
   public
     constructor Create(AOwner: TComponent); override;
   end;
 
 constructor TDafWebModule.Create(AOwner: TComponent);
 begin
-  inherited CreateNew(AOwner);
+  inherited Create(AOwner);
+  var Fallback := Actions.Add;
+  Fallback.Default := True;
+  Fallback.OnAction := NotFound;
   if Assigned(MappedRouter) then
     MappedRouter.UseDispatcher(Self);
+end;
+
+procedure TDafWebModule.NotFound(Sender: TObject; Request: TWebRequest; Response: TWebResponse;
+  var Handled: Boolean);
+begin
+  Response.StatusCode := 404;
+  Response.Content := 'Not found';
+  Handled := True;
 end;
 
 { Web }

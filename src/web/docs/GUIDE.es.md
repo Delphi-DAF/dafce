@@ -117,7 +117,7 @@ el orden que se declaren: con `/{id}` y `/me` en el mismo prefijo, `/api/usuario
 de `/me`. Dos rutas que casan igual con un path —`/{id}` y `/{nombre}` en el mismo verbo— no son un
 error: se queda la petición la primera que el router descubrió.
 
-Una petición cuyo path casa pero cuyo verbo no declara ninguna acción **no** se despacha a una acción de otro verbo: el router la deja sin atender y responde WebBroker.
+Una petición cuyo path casa pero cuyo verbo no declara ninguna acción **no** se despacha a una acción de otro verbo: el router la deja sin atender, y el módulo web de la variante contesta `404 Not found`, igual que a un path que no declara ninguna acción. Un módulo web propio pasado a `Web.AddHttpServer` contesta esas peticiones como decida.
 
 ---
 

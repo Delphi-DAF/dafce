@@ -69,6 +69,7 @@ begin
 
     Section('Lo que no existe contesta 404, y lo dice');
     Call('GET', '/api/products/99');
+    Call('GET', '/api/nothing-declared');
 
     Section('De la cadena de consulta, con FromQuery');
     Call('GET', '/api/products/search?q=taladro');
