@@ -73,7 +73,12 @@ end;
 
 constructor TJsonResult.Create(const ABool: Boolean);
 begin
-  FContent := TJSONBool.Create(ABool).ToJSON;
+  var Json := TJSONBool.Create(ABool);
+  try
+    FContent := Json.ToJSON;
+  finally
+    Json.Free;
+  end;
 end;
 
 procedure TJsonResult.Execute(Response: TWebResponse);

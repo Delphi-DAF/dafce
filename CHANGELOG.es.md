@@ -162,6 +162,7 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 - **Web**: Un segmento literal de ruta se prueba antes que un parámetro en la misma posición; antes ganaba la acción declarada primero, así que `/items/search` podía caer en `/items/{Id}`
 - **Web**: Un parámetro `[FromServices]` recibe su servicio. Con el servicio registrado la petición fallaba con `EInvalidCast`, y sin él la acción recibía `nil` sin aviso; ese caso hace fallar ahora la petición nombrando el servicio
 - **Web**: Destruir un `TDafHttpServer` libera los módulos web que WebBroker guardaba para reutilizarlos; un servidor posterior en el mismo proceso recibía los que se construyeron para el anterior
+- **Web**: `Ok(Boolean)` ya no pierde el valor JSON que serializa, uno por respuesta
 
 ## [1.6.0] - 2026-07-20
 
