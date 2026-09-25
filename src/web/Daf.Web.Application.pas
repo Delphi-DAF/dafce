@@ -64,7 +64,7 @@ type
   ///   necesita. Es <c>class</c> y no <c>record</c> para que se pueda heredar y agrupar el
   ///   arranque repetido de una suite.
   /// </remarks>
-  Web = class
+  WebApp = class
   public
     /// <param name="WebModuleClass">
     ///   El modulo de WebBroker que atiende las peticiones. Por defecto el de la variante, que
@@ -157,9 +157,9 @@ begin
   Handled := True;
 end;
 
-{ Web }
+{ WebApp }
 
-class procedure Web.AddHttpServer(const Services: IServiceCollection; const WebModuleClass: TComponentClass);
+class procedure WebApp.AddHttpServer(const Services: IServiceCollection; const WebModuleClass: TComponentClass);
 begin
   var ModuleClass := WebModuleClass;
   if ModuleClass = nil then

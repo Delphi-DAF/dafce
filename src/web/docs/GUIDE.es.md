@@ -117,7 +117,7 @@ el orden que se declaren: con `/{id}` y `/me` en el mismo prefijo, `/api/usuario
 de `/me`. Dos rutas que casan igual con un path —`/{id}` y `/{nombre}` en el mismo verbo— no son un
 error: se queda la petición la primera que el router descubrió.
 
-Una petición cuyo path casa pero cuyo verbo no declara ninguna acción **no** se despacha a una acción de otro verbo: el router la deja sin atender, y el módulo web de la variante contesta `404 Not found`, igual que a un path que no declara ninguna acción. Un módulo web propio pasado a `Web.AddHttpServer` contesta esas peticiones como decida.
+Una petición cuyo path casa pero cuyo verbo no declara ninguna acción **no** se despacha a una acción de otro verbo: el router la deja sin atender, y el módulo web de la variante contesta `404 Not found`, igual que a un path que no declara ninguna acción. Un módulo web propio pasado a `WebApp.AddHttpServer` contesta esas peticiones como decida.
 
 ---
 
@@ -183,13 +183,13 @@ el host, el servidor y el enrutado son cuatro líneas:
 ```pascal
 uses
   Daf.Extensions.DependencyInjection,   // IServiceCollection, AddScoped
-  Daf.Web.Application;                  // TWebApplication, Web
+  Daf.Web.Application;                  // TWebApplication, WebApp
 
 begin
   var Builder := TWebApplication.CreateBuilder;
   Builder.Services.AddScoped<IUserService, TUserService>;
 
-  Web.AddHttpServer(Builder.Services);
+  WebApp.AddHttpServer(Builder.Services);
 
   var App := Builder.Build;
   App.MapControllers;
@@ -197,7 +197,7 @@ begin
 end.
 ```
 
-- **`Web.AddHttpServer`** registra el router y el servidor. Es una fachada de `Daf.Web` y no un
+- **`WebApp.AddHttpServer`** registra el router y el servidor. Es una fachada de `Daf.Web` y no un
   miembro del componedor común, así que el paquete genérico no nombra a ninguna variante y el grafo
   de paquetes va en un solo sentido.
 - **`MapControllers`** resuelve el router, y resolverlo **es** el descubrimiento: el router recorre
@@ -244,7 +244,7 @@ end;
 
 ### Manejarlo tú
 
-`Web.AddHttpServer` lo registra por ti, y esa es la vía. Construirlo a mano es para un proceso que no
+`WebApp.AddHttpServer` lo registra por ti, y esa es la vía. Construirlo a mano es para un proceso que no
 es una aplicación DAF —un banco de specs, un programa existente que adopta DAF a trozos—:
 
 ```pascal

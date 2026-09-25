@@ -6,7 +6,7 @@ código y el cuerpo de cada respuesta. No hay que creerse lo que enseña: sale p
 ## Qué enseña
 
 - **Componer la variante Web son cuatro líneas.** `TWebApplication.CreateBuilder`, los servicios,
-  `Web.AddHttpServer` y `Build`. `MapControllers` resuelve el router, y resolverlo **es**
+  `WebApp.AddHttpServer` y `Build`. `MapControllers` resuelve el router, y resolverlo **es**
   descubrirlos: el router recorre el RTTI buscando `[WebRoute]` al construirse.
 - **Un segmento literal gana a un parámetro**, se declaren en el orden que se declaren. `Search` y
   `Health` están declaradas después de `GetById` y `Remove`, y `/api/products/search` llega a

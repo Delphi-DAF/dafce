@@ -117,7 +117,7 @@ declared in: with `/{id}` and `/me` on the same prefix, `/api/users/me` reaches 
 routes a path matches alike — `/{id}` and `/{name}` on the same verb — are not an error: the first one
 the router discovered takes the request.
 
-A request whose path matches but whose verb no action declares is **not** dispatched to an action of another verb: the router leaves it unhandled, and the variant's web module answers `404 Not found`, as it does for a path no action declares. A web module of your own passed to `Web.AddHttpServer` answers those requests as it decides.
+A request whose path matches but whose verb no action declares is **not** dispatched to an action of another verb: the router leaves it unhandled, and the variant's web module answers `404 Not found`, as it does for a path no action declares. A web module of your own passed to `WebApp.AddHttpServer` answers those requests as it decides.
 
 ---
 
@@ -183,13 +183,13 @@ host, the server and the routing is four lines:
 ```pascal
 uses
   Daf.Extensions.DependencyInjection,   // IServiceCollection, AddScoped
-  Daf.Web.Application;                  // TWebApplication, Web
+  Daf.Web.Application;                  // TWebApplication, WebApp
 
 begin
   var Builder := TWebApplication.CreateBuilder;
   Builder.Services.AddScoped<IUserService, TUserService>;
 
-  Web.AddHttpServer(Builder.Services);
+  WebApp.AddHttpServer(Builder.Services);
 
   var App := Builder.Build;
   App.MapControllers;
@@ -197,7 +197,7 @@ begin
 end.
 ```
 
-- **`Web.AddHttpServer`** registers the router and the server. It is a facade of `Daf.Web` rather
+- **`WebApp.AddHttpServer`** registers the router and the server. It is a facade of `Daf.Web` rather
   than a member of the shared builder, so the generic package names no variant and the package graph
   stays one-way.
 - **`MapControllers`** resolves the router, and resolving it **is** the discovery: the router scans
@@ -244,7 +244,7 @@ end;
 
 ### Driving it yourself
 
-`Web.AddHttpServer` registers it for you, and that is the route to take. Building one by hand is for
+`WebApp.AddHttpServer` registers it for you, and that is the route to take. Building one by hand is for
 a process that is not a DAF application — a spec harness, an existing program taking DAF in piece by
 piece:
 

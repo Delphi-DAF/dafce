@@ -61,9 +61,7 @@ procedure THttpWorld.Serve;
 begin
   Port := FindFreePort;
   var Builder := TWebApplication.CreateBuilder(['--Web:Port=' + Port.ToString]);
-  // Qualified by its unit: with Web.HTTPApp in the uses clause, a bare Web is the Web.* unit
-  // scope and not the facade.
-  Daf.Web.Application.Web.AddHttpServer(Builder.Services);
+  WebApp.AddHttpServer(Builder.Services);
   App := Builder.Build;
   App.MapControllers;
   App.Server.Start;
