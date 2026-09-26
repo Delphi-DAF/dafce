@@ -285,7 +285,9 @@ begin
   Parts := nil;
   for Letter in Body do
   begin
-    if not Known.KnowsShort(Letter) then
+    // Inside a group a letter only has to be known, and the help letter is: `-fh` asks for help.
+    // Whether the token is a group at all was decided above by declared letters alone.
+    if not (Known.KnowsShort(Letter) or Known.Knows(ShortPrefix + Letter)) then
     begin
       // Refused WHOLE, naming the letter. Taking the letters that exist and keeping
       // quiet about the one that does not would leave whoever invoked believing they

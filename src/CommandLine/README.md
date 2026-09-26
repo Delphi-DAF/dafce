@@ -286,7 +286,8 @@ says anything the others do not.
 Every one of them is bounded the same way: **each fires only when the token does not already name
 something declared**. `-fdx` becomes three because `f`, `d` and `x` are declared aliases; were there
 an option called `-fdx`, that is what the token would stay. And a group with a letter nobody declared
-is refused **whole**, naming the letter.
+is refused **whole**, naming the letter. The help letter fits inside a group — `-fh` asks for help —
+but does not make one: a token none of whose letters the command declares stays the token it was.
 
 ### ⚠️ What admitting them takes away
 

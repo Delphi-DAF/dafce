@@ -261,6 +261,23 @@ Feature Command line syntax @commandline @syntax
         Expect(W.Parsed.WasProvided(W.DryOpt)).ToBeFalse;
       end)
 
+.Scenario('The built-in help still answers inside a group')
+    .Given('declared one-character aliases',
+      procedure(W: TSyntaxWorld)
+      begin
+        W.BuildGrammar;
+      end)
+    .When('the invocation groups a declared letter with the help letter',
+      procedure(W: TSyntaxWorld)
+      begin
+        W.Parsed := W.Root.Parse(['build', '-fh']);
+      end)
+    .&Then('help is asked for, as if both had been written apart',
+      procedure(W: TSyntaxWorld)
+      begin
+        Expect(W.Parsed.HelpRequested).ToBeTrue;
+      end)
+
 .Rule('the Windows prefix is admitted alongside the POSIX one')
 
   .Scenario('An option named with a slash')
@@ -532,6 +549,45 @@ Feature Command line syntax @commandline @syntax
       procedure(W: TSyntaxWorld)
       begin
         Expect('[' + string.Join(' ', W.Parsed.UnmatchedTokens) + ']').ToEqual('[]');
+      end)
+
+.Scenario('A single-dash token whose only known letter is the help one is handed on whole')
+    .Given('a command declared not to treat what it does not recognise as an error',
+      procedure(W: TSyntaxWorld)
+      begin
+        W.BuildWrapper;
+      end)
+    .When('the invocation passes a single-dash token none of whose letters the command declares',
+      procedure(W: TSyntaxWorld)
+      begin
+        // "-Fecha" carries an h, and the help letter counts as known: it is what lets -fh
+        // reach the help. Known is not declared, and only declared letters make a group.
+        W.Parsed := W.Wrapper.Parse(['-u', 'admin', '-Fecha', '2026-09-26']);
+      end)
+    .&Then('the parse succeeds and the token goes on whole, value and all',
+      procedure(W: TSyntaxWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('');
+        Expect(string.Join(' ', W.Parsed.UnmatchedTokens)).ToEqual('-Fecha 2026-09-26');
+      end)
+
+  .Scenario('A command that collects nothing names that token whole')
+    .Given('a command that has declared nothing about unrecognised tokens',
+      procedure(W: TSyntaxWorld)
+      begin
+        W.BuildWrapper;
+      end)
+    .When('the invocation passes a single-dash token none of whose letters the command declares',
+      procedure(W: TSyntaxWorld)
+      begin
+        W.Parsed := W.Plain.Parse(['--keep', 'x', '-Fecha']);
+      end)
+    .&Then('the parse fails naming the token, not one of its letters',
+      procedure(W: TSyntaxWorld)
+      begin
+        Expect(W.Parsed.Succeeded).ToBeFalse;
+        Expect(W.Parsed.ErrorText).ToContain('"-Fecha"');
+        Expect(Pos('inside the group', W.Parsed.ErrorText)).ToEqual(0);
       end)
 
 .Rule('what a new form takes away, the end of options gives back')

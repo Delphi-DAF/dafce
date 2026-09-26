@@ -1669,16 +1669,18 @@ end;
 
 function TScopeKnowledge.Knows(const Token: string): Boolean;
 begin
-  // The two built-in tokens count as declared. Otherwise `/help` would not reach the
-  // help and `-h` could be swallowed into a bundle, which is the kind of hole a
-  // rewriting opens by only ever looking at what the application declared.
+  // The two built-in tokens count as known. Otherwise `/help` would not reach the help and
+  // `-h` could be swallowed into a bundle, which is the kind of hole a rewriting opens by only
+  // ever looking at what the application declared.
   Result := (FindOption(FCurrent, FAvailable, Token) <> nil) or IsHelpToken(Token) or
     (FAtRoot and IsVersionToken(Token));
 end;
 
 function TScopeKnowledge.KnowsShort(const Letter: Char): Boolean;
 begin
-  Result := Knows(ShortPrefix + Letter);
+  // Declared only, built-ins out: this is what decides whether a token is a group, and a help
+  // letter the application never declared does not make `-Fecha` one.
+  Result := FindOption(FCurrent, FAvailable, ShortPrefix + Letter) <> nil;
 end;
 
 function TScopeKnowledge.ShortTakesValue(const Letter: Char): Boolean;

@@ -288,7 +288,8 @@ que no digan las otras.
 Todas están acotadas igual: **cada una actúa solo cuando el token no nombra ya algo declarado**.
 `-fdx` se parte en tres porque `f`, `d` y `x` son alias declarados; si existiera una opción llamada
 `-fdx`, eso es lo que el token seguiría siendo. Y un grupo con una letra que nadie declaró se rechaza
-**entero**, nombrando la letra.
+**entero**, nombrando la letra. La letra de la ayuda cabe dentro de un grupo —`-fh` pide ayuda—, pero
+no lo forma: un token ninguna de cuyas letras declara el comando sigue siendo el token que era.
 
 ### ⚠️ Qué quita admitirlas
 
