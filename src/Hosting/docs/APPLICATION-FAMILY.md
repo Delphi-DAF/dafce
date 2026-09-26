@@ -70,7 +70,7 @@ write by hand:
 | The policy for what escapes, and the exit code | `OnUnhandled(Policy)` | CLI |
 | The work, and its exit code | `OnExecute` / a registered `ICliHandler` | CLI |
 | `--version`, `--help`, invalid invocation | `RootCommand`, answered by the parse | CLI |
-| The HTTP server, wired to DI and the host | `Web.AddHttpServer` + `MapControllers` | Web |
+| The HTTP server, wired to DI and the host | `WebApp.AddHttpServer` + `MapControllers` | Web |
 | Creating the main form and handing over the loop | `Run(TFormClass)` | VCL, FMX |
 | A global for the code the platform builds itself | `DafApp` | VCL, FMX |
 

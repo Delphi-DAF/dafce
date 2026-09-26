@@ -387,7 +387,7 @@ uses
 
 type
   // La cache de plantilla -> nombres. Las plantillas son literales del codigo, asi que el conjunto
-  // de plantillas distintas de un programa es pequeño y cerrado (D4): el regex corre una vez por
+  // de plantillas distintas de un programa es pequeño y cerrado: el regex corre una vez por
   // plantilla en toda la vida del proceso, no una por linea ni una por hilo. Se cachea el RESULTADO
   // del analisis, no el TRegEx: un threadvar con un tipo gestionado dentro no se finaliza al morir
   // el hilo, y cada hilo que aparece y se va dejaria el suyo.
@@ -692,7 +692,7 @@ end;
 function TNullLogger.IsEnabled(const Level: TLogLevel): Boolean;
 begin
   // El silencio declarado: quien pide este logger no quiere que se componga nada. Contesta que no,
-  // y asi la puerta de TCompositeLogger se cierra sin construir la entrada (D6).
+  // y asi la puerta de TCompositeLogger se cierra sin construir la entrada.
   Result := False;
 end;
 

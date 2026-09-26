@@ -36,7 +36,9 @@ type
     FId: Integer;
   public
     class var Built: Integer;
+    class var Released: Integer;
     constructor Create;
+    destructor Destroy; override;
     function Name: string;
     function Id: Integer;
   end;
@@ -131,6 +133,12 @@ begin
   FId := Built;
 end;
 
+destructor TArchive.Destroy;
+begin
+  Inc(Released);
+  inherited;
+end;
+
 function TArchive.Id: Integer;
 begin
   Result := FId;
@@ -201,6 +209,7 @@ constructor TLazyWorld.Create;
 begin
   inherited;
   TArchive.Built := 0;
+  TArchive.Released := 0;
   Told := '';
   Services := TServiceCollection.Create;
 end;
@@ -404,6 +413,28 @@ Feature A dependency the consumer asks for lazily @di @lazy
         Expect(W.BuiltBefore).ToEqual(0);
         Expect(W.Told).ToEqual('archive,archive');
         Expect(TArchive.Built).ToEqual(1);
+      end)
+
+  .Scenario('What it built is released with it')
+    .Given('a lazy built from a factory of its own, already read', procedure(W: TLazyWorld)
+      begin
+        W.Build;
+        W.Manual := Lazy.From<IArchive>(W.Provider,
+          function(P: IServiceProvider): IArchive
+          begin
+            Result := TArchive.Create;
+          end);
+        W.Manual.Name;
+        W.Manual.Name;
+      end)
+    .When('the lazy is released', procedure(W: TLazyWorld)
+      begin
+        W.Manual := nil;
+        W.Told := Format('built=%d released=%d', [TArchive.Built, TArchive.Released]);
+      end)
+    .&Then('what it built is destroyed with it', procedure(W: TLazyWorld)
+      begin
+        Expect(W.Told).ToEqual('built=1 released=1');
       end)
 
   .Scenario('Several threads reading at once build it once')

@@ -45,6 +45,7 @@ type
     Request: TSpecWebRequest;
     Response: TSpecWebResponse;
     Payload: TSpecPayload;
+    Report: string;
     constructor Create;
     destructor Destroy; override;
     function Ctrl: TResultsController;
@@ -55,7 +56,18 @@ implementation
 
 uses
   System.SysUtils,
+  Daf.Web.ActionResult,
   Daf.MiniSpec;
+
+/// The blocks the memory manager holds right now, of every size.
+function LiveBlocks: Int64;
+begin
+  var State: TMemoryManagerState;
+  GetMemoryManagerState(State);
+  Result := State.AllocatedMediumBlockCount + State.AllocatedLargeBlockCount;
+  for var SmallBlock in State.SmallBlockTypeStates do
+    Inc(Result, SmallBlock.AllocatedBlockCount);
+end;
 
 { TSpecPayload }
 
@@ -184,6 +196,32 @@ Feature Action results @results
         Expect(W.Response.Content).ToContain('Bolt');
         Expect(W.Response.Content).ToContain('3');
         Expect(W.Response.ContentType).ToEqual('application/json');
+      end)
+
+  .Scenario('A boolean result keeps nothing alive once released')
+    .When('a hundred boolean results are built and released',
+      procedure(W: TActionResultsWorld)
+      begin
+        // One first, outside the count: whatever the RTL allocates once, on first use, is not
+        // what this scenario is about.
+        var First: IActionResult := TJsonResult.Create(True);
+        First := nil;
+        var Before := LiveBlocks;
+        for var I := 1 to 100 do
+        begin
+          var R: IActionResult := TJsonResult.Create(Odd(I));
+          R := nil;
+        end;
+        var Surviving := LiveBlocks - Before;
+        if Surviving < 50 then
+          W.Report := 'nothing survives'
+        else
+          W.Report := Format('%d blocks survive a hundred results', [Surviving]);
+      end)
+    .&Then('what each one allocated went with it',
+      procedure(W: TActionResultsWorld)
+      begin
+        Expect(W.Report).ToEqual('nothing survives');
       end);
 
 end.

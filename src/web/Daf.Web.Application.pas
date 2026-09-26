@@ -64,7 +64,7 @@ type
   ///   necesita. Es <c>class</c> y no <c>record</c> para que se pueda heredar y agrupar el
   ///   arranque repetido de una suite.
   /// </remarks>
-  Web = class
+  WebApp = class
   public
     /// <param name="WebModuleClass">
     ///   El modulo de WebBroker que atiende las peticiones. Por defecto el de la variante, que
@@ -125,23 +125,41 @@ var
   MappedRouter: IWebRouter = nil;
 
 type
-  /// El modulo web que la variante registra por defecto: se engancha al enrutado en cuanto
-  /// WebBroker lo crea, que es una vez por peticion.
-  TDafWebModule = class(TWebModule)
+  /// El modulo web que la variante registra por defecto: se engancha al enrutado cuando WebBroker
+  /// lo construye, y contesta 404 a lo que el enrutado declina.
+  /// Desciende de TCustomWebDispatcher y no de TWebModule porque su constructor no busca un .dfm,
+  /// y TWebModule.Create lo exige. CreateNew no sirve de atajo: se salta el constructor del
+  /// despachador y deja sin crear las Actions que DispatchAction recorre en cuanto el enrutado
+  /// declina una peticion.
+  TDafWebModule = class(TCustomWebDispatcher)
+  private
+    procedure NotFound(Sender: TObject; Request: TWebRequest; Response: TWebResponse;
+      var Handled: Boolean);
   public
     constructor Create(AOwner: TComponent); override;
   end;
 
 constructor TDafWebModule.Create(AOwner: TComponent);
 begin
-  inherited CreateNew(AOwner);
+  inherited Create(AOwner);
+  var Fallback := Actions.Add;
+  Fallback.Default := True;
+  Fallback.OnAction := NotFound;
   if Assigned(MappedRouter) then
     MappedRouter.UseDispatcher(Self);
 end;
 
-{ Web }
+procedure TDafWebModule.NotFound(Sender: TObject; Request: TWebRequest; Response: TWebResponse;
+  var Handled: Boolean);
+begin
+  Response.StatusCode := 404;
+  Response.Content := 'Not found';
+  Handled := True;
+end;
 
-class procedure Web.AddHttpServer(const Services: IServiceCollection; const WebModuleClass: TComponentClass);
+{ WebApp }
+
+class procedure WebApp.AddHttpServer(const Services: IServiceCollection; const WebModuleClass: TComponentClass);
 begin
   var ModuleClass := WebModuleClass;
   if ModuleClass = nil then
@@ -170,7 +188,7 @@ constructor TWebApplicationBuilder.Create(const Args: TArray<string>);
 begin
   inherited Create;
 
-  // D9: la variante aporta sus fuentes SEMBRANDO el manager y entregandolo ya sembrado, no
+  // La variante aporta sus fuentes SEMBRANDO el manager y entregandolo ya sembrado, no
   // encadenando una segunda configuracion. Si el componedor comun lo fabricase y acto seguido
   // derivase el entorno de el, lo que se anadiera despues llegaria tarde para el entorno.
   var Manager: IConfigurationManager := TConfigurationManager.Create;

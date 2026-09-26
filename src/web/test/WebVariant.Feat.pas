@@ -174,7 +174,7 @@ Feature La variante Web de la familia @web @application-family
       procedure(W: TWebVariantWorld)
       begin
         W.WebBuilder := TWebApplication.CreateBuilder;
-        Web.AddHttpServer(W.WebBuilder.Services);
+        WebApp.AddHttpServer(W.WebBuilder.Services);
       end)
     .When('se construye la aplicacion y se mapean los controladores',
       procedure(W: TWebVariantWorld)
@@ -201,7 +201,7 @@ Feature La variante Web de la familia @web @application-family
       procedure(W: TWebVariantWorld)
       begin
         W.WebBuilder := TWebApplication.CreateBuilder(['--Web:Port=8099']);
-        Web.AddHttpServer(W.WebBuilder.Services);
+        WebApp.AddHttpServer(W.WebBuilder.Services);
         W.App := W.WebBuilder.Build;
         W.App.MapControllers;
       end)

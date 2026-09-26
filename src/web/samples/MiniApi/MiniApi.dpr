@@ -51,7 +51,7 @@ begin
 
   // Registra el router y el servidor. Es una fachada de Daf.Web y no un miembro del
   // componedor comun, para que el paquete generico no nombre a ninguna variante.
-  Web.AddHttpServer(Builder.Services);
+  WebApp.AddHttpServer(Builder.Services);
 
   var App := Builder.Build;
   // Resolver el router ES descubrir los controladores: los busca por RTTI al construirse.
@@ -69,6 +69,7 @@ begin
 
     Section('Lo que no existe contesta 404, y lo dice');
     Call('GET', '/api/products/99');
+    Call('GET', '/api/nothing-declared');
 
     Section('De la cadena de consulta, con FromQuery');
     Call('GET', '/api/products/search?q=taladro');

@@ -523,7 +523,7 @@ end;
 
 procedure THostBuilder.InitializeHostConfiguration;
 begin
-  // D9: una variante aporta sus fuentes SEMBRANDO el manager y entregandolo, no encadenando una
+  // Una variante aporta sus fuentes SEMBRANDO el manager y entregandolo, no encadenando una
   // segunda configuracion. Si el componedor generico lo fabricase siempre y acto seguido
   // derivase el entorno de el, lo que la variante anadiera despues llegaria tarde.
   if not Assigned(FConfiguration) then

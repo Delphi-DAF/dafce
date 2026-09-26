@@ -51,10 +51,10 @@ type
   public
     constructor Create(const ACategory: string);
     destructor Destroy; override;
-    // La puerta (D1/D3): contesta si una entrada de ese nivel llegaria a algun destino. VIRTUAL con
+    // La puerta: contesta si una entrada de ese nivel llegaria a algun destino. VIRTUAL con
     // defecto True, y no abstracta, por la asimetria del error: el defecto que traga una linea es
-    // False, no True. Un descendiente que no la sobreescriba se comporta EXACTAMENTE como antes de
-    // que esto existiera -- solo se queda sin el ahorro. Y TLogger es punto de extension: quien
+    // False, no True. Un descendiente que no la sobreescriba sigue escribiendo todo lo que le
+    // llega, y solo se queda sin el ahorro. Y TLogger es punto de extension: quien
     // escribe un proveedor devuelve un ILogger que desciende de aqui, asi que un metodo abstracto
     // nuevo romperia a todos sin salida posible.
     function IsEnabled(const Level: TLogLevel): Boolean; virtual;
@@ -446,9 +446,9 @@ end;
 procedure TLogger.Log(const Level: TLogLevel; const EventId: TEventId; const Ex: Exception; const Msg: string;
 const Args: TArray<TValue> = nil);
 begin
-  // La puerta (D2): el embudo al que llegan los treinta y pico LogXxx. Una entrada que ningun
+  // La puerta: el embudo al que llegan los treinta y pico LogXxx. Una entrada que ningun
   // destino aceptaria no analiza su plantilla, no compone la entrada y no llega a ningun proveedor.
-  // El MISMO predicado que la escritura (D3), preguntado al logger concreto por IsEnabled virtual.
+  // El MISMO predicado que la escritura, preguntado al logger concreto por IsEnabled virtual.
   if not IsEnabled(Level) then Exit;
   var
   State := TLogState.Create(Msg, Args);

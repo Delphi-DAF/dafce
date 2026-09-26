@@ -228,9 +228,6 @@ begin
 
   var Rule := TLogRule.Create;
   try
-    // Los cuatro a mano porque TLogRule no declara constructor: arranca con el cero de su clase
-    // base --desactivada y con el nivel maximo en el mas bajo--. Es el defecto que arregla la
-    // tarea 5, y aqui se ve en que consiste tener que escribirlos.
     Rule.Name := '*';
     Rule.Enabled := True;
     Rule.MinLevel := TLogLevel.Trace;

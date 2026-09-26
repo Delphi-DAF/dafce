@@ -48,6 +48,17 @@ type
     function Place(const Id: string): IActionResult;
   end;
 
+  // The parameter route is declared before the literal one: what the rule below asserts is
+  // that the literal wins whatever order the two were declared in.
+  [WebRoutePrefix('/spec/catalog')]
+  TCatalogController = class(TWebController)
+  public
+    [WebRoute(mtGet, '/{Id}')]
+    function ById(const Id: string): IActionResult;
+    [WebRoute(mtGet, '/search')]
+    function Search: IActionResult;
+  end;
+
   TRoutingWorld = class
   public
     Services: IServiceCollection;
@@ -103,6 +114,20 @@ function TOrdersController.Place(const Id: string): IActionResult;
 begin
   InvokedAction := 'TOrdersController.Place';
   Result := Created('/spec/orders/' + Id);
+end;
+
+{ TCatalogController }
+
+function TCatalogController.ById(const Id: string): IActionResult;
+begin
+  InvokedAction := 'TCatalogController.ById';
+  Result := Ok(Id);
+end;
+
+function TCatalogController.Search: IActionResult;
+begin
+  InvokedAction := 'TCatalogController.Search';
+  Result := Ok('search');
 end;
 
 { TRoutingWorld }
@@ -224,6 +249,33 @@ Feature Attribute routing @routing
         Expect(InvokedAction).ToEqual('');
         Expect(W.Handled).ToEqual(False);
         Expect(W.Response.Content).ToEqual('');
+      end)
+
+.Rule('A literal segment wins over a parameter, whatever the order they were declared in')
+
+  .Scenario('A literal route wins over a parameter route declared before it')
+    .When('a GET arrives on a path both routes of a controller accept',
+      procedure(W: TRoutingWorld)
+      begin
+        W.DispatchRequest('GET', '/spec/catalog/search');
+      end)
+    .&Then('the literal route is the one invoked',
+      procedure(W: TRoutingWorld)
+      begin
+        Expect(InvokedAction).ToEqual('TCatalogController.Search');
+      end)
+
+  .Scenario('The parameter still takes what no literal claims')
+    .When('a GET arrives on a path only the parameter route accepts',
+      procedure(W: TRoutingWorld)
+      begin
+        W.DispatchRequest('GET', '/spec/catalog/42');
+      end)
+    .&Then('the parameter route is invoked with the segment',
+      procedure(W: TRoutingWorld)
+      begin
+        Expect(InvokedAction).ToEqual('TCatalogController.ById');
+        Expect(W.Response.Content).ToEqual('42');
       end)
 
 .Rule('A controller is constructible')

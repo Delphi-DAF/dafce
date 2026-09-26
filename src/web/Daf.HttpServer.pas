@@ -91,6 +91,10 @@ destructor TDafHttpServer.Destroy;
 begin
   Stop;
   WebRequestHandler.WebModuleClass := nil;
+  // WebBroker keeps the modules it built for reuse, whatever class is installed later, and each
+  // one is wired to the router of the application it served. Freed with the server, a later one
+  // in the same process does not dispatch to a router that no longer exists.
+  WebRequestHandler.FreeModules;
   FreeAndNil(FWebBrokerBridge);
   inherited;
 end;

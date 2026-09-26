@@ -136,7 +136,7 @@ end;
 
 function TLogRule.Matches(const Category: string; const Level: TLogLevel): Boolean;
 begin
-  // La categoria ya se emparejo al construir el logger (D3, TNNLogLogger.Create); aqui solo
+  // La categoria ya se emparejo al construir el logger (TNNLogLogger.Create); aqui solo
   // quedan las comprobaciones de nivel, que es lo que se paga por linea.
   Result := (Level >= MinLevel) and (Level <= MaxLevel) and
     ((Length(Levels) = 0) or TArray.Contains<TLogLevel>(Levels, Level));
@@ -148,7 +148,7 @@ constructor TNNLogLogger.Create(const Category: string; const Rules: TArray<TLog
 begin
   inherited Create(Category);
   // La categoria se empareja UNA vez, aqui, no una por linea: el logger se queda solo con las
-  // reglas que le aplican (D3). En el camino caliente no queda ni un regex.
+  // reglas que le aplican. En el camino caliente no queda ni un regex.
   FRules := nil;
   for var Rule in Rules do
     if Rule.NameMatch(Category) then
@@ -157,7 +157,7 @@ end;
 
 function TNNLogLogger.IsEnabled(const Level: TLogLevel): Boolean;
 begin
-  // EXACTAMENTE el mismo predicado que la escritura de abajo (D3): las reglas ya estan filtradas por
+  // EXACTAMENTE el mismo predicado que la escritura de abajo: las reglas ya estan filtradas por
   // categoria en Create, asi que aqui solo queda "hay alguna regla activa que acepte este nivel".
   // Si usara un predicado propio podria cerrarse sobre una linea que la escritura si aceptaria.
   for var Rule in FRules do

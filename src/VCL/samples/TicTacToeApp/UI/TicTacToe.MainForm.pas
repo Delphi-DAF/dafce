@@ -336,9 +336,9 @@ begin
   Line(0,1, 1,1); Line(1,1, 2,1);  // vertical center
   Line(1,0, 1,1); Line(1,1, 1,2);  // horizontal center
 
-  // Major diagonals: a1-b2-c3 (D1) and a3-b2-c1 (D2)
-  Line(0,0, 1,1); Line(1,1, 2,2);  // D1
-  Line(0,2, 1,1); Line(1,1, 2,0);  // D2
+  // Major diagonals
+  Line(0,0, 1,1); Line(1,1, 2,2);  // a1-b2-c3
+  Line(0,2, 1,1); Line(1,1, 2,0);  // a3-b2-c1
 
   ACanvas.Pen.Width := 1;
 end;

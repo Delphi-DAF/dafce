@@ -455,7 +455,7 @@ Feature SQLCute back-end symmetry @inmemory @parity
         Expect(W.MutationErrors).ToEqual('');
       end)
 
-.Rule('Mixed AND/OR precedence comes from one shared tree (Decision 13)')
+.Rule('Mixed AND/OR precedence comes from one shared tree')
 
   .Scenario('The emitted SQL carries the parentheses the in-memory predicate was built from')
     .When('the mixed AND/OR query is compiled by the SQL back-end',

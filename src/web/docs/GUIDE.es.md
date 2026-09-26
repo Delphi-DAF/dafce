@@ -112,7 +112,12 @@ Se aplica a un método de acción. El verbo es un `TMethodType`, no una cadena �
 
 Los segmentos escritos `{nombre}` son parámetros de ruta — se casan por nombre con los parámetros del método.
 
-Una petición cuyo path casa pero cuyo verbo no declara ninguna acción **no** se despacha a una acción de otro verbo: el router la deja sin atender y responde WebBroker.
+Un segmento literal se prueba antes que un parámetro en la misma posición, se declaren las acciones en
+el orden que se declaren: con `/{id}` y `/me` en el mismo prefijo, `/api/usuarios/me` llega a la acción
+de `/me`. Dos rutas que casan igual con un path —`/{id}` y `/{nombre}` en el mismo verbo— no son un
+error: se queda la petición la primera que el router descubrió.
+
+Una petición cuyo path casa pero cuyo verbo no declara ninguna acción **no** se despacha a una acción de otro verbo: el router la deja sin atender, y el módulo web de la variante contesta `404 Not found`, igual que a un path que no declara ninguna acción. Un módulo web propio pasado a `WebApp.AddHttpServer` contesta esas peticiones como decida.
 
 ---
 
@@ -123,9 +128,12 @@ Una petición cuyo path casa pero cuyo verbo no declara ninguna acción **no** s
 | *(ninguno)* | Segmento de path | `[WebRoute(mtGet,'/{id}')] function Get(Id: Integer)` |
 | `[FromQuery]` | Query string | `function Search([FromQuery] Q: string)` |
 | `[FromBody]` | Cuerpo de la petición (JSON) | `function Create([FromBody] Cmd: TCreateUserCmd)` |
-| `[FromServices]` | Contenedor DI | `function Ping([FromServices] Logger: ILogger)` |
+| `[FromServices]` | Contenedor DI | `function Ping([FromServices] Clock: IClock)` |
 
 Un parámetro de tipo `TWebRequest` o `TWebResponse` recibe la propia petición o respuesta, sin necesidad de atributo.
+
+Un parámetro `[FromServices]` es una interfaz y se resuelve del ámbito de la petición. Un servicio que
+nadie registró hace fallar la petición nombrando el servicio: la acción no recibe nunca un `nil`.
 
 ---
 
@@ -175,13 +183,13 @@ el host, el servidor y el enrutado son cuatro líneas:
 ```pascal
 uses
   Daf.Extensions.DependencyInjection,   // IServiceCollection, AddScoped
-  Daf.Web.Application;                  // TWebApplication, Web
+  Daf.Web.Application;                  // TWebApplication, WebApp
 
 begin
   var Builder := TWebApplication.CreateBuilder;
   Builder.Services.AddScoped<IUserService, TUserService>;
 
-  Web.AddHttpServer(Builder.Services);
+  WebApp.AddHttpServer(Builder.Services);
 
   var App := Builder.Build;
   App.MapControllers;
@@ -189,7 +197,7 @@ begin
 end.
 ```
 
-- **`Web.AddHttpServer`** registra el router y el servidor. Es una fachada de `Daf.Web` y no un
+- **`WebApp.AddHttpServer`** registra el router y el servidor. Es una fachada de `Daf.Web` y no un
   miembro del componedor común, así que el paquete genérico no nombra a ninguna variante y el grafo
   de paquetes va en un solo sentido.
 - **`MapControllers`** resuelve el router, y resolverlo **es** el descubrimiento: el router recorre
@@ -236,7 +244,7 @@ end;
 
 ### Manejarlo tú
 
-`Web.AddHttpServer` lo registra por ti, y esa es la vía. Construirlo a mano es para un proceso que no
+`WebApp.AddHttpServer` lo registra por ti, y esa es la vía. Construirlo a mano es para un proceso que no
 es una aplicación DAF —un banco de specs, un programa existente que adopta DAF a trozos—:
 
 ```pascal

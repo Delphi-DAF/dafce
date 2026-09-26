@@ -135,6 +135,7 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
   - Un ciclo que el contenedor no puede romper **deja de matar el proceso**: la resolución falla nombrando el camino, en vez de agotar la pila sin excepción ni mensaje
   - Resolver después de `ShutDown` lanza `EContainerShutDownError` nombrando el servicio, en vez de `EAccessViolation`. Cerrar dos veces deja de romper
   - `Lazy.From<T>` construye su servicio una sola vez aunque varios hilos lleguen a la vez —ocho hilos construían ocho—, y una factoría que no devuelve nada falla nombrando el contrato en vez de contestar el cero del tipo de retorno
+  - `Lazy.From<T>` libera lo que construyó junto con el lazy: cada llamada a través de él retenía una referencia más, y el servicio no se destruía nunca
 - **MiniSpec**: Correcciones
   - La marca de inyección funciona **sobre un campo**: el barrido solo recorría propiedades, así que el campo se quedaba en `nil` sin aviso
   - `UseSuiteContext<T>` construye el contexto de suite: `SpecContext.SuiteContext` valía `nil` en todos los steps
@@ -158,6 +159,10 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 - **Commons**: un tag de versión que no es SemVer se informaba como `0.0.0`; ahora el texto declarado sobrevive
 - **Commons**: un tag con sus propios metadatos de build producía dos secciones `+`, que SemVer no admite; lo que declara el tag y lo que vio el compilador comparten ya la única sección
 - **SystemProcess**: un `Kill` explícito se informaba como `Timeout`, y mataba al hijo dos veces —una al pedirlo y otra cuando el bucle de espera se enteraba—. Ahora informa `Killed` y mata una vez
+- **Web**: Un segmento literal de ruta se prueba antes que un parámetro en la misma posición; antes ganaba la acción declarada primero, así que `/items/search` podía caer en `/items/{Id}`
+- **Web**: Un parámetro `[FromServices]` recibe su servicio. Con el servicio registrado la petición fallaba con `EInvalidCast`, y sin él la acción recibía `nil` sin aviso; ese caso hace fallar ahora la petición nombrando el servicio
+- **Web**: Destruir un `TDafHttpServer` libera los módulos web que WebBroker guardaba para reutilizarlos; un servidor posterior en el mismo proceso recibía los que se construyeron para el anterior
+- **Web**: `Ok(Boolean)` ya no pierde el valor JSON que serializa, uno por respuesta
 
 ## [1.6.0] - 2026-07-20
 

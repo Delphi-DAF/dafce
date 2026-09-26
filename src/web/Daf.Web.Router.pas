@@ -105,6 +105,7 @@ type
     FRegexPattern: string;
     FRouteParameters: TArray<TRouteParameter>;
     FBoundParams: TArray<TBoundParameter>;
+    FOrder: Integer;
     function GetPathPattern: string;
     function BuildRegexFromRoute(const RouteTemplate: string): string;
     function ExtractRouteParams(const RouteTemplate: string): TArray<TRouteParameter>;
@@ -373,8 +374,10 @@ end;
 function TWebRouteMatcher.GetServiceValue(Param: TRttiParameter; const Services: IServiceProvider): TValue;
 begin
   var Intf: IInterface;
-  Services.GetService(Param.ParamType.Handle, Intf);
-  Result := TValue.From(Intf);
+  Services.GetRequiredService(Param.ParamType.Handle, Intf);
+  // Typed as the parameter: Invoke does not cast a TValue of IInterface to the interface the
+  // action declares.
+  TValue.Make(@Intf, Param.ParamType.Handle, Result);
 end;
 
 function TWebRouteMatcher.GetRouteValue(Param: TRttiParameter): TValue;
@@ -510,6 +513,7 @@ begin
       var
       Matcher := TWebRouteMatcher.Create(ControllerType, ControllerMethod, PrefixAttr, Attr);
       Matcher.FWebRouter := Self;
+      Matcher.FOrder := FMatchers.Count;
       FMatchers.Add(Matcher);
     end;
   end;
@@ -518,6 +522,24 @@ end;
 function TWebRouter.GetRootDirectory: string;
 begin
   Result := FRootDirectory;
+end;
+
+// Negative when the route A has to be tried before B: at the first position where one has a
+// literal segment and the other a parameter, the literal goes first.
+function ComparePrecedence(const A, B: string): Integer;
+begin
+  var SegmentsA := A.Split(['/'], TStringSplitOptions.ExcludeEmpty);
+  var SegmentsB := B.Split(['/'], TStringSplitOptions.ExcludeEmpty);
+  for var I := 0 to High(SegmentsA) do
+  begin
+    if I > High(SegmentsB) then
+      Break;
+    var ParamA := SegmentsA[I].Contains('{');
+    var ParamB := SegmentsB[I].Contains('{');
+    if ParamA <> ParamB then
+      Exit(Ord(ParamA) - Ord(ParamB));
+  end;
+  Result := 0;
 end;
 
 procedure TWebRouter.DiscoverControllers;
@@ -531,6 +553,16 @@ begin
     if Assigned(Attr) then
       DiscoverMethods(RttiType.AsInstance, Attr);
   end;
+  // WebDispatch takes the first matcher that accepts, so this order is the precedence: a literal
+  // wins over a parameter whatever order the actions were declared in, and routes that tie keep
+  // the order they were discovered in.
+  FMatchers.Sort(TComparer<TWebRouteMatcher>.Construct(
+    function(const A, B: TWebRouteMatcher): Integer
+    begin
+      Result := ComparePrecedence(A.PathPattern, B.PathPattern);
+      if Result = 0 then
+        Result := A.FOrder - B.FOrder;
+    end));
 end;
 
 procedure TWebRouter.SetRootDirectory(const Value: string);

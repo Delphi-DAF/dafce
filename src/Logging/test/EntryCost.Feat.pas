@@ -336,7 +336,7 @@ Feature The line that is not written is not paid for @logging @entry-cost
       begin
         W.Ask(TLogLevel.Error);
       end)
-    .&Then('the answer is no, so nothing gets composed (D6)',
+    .&Then('the answer is no, so nothing gets composed',
       procedure(W: TEntryCostWorld)
       begin
         Expect(W.Answer).ToBeFalse;

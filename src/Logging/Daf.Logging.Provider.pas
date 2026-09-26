@@ -55,7 +55,7 @@ end;
 
 function TCompositeLogger.IsEnabled(const Level: TLogLevel): Boolean;
 begin
-  // Si si ALGUNO de sus destinos escribiria (D3). Un destino que no sabe contestar contesta que si
+  // Si si ALGUNO de sus destinos escribiria. Un destino que no sabe contestar contesta que si
   // por su cuenta --su IsEnabled devuelve True--, asi que "no se" cuenta como "si" sin un caso
   // especial aqui: perder una linea por no saber es peor que componer una de mas.
   for var Logger in FLoggers do
