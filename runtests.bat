@@ -93,7 +93,9 @@ if not exist "!_exe!" (
   set "FAILURES=!FAILURES! [%_platform%/%_name%:missing]"
   exit /B 0
 )
-call "!_exe!"
+rem stderr joins stdout here, so what a runner writes there -- a leak report among it -- lands
+rem in its own block and not after the last one.
+call "!_exe!" 2>&1
 if !ERRORLEVEL! neq 0 (
   set /a FAIL+=1
   set "FAILURES=!FAILURES! [%_platform%/%_name%]"
