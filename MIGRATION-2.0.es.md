@@ -59,6 +59,9 @@ paquete propio, y hay que añadirlo a los `requires` del paquete que lo use:
 | `Daf.CmdLn.Parser` | a ningún sitio: retirado — ver la sección siguiente |
 | `Daf.SystemProcess` | paquete `Daf.SystemProcess` |
 
+`KillAfterTimeout` desaparece de `ISystemProcess` y de su builder: el plazo mata siempre el proceso.
+Quita la llamada.
+
 ### 3. `Daf.CmdLn.Parser` ya no está
 
 La unit que 1.6.0 traía dentro de `Daf.Commons` **ya no se distribuye**. Su sustituto es
@@ -162,6 +165,7 @@ comparte motor con ninguno de los dos módulos.
 | `TFilterSpec<T>`, en `Daf.Expression` | misma clase, en `Daf.FilterSpec` |
 | unidad `Daf.Expression` | disuelta en `Daf.FilterSpec` y `Daf.Types` |
 | `TBooleanExpresion` | retirado |
+| `&If.Exp<T>` | retirado — lo sustituye el operador ternario de Delphi 13, `if … then … else` como expresión, que evalúa solo la rama que toma |
 | `TGenericRTTI.GetGenericArguments(TRttiType)` | **`_T.GenericArgs(PTypeInfo)`**, en `Daf.Rtti` — devuelve información de tipo en vez de tipos reflejados, y cuenta como uno un argumento que a su vez es genérico |
 | `TGenericRTTI.MakeGenericType` | retirado sin sustituto — ver abajo |
 | `TSmartArray<T>.Select(TDeferred<TMapper<T, TTarget>>)` | `Select(TFunc<T, TTarget>)` |
@@ -280,6 +284,12 @@ Es el frente más grande de 2.0 para cualquier cosa que tuviera un `.dpr`.
   `VersionRequested` es `ICommandLineParseResult.VersionRequested`, contestado por la gramática;
   y `App` pasa a ser `DafApp`, que existe **solo en VCL y FMX** — en CLI y en Web no hay global
   de aplicación a propósito.
+
+  La parte de método plantilla de `TDafApplication` —`AppClass`, el `Create(Host)` virtual,
+  `Execute` y `VersionInfo`— no tiene equivalente en las variantes. En CLI el trabajo es
+  `OnExecute` o un `ICliHandler` registrado; lo que corría a su alrededor es una tarea de arranque
+  (`AddStartupTask<T>`) o un servicio alojado; y la versión es un atributo `[Version]` sobre
+  cualquier clase.
 
 - **`Daf.Application.Version` se muda a `Daf.Commons`.** Añade `Daf.Commons` a `requires` si usabas
   `TVersionInfo` y no lo tenías ya. Y cambian dos cosas:
@@ -494,6 +504,15 @@ begin
 end;
 ```
 
+### 18. Los servicios alojados paran en orden inverso
+
+Los `IHostedService` paran en el orden inverso al de su registro —el mismo en que el contenedor
+libera—, así que un servicio arrancado después para antes que el que puede estar usando. En 1.6
+paraban en el orden de registro.
+
+- **Qué rompe**: un servicio cuyo `Stop` contara con que otro registrado después ya hubiera parado.
+  Registra el servicio que se usa antes que el que lo usa.
+
 ## Cómo hacerlo
 
 1. Compila. Lo que falte sale como error del compilador, no como comportamiento raro en
@@ -506,6 +525,6 @@ end;
 5. Vuelve a compilar y pasa tus tests. Después arranca la aplicación una vez con
    `DAF_APP_ENV=Development`: el host valida el contenedor, y un registro que se haya perdido detiene
    la construcción nombrándolo.
-6. Las secciones 10 a 13, la 15 y la 17 son cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
+6. Las secciones 10 a 13, la 15, la 17 y la 18 son cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
    contra tu propia composición — la vida de los ámbitos, los registros repetidos, y lo que lea
    un destructor.

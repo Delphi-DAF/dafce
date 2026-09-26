@@ -59,6 +59,9 @@ and it must be added to the `requires` of whichever package uses it:
 | `Daf.CmdLn.Parser` | nowhere: withdrawn — see the next section |
 | `Daf.SystemProcess` | package `Daf.SystemProcess` |
 
+`KillAfterTimeout` is gone from `ISystemProcess` and from its builder: the deadline always kills the
+process. Drop the call.
+
 ### 3. `Daf.CmdLn.Parser` is gone
 
 The unit 1.6.0 shipped inside `Daf.Commons` **is no longer distributed**. Its replacement is
@@ -161,6 +164,7 @@ no engine with either module.
 | `TFilterSpec<T>`, in `Daf.Expression` | same class, in `Daf.FilterSpec` |
 | unit `Daf.Expression` | dissolved into `Daf.FilterSpec` and `Daf.Types` |
 | `TBooleanExpresion` | removed |
+| `&If.Exp<T>` | removed — Delphi 13's ternary operator, `if … then … else` as an expression, replaces it and evaluates only the branch it takes |
 | `TGenericRTTI.GetGenericArguments(TRttiType)` | **`_T.GenericArgs(PTypeInfo)`**, in `Daf.Rtti` — returns type information rather than reflected types, and counts an argument that is itself generic as one |
 | `TGenericRTTI.MakeGenericType` | removed with no replacement — see below |
 | `TSmartArray<T>.Select(TDeferred<TMapper<T, TTarget>>)` | `Select(TFunc<T, TTarget>)` |
@@ -278,6 +282,11 @@ This is the largest front of 2.0 for anything that had a `.dpr`.
   `VersionRequested` is `ICommandLineParseResult.VersionRequested`, answered by the grammar; and
   `App` becomes `DafApp`, which exists **only in VCL and FMX** — in CLI and Web there is no
   application global on purpose.
+
+  The template-method side of `TDafApplication` —`AppClass`, the virtual `Create(Host)`, `Execute`
+  and `VersionInfo`— has no counterpart in the variants. In CLI the work is `OnExecute` or a
+  registered `ICliHandler`; what ran around it is a startup task (`AddStartupTask<T>`) or a hosted
+  service; and the version is a `[Version]` attribute on any class.
 
 - **`Daf.Application.Version` moved to `Daf.Commons`.** Add `Daf.Commons` to `requires` if you used
   `TVersionInfo` and did not already. Two things changed in it:
@@ -492,6 +501,15 @@ begin
 end;
 ```
 
+### 18. Hosted services stop in reverse order
+
+The `IHostedService`s stop in the reverse order of their registration — the order the container
+releases in —, so a service started later stops before the one it may be using. In 1.6 they stopped
+in registration order.
+
+- **What breaks**: a service whose `Stop` counted on one registered after it having stopped already.
+  Register the service that is used before the one that uses it.
+
 ## How to do it
 
 1. Compile. Whatever is missing comes out as a compiler error, not as odd behaviour at run time.
@@ -501,6 +519,6 @@ end;
 4. Rename the types and units from the tables above.
 5. Compile again and run your tests. Then start the application once with `DAF_APP_ENV=Development`:
    the host validates the container, and a registration that went missing stops the build naming it.
-6. Sections 10 to 13, 15 and 17 are **run-time** changes: the compiler says nothing about them. Read them
+6. Sections 10 to 13, 15, 17 and 18 are **run-time** changes: the compiler says nothing about them. Read them
    against your own composition — scope lifetimes, duplicate registrations, and anything a
    destructor reads.

@@ -101,7 +101,6 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 - ⚠️ **NNLog**: Un destino implementa `DoWrite` en vez de sobrescribir `Write`. `TTarget.Write` toma una sección crítica de esa instancia de destino y lo llama, así que las escrituras de varios hilos por un mismo destino dejan de solaparse — todos los loggers de un proceso comparten las mismas instancias de destino. **Rompe** a quien escribiera un destino propio
 - ⚠️ **NNLog**: Un destino que no puede escribir deja de lanzar hacia quien registró; informa por el canal de arranque, nombrando el destino. **Cambio observable**: un fallo del log deja de tumbar al código que solo quería registrar
 - **NNLog**: Un token de layout sin renderer detrás se queda sin sustituir en vez de convertirse en cadena vacía, así que un `${mesage}` mal escrito sale en la línea
-- ⚠️ **CommandLine**: `IRootCommand.VersionText` e `ICommandLineParseResult.VersionText` pasan a ser `VersionInfo` — la gramática entrega la versión y formatearla es decisión de quien la muestra. **Rompe** a quien leyera `VersionText`
 - ⚠️ **Commons**: el flag `WithCompiledMeta` de `VersionTag` pasa a ser un parámetro de plantilla, y `TVersionInfo.Debug` es de solo lectura y lo declara el binario —un cuarto argumento de `[Version(...)]` o de `TVersionInfo.Create`, `False` si se omite—; antes informaba de cómo se compiló el propio DAF. **Rompe** a quien pasara el flag o asignara `Debug`
 
 ### Deprecated
