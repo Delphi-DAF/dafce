@@ -270,7 +270,8 @@ Es el frente más grande de 2.0 para cualquier cosa que tuviera un `.dpr`.
 
 - **Tu punto de entrada es ahora tu variante.** `TCliApplication` (`Daf.Cli`), `TWebApplication`
   (`Daf.Web`), `TVclApplication` (`Daf.VCL`) y `TFmxApplication` (`Daf.FMX`). Comparten `Services`,
-  `Configuration`, `Environment`, `Logging` y `Properties` por `IHostApplicationBuilder`.
+  `Configuration`, `Environment`, `Logging`, `Properties` y `ServiceProviderOptions` por
+  `IHostApplicationBuilder`.
 
 - **`TDafApplication` y `TDafApplicationBuilder` se retiran**, y con ellos el paquete
   `Daf.Application`. Su relevo es la variante de la entrada de arriba, y cada miembro tiene
@@ -502,8 +503,9 @@ end;
    `Daf.CommandLine` si parseabas una línea de comandos— y quita `Daf.CmdLn` y
    `Daf.SQLCute.Compilers`.
 4. Renombra los tipos y unidades de las tablas de arriba.
-5. Vuelve a compilar y pasa tus tests. `ValidateOnBuild` ayuda a confirmar que la composición
-   registra lo mismo que antes.
+5. Vuelve a compilar y pasa tus tests. Después arranca la aplicación una vez con
+   `DAF_APP_ENV=Development`: el host valida el contenedor, y un registro que se haya perdido detiene
+   la construcción nombrándolo.
 6. Las secciones 10 a 13, la 15 y la 17 son cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
    contra tu propia composición — la vida de los ámbitos, los registros repetidos, y lo que lea
    un destructor.

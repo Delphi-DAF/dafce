@@ -17,7 +17,7 @@ Todos los tipos se encuentran en `Daf.Extensions.Hosting`.
 
 | Interfaz | Rol |
 |----------|-----|
-| `IHostApplicationBuilder` | El contrato común de la familia de aplicaciones: `Services`, `Configuration`, `Environment`, `Logging`, `Properties` |
+| `IHostApplicationBuilder` | El contrato común de la familia de aplicaciones: `Services`, `Configuration`, `Environment`, `Logging`, `Properties`, `ServiceProviderOptions` |
 | `IStartupTask` | Se ejecuta una vez al arrancar, con el proveedor ya construido: `Run`, y nada que parar |
 | `IHost` | El host en ejecución: `Services`, `Start`, `Stop`, `WaitForShutdown` |
 | `IHostedService` | Contrato de servicio en segundo plano: `Start` / `Stop` |

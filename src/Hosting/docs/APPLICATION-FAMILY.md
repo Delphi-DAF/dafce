@@ -30,7 +30,8 @@ are writing — not which of two layers to use. A VCL one, whole and with its ow
 | Desktop, VCL | `TVclApplication.CreateBuilder` | `Daf.VCL` | `IVclApplication` |
 | Desktop, FireMonkey | `TFmxApplication.CreateBuilder` | `Daf.FMX` | `IFmxApplication` |
 
-All four share `Services`, `Configuration`, `Environment`, `Logging` and `Properties`, written the
+All four share `Services`, `Configuration`, `Environment`, `Logging`, `Properties` and
+`ServiceProviderOptions`, written the
 same way. **That shared contract — `IHostApplicationBuilder` — is what makes them a family rather
 than four similar things**, and it is what lets a package contribute startup registrations without
 knowing which variant will consume it.
@@ -76,7 +77,9 @@ write by hand:
 
 Two members of the .NET family are **not** ported, and they are declared rather than discovered:
 `Metrics`, because DAF has no equivalent piece to point at, and `ConfigureContainer<T>`, because a
-Delphi interface admits no generic methods — it is not rejected, it is unrepresentable.
+Delphi interface admits no generic methods — it is not rejected, it is unrepresentable. The options
+of the default provider, which .NET sets through that member, are the builder's
+`ServiceProviderOptions`.
 
 ---
 

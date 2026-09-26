@@ -78,6 +78,8 @@ type
     function GetEnvironment: IHostEnvironment;
     function GetLogging: ILoggingBuilder;
     function GetProperties: TDictionary<string, TValue>;
+    function GetServiceProviderOptions: TServiceProviderOptions;
+    procedure SetServiceProviderOptions(const Value: TServiceProviderOptions);
   public
     constructor Create(const Args: TArray<string>);
     function Build: IVclApplication;
@@ -86,6 +88,8 @@ type
     property Environment: IHostEnvironment read GetEnvironment;
     property Logging: ILoggingBuilder read GetLogging;
     property Properties: TDictionary<string, TValue> read GetProperties;
+    property ServiceProviderOptions: TServiceProviderOptions read GetServiceProviderOptions
+      write SetServiceProviderOptions;
   end;
 
 /// <summary>
@@ -146,6 +150,16 @@ end;
 function TVclApplicationBuilder.GetProperties: TDictionary<string, TValue>;
 begin
   Result := FImpl.Properties;
+end;
+
+function TVclApplicationBuilder.GetServiceProviderOptions: TServiceProviderOptions;
+begin
+  Result := FImpl.ServiceProviderOptions;
+end;
+
+procedure TVclApplicationBuilder.SetServiceProviderOptions(const Value: TServiceProviderOptions);
+begin
+  FImpl.ServiceProviderOptions := Value;
 end;
 
 function TVclApplicationBuilder.Build: IVclApplication;

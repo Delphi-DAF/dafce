@@ -17,7 +17,7 @@ All types live in `Daf.Extensions.Hosting`.
 
 | Interface | Role |
 |-----------|------|
-| `IHostApplicationBuilder` | The shared contract of the application family: `Services`, `Configuration`, `Environment`, `Logging`, `Properties` |
+| `IHostApplicationBuilder` | The shared contract of the application family: `Services`, `Configuration`, `Environment`, `Logging`, `Properties`, `ServiceProviderOptions` |
 | `IStartupTask` | Runs once at startup with the provider already built: `Run`, and nothing to stop |
 | `IHost` | The running host: `Services`, `Start`, `Stop`, `WaitForShutdown` |
 | `IHostedService` | Background service contract: `Start` / `Stop` |

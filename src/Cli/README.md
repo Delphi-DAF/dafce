@@ -197,7 +197,7 @@ with there.
 |---|---|---|
 | Extension methods (`AddX`, `UseX`) | Methods of the record, or a `class` facade | Delphi has no extension methods, and only **one** `record helper` is visible per type — a fluent API spread over units breaks silently when a `uses` is reordered |
 | `IHostApplicationBuilder.Metrics` | **Not ported** | There is no equivalent piece in DAF to point at |
-| `ConfigureContainer<T>` | **Not ported** | A generic method is not expressible in a Delphi interface — not rejected, unrepresentable |
+| `ConfigureContainer<T>` | **Not ported** | A generic method is not expressible in a Delphi interface — not rejected, unrepresentable. The default provider's options, which .NET sets through it, are `ServiceProviderOptions` |
 | Handler dispatch inside `System.CommandLine` | `OnExecute` / `ICliHandler` | `Daf.CommandLine` parses and does not dispatch, on purpose: the outcome of an invocation is data |
 | No app-global | Same | In console there is no `Application` global the user expects: the work receives the `IServiceProvider` it needs, and a registered `ICliHandler` takes its dependencies by constructor |
 

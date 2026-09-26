@@ -398,7 +398,9 @@ var Provider := Services.BuildServiceProvider(TServiceProviderOptions.Create(Tru
   nombrando los dos servicios. Lee las dos vías por igual: la dependencia capturada por una
   propiedad marcada se caza como la que entra por el constructor.
 
-Ambos son calcados de `ServiceProviderOptions`, y ambos son **opt-in**. En Delphi esto vale
+Ambos son calcados de `ServiceProviderOptions`, y ambos son **opt-in**: `BuildServiceProvider`
+sin opciones no valida nada, y el host de la familia de aplicaciones activa los dos en el entorno
+`Development`. En Delphi esto vale
 más que en .NET: sin stack traces cómodos, la diferencia está entre un mensaje al arrancar y
 un Access Violation a mitad de una operación larga.
 
@@ -414,7 +416,7 @@ valida sin quejarse no dice que el grafo entero esté bien: dice que lo inspecci
 | `IServiceCollection` como `IList<ServiceDescriptor>` | `Descriptors(ServiceType)` | Copia de sólo lectura, a propósito |
 | `TryAdd*` / `Replace` / `RemoveAll` | los mismos nombres | Misma semántica |
 | `Decorate` de Scrutor | `Decorate<S>` | Tampoco está en el framework de .NET |
-| `ServiceProviderOptions` | `TServiceProviderOptions` | Opt-in; solo alcanza a los registros por clase |
+| `ServiceProviderOptions` | `TServiceProviderOptions` | Apagado por defecto, encendido en el host de la familia en Development; solo alcanza a los registros por clase |
 | métodos de extensión `services.AddXxx()` | `AddXxx(Services)` | Delphi no los tiene: **no encadena** |
 | módulos de Autofac / Windsor / StructureMap | `AddModule<T>` | Divergencia de capa: en la colección, no en el contenedor |
 | — | `IStartupTask` | Divergencia deliberada: .NET no tiene contrato para esto |

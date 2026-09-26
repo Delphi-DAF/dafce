@@ -11,7 +11,8 @@ uses
   BuilderStyle.Feat in 'BuilderStyle.Feat.pas',
   ShutdownRequest.Feat in 'ShutdownRequest.Feat.pas',
   Lifecycle.Feat in 'Lifecycle.Feat.pas',
-  ShadowedHelper.Feat in 'ShadowedHelper.Feat.pas';
+  ShadowedHelper.Feat in 'ShadowedHelper.Feat.pas',
+  ContainerValidation.Feat in 'ContainerValidation.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

@@ -30,7 +30,8 @@ escribiendo — no de cuál de dos capas usar. Una VCL entera, con sus propias s
 | Escritorio, VCL | `TVclApplication.CreateBuilder` | `Daf.VCL` | `IVclApplication` |
 | Escritorio, FireMonkey | `TFmxApplication.CreateBuilder` | `Daf.FMX` | `IFmxApplication` |
 
-Las cuatro comparten `Services`, `Configuration`, `Environment`, `Logging` y `Properties`, escritos
+Las cuatro comparten `Services`, `Configuration`, `Environment`, `Logging`, `Properties` y
+`ServiceProviderOptions`, escritos
 igual. **Ese contrato común —`IHostApplicationBuilder`— es lo que las hace una familia y no cuatro
 cosas parecidas**, y es lo que permite que un paquete aporte registros de arranque sin saber qué
 variante lo va a consumir.
@@ -77,7 +78,8 @@ Encima de eso, las variantes añaden **el borde alrededor del `Run`** — que es
 Dos miembros de la familia de .NET **no** se portan, y quedan declarados en vez de descubiertos:
 `Metrics`, porque no hay pieza equivalente en DAF a la que apuntar, y `ConfigureContainer<T>`,
 porque una interfaz de Delphi no admite métodos genéricos — no es que se descarte, es que no es
-expresable.
+expresable. Las opciones del proveedor por defecto, que .NET fija a través de ese miembro, son la
+`ServiceProviderOptions` del builder.
 
 ---
 

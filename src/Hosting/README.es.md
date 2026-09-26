@@ -100,6 +100,25 @@ Variables de entorno leídas al arrancar:
 
 ---
 
+## Validación del contenedor
+
+En el entorno `Development` el host construye el contenedor con `ValidateOnBuild` y
+`ValidateScopes`: un registro cuyas dependencias no se pueden satisfacer, o un Singleton que captura
+un Scoped, detiene `Build` con todos los hallazgos juntos. En cualquier otro entorno el contenedor se
+construye sin validar.
+
+`ServiceProviderOptions` en el builder dice las opciones que usará `Build`, y asignarla las fija sea
+cual sea el entorno:
+
+```pascal
+Builder.ServiceProviderOptions := TServiceProviderOptions.None;               // nunca valida
+Builder.ServiceProviderOptions := TServiceProviderOptions.Create(True, True); // valida siempre
+```
+
+La validación alcanza a los registros por clase; un registro por factory queda fuera.
+
+---
+
 ## Ciclo de vida de la aplicación
 
 ```pascal

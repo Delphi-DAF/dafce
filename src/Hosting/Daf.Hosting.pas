@@ -127,11 +127,15 @@ type
     // Componer logging sin proveedores es un error, asi que solo se compone si alguien toco la
     // propiedad. Llamar a AddLogging por sistema romperia toda aplicacion que no lo configure.
     FLoggingTouched: Boolean;
+    FServiceProviderOptions: TServiceProviderOptions;
+    FServiceProviderOptionsFixed: Boolean;
     function GetProperties: TDictionary<string, TValue>;
     function GetServices: IServiceCollection;
     function GetConfiguration: IConfigurationManager;
     function GetEnvironment: IHostEnvironment;
     function GetLogging: ILoggingBuilder;
+    function GetServiceProviderOptions: TServiceProviderOptions;
+    procedure SetServiceProviderOptions(const Value: TServiceProviderOptions);
     procedure InitializeHostConfiguration;
     procedure InitializeHostingEnvironment;
     procedure InitializeHostBuilderContext;
@@ -156,6 +160,8 @@ type
     property Environment: IHostEnvironment read GetEnvironment;
     property Logging: ILoggingBuilder read GetLogging;
     property Properties: TDictionary<string, TValue> read GetProperties;
+    property ServiceProviderOptions: TServiceProviderOptions read GetServiceProviderOptions
+      write SetServiceProviderOptions;
   end;
 
   THostApplicationLifetime = class(TInterfacedObject, IHostApplicationLifetime)
@@ -521,6 +527,19 @@ begin
   Result := FLogging;
 end;
 
+function THostBuilder.GetServiceProviderOptions: TServiceProviderOptions;
+begin
+  if FServiceProviderOptionsFixed then
+    Exit(FServiceProviderOptions);
+  Result := TServiceProviderOptions.Create(FEnvironment.IsDevelopment, FEnvironment.IsDevelopment);
+end;
+
+procedure THostBuilder.SetServiceProviderOptions(const Value: TServiceProviderOptions);
+begin
+  FServiceProviderOptions := Value;
+  FServiceProviderOptionsFixed := True;
+end;
+
 procedure THostBuilder.InitializeHostConfiguration;
 begin
   // Una variante aporta sus fuentes SEMBRANDO el manager y entregandolo, no encadenando una
@@ -574,7 +593,7 @@ begin
   if FLoggingTouched then
     AddLogging(FServices, FLoggingImpl);
 
-  FAppServices := FServices.BuildServiceProvider;
+  FAppServices := FServices.BuildServiceProvider(GetServiceProviderOptions);
 end;
 
 function THostBuilder.Build: IHost;

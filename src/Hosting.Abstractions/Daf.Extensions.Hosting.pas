@@ -108,6 +108,8 @@ type
     function GetEnvironment: IHostEnvironment;
     function GetLogging: ILoggingBuilder;
     function GetProperties: TDictionary<string, TValue>;
+    function GetServiceProviderOptions: TServiceProviderOptions;
+    procedure SetServiceProviderOptions(const Value: TServiceProviderOptions);
 
     /// <summary>Los registros de servicio de la aplicacion.</summary>
     property Services: IServiceCollection read GetServices;
@@ -125,6 +127,13 @@ type
     property Logging: ILoggingBuilder read GetLogging;
     /// <summary>Datos que comparten entre si las piezas que componen el arranque.</summary>
     property Properties: TDictionary<string, TValue> read GetProperties;
+    /// <summary>
+    /// Las opciones con que se construira el contenedor. Sin fijarlas, ValidateOnBuild y
+    /// ValidateScopes valen Environment.IsDevelopment en el momento de leerlas; fijadas, ganan al
+    /// entorno. Se fija el record entero: devuelto por una propiedad, no se modifica en su sitio.
+    /// </summary>
+    property ServiceProviderOptions: TServiceProviderOptions read GetServiceProviderOptions
+      write SetServiceProviderOptions;
   end;
 
   IHostApplicationLifetime = interface(IInvokable)

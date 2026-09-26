@@ -100,6 +100,25 @@ Environment variables read at startup:
 
 ---
 
+## Container validation
+
+In the `Development` environment the host builds the container with `ValidateOnBuild` and
+`ValidateScopes`: a registration whose dependencies cannot be satisfied, or a Singleton that
+captures a Scoped, stops `Build` with every finding listed. In any other environment the container
+is built without validating.
+
+`ServiceProviderOptions` on the builder reads the options `Build` will use, and assigning it fixes
+them whatever the environment:
+
+```pascal
+Builder.ServiceProviderOptions := TServiceProviderOptions.None;               // never validate
+Builder.ServiceProviderOptions := TServiceProviderOptions.Create(True, True); // always validate
+```
+
+The validation reaches the registrations made by class; a factory registration is left out.
+
+---
+
 ## Application Lifetime
 
 ```pascal

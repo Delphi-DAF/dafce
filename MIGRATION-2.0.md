@@ -268,8 +268,8 @@ This is the largest front of 2.0 for anything that had a `.dpr`.
 
 - **Your entry point is now your variant.** `TCliApplication` (`Daf.Cli`), `TWebApplication`
   (`Daf.Web`), `TVclApplication` (`Daf.VCL`) and `TFmxApplication` (`Daf.FMX`). They share
-  `Services`, `Configuration`, `Environment`, `Logging` and `Properties` through
-  `IHostApplicationBuilder`.
+  `Services`, `Configuration`, `Environment`, `Logging`, `Properties` and `ServiceProviderOptions`
+  through `IHostApplicationBuilder`.
 
 - **`TDafApplication` and `TDafApplicationBuilder` are retired**, and so is the `Daf.Application`
   package. Their replacement is the variant from the entry above, and each member goes somewhere:
@@ -499,8 +499,8 @@ end;
 3. Add the new packages you need to `requires` — `Daf.SystemProcess`, and `Daf.CommandLine` if
    you parsed a command line — and remove `Daf.CmdLn` and `Daf.SQLCute.Compilers`.
 4. Rename the types and units from the tables above.
-5. Compile again and run your tests. `ValidateOnBuild` helps confirm the composition registers what
-   it did before.
+5. Compile again and run your tests. Then start the application once with `DAF_APP_ENV=Development`:
+   the host validates the container, and a registration that went missing stops the build naming it.
 6. Sections 10 to 13, 15 and 17 are **run-time** changes: the compiler says nothing about them. Read them
    against your own composition — scope lifetimes, duplicate registrations, and anything a
    destructor reads.

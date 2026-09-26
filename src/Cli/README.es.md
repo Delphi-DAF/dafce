@@ -197,7 +197,7 @@ Las variantes Web, VCL y FMX —que no declaran gramática— sí los añaden: a
 |---|---|---|
 | Métodos de extensión (`AddX`, `UseX`) | Métodos del propio record, o fachada `class` | Delphi no tiene métodos de extensión, y solo hay **un** `record helper` visible por tipo — una API fluida repartida entre units se rompe en silencio en cuanto alguien reordena un `uses` |
 | `IHostApplicationBuilder.Metrics` | **No se porta** | No hay pieza equivalente en DAF a la que apuntar |
-| `ConfigureContainer<T>` | **No se porta** | Un método genérico no es expresable en una interfaz de Delphi — no es que se descarte, es que no cabe |
+| `ConfigureContainer<T>` | **No se porta** | Un método genérico no es expresable en una interfaz de Delphi — no es que se descarte, es que no cabe. Las opciones del proveedor por defecto, que .NET fija a través de él, son `ServiceProviderOptions` |
 | Despacho de handler dentro de `System.CommandLine` | `OnExecute` / `ICliHandler` | `Daf.CommandLine` parsea y no despacha, a propósito: el desenlace de una invocación es un dato |
 | Sin global de aplicación | Igual | En consola no hay ningún `Application` global que el usuario espere: el trabajo recibe el `IServiceProvider` que necesita, y un `ICliHandler` registrado toma sus dependencias por constructor |
 

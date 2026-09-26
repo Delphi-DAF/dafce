@@ -103,6 +103,7 @@
         <DCCReference Include="ShutdownRequest.Feat.pas"/>
         <DCCReference Include="Lifecycle.Feat.pas"/>
         <DCCReference Include="ShadowedHelper.Feat.pas"/>
+        <DCCReference Include="ContainerValidation.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>

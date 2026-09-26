@@ -393,7 +393,9 @@ var Provider := Services.BuildServiceProvider(TServiceProviderOptions.Create(Tru
   both services. It reads the same two routes: the dependency captured through a marked
   property is caught like the one taken by the constructor.
 
-Both are calqued from `ServiceProviderOptions`, and both are **opt-in**. In Delphi this is
+Both are calqued from `ServiceProviderOptions`, and both are **opt-in**: `BuildServiceProvider`
+without options validates nothing, and the host of the application family turns both on in the
+`Development` environment. In Delphi this is
 worth more than in .NET: without comfortable stack traces, the difference is between a
 message at startup and an access violation halfway through a long operation.
 
@@ -410,7 +412,7 @@ inspectable part of it is.
 | `IServiceCollection` as `IList<ServiceDescriptor>` | `Descriptors(ServiceType)` | Read-only copy, on purpose |
 | `TryAdd*` / `Replace` / `RemoveAll` | same names | Same semantics |
 | Scrutor's `Decorate` | `Decorate<S>` | Not in the .NET framework either |
-| `ServiceProviderOptions` | `TServiceProviderOptions` | Opt-in; only reaches class registrations |
+| `ServiceProviderOptions` | `TServiceProviderOptions` | Off by default, on in the family's host in Development; only reaches class registrations |
 | extension methods `services.AddXxx()` | `AddXxx(Services)` | Delphi has no extension methods: **it does not chain** |
 | Autofac / Windsor / StructureMap modules | `AddModule<T>` | Divergence of layer: on the collection, not on the container |
 | — | `IStartupTask` | Deliberate divergence: .NET has no contract for this |

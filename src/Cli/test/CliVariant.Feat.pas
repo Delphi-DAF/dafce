@@ -58,7 +58,8 @@ uses
   Daf.MiniSpec,
   Daf.Extensions.Configuration,
   Daf.Configuration.CommandLine,
-  Daf.Extensions.Hosting;
+  Daf.Extensions.Hosting,
+  Daf.Extensions.Logging;
 
 function TGreeter.Greet: string;
 begin
@@ -321,6 +322,42 @@ Feature La variante CLI de la familia @cli @application-family
       begin
         Expect(W.Report).ToStartWith('ECliCompositionError: ');
         Expect(W.Report).ToContain('declares its work twice');
+      end)
+
+.Rule('Las opciones del contenedor llegan por el builder de la variante')
+
+  .Scenario('Fijar la validacion en el builder CLI la aplica al construir')
+    .Given('una aplicacion CLI con un trabajo cuya dependencia nadie registra, y la validacion fijada',
+      procedure(W: TCliWorld)
+      begin
+        W.Builder := TCliApplication.CreateBuilder;
+        W.Builder.Services.AddSingleton<ICliHandler, TGreetingHandler>;
+        W.Builder.ServiceProviderOptions := TServiceProviderOptions.Create(True, True);
+      end)
+    .When('se construye',
+      procedure(W: TCliWorld)
+      begin
+        // El fallo del host sale tambien por el canal de arranque; se aparta para que no se
+        // confunda con la salida de las specs.
+        var Saved := BootstrapLog.Sinks;
+        BootstrapLog.ClearSinks;
+        try
+          try
+            W.App := W.Builder.Build;
+            W.Report := '<construyo sin protestar>';
+          except
+            on E: Exception do
+              W.Report := E.Message;
+          end;
+        finally
+          for var Sink in Saved do
+            BootstrapLog.AddSink(Sink);
+        end;
+      end)
+    .&Then('falla nombrando la dependencia que falta',
+      procedure(W: TCliWorld)
+      begin
+        Expect(W.Report).ToContain('IGreeter');
       end)
 
 .Rule('Sin acceso global')
