@@ -279,8 +279,26 @@ This is the largest front of 2.0 for anything that had a `.dpr`.
   `App` becomes `DafApp`, which exists **only in VCL and FMX** — in CLI and Web there is no
   application global on purpose.
 
-- **`Daf.Application.Version` moved to `Daf.Commons`**, unchanged. Add `Daf.Commons` to `requires`
-  if you used `TVersionInfo` and did not already.
+- **`Daf.Application.Version` moved to `Daf.Commons`.** Add `Daf.Commons` to `requires` if you used
+  `TVersionInfo` and did not already. Two things changed in it:
+
+  - `TVersionInfo.Debug` is read-only, and the binary declares it: a fourth argument to the attribute
+    or to `TVersionInfo.Create`. Without it, `Debug` is `False` — in 1.6 it reported how DAF itself
+    was compiled, whatever the configuration of your binary.
+  - `VersionTag` takes a template instead of the `WithCompiledMeta` flag.
+
+  ```pascal
+  // before
+  Info.Debug := {$IFDEF DEBUG}True{$ELSE}False{$ENDIF};
+  Text := Info.VersionTag(True);
+
+  // now
+  [Version('2.9.0', 'MyApp', 'Acme', {$IFDEF DEBUG}True{$ELSE}False{$ENDIF})]
+  TMyApp = class
+  end;
+
+  Text := TVersionInfo.GetFrom(TMyApp).VersionTag(VersionTemplateWithBuild);
+  ```
 
 - **`ILoggingBuilder` moved to `Daf.Logging.Abstractions`**, where .NET has it. Composing logging no
   longer requires the implementation package. And the builder exposes it as a live property — the

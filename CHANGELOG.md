@@ -103,7 +103,7 @@ The changes that break compilation are collected, with their example diff, in `M
 - ⚠️ **NNLog**: A target that cannot write no longer raises towards whoever logged; it reports on the bootstrap channel, naming the target. **Observable change**: a logging failure stops aborting the code that was only trying to log
 - **NNLog**: A layout token with no renderer behind it is left unsubstituted instead of becoming the empty string, so a misspelled `${mesage}` shows up in the line
 - ⚠️ **CommandLine**: `IRootCommand.VersionText` and `ICommandLineParseResult.VersionText` are now `VersionInfo` — the grammar hands over the version and formatting it is the caller's decision. **Breaks** whoever read `VersionText`
-- ⚠️ **Commons**: `VersionTag`'s `WithCompiledMeta` flag is now a template parameter, and `TVersionInfo.Debug` is read-only because it describes the binary that reports it. **Breaks** whoever passed the flag or assigned `Debug`
+- ⚠️ **Commons**: `VersionTag`'s `WithCompiledMeta` flag is now a template parameter, and `TVersionInfo.Debug` is read-only and declared by the binary — a fourth argument to `[Version(...)]` or `TVersionInfo.Create`, `False` when omitted; it used to report how DAF itself was compiled. **Breaks** whoever passed the flag or assigned `Debug`
 
 ### Deprecated
 
@@ -113,7 +113,7 @@ The changes that break compilation are collected, with their example diff, in `M
 ### Removed
 
 - ⚠️ **Hosting**: `IHostBuilder`, and with it the deferred style: the `ConfigureServices`, `ConfigureAppConfiguration` and `ConfigureHostConfiguration` callbacks, plus `TConfigureServicesAction`. One style is left, the immediate one; the entry point is `THost.CreateBuilder` or the family's variant
-- ⚠️ **Application**: The `Daf.Application` package, with `TDafApplication`, `TDafApplicationBuilder` and `IDafApplication`. The replacement is the variant of the application family — `TCliApplication`, `TWebApplication`, `TVclApplication`, `TFmxApplication` — and `MIGRATION-2.0.md` says where each member went. `TVersionInfo` and `[Version]` are untouched: they ship in `Daf.Commons`
+- ⚠️ **Application**: The `Daf.Application` package, with `TDafApplication`, `TDafApplicationBuilder` and `IDafApplication`. The replacement is the variant of the application family — `TCliApplication`, `TWebApplication`, `TVclApplication`, `TFmxApplication` — and `MIGRATION-2.0.md` says where each member went. `TVersionInfo` and `[Version]` move to `Daf.Commons`
 - ⚠️ **DependencyInjection**: `AddModules(Package)`, the RTTI discovery of `IAppModule`s. The replacement is `AddModule<T>`, one call per module and in whatever order the application wants; `IAppModule` and `TAppModule` do not change
 - **Logging**: The global `DAFInternalLogger`, replaced by `BootstrapLog.LoggerFor(<category>)`
 - ⚠️ **Configuration**: `csoReloadOnChange`, a value of `TConfigurationSourceOption` that no provider ever read. `csoOptional` is untouched

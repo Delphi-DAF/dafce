@@ -399,8 +399,9 @@ or `Unassigned`. This is what `SQLCute.InMemory` builds its ANSI NULL semantics 
 
 ### TVersionInfo / [Version]
 
-A class declares its version with the `[Version]` attribute — SemVer tag, application name and
-company — and `TVersionInfo.GetFrom` reads it back by RTTI:
+A class declares its version with the `[Version]` attribute — SemVer tag, application name,
+company and, optionally, whether the binary is a debug build — and `TVersionInfo.GetFrom` reads it
+back by RTTI:
 
 ```pascal
 uses
@@ -420,12 +421,25 @@ var Info := TVersionInfo.GetFrom(TInvoicerApp);
 | Member | What it answers |
 |---|---|
 | `Tag` | the string the attribute declared, verbatim |
-| `VersionTag(Template)` | the version formatted with a template of `${...}` markers; `VersionTemplate` is the default, `VersionTemplateWithBuild` adds what the compiler saw |
+| `VersionTag(Template)` | the version formatted with a template of `${...}` markers; `VersionTemplate` is the default, `VersionTemplateWithBuild` adds the compiled metadata |
 | `IsEmpty` | whether a version was set at all |
 | `IsSemVer` | whether the declared tag follows the SemVer grammar |
 | `Major` / `Minor` / `Patch` / `PreRelease` / `Metadata` | the SemVer pieces |
 | `ApplicationName` / `Company` | the other two arguments of the attribute |
-| `ArchBits` / `Platform` / `Debug` | what the **compiler** saw: 32 or 64, the target platform, and whether `DEBUG` was defined |
+| `ArchBits` / `Platform` | what the **compiler** saw: 32 or 64, and the target platform |
+| `Debug` | whether the binary declared itself a debug build; `False` when it declared nothing |
+
+**`Debug` is declared by the binary.** Only the binary's own code sees its build configuration — the
+framework is compiled apart —, and the attribute's arguments are evaluated when that code compiles:
+
+```pascal
+[Version('1.2.3', 'Invoicer', 'Acme', {$IFDEF DEBUG}True{$ELSE}False{$ENDIF})]
+TInvoicerApp = class
+end;
+```
+
+`TVersionInfo.Create` takes the same fourth argument. The information is fixed when it is built:
+`Debug` has no setter.
 
 **A class with no attribute gives an empty record**, not an error: `IsEmpty` answers `True`, `Tag`
 and the two names come back as empty strings, the numeric pieces as zero, and `VersionTag` as the
@@ -440,7 +454,8 @@ The markers a template can name:
 |---|---|
 | `${Major}` `${Minor}` `${Patch}` `${Metadata}` `${Tag}` | the SemVer pieces and the declared string, raw |
 | `${PreRelease}` | the pre-release with its own `-`, or nothing |
-| `${Platform}` `${ArchBits}` `${CompiledMeta}` | what the compiler saw |
+| `${Platform}` `${ArchBits}` | the target platform and the word size |
+| `${CompiledMeta}` | both together — `Win32` —, followed by `.Dbg` when the binary declared a debug build |
 | `${Build}` / `${BuildFull}` | the build section, opened with `+`. The first carries what the tag declared; the second joins it with the compiled metadata inside that single section. They are alternatives: a template names one |
 
 SemVer admits one build section, so `${BuildFull}` separates the two sources with `.` rather than

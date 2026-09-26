@@ -402,8 +402,9 @@ ver [SQLCute.InMemory](../../SQLCute.InMemory/README.es.md).
 
 ### TVersionInfo / [Version]
 
-Una clase declara su versión con el atributo `[Version]` —tag SemVer, nombre de aplicación y
-compañía— y `TVersionInfo.GetFrom` la lee de vuelta por RTTI:
+Una clase declara su versión con el atributo `[Version]` —tag SemVer, nombre de aplicación,
+compañía y, si se quiere, si el binario es una build de depuración— y `TVersionInfo.GetFrom` la lee
+de vuelta por RTTI:
 
 ```pascal
 uses
@@ -423,12 +424,26 @@ var Info := TVersionInfo.GetFrom(TInvoicerApp);
 | Miembro | Qué contesta |
 |---|---|
 | `Tag` | la cadena que declaró el atributo, tal cual |
-| `VersionTag(Plantilla)` | la versión formateada con una plantilla de marcadores `${...}`; `VersionTemplate` es la de por defecto y `VersionTemplateWithBuild` añade lo que vio el compilador |
+| `VersionTag(Plantilla)` | la versión formateada con una plantilla de marcadores `${...}`; `VersionTemplate` es la de por defecto y `VersionTemplateWithBuild` añade los datos de compilación |
 | `IsEmpty` | si se fijó alguna versión |
 | `IsSemVer` | si el tag declarado sigue la gramática SemVer |
 | `Major` / `Minor` / `Patch` / `PreRelease` / `Metadata` | las piezas del SemVer |
 | `ApplicationName` / `Company` | los otros dos argumentos del atributo |
-| `ArchBits` / `Platform` / `Debug` | lo que vio el **compilador**: 32 o 64, la plataforma destino y si `DEBUG` estaba definido |
+| `ArchBits` / `Platform` | lo que vio el **compilador**: 32 o 64, y la plataforma destino |
+| `Debug` | si el binario se declaró build de depuración; `False` si no declaró nada |
+
+**`Debug` lo declara el binario.** Solo el código del propio binario ve su configuración de
+compilación —el framework se compila aparte—, y los argumentos del atributo se evalúan al compilar
+ese código:
+
+```pascal
+[Version('1.2.3', 'Invoicer', 'Acme', {$IFDEF DEBUG}True{$ELSE}False{$ENDIF})]
+TInvoicerApp = class
+end;
+```
+
+`TVersionInfo.Create` recibe el mismo cuarto argumento. La información queda fijada al construirse:
+`Debug` no tiene setter.
 
 **Una clase sin atributo da un record vacío**, no un error: `IsEmpty` responde `True`, `Tag` y los
 dos nombres vuelven como cadena vacía, las piezas numéricas como cero y `VersionTag` como cadena
@@ -443,7 +458,8 @@ Los marcadores que una plantilla puede nombrar:
 |---|---|
 | `${Major}` `${Minor}` `${Patch}` `${Metadata}` `${Tag}` | las piezas del SemVer y la cadena declarada, crudas |
 | `${PreRelease}` | el pre-release con su propio `-`, o nada |
-| `${Platform}` `${ArchBits}` `${CompiledMeta}` | lo que vio el compilador |
+| `${Platform}` `${ArchBits}` | la plataforma destino y el tamaño de palabra |
+| `${CompiledMeta}` | los dos juntos —`Win32`—, seguidos de `.Dbg` si el binario se declaró build de depuración |
 | `${Build}` / `${BuildFull}` | la sección de build, abierta con `+`. El primero lleva lo que declaró el tag; el segundo lo une con los datos de compilación dentro de esa única sección. Son alternativas: una plantilla nombra uno |
 
 SemVer admite una sola sección de build, así que `${BuildFull}` separa las dos fuentes con `.` en

@@ -29,6 +29,15 @@ type
   TPlainVersionedApp = class
   end;
 
+  [Version('2.0.0', 'SpecApp', 'DAF', True)]
+  TDebugDeclaredApp = class
+  end;
+
+  // El runner enlaza el framework en Debug: si Debug saliera del framework, esta clase diria True.
+  [Version('2.0.0', 'SpecApp', 'DAF', False)]
+  TReleaseDeclaredApp = class
+  end;
+
 implementation
 
 uses
@@ -254,6 +263,70 @@ Feature Los metadatos de version declarados en una clase @commons @version
       begin
         // El punto es el separador interno de la seccion; lo que venga detras es la plataforma.
         Expect(W.Info.VersionTag(VersionTemplateWithBuild)).ToContain('+build.7.');
+      end)
+
+.Rule('La configuracion de depuracion la declara el binario')
+
+  .Scenario('Sin declararla no se afirma una build de depuracion')
+    .Given('una clase que declara su version sin decir si es de depuracion, en un runner que enlaza el framework en Debug',
+      procedure(W: TVersionWorld)
+      begin
+        W.AppClass := TPlainVersionedApp;
+      end)
+    .When('se leen sus metadatos de version',
+      procedure(W: TVersionWorld)
+      begin
+        W.Info := TVersionInfo.GetFrom(W.AppClass);
+      end)
+    .&Then('no dice que sea una build de depuracion',
+      procedure(W: TVersionWorld)
+      begin
+        Expect(W.Info.Debug).ToBeFalse;
+      end)
+    .&And('y su seccion de build no lo anuncia',
+      procedure(W: TVersionWorld)
+      begin
+        Expect(Pos('.Dbg', W.Info.VersionTag(VersionTemplateWithBuild))).ToEqual(0);
+      end)
+
+  .Scenario('Una build que se declara de depuracion lo dice en su seccion de build')
+    .Given('una clase que declara su version y una build de depuracion',
+      procedure(W: TVersionWorld)
+      begin
+        W.AppClass := TDebugDeclaredApp;
+      end)
+    .When('se leen sus metadatos de version',
+      procedure(W: TVersionWorld)
+      begin
+        W.Info := TVersionInfo.GetFrom(W.AppClass);
+      end)
+    .&Then('dice que es una build de depuracion',
+      procedure(W: TVersionWorld)
+      begin
+        Expect(W.Info.Debug).ToBeTrue;
+      end)
+    .&And('y la seccion de build acaba anunciandolo',
+      procedure(W: TVersionWorld)
+      begin
+        Expect(W.Info.VersionTag(VersionTemplateWithBuild)).ToEndWith('.Dbg');
+      end)
+
+  .Scenario('Una build que se declara de release no lo dice, aunque el framework este en Debug')
+    .Given('una clase que declara su version y que no es una build de depuracion',
+      procedure(W: TVersionWorld)
+      begin
+        W.AppClass := TReleaseDeclaredApp;
+      end)
+    .When('se leen sus metadatos de version',
+      procedure(W: TVersionWorld)
+      begin
+        W.Info := TVersionInfo.GetFrom(W.AppClass);
+      end)
+    .&Then('no dice que sea una build de depuracion',
+      procedure(W: TVersionWorld)
+      begin
+        Expect(W.Info.Debug).ToBeFalse;
+        Expect(Pos('.Dbg', W.Info.VersionTag(VersionTemplateWithBuild))).ToEqual(0);
       end)
 
 .Rule('El formato del texto lo decide quien lo muestra')

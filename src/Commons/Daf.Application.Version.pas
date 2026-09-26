@@ -27,12 +27,18 @@ type
     FDebug: Boolean;
     FIsSemVer: Boolean;
     function CompiledPlatform: string;inline;
-    function CompiledDebug: Boolean;inline;
     function CompiledArchBits: Integer;inline;
     procedure ParseSemVer(const SemVerTag: string);
   public
     class function GetFrom(const AClass: TClass): TVersionInfo;static;
-    constructor Create(SemVerTag: string; AppName: string; Company: string);
+    /// <summary>Sin declarar la configuracion de depuracion: Debug es False.</summary>
+    constructor Create(SemVerTag: string; AppName: string; Company: string); overload;
+    /// <param name="Debug">
+    ///   Si el binario que informa es una build de depuracion. Lo sabe su propio codigo y no el
+    ///   framework, que se compila aparte: se escribe {$IFDEF DEBUG}True{$ELSE}False{$ENDIF} en el
+    ///   codigo del binario.
+    /// </param>
+    constructor Create(SemVerTag: string; AppName: string; Company: string; Debug: Boolean); overload;
     /// <summary>No se fijo ninguna version: es distinto de haberla fijado y no entenderla.</summary>
     function IsEmpty: Boolean;
     /// <summary>El tag fijado sigue la gramatica semver, y por tanto las piezas estan pobladas.</summary>
@@ -53,7 +59,10 @@ type
     property Metadata: string read FMetadata;
     property ArchBits: Integer read FArchBits;
     property Platform: string read FPlatform;
-    /// <summary>Describe el binario que la informa, asi que se fija al construirse.</summary>
+    /// <summary>
+    ///   Lo que declaro quien construyo la informacion: False si no declaro nada. Se fija al
+    ///   construirse, como la plataforma y el tamano de palabra.
+    /// </summary>
     property Debug: Boolean read FDebug;
   end;
 
@@ -61,7 +70,13 @@ type
   strict private
     FVersionInfo: TVersionInfo;
   public
-    constructor Create(SemVerTag: string; AppName: string; Company: string);
+    constructor Create(SemVerTag: string; AppName: string; Company: string); overload;
+    /// <param name="Debug">
+    ///   Si el binario es una build de depuracion. Los argumentos de un atributo se evaluan al
+    ///   compilar el codigo que lo lleva, asi que {$IFDEF DEBUG}True{$ELSE}False{$ENDIF} escrito
+    ///   aqui es la configuracion del binario.
+    /// </param>
+    constructor Create(SemVerTag: string; AppName: string; Company: string; Debug: Boolean); overload;
     property VersionInfo: TVersionInfo read FVersionInfo;
   end;
 
@@ -96,13 +111,19 @@ end;
 
 constructor TVersionInfo.Create(SemVerTag, AppName, Company: string);
 begin
+  Self := TVersionInfo.Create(SemVerTag, AppName, Company, False);
+end;
+
+constructor TVersionInfo.Create(SemVerTag, AppName, Company: string; Debug: Boolean);
+begin
+  Self := Default(TVersionInfo);
   FTag := SemVerTag;
   FApplicationName := AppName;
   FCompany := Company;
   ParseSemVer(SemVerTag);
   FArchBits := CompiledArchBits;
   FPlatform := CompiledPlatform;
-  FDebug := CompiledDebug;
+  FDebug := Debug;
 end;
 
 function TVersionInfo.IsEmpty: Boolean;
@@ -113,15 +134,6 @@ end;
 function TVersionInfo.IsSemVer: Boolean;
 begin
   Result := FIsSemVer;
-end;
-
-function TVersionInfo.CompiledDebug: Boolean;
-begin
-  {$IFDEF DEBUG}
-  Result := True;
-  {$else}
-  Result := False;
-  {$ENDIF}
 end;
 
 function TVersionInfo.CompiledArchBits: Integer;
@@ -243,8 +255,13 @@ end;
 
 constructor VersionAttribute.Create(SemVerTag, AppName, Company: string);
 begin
+  Create(SemVerTag, AppName, Company, False);
+end;
+
+constructor VersionAttribute.Create(SemVerTag, AppName, Company: string; Debug: Boolean);
+begin
   inherited Create;
-  Self.FVersionInfo.Create(SemVerTag, AppName, Company);
+  FVersionInfo := TVersionInfo.Create(SemVerTag, AppName, Company, Debug);
 end;
 
 end.

@@ -16,6 +16,10 @@ type
   TUnannotatedTool = class
   end;
 
+  [Version('4.5.6', 'DebugTool', 'DAF', True)]
+  TDebugAnnotatedTool = class
+  end;
+
   THelpWorld = class
   public
     Root: IRootCommand;
@@ -39,6 +43,7 @@ type
     // Las tres vias de declarar la version, y la de no declararla.
     NoVersionRoot: IRootCommand;
     AnnotatedRoot: IRootCommand;
+    DebugAnnotatedRoot: IRootCommand;
     UnannotatedRoot: IRootCommand;
     NamedRoot: IRootCommand;
     // A hidden option next to one that is not, which is the only way to tell "not
@@ -97,6 +102,7 @@ procedure THelpWorld.BuildVersionSourcesGrammar;
 begin
   NoVersionRoot := CommandLine.Root('bare', 'Declares no version at all');
   AnnotatedRoot := CommandLine.Root('annotated', 'Takes it from a class').WithVersion(TAnnotatedTool);
+  DebugAnnotatedRoot := CommandLine.Root('debugtool', 'A class that declares a debug build').WithVersion(TDebugAnnotatedTool);
   UnannotatedRoot := CommandLine.Root('unannotated', 'Names a class without it').WithVersion(TUnannotatedTool);
   NamedRoot := CommandLine.Root('named', 'Declares text, name and company').WithVersion('7.8.9', 'NamedTool', 'DAF');
 end;
@@ -399,6 +405,24 @@ Feature Command line help @commandline @help
         Expect(W.Parsed.VersionRequested).ToBeTrue;
         Expect(W.Parsed.VersionInfo.Tag).ToEqual('4.5.6');
         Expect(W.Parsed.VersionInfo.ApplicationName).ToEqual('AnnotatedTool');
+      end)
+
+  .Scenario('The build configuration the class declares travels with the version')
+    .Given('a grammar whose root takes its version from a class that declares a debug build',
+      procedure(W: THelpWorld)
+      begin
+        W.BuildVersionSourcesGrammar;
+      end)
+    .When('an invocation passing --version is parsed',
+      procedure(W: THelpWorld)
+      begin
+        W.Parsed := W.DebugAnnotatedRoot.Parse(['--version']);
+      end)
+    .&Then('the version it hands over says it is a debug build',
+      procedure(W: THelpWorld)
+      begin
+        Expect(W.Parsed.VersionRequested).ToBeTrue;
+        Expect(W.Parsed.VersionInfo.Debug).ToBeTrue;
       end)
 
   .Scenario('A class without the annotation leaves the version empty')
