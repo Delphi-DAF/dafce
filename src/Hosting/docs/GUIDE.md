@@ -179,7 +179,8 @@ Services.AddHostedService<TOrderProcessor>;
 ```
 
 - `Start` is called for each hosted service when `Host.Start` runs, **in registration order**.
-- `Stop` is called in the **same** order during shutdown, not the reverse of it.
+- `Stop` is called in the **reverse** order during shutdown — the order the container releases in —,
+  so a service stops before the ones registered ahead of it, which it may be using.
 - `AddHostedService<T>` registers `T` under `IHostedService` and nothing else. To reach the same
   instance as `IOrderProcessor`, register that too and have the hosted-service registration
   resolve it.
@@ -261,6 +262,11 @@ DAF_APP_ENV=Development
 
 Accepted shorthands: `deve`, `stag`, `prod`, `test` (case-insensitive).
 
+In `Development` the host also validates the container when it builds it: a registration whose
+dependencies cannot be satisfied, or a Singleton that captures a Scoped, stops `Build` with every
+finding listed. `ServiceProviderOptions` on the builder fixes that choice whatever the environment —
+see *Container validation* in the module README.
+
 You can also read arbitrary environment variables:
 ```pascal
 var DbHost := Env['MY_DB_HOST'];
@@ -331,7 +337,7 @@ end;
 `Host.WaitForShutdown` blocks until the process receives a shutdown signal (`Ctrl+C`, `SIGTERM`, or `Lifetime.StopApplication`). The shutdown sequence is:
 
 1. `IHostApplicationLifetime.ApplicationStopping` callbacks fire
-2. `IHostedService.Stop` called for each service, in registration order
+2. `IHostedService.Stop` called for each service, in reverse registration order
 3. The DI container releases each Singleton once nothing but itself holds it, so a service goes
    after everything that depends on it
 4. `IHostApplicationLifetime.ApplicationStopped` callbacks fire

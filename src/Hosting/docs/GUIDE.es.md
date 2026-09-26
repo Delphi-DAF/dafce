@@ -179,7 +179,8 @@ Services.AddHostedService<TOrderProcessor>;
 ```
 
 - `Start` se llama para cada hosted service cuando se ejecuta `Host.Start`, **en orden de registro**.
-- `Stop` se llama en el **mismo** orden durante el apagado, no en el inverso.
+- `Stop` se llama en el orden **inverso** durante el apagado —el mismo en que el contenedor libera—,
+  así que un servicio para antes que los registrados delante de él, que puede estar usando.
 - `AddHostedService<T>` registra `T` bajo `IHostedService` y nada más. Para llegar a esa misma
   instancia como `IOrderProcessor`, regístralo también y que el registro del hosted service lo
   resuelva.
@@ -261,6 +262,11 @@ DAF_APP_ENV=Development
 
 Abreviaturas aceptadas: `deve`, `stag`, `prod`, `test` (sin distinción de mayúsculas).
 
+En `Development` el host además valida el contenedor al construirlo: un registro cuyas dependencias
+no se pueden satisfacer, o un Singleton que captura un Scoped, detiene `Build` con todos los hallazgos
+juntos. `ServiceProviderOptions` en el builder fija esa elección sea cual sea el entorno — ver
+*Validación del contenedor* en el README del módulo.
+
 También puedes leer variables de entorno arbitrarias:
 ```pascal
 var DbHost := Env['MY_DB_HOST'];
@@ -331,7 +337,7 @@ end;
 `Host.WaitForShutdown` bloquea hasta que el proceso recibe una señal de apagado (`Ctrl+C`, `SIGTERM` o `Lifetime.StopApplication`). La secuencia de apagado es:
 
 1. Se disparan los callbacks de `IHostApplicationLifetime.ApplicationStopping`
-2. Se llama a `IHostedService.Stop` para cada servicio, en orden de registro
+2. Se llama a `IHostedService.Stop` para cada servicio, en orden inverso al de registro
 3. El contenedor DI suelta cada Singleton cuando ya no lo sostiene nadie más que él, así que un
    servicio cae después de todo lo que depende de él
 4. Se disparan los callbacks de `IHostApplicationLifetime.ApplicationStopped`
