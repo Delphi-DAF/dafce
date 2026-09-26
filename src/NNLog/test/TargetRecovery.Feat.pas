@@ -56,6 +56,7 @@ type
     procedure WriteTo(const Name, Line: string);
     procedure HoldExclusively(const Name: string);
     procedure Release;
+    procedure Unname;
     /// Lo que una regla hace de verdad: recorrer sus destinos y despachar a cada uno.
     procedure RuleWritesToBoth(const FailingName, GoodName, Line: string);
     function TextIn(const Name: string): string;
@@ -211,6 +212,11 @@ end;
 procedure TRecoveryWorld.Release;
 begin
   FreeAndNil(FHold);
+end;
+
+procedure TRecoveryWorld.Unname;
+begin
+  FTarget.Name := EmptyStr;
 end;
 
 procedure TRecoveryWorld.RuleWritesToBoth(const FailingName, GoodName, Line: string);
@@ -388,6 +394,25 @@ Feature Un destino de NNLog que no pudo escribir vuelve a intentarlo @nnlog @tar
       procedure(W: TRecoveryWorld)
       begin
         Expect(W.ChannelText).ToContain('fichero');
+      end)
+
+  .Scenario('Un destino sin nombre se nombra por su clase')
+    .Given('un canal de arranque que graba lo que le llega, y un destino sin nombre que no puede escribir',
+      procedure(W: TRecoveryWorld)
+      begin
+        W.WatchStartupChannel;
+        W.Unname;
+        W.HoldExclusively('b.log');
+      end)
+    .When('se registra una linea por el',
+      procedure(W: TRecoveryWorld)
+      begin
+        W.WriteTo('b.log', 'PERDIDA');
+      end)
+    .&Then('el canal nombra el destino por su clase, y no con una cadena vacia',
+      procedure(W: TRecoveryWorld)
+      begin
+        Expect(W.ChannelText).ToContain('el destino "TFileTarget"');
       end)
 
   .Scenario('Un destino que falla no calla a los demas')

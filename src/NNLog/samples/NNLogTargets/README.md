@@ -18,7 +18,7 @@ regla, `final`, los tokens del layout y lo que pasa cuando un destino no puede e
   instancia y luego llama a `DoWrite`, así que dos hilos que escriban por el mismo destino no se
   solapan sin que el destino haga nada.
 - **Y si `DoWrite` lanza, quien registraba no se entera.** El fallo sale por el canal de arranque,
-  nombrando al destino, y la siguiente línea se escribe con normalidad. El sample lo enseña
+  nombrando al destino —por su `Name`, o por su clase si no tiene—, y la siguiente línea se escribe con normalidad. El sample lo enseña
   entero: el programa sigue vivo y el informe aparece.
 - **El canal de arranque no trae destinos puestos.** Es donde informa el logging cuando lo que
   falla es el logging, y adónde va lo decide quien despliega. `IBootstrapSink` son dos métodos:

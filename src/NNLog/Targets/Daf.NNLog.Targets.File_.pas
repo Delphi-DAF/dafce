@@ -280,7 +280,7 @@ begin
     begin
       // Sin rotar. El llamante reabre el mismo fichero y la linea se escribe igual, al final del
       // que ya habia: peor que rotar, mejor que perderla y quedarse sin destino.
-      BootstrapLog.LoggerFor(ClassName).LogError(E, Format('el destino "%s" no pudo archivar su fichero', [Name]));
+      BootstrapLog.LoggerFor(ClassName).LogError(E, Format('el destino "%s" no pudo archivar su fichero', [DisplayName]));
       Exit;
     end;
   end;
@@ -301,7 +301,7 @@ begin
     CleanupHistory(TPath.GetDirectoryName(RotatedPath));
   except
     on E: Exception do
-      BootstrapLog.LoggerFor(ClassName).LogError(E, Format('el destino "%s" roto, pero no pudo comprimir o limpiar el historico', [Name]));
+      BootstrapLog.LoggerFor(ClassName).LogError(E, Format('el destino "%s" no pudo comprimir o limpiar el historico tras rotar su fichero', [DisplayName]));
   end;
 end;
 

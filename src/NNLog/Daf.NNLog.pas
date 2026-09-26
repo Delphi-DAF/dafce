@@ -30,6 +30,8 @@ type
     // de quien escribe un destino, porque el recurso compartido es el destino mismo -- una regla
     // guarda sus destinos y todos los loggers despachan por ellos.
     procedure DoWrite(const Entry: TLogEntry); virtual; abstract;
+    /// <summary>Como se nombra el destino en un aviso: su Name, o su clase si no tiene.</summary>
+    function DisplayName: string;
   public
     const DefaultLayout = '${timestamp} #${pid}:${thread} [${level}] ${category} | ${message} ${exception}';
     constructor Create;virtual;
@@ -219,6 +221,14 @@ begin
   inherited;
 end;
 
+function TTarget.DisplayName: string;
+begin
+  if FName.IsEmpty then
+    Result := ClassName
+  else
+    Result := FName;
+end;
+
 procedure TTarget.Write(const Entry: TLogEntry);
 begin
   FLock.Enter;
@@ -231,7 +241,7 @@ begin
       // del camino de error. El fallo no se pierde -- sale por el canal de arranque, que es el que
       // existe para cuando el logging es justo lo que no funciona.
       on E: Exception do
-        BootstrapLog.LoggerFor(ClassName).LogError(E, Format('el destino "%s" no pudo escribir', [Name]));
+        BootstrapLog.LoggerFor(ClassName).LogError(E, Format('el destino "%s" no pudo escribir', [DisplayName]));
     end;
   finally
     FLock.Leave;
