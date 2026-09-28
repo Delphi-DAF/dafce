@@ -114,6 +114,7 @@
         <DCCReference Include="InjectionPrecedence.Feat.pas"/>
         <DCCReference Include="NestedRun.Feat.pas"/>
         <DCCReference Include="FailureVisibility.Feat.pas"/>
+        <DCCReference Include="FailureReason.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>

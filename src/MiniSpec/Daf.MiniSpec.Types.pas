@@ -342,10 +342,17 @@ type
     procedure SetCapturedRaise(const Value: TCapturedRaise);
     procedure ClearCapturedRaise;
     function ConsumeCapturedRaise: TCapturedRaise;
+    function GetFailedStep: IScenarioStep;
     property StepsWhen: TList<IScenarioStep> read GetStepsWhen;
     property StepsThen: TList<IScenarioStep> read GetStepsThen;
     property ExampleMeta: TExampleMeta read GetExampleMeta;
     property CapturedRaise: TCapturedRaise read GetCapturedRaise write SetCapturedRaise;
+    /// <summary>
+    ///   The step whose failure ended the last run of this scenario, or nil. What fails the
+    ///   scenario itself -- a World that cannot be built, a raise nobody consumed -- is in its own
+    ///   RunInfo instead.
+    /// </summary>
+    property FailedStep: IScenarioStep read GetFailedStep;
   end;
 
   /// <summary>
@@ -610,12 +617,14 @@ type
     FStepsWhen: TList<IScenarioStep>;
     FStepsThen: TList<IScenarioStep>;
     FCapturedRaise: TCapturedRaise;
+    FFailedStep: IScenarioStep;
     function GetStepsGiven: TList<IScenarioStep>;
     function GetStepsWhen: TList<IScenarioStep>;
     function GetStepsThen: TList<IScenarioStep>;
     function GetExampleMeta: TExampleMeta;
     function GetCapturedRaise: TCapturedRaise;
     procedure SetCapturedRaise(const Value: TCapturedRaise);
+    function GetFailedStep: IScenarioStep;
   private
     function GetFeature: IFeature;
     procedure RunSteps(Steps: TList<IScenarioStep>; World: TObject);
@@ -1369,6 +1378,7 @@ end;
 
 destructor TScenario<T>.Destroy;
 begin
+  FFailedStep := nil;
   FStepsThen.Free;
   FStepsWhen.Free;
   FStepsGiven.Free;
@@ -1405,6 +1415,11 @@ end;
 function TScenario<T>.GetExampleMeta: TExampleMeta;
 begin
   Result := FExampleMeta;
+end;
+
+function TScenario<T>.GetFailedStep: IScenarioStep;
+begin
+  Result := FFailedStep;
 end;
 
 function TScenario<T>.GetCapturedRaise: TCapturedRaise;
@@ -1463,6 +1478,7 @@ begin
       srrFail, srrError:
         begin
           FRunInfo.Result := srrFail;
+          FFailedStep := Steps[i];
           Aborted := True;
         end;
       srrPending:
@@ -1488,6 +1504,7 @@ begin
   SetCurrentScenario(Self);
   try
     FCapturedRaise := TCapturedRaise.Empty;  // Clear any captured raise from previous run
+    FFailedStep := nil;
     if Assigned(FInitExample) then
       FInitExample.Run(World);
     inherited;

@@ -341,6 +341,13 @@ type
     function ExitCode: Integer;
   end;
 
+/// <summary>
+///   Why Scenario failed, as a report shows it: its own error, or else the step that failed it
+///   followed by that step's error. Empty when it did not fail. The detail comes from
+///   Context.GetErrorDetail, so it carries the stack trace when the run asks for one.
+/// </summary>
+function ScenarioFailure(const Context: IRunContext; const Scenario: IScenario): string;
+
 implementation
 uses
 
@@ -349,6 +356,14 @@ uses
   Daf.MiniSpec.Utils,
   Daf.MiniSpec,
   Daf.MiniSpec.LiveDashboard;
+
+function ScenarioFailure(const Context: IRunContext; const Scenario: IScenario): string;
+begin
+  Result := Context.GetErrorDetail((Scenario as ISpecItem).RunInfo);
+  if Result.IsEmpty and Assigned(Scenario.FailedStep) then
+    Result := Scenario.FailedStep.KeyWord + ' ' + Scenario.FailedStep.Description + ': ' +
+      Context.GetErrorDetail(Scenario.FailedStep.RunInfo);
+end;
 
 { TCustomListener }
 

@@ -432,8 +432,12 @@ begin
     Data.AddPair('success', TJSONBool.Create(Scenario.RunInfo.IsSuccess));
     // Use Scenario.RunInfo instead of Counters parameter
     Data.AddPair('ms', TJSONNumber.Create(Scenario.RunInfo.ExecTimeMs));
-    if not IsSkipped and not Scenario.RunInfo.IsSuccess and (Scenario.RunInfo.ErrMsg <> '') then
-      Data.AddPair('error', Scenario.RunInfo.ErrMsg);
+    if not IsSkipped and not Scenario.RunInfo.IsSuccess then
+    begin
+      var Reason := ScenarioFailure(Context, Scenario);
+      if Reason <> '' then
+        Data.AddPair('error', Reason);
+    end;
 
     StepsArray := TJSONArray.Create;
     TempArr := StepsToJsonArray(Scenario.StepsGiven, 'Given');
@@ -510,8 +514,12 @@ begin
         else
           ExampleObj.AddPair('success', TJSONBool.Create(Example.RunInfo.IsSuccess));
         ExampleObj.AddPair('ms', TJSONNumber.Create(Example.RunInfo.ExecTimeMs));
-        if not IsSkipped and not Example.RunInfo.IsSuccess and (Example.RunInfo.ErrMsg <> '') then
-          ExampleObj.AddPair('error', Example.RunInfo.ErrMsg);
+        if not IsSkipped and not Example.RunInfo.IsSuccess then
+        begin
+          var Reason := ScenarioFailure(Context, Example);
+          if Reason <> '' then
+            ExampleObj.AddPair('error', Reason);
+        end;
         ExamplesArray.AddElement(ExampleObj);
       end;
     end;

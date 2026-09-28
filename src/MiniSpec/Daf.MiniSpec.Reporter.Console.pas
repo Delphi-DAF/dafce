@@ -23,6 +23,9 @@ type
     function Level2Margin(const Level: Byte): string;
     function ResultSymbol(const AResult: TSpecRunResult): string;
     procedure OutputStep(const Context: IRunContext; const Item: ISpecItem);
+  protected
+    /// <summary>Writes a piece of the report, already indented, to the console.</summary>
+    procedure Emit(const Text: string); virtual;
   public
     function UseConsole: Boolean; override;
     procedure OnBeginSuite(const Context: IRunContext; const Suite: ISpecSuite); override;
@@ -90,7 +93,12 @@ begin
   OutputText := Regex.Replace(Text, ExtractValue);
   if Level = 0 then
     Margin := SLineBreak + Margin;
-  Write(Margin + OutputText);
+  Emit(Margin + OutputText);
+end;
+
+procedure TConsoleReporter.Emit(const Text: string);
+begin
+  Write(Text);
 end;
 
 procedure TConsoleReporter.OutputLn(const Level: Byte; const Text: string);
@@ -313,6 +321,10 @@ begin
       end;
       var Symbol := ResultSymbol(Example.RunInfo.Result);
       OutputLn(BaseLevel + 2, Symbol + ' ' + Row + Format(' (%d ms)', [Example.RunInfo.ExecTimeMs]));
+      // Una fila no imprime sus steps: el motivo de su fallo solo sale aqui.
+      var Reason := ScenarioFailure(Context, Example);
+      if not Reason.IsEmpty then
+        OutputLn(BaseLevel + 3, 'ERROR: "' + Reason + '"');
     end;
   end;
 end;

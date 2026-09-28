@@ -19,8 +19,8 @@ type
     FOutput: string;
     function EscapeXml(const S: string): string;
     function TimeToXml(const Ms: Int64): string;
-    function BuildTestCase(const Scenario: IScenario; const ClassName: string): string;
-    function BuildTestSuite(const Feature: IFeature): string;
+    function BuildTestCase(const Context: IRunContext; const Scenario: IScenario; const ClassName: string): string;
+    function BuildTestSuite(const Context: IRunContext; const Feature: IFeature): string;
     function BuildXml(const Context: IRunContext): string;
   public
     function GetContent: string; override;
@@ -76,7 +76,7 @@ begin
   Result := FormatFloat('0.000', Ms / 1000.0, XmlFormatSettings);
 end;
 
-function TJUnitReporter.BuildTestCase(const Scenario: IScenario; const ClassName: string): string;
+function TJUnitReporter.BuildTestCase(const Context: IRunContext; const Scenario: IScenario; const ClassName: string): string;
 var
   SB: TStringBuilder;
   RunInfo: TSpecRunInfo;
@@ -94,14 +94,14 @@ begin
       SB.AppendLine('      <skipped/>');
       SB.AppendLine('    </testcase>');
     end
-    else if RunInfo.Result = srrFail then
+    else if RunInfo.Result in [srrFail, srrError] then
     begin
       // Failed
       SB.AppendFormat('    <testcase name="%s" classname="%s" time="%s">',
         [EscapeXml(Scenario.Description), EscapeXml(ClassName), TimeToXml(RunInfo.ExecTimeMs)]);
       SB.AppendLine;
       SB.AppendFormat('      <failure message="%s" type="AssertionError"/>',
-        [EscapeXml(RunInfo.ErrMsg)]);
+        [EscapeXml(ScenarioFailure(Context, Scenario))]);
       SB.AppendLine;
       SB.AppendLine('    </testcase>');
     end
@@ -119,7 +119,7 @@ begin
   end;
 end;
 
-function TJUnitReporter.BuildTestSuite(const Feature: IFeature): string;
+function TJUnitReporter.BuildTestSuite(const Context: IRunContext; const Feature: IFeature): string;
 var
   SB: TStringBuilder;
   Rule: IRule;
@@ -162,13 +162,13 @@ begin
               SB.AppendLine('      <skipped/>');
               SB.AppendLine('    </testcase>');
             end
-            else if ExampleRunInfo.Result = srrFail then
+            else if ExampleRunInfo.Result in [srrFail, srrError] then
             begin
               SB.AppendFormat('    <testcase name="%s" classname="%s" time="%s">',
                 [EscapeXml(ExampleDesc), EscapeXml(Feature.Title), TimeToXml(ExampleRunInfo.ExecTimeMs)]);
               SB.AppendLine;
               SB.AppendFormat('      <failure message="%s" type="AssertionError"/>',
-                [EscapeXml(ExampleRunInfo.ErrMsg)]);
+                [EscapeXml(ScenarioFailure(Context, Example))]);
               SB.AppendLine;
               SB.AppendLine('    </testcase>');
             end
@@ -183,7 +183,7 @@ begin
         else
         begin
           // Regular scenario
-          SB.Append(BuildTestCase(Scenario, Feature.Title));
+          SB.Append(BuildTestCase(Context, Scenario, Feature.Title));
         end;
       end;
     end;
@@ -216,7 +216,7 @@ begin
     // Each feature as a testsuite — skip features with no executed scenarios
     for Feature in Context.Suite.Features do
       if (Feature as ISpecItem).RunInfo.TotalCount > 0 then
-        SB.Append(BuildTestSuite(Feature));
+        SB.Append(BuildTestSuite(Context, Feature));
 
     SB.AppendLine('</testsuites>');
 

@@ -219,8 +219,13 @@ begin
       FCurrentScenario.AddPair('description', Item.Description);
       FCurrentScenario.AddPair('status', GetStatus(Item));
       FCurrentScenario.AddPair('duration', TJSONNumber.Create(Item.RunInfo.ExecTimeMs));
-      if (GetStatus(Item) = 'fail') and (Item.RunInfo.ErrMsg <> '') then
-        FCurrentScenario.AddPair('error', Item.RunInfo.ErrMsg);
+      var Scenario: IScenario;
+      if (GetStatus(Item) = 'fail') and Supports(Item, IScenario, Scenario) then
+      begin
+        var Reason := ScenarioFailure(Context, Scenario);
+        if Reason <> '' then
+          FCurrentScenario.AddPair('error', Reason);
+      end;
       FCurrentSteps := TJSONArray.Create;
     end;
     sikExampleInit: ;
@@ -267,8 +272,12 @@ begin
     ExampleObj.AddPair('values', ValuesArr);
     ExampleObj.AddPair('status', GetStatus(Example as ISpecItem));
     ExampleObj.AddPair('duration', TJSONNumber.Create((Example as ISpecItem).RunInfo.ExecTimeMs));
-    if (Example as ISpecItem).RunInfo.Result = srrFail then
-      ExampleObj.AddPair('error', (Example as ISpecItem).RunInfo.ErrMsg);
+    if GetStatus(Example as ISpecItem) = 'fail' then
+    begin
+      var Reason := ScenarioFailure(Context, Example);
+      if Reason <> '' then
+        ExampleObj.AddPair('error', Reason);
+    end;
     ExamplesArr.AddElement(ExampleObj);
   end;
   OutlineObj.AddPair('examples', ExamplesArr);

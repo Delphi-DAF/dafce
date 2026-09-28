@@ -26,9 +26,9 @@ type
     procedure AddTags(const Tags: TSpecTags);
     function GetGherkinKeyword(Kind: TSpecItemKind): string;
     function RestorePlaceholders(const Text: string): string;
-    procedure WriteExamplesTable(const Outline: IScenarioOutline);
+    procedure WriteExamplesTable(const Context: IRunContext; const Outline: IScenarioOutline);
     procedure WriteDataTable(const Table: TDataTableObj);
-    function ResultComment(const Item: ISpecItem): string;
+    function ResultComment(const Item: ISpecItem; const Reason: string = ''): string;
     function SanitizeFileName(const Name: string): string;
     procedure FlushCurrentFeature;
   public
@@ -115,7 +115,7 @@ begin
   Result := TRegEx.Replace(Text, '#\{([^}]+)\}', '<$1>');
 end;
 
-function TGherkinReporter.ResultComment(const Item: ISpecItem): string;
+function TGherkinReporter.ResultComment(const Item: ISpecItem; const Reason: string): string;
 begin
   if not FWithResults then
     Exit('');
@@ -123,8 +123,11 @@ begin
     Exit(' # skip');
   if Item.RunInfo.IsSuccess then
     Result := ' # pass'
+  else if Reason.IsEmpty then
+    Result := ' # FAIL'
   else
-    Result := ' # FAIL';
+    // Un comentario es una linea: de un mensaje de varias, o de una traza, queda la primera.
+    Result := ' # FAIL: ' + Reason.Split([sLineBreak, #10])[0];
 end;
 
 function TGherkinReporter.SanitizeFileName(const Name: string): string;
@@ -154,7 +157,7 @@ begin
   FCurrentFeatureName := '';
 end;
 
-procedure TGherkinReporter.WriteExamplesTable(const Outline: IScenarioOutline);
+procedure TGherkinReporter.WriteExamplesTable(const Context: IRunContext; const Outline: IScenarioOutline);
 var
   ColWidths: TArray<Integer>;
   Headers: TArray<string>;
@@ -190,7 +193,7 @@ begin
     for i := 0 to High(Values) do
       if i <= High(ColWidths) then
         DataLine := DataLine + ' ' + Val2Str(Values[i]).PadRight(ColWidths[i]) + ' |';
-    AddLine(DataLine + ResultComment(Example));
+    AddLine(DataLine + ResultComment(Example, ScenarioFailure(Context, Example)));
   end;
 end;
 
@@ -325,7 +328,7 @@ begin
 
     sikGiven, sikWhen, sikThen: begin
       var Step: IScenarioStep;
-      AddLine(GetGherkinKeyword(Item.Kind) + ' ' + Item.Description + ResultComment(Item));
+      AddLine(GetGherkinKeyword(Item.Kind) + ' ' + Item.Description + ResultComment(Item, Context.GetErrorDetail(Item.RunInfo)));
       if Supports(Item, IScenarioStep, Step) and Assigned(Step.DataTable) then
       begin
         Inc(FIndent);
@@ -356,7 +359,7 @@ begin
   AddLine('');
   AddLine('Examples:');
   FIndent := 3;
-  WriteExamplesTable(Outline);
+  WriteExamplesTable(Context, Outline);
 end;
 
 function TGherkinReporter.GetContent: string;

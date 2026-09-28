@@ -23,7 +23,8 @@ uses
   SuiteContext.Feat in 'SuiteContext.Feat.pas',
   InjectionPrecedence.Feat in 'InjectionPrecedence.Feat.pas',
   NestedRun.Feat in 'NestedRun.Feat.pas',
-  FailureVisibility.Feat in 'FailureVisibility.Feat.pas';
+  FailureVisibility.Feat in 'FailureVisibility.Feat.pas',
+  FailureReason.Feat in 'FailureReason.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;
