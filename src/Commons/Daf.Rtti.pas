@@ -131,9 +131,11 @@ function HasRtti(PInfo: PTypeInfo): Boolean;
 ///   Converts <c>Source</c> to a value assignable to <c>Target</c>, returning False when no
 ///   reasonable conversion exists. Handles: exact type; a record with an <c>Implicit(X)</c>
 ///   operator returning <c>Target</c> (the value is coerced to <c>X</c> then wrapped — e.g.
-///   <c>TNullable&lt;X&gt;</c>); a direct cast; and coercion through a Variant. Shared by the
-///   smart <c>SetValue</c> helpers and by callers that materialize values (e.g. the in-memory
-///   query engine).
+///   <c>TNullable&lt;X&gt;</c>); a direct cast; and the same cast after a round-trip through a
+///   Variant, which turns an enumeration into its ordinal and a Variant into the value it holds.
+///   It does not convert between families -- an integer into a Boolean, a number into a string.
+///   Shared by the smart <c>SetValue</c> helpers and by callers that materialize values (e.g.
+///   the in-memory query engine).
 /// </summary>
 function CoerceForAssign(const Target: TRttiType; const Source: TValue; out Res: TValue): Boolean;
 
@@ -581,7 +583,9 @@ begin
   if Source.TryCast(Target.Handle, Res) then
     Exit(True);
 
-  // 4. Coerce through a Variant (numeric/string/date/bool families).
+  // 4. Round-trip through a Variant: an enumeration comes back as its ordinal and a Variant
+  //    as the value it holds, so either can take one of the casts above. It does not convert
+  //    between families; the property helper leaves that to SetPropValue.
   try
     var Tmp := TValue.FromVariant(Source.AsVariant);
     if Tmp.TypeInfo = Target.Handle then
