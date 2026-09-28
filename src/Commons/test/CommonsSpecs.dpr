@@ -14,6 +14,7 @@ uses
   Macros.Feat in 'Macros.Feat.pas',
   MissingMacros.Feat in 'MissingMacros.Feat.pas',
   Rtti.Feat in 'Rtti.Feat.pas',
+  PropertyAssign.Feat in 'PropertyAssign.Feat.pas',
   Version.Feat in 'Version.Feat.pas';
 
 begin

@@ -599,13 +599,15 @@ procedure TRttiPropertyHelper.SetValue(Instance: Pointer;const AValue: TValue);
 var
   V: TValue;
 begin
-  // Smart set via CoerceForAssign: exact type, a record Implicit operator (e.g.
-  // TNullable), a direct cast, or Variant coercion. We already hold the
-  // TRttiProperty, so we set through modern RTTI directly — no name re-lookup
-  // (SetPropValue would re-resolve the PPropInfo) and public members work too.
-  // If nothing converts, let modern RTTI raise a clear EInvalidCast.
+  // CoerceForAssign first: exact type, a record Implicit operator (e.g. TNullable), a
+  // direct cast. What it does not convert goes to SetPropValue, which converts by the
+  // kind of the property: an ordinal or a name into an enumeration or a set, a number
+  // into a string, a string into a number. A record has no such conversion, so modern
+  // RTTI raises EInvalidCast.
   if CoerceForAssign(PropertyType, AValue, V) then
     inherited SetValue(Instance, V)
+  else if (Self is TRttiInstanceProperty) and not (PropertyType is TRttiRecordType) then
+    SetPropValue(TObject(Instance), TRttiInstanceProperty(Self).PropInfo, AValue.AsVariant)
   else
     inherited SetValue(Instance, AValue);
 end;

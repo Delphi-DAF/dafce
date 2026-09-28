@@ -102,6 +102,7 @@
         <DCCReference Include="Enumerable.Feat.pas"/>
         <DCCReference Include="Comparers.Feat.pas"/>
         <DCCReference Include="Rtti.Feat.pas"/>
+        <DCCReference Include="PropertyAssign.Feat.pas"/>
         <DCCReference Include="Version.Feat.pas"/>
         <DCCReference Include="MissingMacros.Feat.pas"/>
         <BuildConfiguration Include="Base">
