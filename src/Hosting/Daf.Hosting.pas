@@ -187,6 +187,9 @@ type
 
 implementation
 uses
+  {$IFDEF MSWINDOWS}
+  Winapi.Windows,
+  {$ENDIF}
   System.IOUtils,
   System.SyncObjs,
   System.Types,
@@ -224,24 +227,39 @@ end;
 
 { THostEnvironment }
 
+// La de .NET: el directorio de trabajo, salvo que sea el del sistema, que es donde arranca un
+// servicio de Windows y donde no hay nada suyo; entonces, la carpeta del ejecutable.
+function DefaultContentRoot: string;
+begin
+  Result := TDirectory.GetCurrentDirectory;
+  {$IFDEF MSWINDOWS}
+  var Buffer: array[0..MAX_PATH] of Char;
+  var SystemDir: string;
+  SetString(SystemDir, Buffer, GetSystemDirectory(Buffer, Length(Buffer)));
+  if SameText(ExcludeTrailingPathDelimiter(Result), ExcludeTrailingPathDelimiter(SystemDir)) then
+    Result := TPath.GetAppPath;
+  {$ENDIF}
+end;
+
 constructor THostEnvironment.Create(const HostConfiguration: IConfiguration);
 begin
   Assert(Assigned(HostConfiguration), 'THostEnvironment needs the host configuration to derive from');
 
-  // Las tres claves conservan el nombre que ya tenian, asi que la variable de entorno de
-  // siempre sigue valiendo -- entra por el proveedor de entorno, que las publica sin quitarles
-  // el prefijo-- y gana ademas la forma --DAF_APP_ENV=Development.
-  TEnvironmentName.TryParse(HostConfiguration[TDafEnvVars.APP_ENV], FEnvironmentName);
+  TEnvironmentName.TryParse(HostConfiguration[THostDefaults.EnvironmentKey], FEnvironmentName);
   if EnvironmentName.IsEmpty then
     EnvironmentName := TEnvironments.Production;
 
-  ApplicationName := HostConfiguration[TDafEnvVars.APP_NAME];
+  ApplicationName := HostConfiguration[THostDefaults.ApplicationKey];
   if ApplicationName.IsEmpty then
     ApplicationName := TPath.GetFileNameWithoutExtension(ParamStr(0));
 
-  ContentRootPath := HostConfiguration[TDafEnvVars.CONTENT_ROOT];
+  // Como en .NET: una raiz relativa cuelga de la carpeta del ejecutable, no del directorio de
+  // trabajo.
+  ContentRootPath := HostConfiguration[THostDefaults.ContentRootKey];
   if ContentRootPath.IsEmpty then
-    ContentRootPath := TPath.GetAppPath;
+    ContentRootPath := DefaultContentRoot
+  else if not TPath.IsPathRooted(ContentRootPath) then
+    ContentRootPath := TPath.Combine(BinPath, ContentRootPath);
   ContentRootPath := IncludeTrailingPathDelimiter(ContentRootPath);
 end;
 
@@ -552,9 +570,9 @@ begin
     FConfiguration := TConfigurationManager.Create;
 
   // El orden es el del linaje, y decide quien gana: primero el entorno del proceso, despues los
-  // argumentos. Sin quitar el prefijo, para que DAF_APP_ENV se lea con ese mismo nombre venga
-  // de donde venga.
-  FConfiguration.Add(TEnvironmentVariablesConfigurationSource.Create('DAF_', True, False));
+  // argumentos. Las variables DAF_ se leen sin el prefijo, como las DOTNET_ en .NET, asi que
+  // DAF_ENVIRONMENT y --environment fijan la misma clave.
+  FConfiguration.Add(TEnvironmentVariablesConfigurationSource.Create('DAF_'));
 
   if Length(FArgs) > 0 then
     CommandLineConfig.AddArgs(FConfiguration, FArgs);
@@ -585,7 +603,7 @@ begin
       TPath.Combine(FEnvironment.ContentRootPath, App + '.settings.' + FEnvironment.EnvironmentName + '.json'),
       [csoOptional]);
   end;
-  FConfiguration.Add(TEnvironmentVariablesConfigurationSource.Create('', True, False));
+  FConfiguration.Add(TEnvironmentVariablesConfigurationSource.Create);
   if Length(FArgs) > 0 then
     CommandLineConfig.AddArgs(FConfiguration, FArgs);
 end;

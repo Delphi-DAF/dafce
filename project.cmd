@@ -10,8 +10,8 @@ set "PRJ_ROOT_KEY=BDSDEFAULTS"
 
 set "PRJ_BUILD_FILE=%PRJ_DIR%\src\DAFGroup.groupproj"
 SET "PRJ_LOAD=%PRJ_DIR%\src\DAFGroup.groupproj"
-set "DAF_CONTENT_ROOT=%PRJ_OUT_DIR%"
-set "DAF_APP_ENV=Development"
+set "DAF_CONTENTROOT=%PRJ_OUT_DIR%"
+set "DAF_ENVIRONMENT=Development"
 
 
 goto :eof

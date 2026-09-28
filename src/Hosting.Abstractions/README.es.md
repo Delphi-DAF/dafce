@@ -34,12 +34,15 @@ TEnvironments.Production    // 'Production'
 TEnvironments.Testing       // 'Testing'
 ```
 
-### Variables de entorno DAF
+### Ajustes de host
+
+Las claves de la configuración de host de la que se deriva `IHostEnvironment`, con los nombres del
+`HostDefaults` de .NET. Como variables de entorno llevan el prefijo `DAF_`: `DAF_ENVIRONMENT`.
 
 ```pascal
-TDafEnvVars.APP_ENV       // 'DAF_APP_ENV'
-TDafEnvVars.APP_NAME      // 'DAF_APP_NAME'
-TDafEnvVars.CONTENT_ROOT  // 'DAF_CONTENT_ROOT'
+THostDefaults.EnvironmentKey   // 'environment'
+THostDefaults.ApplicationKey   // 'applicationName'
+THostDefaults.ContentRootKey   // 'contentRoot'
 ```
 
 ### Helper

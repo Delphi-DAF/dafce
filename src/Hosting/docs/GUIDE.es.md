@@ -73,8 +73,8 @@ fuente se puede elegir a partir de lo ya configurado.
 Antes de entregarse, el builder carga las fuentes que carga `Host.CreateApplicationBuilder`, en este
 orden, y cada una gana a las anteriores:
 
-1. las variables de entorno del proceso con prefijo `DAF_` —de donde salen `DAF_APP_ENV`,
-   `DAF_APP_NAME` y `DAF_CONTENT_ROOT`— y, si se le dieron argumentos, la línea de comandos;
+1. las variables de entorno del proceso con prefijo `DAF_`, sin el prefijo —`DAF_ENVIRONMENT` fija
+   `environment`— y, si se le dieron argumentos, la línea de comandos;
 2. `appsettings.json`, `appsettings.{Entorno}.json`, `{ApplicationName}.settings.json` y
    `{ApplicationName}.settings.{Entorno}.json` del content root, todos opcionales; un separador de
    ruta en el nombre de la aplicación pasa a `_`;
@@ -85,8 +85,17 @@ orden, y cada una gana a las anteriores:
 var Builder := THost.CreateBuilder(CommandLineConfig.ProcessArgs);
 ```
 
-El content root es la carpeta del ejecutable, salvo que `DAF_CONTENT_ROOT` diga otra. Los ficheros se
-leen una vez, al crear el builder: un cambio en ellos no se nota mientras el proceso sigue vivo.
+De esas primeras fuentes sale el entorno, por las claves que usa .NET y que nombra `THostDefaults`:
+`environment`, `applicationName` y `contentRoot`. Así que `--environment Staging` y
+`DAF_ENVIRONMENT=Staging` dicen lo mismo, y gana el argumento.
+
+El content root es el directorio actual, como en .NET, salvo que `contentRoot` diga otro; uno
+relativo se resuelve contra la carpeta del ejecutable. La excepción es el directorio del sistema,
+que es donde arranca un servicio de Windows: ahí el content root es la carpeta del ejecutable.
+`Environment.BinPath` es siempre esa carpeta, sea cual sea el directorio de trabajo.
+
+Los ficheros se leen una vez, al crear el builder: un cambio en ellos no se nota mientras el proceso
+sigue vivo.
 
 ### 2. El entorno, ya resuelto
 
@@ -263,7 +272,7 @@ Env.IsTesting       // True en Testing (útil para test runners)
 
 Establece el entorno mediante variable de OS antes de lanzar:
 ```
-DAF_APP_ENV=Development
+DAF_ENVIRONMENT=Development
 ```
 
 Abreviaturas aceptadas: `deve`, `stag`, `prod`, `test` (sin distinción de mayúsculas).

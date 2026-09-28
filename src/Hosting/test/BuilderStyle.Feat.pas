@@ -37,11 +37,37 @@ implementation
 
 uses
   System.SysUtils,
+  System.IOUtils,
   Winapi.Windows,
   Daf.MiniSpec,
   Daf.Extensions.Logging,
   Daf.Extensions.DependencyInjection,
   Daf.Extensions.Hosting;
+
+// El directorio de trabajo es del proceso: se cambia solo mientras se crea el builder, que es
+// cuando el host lo lee. Y sin DAF_CONTENTROOT, que el entorno de desarrollo puede traer puesta.
+function CreateInDirectory(const Dir: string): IGenericHostBuilder;
+begin
+  var VarName: string := 'DAF_CONTENTROOT';
+  var Ambient := GetEnvironmentVariable(VarName);
+  var Previous := TDirectory.GetCurrentDirectory;
+  Winapi.Windows.SetEnvironmentVariable(PChar(VarName), nil);
+  TDirectory.SetCurrentDirectory(Dir);
+  try
+    Result := THostBuilder.Create;
+  finally
+    TDirectory.SetCurrentDirectory(Previous);
+    if Ambient <> '' then
+      Winapi.Windows.SetEnvironmentVariable(PChar(VarName), PChar(Ambient));
+  end;
+end;
+
+function SystemDirectory: string;
+var
+  Buffer: array[0..MAX_PATH] of Char;
+begin
+  SetString(Result, Buffer, GetSystemDirectory(Buffer, Length(Buffer)));
+end;
 
 constructor TMarker.Create(const AName: string);
 begin
@@ -142,14 +168,13 @@ Feature Several startups in one process @hosting @builder-style
 
 .Rule('El entorno sale de la configuracion de host')
 
-  // Hoy no habia forma de fijar el entorno por linea de comandos: THostEnvironment leia las tres
-  // variables del proceso por su cuenta y la configuracion no participaba. Y es lo primero que se
-  // prueba en cuanto el builder recibe argumentos.
+  // Las claves son las de .NET: environment, applicationName y contentRoot. Llegan por los
+  // argumentos, o por una variable de entorno con DAF_ delante, que se lee sin el prefijo.
   .Scenario('El entorno se fija por linea de comandos')
     .Given('un builder al que se le pasa el entorno como argumento',
       procedure(W: TOverlapWorld)
       begin
-        W.Builder := THostBuilder.Create(['--DAF_APP_ENV=Development']);
+        W.Builder := THostBuilder.Create(['--environment', 'Development']);
       end)
     .When('se lee su entorno',
       procedure(W: TOverlapWorld)
@@ -162,13 +187,13 @@ Feature Several startups in one process @hosting @builder-style
         Expect(W.Report).ToEqual('Development');
       end)
 
-  .Scenario('La variable de entorno de siempre sigue valiendo')
-    .Given('el entorno puesto en la variable de entorno, y ningun argumento',
+  .Scenario('Una variable DAF_ fija la clave que queda al quitarle el prefijo')
+    .Given('el entorno puesto en DAF_ENVIRONMENT, y ningun argumento',
       procedure(W: TOverlapWorld)
       begin
         // Nombre en una variable: PChar sobre una constante verdadera da E2036, y el error sale
         // lejos de la causa.
-        var VarName: string := TDafEnvVars.APP_ENV;
+        var VarName: string := 'DAF_ENVIRONMENT';
         Winapi.Windows.SetEnvironmentVariable(PChar(VarName), 'Staging');
         try
           // El entorno se resuelve al construir, no al consultarlo, asi que queda fijado antes
@@ -196,7 +221,7 @@ Feature Several startups in one process @hosting @builder-style
     .Given('el entorno fijado a un valor distinto del predeterminado',
       procedure(W: TOverlapWorld)
       begin
-        W.Builder := THostBuilder.Create(['--DAF_APP_ENV=Testing']);
+        W.Builder := THostBuilder.Create(['--environment=Testing']);
       end)
     .When('se lee su entorno',
       procedure(W: TOverlapWorld)
@@ -214,17 +239,72 @@ Feature Several startups in one process @hosting @builder-style
     .Given('los dos fijados por argumento',
       procedure(W: TOverlapWorld)
       begin
-        W.Builder := THostBuilder.Create(['--DAF_APP_NAME=mytool']);
+        W.Builder := THostBuilder.Create(['--applicationName=mytool', '--contentRoot=C:\DafSpecRoot']);
       end)
     .When('se leen',
       procedure(W: TOverlapWorld)
       begin
-        W.Report := W.Builder.Environment.ApplicationName;
+        W.Report := W.Builder.Environment.ApplicationName + '|' + W.Builder.Environment.ContentRootPath;
       end)
     .&Then('responden con lo que se les paso',
       procedure(W: TOverlapWorld)
       begin
-        Expect(W.Report).ToEqual('mytool');
+        Expect(W.Report).ToEqual('mytool|C:\DafSpecRoot\');
+      end)
+
+.Rule('Sin fijarla, la raiz de contenido es la que elige .NET')
+
+  .Scenario('Sin fijarla, es el directorio de trabajo')
+    .Given('un builder creado desde un directorio que no es el del ejecutable',
+      procedure(W: TOverlapWorld)
+      begin
+        W.Builder := CreateInDirectory(TPath.GetTempPath);
+      end)
+    .When('se lee su raiz de contenido',
+      procedure(W: TOverlapWorld)
+      begin
+        W.Report := W.Builder.Environment.ContentRootPath;
+      end)
+    .&Then('es ese directorio',
+      procedure(W: TOverlapWorld)
+      begin
+        Expect(W.Report).ToEqual(IncludeTrailingPathDelimiter(TPath.GetTempPath));
+      end)
+
+  // Un servicio de Windows arranca en el directorio del sistema, donde no hay nada suyo.
+  .Scenario('Si el directorio de trabajo es el del sistema, es la carpeta del ejecutable')
+    .Given('un builder creado desde el directorio del sistema, como el de un servicio',
+      procedure(W: TOverlapWorld)
+      begin
+        W.Builder := CreateInDirectory(SystemDirectory);
+      end)
+    .When('se lee su raiz de contenido',
+      procedure(W: TOverlapWorld)
+      begin
+        W.Report := W.Builder.Environment.ContentRootPath;
+      end)
+    .&Then('es la carpeta del ejecutable',
+      procedure(W: TOverlapWorld)
+      begin
+        Expect(W.Report).ToEqual(W.Builder.Environment.BinPath);
+      end)
+
+  .Scenario('Una raiz de contenido relativa cuelga de la carpeta del ejecutable')
+    .Given('un builder al que se le pasa una raiz de contenido relativa',
+      procedure(W: TOverlapWorld)
+      begin
+        W.Builder := THostBuilder.Create(['--contentRoot=conf']);
+      end)
+    .When('se lee su raiz de contenido',
+      procedure(W: TOverlapWorld)
+      begin
+        W.Report := W.Builder.Environment.ContentRootPath;
+      end)
+    .&Then('es esa carpeta dentro de la del ejecutable',
+      procedure(W: TOverlapWorld)
+      begin
+        Expect(W.Report).ToEqual(
+          IncludeTrailingPathDelimiter(TPath.Combine(W.Builder.Environment.BinPath, 'conf')));
       end)
 
 .Rule('Componer logging solo si se pidio')

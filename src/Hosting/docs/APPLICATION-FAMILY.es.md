@@ -105,14 +105,14 @@ Donde **diverge**, y esto importa más que el parecido:
   ninguno se aplica a interfaces, así que el truco no se traslada. DAF compone con fachadas
   explícitas —`JsonConfig.AddFile(Builder, …)` en vez de `Builder.AddJsonFile(…)`— y con un
   `IServiceCollection` que es un record con métodos de verdad.
-- **Las fuentes por defecto son las de .NET 10, con cinco diferencias.** El builder carga
+- **Las fuentes por defecto son las de .NET 10, con tres diferencias.** El builder carga
   `appsettings.json`, `appsettings.{Entorno}.json`, `{ApplicationName}.settings.json`,
   `{ApplicationName}.settings.{Entorno}.json`, todas las variables de entorno y la línea de comandos,
-  como `Host.CreateApplicationBuilder`. Los ajustes del propio host salen de las variables con prefijo
-  `DAF_`, que se leen con el prefijo —`DAF_APP_ENV`— donde .NET lee `DOTNET_` y lo quita; no hay *user
-  secrets*; los ficheros no se recargan cuando cambian; una variable de entorno con un prefijo de
-  cadena de conexión como `SQLCONNSTR_` no se convierte en una clave `ConnectionStrings:`; y el content
-  root es la carpeta del ejecutable, no el directorio actual.
+  como `Host.CreateApplicationBuilder`, y deriva el entorno y el content root de la misma manera —las
+  variables del propio host llevan `DAF_` donde las de .NET llevan `DOTNET_`, así que
+  `DAF_ENVIRONMENT` es `environment`—. Lo que difiere: no hay *user secrets*; los ficheros no se
+  recargan cuando cambian; y una variable de entorno con un prefijo de cadena de conexión como
+  `SQLCONNSTR_` no se convierte en una clave `ConnectionStrings:`.
 - **Sin proveedor de log por defecto.** .NET escribe en la consola, en la salida de depuración y en el
   event source salvo que se le diga otra cosa; DAF no añade ninguno. Quien usa `Logging` añade un
   proveedor, o `AddNullProvider` para declarar que el silencio es a propósito: con `Logging` usado y

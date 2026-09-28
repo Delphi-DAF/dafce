@@ -74,7 +74,8 @@ Services.AddSingleton<IHostedService, TMyWorker>;
 
 ## Environment
 
-The environment is read from the `DAF_APP_ENV` variable (or defaults to `Production`):
+The environment is read from the `environment` host setting — `--environment Staging` on the
+command line, or the `DAF_ENVIRONMENT` variable — and defaults to `Production`:
 
 | Value | IsDevelopment | IsStaging | IsProduction | IsTesting |
 |-------|:---:|:---:|:---:|:---:|
@@ -90,13 +91,16 @@ if Env.IsDevelopment then
 WriteLn(Env.ContentRootPath);
 ```
 
-Environment variables read at startup:
+Host settings read at startup, as an argument or as a variable — the argument wins:
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `DAF_APP_ENV` | `Production` | Environment name |
-| `DAF_APP_NAME` | Executable name | Application name |
-| `DAF_CONTENT_ROOT` | App binary path | Content root directory |
+| Key | Variable | Default | Purpose |
+|-----|----------|---------|---------|
+| `environment` | `DAF_ENVIRONMENT` | `Production` | Environment name |
+| `applicationName` | `DAF_APPLICATIONNAME` | Executable name | Application name |
+| `contentRoot` | `DAF_CONTENTROOT` | Current directory | Content root directory |
+
+When the current directory is the system one, as for a Windows service, the content root is the
+folder of the executable instead. `Env.BinPath` is always that folder.
 
 ---
 

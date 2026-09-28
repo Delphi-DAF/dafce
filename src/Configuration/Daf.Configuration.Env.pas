@@ -18,23 +18,15 @@ type
   private
     FPrefix: string;
     FConvertDoubleUnderscore: Boolean;
-    FStripPrefix: Boolean;
   public
     /// <param name="APrefix">
-    ///   Prefijo que deben tener las variables de entorno para ser incluidas (opcional).
+    ///   Prefijo que deben tener las variables de entorno para ser incluidas (opcional). Se
+    ///   quita de la clave, como en .NET.
     /// </param>
     /// <param name="AConvertDoubleUnderscore">
     ///   Indica si se convierte '__' en ':' para simular sub-secciones (true por defecto).
     /// </param>
-    /// <param name="AStripPrefix">
-    ///   Si el prefijo se quita de la clave resultante (true por defecto, que es lo que hace
-    ///   .NET). En false la clave conserva su nombre completo: es lo que necesita la
-    ///   configuracion de host de DAF, donde DAF_APP_ENV se lee con ese mismo nombre venga de
-    ///   la variable de entorno o de --DAF_APP_ENV=... en la linea de comandos. Con el prefijo
-    ///   quitado las dos vias produciran claves distintas, y una de las dos dejaria de valer.
-    /// </param>
-    constructor Create(const APrefix: string = ''; AConvertDoubleUnderscore: Boolean = True;
-      const AStripPrefix: Boolean = True);
+    constructor Create(const APrefix: string = ''; AConvertDoubleUnderscore: Boolean = True);
 
     /// <summary>
     ///   Carga (o recarga) todas las variables de entorno en la propiedad Data.
@@ -50,10 +42,8 @@ type
   private
     FPrefix: string;
     FConvertDoubleUnderscore: Boolean;
-    FStripPrefix: Boolean;
   public
-    constructor Create(const APrefix: string = ''; AConvertDoubleUnderscore: Boolean = True;
-      const AStripPrefix: Boolean = True);
+    constructor Create(const APrefix: string = ''; AConvertDoubleUnderscore: Boolean = True);
     function Build(const Builder: IConfigurationBuilder): IConfigurationProvider;
   end;
 
@@ -79,13 +69,11 @@ uses
   Daf.Types;
 { TEnvironmentVariablesConfigurationProvider }
 
-constructor TEnvironmentVariablesConfigurationProvider.Create(const APrefix: string; AConvertDoubleUnderscore: Boolean;
-  const AStripPrefix: Boolean);
+constructor TEnvironmentVariablesConfigurationProvider.Create(const APrefix: string; AConvertDoubleUnderscore: Boolean);
 begin
   inherited Create;
   FPrefix := APrefix.ToUpper; // Forzamos mayúsculas para filtrar consistentemente
   FConvertDoubleUnderscore := AConvertDoubleUnderscore;
-  FStripPrefix := AStripPrefix;
 end;
 
 procedure TEnvironmentVariablesConfigurationProvider.Load;
@@ -107,7 +95,7 @@ begin
         Continue;
 
       KeyFiltered := kvp.Key;
-      if (FPrefix <> '') and FStripPrefix then
+      if FPrefix <> '' then
         KeyFiltered := KeyFiltered.Substring(FPrefix.Length);
 
       if FConvertDoubleUnderscore then
@@ -124,18 +112,16 @@ end;
 
 { TEnvironmentVariablesConfigurationSource }
 
-constructor TEnvironmentVariablesConfigurationSource.Create(const APrefix: string; AConvertDoubleUnderscore: Boolean;
-  const AStripPrefix: Boolean);
+constructor TEnvironmentVariablesConfigurationSource.Create(const APrefix: string; AConvertDoubleUnderscore: Boolean);
 begin
   inherited Create;
   FPrefix := APrefix;
   FConvertDoubleUnderscore := AConvertDoubleUnderscore;
-  FStripPrefix := AStripPrefix;
 end;
 
 function TEnvironmentVariablesConfigurationSource.Build(const Builder: IConfigurationBuilder): IConfigurationProvider;
 begin
-  Result := TEnvironmentVariablesConfigurationProvider.Create(FPrefix, FConvertDoubleUnderscore, FStripPrefix);
+  Result := TEnvironmentVariablesConfigurationProvider.Create(FPrefix, FConvertDoubleUnderscore);
 end;
 
 { TEnvironmentVariablesConfigurationBuilderExtensions }

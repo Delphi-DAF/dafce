@@ -254,13 +254,14 @@ silencio.
 | `${env:NOMBRE}` | la variable de entorno `NOMBRE` |
 | `${event-properties:clave}` | `clave` del estado de la entrada, vacío si no la trae |
 | `${environment}` | `IHostEnvironment.EnvironmentName` |
-| `${contentRootPath}` | `IHostEnvironment.ContentRootPath` |
-| `${binPath}` | `IHostEnvironment.BinPath` |
+| `${contentRootPath}` | `IHostEnvironment.ContentRootPath`, por defecto el directorio actual |
+| `${binPath}` | `IHostEnvironment.BinPath`, la carpeta del ejecutable |
 | `${ApplicationName}` | `IHostEnvironment.ApplicationName` |
 | `${uppercase:texto}`, `${lowercase:texto}` | el argumento literal, con otra caja |
 
 Los tokens no se anidan: el argumento de un token se toma literal, así que `${uppercase:${level}}`
-no cambia la caja del nombre del nivel.
+no cambia la caja del nombre del nivel. El nombre de un token no distingue mayúsculas: `${BinPath}` y
+`${binPath}` son el mismo token.
 
 ### Layout por defecto
 
@@ -269,7 +270,8 @@ ${timestamp} #${pid}:${thread} [${level}] ${category} | ${message} ${exception}
 ```
 
 El `FileName` de `TFileTarget` pasa por el mismo motor, así que `${binPath}`, `${date}` y los demás
-funcionan dentro de una ruta.
+funcionan dentro de una ruta. `${binPath}` deja el log junto al ejecutable, se arranque el proceso
+desde donde se arranque; `${contentRootPath}` sigue al content root.
 
 ---
 

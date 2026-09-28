@@ -35,6 +35,7 @@ type
     procedure WriteInsideScope(const ScopeMsg, Line: string);
     procedure WriteWithoutScope(const Line: string);
     function Written: string;
+    function BinPath: string;
   end;
 
 implementation
@@ -125,6 +126,11 @@ begin
   Result := TRenderTarget(FTarget).Text;
 end;
 
+function TLayoutWorld.BinPath: string;
+begin
+  Result := FEnv.BinPath;
+end;
+
 initialization
 
 Feature('''
@@ -207,6 +213,25 @@ Feature El layout de NNLog escribe el ambito, y no se calla un token que nadie a
       procedure(W: TLayoutWorld)
       begin
         Expect(W.Written).ToEqual('[Prueba]');
+      end)
+
+.Rule('Un token se reconoce escrito con cualquier caja')
+
+  .Scenario('BinPath y binPath son el mismo token')
+    .Given('un layout que nombra la carpeta del ejecutable con las dos cajas',
+      procedure(W: TLayoutWorld)
+      begin
+        W.TargetRenders('[${BinPath}|${binPath}]');
+      end)
+    .When('se compone una linea',
+      procedure(W: TLayoutWorld)
+      begin
+        W.WriteWithoutScope('da igual que diga');
+      end)
+    .&Then('las dos dan la carpeta del ejecutable',
+      procedure(W: TLayoutWorld)
+      begin
+        Expect(W.Written).ToEqual('[' + W.BinPath + '|' + W.BinPath + ']');
       end);
 
 end.

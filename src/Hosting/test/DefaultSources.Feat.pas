@@ -69,7 +69,7 @@ end;
 
 procedure TDefaultSourcesWorld.BuildHost(const ExtraArgs: TArray<string>);
 begin
-  var Builder := THostBuilder.Create(['--DAF_CONTENT_ROOT=' + Folder] + ExtraArgs);
+  var Builder := THostBuilder.Create(['--contentRoot=' + Folder] + ExtraArgs);
   var Owner: IHostApplicationBuilder := Builder;
   try
     // Se lee del host: al construirlo, el builder suelta su configuracion.
@@ -130,7 +130,7 @@ Feature Fuentes de configuracion por defecto @hosting @defaultsources
     .When('se construye el host en el entorno Staging',
       procedure(W: TDefaultSourcesWorld)
       begin
-        W.BuildHost(['--DAF_APP_ENV=Staging']);
+        W.BuildHost(['--environment=Staging']);
       end)
     .&Then('la clave es la del fichero del entorno',
       procedure(W: TDefaultSourcesWorld)
@@ -163,7 +163,7 @@ Feature Fuentes de configuracion por defecto @hosting @defaultsources
     .When('se construye el host de la aplicacion SpecApp',
       procedure(W: TDefaultSourcesWorld)
       begin
-        W.BuildHost(['--DAF_APP_NAME=SpecApp']);
+        W.BuildHost(['--applicationName=SpecApp']);
       end)
     .&Then('la clave es la del fichero de la aplicacion',
       procedure(W: TDefaultSourcesWorld)
@@ -181,7 +181,7 @@ Feature Fuentes de configuracion por defecto @hosting @defaultsources
     .When('se construye el host de SpecApp en el entorno Staging',
       procedure(W: TDefaultSourcesWorld)
       begin
-        W.BuildHost(['--DAF_APP_NAME=SpecApp', '--DAF_APP_ENV=Staging']);
+        W.BuildHost(['--applicationName=SpecApp', '--environment=Staging']);
       end)
     .&Then('la clave es la del fichero de la aplicacion',
       procedure(W: TDefaultSourcesWorld)
@@ -199,7 +199,7 @@ Feature Fuentes de configuracion por defecto @hosting @defaultsources
     .When('se construye el host de SpecApp en el entorno Staging',
       procedure(W: TDefaultSourcesWorld)
       begin
-        W.BuildHost(['--DAF_APP_NAME=SpecApp', '--DAF_APP_ENV=Staging']);
+        W.BuildHost(['--applicationName=SpecApp', '--environment=Staging']);
       end)
     .&Then('la clave es la del fichero de la aplicacion para ese entorno',
       procedure(W: TDefaultSourcesWorld)
@@ -216,7 +216,7 @@ Feature Fuentes de configuracion por defecto @hosting @defaultsources
     .When('se construye el host de la aplicacion Suite/Tool',
       procedure(W: TDefaultSourcesWorld)
       begin
-        W.BuildHost(['--DAF_APP_NAME=Suite/Tool']);
+        W.BuildHost(['--applicationName=Suite/Tool']);
       end)
     .&Then('lee el fichero con el separador cambiado',
       procedure(W: TDefaultSourcesWorld)

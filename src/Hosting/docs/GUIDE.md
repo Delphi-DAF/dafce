@@ -73,8 +73,8 @@ so a source can be chosen from what is already configured.
 Before returning, the builder loads the sources `Host.CreateApplicationBuilder` loads, in this
 order, each one winning over the ones before it:
 
-1. the process environment variables prefixed `DAF_` — where `DAF_APP_ENV`, `DAF_APP_NAME` and
-   `DAF_CONTENT_ROOT` come from — and, if it was given arguments, the command line;
+1. the process environment variables prefixed `DAF_`, with the prefix stripped — `DAF_ENVIRONMENT`
+   sets `environment` — and, if it was given arguments, the command line;
 2. `appsettings.json`, `appsettings.{Environment}.json`, `{ApplicationName}.settings.json` and
    `{ApplicationName}.settings.{Environment}.json` from the content root, all optional; a path
    separator in the application name becomes `_`;
@@ -85,8 +85,16 @@ order, each one winning over the ones before it:
 var Builder := THost.CreateBuilder(CommandLineConfig.ProcessArgs);
 ```
 
-The content root is the folder of the executable unless `DAF_CONTENT_ROOT` names another one. The
-files are read once, when the builder is created: a change to them is not picked up while the
+Those first sources are where the environment comes from, through the keys .NET uses and
+`THostDefaults` names: `environment`, `applicationName` and `contentRoot`. So `--environment Staging`
+and `DAF_ENVIRONMENT=Staging` say the same thing, and the argument wins.
+
+The content root is the current directory, as in .NET, unless `contentRoot` names another one; a
+relative one is resolved against the folder of the executable. The exception is the system
+directory, which is where a Windows service starts: there the content root is the folder of the
+executable. `Environment.BinPath` is always that folder, whatever the working directory.
+
+The files are read once, when the builder is created: a change to them is not picked up while the
 process runs.
 
 ### 2. The environment, already resolved
@@ -264,7 +272,7 @@ Env.IsTesting       // True in Testing (useful for test runners)
 
 Set environment via OS variable before launching:
 ```
-DAF_APP_ENV=Development
+DAF_ENVIRONMENT=Development
 ```
 
 Accepted shorthands: `deve`, `stag`, `prod`, `test` (case-insensitive).

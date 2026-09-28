@@ -144,12 +144,12 @@ Feature Configuration manager @configuration @manager
     .Given('a manager that already knows the environment',
       procedure(W: TManagerWorld)
       begin
-        Seed(W.Manager, ['DAF_APP_ENV', 'Staging']);
+        Seed(W.Manager, ['environment', 'Staging']);
       end)
     .When('I read it to decide which settings to add',
       procedure(W: TManagerWorld)
       begin
-        var Env := W.Manager['DAF_APP_ENV'];
+        var Env := W.Manager['environment'];
         Seed(W.Manager, ['Db:Server', 'db-' + Env.ToLower]);
       end)
     .&Then('the chosen source is in and readable',

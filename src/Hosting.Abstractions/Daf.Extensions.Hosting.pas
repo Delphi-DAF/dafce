@@ -152,10 +152,13 @@ type
     const Testing = 'Testing';
   end;
 
-  TDafEnvVars = record
-    const APP_ENV = 'DAF_APP_ENV';
-    const APP_NAME = 'DAF_APP_NAME';
-    const CONTENT_ROOT = 'DAF_CONTENT_ROOT';
+  /// Las claves de la configuracion de host de las que sale IHostEnvironment, con los nombres de
+  /// .NET. Se fijan por argumento (--environment Staging) o con una variable de entorno con DAF_
+  /// delante, que se lee sin el prefijo: DAF_ENVIRONMENT, DAF_APPLICATIONNAME, DAF_CONTENTROOT.
+  THostDefaults = record
+    const EnvironmentKey = 'environment';
+    const ApplicationKey = 'applicationName';
+    const ContentRootKey = 'contentRoot';
   end;
 
   TEnvironmentNameHelper = record Helper for TEnvironmentName

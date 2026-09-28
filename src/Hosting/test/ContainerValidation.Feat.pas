@@ -55,7 +55,7 @@ type
     Options: TServiceProviderOptions;
     constructor Create;
     destructor Destroy; override;
-    /// El entorno va por argumento: gana a la variable DAF_APP_ENV del proceso.
+    /// El entorno va por argumento: gana a la variable DAF_ENVIRONMENT del proceso.
     procedure UseEnvironment(const Name: string);
     procedure Build;
   end;
@@ -120,7 +120,7 @@ end;
 
 procedure TValidationWorld.UseEnvironment(const Name: string);
 begin
-  Builder := THostBuilder.Create(['--DAF_APP_ENV=' + Name]);
+  Builder := THostBuilder.Create(['--environment=' + Name]);
 end;
 
 procedure TValidationWorld.Build;

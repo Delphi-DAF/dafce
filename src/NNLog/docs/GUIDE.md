@@ -250,13 +250,13 @@ column.
 | `${env:NAME}` | the `NAME` environment variable |
 | `${event-properties:key}` | `key` from the entry's state, empty when it carries no such key |
 | `${environment}` | `IHostEnvironment.EnvironmentName` |
-| `${contentRootPath}` | `IHostEnvironment.ContentRootPath` |
-| `${binPath}` | `IHostEnvironment.BinPath` |
+| `${contentRootPath}` | `IHostEnvironment.ContentRootPath`, by default the current directory |
+| `${binPath}` | `IHostEnvironment.BinPath`, the folder of the executable |
 | `${ApplicationName}` | `IHostEnvironment.ApplicationName` |
 | `${uppercase:text}`, `${lowercase:text}` | the literal argument, recased |
 
 Tokens do not nest: the argument of a token is taken literally, so `${uppercase:${level}}` does not
-recase the level name.
+recase the level name. Token names ignore case: `${BinPath}` and `${binPath}` are the same token.
 
 ### Default layout
 
@@ -265,7 +265,8 @@ ${timestamp} #${pid}:${thread} [${level}] ${category} | ${message} ${exception}
 ```
 
 `TFileTarget.FileName` goes through the same engine, so `${binPath}`, `${date}` and the rest work
-in a path.
+in a path. `${binPath}` puts the log next to the executable whatever directory the process was
+started from; `${contentRootPath}` follows the content root.
 
 ---
 

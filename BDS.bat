@@ -698,7 +698,7 @@ if /i "%CONFIRM%"=="y" (
   rmdir /s /q "%PRJ_OUT_DIR%"
   robocopy "%PRJ_DIR%\src\runenv\_shared" "%PRJ_OUT_DIR%" /E /NJH /NJS /NFL /NP /NDL
   robocopy "%PRJ_DIR%\src\runenv\%ARG_MODE%" "%PRJ_OUT_DIR%" /E /NJH /NJS /NFL /NP /NDL
-  set "DAF_APP_ENV=%ARG_MODE%"
+  set "DAF_ENVIRONMENT=%ARG_MODE%"
   echo environment established to %ARG_MODE%
 ) else (
   echo canceled

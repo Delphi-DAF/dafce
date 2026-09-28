@@ -34,12 +34,15 @@ TEnvironments.Production    // 'Production'
 TEnvironments.Testing       // 'Testing'
 ```
 
-### DAF environment variables
+### Host settings
+
+The keys of the host configuration that `IHostEnvironment` is derived from, named as in .NET's
+`HostDefaults`. As environment variables they carry the `DAF_` prefix: `DAF_ENVIRONMENT`.
 
 ```pascal
-TDafEnvVars.APP_ENV       // 'DAF_APP_ENV'
-TDafEnvVars.APP_NAME      // 'DAF_APP_NAME'
-TDafEnvVars.CONTENT_ROOT  // 'DAF_CONTENT_ROOT'
+THostDefaults.EnvironmentKey   // 'environment'
+THostDefaults.ApplicationKey   // 'applicationName'
+THostDefaults.ContentRootKey   // 'contentRoot'
 ```
 
 ### Helper

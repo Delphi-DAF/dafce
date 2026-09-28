@@ -317,10 +317,8 @@ Es el frente más grande de 2.0 para cualquier cosa que tuviera un `.dpr`.
   pipeline solo se compone **si la tocas**, así que una aplicación que nunca configura logging
   sigue arrancando.
 
-- **El entorno pasa a derivarse de la configuración de host.** Las tres claves conservan su nombre
-  (`DAF_APP_ENV`, `DAF_APP_NAME`, `DAF_CONTENT_ROOT`), así que lo que fijaras por variable de
-  entorno sigue funcionando — y ahora además funciona `--DAF_APP_ENV=Development`, que antes no
-  había forma de escribir.
+- **El entorno pasa a derivarse de la configuración de host**, así que se puede fijar por línea de
+  comandos además de por variable. Sus claves también cambian de nombre: ver la sección 20.
 
 - **`IConfiguration` gana dos miembros**, para poder distinguir una clave ausente de una cuyo valor
   es vacío. Esto rompe a los **implementadores** de la interfaz, no a quien la llama: el indexador
@@ -522,8 +520,32 @@ de comandos: las fuentes de `Host.CreateApplicationBuilder`. En 1.6 el host no c
 por su cuenta.
 
 - **Qué rompe**: una variable de entorno cuyo nombre coincide con una clave de configuración pasa a
-  pisarla —`Db__Server` pisa `Db:Server`—, y un `appsettings.json` en la carpeta del ejecutable se
-  lee sin pedirlo. Quita las llamadas que cargaban esos dos ficheros a mano.
+  pisarla —`Db__Server` pisa `Db:Server`—, y un `appsettings.json` en el content root se lee sin
+  pedirlo. Quita las llamadas que cargaban esos dos ficheros a mano.
+
+### 20. Los ajustes del host toman los nombres de .NET, y el content root es el directorio actual
+
+El host lee sus propios ajustes con las claves del `HostDefaults` de .NET —`environment`,
+`applicationName` y `contentRoot`—, como argumento o como variable con el prefijo `DAF_`, que se
+quita: `--environment Staging` y `DAF_ENVIRONMENT=Staging` fijan la misma clave. `THostDefaults`
+sustituye a `TDafEnvVars`. Y sin `contentRoot`, el content root es el directorio actual, como en
+.NET, salvo en el directorio del sistema —donde arranca un servicio de Windows—, que conserva la
+carpeta del ejecutable.
+
+```pascal
+// antes
+TDafEnvVars.APP_ENV            // 'DAF_APP_ENV'
+
+// ahora
+THostDefaults.EnvironmentKey   // 'environment', y DAF_ENVIRONMENT como variable
+```
+
+- **Qué rompe**: `DAF_APP_ENV`, `DAF_APP_NAME` y `DAF_CONTENT_ROOT` dejan de leerse, y nada lo avisa:
+  una aplicación arrancada con `DAF_APP_ENV=Development` corre como `Production`. Renómbralas a
+  `DAF_ENVIRONMENT`, `DAF_APPLICATIONNAME` y `DAF_CONTENTROOT`. Una aplicación arrancada desde otro
+  directorio ya no encuentra el `appsettings.json` junto a su ejecutable: fija `contentRoot`, o
+  arráncala desde su carpeta. Y una configuración de log que escribe bajo `${contentRootPath}` sigue
+  ahora al directorio actual; escribe `${binPath}` para que el log se quede junto al ejecutable.
 
 ## Cómo hacerlo
 
@@ -535,9 +557,9 @@ por su cuenta.
    `Daf.SQLCute.Compilers`.
 4. Renombra los tipos y unidades de las tablas de arriba.
 5. Vuelve a compilar y pasa tus tests. Después arranca la aplicación una vez con
-   `DAF_APP_ENV=Development`: el host valida el contenedor, y un registro que se haya perdido detiene
+   `DAF_ENVIRONMENT=Development`: el host valida el contenedor, y un registro que se haya perdido detiene
    la construcción nombrándolo. Un servicio Scoped pedido al proveedor raíz también se rechaza, al
    resolverlo: se resuelve desde un ámbito que abre el trabajo, `Services.CreateScope`.
-6. Las secciones 10 a 13, la 15, la 17 y la 18 son cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
+6. Las secciones 10 a 13, la 15 y de la 17 a la 20 son cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
    contra tu propia composición — la vida de los ámbitos, los registros repetidos, y lo que lea
    un destructor.
