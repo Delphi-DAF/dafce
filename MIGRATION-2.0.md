@@ -510,6 +510,17 @@ in registration order.
 - **What breaks**: a service whose `Stop` counted on one registered after it having stopped already.
   Register the service that is used before the one that uses it.
 
+### 19. The host loads `appsettings.json` and the environment by default
+
+The builder loads `appsettings.json` and `appsettings.{Environment}.json` from the content root,
+both optional, and every environment variable, with `__` as the section separator, before the
+command line: the sources of `Host.CreateApplicationBuilder`. In 1.6 the host loaded no source of
+its own.
+
+- **What breaks**: an environment variable whose name matches a configuration key now overrides it
+  — `Db__Server` overrides `Db:Server` —, and an `appsettings.json` in the folder of the executable
+  is read without being asked for. Remove the calls that loaded those two files by hand.
+
 ## How to do it
 
 1. Compile. Whatever is missing comes out as a compiler error, not as odd behaviour at run time.

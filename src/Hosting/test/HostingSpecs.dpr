@@ -12,7 +12,8 @@ uses
   ShutdownRequest.Feat in 'ShutdownRequest.Feat.pas',
   Lifecycle.Feat in 'Lifecycle.Feat.pas',
   ShadowedHelper.Feat in 'ShadowedHelper.Feat.pas',
-  ContainerValidation.Feat in 'ContainerValidation.Feat.pas';
+  ContainerValidation.Feat in 'ContainerValidation.Feat.pas',
+  DefaultSources.Feat in 'DefaultSources.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

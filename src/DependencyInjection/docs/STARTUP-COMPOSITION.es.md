@@ -247,8 +247,10 @@ configuración de logging que uno mismo escribió.
   THostBuilder.Build                          ── canal de arranque ──▶  salida de depuración
   ├── InitializeHostConfiguration                                       del sistema
   ├── InitializeHostingEnvironment                                      salida de error, si el
-  ├── InitializeHostBuilderContext                                      proceso tiene una
-  ├── InitializeAppConfiguration  ← appsettings.json se lee aquí        lo que hayas registrado
+  │                                                                     proceso tiene una
+  ├── InitializeDefaultAppConfiguration  ← appsettings.json se lee aquí
+  ├── InitializeHostBuilderContext                                      lo que hayas registrado
+  ├── InitializeAppConfiguration
   └── InitializeServiceProvider
   ════════════════════ BuildServiceProvider ════════════════════
   THost.Start / THost.Stop                    ── pipeline de ILogger ─▶  tus proveedores, tu

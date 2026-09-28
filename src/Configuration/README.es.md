@@ -216,15 +216,15 @@ estado de la sección en el momento en que se construyeron sus ajustes.
 
 ## Integración con Hosting
 
-Con `Hosting`, añade las fuentes a la `Configuration` del builder:
+Con `Hosting`, el builder ya carga `appsettings.json`, `appsettings.{Entorno}.json` y las variables
+de entorno; el orden está en la [guía de Hosting](../Hosting/docs/GUIDE.es.md). Añade tus propias
+fuentes a la `Configuration` del builder:
 
 ```pascal
 var Builder := THost.CreateBuilder;
 
-JsonConfig.AddFile(Builder.Configuration, 'appsettings.json');
 JsonConfig.AddFile(Builder.Configuration,
-  'appsettings.' + string(Builder.Environment.EnvironmentName) + '.json', [csoOptional]);
-Builder.Configuration.Add(TEnvironmentVariablesConfigurationSource.Create);
+  TPath.Combine(Builder.Environment.ContentRootPath, 'features.json'), [csoOptional]);
 
 // El gestor lee además de construir, así que el registro la consume en el sitio. El cast es
 // porque el gestor es lector y constructor a la vez, y Delphi solo admite un padre por interfaz.

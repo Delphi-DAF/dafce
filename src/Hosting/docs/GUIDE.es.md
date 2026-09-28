@@ -70,15 +70,21 @@ fuente se puede elegir a partir de lo ya configurado.
 
 ### 1. Lo que siembra el builder
 
-Antes de entregarse, el builder lee las variables de entorno del proceso con prefijo `DAF_` —de
-donde salen `DAF_APP_ENV`, `DAF_APP_NAME` y `DAF_CONTENT_ROOT`— y, si se le dieron argumentos, la
-línea de comandos:
+Antes de entregarse, el builder carga las fuentes que carga `Host.CreateApplicationBuilder`, en este
+orden, y cada una gana a las anteriores:
+
+1. las variables de entorno del proceso con prefijo `DAF_` —de donde salen `DAF_APP_ENV`,
+   `DAF_APP_NAME` y `DAF_CONTENT_ROOT`— y, si se le dieron argumentos, la línea de comandos;
+2. `appsettings.json` y `appsettings.{Entorno}.json` del content root, los dos opcionales;
+3. todas las variables de entorno, con `__` como separador de sección: `Db__Server` es `Db:Server`;
+4. otra vez la línea de comandos.
 
 ```pascal
 var Builder := THost.CreateBuilder(CommandLineConfig.ProcessArgs);
 ```
 
-Los argumentos se añaden después de las variables de entorno, así que ganan.
+El content root es la carpeta del ejecutable, salvo que `DAF_CONTENT_ROOT` diga otra. Los ficheros se
+leen una vez, al crear el builder: un cambio en ellos no se nota mientras el proceso sigue vivo.
 
 ### 2. El entorno, ya resuelto
 
@@ -87,12 +93,12 @@ paso siguiente dependa de él: no hay ninguna fase que esperar.
 
 ### 3. Tus propias fuentes
 
-Se añaden donde estás, entre el builder y `Build`:
+Se añaden donde estás, entre el builder y `Build`. Van detrás de las de por defecto, así que les
+ganan, línea de comandos incluida, como en .NET:
 
 ```pascal
-JsonConfig.AddFile(Builder.Configuration, 'appsettings.json');
 JsonConfig.AddFile(Builder.Configuration,
-  'appsettings.' + string(Builder.Environment.EnvironmentName) + '.json', [csoOptional]);
+  TPath.Combine(Builder.Environment.ContentRootPath, 'features.json'), [csoOptional]);
 ```
 
 Y como el manager lee además de construir, un registro consume configuración en el sitio:

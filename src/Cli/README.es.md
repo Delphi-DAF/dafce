@@ -105,7 +105,9 @@ se puede elegir una fuente a partir de lo ya configurado sin ningún callback di
 var B := TCliApplication.CreateBuilder(Args);
 
 // El entorno ya responde -- este es el caso por el que existía el estilo por callback.
-JsonConfig.AddFile(B.Configuration, TPath.Combine(B.Environment.BinPath, 'appsettings.json'));
+if B.Environment.IsDevelopment then
+  JsonConfig.AddFile(B.Configuration,
+    TPath.Combine(B.Environment.ContentRootPath, 'devtools.json'), [csoOptional]);
 
 if B.Configuration.Find('Features:Beta').GetValueOrDefault('') = 'on' then
   B.Services.AddModule<TBetaModule>;
@@ -181,7 +183,8 @@ constructor—; con la validación activa, como en `Development`, pedírselo al 
 
 `CreateBuilder(Args)` pasa los argumentos a la gramática (`RootCommand`) y, como en .NET, también los carga en `Configuration`.
 
-La configuración los lee sin la gramática. Admite `--clave=valor` y `--clave valor`, ignora las banderas sueltas y los posicionales, y una bandera seguida de un posicional la lee como clave y valor.
+La configuración los lee sin la gramática. Admite `--clave=valor` y `--clave valor`, ignora las
+banderas sueltas y los posicionales, y una bandera seguida de un posicional la lee como clave y valor.
 Sobre `mytool --verbose informe.txt`:
 
 - la gramática ve la bandera `--verbose` y el argumento posicional `informe.txt`;

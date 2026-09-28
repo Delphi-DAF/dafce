@@ -104,6 +104,17 @@ Where it **diverges**, and it matters more than the resemblance:
   in scope per type and none apply to interfaces, so the trick does not carry over. DAF composes
   through explicit facades instead — `JsonConfig.AddFile(Builder, …)` rather than
   `Builder.AddJsonFile(…)` — and through `IServiceCollection` being a record with real methods.
+- **The default sources are .NET's, with four differences.** The builder loads `appsettings.json`,
+  `appsettings.{Environment}.json`, every environment variable and the command line, as
+  `Host.CreateApplicationBuilder` does. The host's own settings come from variables prefixed `DAF_`,
+  read with the prefix — `DAF_APP_ENV` — where .NET reads `DOTNET_` and strips it; there are no user
+  secrets; the files are not reloaded when they change; and the content root is the folder of the
+  executable, not the current directory.
+- **No logging provider by default.** .NET logs to the console, the debug output and the event
+  source unless told otherwise; DAF adds none. Whoever uses `Logging` adds a provider, or
+  `AddNullProvider` to declare the silence deliberate: with `Logging` used and no provider, `Build`
+  fails with `ELoggingCompositionError`.
+- **`Properties` is keyed by string**, `TDictionary<string, TValue>`, where .NET keys it by `object`.
 - **Startup is synchronous throughout.** .NET's `RunAsync`, `StartAsync` and `StopAsync` have no
   counterpart here; `Run`, `Start` and `Stop` return when the work is done.
 

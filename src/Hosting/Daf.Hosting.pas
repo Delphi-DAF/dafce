@@ -138,6 +138,7 @@ type
     procedure SetServiceProviderOptions(const Value: TServiceProviderOptions);
     procedure InitializeHostConfiguration;
     procedure InitializeHostingEnvironment;
+    procedure InitializeDefaultAppConfiguration;
     procedure InitializeHostBuilderContext;
     procedure InitializeAppConfiguration;
     procedure InitializeServiceProvider;
@@ -192,6 +193,7 @@ uses
   Daf.DependencyInjection,
   Daf.Configuration.Manager,
   Daf.Configuration.Env,
+  Daf.Configuration.Json,
   Daf.Configuration.CommandLine;
 
 // El relevo del arranque. Antes de BuildServiceProvider informa el canal de arranque, porque no hay
@@ -484,6 +486,7 @@ begin
   // permite leer el entorno para decidir que fuente anadir sin ningun callback.
   InitializeHostConfiguration;
   InitializeHostingEnvironment;
+  InitializeDefaultAppConfiguration;
   InitializeHostBuilderContext;
 
   // Vivos desde ya, que es lo que el estilo inmediato promete: Services y Logging responden al
@@ -560,6 +563,21 @@ end;
 procedure THostBuilder.InitializeHostingEnvironment;
 begin
   FEnvironment := THostEnvironment.Create(FConfiguration as IConfiguration);
+end;
+
+procedure THostBuilder.InitializeDefaultAppConfiguration;
+begin
+  // Las fuentes de aplicacion de Host.CreateApplicationBuilder, en su orden: los dos ficheros
+  // del content root, que necesitan el entorno ya resuelto; todas las variables de entorno; y
+  // otra vez los argumentos, que tienen que ganar a todo lo anterior.
+  JsonConfig.AddFile(FConfiguration,
+    TPath.Combine(FEnvironment.ContentRootPath, 'appsettings.json'), [csoOptional]);
+  JsonConfig.AddFile(FConfiguration,
+    TPath.Combine(FEnvironment.ContentRootPath, 'appsettings.' + FEnvironment.EnvironmentName + '.json'),
+    [csoOptional]);
+  FConfiguration.Add(TEnvironmentVariablesConfigurationSource.Create('', True, False));
+  if Length(FArgs) > 0 then
+    CommandLineConfig.AddArgs(FConfiguration, FArgs);
 end;
 
 procedure THostBuilder.InitializeHostBuilderContext;

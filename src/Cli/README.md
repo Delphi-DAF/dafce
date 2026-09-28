@@ -104,7 +104,9 @@ so a source can be chosen from what is already configured without a deferred cal
 var B := TCliApplication.CreateBuilder(Args);
 
 // The environment already responds -- this is the case the callback style existed for.
-JsonConfig.AddFile(B.Configuration, TPath.Combine(B.Environment.BinPath, 'appsettings.json'));
+if B.Environment.IsDevelopment then
+  JsonConfig.AddFile(B.Configuration,
+    TPath.Combine(B.Environment.ContentRootPath, 'devtools.json'), [csoOptional]);
 
 if B.Configuration.Find('Features:Beta').GetValueOrDefault('') = 'on' then
   B.Services.AddModule<TBetaModule>;

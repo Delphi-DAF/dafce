@@ -243,8 +243,9 @@ own logging configuration gets skipped.
   THostBuilder.Build                          ── bootstrap channel ──▶  system debug output
   ├── InitializeHostConfiguration                                       error output, if the
   ├── InitializeHostingEnvironment                                      process has one
+  ├── InitializeDefaultAppConfiguration  ← appsettings.json is read here
   ├── InitializeHostBuilderContext                                      whatever you registered
-  ├── InitializeAppConfiguration  ← appsettings.json is read here
+  ├── InitializeAppConfiguration
   └── InitializeServiceProvider
   ════════════════════ BuildServiceProvider ════════════════════
   THost.Start / THost.Stop                    ── ILogger pipeline ──▶  your providers, your

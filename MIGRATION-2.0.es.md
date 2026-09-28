@@ -513,6 +513,17 @@ paraban en el orden de registro.
 - **Qué rompe**: un servicio cuyo `Stop` contara con que otro registrado después ya hubiera parado.
   Registra el servicio que se usa antes que el que lo usa.
 
+### 19. El host carga `appsettings.json` y el entorno por defecto
+
+El builder carga `appsettings.json` y `appsettings.{Entorno}.json` del content root, los dos
+opcionales, y todas las variables de entorno, con `__` como separador de sección, antes de la línea
+de comandos: las fuentes de `Host.CreateApplicationBuilder`. En 1.6 el host no cargaba ninguna fuente
+por su cuenta.
+
+- **Qué rompe**: una variable de entorno cuyo nombre coincide con una clave de configuración pasa a
+  pisarla —`Db__Server` pisa `Db:Server`—, y un `appsettings.json` en la carpeta del ejecutable se
+  lee sin pedirlo. Quita las llamadas que cargaban esos dos ficheros a mano.
+
 ## Cómo hacerlo
 
 1. Compila. Lo que falte sale como error del compilador, no como comportamiento raro en

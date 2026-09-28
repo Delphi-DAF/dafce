@@ -70,15 +70,22 @@ so a source can be chosen from what is already configured.
 
 ### 1. What the builder seeds
 
-Before returning, the builder reads the process environment variables prefixed `DAF_` — where
-`DAF_APP_ENV`, `DAF_APP_NAME` and `DAF_CONTENT_ROOT` come from — and, if it was given arguments,
-the command line:
+Before returning, the builder loads the sources `Host.CreateApplicationBuilder` loads, in this
+order, each one winning over the ones before it:
+
+1. the process environment variables prefixed `DAF_` — where `DAF_APP_ENV`, `DAF_APP_NAME` and
+   `DAF_CONTENT_ROOT` come from — and, if it was given arguments, the command line;
+2. `appsettings.json` and `appsettings.{Environment}.json` from the content root, both optional;
+3. every environment variable, with `__` as the section separator: `Db__Server` is `Db:Server`;
+4. the command line, again.
 
 ```pascal
 var Builder := THost.CreateBuilder(CommandLineConfig.ProcessArgs);
 ```
 
-Arguments are added after the environment variables, so they win.
+The content root is the folder of the executable unless `DAF_CONTENT_ROOT` names another one. The
+files are read once, when the builder is created: a change to them is not picked up while the
+process runs.
 
 ### 2. The environment, already resolved
 
@@ -87,12 +94,12 @@ step depend on it: there is no phase to wait for.
 
 ### 3. Your own sources
 
-Add them where you stand, between the builder and `Build`:
+Add them where you stand, between the builder and `Build`. They come after the defaults, so they
+win over them, the command line included, as in .NET:
 
 ```pascal
-JsonConfig.AddFile(Builder.Configuration, 'appsettings.json');
 JsonConfig.AddFile(Builder.Configuration,
-  'appsettings.' + string(Builder.Environment.EnvironmentName) + '.json', [csoOptional]);
+  TPath.Combine(Builder.Environment.ContentRootPath, 'features.json'), [csoOptional]);
 ```
 
 And because the manager reads as well as builds, a registration consumes configuration on the spot:
