@@ -78,9 +78,7 @@ línea de comandos:
 var Builder := THost.CreateBuilder(CommandLineConfig.ProcessArgs);
 ```
 
-Los argumentos se añaden después de las variables de entorno, así que ganan. Una variante que
-declare gramática propia de línea de comandos **no** los pasa aquí: son dos lecturas del mismo
-`argv` con reglas distintas, y discrepan por construcción.
+Los argumentos se añaden después de las variables de entorno, así que ganan.
 
 ### 2. El entorno, ya resuelto
 

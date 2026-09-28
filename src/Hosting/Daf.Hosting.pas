@@ -553,8 +553,6 @@ begin
   // de donde venga.
   FConfiguration.Add(TEnvironmentVariablesConfigurationSource.Create('DAF_', True, False));
 
-  // Una variante con gramatica propia no pasa argumentos por aqui: serian dos lecturas del
-  // mismo argv que discrepan sin dar error, y una de las dos es falsa.
   if Length(FArgs) > 0 then
     CommandLineConfig.AddArgs(FConfiguration, FArgs);
 end;

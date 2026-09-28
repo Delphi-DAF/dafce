@@ -78,9 +78,7 @@ the command line:
 var Builder := THost.CreateBuilder(CommandLineConfig.ProcessArgs);
 ```
 
-Arguments are added after the environment variables, so they win. A variant that declares its own
-command-line grammar does **not** pass them here: that is two readings of the same `argv` under
-different rules, and they disagree by construction.
+Arguments are added after the environment variables, so they win.
 
 ### 2. The environment, already resolved
 

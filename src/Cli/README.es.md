@@ -127,7 +127,7 @@ Esto es lo que la capa añade sobre el host, y lo que cada herramienta de consol
 | `OnUnhandled(Policy)` | Qué pasa con lo que se escapa, y con qué código de salida. Sin ella, `ExitPolicy.LogAndFail` | Alrededor del `Run` |
 | `OnExecute(Handler)` | El trabajo, escrito en el sitio | Dentro del `Run` |
 | `ICliHandler` registrado en `Services` | El trabajo, resuelto del contenedor | Dentro del `Run` |
-| `RootCommand` | La gramática, dueña de `argv` | En el `Build` |
+| `RootCommand` | La gramática, que parsea `argv` | En el `Build` |
 
 Una aplicación declara su trabajo de una sola forma: con `OnExecute` o registrando **un**
 `ICliHandler`. Si declara las dos, o registra más de un `ICliHandler`, `Build` lanza
@@ -177,23 +177,25 @@ constructor—; con la validación activa, como en `Development`, pedírselo al 
 
 ---
 
-## Dos lectores de `argv`, y un solo dueño
+## Los argumentos, en la gramática y en la configuración
 
-`TCommandLineConfigurationProvider` y la gramática leen los dos el mismo `argv`, con reglas
-**distintas**, y discrepan por construcción. Sobre `mytool --verbose informe.txt`:
+`CreateBuilder(Args)` pasa los argumentos a la gramática (`RootCommand`) y, como en .NET, también los carga en `Configuration`.
 
-- la gramática ve la bandera `--verbose` y el posicional `informe.txt`;
-- el proveedor de configuración ve `verbose = informe.txt`.
+La configuración los lee sin la gramática. Admite `--clave=valor` y `--clave valor`, ignora las banderas sueltas y los posicionales, y una bandera seguida de un posicional la lee como clave y valor.
+Sobre `mytool --verbose informe.txt`:
 
-Las dos contestan sin error, y una de las dos es falsa. **En esta variante la gramática es la dueña
-de `argv`**, y el builder no añade los argumentos como fuente de configuración por su cuenta. Quien
-quiera esa vista la pide, sabiendo que conviven:
+- la gramática ve la bandera `--verbose` y el argumento posicional `informe.txt`;
+- la configuración ve la clave `verbose` con el valor `informe.txt`.
+
+Lo que la gramática declara se lee del resultado del parseo, no de `Configuration`.
+
+Una clave de configuración que la gramática no declara —`--Db:Server=localhost`— no deja arrancar la
+aplicación: la gramática rechaza por defecto lo que no reconoce, y `Run` devuelve
+`TCliExit.InvocationError`. Para admitirla, la raíz lo declara:
 
 ```pascal
-CommandLineConfig.AddArgs(B.Configuration, CommandLineConfig.ProcessArgs);
+B.RootCommand.AllowUnmatchedTokens;
 ```
-
-Las variantes Web, VCL y FMX —que no declaran gramática— sí los añaden: allí no hay con qué chocar.
 
 ---
 

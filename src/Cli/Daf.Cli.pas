@@ -90,10 +90,10 @@ type
     ['{71536E8D-49F8-45D8-AB43-C5F726B2F25A}']
     function GetRootCommand: IRootCommand;
     /// <summary>
-    /// La gramatica de esta herramienta. Es la UNICA duena de argv en esta variante: el
-    /// builder no anade los argumentos como fuente de configuracion por su cuenta, porque las
-    /// dos lecturas discrepan por construccion y ninguna de las dos da error. Quien quiera la
-    /// vista de configuracion la pide: <c>CommandLineConfig.AddArgs(B.Configuration, Args)</c>.
+    /// La gramatica de esta herramienta, que parsea los argumentos en <c>Build</c>. Los mismos
+    /// argumentos estan tambien en la configuracion, como en .NET, y alli se leen sin la
+    /// gramatica: una bandera seguida de un posicional queda como clave con el posicional por
+    /// valor. Lo que la gramatica declara se lee del resultado del parseo.
     /// </summary>
     property RootCommand: IRootCommand read GetRootCommand;
 
@@ -242,9 +242,8 @@ begin
   inherited Create;
   FArgs := Args;
 
-  // Sin argumentos para la maquinaria comun: en esta variante la gramatica es la duena de argv.
-  // Las variantes sin gramatica SI se los pasan, que alli no hay con que chocar.
-  FImpl := THostBuilder.Create;
+  // Como en .NET: los argumentos van a la gramatica y tambien, como fuente, a la configuracion.
+  FImpl := THostBuilder.Create(Args);
   FOwned := FImpl;
 
   FRootCommand := CommandLine.Root(TPath.GetFileNameWithoutExtension(ParamStr(0)));

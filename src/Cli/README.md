@@ -126,7 +126,7 @@ This is what the layer adds over the host, and what every console tool used to r
 | `OnUnhandled(Policy)` | What happens to what escapes, and with which exit code. Without it, `ExitPolicy.LogAndFail` | Around `Run` |
 | `OnExecute(Handler)` | The work, written in place | Inside `Run` |
 | `ICliHandler` registered in `Services` | The work, resolved from the container | Inside `Run` |
-| `RootCommand` | The grammar that owns `argv` | At `Build` |
+| `RootCommand` | The grammar that parses `argv` | At `Build` |
 
 An application declares its work in a single way: `OnExecute`, or **one** registered `ICliHandler`.
 If it declares both, or registers more than one `ICliHandler`, `Build` raises
@@ -176,24 +176,27 @@ as it is in `Development`, asking the root provider for it is rejected.
 
 ---
 
-## Two readers of `argv`, and only one owner
+## The arguments, in the grammar and in the configuration
 
-`TCommandLineConfigurationProvider` and the grammar both read `argv`, with **different rules**, and
-they disagree by construction. On `mytool --verbose report.txt`:
+`CreateBuilder(Args)` hands the arguments to the grammar (`RootCommand`) and, as in .NET, also loads
+them into `Configuration`.
 
-- the grammar sees the flag `--verbose` and the positional `report.txt`;
-- the configuration provider sees `verbose = report.txt`.
+The configuration reads them without the grammar. It takes `--key=value` and `--key value`, ignores
+bare flags and positionals, and reads a flag followed by a positional as a key and its value. On
+`mytool --verbose report.txt`:
 
-Both answer without error, and one of the two is false. **In this variant the grammar owns `argv`**,
-and the builder does not add the arguments as a configuration source on its own. Whoever wants that
-view asks for it, knowing the two coexist:
+- the grammar sees the flag `--verbose` and the positional argument `report.txt`;
+- the configuration sees the key `verbose` with the value `report.txt`.
+
+What the grammar declares is read from the parse result, not from `Configuration`.
+
+A configuration key the grammar does not declare —`--Db:Server=localhost`— keeps the application from
+starting: the grammar rejects what it does not recognise by default, and `Run` returns
+`TCliExit.InvocationError`. To accept it, the root says so:
 
 ```pascal
-CommandLineConfig.AddArgs(B.Configuration, CommandLineConfig.ProcessArgs);
+B.RootCommand.AllowUnmatchedTokens;
 ```
-
-The Web, VCL and FMX variants — which declare no grammar — do add them: there is nothing to clash
-with there.
 
 ---
 

@@ -116,12 +116,23 @@ Feature La variante CLI de la familia @cli @application-family
 
 .UseWorld<TCliWorld>
 
-.Rule('La gramatica es la unica duena de argv')
+.Rule('Los argumentos llegan a la gramatica y, como en .NET, tambien a la configuracion')
 
-  // Dos lectores del mismo argv con reglas distintas, y discrepan por construccion: la
-  // gramatica ve un flag y un posicional; el proveedor de configuracion veria verbose con el
-  // posicional por valor. Las dos contestan sin error, y una de las dos es falsa.
-  .Scenario('Una bandera seguida de un posicional no acaba en la configuracion')
+  .Scenario('Un argumento clave=valor llega a la configuracion')
+    .When('se crea el builder de consola con un argumento clave=valor',
+      procedure(W: TCliWorld)
+      begin
+        W.Builder := TCliApplication.CreateBuilder(['--Db:Server=localhost']);
+      end)
+    .&Then('la clave se lee de su configuracion',
+      procedure(W: TCliWorld)
+      begin
+        Expect(W.Builder.Configuration['Db:Server']).ToEqual('localhost');
+      end)
+
+  // La configuracion no conoce la gramatica: no sabe que --verbose no lleva valor, y lo empareja
+  // con el token que le sigue.
+  .Scenario('La configuracion lee una bandera seguida de un posicional como clave y valor')
     .Given('una gramatica con una bandera y un argumento posicional',
       procedure(W: TCliWorld)
       begin
@@ -130,42 +141,69 @@ Feature La variante CLI de la familia @cli @application-family
 
         W.Builder := TCliApplication.CreateBuilder(['--verbose', 'informe.txt']);
         W.Builder.RootCommand.Add([W.Verbose, W.FileArg]);
-        W.Builder.OnExecute(
-          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
-          begin
-            Result := 0;
-          end);
       end)
     .When('se invoca con la bandera y el posicional detras',
       procedure(W: TCliWorld)
       begin
         W.Parsed := W.Builder.RootCommand.Parse(['--verbose', 'informe.txt']);
       end)
-    .&Then('la gramatica liga los dos simbolos y la configuracion no ha inventado la clave',
+    .&Then('la gramatica liga los dos simbolos, y la configuracion lee verbose con el posicional',
       procedure(W: TCliWorld)
       begin
+        var Config := '<ausente>';
+        if W.Builder.Configuration.Exists('verbose') then
+          Config := W.Builder.Configuration['verbose'];
         Expect(Format('verbose=%s file=%s config=%s',
-          [BoolToStr(W.Verbose.ValueIn(W.Parsed), True), W.FileArg.ValueIn(W.Parsed),
-           BoolToStr(W.Builder.Configuration.Exists('verbose'), True)]))
-          .ToEqual('verbose=True file=informe.txt config=False');
+          [BoolToStr(W.Verbose.ValueIn(W.Parsed), True), W.FileArg.ValueIn(W.Parsed), Config]))
+          .ToEqual('verbose=True file=informe.txt config=informe.txt');
       end)
 
-  .Scenario('Quien quiere los argumentos como configuracion los pide')
-    .Given('un arranque de consola que todavia no ha mirado argv',
+  .Scenario('Una clave que la gramatica no declara no deja arrancar la aplicacion')
+    .Given('una aplicacion con una clave de configuracion en la linea de comandos',
       procedure(W: TCliWorld)
       begin
-        W.Builder := TCliApplication.CreateBuilder;
-        Expect(W.Builder.Configuration.Exists('Db:Server')).ToBeFalse;
+        W.Builder := TCliApplication.CreateBuilder(['--Db:Server=localhost']);
+        W.Builder.OnExecute(
+          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          begin
+            Result := 0;
+          end);
       end)
-    .When('se anaden los argumentos explicitamente como fuente',
+    .When('se construye y se ejecuta',
       procedure(W: TCliWorld)
       begin
-        CommandLineConfig.AddArgs(W.Builder.Configuration, ['--Db:Server=localhost']);
+        W.App := W.Builder.Build;
+        W.ExitCode := W.App.Run;
       end)
-    .&Then('sus claves se leen como las de cualquier otra fuente',
+    .&Then('termina con el codigo de error de invocacion',
       procedure(W: TCliWorld)
       begin
-        Expect(W.Builder.Configuration['Db:Server']).ToEqual('localhost');
+        Expect(W.ExitCode).ToEqual(TCliExit.InvocationError);
+      end)
+
+  .Scenario('Con AllowUnmatchedTokens, la clave llega a la configuracion de la aplicacion')
+    .Given('la misma aplicacion, cuya raiz admite lo que no declara',
+      procedure(W: TCliWorld)
+      begin
+        W.Builder := TCliApplication.CreateBuilder(['--Db:Server=localhost']);
+        W.Builder.RootCommand.AllowUnmatchedTokens;
+        W.Builder.OnExecute(
+          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          begin
+            W.Report := Services.GetRequiredService<IConfiguration>['Db:Server'];
+            Result := 0;
+          end);
+      end)
+    .When('se construye y se ejecuta',
+      procedure(W: TCliWorld)
+      begin
+        W.App := W.Builder.Build;
+        W.ExitCode := W.App.Run;
+      end)
+    .&Then('arranca, y el trabajo lee la clave de su configuracion',
+      procedure(W: TCliWorld)
+      begin
+        Expect(Format('exit=%d Db:Server=%s', [W.ExitCode, W.Report])).ToEqual('exit=0 Db:Server=localhost');
       end)
 
 .Rule('El borde del Run')
