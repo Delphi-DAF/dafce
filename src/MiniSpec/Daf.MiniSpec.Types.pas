@@ -25,6 +25,13 @@ type
   TSpecRunState =  (srsPrepared, srsRunning, srsFinished);
   TSpecRunResult =  (srrNone, srrSuccess, srrFail, srrError, srrPending, srrSkipped, srrUndefined);
   /// <summary>
+  ///   A Background that failed: the scenario it was preparing fails with this error instead of
+  ///   running.
+  /// </summary>
+  // En la interface por obligacion: lo lanza un metodo de TRule<T>, y un generico no puede usar
+  // un simbolo de la implementation (E2506).
+  EBackgroundFailed = class(Exception);
+  /// <summary>
   /// Result kind for counting scenarios by outcome.
   /// Used in TSpecRunInfo.Counts for aggregated results.
   /// </summary>
@@ -766,6 +773,7 @@ type
     function GetFeature: IFeature;
   private
     procedure RunBackground(World: T);
+    procedure RunCheckedBackground(const Background: IBackground; World: T);
     function GetScenarios: TList<IScenario>;
     function CreateWorld: T;
   public
@@ -1332,6 +1340,11 @@ procedure TBackground<T>.RunSteps(Steps: TList<IScenarioStep>; World: TObject);
 begin
   for var Step in Steps do
   begin
+    if FRunInfo.Result = srrFail then
+    begin
+      Step.MarkAsSkipped;
+      Continue;
+    end;
     Step.Run(World);
     if Step.RunInfo.Result in [srrFail, srrError] then
       FRunInfo.Result := srrFail;
@@ -1625,8 +1638,16 @@ begin
       SpecContext.SetScenarioContext(ExampleWorld);
       try
         SpecContext.Injector.InjectInto(ExampleWorld);
-        Rule.RunBackground(ExampleWorld);
-        Example.Run(ExampleWorld);
+        // Lo que falla preparando una fila es un fallo de esa fila, no del Outline entero.
+        var Prepared := True;
+        try
+          Rule.RunBackground(ExampleWorld);
+        except
+          Example.MarkAsError;
+          Prepared := False;
+        end;
+        if Prepared then
+          Example.Run(ExampleWorld);
         if not Example.RunInfo.IsSuccess then
           FRunInfo.Result := srrFail;
       finally
@@ -2014,9 +2035,23 @@ procedure TRule<T>.RunBackground(World: T);
 begin
   // Primero ejecutar Background de Feature, luego el de Rule
   if Assigned(FFeature) and Assigned(FFeature.BackGround) then
-    FFeature.BackGround.Run(World);
+    RunCheckedBackground(FFeature.BackGround, World);
   if Assigned(FBackground) then
-    FBackground.Run(World);
+    RunCheckedBackground(FBackground, World);
+end;
+
+procedure TRule<T>.RunCheckedBackground(const Background: IBackground; World: T);
+begin
+  // Un Background que falla deja sin sentido el escenario que prepara: se corta aqui, como
+  // cualquier otro fallo al preparar un escenario, con el step que fallo y su mensaje.
+  Background.Run(World);
+  if not (Background.RunInfo.Result in [srrFail, srrError]) then
+    Exit;
+  for var Step in Background.StepsGiven do
+    if Step.RunInfo.Result in [srrFail, srrError] then
+      raise EBackgroundFailed.CreateFmt('%s: %s %s: %s',
+        [Background.KeyWord, Step.KeyWord, Step.Description, Step.RunInfo.ErrMsg]);
+  raise EBackgroundFailed.CreateFmt('%s: %s', [Background.KeyWord, Background.RunInfo.ErrMsg]);
 end;
 
 function TRule<T>.HasMatchingScenarios(const Matcher: TSpecMatcher): Boolean;

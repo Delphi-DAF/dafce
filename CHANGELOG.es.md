@@ -143,6 +143,7 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
   - El fallo de una excepción que escapa de un step When nombraba un API que no existe; ahora nombra `ExpectException(Raised)`
   - El informe JUnit da el mensaje de fallo de cada escenario que falla —salía siempre vacío— y un escenario que lanzó sale como fallido en vez de como pasado
   - Una fila de Scenario Outline que falla dice qué step falló y por qué, en los informes de consola, JSON, gherkin-results y live; solo enseñaba su aspa
+  - Un paso de Background que falla hace fallar el escenario que prepara, que ya no se ejecuta; antes el escenario se ejecutaba y podía pasar
 - **Hosting**: `IHostApplicationLifetime.StopApplication` para de verdad la aplicación: cancelaba `ApplicationStopping` en vez de pedir la parada, así que `WaitForShutdown` seguía bloqueado y los `IHostedService` no se paraban nunca
 - **Hosting**: Un proceso puede construir más de un host: «Build already called» y el «ya parado» eran estado de clase, así que un arnés que monta y desmonta hosts solo podía montar el primero
 - **NNLog**: `enabled` y `name` de una regla se ignoraban en silencio: `enabled` ausente vale **activada** y `name` filtra de verdad. Solo el literal `true`, con cualquier caja, mantiene activada una regla; cualquier otro valor la desactiva. **Cambio observable**: un config con alguna regla de `name` distinto de `*` deja de recibirlo todo

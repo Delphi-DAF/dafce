@@ -40,6 +40,16 @@ type
 
   TPlainWorld = class end;
 
+  /// Cuenta lo que se ejecuta detras de un Background: sus propias pasadas, y los steps de los
+  /// escenarios que prepara. Es de clase porque cada escenario tiene su World.
+  TBackgroundWorld = class
+  public
+    // N antes de los class var: un campo declarado detras de un class var tambien es de clase.
+    N: Integer;
+    class var Runs: Integer;
+    class var ScenarioSteps: Integer;
+  end;
+
   /// Anota lo que el informe de una ejecucion emite. Es el unico modo de afirmar que algo «sale en
   /// el informe»: los recuentos dicen cuantos, no quienes ni con que mensaje.
   TRecordingListener = class(TCustomListener)
@@ -59,6 +69,8 @@ type
   public
     Report: string;
     DiscardedShown: string;
+    StepsRan: string;
+    BackgroundRest: string;
     constructor Create;
     destructor Destroy; override;
     property Run: TSpecRun read FRun;
@@ -185,6 +197,147 @@ Failure visibility @failure-visibility
     .&And('the second one runs and its result is its own', procedure(W: TVisibilityWorld)
       begin
         Expect(Integer(W.Run.PassCount)).ToEqual(1);
+      end)
+
+  .Scenario('A step of the Background fails')
+    .Given('a run whose only scenario is prepared by a Background that fails', procedure(W: TVisibilityWorld)
+      begin
+        TBackgroundWorld.ScenarioSteps := 0;
+        TBackgroundWorld.Runs := 0;
+        Feature('Its Background fails', W.Run.Suite)
+          .UseWorld<TBackgroundWorld>
+          .Background
+            .Given('the environment is ready', procedure(B: TBackgroundWorld)
+              begin
+                Expect('broken').ToEqual('ready');
+              end)
+            .&And('the rest of the environment is set up on top', procedure(B: TBackgroundWorld)
+              begin
+                Inc(TBackgroundWorld.Runs);
+              end)
+          .Scenario('It depends on the environment')
+            .When('it uses the environment', procedure(B: TBackgroundWorld)
+              begin
+                Inc(TBackgroundWorld.ScenarioSteps);
+              end)
+            .&Then('it checks what it got', procedure(B: TBackgroundWorld)
+              begin
+                Inc(TBackgroundWorld.ScenarioSteps);
+              end);
+      end)
+    .When('the suite is executed', procedure(W: TVisibilityWorld)
+      begin
+        W.Run.Execute;
+        W.Report := W.Recorder.Text;
+        W.StepsRan := Format('%d steps of the scenario ran', [TBackgroundWorld.ScenarioSteps]);
+        W.BackgroundRest := Format('%d steps of the Background ran after the failure', [TBackgroundWorld.Runs]);
+      end)
+    .&Then('that scenario counts as failed, and none as passed', procedure(W: TVisibilityWorld)
+      begin
+        Expect(Format('%d failed, %d passed', [W.Run.FailCount, W.Run.PassCount])).ToEqual('1 failed, 0 passed');
+      end)
+    .&And('its own steps are not run', procedure(W: TVisibilityWorld)
+      begin
+        Expect(W.StepsRan).ToEqual('0 steps of the scenario ran');
+      end)
+    .&And('nor the steps of the Background after the one that failed', procedure(W: TVisibilityWorld)
+      begin
+        Expect(W.BackgroundRest).ToEqual('0 steps of the Background ran after the failure');
+      end)
+    .&And('the report says which step of the Background failed and why', procedure(W: TVisibilityWorld)
+      begin
+        Expect(W.Report).ToContain('Background: Given the environment is ready: Expected ready but got broken');
+      end)
+    .&And('the exit code of that run is 1', procedure(W: TVisibilityWorld)
+      begin
+        Expect(W.Run.ExitCode).ToEqual(1);
+      end)
+
+  .Scenario('A Background that fails for one scenario fails only that one')
+    // Cada escenario ejecuta su Background con su World: un fallo no se hereda al siguiente.
+    .Given('a rule with two scenarios whose Background fails only the first time', procedure(W: TVisibilityWorld)
+      begin
+        TBackgroundWorld.Runs := 0;
+        Feature('Its Background fails once', W.Run.Suite)
+          .UseWorld<TBackgroundWorld>
+          .Background
+            .Given('the environment is ready from the second time on', procedure(B: TBackgroundWorld)
+              begin
+                Inc(TBackgroundWorld.Runs);
+                if TBackgroundWorld.Runs = 1 then
+                  Expect('broken').ToEqual('ready');
+              end)
+          .Scenario('The first one')
+            .&Then('it passes by itself', procedure(B: TBackgroundWorld) begin end)
+          .Scenario('The second one')
+            .&Then('it passes by itself', procedure(B: TBackgroundWorld) begin end);
+      end)
+    .When('the suite is executed', procedure(W: TVisibilityWorld)
+      begin
+        W.Run.Execute;
+      end)
+    .&Then('the first one fails and the second one passes', procedure(W: TVisibilityWorld)
+      begin
+        Expect(Format('%d failed, %d passed', [W.Run.FailCount, W.Run.PassCount])).ToEqual('1 failed, 1 passed');
+      end)
+
+  .Scenario('A Background that fails before the rows of an outline')
+    .Given('an outline of two rows prepared by a Background that fails', procedure(W: TVisibilityWorld)
+      begin
+        TBackgroundWorld.ScenarioSteps := 0;
+        Feature('Its Background fails under an outline', W.Run.Suite)
+          .UseWorld<TBackgroundWorld>
+          .Background
+            .Given('the environment is ready', procedure(B: TBackgroundWorld)
+              begin
+                Expect('broken').ToEqual('ready');
+              end)
+          .ScenarioOutline('Row <N>')
+            .&Then('it runs', procedure(B: TBackgroundWorld)
+              begin
+                Inc(TBackgroundWorld.ScenarioSteps);
+              end)
+            .Examples([['N'], [1], [2]]);
+      end)
+    .When('the suite is executed', procedure(W: TVisibilityWorld)
+      begin
+        W.Run.Execute;
+        W.StepsRan := Format('%d steps of the scenario ran', [TBackgroundWorld.ScenarioSteps]);
+      end)
+    .&Then('each row counts as failed', procedure(W: TVisibilityWorld)
+      begin
+        Expect(Format('%d failed, %d passed', [W.Run.FailCount, W.Run.PassCount])).ToEqual('2 failed, 0 passed');
+      end)
+    .&And('no row runs its steps', procedure(W: TVisibilityWorld)
+      begin
+        Expect(W.StepsRan).ToEqual('0 steps of the scenario ran');
+      end)
+
+  .Scenario('The same outline with a Background that passes')
+    // El control del anterior: sin el fallo del Background, las dos filas se ejecutan y pasan.
+    .Given('the same outline prepared by a Background that passes', procedure(W: TVisibilityWorld)
+      begin
+        TBackgroundWorld.ScenarioSteps := 0;
+        Feature('Its Background passes under an outline', W.Run.Suite)
+          .UseWorld<TBackgroundWorld>
+          .Background
+            .Given('the environment is ready', procedure(B: TBackgroundWorld) begin end)
+          .ScenarioOutline('Row <N>')
+            .&Then('it runs', procedure(B: TBackgroundWorld)
+              begin
+                Inc(TBackgroundWorld.ScenarioSteps);
+              end)
+            .Examples([['N'], [1], [2]]);
+      end)
+    .When('the suite is executed', procedure(W: TVisibilityWorld)
+      begin
+        W.Run.Execute;
+        W.StepsRan := Format('%d steps of the scenario ran', [TBackgroundWorld.ScenarioSteps]);
+      end)
+    .&Then('both rows run and pass', procedure(W: TVisibilityWorld)
+      begin
+        Expect(Format('%d failed, %d passed, %s', [W.Run.FailCount, W.Run.PassCount, W.StepsRan]))
+          .ToEqual('0 failed, 2 passed, 2 steps of the scenario ran');
       end)
 
 .Rule('A feature that fails outside its scenarios is in the report')

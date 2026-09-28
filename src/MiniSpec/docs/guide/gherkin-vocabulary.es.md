@@ -12,7 +12,7 @@ Referencia completa del vocabulario Gherkin en MiniSpec:
 |---------------|----------|-------------|
 | Feature | `Feature('...')` | Funcionalidad que se especifica |
 | Rule | `.Rule('...')` | Agrupa escenarios bajo una regla de negocio |
-| Background | `.Background` | Pasos comunes a todos los escenarios |
+| Background | `.Background` | Pasos comunes a todos los escenarios; si uno falla, el escenario falla sin ejecutar sus propios pasos |
 | Scenario | `.Scenario('...')` | Un ejemplo concreto de comportamiento |
 | Scenario Outline | `.ScenarioOutline('...')` | Ejemplo parametrizado con tabla |
 | Examples | `.Examples([...])` | Tabla de datos para el Outline |
