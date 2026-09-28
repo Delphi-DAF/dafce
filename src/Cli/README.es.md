@@ -169,6 +169,11 @@ Así que lo que un programa necesite del contenedor una vez corrido el trabajo l
 dentro del trabajo: `OnExecute` recibe el `IServiceProvider`, y un `ICliHandler` toma sus
 dependencias por constructor.
 
+Ese `IServiceProvider` es el raíz, y desde él se resuelve también un `ICliHandler`: alrededor del
+trabajo no se abre ningún ámbito. Un servicio Scoped que el trabajo necesite sale de un ámbito que
+abre el propio trabajo —`Services.CreateScope`, o un `IServiceScopeFactory` recibido por
+constructor—; con la validación activa, como en `Development`, pedírselo al proveedor raíz se rechaza.
+
 ---
 
 ## Dos lectores de `argv`, y un solo dueño

@@ -46,6 +46,8 @@ type
     function GetSingletonsScope: IServiceScope;
     procedure CheckNotShutDown;
   private
+    // La lee la resolucion de cualquier ambito, y la fabrica es lo unico que comparten todos.
+    FValidateScopes: Boolean;
     procedure AddToSingletonScope;
     procedure RemoveFromSingletonScope;
     procedure RemoveScope(const Scope: TServiceScope);
@@ -57,8 +59,11 @@ type
     constructor Create(const ServiceCollection: IServiceCollection);
     destructor Destroy;override;
     function CreateScope: IServiceScope;
+    /// <summary>El ambito que devuelve BuildServiceProvider: el proveedor raiz.</summary>
+    function CreateRootScope(const ValidateScopes: Boolean): IServiceScope;
     property ServiceCollection: IServiceCollection read FServiceCollection;
     property SingletonsScope: IServiceScope read GetSingletonsScope;
+    property ValidateScopes: Boolean read FValidateScopes;
   end;
 
   IServiceResolver = interface(IInvokable)
@@ -87,6 +92,7 @@ type
     FInstancesLock: TLightweightMREW;
     FBuildLock: TCriticalSection;
     FIsSingletonsScope: Boolean;
+    FIsRoot: Boolean;
     FShutDonwnDone: Boolean;
     function GetServiceIdentity(const Descriptor: TServiceDescriptor): TServiceIdentity;
     function CreateInstance(const Descriptor: TServiceDescriptor; const Provider: IServiceProvider): IInterface;
@@ -106,6 +112,7 @@ type
     function CanResolve(const Slot: TServiceSlot): Boolean;
     procedure CheckNotShutDown(const ServiceType: PTypeInfo);
     procedure RaiseShutDown(const ServiceType: PTypeInfo);
+    procedure RaiseScopedFromRoot(const Descriptor: TServiceDescriptor);
     procedure CollectGarbage;
     function InjectorsFor(const AClass: TClass): TArray<TServiceInjector>;
     class function TryAcquire(const Scope: TServiceScope; out Ref: IServiceScope): Boolean; static;
@@ -360,7 +367,7 @@ begin
  if FIsFrozen then
     raise Exception.Create('BuildServiceProvider can only be called once per ServiceCollection.');
   var Factory := CreateScopeFactory;
-  var Scope := Factory.CreateScope;
+  var Scope := TServiceScopeFactory(Factory as TObject).CreateRootScope(Options.ValidateScopes);
   var Provider: IServiceProvider := Scope.ServiceProvider;
   try
     Validate(Provider, Options);
@@ -894,6 +901,13 @@ begin
     Inc(Result, TServiceScope(Scope).InstanceCount);
 end;
 
+function TServiceScopeFactory.CreateRootScope(const ValidateScopes: Boolean): IServiceScope;
+begin
+  FValidateScopes := ValidateScopes;
+  Result := CreateScope;
+  TServiceScope(Result as TObject).FIsRoot := True;
+end;
+
 function TServiceScopeFactory.CreateScope: IServiceScope;
 begin
   var Scope := TServiceScope.Create(Self);
@@ -1366,6 +1380,20 @@ begin
   RaiseShutDown(ServiceType);
 end;
 
+procedure TServiceScope.RaiseScopedFromRoot(const Descriptor: TServiceDescriptor);
+begin
+  // Lo que se pidio a la raiz es el marco mas externo de lo que este hilo construye; sin ninguno,
+  // el Scoped se pidio directamente.
+  var Requested := GCreating;
+  while (Requested <> nil) and (Requested.Outer <> nil) do
+    Requested := Requested.Outer;
+  if Requested = nil then
+    raise EServiceProviderError.CreateFmt('Cannot resolve scoped service %s from root provider',
+      [Descriptor.ServiceName]);
+  raise EServiceProviderError.CreateFmt('Cannot resolve %s from root provider because it requires scoped service %s',
+    [Requested.Descriptor.ServiceName, Descriptor.ServiceName]);
+end;
+
 procedure TServiceScope.RaiseShutDown(const ServiceType: PTypeInfo);
 begin
   // El mensaje nombra lo que se pidio: sin depurador comodo, un "esta cerrado" a secas obliga
@@ -1387,6 +1415,8 @@ begin
       var Captor := CreatingSingleton;
       if Captor <> nil then
         raise Exception.CreateFmt('singleton %s cannot depends on scoped %s ',[Captor.ServiceName, Descriptor.ServiceName]);
+      if FIsRoot and Assigned(FScopeFactory) and FScopeFactory.ValidateScopes then
+        RaiseScopedFromRoot(Descriptor);
       Result := Self.GetOrCreate(Descriptor, Self);
     end;
     Transient: begin

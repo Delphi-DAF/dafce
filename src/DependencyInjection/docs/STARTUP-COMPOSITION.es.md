@@ -396,7 +396,10 @@ var Provider := Services.BuildServiceProvider(TServiceProviderOptions.Create(Tru
   varios, y descubrirlos de uno en uno cuesta un ciclo de compilación por cada uno.
 - `ValidateScopes` rechaza que un Singleton dependa de un Scoped (*captured dependency*),
   nombrando los dos servicios. Lee las dos vías por igual: la dependencia capturada por una
-  propiedad marcada se caza como la que entra por el constructor.
+  propiedad marcada se caza como la que entra por el constructor. Con ella activa, resolver un Scoped
+  desde el proveedor raíz —directamente, o a través de un servicio que lo requiere— también falla, al
+  resolverlo: un Scoped resuelto allí vive hasta que se cierra el contenedor. Se resuelve desde un
+  ámbito.
 
 Ambos son calcados de `ServiceProviderOptions`, y ambos son **opt-in**: `BuildServiceProvider`
 sin opciones no valida nada, y el host de la familia de aplicaciones activa los dos en el entorno

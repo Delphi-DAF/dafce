@@ -524,7 +524,8 @@ paraban en el orden de registro.
 4. Renombra los tipos y unidades de las tablas de arriba.
 5. Vuelve a compilar y pasa tus tests. Después arranca la aplicación una vez con
    `DAF_APP_ENV=Development`: el host valida el contenedor, y un registro que se haya perdido detiene
-   la construcción nombrándolo.
+   la construcción nombrándolo. Un servicio Scoped pedido al proveedor raíz también se rechaza, al
+   resolverlo: se resuelve desde un ámbito que abre el trabajo, `Services.CreateScope`.
 6. Las secciones 10 a 13, la 15, la 17 y la 18 son cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
    contra tu propia composición — la vida de los ámbitos, los registros repetidos, y lo que lea
    un destructor.

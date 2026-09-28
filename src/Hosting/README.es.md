@@ -115,7 +115,10 @@ Builder.ServiceProviderOptions := TServiceProviderOptions.None;               //
 Builder.ServiceProviderOptions := TServiceProviderOptions.Create(True, True); // valida siempre
 ```
 
-La validación alcanza a los registros por clase; un registro por factory queda fuera.
+La validación alcanza a los registros por clase; un registro por factory queda fuera. Con
+`ValidateScopes`, un servicio Scoped pedido al proveedor raíz también se rechaza al resolverlo. Los
+servicios alojados y las tareas de arranque son Singleton, así que lo que necesiten de un Scoped lo
+resuelven desde un ámbito propio, con un `IServiceScopeFactory` recibido por constructor.
 
 ---
 

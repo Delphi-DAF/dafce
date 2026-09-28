@@ -264,7 +264,7 @@ Accepted shorthands: `deve`, `stag`, `prod`, `test` (case-insensitive).
 
 In `Development` the host also validates the container when it builds it: a registration whose
 dependencies cannot be satisfied, or a Singleton that captures a Scoped, stops `Build` with every
-finding listed. `ServiceProviderOptions` on the builder fixes that choice whatever the environment —
+finding listed, and a Scoped asked of the root provider is rejected when it is resolved. `ServiceProviderOptions` on the builder fixes that choice whatever the environment —
 see *Container validation* in the module README.
 
 You can also read arbitrary environment variables:

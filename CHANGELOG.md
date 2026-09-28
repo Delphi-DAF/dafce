@@ -21,7 +21,7 @@ The changes that break compilation are collected, with their example diff, in `M
 - **DependencyInjection**: `AddInjector<T>` — wiring in code, with no attributes and no RTTI, so it reaches a class from another library
 - **DependencyInjection**: `IOptions<T>` — a service asks for its settings in the constructor and gets them built and validated, from `AppOptions.Configure<T>` or from a configuration section
 - **DependencyInjection**: Open generics — `AddSingleton<IRepo<_>, TRepo<_>>` serves every closure of the contract. What it covers and what it does not, in the README
-- **DependencyInjection**: `ValidateOnBuild` and `ValidateScopes` on `BuildServiceProvider(TServiceProviderOptions)` — the graph is checked at build time and every failure is reported together. Factory registrations are left out. The family's host turns both on in the Development environment, and `ServiceProviderOptions` on the builder fixes them by hand
+- **DependencyInjection**: `ValidateOnBuild` and `ValidateScopes` on `BuildServiceProvider(TServiceProviderOptions)` — the graph is checked at build time and every failure is reported together. Factory registrations are left out. The family's host turns both on in the Development environment, and `ServiceProviderOptions` on the builder fixes them by hand. With `ValidateScopes`, a Scoped resolved from the root provider is also rejected, when it is resolved
 - **DependencyInjection**: Improvements to composing the collection
   - `TryAddSingleton` / `TryAddScoped` / `TryAddTransient`, `Replace` and `RemoveAll`, with .NET's semantics
   - `Descriptors` — a service's registrations, read-only

@@ -264,7 +264,7 @@ Abreviaturas aceptadas: `deve`, `stag`, `prod`, `test` (sin distinción de mayú
 
 En `Development` el host además valida el contenedor al construirlo: un registro cuyas dependencias
 no se pueden satisfacer, o un Singleton que captura un Scoped, detiene `Build` con todos los hallazgos
-juntos. `ServiceProviderOptions` en el builder fija esa elección sea cual sea el entorno — ver
+juntos, y un Scoped pedido al proveedor raíz se rechaza al resolverlo. `ServiceProviderOptions` en el builder fija esa elección sea cual sea el entorno — ver
 *Validación del contenedor* en el README del módulo.
 
 También puedes leer variables de entorno arbitrarias:

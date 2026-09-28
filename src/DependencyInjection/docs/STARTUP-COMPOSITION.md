@@ -391,7 +391,9 @@ var Provider := Services.BuildServiceProvider(TServiceProviderOptions.Create(Tru
   finding them one at a time costs a compile cycle each.
 - `ValidateScopes` rejects a Singleton depending on a Scoped (*captured dependency*), naming
   both services. It reads the same two routes: the dependency captured through a marked
-  property is caught like the one taken by the constructor.
+  property is caught like the one taken by the constructor. With it on, resolving a Scoped from the
+  root provider — directly, or through a service that requires it — also fails, when it is resolved:
+  a Scoped resolved there lives until the container shuts down. Resolve it from a scope.
 
 Both are calqued from `ServiceProviderOptions`, and both are **opt-in**: `BuildServiceProvider`
 without options validates nothing, and the host of the application family turns both on in the

@@ -168,6 +168,11 @@ So whatever a program needs from the container once the work has run, it keeps f
 `OnExecute` receives the `IServiceProvider`, and an `ICliHandler` takes its dependencies by
 constructor.
 
+That `IServiceProvider` is the root one, and an `ICliHandler` is resolved from it too: no scope is
+opened around the work. A Scoped service the work needs comes from a scope the work opens —
+`Services.CreateScope`, or an `IServiceScopeFactory` taken by constructor —; with the validation on,
+as it is in `Development`, asking the root provider for it is rejected.
+
 ---
 
 ## Two readers of `argv`, and only one owner

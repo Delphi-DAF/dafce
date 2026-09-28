@@ -519,6 +519,8 @@ in registration order.
 4. Rename the types and units from the tables above.
 5. Compile again and run your tests. Then start the application once with `DAF_APP_ENV=Development`:
    the host validates the container, and a registration that went missing stops the build naming it.
+   A Scoped service asked of the root provider is rejected too, when it is resolved: resolve it from a
+   scope the work opens, `Services.CreateScope`.
 6. Sections 10 to 13, 15, 17 and 18 are **run-time** changes: the compiler says nothing about them. Read them
    against your own composition — scope lifetimes, duplicate registrations, and anything a
    destructor reads.

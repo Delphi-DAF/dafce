@@ -3,6 +3,7 @@
 interface
 
 uses
+  System.SysUtils,
   Daf.Extensions.DependencyInjection;
 
 type
@@ -105,15 +106,16 @@ type
     Services: IServiceCollection;
     Provider: IServiceProvider;
     Failure: string;
+    ResolveFailure: string;
     constructor Create;
     destructor Destroy; override;
     procedure BuildWith(const Options: TServiceProviderOptions);
+    procedure TryResolve(const Resolve: TProc);
   end;
 
 implementation
 
 uses
-  System.SysUtils,
   System.TypInfo,
   Daf.MiniSpec,
   Daf.DependencyInjection,
@@ -172,6 +174,16 @@ begin
     Provider := Services.BuildServiceProvider(Options);
   except
     on E: Exception do Failure := E.Message;
+  end;
+end;
+
+procedure TValidationWorld.TryResolve(const Resolve: TProc);
+begin
+  ResolveFailure := '';
+  try
+    Resolve;
+  except
+    on E: Exception do ResolveFailure := E.Message;
   end;
 end;
 
@@ -287,11 +299,13 @@ Feature Dependency graph validation @di @validation
       begin
         W.BuildWith(TServiceProviderOptions.Create(True, True));
       end)
-    .&Then('the provider is built without flagging anything',
+    .&Then('the provider is built without flagging anything, and a scope resolves from it',
       procedure(W: TValidationWorld)
       begin
         Expect(W.Failure).ToBeEmpty;
-        Expect(W.Provider.GetRequiredService<IHealthy> <> nil).ToBeTrue;
+        // From a child scope: with ValidateScopes the root provider refuses a scoped service.
+        var Scope := W.Provider.CreateScope;
+        Expect(Scope.ServiceProvider.GetRequiredService<IHealthy> <> nil).ToBeTrue;
       end)
 
   .Scenario('A healthy graph with marked properties is not blocked either')
@@ -475,6 +489,103 @@ Feature Dependency graph validation @di @validation
         Expect(W.Failure).ToContain('TSecondBroken');
         Expect(W.Failure).ToContain('TThirdBroken');
         Expect(W.Failure).ToContain('cycle');
+      end)
+
+.Rule('with ValidateScopes, a scoped service is not resolved from the root provider')
+
+  .Scenario('A scoped service asked of the root provider is rejected')
+    .Given('a scoped service, and a provider built with ValidateScopes',
+      procedure(W: TValidationWorld)
+      begin
+        W.Services.AddScoped<IScopedDep, TScopedDep>;
+        W.BuildWith(TServiceProviderOptions.Create(False, True));
+      end)
+    .When('it is resolved from the root provider',
+      procedure(W: TValidationWorld)
+      begin
+        W.TryResolve(
+          procedure
+          begin
+            W.Provider.GetRequiredService<IScopedDep>;
+          end);
+      end)
+    .&Then('the resolution fails naming the service and saying it was asked of the root',
+      procedure(W: TValidationWorld)
+      begin
+        Expect(W.Failure).ToEqual('');
+        Expect(W.ResolveFailure).ToContain('Cannot resolve scoped service');
+        Expect(W.ResolveFailure).ToContain('IScopedDep');
+        Expect(W.ResolveFailure).ToContain('from root provider');
+      end)
+
+  .Scenario('A service that requires a scoped one, asked of the root provider, is rejected')
+    .Given('a transient service that asks for a scoped one, and a provider built with ValidateScopes',
+      procedure(W: TValidationWorld)
+      begin
+        W.Services.AddScoped<IScopedDep, TScopedDep>;
+        W.Services.AddTransient<IHealthy, TDependent>;
+        W.BuildWith(TServiceProviderOptions.Create(False, True));
+      end)
+    .When('the transient is resolved from the root provider',
+      procedure(W: TValidationWorld)
+      begin
+        W.TryResolve(
+          procedure
+          begin
+            W.Provider.GetRequiredService<IHealthy>;
+          end);
+      end)
+    .&Then('the resolution fails naming what was asked and the scoped service it requires',
+      procedure(W: TValidationWorld)
+      begin
+        Expect(W.ResolveFailure).ToContain('IHealthy');
+        Expect(W.ResolveFailure).ToContain('requires scoped service');
+        Expect(W.ResolveFailure).ToContain('IScopedDep');
+      end)
+
+  .Scenario('The same scoped service asked of a child scope is built')
+    .Given('a scoped service, and a provider built with ValidateScopes',
+      procedure(W: TValidationWorld)
+      begin
+        W.Services.AddScoped<IScopedDep, TScopedDep>;
+        W.BuildWith(TServiceProviderOptions.Create(False, True));
+      end)
+    .When('it is resolved from a child scope',
+      procedure(W: TValidationWorld)
+      begin
+        W.TryResolve(
+          procedure
+          begin
+            var Scope := W.Provider.CreateScope;
+            Scope.ServiceProvider.GetRequiredService<IScopedDep>;
+          end);
+      end)
+    .&Then('it is built',
+      procedure(W: TValidationWorld)
+      begin
+        Expect(W.ResolveFailure).ToEqual('');
+      end)
+
+  .Scenario('Without ValidateScopes the root provider still resolves it')
+    .Given('a scoped service, and a provider built without options',
+      procedure(W: TValidationWorld)
+      begin
+        W.Services.AddScoped<IScopedDep, TScopedDep>;
+        W.BuildWith(TServiceProviderOptions.None);
+      end)
+    .When('it is resolved from the root provider',
+      procedure(W: TValidationWorld)
+      begin
+        W.TryResolve(
+          procedure
+          begin
+            W.Provider.GetRequiredService<IScopedDep>;
+          end);
+      end)
+    .&Then('it is built',
+      procedure(W: TValidationWorld)
+      begin
+        Expect(W.ResolveFailure).ToEqual('');
       end);
 
 end.
