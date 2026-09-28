@@ -128,8 +128,9 @@ This is what the layer adds over the host, and what every console tool used to r
 | `ICliHandler` registered in `Services` | The work, resolved from the container | Inside `Run` |
 | `RootCommand` | The grammar that owns `argv` | At `Build` |
 
-Declaring the work **both** ways raises `ECliCompositionError`. Two ways of saying the same thing is
-a precedence rule nobody remembers.
+An application declares its work in a single way: `OnExecute`, or **one** registered `ICliHandler`.
+If it declares both, or registers more than one `ICliHandler`, `Build` raises
+`ECliCompositionError`.
 
 ### The policies that come as standard
 

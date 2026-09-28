@@ -16,7 +16,7 @@ uses
 
 type
   /// <summary>
-  /// Componer mal la variante: dos formas de decir cual es el trabajo, no una sola.
+  /// Componer mal la variante: el trabajo declarado de dos formas, o por mas de un ICliHandler.
   /// </summary>
   ECliCompositionError = class(Exception);
 
@@ -42,7 +42,8 @@ type
   /// <summary>
   /// El trabajo, resuelto del contenedor. Se registra como cualquier otro servicio --
   /// <c>B.Services.AddSingleton&lt;ICliHandler, TMiHandler&gt;</c>-- y no hace falta una via
-  /// de registro propia: la que hay ya sirve.
+  /// de registro propia: la que hay ya sirve. Uno solo: con mas de uno, <c>Build</c> lanza
+  /// <see cref="ECliCompositionError"/>.
   /// </summary>
   ICliHandler = interface(IInvokable)
     ['{52B72A0C-07F3-479D-998B-970DBCA7CFD4}']
@@ -333,6 +334,10 @@ begin
     raise ECliCompositionError.Create('This application declares its work twice: an OnExecute ' +
       'handler and a registered ICliHandler. Two ways of saying the same thing is a precedence ' +
       'rule nobody remembers -- keep one.');
+  var Handlers := Length(FImpl.Services.Descriptors<ICliHandler>);
+  if Handlers > 1 then
+    raise ECliCompositionError.CreateFmt('This application registers %d ICliHandler services, and ' +
+      'which one runs would depend on the order of registration -- keep one.', [Handlers]);
 
   // Lo de ANTES del contenedor. Una aplicacion que decide no arrancar termina sin haber
   // construido nada, y lo dice por su codigo de salida.

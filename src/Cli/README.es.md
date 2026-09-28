@@ -129,8 +129,9 @@ Esto es lo que la capa añade sobre el host, y lo que cada herramienta de consol
 | `ICliHandler` registrado en `Services` | El trabajo, resuelto del contenedor | Dentro del `Run` |
 | `RootCommand` | La gramática, dueña de `argv` | En el `Build` |
 
-Declarar el trabajo por las **dos** vías levanta `ECliCompositionError`. Dos formas de decir lo mismo
-son una regla de precedencia que nadie recuerda.
+Una aplicación declara su trabajo de una sola forma: con `OnExecute` o registrando **un**
+`ICliHandler`. Si declara las dos, o registra más de un `ICliHandler`, `Build` lanza
+`ECliCompositionError`.
 
 ### Las políticas que vienen de serie
 

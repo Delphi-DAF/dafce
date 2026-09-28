@@ -324,6 +324,33 @@ Feature La variante CLI de la familia @cli @application-family
         Expect(W.Report).ToContain('declares its work twice');
       end)
 
+  .Scenario('Registrar mas de un ICliHandler es un error de composicion')
+    .Given('una aplicacion con dos ICliHandler registrados',
+      procedure(W: TCliWorld)
+      begin
+        W.Builder := TCliApplication.CreateBuilder;
+        W.Builder.Services.AddSingleton<IGreeter, TGreeter>;
+        W.Builder.Services.AddSingleton<ICliHandler, TGreetingHandler>;
+        W.Builder.Services.AddSingleton<ICliHandler, TGreetingHandler>;
+      end)
+    .When('se construye',
+      procedure(W: TCliWorld)
+      begin
+        try
+          W.App := W.Builder.Build;
+          W.Report := '<construyo sin protestar>';
+        except
+          on E: Exception do
+            W.Report := E.ClassName + ': ' + E.Message;
+        end;
+      end)
+    .&Then('falla al componer, diciendo cuantos hay',
+      procedure(W: TCliWorld)
+      begin
+        Expect(W.Report).ToStartWith('ECliCompositionError: ');
+        Expect(W.Report).ToContain('registers 2 ICliHandler');
+      end)
+
 .Rule('Las opciones del contenedor llegan por el builder de la variante')
 
   .Scenario('Fijar la validacion en el builder CLI la aplica al construir')
