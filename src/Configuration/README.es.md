@@ -216,8 +216,8 @@ estado de la sección en el momento en que se construyeron sus ajustes.
 
 ## Integración con Hosting
 
-Con `Hosting`, el builder ya carga `appsettings.json`, `appsettings.{Entorno}.json` y las variables
-de entorno; el orden está en la [guía de Hosting](../Hosting/docs/GUIDE.es.md). Añade tus propias
+Con `Hosting`, el builder ya carga los ficheros `appsettings`, los de la propia aplicación y las
+variables de entorno; cuáles y en qué orden está en la [guía de Hosting](../Hosting/docs/GUIDE.es.md). Añade tus propias
 fuentes a la `Configuration` del builder:
 
 ```pascal

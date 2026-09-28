@@ -75,7 +75,9 @@ order, each one winning over the ones before it:
 
 1. the process environment variables prefixed `DAF_` — where `DAF_APP_ENV`, `DAF_APP_NAME` and
    `DAF_CONTENT_ROOT` come from — and, if it was given arguments, the command line;
-2. `appsettings.json` and `appsettings.{Environment}.json` from the content root, both optional;
+2. `appsettings.json`, `appsettings.{Environment}.json`, `{ApplicationName}.settings.json` and
+   `{ApplicationName}.settings.{Environment}.json` from the content root, all optional; a path
+   separator in the application name becomes `_`;
 3. every environment variable, with `__` as the section separator: `Db__Server` is `Db:Server`;
 4. the command line, again.
 

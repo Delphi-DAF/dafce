@@ -567,14 +567,24 @@ end;
 
 procedure THostBuilder.InitializeDefaultAppConfiguration;
 begin
-  // Las fuentes de aplicacion de Host.CreateApplicationBuilder, en su orden: los dos ficheros
-  // del content root, que necesitan el entorno ya resuelto; todas las variables de entorno; y
-  // otra vez los argumentos, que tienen que ganar a todo lo anterior.
+  // Las fuentes de aplicacion de Host.CreateApplicationBuilder, en su orden: los ficheros del
+  // content root, que necesitan el entorno ya resuelto; todas las variables de entorno; y otra
+  // vez los argumentos, que tienen que ganar a todo lo anterior.
   JsonConfig.AddFile(FConfiguration,
     TPath.Combine(FEnvironment.ContentRootPath, 'appsettings.json'), [csoOptional]);
   JsonConfig.AddFile(FConfiguration,
     TPath.Combine(FEnvironment.ContentRootPath, 'appsettings.' + FEnvironment.EnvironmentName + '.json'),
     [csoOptional]);
+  if FEnvironment.ApplicationName <> '' then
+  begin
+    // Un separador de ruta en el nombre sacaria el fichero del content root.
+    var App := FEnvironment.ApplicationName.Replace('\', '_').Replace('/', '_');
+    JsonConfig.AddFile(FConfiguration,
+      TPath.Combine(FEnvironment.ContentRootPath, App + '.settings.json'), [csoOptional]);
+    JsonConfig.AddFile(FConfiguration,
+      TPath.Combine(FEnvironment.ContentRootPath, App + '.settings.' + FEnvironment.EnvironmentName + '.json'),
+      [csoOptional]);
+  end;
   FConfiguration.Add(TEnvironmentVariablesConfigurationSource.Create('', True, False));
   if Length(FArgs) > 0 then
     CommandLineConfig.AddArgs(FConfiguration, FArgs);

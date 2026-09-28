@@ -151,6 +151,79 @@ Feature Fuentes de configuracion por defecto @hosting @defaultsources
         Expect(W.Report).ToEqual('<ausente>');
       end)
 
+.Rule('El host carga tambien los ficheros de la aplicacion, y ganan a appsettings')
+
+  .Scenario('El fichero de la aplicacion gana a appsettings.json')
+    .Given('un appsettings.json y un SpecApp.settings.json en el content root',
+      procedure(W: TDefaultSourcesWorld)
+      begin
+        W.WriteJson('appsettings.json', 'from-json');
+        W.WriteJson('SpecApp.settings.json', 'from-app');
+      end)
+    .When('se construye el host de la aplicacion SpecApp',
+      procedure(W: TDefaultSourcesWorld)
+      begin
+        W.BuildHost(['--DAF_APP_NAME=SpecApp']);
+      end)
+    .&Then('la clave es la del fichero de la aplicacion',
+      procedure(W: TDefaultSourcesWorld)
+      begin
+        Expect(W.Report).ToEqual('from-app');
+      end)
+
+  .Scenario('El fichero de la aplicacion gana tambien al appsettings del entorno')
+    .Given('un appsettings.Staging.json y un SpecApp.settings.json en el content root',
+      procedure(W: TDefaultSourcesWorld)
+      begin
+        W.WriteJson('appsettings.Staging.json', 'from-staging');
+        W.WriteJson('SpecApp.settings.json', 'from-app');
+      end)
+    .When('se construye el host de SpecApp en el entorno Staging',
+      procedure(W: TDefaultSourcesWorld)
+      begin
+        W.BuildHost(['--DAF_APP_NAME=SpecApp', '--DAF_APP_ENV=Staging']);
+      end)
+    .&Then('la clave es la del fichero de la aplicacion',
+      procedure(W: TDefaultSourcesWorld)
+      begin
+        Expect(W.Report).ToEqual('from-app');
+      end)
+
+  .Scenario('El fichero de la aplicacion y su entorno gana a todos los ficheros')
+    .Given('un SpecApp.settings.json y un SpecApp.settings.Staging.json en el content root',
+      procedure(W: TDefaultSourcesWorld)
+      begin
+        W.WriteJson('SpecApp.settings.json', 'from-app');
+        W.WriteJson('SpecApp.settings.Staging.json', 'from-app-staging');
+      end)
+    .When('se construye el host de SpecApp en el entorno Staging',
+      procedure(W: TDefaultSourcesWorld)
+      begin
+        W.BuildHost(['--DAF_APP_NAME=SpecApp', '--DAF_APP_ENV=Staging']);
+      end)
+    .&Then('la clave es la del fichero de la aplicacion para ese entorno',
+      procedure(W: TDefaultSourcesWorld)
+      begin
+        Expect(W.Report).ToEqual('from-app-staging');
+      end)
+
+  .Scenario('Un separador de ruta en el nombre de la aplicacion pasa a guion bajo')
+    .Given('un Suite_Tool.settings.json en el content root',
+      procedure(W: TDefaultSourcesWorld)
+      begin
+        W.WriteJson('Suite_Tool.settings.json', 'from-sanitized');
+      end)
+    .When('se construye el host de la aplicacion Suite/Tool',
+      procedure(W: TDefaultSourcesWorld)
+      begin
+        W.BuildHost(['--DAF_APP_NAME=Suite/Tool']);
+      end)
+    .&Then('lee el fichero con el separador cambiado',
+      procedure(W: TDefaultSourcesWorld)
+      begin
+        Expect(W.Report).ToEqual('from-sanitized');
+      end)
+
 .Rule('El entorno gana a los ficheros, y los argumentos a todo')
 
   .Scenario('Una variable de entorno gana a appsettings.json')

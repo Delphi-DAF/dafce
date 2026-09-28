@@ -512,8 +512,9 @@ in registration order.
 
 ### 19. The host loads `appsettings.json` and the environment by default
 
-The builder loads `appsettings.json` and `appsettings.{Environment}.json` from the content root,
-both optional, and every environment variable, with `__` as the section separator, before the
+The builder loads `appsettings.json`, `appsettings.{Environment}.json`,
+`{ApplicationName}.settings.json` and `{ApplicationName}.settings.{Environment}.json` from the
+content root, all optional, and every environment variable, with `__` as the section separator, before the
 command line: the sources of `Host.CreateApplicationBuilder`. In 1.6 the host loaded no source of
 its own.
 

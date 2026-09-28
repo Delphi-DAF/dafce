@@ -215,8 +215,9 @@ section at the moment its settings were built.
 
 ## Integration with Hosting
 
-When using `Hosting`, the builder already loads `appsettings.json`, `appsettings.{Environment}.json`
-and the environment variables; the order is in [Hosting's guide](../Hosting/docs/GUIDE.md). Add
+When using `Hosting`, the builder already loads the `appsettings` files, the application's own
+settings files and the environment variables; which ones and in what order is in
+[Hosting's guide](../Hosting/docs/GUIDE.md). Add
 your own sources to the builder's `Configuration`:
 
 ```pascal

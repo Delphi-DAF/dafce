@@ -515,8 +515,9 @@ paraban en el orden de registro.
 
 ### 19. El host carga `appsettings.json` y el entorno por defecto
 
-El builder carga `appsettings.json` y `appsettings.{Entorno}.json` del content root, los dos
-opcionales, y todas las variables de entorno, con `__` como separador de sección, antes de la línea
+El builder carga `appsettings.json`, `appsettings.{Entorno}.json`, `{ApplicationName}.settings.json`
+y `{ApplicationName}.settings.{Entorno}.json` del content root, todos opcionales, y todas las
+variables de entorno, con `__` como separador de sección, antes de la línea
 de comandos: las fuentes de `Host.CreateApplicationBuilder`. En 1.6 el host no cargaba ninguna fuente
 por su cuenta.
 

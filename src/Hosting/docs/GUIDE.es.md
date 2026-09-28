@@ -75,7 +75,9 @@ orden, y cada una gana a las anteriores:
 
 1. las variables de entorno del proceso con prefijo `DAF_` —de donde salen `DAF_APP_ENV`,
    `DAF_APP_NAME` y `DAF_CONTENT_ROOT`— y, si se le dieron argumentos, la línea de comandos;
-2. `appsettings.json` y `appsettings.{Entorno}.json` del content root, los dos opcionales;
+2. `appsettings.json`, `appsettings.{Entorno}.json`, `{ApplicationName}.settings.json` y
+   `{ApplicationName}.settings.{Entorno}.json` del content root, todos opcionales; un separador de
+   ruta en el nombre de la aplicación pasa a `_`;
 3. todas las variables de entorno, con `__` como separador de sección: `Db__Server` es `Db:Server`;
 4. otra vez la línea de comandos.
 
