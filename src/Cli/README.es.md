@@ -158,7 +158,8 @@ B.SetAction(Greet,
 - Una aplicación que no declara ninguna acción es sus tareas de arranque y sus servicios alojados, y
   `Run` devuelve `TCliExit.Ok`.
 - Lo que se escapa de una acción va a la política de `OnUnhandled`.
-- Un fallo al parar el host va a la misma política, y `Services` es `nil`: el contenedor ya se apagó.
+- Un fallo al parar el host va a la misma política, y `Services` es `nil`: el contenedor ya se apagó,
+  y el host ya informó del fallo.
   Si la acción ya había fallado, el código de salida es el que la política dio a ese primer fallo, y
   el de la parada solo se informa.
 
@@ -172,7 +173,7 @@ acción la aplicación— y la aplicación no se libera nunca.
 
 | | Qué hace |
 |---|---|
-| `ExitPolicy.LogAndFail` | informa por el canal de arranque y devuelve `TCliExit.Failure`. **Es la que se aplica si no se llama a `OnUnhandled`** |
+| `ExitPolicy.LogAndFail` | informa por el canal de arranque y devuelve `TCliExit.Failure`; un fallo de la parada, que el host ya informó, no lo vuelve a informar. **Es la que se aplica si no se llama a `OnUnhandled`** |
 | `ExitPolicy.Rethrow` | deja salir la excepción del `Run`, para quien lo llamó. El host se para igual — la parada está en el `finally` |
 | `ExitPolicy.Silent` | devuelve `TCliExit.Failure` y no dice nada |
 

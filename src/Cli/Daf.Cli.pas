@@ -61,7 +61,7 @@ type
   ///   cambio en el framework. Las de siempre estan escritas en <see cref="ExitPolicy"/>.
   ///
   ///   Services llega vacio cuando lo que se escapa es un fallo de la parada: el contenedor ya se
-  ///   apago.
+  ///   apago, y el host ya lo informo al ocurrir.
   /// </remarks>
   TCliExceptionPolicy = reference to function(const E: Exception;
     const Services: IServiceProvider): Integer;
@@ -72,7 +72,8 @@ type
   /// </summary>
   ExitPolicy = class
   public
-    /// <summary>Informa por el canal de arranque y devuelve Failure.</summary>
+    /// <summary>Informa por el canal de arranque y devuelve Failure. Un fallo de la parada, que el
+    /// host ya informo, no lo vuelve a informar.</summary>
     class function LogAndFail: TCliExceptionPolicy; virtual;
     /// <summary>Propaga: la excepcion sale del Run y la ve quien invoco.</summary>
     class function Rethrow: TCliExceptionPolicy; virtual;
@@ -261,8 +262,10 @@ begin
     function(const E: Exception; const Services: IServiceProvider): Integer
     begin
       // Por el canal de arranque y no por el pipeline: a estas alturas el proveedor puede estar
-      // ya soltandose, y este informe es lo ultimo que se puede decir.
-      BootstrapLog.LoggerFor('TCliApplication').LogError(E, 'the application ended on an unhandled exception');
+      // ya soltandose, y este informe es lo ultimo que se puede decir. Sin proveedor, el fallo es
+      // de la parada, y el host ya lo informo.
+      if Services <> nil then
+        BootstrapLog.LoggerFor('TCliApplication').LogError(E, 'the application ended on an unhandled exception');
       Result := TCliExit.Failure;
     end;
 end;

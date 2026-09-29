@@ -212,6 +212,41 @@ begin
   end;
 end;
 
+type
+  /// Guarda lo que llega al canal de arranque, para contar cuantas veces se informa algo.
+  TLinesSink = class(TInterfacedObject, IBootstrapSink)
+  public
+    Lines: string;
+    function IsAvailable: Boolean;
+    procedure Write(const Line: string);
+  end;
+
+function TLinesSink.IsAvailable: Boolean;
+begin
+  Result := True;
+end;
+
+procedure TLinesSink.Write(const Line: string);
+begin
+  Lines := Lines + Line + sLineBreak;
+end;
+
+/// Ejecuta con el canal de arranque recogido en Sink en vez de en la salida de error del arnes.
+function RunReporting(const App: ICliApplication; const Sink: TLinesSink): Integer;
+begin
+  var Keep: IBootstrapSink := Sink;
+  var Saved := BootstrapLog.Sinks;
+  BootstrapLog.ClearSinks;
+  BootstrapLog.AddSink(Keep);
+  try
+    Result := App.Run;
+  finally
+    BootstrapLog.ClearSinks;
+    for var Each in Saved do
+      BootstrapLog.AddSink(Each);
+  end;
+end;
+
 // --- Feature definition ---
 
 initialization
@@ -682,6 +717,41 @@ Feature La variante CLI de la familia @cli @application-family
       procedure(W: TCliWorld)
       begin
         Expect(Format('%d %s', [W.ExitCode, W.PolicySaw])).ToEqual('42 el trabajo fallo;');
+      end)
+
+  .Scenario('Con la politica por defecto, un fallo al parar se informa una sola vez')
+    .Given('una aplicacion CLI sin politica declarada, y un servicio alojado que falla al parar',
+      procedure(W: TCliWorld)
+      begin
+        W.Builder := TCliApplication.CreateBuilder;
+        Hosting.AddHostedService(W.Builder.Services, TRefusingStop);
+        W.Builder.SetAction(
+          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          begin
+            Result := TCliExit.Ok;
+          end);
+        W.App := W.Builder.Build;
+      end)
+    .When('se ejecuta',
+      procedure(W: TCliWorld)
+      begin
+        var Sink := TLinesSink.Create;
+        var Keep: IBootstrapSink := Sink;
+        W.ExitCode := RunReporting(W.App, Sink);
+        W.Report := Sink.Lines;
+      end)
+    .&Then('el canal de arranque lo recibe una vez, y el proceso termina con Failure',
+      procedure(W: TCliWorld)
+      begin
+        var Times := 0;
+        var From := Pos('la parada fallo', W.Report);
+        while From > 0 do
+        begin
+          Inc(Times);
+          From := PosEx('la parada fallo', W.Report, From + 1);
+        end;
+        Expect(Format('%d informe(s), codigo %d', [Times, W.ExitCode]))
+          .ToEqual(Format('1 informe(s), codigo %d', [TCliExit.Failure]));
       end)
 
   .Scenario('Soltar la aplicacion tras un fallo de la parada')

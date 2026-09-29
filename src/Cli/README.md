@@ -159,7 +159,7 @@ B.SetAction(Greet,
   answers `TCliExit.Ok`.
 - What escapes an action goes to the `OnUnhandled` policy.
 - A failure while stopping the host goes to the same policy, and `Services` is `nil`: the container
-  is already shut down. If the action had already failed, the exit code is the one the policy gave
+  is already shut down, and the host has already reported the failure. If the action had already failed, the exit code is the one the policy gave
   that first failure, and the shutdown failure is only reported.
 
 ⚠️ Use the `Services` parameter. An action that captures the application to read `App.Services`
@@ -172,7 +172,7 @@ action the application — and the application is never released.
 
 | | What it does |
 |---|---|
-| `ExitPolicy.LogAndFail` | reports through the startup channel and returns `TCliExit.Failure`. **This is the one that applies when `OnUnhandled` is not called** |
+| `ExitPolicy.LogAndFail` | reports through the startup channel and returns `TCliExit.Failure`; a shutdown failure, which the host already reported, is not reported again. **This is the one that applies when `OnUnhandled` is not called** |
 | `ExitPolicy.Rethrow` | lets the exception out of `Run`, for whoever called it. The host is stopped either way — the shutdown is in the `finally` |
 | `ExitPolicy.Silent` | returns `TCliExit.Failure` and says nothing |
 
