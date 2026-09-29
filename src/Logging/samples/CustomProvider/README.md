@@ -5,7 +5,7 @@ Dos proveedores escritos desde fuera del framework, compuestos en el mismo pipel
 los dos finales de una composición sin destinos.
 
 Es el sample de lo que el README de `Logging.Abstractions` promete a «quien implemente proveedores
-propios», y no había ninguno.
+propios».
 
 ## Qué enseña
 

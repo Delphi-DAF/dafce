@@ -1,9 +1,8 @@
 ﻿unit LayoutTokens.Feat;
 
-// El modo de fallo del propio motor: un token para el que no hay renderer se
-// resuelve a cadena VACIA, sin error ni aviso. Un destino puede escribir, rotar y no lanzar mientras
-// llena el fichero de lineas sin contenido, y todo lo observable dice que funciona. Lo mismo le pasa
-// a un token mal escrito en una configuracion de produccion: se pierde una columna y nada lo dice.
+// Un token sin renderer se queda sin sustituir: resuelto a cadena vacia no lo delataria nada. Un
+// destino escribiria, rotaria y no lanzaria mientras llena el fichero de lineas sin contenido, y un
+// token mal escrito en una configuracion de produccion perderia una columna en silencio.
 //
 // Los renderers se registran aqui a proposito --el motor los guarda en un mapa global que llena el
 // host-- porque estos escenarios son justo los que preguntan que se ve en la salida.

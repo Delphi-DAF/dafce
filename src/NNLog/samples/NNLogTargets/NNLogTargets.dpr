@@ -118,8 +118,8 @@ end;
 begin
   ReportMemoryLeaksOnShutdown := True;
 
-  // El canal de arranque no trae destinos puestos: es donde informa el logging cuando lo
-  // que falla es el logging, y adonde va lo decide quien despliega.
+  // El canal de arranque trae puestas la salida de depuracion y la de error, y este destino se
+  // suma a ellas: en consola el informe sale dos veces, por la de error y por la normal con '>>'.
   BootstrapLog.AddSink(TStdOutBootstrapSink.Create);
 
   var Env := BuildEnvironment;
