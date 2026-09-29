@@ -22,6 +22,6 @@ begin
   try
     Writeln('El host esta arrancado');
   finally
-    Host.Stop;
+    StopAndNil(Host);
   end;
 end.

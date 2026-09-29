@@ -38,7 +38,7 @@ Host.Start;
 try
   Host.WaitForShutdown;
 finally
-  Host.Stop;
+  StopAndNil(Host);
 end;
 ```
 
@@ -182,6 +182,7 @@ Consulta [La familia de aplicaciones](docs/APPLICATION-FAMILY.es.md) para saber 
 - 📖 [Composición del arranque](../DependencyInjection/docs/STARTUP-COMPOSITION.es.md) — `IStartupTask` frente a `IHostedService`, y las dos fases del arranque
 - 📁 [HostQuickStart](samples/HostQuickStart/README.md) — componer, construir, arrancar y parar, sin ninguna variante de aplicación alrededor
 - 📁 [StartupReport](samples/StartupReport/README.md) — dónde queda el registro del arranque, y qué enseña un arranque que no llega a completarse
+- 📁 [HostLifetime](samples/HostLifetime/README.md) — las tres notificaciones del ciclo de vida, y una copia del `IHost` que se suelta en `ApplicationStopped`
 - 📁 [ConsoleSample](../Cli/samples/ConsoleSample/README.md) — configuración y el patrón de opciones en un programa de consola
 - 📁 [HostedService](../samples/HostedService/) — workers en segundo plano con `AddHostedService`
 - 📁 [PackageInit](../Cli/samples/PackageInit/README.md) — un `IStartupTask` aportado desde un paquete, sin que el `.dpr` lo nombre

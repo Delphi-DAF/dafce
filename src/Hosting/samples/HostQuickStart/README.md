@@ -10,7 +10,8 @@ ninguna variante de la familia por encima.
 - `Services.AddHostedService<T>` registra algo con ciclo de vida — va por `Services` porque una
   interfaz de Delphi no puede declarar un método genérico. La regla de elección es una frase: si
   tiene algo que parar es `IHostedService`; si solo se ejecuta una vez, `IStartupTask`.
-- `Build` devuelve la `IHost`, y `Start` / `Stop` son el ciclo que el host conduce.
+- `Build` devuelve la `IHost`, y `Start` / `Stop` son el ciclo que el host conduce. El `.dpr` lo
+  para con `StopAndNil(Host)`, que deja además la variable vacía, como `FreeAndNil` con un objeto.
 
 ## El dueño lo pone el punto de entrada
 

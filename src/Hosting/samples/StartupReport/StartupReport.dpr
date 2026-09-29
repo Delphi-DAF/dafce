@@ -39,6 +39,6 @@ begin
   try
     Host.WaitForShutdown;
   finally
-    Host.Stop;
+    StopAndNil(Host);
   end;
 end.

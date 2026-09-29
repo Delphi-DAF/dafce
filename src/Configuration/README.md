@@ -236,7 +236,7 @@ Host.Start;
 try
   Host.WaitForShutdown;
 finally
-  Host.Stop;
+  StopAndNil(Host);
 end;
 ```
 

@@ -176,6 +176,7 @@ return {
       ["../../Cli/samples/PackageInit/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/Cli/samples/PackageInit/README.md",
       ["../../DependencyInjection/docs/GUIDE.md"] = "/en/modules/di-guide.qmd",
       ["../../DependencyInjection/docs/STARTUP-COMPOSITION.md"] = "/en/docs/startup-composition.qmd",
+      ["../samples/HostLifetime/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/Hosting/samples/HostLifetime/README.md",
       ["GUIDE.es.md"] = "/es/modules/hosting-guide.qmd",
     },
     ["en/modules/hosting.qmd"] = {
@@ -188,6 +189,7 @@ return {
       ["README.es.md"] = "/es/modules/hosting.qmd",
       ["docs/APPLICATION-FAMILY.md"] = "/en/docs/application-family.qmd",
       ["docs/GUIDE.md"] = "/en/modules/hosting-guide.qmd",
+      ["samples/HostLifetime/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/Hosting/samples/HostLifetime/README.md",
       ["samples/HostQuickStart/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/Hosting/samples/HostQuickStart/README.md",
       ["samples/StartupReport/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/Hosting/samples/StartupReport/README.md",
     },
@@ -524,6 +526,7 @@ return {
       ["../../Cli/samples/PackageInit/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/Cli/samples/PackageInit/README.md",
       ["../../DependencyInjection/docs/GUIDE.es.md"] = "/es/modules/di-guide.qmd",
       ["../../DependencyInjection/docs/STARTUP-COMPOSITION.es.md"] = "/es/docs/startup-composition.qmd",
+      ["../samples/HostLifetime/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/Hosting/samples/HostLifetime/README.md",
       ["GUIDE.md"] = "/en/modules/hosting-guide.qmd",
     },
     ["es/modules/hosting.qmd"] = {
@@ -536,6 +539,7 @@ return {
       ["README.md"] = "/en/modules/hosting.qmd",
       ["docs/APPLICATION-FAMILY.es.md"] = "/es/docs/application-family.qmd",
       ["docs/GUIDE.es.md"] = "/es/modules/hosting-guide.qmd",
+      ["samples/HostLifetime/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/Hosting/samples/HostLifetime/README.md",
       ["samples/HostQuickStart/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/Hosting/samples/HostQuickStart/README.md",
       ["samples/StartupReport/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/Hosting/samples/StartupReport/README.md",
     },

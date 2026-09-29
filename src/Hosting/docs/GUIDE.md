@@ -55,7 +55,7 @@ Host.Start;
 try
   Host.WaitForShutdown; // blocks until shutdown signal
 finally
-  Host.Stop;
+  StopAndNil(Host);
 end;
 ```
 
@@ -63,6 +63,10 @@ end;
 and reaches `Build`. Each builder is independent: several builders and several hosts can be alive
 at once in one process.  
 `Build` can only be called **once** per builder; it freezes configuration and creates the DI container.
+
+`StopAndNil(Host)` stops the host and leaves the variable empty, like `FreeAndNil` with an object:
+stopping releases the host, and a variable still pointing at it touches returned memory when it
+goes out of scope.
 
 ---
 
@@ -335,7 +339,7 @@ try
 
   Host.WaitForShutdown;
 finally
-  Host.Stop;
+  StopAndNil(Host);
 end;
 ```
 
@@ -371,6 +375,11 @@ failed at the end, with the host already released:
 - one failure: that same exception, unwrapped;
 - several: an `EAggregateException` (unit `System.Threading`) holding all of them, whose message
   says how many steps failed.
+
+`StopAndNil(Host)` leaves the variable empty also when `Stop` raises, and raises the same. It
+empties that variable only: a copy of the reference kept elsewhere still points at the released
+host. Release the copy in `ApplicationStopped`, which fires with the host still alive — the
+[HostLifetime](../samples/HostLifetime/README.md) sample keeps one and releases it there.
 
 Freeing a host that was never stopped runs the same sequence once. What fails there is reported,
 and the destructor does not raise it.
