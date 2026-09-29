@@ -511,5 +511,6 @@ declaraciones enfrentadas.
 
 ## Sample
 
-[`samples/BuildTool`](samples/BuildTool) declara una gramática de dos niveles y lee sus valores.
-Ejecútalo sin argumentos y recorre un conjunto de invocaciones, incluidas las cuatro que fallan.
+[`samples/BuildTool`](samples/BuildTool) declara una gramática de dos niveles, da a cada hoja su acción
+e invoca lo que parsea. Ejecútalo sin argumentos y recorre un conjunto de invocaciones, incluidas las
+seis que fallan, con el código de salida de cada una.

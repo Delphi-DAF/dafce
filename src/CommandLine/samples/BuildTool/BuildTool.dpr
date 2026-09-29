@@ -19,6 +19,9 @@
   `native`, `web` and `serve` are the leaves. `build` only groups, so `buildtool build`
   is an INCOMPLETE invocation rather than an invocation of `build`.
 
+  Each leaf declares its action, and Invoke runs the one of the leaf reached and answers
+  the code the process ends with. Nothing in this program asks which command it got.
+
   <target> is REQUIRED without anybody saying so: a string argument gets an arity of
   exactly one, and exactly one is what "required" means at the argument end.
 
@@ -36,9 +39,9 @@
 
 uses
   System.SysUtils,
+  System.Classes,
   System.TypInfo,
-  Daf.CommandLine,
-  Daf.Application.Version;
+  Daf.CommandLine;
 
 type
   /// <summary>An enumerated type already names its own values, so nobody repeats them.</summary>
@@ -54,15 +57,6 @@ type
     Patch: Integer;
     class function TryParse(const Raw: string; out Value: TSemVer): Boolean; static;
     function ToString: string;
-  end;
-
-  /// <summary>What to do once an invocation has reached a leaf.</summary>
-  TLeafHandler = reference to procedure(const Parsed: ICommandLineParseResult);
-
-  /// <summary>One leaf and the handler that answers for it.</summary>
-  TLeafAction = record
-    Leaf: ICommand;
-    Handler: TLeafHandler;
   end;
 
   /// <summary>The tool: its grammar, and what it does with a parsed invocation.</summary>
@@ -83,22 +77,18 @@ type
     FLevel: IOption<TVerbosity>;
     FMinSdk: IOption<TSemVer>;
     FTarget: IArgument<string>;
-    // The module parses and hands back the leaf; DISPATCHING is the application's
-    // job, on purpose -- invocation is an explicit non-goal, because a library that
-    // runs your handlers ends up owning exit codes, cancellation and middleware too.
-    // So the table below is app code, and this is where the frontier sits.
-    FActions: TArray<TLeafAction>;
     procedure DeclareGrammar;
-    procedure BindActions;
+    procedure DeclareActions;
     procedure ShowCommon(const Parsed: ICommandLineParseResult);
-    procedure Dispatch(const Parsed: ICommandLineParseResult);
     procedure ReportNative(const Parsed: ICommandLineParseResult);
     procedure ReportWeb(const Parsed: ICommandLineParseResult);
     procedure ReportServe(const Parsed: ICommandLineParseResult);
+    /// <summary>One step of the walkthrough: the invocation, what it wrote, and its exit code.</summary>
+    function Walk(const Args: TArray<string>): Integer;
   public
     constructor Create;
-    /// <summary>Parses one invocation and reports it.</summary>
-    procedure Run(const Args: TArray<string>);
+    /// <summary>Parses one invocation, invokes it, and answers its exit code.</summary>
+    function Run(const Args: TArray<string>): Integer;
     /// <summary>Walks a fixed set of invocations, including the ones that fail.</summary>
     procedure Demonstrate;
   end;
@@ -121,7 +111,7 @@ constructor TBuildTool.Create;
 begin
   inherited;
   DeclareGrammar;
-  BindActions;
+  DeclareActions;
 end;
 
 procedure TBuildTool.DeclareGrammar;
@@ -184,34 +174,13 @@ begin
   FRoot.Add([FVerbose, FBuild, FServe]);
 end;
 
-// The leaves are keyed by the command OBJECT, not by its name. Comparing
-// Parsed.Command.Name against 'native' would put a quoted name back in the middle of
-// the program -- the very mistake this module exists to remove.
-procedure TBuildTool.BindActions;
-
-  function OnLeaf(const Leaf: ICommand; const Handler: TLeafHandler): TLeafAction;
-  begin
-    Result.Leaf := Leaf;
-    Result.Handler := Handler;
-  end;
-
+// Each action is a method of this class, with no code of its own: the invocation answers 0
+// for it. `build` gets none, and that is what keeps it a group.
+procedure TBuildTool.DeclareActions;
 begin
-  FActions := [
-    OnLeaf(FNative, ReportNative),
-    OnLeaf(FWeb, ReportWeb),
-    OnLeaf(FServe, ReportServe)];
-end;
-
-procedure TBuildTool.Dispatch(const Parsed: ICommandLineParseResult);
-var
-  Action: TLeafAction;
-begin
-  for Action in FActions do
-    if Parsed.Command = Action.Leaf then
-    begin
-      Action.Handler(Parsed);
-      Exit;
-    end;
+  FNative.SetAction(ReportNative);
+  FWeb.SetAction(ReportWeb);
+  FServe.SetAction(ReportServe);
 end;
 
 // What every leaf has in common, including the option nobody declared on it.
@@ -231,6 +200,7 @@ end;
 
 procedure TBuildTool.ReportNative(const Parsed: ICommandLineParseResult);
 begin
+  ShowCommon(Parsed);
   // A string, statically. Reading it into an Integer would not compile.
   Writeln('  out     : ', FOut.ValueIn(Parsed));
   // And a type of this program's own, read as that type: no TValue, no cast, no name
@@ -241,84 +211,80 @@ end;
 
 procedure TBuildTool.ReportWeb(const Parsed: ICommandLineParseResult);
 begin
+  ShowCommon(Parsed);
   Writeln('  minify  : ', BoolToStr(FMinify.ValueIn(Parsed), True));
 end;
 
 procedure TBuildTool.ReportServe(const Parsed: ICommandLineParseResult);
 begin
+  ShowCommon(Parsed);
   // An Integer, statically: it goes straight into arithmetic, with no conversion.
   Writeln('  port    : ', FPort.ValueIn(Parsed) + 0);
   // And an enumerated value, also statically typed.
   Writeln('  level   : ', GetEnumName(TypeInfo(TVerbosity), Ord(FLevel.ValueIn(Parsed))));
 end;
 
-procedure TBuildTool.Run(const Args: TArray<string>);
+function TBuildTool.Run(const Args: TArray<string>): Integer;
+begin
+  // Help and version are written and answer 0, a parse error goes to the error output
+  // and answers 2, and otherwise the action of the leaf reached runs. Help is answered
+  // before anything is judged: asking how a tool works is an outcome, not a mistake.
+  Result := FRoot.Parse(Args).Invoke;
+end;
+
+function TBuildTool.Walk(const Args: TArray<string>): Integer;
 var
-  Parsed: ICommandLineParseResult;
+  Configuration: TInvocationConfiguration;
+  Errors: TStringWriter;
 begin
   Writeln('$ buildtool ', string.Join(' ', Args));
-
-  Parsed := FRoot.Parse(Args);
-
-  // Help is answered before anything is judged: asking how a tool works is an
-  // outcome, not a mistake, so it is not reported as a parse error.
-  if Parsed.HelpRequested then
-  begin
-    Writeln(Parsed.HelpText);
-    Exit;
+  // The walkthrough reads top to bottom, so a parse error is written in its place, after
+  // the invocation that caused it, and not on the console's error output.
+  Errors := TStringWriter.Create;
+  try
+    Configuration.Error := Errors;
+    Result := FRoot.Parse(Args).Invoke(Configuration);
+    if Errors.ToString <> '' then
+      Write('  ! ', Errors.ToString);
+  finally
+    Errors.Free;
   end;
-
-  if Parsed.VersionRequested then
-  begin
-    Writeln('  ', Parsed.VersionInfo.VersionTag(VersionTemplateWithBuild));
-    Writeln;
-    Exit;
-  end;
-
-  if not Parsed.Succeeded then
-  begin
-    Writeln('  ! ', Parsed.ErrorText);
-    Writeln;
-    Exit;
-  end;
-
-  ShowCommon(Parsed);
-  Dispatch(Parsed);
+  Writeln('  exit    : ', Result);
   Writeln;
 end;
 
 procedure TBuildTool.Demonstrate;
 begin
-  Run(['build', 'native', 'app.dpr', '--out', 'bin\app.exe']);
+  Walk(['build', 'native', 'app.dpr', '--out', 'bin\app.exe']);
   // The alias reaches the same command, and the recursive option is read from the leaf.
-  Run(['b', 'web', 'site.dpr', '--minify', '--verbose']);
-  Run(['serve', '--port', '9090']);
+  Walk(['b', 'web', 'site.dpr', '--minify', '--verbose']);
+  Walk(['serve', '--port', '9090']);
   // A command that only groups is not an invocation of its own.
-  Run(['build']);
+  Walk(['build']);
   // The value engine refuses a number with something left over instead of inventing
   // one out of it: this is NOT read as 80.
-  Run(['serve', '--port', '80xyz']);
+  Walk(['serve', '--port', '80xyz']);
   // A number the type admits and the application does not. The validation's refusal
   // comes out through Errors, like every other invalid invocation.
-  Run(['serve', '--port', '70000']);
+  Walk(['serve', '--port', '70000']);
   // <target> is required by its arity: leaving it out is an incomplete invocation.
-  Run(['build', 'native']);
+  Walk(['build', 'native']);
   // The enumerated type refuses what is not one of its values, and says which are.
-  Run(['serve', '--level', 'shouting']);
+  Walk(['serve', '--level', 'shouting']);
   // A type of this program's own, read through the conversion declared beside it.
-  Run(['build', 'native', 'app.dpr', '--min-sdk', '11.4.2']);
+  Walk(['build', 'native', 'app.dpr', '--min-sdk', '11.4.2']);
   // And refused by that same conversion, with the message the conversion wrote. The
   // refusal comes out through Errors, like every other invalid invocation.
-  Run(['build', 'native', 'app.dpr', '--min-sdk', '11.4']);
+  Walk(['build', 'native', 'app.dpr', '--min-sdk', '11.4']);
   // The same invocation, written the three other ways the grammar admits. None of them
   // says anything the forms above do not: that is the point of admitting them.
-  Run(['serve', '--port:9090']);
-  Run(['serve', '/port', '80']);
+  Walk(['serve', '--port:9090']);
+  Walk(['serve', '/port', '80']);
   // A bundle: -v and -m are declared one-character aliases, so this is `-v -m`.
-  Run(['b', 'web', 'site.dpr', '-vm']);
+  Walk(['b', 'web', 'site.dpr', '-vm']);
   // Neither --help nor --version was declared anywhere. Both answer.
-  Run(['--version']);
-  Run(['--help']);
+  Walk(['--version']);
+  Walk(['--help']);
 end;
 
 function ArgsFromCommandLine: TArray<string>;
@@ -341,7 +307,7 @@ begin
       if ParamCount = 0 then
         Tool.Demonstrate
       else
-        Tool.Run(ArgsFromCommandLine);
+        ExitCode := Tool.Run(ArgsFromCommandLine);
     finally
       Tool.Free;
     end;

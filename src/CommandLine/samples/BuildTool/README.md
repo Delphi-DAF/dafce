@@ -22,7 +22,8 @@ buildtool                        --verbose, -v   recursive: every leaf inherits 
 
 ## Running it
 
-With no arguments it walks a set of invocations, including the five that fail:
+With no arguments it walks a set of invocations, including the six that fail, and prints the exit code
+of each:
 
 ```
 out\Win32\samples\bin\BuildTool.exe
@@ -55,14 +56,10 @@ Everything lives in one class, `TBuildTool`, and each part answers a different q
   group; the root mixes a recursive option with two subcommands. Adding `--verbose` once, at the root,
   is what puts it on every leaf.
 
-- **`BindActions` maps each leaf to a handler, and keys it by the command *object*.**
-  `Parsed.Command = Action.Leaf`, never `Parsed.Command.Name = 'native'` — that puts a quoted name
-  back in the middle of the program. There is no ladder of `if`s and no `case` on a string.
-
-- **That table is application code, and deliberately so.** `Daf.CommandLine` parses and hands back
-  the leaf it reached; **it does not invoke anything**. Dispatch is a non-goal of the module, because a
-  library that runs your handlers ends up owning exit codes, cancellation and middleware too. The
-  table is where that frontier sits — three lines, and yours.
+- **`DeclareActions` gives each leaf its action, and `build` none.** `FNative.SetAction(ReportNative)`
+  takes a method of the class, with no code of its own, so the invocation answers 0 for it. Nothing
+  in the program compares `Parsed.Command` against anything: `Invoke` runs the action of the leaf
+  reached. `build` has no action, and that is what keeps it a group.
 
 - **Each value arrives with its declared type.** `--out` is a `string`; `--port` is an `Integer` that
   goes straight into arithmetic with no conversion. Reading either into the other's type is a
@@ -73,14 +70,20 @@ Everything lives in one class, `TBuildTool`, and each part answers a different q
   changed. Its refusal comes out through `Errors` like any other invalid invocation, with the message
   the conversion itself wrote — a type a third party adds fails as well as one of serie.
 
-- **`Run` answers help before judging anything.** Asking how a tool works is an outcome, not a
-  mistake, so it is never reported as a parse error.
+- **`Run` is `Parse(Args).Invoke`, and what it answers is the exit code.** Help and version are
+  written and answer 0, and a parse error goes to the error output and answers 2. Help is answered
+  before anything is judged: asking how a tool works is an outcome, not a mistake.
+
+- **`Walk` invokes with a `TInvocationConfiguration` whose `Error` is a `TStringWriter`**, so the
+  walkthrough writes each error right after the invocation that caused it, followed by its exit
+  code. Run with arguments, the tool writes its errors to the console's error output.
 
 ## The invocations that fail on purpose
 
 | Invocation | What it shows |
 |---|---|
 | `buildtool build` | A command that only groups is not an invocation of its own — the error names the subcommands it expected |
+| `buildtool build native` | `<target>` is required by its arity: a string argument admits exactly one value, and nobody wrote "required" |
 | `buildtool serve --port 80xyz` | The engine refuses the whole token, naming the option and the text, instead of quietly meaning `80` |
 | `buildtool serve --level shouting` | The enumerated type refuses what is not one of its values, and lists the ones it has |
 | `buildtool build native app.dpr --min-sdk 11.4` | The conversion declared with the option refuses it, with its own message |

@@ -504,5 +504,6 @@ no unit alias: they are different APIs. `MIGRATION-2.0.md` has the two declarati
 
 ## Sample
 
-[`samples/BuildTool`](samples/BuildTool) declares a two-level grammar and reads its values. Run it
-with no arguments and it walks a set of invocations, including the four that fail.
+[`samples/BuildTool`](samples/BuildTool) declares a two-level grammar, gives each leaf its action and
+invokes what it parses. Run it with no arguments and it walks a set of invocations, including the six
+that fail, with the exit code of each.
