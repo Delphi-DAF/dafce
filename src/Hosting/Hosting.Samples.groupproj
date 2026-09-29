@@ -9,6 +9,9 @@
         <Projects Include="samples\StartupReport\StartupReport.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="samples\HostLifetime\HostLifetime.dproj">
+            <Dependencies/>
+        </Projects>
     </ItemGroup>
     <ProjectExtensions>
         <Borland.Personality>Default.Personality.12</Borland.Personality>
@@ -35,14 +38,23 @@
     <Target Name="StartupReport:Make">
         <MSBuild Projects="samples\StartupReport\StartupReport.dproj" Targets="Make"/>
     </Target>
+    <Target Name="HostLifetime">
+        <MSBuild Projects="samples\HostLifetime\HostLifetime.dproj"/>
+    </Target>
+    <Target Name="HostLifetime:Clean">
+        <MSBuild Projects="samples\HostLifetime\HostLifetime.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="HostLifetime:Make">
+        <MSBuild Projects="samples\HostLifetime\HostLifetime.dproj" Targets="Make"/>
+    </Target>
     <Target Name="Build">
-        <CallTarget Targets="HostQuickStart;StartupReport"/>
+        <CallTarget Targets="HostQuickStart;StartupReport;HostLifetime"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="HostQuickStart:Clean;StartupReport:Clean"/>
+        <CallTarget Targets="HostQuickStart:Clean;StartupReport:Clean;HostLifetime:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="HostQuickStart:Make;StartupReport:Make"/>
+        <CallTarget Targets="HostQuickStart:Make;StartupReport:Make;HostLifetime:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

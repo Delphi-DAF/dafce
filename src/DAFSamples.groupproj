@@ -18,6 +18,9 @@
         <Projects Include="Hosting\samples\StartupReport\StartupReport.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="Hosting\samples\HostLifetime\HostLifetime.dproj">
+            <Dependencies/>
+        </Projects>
         <Projects Include="Cli\samples\PackageInit\PackageInit.dproj">
             <Dependencies/>
         </Projects>
@@ -136,6 +139,15 @@
     </Target>
     <Target Name="StartupReport:Make">
         <MSBuild Projects="Hosting\samples\StartupReport\StartupReport.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="HostLifetime">
+        <MSBuild Projects="Hosting\samples\HostLifetime\HostLifetime.dproj"/>
+    </Target>
+    <Target Name="HostLifetime:Clean">
+        <MSBuild Projects="Hosting\samples\HostLifetime\HostLifetime.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="HostLifetime:Make">
+        <MSBuild Projects="Hosting\samples\HostLifetime\HostLifetime.dproj" Targets="Make"/>
     </Target>
     <Target Name="PackageInit">
         <MSBuild Projects="Cli\samples\PackageInit\PackageInit.dproj"/>
@@ -336,13 +348,13 @@
         <MSBuild Projects="FMX\samples\FmxQuickStart\FmxQuickStart.dproj" Targets="Make"/>
     </Target>
     <Target Name="Build">
-        <CallTarget Targets="ConfigExample;MediatRSample;ConsoleSample;HostQuickStart;StartupReport;HostedService;PackageInit;GreetTool;PingProcess;BuildTool;CalculatorSpecs;MasterMind_Specs;TicTacToeApp;TicTacToeSpecs;SQLCuteSample;InMemoryQuerySample;InMemoryJoinSample;CatalogServiceSample;QuickStart;ServiceWiring;ModuleComposition;LinqPipeline;SpecAuthoring;CustomProvider;NNLogTargets;MiniApi;FmxQuickStart"/>
+        <CallTarget Targets="ConfigExample;MediatRSample;ConsoleSample;HostQuickStart;StartupReport;HostLifetime;HostedService;PackageInit;GreetTool;PingProcess;BuildTool;CalculatorSpecs;MasterMind_Specs;TicTacToeApp;TicTacToeSpecs;SQLCuteSample;InMemoryQuerySample;InMemoryJoinSample;CatalogServiceSample;QuickStart;ServiceWiring;ModuleComposition;LinqPipeline;SpecAuthoring;CustomProvider;NNLogTargets;MiniApi;FmxQuickStart"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="ConfigExample:Clean;MediatRSample:Clean;ConsoleSample:Clean;HostQuickStart:Clean;StartupReport:Clean;HostedService:Clean;PackageInit:Clean;GreetTool:Clean;PingProcess:Clean;BuildTool:Clean;CalculatorSpecs:Clean;MasterMind_Specs:Clean;TicTacToeApp:Clean;TicTacToeSpecs:Clean;SQLCuteSample:Clean;InMemoryQuerySample:Clean;InMemoryJoinSample:Clean;CatalogServiceSample:Clean;QuickStart:Clean;ServiceWiring:Clean;ModuleComposition:Clean;LinqPipeline:Clean;SpecAuthoring:Clean;CustomProvider:Clean;NNLogTargets:Clean;MiniApi:Clean;FmxQuickStart:Clean"/>
+        <CallTarget Targets="ConfigExample:Clean;MediatRSample:Clean;ConsoleSample:Clean;HostQuickStart:Clean;StartupReport:Clean;HostLifetime:Clean;HostedService:Clean;PackageInit:Clean;GreetTool:Clean;PingProcess:Clean;BuildTool:Clean;CalculatorSpecs:Clean;MasterMind_Specs:Clean;TicTacToeApp:Clean;TicTacToeSpecs:Clean;SQLCuteSample:Clean;InMemoryQuerySample:Clean;InMemoryJoinSample:Clean;CatalogServiceSample:Clean;QuickStart:Clean;ServiceWiring:Clean;ModuleComposition:Clean;LinqPipeline:Clean;SpecAuthoring:Clean;CustomProvider:Clean;NNLogTargets:Clean;MiniApi:Clean;FmxQuickStart:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="ConfigExample:Make;MediatRSample:Make;ConsoleSample:Make;HostQuickStart:Make;StartupReport:Make;HostedService:Make;PackageInit:Make;GreetTool:Make;PingProcess:Make;BuildTool:Make;CalculatorSpecs:Make;MasterMind_Specs:Make;TicTacToeApp:Make;TicTacToeSpecs:Make;SQLCuteSample:Make;InMemoryQuerySample:Make;InMemoryJoinSample:Make;CatalogServiceSample:Make;QuickStart:Make;ServiceWiring:Make;ModuleComposition:Make;LinqPipeline:Make;SpecAuthoring:Make;CustomProvider:Make;NNLogTargets:Make;MiniApi:Make;FmxQuickStart:Make"/>
+        <CallTarget Targets="ConfigExample:Make;MediatRSample:Make;ConsoleSample:Make;HostQuickStart:Make;StartupReport:Make;HostLifetime:Make;HostedService:Make;PackageInit:Make;GreetTool:Make;PingProcess:Make;BuildTool:Make;CalculatorSpecs:Make;MasterMind_Specs:Make;TicTacToeApp:Make;TicTacToeSpecs:Make;SQLCuteSample:Make;InMemoryQuerySample:Make;InMemoryJoinSample:Make;CatalogServiceSample:Make;QuickStart:Make;ServiceWiring:Make;ModuleComposition:Make;LinqPipeline:Make;SpecAuthoring:Make;CustomProvider:Make;NNLogTargets:Make;MiniApi:Make;FmxQuickStart:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>
