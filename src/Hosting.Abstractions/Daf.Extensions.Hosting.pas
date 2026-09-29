@@ -187,6 +187,15 @@ type
     class procedure AddStartupTask(const ServiceCollection: IServiceCollection; const TImpl: TClass);
   end;
 
+/// <summary>
+/// Para el host y vacia la variable, como FreeAndNil con un objeto. Parar libera el host, y la
+/// variable queda vacia antes, tambien si la parada lanza; lo que lanza sale igual que de Stop.
+/// </summary>
+/// <remarks>
+/// Vacia esta variable, no sus copias: una copia guardada aparte se suelta al notificarse
+/// ApplicationStopped, cuando el host todavia existe.
+/// </remarks>
+procedure StopAndNil(var Host: IHost);
 
 implementation
 uses System.StrUtils, System.TypInfo;
@@ -211,6 +220,19 @@ end;
 class procedure Hosting.AddStartupTask(const ServiceCollection: IServiceCollection; const TImpl: TClass);
 begin
   ServiceCollection.AddSingleton(TypeInfo(IStartupTask), TImpl);
+end;
+
+procedure StopAndNil(var Host: IHost);
+begin
+  // El host no cuenta referencias: vaciar la variable no lo libera, lo libera Stop, y a partir de
+  // ahi la copia apunta a memoria devuelta.
+  var Stopping := Host;
+  Host := nil;
+  try
+    Stopping.Stop;
+  finally
+    Pointer(Stopping) := nil;
+  end;
 end;
 
 { TEnvironmentNameHelper }

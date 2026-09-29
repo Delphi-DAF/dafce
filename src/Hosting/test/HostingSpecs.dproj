@@ -106,6 +106,7 @@
         <DCCReference Include="ContainerValidation.Feat.pas"/>
         <DCCReference Include="DefaultSources.Feat.pas"/>
         <DCCReference Include="StopFailure.Feat.pas"/>
+        <DCCReference Include="StopAndRelease.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>

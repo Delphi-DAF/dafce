@@ -14,7 +14,8 @@ uses
   ShadowedHelper.Feat in 'ShadowedHelper.Feat.pas',
   ContainerValidation.Feat in 'ContainerValidation.Feat.pas',
   DefaultSources.Feat in 'DefaultSources.Feat.pas',
-  StopFailure.Feat in 'StopFailure.Feat.pas';
+  StopFailure.Feat in 'StopFailure.Feat.pas',
+  StopAndRelease.Feat in 'StopAndRelease.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;
