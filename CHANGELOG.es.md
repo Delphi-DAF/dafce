@@ -10,7 +10,7 @@ con [Semantic Versioning](https://semver.org/spec/v2.0.0.html) y los commits sig
 
 ## [Unreleased]
 
-Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` en español).
+Los cambios que rompen una aplicación, al compilar o en ejecución, están recogidos con su diff de ejemplo en `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` en español).
 
 ### Added
 

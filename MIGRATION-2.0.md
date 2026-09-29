@@ -1,10 +1,11 @@
 ﻿# Migrating to DAF 2.0
 
-This release is a **major**: some changes break compilation. Every one of them shows up at compile
-time — none degrades silently — and the list below covers all of them.
+This release is a **major**: some changes break compilation, and others change behaviour at run time
+where the compiler says nothing. The list below covers both; step 6 of "How to do it" names the
+run-time ones.
 
-You upgrade from **1.6.0**. There was no published 1.7.0: it was planned, then cut as a major, and
-its content ships here, so 1.6 to 2.0 is a single step.
+You upgrade from **1.6.0**. There was no published 1.7.0 — its content ships here —, so 1.6 to 2.0
+is a single step.
 
 ## What to change, most likely first
 

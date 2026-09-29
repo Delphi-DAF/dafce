@@ -1,10 +1,11 @@
 ﻿# Migrar a DAF 2.0
 
-Esta versión es un **major**: hay cambios que rompen la compilación. Todos se detectan al
-compilar —ninguno degrada en silencio— y la lista de abajo los cubre por completo.
+Esta versión es un **major**: hay cambios que rompen la compilación, y otros que cambian el
+comportamiento en ejecución sin que el compilador diga nada. La lista de abajo cubre los dos; el paso
+6 de «Cómo hacerlo» dice cuáles son de ejecución.
 
-Se sube desde **1.6.0**. No hubo una 1.7.0 publicada: se planificó, se decidió cortarla como
-major y su contenido va aquí, así que un salto de 1.6 a 2.0 es un solo paso.
+Se sube desde **1.6.0**. No hubo una 1.7.0 publicada —su contenido va aquí—, así que de 1.6 a 2.0 es
+un solo paso.
 
 ## Lo que hay que tocar, por orden de probabilidad
 

@@ -10,8 +10,8 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
 ## [Unreleased]
 
-The changes that break compilation are collected, with their example diff, in `MIGRATION-2.0.md`
-(`MIGRATION-2.0.es.md` in Spanish).
+The changes that break an application, at compile time or at run time, are collected with their
+example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 
 ### Added
 

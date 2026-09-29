@@ -4,7 +4,8 @@ sidebar: migration
 lang: en
 ---
 
-One guide per major version. Each one lists what breaks at compile time and the diff that fixes it.
+One guide per major version. Each one lists what breaks, at compile time and at run time, and the diff
+that fixes it.
 
 | Jump | Guide |
 |---|---|
