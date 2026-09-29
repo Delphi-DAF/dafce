@@ -13,7 +13,8 @@ uses
   Lifecycle.Feat in 'Lifecycle.Feat.pas',
   ShadowedHelper.Feat in 'ShadowedHelper.Feat.pas',
   ContainerValidation.Feat in 'ContainerValidation.Feat.pas',
-  DefaultSources.Feat in 'DefaultSources.Feat.pas';
+  DefaultSources.Feat in 'DefaultSources.Feat.pas',
+  StopFailure.Feat in 'StopFailure.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

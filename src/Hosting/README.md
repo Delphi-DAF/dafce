@@ -70,6 +70,10 @@ Services.AddHostedService<TMyWorker>;
 Services.AddSingleton<IHostedService, TMyWorker>;
 ```
 
+If a `Stop` raises, the rest of the shutdown still runs: the other services stop and the container
+is shut down. `Host.Stop` raises what failed at the end — the exception itself, or an
+`EAggregateException` holding every failure when several steps failed.
+
 ---
 
 ## Environment

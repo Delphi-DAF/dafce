@@ -70,6 +70,10 @@ Services.AddHostedService<TMyWorker>;
 Services.AddSingleton<IHostedService, TMyWorker>;
 ```
 
+Si un `Stop` lanza, el resto del apagado se ejecuta igual: los demás servicios paran y el contenedor
+se apaga. `Host.Stop` lanza lo que falló al final: la misma excepción, o una `EAggregateException`
+con todos los fallos dentro si fallaron varios pasos.
+
 ---
 
 ## Entorno

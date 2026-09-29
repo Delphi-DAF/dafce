@@ -349,13 +349,24 @@ end;
 
 ## Graceful Shutdown
 
-`Host.WaitForShutdown` blocks until the process receives a shutdown signal (`Ctrl+C`, `SIGTERM`, or `Lifetime.StopApplication`). The shutdown sequence is:
+`Host.WaitForShutdown` blocks until the process receives a shutdown signal (`Ctrl+C`, `SIGTERM`, or `Lifetime.StopApplication`). `Host.Stop` runs the shutdown sequence:
 
 1. `IHostApplicationLifetime.ApplicationStopping` callbacks fire
 2. `IHostedService.Stop` called for each service, in reverse registration order
-3. The DI container releases each Singleton once nothing but itself holds it, so a service goes
+3. `IHostApplicationLifetime.ApplicationStopped` callbacks fire
+4. The DI container releases each Singleton once nothing but itself holds it, so a service goes
    after everything that depends on it
-4. `IHostApplicationLifetime.ApplicationStopped` callbacks fire
+
+A step that fails does not stop the ones after it. A hosted service whose `Stop` raises is reported
+through the logger when it happens, and the rest of the sequence still runs. `Host.Stop` raises what
+failed at the end, with the host already released:
+
+- one failure: that same exception, unwrapped;
+- several: an `EAggregateException` (unit `System.Threading`) holding all of them, whose message
+  says how many steps failed.
+
+Freeing a host that was never stopped runs the same sequence once. What fails there is reported,
+and the destructor does not raise it.
 
 `WaitForShutdown` integrates with the OS signal handler via `TShutdownHook`.
 

@@ -222,11 +222,12 @@ begin
     CurrentApp := nil;
   FMainForm := nil;
   if Assigned(FHost) then
-  begin
-    FHost.Stop;
-    // Stop libera el host: se hace Free a si mismo al parar.
-    Pointer(FHost) := nil;
-  end;
+    try
+      FHost.Stop;
+    finally
+      // Stop libera el host: se hace Free a si mismo al parar, tambien cuando lanza.
+      Pointer(FHost) := nil;
+    end;
 end;
 
 end.

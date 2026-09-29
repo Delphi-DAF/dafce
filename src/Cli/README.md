@@ -158,6 +158,9 @@ B.SetAction(Greet,
 - An application that declares no action is its startup tasks and its hosted services, and `Run`
   answers `TCliExit.Ok`.
 - What escapes an action goes to the `OnUnhandled` policy.
+- A failure while stopping the host goes to the same policy, and `Services` is `nil`: the container
+  is already shut down. If the action had already failed, the exit code is the one the policy gave
+  that first failure, and the shutdown failure is only reported.
 
 ⚠️ Use the `Services` parameter. An action that captures the application to read `App.Services`
 forms a reference cycle with it — the application holds the grammar, the grammar the action, the

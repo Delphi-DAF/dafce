@@ -349,13 +349,24 @@ end;
 
 ## Apagado elegante
 
-`Host.WaitForShutdown` bloquea hasta que el proceso recibe una señal de apagado (`Ctrl+C`, `SIGTERM` o `Lifetime.StopApplication`). La secuencia de apagado es:
+`Host.WaitForShutdown` bloquea hasta que el proceso recibe una señal de apagado (`Ctrl+C`, `SIGTERM` o `Lifetime.StopApplication`). `Host.Stop` ejecuta la secuencia de apagado:
 
 1. Se disparan los callbacks de `IHostApplicationLifetime.ApplicationStopping`
 2. Se llama a `IHostedService.Stop` para cada servicio, en orden inverso al de registro
-3. El contenedor DI suelta cada Singleton cuando ya no lo sostiene nadie más que él, así que un
+3. Se disparan los callbacks de `IHostApplicationLifetime.ApplicationStopped`
+4. El contenedor DI suelta cada Singleton cuando ya no lo sostiene nadie más que él, así que un
    servicio cae después de todo lo que depende de él
-4. Se disparan los callbacks de `IHostApplicationLifetime.ApplicationStopped`
+
+Un paso que falla no impide los siguientes. Un servicio alojado cuyo `Stop` lanza se informa por el
+logger cuando ocurre, y el resto de la secuencia se ejecuta igual. `Host.Stop` lanza lo que falló al
+final, con el host ya liberado:
+
+- un fallo: esa misma excepción, sin envolver;
+- varios: una `EAggregateException` (unit `System.Threading`) que los contiene todos, y cuyo mensaje
+  dice cuántos pasos fallaron.
+
+Liberar un host que no se paró ejecuta la misma secuencia una vez. Lo que falle ahí se informa, y el
+destructor no lo lanza.
 
 `WaitForShutdown` se integra con el manejador de señales del SO mediante `TShutdownHook`.
 

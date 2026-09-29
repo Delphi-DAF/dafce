@@ -64,6 +64,13 @@ type
     procedure Stop;
   end;
 
+  /// Falla al pararse, que es lo que pone a prueba el borde del Run despues de la accion.
+  TRefusingStop = class(TInterfacedObject, IHostedService)
+  public
+    procedure Start;
+    procedure Stop;
+  end;
+
   /// El estado que el Given deja montado y el When usa. Un World de solo texto obliga al Given
   /// a ejecutar la accion para tener algo que dejar escrito, y entonces lo que el Then compara
   /// es la cadena que el propio montaje acaba de componer, no el comportamiento.
@@ -153,6 +160,15 @@ begin
   Log := Log + 'hosted:stop;';
 end;
 
+procedure TRefusingStop.Start;
+begin
+end;
+
+procedure TRefusingStop.Stop;
+begin
+  raise Exception.Create('la parada fallo');
+end;
+
 constructor TCliWorld.Create;
 begin
   inherited;
@@ -179,6 +195,21 @@ begin
     Ctx.Free;
   end;
   Result := Result.Trim;
+end;
+
+/// La parada informa su fallo por el canal de arranque, y eso sale por la salida de error del
+/// arnes. Es el comportamiento que se quiere; aqui solo se aparta mientras corre, para que no se
+/// confunda con la salida de las specs.
+function RunQuietly(const App: ICliApplication): Integer;
+begin
+  var Saved := BootstrapLog.Sinks;
+  BootstrapLog.ClearSinks;
+  try
+    Result := App.Run;
+  finally
+    for var Sink in Saved do
+      BootstrapLog.AddSink(Sink);
+  end;
 end;
 
 // --- Feature definition ---
@@ -579,6 +610,121 @@ Feature La variante CLI de la familia @cli @application-family
       procedure(W: TCliWorld)
       begin
         Expect(W.ExitCode).ToEqual(2);
+      end)
+
+.Rule('Un fallo al parar lo decide la politica')
+
+  .Scenario('La accion termina bien y la parada falla')
+    .Given('una aplicacion CLI con una politica de excepciones declarada, y un servicio alojado que falla al parar',
+      procedure(W: TCliWorld)
+      begin
+        W.Builder := TCliApplication.CreateBuilder;
+        W.Builder.OnUnhandled(
+          function(const E: Exception; const Services: IServiceProvider): Integer
+          begin
+            W.PolicySaw := W.PolicySaw + E.Message + IfThen(Services = nil, ' sin', ' con') + ' proveedor;';
+            Result := 42;
+          end);
+        Hosting.AddHostedService(W.Builder.Services, TRefusingStop);
+        W.Builder.SetAction(
+          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          begin
+            Result := TCliExit.Ok;
+          end);
+        W.App := W.Builder.Build;
+      end)
+    .When('se ejecuta y su accion termina bien',
+      procedure(W: TCliWorld)
+      begin
+        W.ExitCode := RunQuietly(W.App);
+      end)
+    .&Then('la politica recibe la excepcion de la parada, sin proveedor',
+      procedure(W: TCliWorld)
+      begin
+        Expect(W.PolicySaw).ToEqual('la parada fallo sin proveedor;');
+      end)
+    .&And('el proceso termina con el codigo que ella devuelve',
+      procedure(W: TCliWorld)
+      begin
+        Expect(W.ExitCode).ToEqual(42);
+      end)
+
+  .Scenario('Falla la accion y despues la parada')
+    .Given('una aplicacion CLI con una politica de excepciones declarada, una accion que lanza y un servicio alojado que falla al parar',
+      procedure(W: TCliWorld)
+      begin
+        W.Builder := TCliApplication.CreateBuilder;
+        // Un codigo distinto para cada fallo: con uno solo, el de la accion y el de la parada
+        // darian el mismo verde.
+        W.Builder.OnUnhandled(
+          function(const E: Exception; const Services: IServiceProvider): Integer
+          begin
+            W.PolicySaw := W.PolicySaw + E.Message + ';';
+            if E.Message = 'el trabajo fallo' then
+              Result := 42
+            else
+              Result := 43;
+          end);
+        Hosting.AddHostedService(W.Builder.Services, TRefusingStop);
+        W.Builder.SetAction(
+          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          begin
+            raise Exception.Create('el trabajo fallo');
+          end);
+        W.App := W.Builder.Build;
+      end)
+    .When('se ejecuta',
+      procedure(W: TCliWorld)
+      begin
+        W.ExitCode := RunQuietly(W.App);
+      end)
+    .&Then('el proceso termina con el codigo que la politica dio a la excepcion de la accion',
+      procedure(W: TCliWorld)
+      begin
+        Expect(Format('%d %s', [W.ExitCode, W.PolicySaw])).ToEqual('42 el trabajo fallo;');
+      end)
+
+  .Scenario('Soltar la aplicacion tras un fallo de la parada')
+    .Given('una aplicacion CLI cuyo servicio alojado falla al parar, con la politica que deja salir la excepcion',
+      procedure(W: TCliWorld)
+      begin
+        W.CountedBase := TCounted.Alive;
+        W.Builder := TCliApplication.CreateBuilder;
+        W.Builder.OnUnhandled(ExitPolicy.Rethrow());
+        W.Builder.Services.AddSingleton<ICounted, TCounted>;
+        Hosting.AddHostedService(W.Builder.Services, TRefusingStop);
+        W.Builder.SetAction(
+          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          begin
+            Services.GetRequiredService<ICounted>;
+            W.CountedDuring := TCounted.Alive - W.CountedBase;
+            Result := TCliExit.Ok;
+          end);
+        W.App := W.Builder.Build;
+        W.Watched := W.App;
+      end)
+    .When('se ejecuta y se suelta',
+      procedure(W: TCliWorld)
+      begin
+        try
+          W.ExitCode := RunQuietly(W.App);
+          W.Report := '<no lanzo>';
+        except
+          on E: Exception do
+            W.Report := E.Message;
+        end;
+        W.Report := W.Report + ' before=' + IfThen(Assigned(W.Watched), 'alive', 'released');
+        W.App := nil;
+        W.Builder := nil;
+      end)
+    .&Then('no queda viva ni la aplicacion ni su contenedor',
+      procedure(W: TCliWorld)
+      begin
+        // El mensaje es el control de que la excepcion salio del Run, que es el camino donde la
+        // referencia al host tiene que soltarse igual.
+        Expect(Format('during=%d %s after=%s container=%d', [W.CountedDuring, W.Report,
+          IfThen(Assigned(W.Watched), 'alive', 'released'), TCounted.Alive - W.CountedBase]))
+          .ToEqual('during=1 la parada fallo before=alive after=released container=0');
       end)
 
 .Rule('Las opciones del contenedor llegan por el builder de la variante')

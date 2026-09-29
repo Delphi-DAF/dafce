@@ -59,6 +59,9 @@ type
   ///   Es un callback y no un enumerado cerrado porque una suite de aplicaciones tiene su
   ///   propio criterio de codigos de salida, y con un enumerado cada criterio nuevo seria un
   ///   cambio en el framework. Las de siempre estan escritas en <see cref="ExitPolicy"/>.
+  ///
+  ///   Services llega vacio cuando lo que se escapa es un fallo de la parada: el contenedor ya se
+  ///   apago.
   /// </remarks>
   TCliExceptionPolicy = reference to function(const E: Exception;
     const Services: IServiceProvider): Integer;
@@ -101,8 +104,8 @@ type
     /// </summary>
     function SingleInstance(const Id: string): ICliApplicationBuilder;
     /// <summary>
-    /// La politica que envuelve al Run, y la que decide lo que se escapa de una accion. Sin ella,
-    /// LogAndFail.
+    /// La politica que envuelve al Run, y la que decide lo que se escapa de una accion o de la
+    /// parada. Sin ella, LogAndFail.
     /// </summary>
     function OnUnhandled(const Policy: TCliExceptionPolicy): ICliApplicationBuilder;
     /// <summary>La accion de la raiz. Ver la sobrecarga.</summary>
@@ -148,6 +151,10 @@ type
     ///   La version, la ayuda y los errores de parse los resuelve la invocacion sin arrancar
     ///   nada. Lo que se escapa de la accion lo decide la politica de <c>OnUnhandled</c>, y no el
     ///   manejador por defecto de la invocacion.
+    ///
+    ///   Un fallo de la parada lo decide tambien la politica, que lo recibe sin proveedor. Si la
+    ///   accion ya habia fallado, el codigo es el que la politica dio a ese primer fallo, y el de la
+    ///   parada solo se informa.
     /// </remarks>
     function Run: Integer;
     /// <summary>
@@ -488,6 +495,7 @@ begin
   if not Assigned(FHost) then
     Exit(FParsed.Invoke(Configuration));
 
+  var ActionFailed := False;
   FHost.Start;
   try
     FSlot.Fill(FHost.Services);
@@ -495,18 +503,32 @@ begin
       Result := FParsed.Invoke(Configuration);
     except
       on E: Exception do
+      begin
+        ActionFailed := True;
         Result := FPolicy(E, FHost.Services);
+      end;
     end;
   finally
     // Antes de parar: el soporte vive lo que vivan los comandos, y el proveedor no debe
     // sobrevivir a Stop dentro de el.
     FSlot.Clear;
-    FHost.Stop;
-    // Stop LIBERA el host: THost es TNoRefCountObject y se hace Free a si mismo al parar. Soltar
-    // la referencia aqui no es higiene, es lo que evita que el finalizador del campo llame a
-    // _Release sobre memoria ya devuelta -- que con el gestor en modo depuracion es una violacion
-    // de acceso, y sin el, un acierto por casualidad.
-    Pointer(FHost) := nil;
+    try
+      try
+        FHost.Stop;
+      finally
+        // Stop LIBERA el host, tambien cuando lanza: THost es TNoRefCountObject y se hace Free a si
+        // mismo al parar. Soltar la referencia aqui no es higiene, es lo que evita que el
+        // finalizador del campo llame a _Release sobre memoria ya devuelta -- que con el gestor en
+        // modo depuracion es una violacion de acceso, y sin el, un acierto por casualidad.
+        Pointer(FHost) := nil;
+      end;
+    except
+      // Si la accion ya habia fallado, el codigo es el que la politica dio a ese fallo, y Stop ya
+      // informo el suyo.
+      on E: Exception do
+        if not ActionFailed then
+          Result := FPolicy(E, Default(IServiceProvider));
+    end;
   end;
 end;
 

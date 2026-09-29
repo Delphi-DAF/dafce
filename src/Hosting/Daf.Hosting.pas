@@ -192,6 +192,7 @@ uses
   {$ENDIF}
   System.IOUtils,
   System.SyncObjs,
+  System.Threading,
   System.Types,
   Daf.DependencyInjection,
   Daf.Configuration.Manager,
@@ -340,12 +341,13 @@ end;
 
 destructor THost.Destroy;
 begin
+  // Antes de Stop: es lo que le dice que no se libere, porque ya se esta liberando.
   FReleased := True;
   try
     Stop;
   except
     on E: Exception do
-      ; // Ignorar errores en shutdown forzado
+      ; // Stop ya lo informo al ocurrir, y un destructor que lanza deja el objeto a medio liberar.
   end;
   FHostedServices.Free;
   inherited;
@@ -404,46 +406,80 @@ begin
 end;
 
 procedure THost.Stop;
+var
+  Logger: ILogger;
+  Failures: TArray<Exception>;
+
+  // Cada paso que falla se informa y se guarda, y la parada sigue: un paso no impide los
+  // siguientes.
+  procedure Collect(const E: Exception);
+  begin
+    AcquireExceptionObject;
+    Failures := Failures + [E];
+    Logger.LogError(E, 'the application could not stop cleanly');
+  end;
+
 begin
   if FStopped then Exit;
   // El logger se resuelve antes de empezar: a mitad de la parada el proveedor ya se ha soltado, y
   // entonces no habria de donde sacarlo.
-  var Logger := ReportLogger(FServices, ClassName);
+  Logger := ReportLogger(FServices, ClassName);
   TMonitor.Enter(Self);
   try
+    FStopped := True;
+
+    // Antes de cualquier cosa que pueda lanzar: el TProc de clase sostiene el lifetime de
+    // este host, asi que dejarlo puesto deja un host parado atendiendo la señal.
+    TShutdownHook.OnShutdownRequested := nil;
+
+    var Lifetime: IHostApplicationLifetime := nil;
     try
-      FStopped := True;
-
-      // Antes de cualquier cosa que pueda lanzar: el TProc de clase sostiene el lifetime de
-      // este host, asi que dejarlo puesto deja un host parado atendiendo la señal.
-      TShutdownHook.OnShutdownRequested := nil;
-
-      var Lifetime := GetServices.GetService<IHostApplicationLifetime>;
-
+      Lifetime := GetServices.GetService<IHostApplicationLifetime>;
       if Assigned(Lifetime) then
         (Lifetime as THostApplicationLifetime).NotifyStopping;
+    except
+      on E: Exception do Collect(E);
+    end;
 
-      // LIFO, el mismo orden en que cierra el contenedor: un servicio arrancado despues puede
-      // estar usando lo que suelta al parar uno arrancado antes.
-      for var Idx := FHostedServices.Count - 1 downto 0 do
+    // LIFO, el mismo orden en que cierra el contenedor: un servicio arrancado despues puede
+    // estar usando lo que suelta al parar uno arrancado antes.
+    for var Idx := FHostedServices.Count - 1 downto 0 do
+      try
         FHostedServices[Idx].Stop;
-      FHostedServices.Clear;
+      except
+        on E: Exception do Collect(E);
+      end;
+    FHostedServices.Clear;
 
+    try
       if Assigned(Lifetime) then
         (Lifetime as THostApplicationLifetime).NotifyStopped;
+    except
+      on E: Exception do Collect(E);
+    end;
+
+    try
       FServices := nil;
       FContainerAccess.Shutdown;
     except
-      on E: Exception do
-      begin
-        Logger.LogError(E, 'the application could not stop cleanly');
-        raise;
-      end;
+      on E: Exception do Collect(E);
     end;
   finally
     TMonitor.Exit(Self);
   end;
-  Free;
+
+  if not FReleased then
+    Free;
+
+  // Con el host ya liberado. Una sola se lanza tal cual, para que quien la captura por su clase la
+  // siga capturando; varias, dentro de una agregada, que es dueña de ellas.
+  case Length(Failures) of
+    0: ;
+    1: raise Failures[0];
+  else
+    raise EAggregateException.Create(Format('the application could not stop cleanly: %d steps failed',
+      [Length(Failures)]), Failures);
+  end;
 end;
 
 procedure THost.WaitForShutdown;
