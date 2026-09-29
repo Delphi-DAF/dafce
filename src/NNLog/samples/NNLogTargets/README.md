@@ -21,8 +21,9 @@ regla, `final`, los tokens del layout y lo que pasa cuando un destino no puede e
   nombrando al destino —por su `Name`, o por su clase si no tiene—, y la siguiente línea se escribe con normalidad. El sample lo enseña
   entero: el programa sigue vivo y el informe aparece.
 - **El canal de arranque trae puestos dos destinos, la salida de depuración y la de error.** Es donde
-  informa el logging cuando lo que falla es el logging, y quien despliega le añade los suyos.
-  `IBootstrapSink` son dos métodos: `TStdOutBootstrapSink`, en el `.dpr`, es uno entero.
+  informa el logging cuando lo que falla es el logging, y adónde va lo decide quien despliega:
+  `BootstrapLog.ClearSinks` quita los que trae DAF y `AddSink` pone uno propio. `IBootstrapSink` son
+  dos métodos: `TStdOutBootstrapSink`, en el `.dpr`, es uno entero, y es el único que deja el sample.
 - **El `name` de una regla es una expresión regular anclada a la categoría completa**, no un glob:
   `Acme\..*` casa con `Acme.Orders` y no con `Otros.Cosas`. Es una divergencia deliberada con NLog.
 - **`final` corta el recorrido.** `Acme.Audit` casa con las dos reglas; la de auditoría va primera
@@ -58,7 +59,6 @@ Salida, con la fecha, el pid y el hilo del momento:
   [AUD] Acme.Audit pedido=99 | cierre de lote 99 | lote=12 ${nada}
 
 == Un destino que no puede escribir ya no tumba a quien registraba
-2026-09-21 15:37:39.137 #8000:7716 [ERROR] TAuditTarget | el destino "audit" no pudo escribir Exception: el almacen de auditoria no responde
   >> 2026-09-21 15:37:39.137 #8000:7716 [ERROR] TAuditTarget | el destino "audit" no pudo escribir Exception: el almacen de auditoria no responde
   el programa sigue vivo, y la siguiente linea si se escribe:
   [AUD] Acme.Audit pedido=4713 | pago aceptado 4713 ${nada}
@@ -68,5 +68,4 @@ Salida, con la fecha, el pid y el hilo del momento:
 ```
 
 El layout de los destinos va **sin `${timestamp}`** para que la salida sea la misma en cada pasada;
-el del canal de arranque es fijo y sí lo lleva. El informe del destino que falla sale dos veces: por
-la salida de error, que el canal trae puesta, y por el destino del sample, con `>>` delante.
+el del canal de arranque es fijo y sí lo lleva.

@@ -118,8 +118,9 @@ end;
 begin
   ReportMemoryLeaksOnShutdown := True;
 
-  // El canal de arranque trae puestas la salida de depuracion y la de error, y este destino se
-  // suma a ellas: en consola el informe sale dos veces, por la de error y por la normal con '>>'.
+  // El canal de arranque trae puestas la salida de depuracion y la de error. El sample las
+  // cambia por la suya, para que el informe salga una vez y seguido del resto de la salida.
+  BootstrapLog.ClearSinks;
   BootstrapLog.AddSink(TStdOutBootstrapSink.Create);
 
   var Env := BuildEnvironment;
