@@ -516,15 +516,7 @@ begin
     // sobrevivir a Stop dentro de el.
     FSlot.Clear;
     try
-      try
-        FHost.Stop;
-      finally
-        // Stop LIBERA el host, tambien cuando lanza: THost es TNoRefCountObject y se hace Free a si
-        // mismo al parar. Soltar la referencia aqui no es higiene, es lo que evita que el
-        // finalizador del campo llame a _Release sobre memoria ya devuelta -- que con el gestor en
-        // modo depuracion es una violacion de acceso, y sin el, un acierto por casualidad.
-        Pointer(FHost) := nil;
-      end;
+      StopAndNil(FHost);
     except
       // Si la accion ya habia fallado, el codigo es el que la politica dio a ese fallo, y Stop ya
       // informo el suyo.

@@ -287,15 +287,10 @@ begin
   FRouter := nil;
   FServer := nil;
 
-  // Stop es lo que suelta el contenedor, y el host se libera a si mismo al pararse, tambien
-  // cuando lanza.
+  // Parar el host es lo que suelta el contenedor.
   if Assigned(FHost) then
     try
-      try
-        FHost.Stop;
-      finally
-        Pointer(FHost) := nil;
-      end;
+      StopAndNil(FHost);
     except
       on E: Exception do
         ; // El host ya lo informo al ocurrir, y un destructor que lanza deja el objeto a medio liberar.
@@ -318,14 +313,7 @@ begin
     Result := 0;
   finally
     FServer := nil;
-    try
-      FHost.Stop;
-    finally
-      // Stop libera el host: THost se hace Free a si mismo al parar, tambien cuando lanza, asi que
-      // soltar la referencia aqui es lo que evita que el finalizador del campo toque memoria ya
-      // devuelta.
-      Pointer(FHost) := nil;
-    end;
+    StopAndNil(FHost);
   end;
 end;
 
