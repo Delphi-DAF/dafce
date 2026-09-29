@@ -118,15 +118,17 @@ Logger.BeginScope('Processing order {OrderId}', [OrderId],
   begin
     Logger.LogInformation('Checking stock', []);
     Logger.LogInformation('Payment authorised', []);
-    // Both lines carry the scope data
+    // Both entries carry the scope, apart from their message
   end);
 ```
 
 Scopes are stack-based — nested scope data accumulates. On exit the scope is popped automatically.
 
-The scope text reaches the entry as `TLogEntry.Scope`, and a provider decides how to show it. With
-NNLog the token is `${scope}`: adding it to a target's layout puts the open scopes on every line
-written inside them.
+The scope reaches the entry as `TLogEntry.Scope`, apart from its message: `TLogEntry.Message` is the
+formatted message and nothing else. `Scope` holds the open scopes from the innermost to the
+outermost, each prefixed with ` | `, and is empty outside any scope. A provider decides whether to
+write it and where. With NNLog the token is `${scope}`: `${message}${scope}` puts the scopes right
+after the message, and a layout without `${scope}` does not write them.
 
 ---
 
@@ -306,5 +308,6 @@ end;
 ```
 
 Every field is populated before `Write(Entry)` is called on a `TTarget`. `Message` is not among them:
-it is a read-only property, and the first read runs `Formatter` over `State`, appends `Scope` and
-keeps the result — so a target that renders its own layout out of `State` never pays for it.
+it is a read-only property, and the first read runs `Formatter` over `State` and keeps the result —
+so a target that renders its own layout out of `State` never pays for it. `Message` does not include
+`Scope`: a provider that wants the scopes writes them from `Scope`.

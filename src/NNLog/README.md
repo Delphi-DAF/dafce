@@ -63,14 +63,15 @@ from a file.
 | `${thread}` | thread id |
 | `${level}` | level name: `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `CRIT` |
 | `${category}` | logger category |
-| `${scope}` | the scopes open around the entry |
-| `${message}` | rendered message |
+| `${scope}` | the scopes open around the entry, innermost first, each prefixed with ` \| `; empty outside any scope |
+| `${message}` | rendered message, without the scope |
 | `${exception}` | exception class + message, empty when there is none |
 | `${env:NAME}` | environment variable |
 | `${event-properties:key}` | a value from the entry's state |
 | `${binPath}`, `${contentRootPath}`, `${environment}`, `${ApplicationName}` | from `IHostEnvironment` |
 
-Default layout: `${timestamp} #${pid}:${thread} [${level}] ${category} | ${message} ${exception}`
+Default layout: `${timestamp} #${pid}:${thread} [${level}] ${category} | ${message} ${exception}`. It
+has no `${scope}`: a target without a layout of its own does not write the scopes.
 
 The full table, with the arguments each token takes, is in the [guide](docs/GUIDE.md#layout-tokens).
 

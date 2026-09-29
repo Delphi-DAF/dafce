@@ -546,6 +546,39 @@ THostDefaults.EnvironmentKey   // 'environment', and DAF_ENVIRONMENT as a variab
   `${contentRootPath}` now follows the current directory; write `${binPath}` to keep the log next
   to the executable.
 
+### 21. Logging: an entry's message no longer carries the scope
+
+`TLogEntry.Message` is the formatted message and nothing else; the open scopes travel only in
+`TLogEntry.Scope`, innermost first, each prefixed with ` | `. In 1.6 the message carried them
+appended, so every line showed them without asking.
+
+- **What breaks**, and the compiler does not say it: an NNLog layout with `${message}` and no
+  `${scope}` stops showing the scopes — the default layout among them —, and one with both stops
+  writing them twice. `${message}${scope}` gives the line of 1.6; a target that relied on the
+  default layout needs one of its own.
+
+```
+before  ${level} [${category}] ${message}
+now     ${level} [${category}] ${message}${scope}
+```
+
+- **A provider of your own** that writes `Entry.Message` stops writing the scopes. Append
+  `Entry.Scope`, which already brings its separator:
+
+```pascal
+// before
+procedure TMyLogger.Log(const Entry: TLogEntry);
+begin
+  Send(Entry.Message);                 // the scopes came inside the message
+end;
+
+// now
+procedure TMyLogger.Log(const Entry: TLogEntry);
+begin
+  Send(Entry.Message + Entry.Scope);   // empty outside any scope
+end;
+```
+
 ## How to do it
 
 1. Compile. Whatever is missing comes out as a compiler error, not as odd behaviour at run time.
@@ -557,6 +590,6 @@ THostDefaults.EnvironmentKey   // 'environment', and DAF_ENVIRONMENT as a variab
    the host validates the container, and a registration that went missing stops the build naming it.
    A Scoped service asked of the root provider is rejected too, when it is resolved: resolve it from a
    scope the work opens, `Services.CreateScope`.
-6. Sections 10 to 13, 15 and 17 to 20 are **run-time** changes: the compiler says nothing about them. Read them
+6. Sections 10 to 13, 15 and 17 to 21 are **run-time** changes: the compiler says nothing about them. Read them
    against your own composition — scope lifetimes, duplicate registrations, and anything a
    destructor reads.

@@ -1,10 +1,6 @@
 ﻿unit LayoutTokens.Feat;
 
-// El pipeline rellena TLogEntry.Scope en CADA entrada que compone, y hoy no lo lee nadie: hay
-// veinte renderers registrados y ninguno es el del ambito. Asi que "Scopes" --que el README de
-// Logging anuncia y el sample HostedService ejercita dos veces-- no llega a ninguna linea.
-//
-// El segundo defecto es el modo de fallo del propio motor: un token para el que no hay renderer se
+// El modo de fallo del propio motor: un token para el que no hay renderer se
 // resuelve a cadena VACIA, sin error ni aviso. Un destino puede escribir, rotar y no lanzar mientras
 // llena el fichero de lineas sin contenido, y todo lo observable dice que funciona. Lo mismo le pasa
 // a un token mal escrito en una configuracion de produccion: se pierde una columna y nada lo dice.
@@ -27,11 +23,12 @@ type
     FTarget: TTarget;
     FRule: TLogRule;
     FLogger: ILogger;
-    procedure Compose(const Layout: string);
+    procedure Compose;
   public
     constructor Create;
     destructor Destroy; override;
     procedure TargetRenders(const Layout: string);
+    procedure TargetWithDefaultLayout;
     procedure WriteInsideScope(const ScopeMsg, Line: string);
     procedure WriteWithoutScope(const Line: string);
     function Written: string;
@@ -86,11 +83,10 @@ begin
   inherited;
 end;
 
-procedure TLayoutWorld.Compose(const Layout: string);
+procedure TLayoutWorld.Compose;
 begin
   FTarget := TRenderTarget.Create;
   FTarget.Name := 'render';
-  FTarget.Layout := Layout;
   FRule := TLogRule.Create;
   // A mano porque TLogRule no declara constructor: el cero de su clase base la deja desactivada y
   // con el nivel maximo en el mas bajo de todos.
@@ -104,7 +100,13 @@ end;
 
 procedure TLayoutWorld.TargetRenders(const Layout: string);
 begin
-  Compose(Layout);
+  Compose;
+  FTarget.Layout := Layout;
+end;
+
+procedure TLayoutWorld.TargetWithDefaultLayout;
+begin
+  Compose;
 end;
 
 procedure TLayoutWorld.WriteInsideScope(const ScopeMsg, Line: string);
@@ -177,6 +179,59 @@ Feature El layout de NNLog escribe el ambito, y no se calla un token que nadie a
       procedure(W: TLayoutWorld)
       begin
         Expect(W.Written).ToEqual('<>');
+      end)
+
+  .Scenario('El mensaje y el ambito en la misma linea')
+    .Given('un destino cuyo layout pide el mensaje y, detras, el ambito',
+      procedure(W: TLayoutWorld)
+      begin
+        W.TargetRenders('${message}${scope}');
+      end)
+    .When('se registra una linea dentro de un ambito abierto',
+      procedure(W: TLayoutWorld)
+      begin
+        W.WriteInsideScope('procesando pedido', 'dentro');
+      end)
+    .&Then('la linea lleva el texto del ambito una sola vez, detras del mensaje',
+      procedure(W: TLayoutWorld)
+      begin
+        Expect(W.Written).ToEqual('dentro | procesando pedido');
+      end)
+
+  .Scenario('Un layout que solo pide el mensaje')
+    .Given('un destino cuyo layout pide el mensaje y no el ambito',
+      procedure(W: TLayoutWorld)
+      begin
+        W.TargetRenders('[${message}]');
+      end)
+    .When('se registra una linea dentro de un ambito abierto',
+      procedure(W: TLayoutWorld)
+      begin
+        W.WriteInsideScope('procesando pedido', 'dentro');
+      end)
+    .&Then('la linea lleva el mensaje, y no el texto del ambito',
+      procedure(W: TLayoutWorld)
+      begin
+        Expect(W.Written).ToEqual('[dentro]');
+      end)
+
+  .Scenario('El layout por defecto no escribe el ambito')
+    .Given('un destino sin layout declarado',
+      procedure(W: TLayoutWorld)
+      begin
+        W.TargetWithDefaultLayout;
+      end)
+    .When('se registra una linea dentro de un ambito abierto',
+      procedure(W: TLayoutWorld)
+      begin
+        W.WriteInsideScope('procesando pedido', 'dentro');
+      end)
+    .&Then('la linea no lleva el texto del ambito',
+      procedure(W: TLayoutWorld)
+      begin
+        // El layout por defecto acaba en "${category} | ${message} ${exception}", y sin excepcion
+        // el ultimo token se resuelve a vacio.
+        Expect(W.Written).ToEndWith('Prueba | dentro ');
       end)
 
 .Rule('Un token que nadie atiende se nota')

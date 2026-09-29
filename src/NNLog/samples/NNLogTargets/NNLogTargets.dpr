@@ -72,11 +72,10 @@ begin
   var Aud := TTargetConfig.Create;
   Aud.AddOrSetValue('TargetType', 'Audit');
   Aud.AddOrSetValue('Name', 'audit');
-  // ${message} ya trae detras el ambito abierto, asi que anadir ${scope} a un layout que
-  // lo lleve lo escribe dos veces: ${scope} es para colocar el ambito en OTRO sitio de la
-  // linea. Y ${nada} se queda sin sustituir a proposito, que es lo que hace visible un
-  // token mal escrito en vez de dejarlo en blanco.
-  Aud.AddOrSetValue('Layout', '${category} pedido=${event-properties:OrderId} | ${message} ${nada}');
+  // ${message} es el mensaje sin el ambito abierto, y ${scope} lo pone detras. Y ${nada}
+  // se queda sin sustituir a proposito, que es lo que hace visible un token mal escrito en
+  // vez de dejarlo en blanco.
+  Aud.AddOrSetValue('Layout', '${category} pedido=${event-properties:OrderId} | ${message}${scope} ${nada}');
   // Prefix es propiedad escribible de TAuditTarget, asi que el cargador la asigna.
   Aud.AddOrSetValue('Prefix', 'AUD');
   Result.Targets.Add('audit', Aud);

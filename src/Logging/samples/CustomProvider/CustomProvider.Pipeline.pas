@@ -114,10 +114,9 @@ procedure TPrefixLogger.Log(const Entry: TLogEntry);
 begin
   if not IsEnabled(Entry.Level) then
     Exit;
-  // Entry.Message ya trae el ambito pegado detras: concatenar Entry.Scope aqui lo
-  // escribiria dos veces.
-  Writeln(Format('  %s [%-5s] %-42s %s',
-    [FPrefix, Entry.Level.ToString, Entry.Category, Entry.Message]));
+  // Entry.Message no lleva el ambito: viaja aparte en Entry.Scope, ya con su separador delante.
+  Writeln(Format('  %s [%-5s] %-42s %s%s',
+    [FPrefix, Entry.Level.ToString, Entry.Category, Entry.Message, Entry.Scope]));
 end;
 
 { TPrefixLoggerProvider }

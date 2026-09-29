@@ -63,14 +63,15 @@ vienen de un fichero.
 | `${thread}` | ID del hilo |
 | `${level}` | nombre del nivel: `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `CRIT` |
 | `${category}` | categoría del logger |
-| `${scope}` | los ámbitos abiertos alrededor de la entrada |
-| `${message}` | mensaje renderizado |
+| `${scope}` | los ámbitos abiertos alrededor de la entrada, el más interno primero, cada uno precedido de ` \| `; vacío fuera de todo ámbito |
+| `${message}` | mensaje renderizado, sin el ámbito |
 | `${exception}` | clase + mensaje de la excepción, vacío si no hay |
 | `${env:NOMBRE}` | variable de entorno |
 | `${event-properties:clave}` | un valor del estado de la entrada |
 | `${binPath}`, `${contentRootPath}`, `${environment}`, `${ApplicationName}` | de `IHostEnvironment` |
 
-Layout por defecto: `${timestamp} #${pid}:${thread} [${level}] ${category} | ${message} ${exception}`
+Layout por defecto: `${timestamp} #${pid}:${thread} [${level}] ${category} | ${message} ${exception}`.
+No lleva `${scope}`: un destino sin layout propio no escribe los ámbitos.
 
 La tabla completa, con el argumento que acepta cada token, está en la [guía](docs/GUIDE.es.md#tokens-de-layout).
 

@@ -20,8 +20,10 @@ propios», y no había ninguno.
   perder una línea por no saber es peor que componer una de más. Con un solo destino así, la
   puerta no cierra nunca. Aquí los dos la contestan, y el argumento caro se construye **una vez de
   dos intentos**.
-- **`Entry.Message` ya trae el ámbito pegado detrás.** Un proveedor que además escriba
-  `Entry.Scope` lo imprime dos veces. Los ámbitos anidados salen del más interno al más externo.
+- **`Entry.Message` es el mensaje, y el ámbito viaja aparte en `Entry.Scope`.** El proveedor decide
+  si lo escribe y dónde: `TPrefixLogger` lo pone detrás del mensaje. `Entry.Scope` lleva los ámbitos
+  abiertos del más interno al más externo, cada uno precedido de ` | `, y va vacío fuera de todo
+  ámbito.
 - **`ILogger<T>` llega con la categoría puesta.** `TPayrollService` pide `ILogger<TPayrollService>`
   por constructor y la categoría que sale es el nombre cualificado de la clase. Nadie escribe ese
   nombre en ningún sitio: `AddLogging` registra **un** `ILogger<_>` abierto para todos los

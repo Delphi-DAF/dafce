@@ -101,6 +101,7 @@
         <DCCReference Include="PipelineComposition.Feat.pas"/>
         <DCCReference Include="TypedLogger.Feat.pas"/>
         <DCCReference Include="EntryCost.Feat.pas"/>
+        <DCCReference Include="EntryScope.Feat.pas"/>
         <DCCReference Include="TemplateAnalysis.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

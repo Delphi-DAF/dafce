@@ -27,9 +27,9 @@ regla, `final`, los tokens del layout y lo que pasa cuando un destino no puede e
   `Acme\..*` casa con `Acme.Orders` y no con `Otros.Cosas`. Es una divergencia deliberada con NLog.
 - **`final` corta el recorrido.** `Acme.Audit` casa con las dos reglas; la de auditoría va primera
   y es final, así que su línea no llega a consola. El orden de las reglas es el orden del array.
-- ⚠️ **`${message}` ya trae el ámbito pegado detrás**, así que un layout con `${message}` **y**
-  `${scope}` lo escribe dos veces. `${scope}` sirve para colocar el ámbito en otro sitio de la
-  línea.
+- **El ámbito se pide con su propio token.** `${message}` es el mensaje y nada más; `${scope}`
+  escribe los ámbitos abiertos, cada uno precedido de ` | `. El destino de auditoría lo pide detrás
+  del mensaje, `${message}${scope}`.
 - **Un token sin renderer se queda sin sustituir.** `${nada}` sale tal cual, que es lo que hace
   visible un `${mesage}` mal escrito en vez de dejar un hueco en blanco.
 - **Escribir los ajustes o leerlos de una sección da lo mismo.** La última sección compone el

@@ -77,6 +77,7 @@ The changes that break compilation are collected, with their example diff, in `M
 - ⚠️ **DependencyInjection**: Shutting the container down **clears the injected properties** of what it owns before releasing anything, so that two services that injected each other are destroyed
 - ⚠️ **DependencyInjection**: A repeated registration **now gives two instances**; asking for all of them returned the first one twice. Resolving a single one, and the shutdown order, do not change
 - ⚠️ **Logging**: A line no sink would accept **stops being composed**: the level is decided before parsing the template. `ILogger` gains `IsEnabled`, which **breaks** whoever implements the contract without inheriting from `TLogger`
+- ⚠️ **Logging**: An entry's `Message` **no longer carries the scope**, which travels only in `TLogEntry.Scope`. **Breaks, with no compiler error,** a provider of its own that writes `Entry.Message`: it stops writing the scopes until it also writes `Entry.Scope`
 - ⚠️ **SQLCute**: A query **declares** which statement it is —`IQuery.Kind`, `Select` by default— instead of being inferred from its clauses; declaring two keeps the last one, where the first used to win. The new member **breaks** whoever implements `IQuery` on their own
 - ⚠️ **MiniSpec**: `[Inject]` is renamed to **`[MiniInject]`** and travels in the facade, so `uses Daf.MiniSpec` is enough to mark
 - ⚠️ **MiniSpec**: `TInjectorService` no longer takes loose services: it is an instance of the run with the three scopes, `Register(Scope, Instance)`. A collaborator that needs a scenario is built in the World
@@ -103,6 +104,7 @@ The changes that break compilation are collected, with their example diff, in `M
 
 - ⚠️ **NNLog**: A target implements `DoWrite` instead of overriding `Write`. `TTarget.Write` takes a critical section held by that target instance and then calls it, so writes from several threads through one target no longer overlap — every logger in a process shares the same target instances. **Breaks** whoever wrote a custom target
 - ⚠️ **NNLog**: A target that cannot write no longer raises towards whoever logged; it reports on the bootstrap channel, naming the target. **Observable change**: a logging failure stops aborting the code that was only trying to log
+- ⚠️ **NNLog**: `${message}` no longer carries the scope, and `${scope}` is the only token that writes it. **Breaks, with no compiler error,** a layout with `${message}` and no `${scope}`, the default one included: it stops showing the scopes. One with both stops writing them twice
 - **NNLog**: A layout token with no renderer behind it is left unsubstituted instead of becoming the empty string, so a misspelled `${mesage}` shows up in the line
 - ⚠️ **Commons**: `VersionTag`'s `WithCompiledMeta` flag is now a template parameter, and `TVersionInfo.Debug` is read-only and declared by the binary — a fourth argument to `[Version(...)]` or `TVersionInfo.Create`, `False` when omitted; it used to report how DAF itself was compiled. **Breaks** whoever passed the flag or assigned `Debug`
 

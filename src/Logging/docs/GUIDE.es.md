@@ -118,15 +118,17 @@ Logger.BeginScope('Procesando pedido {OrderId}', [OrderId],
   begin
     Logger.LogInformation('Comprobando stock', []);
     Logger.LogInformation('Pago autorizado', []);
-    // Ambas líneas llevan los datos del scope
+    // Las dos entradas llevan el scope, aparte de su mensaje
   end);
 ```
 
 Los scopes están basados en pila — los datos de scopes anidados se acumulan. Al salir, el scope se extrae automáticamente.
 
-El texto del scope llega a la entrada como `TLogEntry.Scope`, y cada proveedor decide cómo
-enseñarlo. En NNLog el token es `${scope}`: añadirlo al layout de un destino pone los scopes
-abiertos en cada línea escrita dentro de ellos.
+El scope llega a la entrada como `TLogEntry.Scope`, aparte de su mensaje: `TLogEntry.Message` es el
+mensaje formateado y nada más. `Scope` lleva los scopes abiertos del más interno al más externo,
+cada uno precedido de ` | `, y va vacío fuera de todo scope. Cada proveedor decide si lo escribe y
+dónde. En NNLog el token es `${scope}`: `${message}${scope}` pone los scopes justo detrás del
+mensaje, y un layout sin `${scope}` no los escribe.
 
 ---
 
@@ -306,6 +308,6 @@ end;
 ```
 
 Todos los campos se rellenan antes de que se llame a `Write(Entry)` en un `TTarget`. `Message` no es
-uno de ellos: es una propiedad de solo lectura, y la primera lectura pasa `Formatter` sobre `State`,
-le añade `Scope` y guarda el resultado — así que un target que renderiza su propio layout desde
-`State` no lo paga nunca.
+uno de ellos: es una propiedad de solo lectura, y la primera lectura pasa `Formatter` sobre `State` y
+guarda el resultado — así que un target que renderiza su propio layout desde `State` no lo paga
+nunca. `Message` no incluye `Scope`: un proveedor que quiera los scopes los escribe desde `Scope`.

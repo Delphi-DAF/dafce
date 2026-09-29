@@ -240,8 +240,8 @@ column.
 | `${date}`, `${date:format}` | render time, formatted; `yyyy-MM-dd` without an argument |
 | `${level}` | level name: `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `CRIT` |
 | `${category}` | the logger's category |
-| `${scope}` | the scopes open around the entry, innermost last, each prefixed with ` \| ` |
-| `${message}` | the rendered message |
+| `${scope}` | the scopes open around the entry, innermost first, each prefixed with ` \| `; empty outside any scope |
+| `${message}` | the rendered message, without the scope |
 | `${exception}` | `ExceptionClass: Message`, empty when the entry carries no exception |
 | `${exception:stacktrace}` | the exception's stack trace |
 | `${pid}` | current process id |
@@ -263,6 +263,9 @@ recase the level name. Token names ignore case: `${BinPath}` and `${binPath}` ar
 ```
 ${timestamp} #${pid}:${thread} [${level}] ${category} | ${message} ${exception}
 ```
+
+It has no `${scope}`: a target without a layout of its own does not write the scopes. To write them
+after the message, put `${scope}` right behind `${message}`.
 
 `TFileTarget.FileName` goes through the same engine, so `${binPath}`, `${date}` and the rest work
 in a path. `${binPath}` puts the log next to the executable whatever directory the process was

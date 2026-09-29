@@ -656,10 +656,7 @@ function TLogEntry.GetMessage: string;
 begin
   // build message only first time
   if FMessage.IsEmpty then
-  begin
     FMessage := Formatter(State, Exception);
-    FMessage := FMessage + Scope;
-  end;
   Result := FMessage;
 end;
 

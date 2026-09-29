@@ -547,6 +547,39 @@ THostDefaults.EnvironmentKey   // 'environment', y DAF_ENVIRONMENT como variable
   arráncala desde su carpeta. Y una configuración de log que escribe bajo `${contentRootPath}` sigue
   ahora al directorio actual; escribe `${binPath}` para que el log se quede junto al ejecutable.
 
+### 21. Logging: el mensaje de una entrada ya no lleva el ámbito
+
+`TLogEntry.Message` es el mensaje formateado y nada más; los ámbitos abiertos viajan solo en
+`TLogEntry.Scope`, el más interno primero, cada uno precedido de ` | `. En 1.6 el mensaje los
+llevaba pegados detrás, así que cada línea los enseñaba sin pedirlos.
+
+- **Qué rompe**, y el compilador no lo dice: un layout de NNLog con `${message}` y sin `${scope}`
+  deja de mostrar los ámbitos —el layout por defecto entre ellos—, y uno con los dos deja de
+  escribirlos dos veces. `${message}${scope}` da la línea de 1.6; un destino que se apoyaba en el
+  layout por defecto necesita uno propio.
+
+```
+antes  ${level} [${category}] ${message}
+ahora  ${level} [${category}] ${message}${scope}
+```
+
+- **Un proveedor propio** que escribe `Entry.Message` deja de escribir los ámbitos. Añade
+  `Entry.Scope`, que ya trae su separador:
+
+```pascal
+// before
+procedure TMyLogger.Log(const Entry: TLogEntry);
+begin
+  Send(Entry.Message);                 // los ámbitos venían dentro del mensaje
+end;
+
+// now
+procedure TMyLogger.Log(const Entry: TLogEntry);
+begin
+  Send(Entry.Message + Entry.Scope);   // vacío fuera de todo ámbito
+end;
+```
+
 ## Cómo hacerlo
 
 1. Compila. Lo que falte sale como error del compilador, no como comportamiento raro en
@@ -560,6 +593,6 @@ THostDefaults.EnvironmentKey   // 'environment', y DAF_ENVIRONMENT como variable
    `DAF_ENVIRONMENT=Development`: el host valida el contenedor, y un registro que se haya perdido detiene
    la construcción nombrándolo. Un servicio Scoped pedido al proveedor raíz también se rechaza, al
    resolverlo: se resuelve desde un ámbito que abre el trabajo, `Services.CreateScope`.
-6. Las secciones 10 a 13, la 15 y de la 17 a la 20 son cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
+6. Las secciones 10 a 13, la 15 y de la 17 a la 21 son cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
    contra tu propia composición — la vida de los ámbitos, los registros repetidos, y lo que lea
    un destructor.

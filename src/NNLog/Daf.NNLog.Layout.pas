@@ -138,9 +138,8 @@ begin
       Result := Entry.Category;
     end);
 
-  // El pipeline rellena Scope en cada entrada que compone. Sin este renderer el campo no lo leia
-  // nadie, asi que BeginScope adjuntaba un contexto que ningun destino podia enseñar. Sale tal cual
-  // lo compone TLogger.GetScopeMessage, que ya trae su propio separador delante.
+  // El unico token que escribe el ambito: ${message} no lo lleva. Sale tal cual lo compone
+  // TLogger.GetScopeMessage, que ya trae su propio separador delante.
   TLogLayoutEngine.RegisterRenderer('scope',
     function(const Arg: string; const Entry: TLogEntry): string
     begin

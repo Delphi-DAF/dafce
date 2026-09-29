@@ -244,8 +244,8 @@ silencio.
 | `${date}`, `${date:formato}` | el momento de renderizar, con formato; `yyyy-MM-dd` sin argumento |
 | `${level}` | nombre del nivel: `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `CRIT` |
 | `${category}` | la categoría del logger |
-| `${scope}` | los ámbitos abiertos alrededor de la entrada, el más interno el último, cada uno precedido de ` \| ` |
-| `${message}` | el mensaje renderizado |
+| `${scope}` | los ámbitos abiertos alrededor de la entrada, el más interno primero, cada uno precedido de ` \| `; vacío fuera de todo ámbito |
+| `${message}` | el mensaje renderizado, sin el ámbito |
 | `${exception}` | `ClaseExcepción: Mensaje`, vacío cuando la entrada no trae excepción |
 | `${exception:stacktrace}` | la pila de la excepción |
 | `${pid}` | ID del proceso actual |
@@ -268,6 +268,9 @@ no cambia la caja del nombre del nivel. El nombre de un token no distingue mayú
 ```
 ${timestamp} #${pid}:${thread} [${level}] ${category} | ${message} ${exception}
 ```
+
+No lleva `${scope}`: un destino sin layout propio no escribe los ámbitos. Para escribirlos detrás del
+mensaje, pon `${scope}` justo detrás de `${message}`.
 
 El `FileName` de `TFileTarget` pasa por el mismo motor, así que `${binPath}`, `${date}` y los demás
 funcionan dentro de una ruta. `${binPath}` deja el log junto al ejecutable, se arranque el proceso

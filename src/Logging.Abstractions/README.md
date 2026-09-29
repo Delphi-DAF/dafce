@@ -200,9 +200,12 @@ TLogEntry = record
 end;
 ```
 
-`Message` is a **read-only property**, not a field: the first read runs `Formatter` over `State`,
-appends `Scope`, and keeps the result. A provider that writes its own layout out of `State` never
-pays for it.
+`Message` is a **read-only property**, not a field: the first read runs `Formatter` over `State` and
+keeps the result. A provider that writes its own layout out of `State` never pays for it.
+
+`Message` does not carry the scope. `Scope` holds the open scopes from the innermost to the
+outermost, each prefixed with ` | `, and is empty outside any scope; a provider that wants them
+writes them from there.
 
 ---
 

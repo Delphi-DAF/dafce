@@ -203,8 +203,12 @@ end;
 ```
 
 `Message` es una **propiedad de solo lectura**, no un campo: la primera lectura pasa `Formatter`
-sobre `State`, le añade `Scope` y guarda el resultado. Un proveedor que escribe su propio layout a
-partir de `State` no lo paga nunca.
+sobre `State` y guarda el resultado. Un proveedor que escribe su propio layout a partir de `State`
+no lo paga nunca.
+
+`Message` no lleva el scope. `Scope` lleva los scopes abiertos del más interno al más externo, cada
+uno precedido de ` | `, y va vacío fuera de todo scope; un proveedor que los quiera los escribe desde
+ahí.
 
 ---
 

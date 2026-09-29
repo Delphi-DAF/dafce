@@ -10,6 +10,7 @@ uses
   PipelineComposition.Feat in 'PipelineComposition.Feat.pas',
   TypedLogger.Feat in 'TypedLogger.Feat.pas',
   EntryCost.Feat in 'EntryCost.Feat.pas',
+  EntryScope.Feat in 'EntryScope.Feat.pas',
   TemplateAnalysis.Feat in 'TemplateAnalysis.Feat.pas';
 
 begin

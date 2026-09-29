@@ -76,6 +76,7 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 - ⚠️ **DependencyInjection**: Cerrar el contenedor **vacía las propiedades inyectadas** de lo que posee antes de soltar nada, para que dos servicios que se inyectaron mutuamente se destruyan
 - ⚠️ **DependencyInjection**: Un registro repetido **pasa a dar dos instancias**; pedirlos todos devolvía la primera dos veces. Resolver uno solo y el orden de cierre no cambian
 - ⚠️ **Logging**: Una línea que ningún destino aceptaría **deja de componerse**: el nivel se decide antes de analizar la plantilla. `ILogger` gana `IsEnabled`, y eso **rompe** a quien implemente el contrato sin heredar de `TLogger`
+- ⚠️ **Logging**: El `Message` de una entrada **deja de llevar el ámbito**, que viaja solo en `TLogEntry.Scope`. **Rompe, sin error de compilación,** a un proveedor propio que escriba `Entry.Message`: deja de escribir los ámbitos hasta que escriba también `Entry.Scope`
 - ⚠️ **SQLCute**: Una consulta **declara** qué sentencia es —`IQuery.Kind`, con `Select` por defecto— en vez de deducirse de sus cláusulas; declarar dos se queda con el último, donde antes ganaba el primero. El miembro nuevo **rompe** a quien implemente `IQuery` por su cuenta
 - ⚠️ **MiniSpec**: `[Inject]` pasa a llamarse **`[MiniInject]`** y viaja en la facade, así que `uses Daf.MiniSpec` basta para marcar
 - ⚠️ **MiniSpec**: `TInjectorService` deja de admitir servicios sueltos: es una instancia de la ejecución con los tres ámbitos, `Register(Scope, Instance)`. El colaborador que necesite un escenario se construye en el World
@@ -102,6 +103,7 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 
 - ⚠️ **NNLog**: Un destino implementa `DoWrite` en vez de sobrescribir `Write`. `TTarget.Write` toma una sección crítica de esa instancia de destino y lo llama, así que las escrituras de varios hilos por un mismo destino dejan de solaparse — todos los loggers de un proceso comparten las mismas instancias de destino. **Rompe** a quien escribiera un destino propio
 - ⚠️ **NNLog**: Un destino que no puede escribir deja de lanzar hacia quien registró; informa por el canal de arranque, nombrando el destino. **Cambio observable**: un fallo del log deja de tumbar al código que solo quería registrar
+- ⚠️ **NNLog**: `${message}` deja de llevar el ámbito, y `${scope}` es el único token que lo escribe. **Rompe, sin error de compilación,** un layout con `${message}` y sin `${scope}`, el de por defecto incluido: deja de mostrar los ámbitos. Uno con los dos deja de escribirlos dos veces
 - **NNLog**: Un token de layout sin renderer detrás se queda sin sustituir en vez de convertirse en cadena vacía, así que un `${mesage}` mal escrito sale en la línea
 - ⚠️ **Commons**: el flag `WithCompiledMeta` de `VersionTag` pasa a ser un parámetro de plantilla, y `TVersionInfo.Debug` es de solo lectura y lo declara el binario —un cuarto argumento de `[Version(...)]` o de `TVersionInfo.Create`, `False` si se omite—; antes informaba de cómo se compiló el propio DAF. **Rompe** a quien pasara el flag o asignara `Debug`
 
