@@ -44,10 +44,19 @@ type
     destructor Destroy; override;
   end;
 
+  /// Falla al pararse: es lo que pone a prueba la liberacion de una aplicacion sin parar.
+  TRefusingStop = class(TInterfacedObject, IHostedService)
+  public
+    procedure Start;
+    procedure Stop;
+  end;
+
+
 implementation
 
 uses
   Daf.MiniSpec,
+  Daf.Extensions.Logging,
   Daf.Extensions.Configuration,
   Daf.Extensions.HttpServer,
   Daf.Web.Router;
@@ -62,6 +71,15 @@ begin
   if WebServices <> nil then
     WebServices.ShutDown;
   inherited;
+end;
+
+procedure TRefusingStop.Start;
+begin
+end;
+
+procedure TRefusingStop.Stop;
+begin
+  raise Exception.Create('la parada fallo');
 end;
 
 function TShared.Name: string;
@@ -220,6 +238,43 @@ Feature La variante Web de la familia @web @application-family
       procedure(W: TWebVariantWorld)
       begin
         Expect(W.Report).ToEqual('port=8099 active=True');
+      end)
+
+.Rule('Lo que falla al parar no sale del destructor')
+
+  .Scenario('Soltar una aplicacion web sin ejecutarla, cuyo servicio alojado falla al parar')
+    .Given('una aplicacion web construida, con un servicio alojado que falla al parar',
+      procedure(W: TWebVariantWorld)
+      begin
+        W.WebBuilder := TWebApplication.CreateBuilder;
+        Hosting.AddHostedService(W.WebBuilder.Services, TRefusingStop);
+        W.App := W.WebBuilder.Build;
+      end)
+    .When('se suelta sin haberla ejecutado',
+      procedure(W: TWebVariantWorld)
+      begin
+        // La parada informa su fallo por el canal de arranque; se aparta para que no se confunda
+        // con la salida de las specs.
+        var Saved := BootstrapLog.Sinks;
+        BootstrapLog.ClearSinks;
+        try
+          try
+            W.App := nil;
+            W.WebBuilder := nil;
+            W.Report := '<sin excepcion>';
+          except
+            on E: Exception do
+              W.Report := E.ClassName + ': ' + E.Message;
+          end;
+        finally
+          for var Sink in Saved do
+            BootstrapLog.AddSink(Sink);
+        end;
+      end)
+    .&Then('la liberacion termina sin error',
+      procedure(W: TWebVariantWorld)
+      begin
+        Expect(W.Report).ToEqual('<sin excepcion>');
       end);
 
 end.

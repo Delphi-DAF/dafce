@@ -184,7 +184,12 @@ end;
 
 destructor TFmxApplication.Destroy;
 begin
-  Stop;
+  try
+    Stop;
+  except
+    on E: Exception do
+      ; // El host ya lo informo al ocurrir, y un destructor que lanza deja el objeto a medio liberar.
+  end;
   inherited;
 end;
 

@@ -5,6 +5,7 @@ interface
 uses
   System.SysUtils,
   Daf.Extensions.DependencyInjection,
+  Daf.Extensions.Hosting,
   Daf.VCL.Application;
 
 type
@@ -25,8 +26,17 @@ type
   public
     Builder: IVclApplicationBuilder;
     App: IVclApplication;
+    /// La primera aplicacion construida; la actual es App.
+    Earlier: IVclApplication;
     Report: string;
     destructor Destroy; override;
+  end;
+
+  /// Falla al pararse: es lo que pone a prueba la liberacion de una aplicacion sin parar.
+  TRefusingStop = class(TInterfacedObject, IHostedService)
+  public
+    procedure Start;
+    procedure Stop;
   end;
 
 implementation
@@ -34,7 +44,7 @@ implementation
 uses
   Vcl.Forms,
   Daf.MiniSpec,
-  Daf.Extensions.Hosting,
+  Daf.Extensions.Logging,
   SpecForm;
 
 destructor TVclWorld.Destroy;
@@ -45,6 +55,15 @@ begin
   if App <> nil then
     App.Stop;
   inherited;
+end;
+
+procedure TRefusingStop.Start;
+begin
+end;
+
+procedure TRefusingStop.Stop;
+begin
+  raise Exception.Create('la parada fallo');
 end;
 
 function TDesktopService.Name: string;
@@ -137,6 +156,47 @@ Feature La variante VCL de la familia @vcl @application-family
       procedure(W: TVclWorld)
       begin
         Expect(DafApp = nil).ToBeTrue;
+      end)
+
+.Rule('Lo que falla al parar no sale del destructor')
+
+  .Scenario('Soltar una aplicacion que ya no es la actual, cuyo servicio alojado falla al parar')
+    .Given('una aplicacion VCL con un servicio alojado que falla al parar, y otra construida despues',
+      procedure(W: TVclWorld)
+      begin
+        var Earlier := TVclApplication.CreateBuilder;
+        Hosting.AddHostedService(Earlier.Services, TRefusingStop);
+        W.Earlier := Earlier.Build;
+        W.Builder := TVclApplication.CreateBuilder;
+        W.App := W.Builder.Build;
+        // Lo que el escenario supone: la actual es la segunda, asi que a la primera solo la sostiene
+        // el World, y soltarla la destruye sin haberla parado.
+        Expect(DafApp = W.App).ToBeTrue;
+      end)
+    .When('se suelta la primera',
+      procedure(W: TVclWorld)
+      begin
+        // La parada informa su fallo por el canal de arranque; se aparta para que no se confunda
+        // con la salida de las specs.
+        var Saved := BootstrapLog.Sinks;
+        BootstrapLog.ClearSinks;
+        try
+          try
+            W.Earlier := nil;
+            W.Report := '<sin excepcion>';
+          except
+            on E: Exception do
+              W.Report := E.ClassName + ': ' + E.Message;
+          end;
+        finally
+          for var Sink in Saved do
+            BootstrapLog.AddSink(Sink);
+        end;
+      end)
+    .&Then('la liberacion termina sin error',
+      procedure(W: TVclWorld)
+      begin
+        Expect(W.Report).ToEqual('<sin excepcion>');
       end);
 
 end.

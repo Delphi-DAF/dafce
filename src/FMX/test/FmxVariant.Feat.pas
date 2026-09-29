@@ -6,6 +6,7 @@ uses
   System.SysUtils,
   System.TypInfo,
   Daf.Extensions.DependencyInjection,
+  Daf.Extensions.Hosting,
   Daf.FMX.Application;
 
 type
@@ -26,17 +27,27 @@ type
   public
     Builder: IFmxApplicationBuilder;
     App: IFmxApplication;
+    /// La primera aplicacion construida; la actual es App.
+    Earlier: IFmxApplication;
     Info: PTypeInfo;
     Report: string;
     destructor Destroy; override;
   end;
+
+  /// Falla al pararse: es lo que pone a prueba la liberacion de una aplicacion sin parar.
+  TRefusingStop = class(TInterfacedObject, IHostedService)
+  public
+    procedure Start;
+    procedure Stop;
+  end;
+
 
 implementation
 
 uses
   System.Rtti,
   Daf.MiniSpec,
-  Daf.Extensions.Hosting;
+  Daf.Extensions.Logging;
 
 destructor TFmxWorld.Destroy;
 begin
@@ -63,6 +74,15 @@ begin
   finally
     Ctx.Free;
   end;
+end;
+
+procedure TRefusingStop.Start;
+begin
+end;
+
+procedure TRefusingStop.Stop;
+begin
+  raise Exception.Create('la parada fallo');
 end;
 
 function TDesktopService.Name: string;
@@ -178,6 +198,47 @@ Feature La variante FMX de la familia @fmx @application-family
       procedure(W: TFmxWorld)
       begin
         Expect(DafApp = nil).ToBeTrue;
+      end)
+
+.Rule('Lo que falla al parar no sale del destructor')
+
+  .Scenario('Soltar una aplicacion que ya no es la actual, cuyo servicio alojado falla al parar')
+    .Given('una aplicacion FMX con un servicio alojado que falla al parar, y otra construida despues',
+      procedure(W: TFmxWorld)
+      begin
+        var Earlier := TFmxApplication.CreateBuilder;
+        Hosting.AddHostedService(Earlier.Services, TRefusingStop);
+        W.Earlier := Earlier.Build;
+        W.Builder := TFmxApplication.CreateBuilder;
+        W.App := W.Builder.Build;
+        // Lo que el escenario supone: la actual es la segunda, asi que a la primera solo la sostiene
+        // el World, y soltarla la destruye sin haberla parado.
+        Expect(DafApp = W.App).ToBeTrue;
+      end)
+    .When('se suelta la primera',
+      procedure(W: TFmxWorld)
+      begin
+        // La parada informa su fallo por el canal de arranque; se aparta para que no se confunda
+        // con la salida de las specs.
+        var Saved := BootstrapLog.Sinks;
+        BootstrapLog.ClearSinks;
+        try
+          try
+            W.Earlier := nil;
+            W.Report := '<sin excepcion>';
+          except
+            on E: Exception do
+              W.Report := E.ClassName + ': ' + E.Message;
+          end;
+        finally
+          for var Sink in Saved do
+            BootstrapLog.AddSink(Sink);
+        end;
+      end)
+    .&Then('la liberacion termina sin error',
+      procedure(W: TFmxWorld)
+      begin
+        Expect(W.Report).ToEqual('<sin excepcion>');
       end);
 
 end.

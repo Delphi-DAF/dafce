@@ -291,9 +291,14 @@ begin
   // cuando lanza.
   if Assigned(FHost) then
     try
-      FHost.Stop;
-    finally
-      Pointer(FHost) := nil;
+      try
+        FHost.Stop;
+      finally
+        Pointer(FHost) := nil;
+      end;
+    except
+      on E: Exception do
+        ; // El host ya lo informo al ocurrir, y un destructor que lanza deja el objeto a medio liberar.
     end;
   inherited;
 end;
