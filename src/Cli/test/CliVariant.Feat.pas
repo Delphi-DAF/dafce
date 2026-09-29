@@ -411,6 +411,36 @@ Feature La variante CLI de la familia @cli @application-family
         Expect(W.ExitCode).ToEqual(42);
       end)
 
+  .Scenario('La politica que deja salir la excepcion la entrega entera')
+    .Given('una aplicacion CLI con la politica que deja salir la excepcion, y una accion que lanza',
+      procedure(W: TCliWorld)
+      begin
+        W.Builder := TCliApplication.CreateBuilder;
+        W.Builder.OnUnhandled(ExitPolicy.Rethrow());
+        W.Builder.SetAction(
+          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          begin
+            raise Exception.Create('el trabajo fallo');
+          end);
+        W.App := W.Builder.Build;
+      end)
+    .When('se ejecuta',
+      procedure(W: TCliWorld)
+      begin
+        try
+          W.ExitCode := W.App.Run;
+          W.Report := '<no lanzo>';
+        except
+          on E: Exception do
+            W.Report := E.ClassName + ': ' + E.Message;
+        end;
+      end)
+    .&Then('la excepcion sale del Run, con su clase y su mensaje',
+      procedure(W: TCliWorld)
+      begin
+        Expect(W.Report).ToEqual('Exception: el trabajo fallo');
+      end)
+
   // Dos formas de decir lo mismo son el defecto, no una precedencia que haya que recordar.
   .Scenario('Dos acciones para el mismo comando')
     .Given('un comando que ya tiene accion',

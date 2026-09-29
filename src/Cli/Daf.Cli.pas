@@ -265,6 +265,9 @@ begin
   Result :=
     function(const E: Exception; const Services: IServiceProvider): Integer
     begin
+      // E es la excepcion que el handler de Run esta manejando, y el handler la libera al salir por
+      // otra. Sin quitarsela antes, quien la capture fuera recibe memoria ya devuelta.
+      AcquireExceptionObject;
       raise E at ReturnAddress;
     end;
 end;
