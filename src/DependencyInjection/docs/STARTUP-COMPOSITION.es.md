@@ -365,14 +365,14 @@ uses
 begin
   // La aplicacion sabe donde viven sus datos; DAF no.
   BootstrapLog.AddSink(TFileBootstrapSink.Create(TPath.Combine(DataFolder, 'startup.log')));
+  var Host: IHost;
   try
     var Builder := THost.CreateBuilder;
 
     AddPayroll(Builder.Services);
 
-    var Host := Builder.Build;
+    Host := Builder.Build;
     Host.Start;
-    Host.WaitForShutdown;
   except
     on E: Exception do
     begin
@@ -380,6 +380,11 @@ begin
       ExitCode := 1;   // consola y desatendido: el codigo de salida es parte del informe
       raise;           // escritorio: esto es lo que hace que la plataforma lo muestre
     end;
+  end;
+  try
+    Host.WaitForShutdown;
+  finally
+    Host.Stop;
   end;
 end.
 ```

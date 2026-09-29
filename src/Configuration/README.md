@@ -233,6 +233,11 @@ Builder.Services.AddSingleton<IMyOptions>(
 
 var Host := Builder.Build;
 Host.Start;
+try
+  Host.WaitForShutdown;
+finally
+  Host.Stop;
+end;
 ```
 
 ---

@@ -35,7 +35,11 @@ Builder.Services.AddHostedService<TMyWorker>; // IHostedService
 
 var Host := Builder.Build;
 Host.Start;
-Host.WaitForShutdown;
+try
+  Host.WaitForShutdown;
+finally
+  Host.Stop;
+end;
 ```
 
 ---

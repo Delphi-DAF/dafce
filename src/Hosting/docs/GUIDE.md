@@ -52,7 +52,11 @@ Builder.Services.AddSingleton<IMyService, TMyService>;
 
 var Host := Builder.Build;
 Host.Start;
-Host.WaitForShutdown; // blocks until shutdown signal
+try
+  Host.WaitForShutdown; // blocks until shutdown signal
+finally
+  Host.Stop;
+end;
 ```
 
 `THost.CreateBuilder` hands back an `IGenericHostBuilder`, so a single variable owns the builder
@@ -324,12 +328,15 @@ Lifetime.StopApplication;
 ```pascal
 var Host := Builder.Build;
 Host.Start;
+try
+  // Access services from outside the DI graph
+  var Svc := Host.Services.GetRequiredService<IMyService>;
+  Svc.Execute;
 
-// Access services from outside the DI graph
-var Svc := Host.Services.GetRequiredService<IMyService>;
-Svc.Execute;
-
-Host.WaitForShutdown;
+  Host.WaitForShutdown;
+finally
+  Host.Stop;
+end;
 ```
 
 For scoped operations (e.g., a background job that needs a unit of work):
