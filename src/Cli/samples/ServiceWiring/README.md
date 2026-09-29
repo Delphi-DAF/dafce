@@ -1,13 +1,13 @@
 # ServiceWiring — cómo entra un servicio en una app de CLI
 
 El nivel siguiente a [`QuickStart`](../QuickStart/): lo mismo, más un servicio registrado en el
-builder y resuelto por el trabajo.
+builder y resuelto por la acción.
 
 ## Qué enseña
 
 - `B.Services` responde **antes** de construir nada, así que el registro ocurre donde está escrito.
-- `OnExecute` recibe el `IServiceProvider` ya construido: el trabajo resuelve del contenedor sin
-  guardarse una referencia a nada.
+- La acción que declara `SetAction` recibe el `IServiceProvider` ya construido, y resuelve del
+  contenedor sin guardarse una referencia a nada.
 
 ## Por qué el servicio vive en su propia unit
 

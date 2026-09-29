@@ -69,7 +69,7 @@ Encima de eso, las variantes añaden **el borde alrededor del `Run`** — que es
 |---|---|---|
 | Decidir si el proceso llega a arrancar | `SingleInstance(Id)` | CLI |
 | La política de lo que se escapa, y el código de salida | `OnUnhandled(Policy)` | CLI |
-| El trabajo, y su código de salida | `OnExecute` / un `ICliHandler` registrado | CLI |
+| La acción del comando alcanzado, y su código de salida | `SetAction(Action)` / `SetAction(Command, Action)` | CLI |
 | `--version`, `--help`, invocación inválida | `RootCommand`, contestado por el parse | CLI |
 | El servidor HTTP, cableado a DI y al host | `WebApp.AddHttpServer` + `MapControllers` | Web |
 | Crear el formulario principal y entregar el bucle | `Run(TFormClass)` | VCL, FMX |

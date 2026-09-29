@@ -39,7 +39,7 @@ begin
       Result := 7;
     end);
 
-  B.OnExecute(
+  B.SetAction(
     function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
     begin
       var Who := NameOpt.ValueIn(Parsed);

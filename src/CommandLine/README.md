@@ -41,7 +41,10 @@ run time.
 | `IOption<T>` | A named, dashed value — `--file main.pas`. Also the key it is read with |
 | `IArgument<T>` | A **positional** value, identified by its place: `mytool build main.pas` |
 | `TArity` | How many values a symbol admits, minimum and maximum |
-| `ICommandLineParseResult` | What an invocation produced: the leaf reached, the values, the errors, the help, the version |
+| `ICommandLineParseResult` | What an invocation produced: the leaf reached, the values, the errors, the help, the version. `Invoke` runs it |
+| `TCommandAction` | What a command does when an invocation reaches it: receives the parse result, answers the exit code |
+| `TInvocationConfiguration` | Where `Invoke` writes, and whether a default handler catches what the action lets escape |
+| `TCommandLineExit` | The codes `Invoke` answers when the action is not the one deciding |
 | `CommandLine` | The entry point: `Option<T>`, `Argument<T>`, `Command`, `Root` |
 
 ---
@@ -70,7 +73,7 @@ initializer.
 
 | Feature | How |
 |---------|-----|
-| Subcommands, any depth | `Parent.Add(Child)`. A command that only groups requires a leaf to be named |
+| Subcommands, any depth | `Parent.Add(Child)`. A command with subcommands and no action requires a leaf to be named |
 | Positional arguments | `CommandLine.Argument<T>(...)`, bound by position in declaration order |
 | Command aliases | `.WithAlias('b')` — `mytool b native` reaches `mytool build native` |
 | Recursive options | `.Recursive` — declared once, available to every descendant |
@@ -379,6 +382,67 @@ An application that declares its own `--help` or `--version` wins — it is the 
 
 ---
 
+## Each command, its action
+
+A command declares what it does when an invocation reaches it, and the parse result runs it:
+
+```pascal
+var NameOpt := CommandLine.Option<string>('--name', 'Who to greet').WithDefault('world');
+var Greet := CommandLine.Command('greet', 'Say hello').Add(NameOpt).SetAction(
+  function(const Parsed: ICommandLineParseResult): Integer
+  begin
+    Writeln('Hello, ', NameOpt.ValueIn(Parsed));
+    Result := TCommandLineExit.Ok;
+  end);
+
+var Root := CommandLine.Root('greeter', 'Greets people');
+Root.Add(Greet);
+
+var Parsed := Root.Parse;                  // reads ParamStr
+ExitCode := Parsed.Invoke;
+```
+
+The action receives the parse result and reads the values from it like any other code. `Invoke`
+settles the invocation and answers the code the process ends with:
+
+| The parse result | What `Invoke` does | What it answers |
+|---|---|---|
+| asked for `--version` | writes the version to the output | `TCommandLineExit.Ok` (0) |
+| asked for `--help` | writes the help to the output | `Ok` (0) |
+| carries errors | writes them to the error | `InvocationError` (2) |
+| reached a command with an action | runs it | the code the action answers |
+| reached a command without one | nothing | `Ok` (0) |
+
+No action runs in the first three rows.
+
+- An action with no code of its own is a `procedure(const Parsed: ICommandLineParseResult)`, and the
+  invocation answers `Ok` for it.
+- Declaring the action again replaces it.
+- A command with subcommands **and** an action is an invocation of its own: `mytool` alone runs
+  `mytool`'s action. Without one it only groups, and `mytool` alone fails with
+  `Command "mytool" requires a subcommand: …`.
+- `SetAction` answers `ICommand`, so on a root it is a statement, like `Describe`.
+
+### Where it writes, and what it does with an exception
+
+`Invoke(Configuration)` takes a `TInvocationConfiguration`; `Invoke` alone uses its defaults.
+
+| Field | Default | What it says |
+|---|---|---|
+| `Output` | `nil`, the console | where the help and the version are written — any `TTextWriter` |
+| `Error` | `nil`, the console's error | where parse errors and escaped exceptions are written |
+| `EnableDefaultExceptionHandler` | `True` | on, an exception leaving the action is written to `Error` as `EClass: message` and `Invoke` answers `TCommandLineExit.Failure` (1); off, it leaves `Invoke` and the caller sees it |
+
+A `TInvocationConfiguration` declared and never assigned already holds those defaults:
+
+```pascal
+var Configuration: TInvocationConfiguration;
+Configuration.Output := Writer;            // any TTextWriter
+ExitCode := Parsed.Invoke(Configuration);
+```
+
+---
+
 ## Divergences from `System.CommandLine`
 
 **1 · The value is read the other way round.** In .NET you write `result.GetValue(fileOption)`. Here
@@ -404,6 +468,15 @@ and the text. The accepted cost: somebody typing by hand has to write the date t
 reads it. And since Delphi has a single date type, "only a date" and "only a time" are not
 declarable; whoever needs that bounds it with a validation.
 
+**4 · A parse error answers 2, not 1.** .NET answers 1 both to a parse error and to an exception
+nobody caught. Here `Invoke` answers `TCommandLineExit.InvocationError` (2) to an invocation that
+does not fit the grammar, and 1 stays for an action that failed.
+
+**5 · The invocation is synchronous.** There is no asynchronous action, no cancellation and no
+handling of the process termination — no Ctrl+C, no grace period before terminating.
+`TInvocationConfiguration` carries the output, the error and the default exception handler, and
+nothing else.
+
 ---
 
 ## What is not here (yet)
@@ -413,11 +486,7 @@ Nothing below changes the shape of the API, so all of it is additive:
 - **The widths nobody has asked for yet** — `short`, `byte` and the unsigned ones. A type enters when
   somebody asks for it; until then a conversion of its own covers it in one line.
 
-**There is no invocation, and that one is a decision rather than a gap.** `SetAction` / `Invoke` —
-dispatching to the leaf and running a handler — are out. `Daf.CommandLine`
-parses and hands back typed values; what to do with them is the application's decision. The
-`[diagram]` and `[suggest]` directives and shell completion ride on invocation, so they are out with
-it.
+The `[diagram]` and `[suggest]` directives, pre-actions and shell completion are not ported.
 
 ---
 

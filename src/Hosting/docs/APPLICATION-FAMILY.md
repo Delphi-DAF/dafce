@@ -69,7 +69,7 @@ write by hand:
 |---|---|---|
 | Deciding whether the process starts at all | `SingleInstance(Id)` | CLI |
 | The policy for what escapes, and the exit code | `OnUnhandled(Policy)` | CLI |
-| The work, and its exit code | `OnExecute` / a registered `ICliHandler` | CLI |
+| The action of the command reached, and its exit code | `SetAction(Action)` / `SetAction(Command, Action)` | CLI |
 | `--version`, `--help`, invalid invocation | `RootCommand`, answered by the parse | CLI |
 | The HTTP server, wired to DI and the host | `WebApp.AddHttpServer` + `MapControllers` | Web |
 | Creating the main form and handing over the loop | `Run(TFormClass)` | VCL, FMX |

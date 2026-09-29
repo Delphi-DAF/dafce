@@ -41,7 +41,10 @@ en ejecución.
 | `IOption<T>` | Un valor con nombre y guiones —`--file main.pas`—. Y la llave con la que se lee |
 | `IArgument<T>` | Un valor **posicional**, identificado por su sitio: `mitool build main.pas` |
 | `TArity` | Cuántos valores admite un símbolo, mínimo y máximo |
-| `ICommandLineParseResult` | Lo que produjo una invocación: la hoja alcanzada, los valores, los errores, la ayuda, la versión |
+| `ICommandLineParseResult` | Lo que produjo una invocación: la hoja alcanzada, los valores, los errores, la ayuda, la versión. `Invoke` la ejecuta |
+| `TCommandAction` | Lo que hace un comando cuando una invocación lo alcanza: recibe el resultado del parse y devuelve el código de salida |
+| `TInvocationConfiguration` | Dónde escribe `Invoke`, y si un manejador por defecto captura lo que la acción deja escapar |
+| `TCommandLineExit` | Los códigos que devuelve `Invoke` cuando no es la acción quien decide |
 | `CommandLine` | El punto de entrada: `Option<T>`, `Argument<T>`, `Command`, `Root` |
 
 ---
@@ -70,7 +73,7 @@ Root.Add([VerboseOpt, Build]);
 
 | Capacidad | Cómo |
 |-----------|------|
-| Subcomandos, sin límite de profundidad | `Padre.Add(Hijo)`. Un comando que solo agrupa exige que se nombre una hoja |
+| Subcomandos, sin límite de profundidad | `Padre.Add(Hijo)`. Un comando con subcomandos y sin acción exige que se nombre una hoja |
 | Argumentos posicionales | `CommandLine.Argument<T>(...)`, ligados por su sitio en orden de declaración |
 | Alias de comando | `.WithAlias('b')` — `mitool b native` alcanza `mitool build native` |
 | Opciones recursivas | `.Recursive` — declarada una vez, disponible en todos sus descendientes |
@@ -384,6 +387,68 @@ herramienta.
 
 ---
 
+## Cada comando, su acción
+
+Un comando declara lo que hace cuando una invocación lo alcanza, y el resultado del parse lo ejecuta:
+
+```pascal
+var NameOpt := CommandLine.Option<string>('--name', 'Who to greet').WithDefault('world');
+var Greet := CommandLine.Command('greet', 'Say hello').Add(NameOpt).SetAction(
+  function(const Parsed: ICommandLineParseResult): Integer
+  begin
+    Writeln('Hello, ', NameOpt.ValueIn(Parsed));
+    Result := TCommandLineExit.Ok;
+  end);
+
+var Root := CommandLine.Root('greeter', 'Greets people');
+Root.Add(Greet);
+
+var Parsed := Root.Parse;                  // lee ParamStr
+ExitCode := Parsed.Invoke;
+```
+
+La acción recibe el resultado del parse y lee de él los valores como cualquier otro código. `Invoke`
+resuelve la invocación y devuelve el código con el que termina el proceso:
+
+| El resultado del parse | Qué hace `Invoke` | Qué devuelve |
+|---|---|---|
+| pidió `--version` | escribe la versión en la salida | `TCommandLineExit.Ok` (0) |
+| pidió `--help` | escribe la ayuda en la salida | `Ok` (0) |
+| trae errores | los escribe en el error | `InvocationError` (2) |
+| alcanzó un comando con acción | la ejecuta | el código que devuelve la acción |
+| alcanzó un comando sin ella | nada | `Ok` (0) |
+
+En las tres primeras filas no corre ninguna acción.
+
+- Una acción sin código propio es un `procedure(const Parsed: ICommandLineParseResult)`, y la
+  invocación devuelve `Ok` por ella.
+- Declarar la acción otra vez la sustituye.
+- Un comando con subcomandos **y** acción es una invocación por sí mismo: `mitool` a secas ejecuta la
+  acción de `mitool`. Sin ella solo agrupa, y `mitool` a secas falla con
+  `Command "mitool" requires a subcommand: …`.
+- `SetAction` devuelve `ICommand`, así que en una raíz es una sentencia, como `Describe`.
+
+### Dónde escribe, y qué hace con una excepción
+
+`Invoke(Configuration)` recibe una `TInvocationConfiguration`; `Invoke` a secas usa sus valores por
+defecto.
+
+| Campo | Por defecto | Qué dice |
+|---|---|---|
+| `Output` | `nil`, la consola | dónde se escriben la ayuda y la versión — cualquier `TTextWriter` |
+| `Error` | `nil`, el error de la consola | dónde se escriben los errores de parse y las excepciones que se escapan |
+| `EnableDefaultExceptionHandler` | `True` | encendido, una excepción que sale de la acción se escribe en `Error` como `EClase: mensaje` e `Invoke` devuelve `TCommandLineExit.Failure` (1); apagado, sale de `Invoke` y la ve quien llamó |
+
+Una `TInvocationConfiguration` declarada y sin asignar ya lleva esos valores:
+
+```pascal
+var Configuration: TInvocationConfiguration;
+Configuration.Output := Writer;            // cualquier TTextWriter
+ExitCode := Parsed.Invoke(Configuration);
+```
+
+---
+
 ## Divergencias con `System.CommandLine`
 
 **1 · El valor se lee al revés.** En .NET se escribe `result.GetValue(fileOption)`. Aquí,
@@ -409,6 +474,15 @@ opción y el texto. El coste aceptado: quien teclee a mano tiene que escribir la
 máquina. Y como Delphi tiene un solo tipo de fecha, «solo fecha» y «solo hora» no son declarables;
 quien lo necesite lo acota con una validación.
 
+**4 · Un error de parse devuelve 2, no 1.** .NET devuelve 1 tanto a un error de parse como a una
+excepción que nadie capturó. Aquí `Invoke` devuelve `TCommandLineExit.InvocationError` (2) a una
+invocación que no encaja con la gramática, y el 1 queda para una acción que falló.
+
+**5 · La invocación es síncrona.** No hay acción asíncrona, ni cancelación, ni manejo de la
+terminación del proceso —ni Ctrl+C, ni tiempo de gracia antes de terminar—.
+`TInvocationConfiguration` lleva la salida, el error y el manejador de excepciones por defecto, y
+nada más.
+
 ---
 
 ## Lo que todavía no está
@@ -418,10 +492,7 @@ Nada de lo de abajo cambia la forma del API, así que todo es aditivo:
 - **Los anchos que nadie ha pedido todavía** — `short`, `byte` y los sin signo. Un tipo entra cuando
   alguien lo pide; hasta entonces una conversión propia lo cubre en una línea.
 
-**No hay invocación, y esa sí es una decisión y no un hueco.** `SetAction` / `Invoke` —despachar a la
-hoja y ejecutar su handler— quedan fuera. `Daf.CommandLine` parsea y entrega
-valores tipados; qué hacer con ellos lo decide la aplicación. Las directivas `[diagram]` y `[suggest]`
-y el autocompletado van montados sobre la invocación, así que salen con ella.
+Las directivas `[diagram]` y `[suggest]`, las pre-acciones y el autocompletado no se portan.
 
 ---
 

@@ -21,6 +21,7 @@ interface
 
 uses
   System.SysUtils,
+  System.Classes,
   System.TypInfo,
   System.Rtti,
   Daf.CommandLine.Tokens,
@@ -75,6 +76,55 @@ type
   TUntypedValidator = reference to function(const Value: TValue; out Error: string): Boolean;
 
   ICommandLineParseResult = interface;
+
+  /// <summary>
+  ///   What a command does when an invocation reaches it. It receives the parse result, reads the
+  ///   values from it like any other code does, and answers the code the process ends with.
+  /// </summary>
+  TCommandAction = reference to function(const Parsed: ICommandLineParseResult): Integer;
+  /// <summary>An action with no code of its own: the invocation answers <c>TCommandLineExit.Ok</c> for it.</summary>
+  TCommandActionProc = reference to procedure(const Parsed: ICommandLineParseResult);
+
+  /// <summary>The codes an invocation ends with when the action is not the one deciding.</summary>
+  /// <remarks>
+  ///   They are contract with whoever invokes the tool from a script, who reads them and nothing
+  ///   else.
+  ///
+  ///   <c>InvocationError</c> is a declared divergence from .NET, which answers 1 to a parse error,
+  ///   the same code as an exception nobody caught. Here 1 stays for work that failed, and 2 says the
+  ///   invocation does not fit the grammar: a script needs to tell the two apart.
+  /// </remarks>
+  TCommandLineExit = record
+  public
+    const Ok = 0;
+    /// <summary>What the default exception handler answers.</summary>
+    const Failure = 1;
+    /// <summary>The invocation does not fit the declared grammar.</summary>
+    const InvocationError = 2;
+  end;
+
+  /// <summary>Where an invocation writes, and what it does with what the action lets escape.</summary>
+  /// <remarks>
+  ///   A variable declared and never assigned already holds the defaults: the console for both
+  ///   writers, and the default exception handler on, as in .NET.
+  ///
+  ///   There is no process termination and no cancellation -- no Ctrl+C handling, no grace period
+  ///   before terminating. The invocation is synchronous from end to end, like DAF's start-up.
+  /// </remarks>
+  TInvocationConfiguration = record
+  public
+    /// <summary>Where the help and the version are written. <c>nil</c> is the console.</summary>
+    Output: TTextWriter;
+    /// <summary>Where parse errors and escaped exceptions are written. <c>nil</c> is the console's error.</summary>
+    Error: TTextWriter;
+    /// <summary>
+    ///   On, an exception leaving the action is written to <c>Error</c> as <c>Class: Message</c> and
+    ///   the invocation answers <c>TCommandLineExit.Failure</c>. Off, it leaves the invocation and
+    ///   whoever invoked sees it.
+    /// </summary>
+    EnableDefaultExceptionHandler: Boolean;
+    class operator Initialize(out Dest: TInvocationConfiguration);
+  end;
 
   /// <summary>How many values a symbol admits: a minimum and a maximum.</summary>
   /// <remarks>
@@ -223,6 +273,22 @@ type
     ///   composed is stored anywhere, so it cannot drift from what the program accepts.
     /// </summary>
     function HelpText: string;
+    /// <summary>Declares what this command does when an invocation reaches it.</summary>
+    /// <remarks>
+    ///   Declaring it again replaces it, whoever declared the first one, as in .NET, where the
+    ///   action is a property of the command.
+    ///
+    ///   A command with subcommands and an action is an invocation of its own. Without an action
+    ///   it only groups, and the invocation has to name one of its leaves.
+    ///
+    ///   It answers <c>ICommand</c>, so on a root it is called as a statement rather than
+    ///   chained -- the same caveat as <c>Describe</c>.
+    /// </remarks>
+    function SetAction(const Action: TCommandAction): ICommand; overload;
+    /// <summary>The same, for an action with no code of its own: the invocation answers <c>Ok</c>.</summary>
+    function SetAction(const Action: TCommandActionProc): ICommand; overload;
+    /// <summary>The declared action, or <c>nil</c> when there is none.</summary>
+    function Action: TCommandAction;
   end;
 
   IRootCommand = interface(ICommand)
@@ -274,6 +340,19 @@ type
     ///   declared it collects them, because otherwise they are errors instead.
     /// </summary>
     function UnmatchedTokens: TArray<string>;
+    /// <summary>Settles the invocation, writing to the console. See the overload.</summary>
+    function Invoke: Integer; overload;
+    /// <summary>
+    ///   Settles the invocation and answers the code the process ends with. In this order: the
+    ///   version or the help, written to <c>Output</c>, answer <c>Ok</c>; parse errors, written to
+    ///   <c>Error</c>, answer <c>InvocationError</c>; otherwise the action of the command reached
+    ///   runs and its code is the answer -- <c>Ok</c> when the command has none.
+    /// </summary>
+    /// <remarks>
+    ///   Help, version and errors never run an action: asking how the tool works, or getting its
+    ///   syntax wrong, is not an invocation of the work.
+    /// </remarks>
+    function Invoke(const Configuration: TInvocationConfiguration): Integer; overload;
   end;
 
   /// <summary>An option whose value is read back with the very object declared here.</summary>
@@ -567,6 +646,8 @@ type
     function RawOf(const Symbol: ISymbol): TNullable<string>;
     function RawValuesOf(const Symbol: ISymbol): TArray<string>;
     function UnmatchedTokens: TArray<string>;
+    function Invoke: Integer; overload;
+    function Invoke(const Configuration: TInvocationConfiguration): Integer; overload;
     procedure Bind(const Symbol: ISymbol; const Raw: string);
     procedure AddError(const Text: string);
     procedure AddUnmatched(const Token: string);
@@ -581,6 +662,7 @@ type
     FArguments: TArray<IArgument>;
     FSubcommands: TArray<ICommand>;
     FAllowUnmatched: Boolean;
+    FAction: TCommandAction;
     // The path is kept as text, set by the parent when the child is added. A child
     // does NOT hold a reference to its parent: that would be a cycle between counted
     // interfaces, and a cycle is a leak the compiler never mentions.
@@ -601,6 +683,9 @@ type
     function AllowUnmatchedTokens: ICommand;
     function Hidden: ICommand;
     function HelpText: string;
+    function SetAction(const Action: TCommandAction): ICommand; overload;
+    function SetAction(const Action: TCommandActionProc): ICommand; overload;
+    function Action: TCommandAction;
     procedure SetPathPrefix(const Value: string);
   end;
 
@@ -633,6 +718,15 @@ type
     function KnowsShort(const Letter: Char): Boolean;
     function ShortTakesValue(const Letter: Char): Boolean;
   end;
+
+{ TInvocationConfiguration }
+
+class operator TInvocationConfiguration.Initialize(out Dest: TInvocationConfiguration);
+begin
+  Dest.Output := nil;
+  Dest.Error := nil;
+  Dest.EnableDefaultExceptionHandler := True;
+end;
 
 { TArity }
 
@@ -1398,6 +1492,61 @@ begin
   Result := FUnmatched;
 end;
 
+procedure WriteTo(const Writer: TTextWriter; var Console: TextFile; const Text: string);
+begin
+  if Assigned(Writer) then
+    Writer.WriteLine(Text)
+  else
+    Writeln(Console, Text);
+end;
+
+function TParseResult.Invoke: Integer;
+var
+  Configuration: TInvocationConfiguration;
+begin
+  Result := Invoke(Configuration);
+end;
+
+function TParseResult.Invoke(const Configuration: TInvocationConfiguration): Integer;
+var
+  Action: TCommandAction;
+begin
+  if FVersionRequested then
+  begin
+    WriteTo(Configuration.Output, System.Output, VersionInfo.VersionTag(VersionTemplateWithBuild));
+    Exit(TCommandLineExit.Ok);
+  end;
+
+  if FHelpRequested then
+  begin
+    WriteTo(Configuration.Output, System.Output, FHelpText);
+    Exit(TCommandLineExit.Ok);
+  end;
+
+  if not Succeeded then
+  begin
+    WriteTo(Configuration.Error, System.ErrOutput, ErrorText);
+    Exit(TCommandLineExit.InvocationError);
+  end;
+
+  Action := FCommand.Action();
+  if not Assigned(Action) then
+    Exit(TCommandLineExit.Ok);
+
+  if not Configuration.EnableDefaultExceptionHandler then
+    Exit(Action(Self));
+
+  try
+    Result := Action(Self);
+  except
+    on E: Exception do
+    begin
+      WriteTo(Configuration.Error, System.ErrOutput, E.ClassName + ': ' + E.Message);
+      Result := TCommandLineExit.Failure;
+    end;
+  end;
+end;
+
 procedure TParseResult.AddError(const Text: string);
 begin
   FErrors := FErrors + [Text];
@@ -1527,6 +1676,37 @@ end;
 function TCommand.HelpText: string;
 begin
   Result := TCommandLineHelp.Render(Self);
+end;
+
+// Outside the class, so the closure captures the procedure and nothing else: a command holding a
+// closure that holds the command is a cycle between counted references.
+function AsCommandAction(const Action: TCommandActionProc): TCommandAction;
+begin
+  if not Assigned(Action) then
+    Exit(nil);
+  Result :=
+    function(const Parsed: ICommandLineParseResult): Integer
+    begin
+      Action(Parsed);
+      Result := TCommandLineExit.Ok;
+    end;
+end;
+
+function TCommand.SetAction(const Action: TCommandAction): ICommand;
+begin
+  FAction := Action;
+  Result := Self;
+end;
+
+function TCommand.SetAction(const Action: TCommandActionProc): ICommand;
+begin
+  FAction := AsCommandAction(Action);
+  Result := Self;
+end;
+
+function TCommand.Action: TCommandAction;
+begin
+  Result := FAction;
 end;
 
 procedure TCommand.SetPathPrefix(const Value: string);
@@ -1708,6 +1888,7 @@ var
   Known: IKnownTokens;
   Tokens, Expansion: TArray<string>;
   Step: TTokenRewrite;
+  Action: TCommandAction;
 begin
   Outcome := TParseResult.Create;
   Result := Outcome;
@@ -1899,8 +2080,9 @@ begin
     Inc(Index);
   end;
 
-  // A command that only groups is not an invocation of its own.
-  if Length(Current.Subcommands) > 0 then
+  // A command that only groups is not an invocation of its own; one with an action is.
+  Action := Current.Action();
+  if (Length(Current.Subcommands) > 0) and not Assigned(Action) then
     Outcome.AddError(Format('Command "%s" requires a subcommand: %s', [Current.FullPath, NamesOf(Current.Subcommands)]));
 
   // What the invocation had to carry and did not. A declared default satisfies the

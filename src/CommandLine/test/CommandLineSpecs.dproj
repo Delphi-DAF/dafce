@@ -103,6 +103,7 @@
         <DCCReference Include="Help.Feat.pas"/>
         <DCCReference Include="Types.Feat.pas"/>
         <DCCReference Include="Values.Feat.pas"/>
+        <DCCReference Include="Invocation.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>

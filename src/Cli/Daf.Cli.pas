@@ -16,42 +16,40 @@ uses
 
 type
   /// <summary>
-  /// Componer mal la variante: el trabajo declarado de dos formas, o por mas de un ICliHandler.
+  /// Componer mal la variante: declarar en el builder la accion de un comando que ya tiene una.
   /// </summary>
   ECliCompositionError = class(Exception);
 
   /// <summary>
-  /// Los desenlaces que la variante decide por su cuenta. Los demas los devuelve el trabajo.
+  /// Los desenlaces que la variante decide por su cuenta. Los demas los devuelve la accion.
   /// </summary>
   /// <remarks>
   ///   Estan aqui y no repartidos por el codigo porque son contrato con el sistema operativo:
   ///   quien invoca la herramienta desde un script lee ESTO, y un numero cambiado en silencio
-  ///   rompe el script sin romper ninguna compilacion.
+  ///   rompe el script sin romper ninguna compilacion. Los tres primeros son los de la invocacion,
+  ///   y se definen a partir de ellos para que no haya dos literales que puedan divergir.
   /// </remarks>
   TCliExit = record
   public
-    const Ok = 0;
+    const Ok = TCommandLineExit.Ok;
     /// <summary>Lo que devuelve la politica por defecto ante una excepcion no capturada.</summary>
-    const Failure = 1;
+    const Failure = TCommandLineExit.Failure;
     /// <summary>La invocacion no encaja con la gramatica declarada.</summary>
-    const InvocationError = 2;
+    const InvocationError = TCommandLineExit.InvocationError;
     /// <summary>Ya habia otra instancia, y se declaro que solo puede haber una.</summary>
     const AlreadyRunning = 3;
   end;
 
   /// <summary>
-  /// El trabajo, resuelto del contenedor. Se registra como cualquier otro servicio --
-  /// <c>B.Services.AddSingleton&lt;ICliHandler, TMiHandler&gt;</c>-- y no hace falta una via
-  /// de registro propia: la que hay ya sirve. Uno solo: con mas de uno, <c>Build</c> lanza
-  /// <see cref="ECliCompositionError"/>.
+  /// La accion de un comando que necesita servicios: recibe el proveedor del contenedor ya
+  /// arrancado y el resultado del parse, y devuelve el codigo con el que termina el proceso.
   /// </summary>
-  ICliHandler = interface(IInvokable)
-    ['{52B72A0C-07F3-479D-998B-970DBCA7CFD4}']
-    function Execute(const Parsed: ICommandLineParseResult): Integer;
-  end;
-
-  /// <summary>El trabajo escrito en el sitio, para el .dpr que no necesita una clase.</summary>
-  TCliExecuteHandler = reference to function(const Services: IServiceProvider;
+  /// <remarks>
+  ///   El proveedor llega por parametro, y no capturado, porque un cierre que capturase la
+  ///   aplicacion para leer sus Services formaria con ella un ciclo de referencias: la aplicacion
+  ///   sostiene la gramatica, la gramatica la accion, y la accion la aplicacion.
+  /// </remarks>
+  TCliAction = reference to function(const Services: IServiceProvider;
     const Parsed: ICommandLineParseResult): Integer;
 
   /// <summary>
@@ -102,13 +100,29 @@ type
     /// de construir el contenedor: una aplicacion que decide no arrancar no paga por arrancar.
     /// </summary>
     function SingleInstance(const Id: string): ICliApplicationBuilder;
-    /// <summary>La politica que envuelve al Run. Sin ella, LogAndFail.</summary>
-    function OnUnhandled(const Policy: TCliExceptionPolicy): ICliApplicationBuilder;
     /// <summary>
-    /// El trabajo, escrito aqui mismo. Alternativa a registrar un <see cref="ICliHandler"/>;
-    /// declarar los dos es un error de composicion y no una precedencia que haya que recordar.
+    /// La politica que envuelve al Run, y la que decide lo que se escapa de una accion. Sin ella,
+    /// LogAndFail.
     /// </summary>
-    function OnExecute(const Handler: TCliExecuteHandler): ICliApplicationBuilder;
+    function OnUnhandled(const Policy: TCliExceptionPolicy): ICliApplicationBuilder;
+    /// <summary>La accion de la raiz. Ver la sobrecarga.</summary>
+    function SetAction(const Action: TCliAction): ICliApplicationBuilder; overload;
+    /// <summary>
+    /// Declara la accion de un comando que necesita servicios. Corre cuando la invocacion alcanza
+    /// ese comando, con el contenedor ya arrancado.
+    /// </summary>
+    /// <remarks>
+    ///   Se instala en el comando en el acto, asi que un comando con subcomandos y accion declarada
+    ///   aqui es invocable por si mismo.
+    ///
+    ///   Si el comando ya tiene accion, lanza <see cref="ECliCompositionError"/> en el acto: son dos
+    ///   formas de decir lo mismo, y cual gana no es algo que haya que recordar. Un
+    ///   <c>Command.SetAction</c> posterior la sustituye, como sustituye cualquier accion.
+    ///
+    ///   Sin ninguna accion declarada, la aplicacion es sus tareas de arranque y sus servicios
+    ///   alojados, y termina con Ok.
+    /// </remarks>
+    function SetAction(const Command: ICommand; const Action: TCliAction): ICliApplicationBuilder; overload;
 
     function Build: ICliApplication;
   end;
@@ -126,9 +140,15 @@ type
     ['{EEADF167-67E2-4B7A-BB34-12DC35EF412E}']
     function GetServices: IServiceProvider;
     /// <summary>
-    /// Parse, cortocircuitos, trabajo y parada. Devuelve un Integer y no es un detalle: una
-    /// aplicacion CLI que no puede decirle al sistema como termino no sirve en un script.
+    /// Arranca el host, invoca el resultado del parse y para. Devuelve un Integer y no es un
+    /// detalle: una aplicacion CLI que no puede decirle al sistema como termino no sirve en un
+    /// script.
     /// </summary>
+    /// <remarks>
+    ///   La version, la ayuda y los errores de parse los resuelve la invocacion sin arrancar
+    ///   nada. Lo que se escapa de la accion lo decide la politica de <c>OnUnhandled</c>, y no el
+    ///   manejador por defecto de la invocacion.
+    /// </remarks>
     function Run: Integer;
     /// <summary>
     /// El contenedor, o nil si la invocacion se resolvio sin construirlo --otra instancia ya
@@ -138,22 +158,44 @@ type
   end;
 
   TCliApplication = class(TInterfacedObject, ICliApplication)
+  private type
+    /// <summary>
+    /// El proveedor tal como lo ven las acciones declaradas en el builder: lleno mientras el host
+    /// corre, vacio antes y despues.
+    /// </summary>
+    /// <remarks>
+    ///   No apunta ni a la gramatica ni a la aplicacion, y por eso la accion que lo captura no
+    ///   cierra ningun ciclo con ellas.
+    /// </remarks>
+    IServicesSlot = interface
+      function Services: IServiceProvider;
+      procedure Fill(const Value: IServiceProvider);
+      procedure Clear;
+    end;
+
+    TServicesSlot = class(TInterfacedObject, IServicesSlot)
+    private
+      FServices: IServiceProvider;
+    public
+      function Services: IServiceProvider;
+      procedure Fill(const Value: IServiceProvider);
+      procedure Clear;
+    end;
   private
     FHost: IHost;
     FRootCommand: IRootCommand;
     FParsed: ICommandLineParseResult;
     FPolicy: TCliExceptionPolicy;
-    FExecute: TCliExecuteHandler;
+    FSlot: IServicesSlot;
     FSettledCode: Integer;
     FSettled: Boolean;
     FInstanceLock: THandle;
-    function DispatchWork: Integer;
   public
     /// <summary>El punto de entrada de una aplicacion CLI de la familia.</summary>
     class function CreateBuilder(const Args: TArray<string> = nil): ICliApplicationBuilder; static;
     constructor Create(const Host: IHost; const RootCommand: IRootCommand;
       const Parsed: ICommandLineParseResult; const Policy: TCliExceptionPolicy;
-      const Execute: TCliExecuteHandler; const InstanceLock: THandle);
+      const Slot: IServicesSlot; const InstanceLock: THandle);
     constructor CreateSettled(const Code: Integer);
     destructor Destroy; override;
     function GetServices: IServiceProvider;
@@ -170,7 +212,7 @@ type
     FRootCommand: IRootCommand;
     FSingleInstanceId: string;
     FPolicy: TCliExceptionPolicy;
-    FExecute: TCliExecuteHandler;
+    FSlot: TCliApplication.IServicesSlot;
     function GetRootCommand: IRootCommand;
     function GetServices: IServiceCollection;
     function GetConfiguration: IConfigurationManager;
@@ -185,7 +227,8 @@ type
     destructor Destroy; override;
     function SingleInstance(const Id: string): ICliApplicationBuilder;
     function OnUnhandled(const Policy: TCliExceptionPolicy): ICliApplicationBuilder;
-    function OnExecute(const Handler: TCliExecuteHandler): ICliApplicationBuilder;
+    function SetAction(const Action: TCliAction): ICliApplicationBuilder; overload;
+    function SetAction(const Command: ICommand; const Action: TCliAction): ICliApplicationBuilder; overload;
     function Build: ICliApplication;
     property RootCommand: IRootCommand read GetRootCommand;
     property Services: IServiceCollection read GetServices;
@@ -235,7 +278,35 @@ begin
     end;
 end;
 
+{ TCliApplication.TServicesSlot }
+
+function TCliApplication.TServicesSlot.Services: IServiceProvider;
+begin
+  Result := FServices;
+end;
+
+procedure TCliApplication.TServicesSlot.Fill(const Value: IServiceProvider);
+begin
+  FServices := Value;
+end;
+
+procedure TCliApplication.TServicesSlot.Clear;
+begin
+  FServices := nil;
+end;
+
 { TCliApplicationBuilder }
+
+// Fuera de las clases, para que el cierre capture la accion y el soporte y nada mas: ni el builder
+// ni el comando en el que se instala.
+function ServiceAction(const Action: TCliAction; const Slot: TCliApplication.IServicesSlot): TCommandAction;
+begin
+  Result :=
+    function(const Parsed: ICommandLineParseResult): Integer
+    begin
+      Result := Action(Slot.Services, Parsed);
+    end;
+end;
 
 constructor TCliApplicationBuilder.Create(const Args: TArray<string>);
 begin
@@ -248,6 +319,7 @@ begin
 
   FRootCommand := CommandLine.Root(TPath.GetFileNameWithoutExtension(ParamStr(0)));
   FPolicy := ExitPolicy.LogAndFail();
+  FSlot := TCliApplication.TServicesSlot.Create;
 end;
 
 destructor TCliApplicationBuilder.Destroy;
@@ -307,9 +379,18 @@ begin
   Result := Self;
 end;
 
-function TCliApplicationBuilder.OnExecute(const Handler: TCliExecuteHandler): ICliApplicationBuilder;
+function TCliApplicationBuilder.SetAction(const Action: TCliAction): ICliApplicationBuilder;
 begin
-  FExecute := Handler;
+  Result := SetAction(FRootCommand, Action);
+end;
+
+function TCliApplicationBuilder.SetAction(const Command: ICommand; const Action: TCliAction): ICliApplicationBuilder;
+begin
+  var Existing := Command.Action();
+  if Assigned(Existing) then
+    raise ECliCompositionError.CreateFmt('Command "%s" already has an action. Two ways of saying the ' +
+      'same thing is a precedence rule nobody remembers -- keep one.', [Command.FullPath]);
+  Command.SetAction(ServiceAction(Action, FSlot));
   Result := Self;
 end;
 
@@ -329,15 +410,6 @@ end;
 
 function TCliApplicationBuilder.Build: ICliApplication;
 begin
-  if Assigned(FExecute) and FImpl.Services.Contains<ICliHandler> then
-    raise ECliCompositionError.Create('This application declares its work twice: an OnExecute ' +
-      'handler and a registered ICliHandler. Two ways of saying the same thing is a precedence ' +
-      'rule nobody remembers -- keep one.');
-  var Handlers := Length(FImpl.Services.Descriptors<ICliHandler>);
-  if Handlers > 1 then
-    raise ECliCompositionError.CreateFmt('This application registers %d ICliHandler services, and ' +
-      'which one runs would depend on the order of registration -- keep one.', [Handlers]);
-
   // Lo de ANTES del contenedor. Una aplicacion que decide no arrancar termina sin haber
   // construido nada, y lo dice por su codigo de salida.
   var Lock: THandle;
@@ -348,9 +420,9 @@ begin
   // hay razon para levantar un contenedor entero para imprimir una linea.
   var Parsed := FRootCommand.Parse(FArgs);
   if Parsed.VersionRequested or Parsed.HelpRequested or not Parsed.Succeeded then
-    Exit(TCliApplication.Create(nil, FRootCommand, Parsed, FPolicy, FExecute, Lock));
+    Exit(TCliApplication.Create(nil, FRootCommand, Parsed, FPolicy, FSlot, Lock));
 
-  Result := TCliApplication.Create(FImpl.Build, FRootCommand, Parsed, FPolicy, FExecute, Lock);
+  Result := TCliApplication.Create(FImpl.Build, FRootCommand, Parsed, FPolicy, FSlot, Lock);
 end;
 
 { TCliApplication }
@@ -362,14 +434,14 @@ end;
 
 constructor TCliApplication.Create(const Host: IHost; const RootCommand: IRootCommand;
   const Parsed: ICommandLineParseResult; const Policy: TCliExceptionPolicy;
-  const Execute: TCliExecuteHandler; const InstanceLock: THandle);
+  const Slot: IServicesSlot; const InstanceLock: THandle);
 begin
   inherited Create;
   FHost := Host;
   FRootCommand := RootCommand;
   FParsed := Parsed;
   FPolicy := Policy;
-  FExecute := Execute;
+  FSlot := Slot;
   FInstanceLock := InstanceLock;
 end;
 
@@ -398,53 +470,34 @@ begin
     Result := nil;
 end;
 
-function TCliApplication.DispatchWork: Integer;
-begin
-  if Assigned(FExecute) then
-    Exit(FExecute(FHost.Services, FParsed));
-
-  var Handler := FHost.Services.GetService<ICliHandler>;
-  if Assigned(Handler) then
-    Exit(Handler.Execute(FParsed));
-
-  // Ni una cosa ni la otra: la aplicacion es sus tareas de arranque y sus servicios alojados,
-  // que ya han corrido. Es un desenlace valido y no un descuido.
-  Result := TCliExit.Ok;
-end;
-
 function TCliApplication.Run: Integer;
+var
+  Configuration: TInvocationConfiguration;
 begin
   if FSettled then Exit(FSettledCode);
 
-  if FParsed.VersionRequested then
-  begin
-    Writeln(FParsed.VersionInfo.VersionTag(VersionTemplateWithBuild));
-    Exit(TCliExit.Ok);
-  end;
+  // Lo que se escapa de la accion es de la politica: con el manejador de la invocacion puesto, la
+  // politica no veria nunca la excepcion.
+  Configuration.EnableDefaultExceptionHandler := False;
 
-  if FParsed.HelpRequested then
-  begin
-    Writeln(FParsed.HelpText);
-    Exit(TCliExit.Ok);
-  end;
-
-  if not FParsed.Succeeded then
-  begin
-    // Al canal de error, que es donde un script lo espera, y con codigo propio: "la invocacion
-    // no encajaba" no es lo mismo que "el trabajo fallo".
-    Writeln(ErrOutput, FParsed.ErrorText);
-    Exit(TCliExit.InvocationError);
-  end;
+  // Sin host, Build ya vio que el parse pidio la version o la ayuda, o que no encajaba: la
+  // invocacion lo resuelve sin ejecutar ninguna accion.
+  if not Assigned(FHost) then
+    Exit(FParsed.Invoke(Configuration));
 
   FHost.Start;
   try
+    FSlot.Fill(FHost.Services);
     try
-      Result := DispatchWork;
+      Result := FParsed.Invoke(Configuration);
     except
       on E: Exception do
         Result := FPolicy(E, FHost.Services);
     end;
   finally
+    // Antes de parar: el soporte vive lo que vivan los comandos, y el proveedor no debe
+    // sobrevivir a Stop dentro de el.
+    FSlot.Clear;
     FHost.Stop;
     // Stop LIBERA el host: THost es TNoRefCountObject y se hace Free a si mismo al parar. Soltar
     // la referencia aqui no es higiene, es lo que evita que el finalizador del campo llame a

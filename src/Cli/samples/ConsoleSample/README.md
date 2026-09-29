@@ -19,8 +19,8 @@ más configuración y el patrón de opciones.
   **copia** los valores que necesita: `Value` devuelve un objeto crudo cuyo dueño es la opción, así
   que quedárselo y soltar la opción deja un puntero colgando. La otra forma correcta es sostener la
   `IOptions<T>` en un campo.
-- `B.OnExecute` recibe el `IServiceProvider` ya construido y el `ICommandLineParseResult`, y lo que
-  devuelve es el código de salida — `TCliExit.Ok` aquí.
+- La acción que declara `B.SetAction` recibe el `IServiceProvider` ya construido y el
+  `ICommandLineParseResult`, y lo que devuelve es el código de salida — `TCliExit.Ok` aquí.
 - `TActivatorUtilities.CreateInstance<T>` construye un objeto **no contado**: el dueño es quien
   llama. Sin el `Free` se fugan dos cosas, el accesor y la interfaz que sostiene dentro, porque su
   campo no se finaliza nunca.
@@ -43,7 +43,7 @@ La comprobación se hace con un `raise` y no con un `Assert`: con las aserciones
 
 | Fichero | Papel |
 |---|---|
-| `ConsoleSample.dpr` | La composición entera: configuración, registros, `OnExecute` |
+| `ConsoleSample.dpr` | La composición entera: configuración, registros, la acción |
 | `ConsoleSample.AppSettings.pas` | `TAppSettings`, con `{$M+}` para que sus propiedades tengan RTTI |
 | `ConsoleSample.Greeter.pas` | `IGreeter`/`TGreeter`, y el trío `IWrapperImpl`/`IWrapper`/`TWrapperAccessor` |
 | `Files/appsettings.json` | Los valores que acaban en `TAppSettings` |

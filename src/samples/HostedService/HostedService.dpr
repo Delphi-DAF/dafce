@@ -41,7 +41,7 @@ begin
     // El trabajo de esta herramienta es estar levantada hasta que pidan parar, asi que eso es lo
     // que espera aqui. Al volver, Run para el host y con el al worker.
     TShutdownHook.PresCtlCMsg := 'Pulse Ctrl+C para parar el servicio...';
-    B.OnExecute(
+    B.SetAction(
       function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
       begin
         TShutdownHook.WaitForShutdown;

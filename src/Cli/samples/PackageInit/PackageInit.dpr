@@ -20,7 +20,7 @@ begin
     // Llamar a esta funcion, ademas, enlaza su unit: no hace falta un uses de force-link.
     AddLegacyEngine(B.Services);
 
-    B.OnExecute(
+    B.SetAction(
       function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
       begin
         // Si la tarea de arranque no hubiera corrido, esto lanzaria.

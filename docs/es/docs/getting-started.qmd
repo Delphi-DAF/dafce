@@ -68,8 +68,8 @@ uses
   Daf.Configuration.CommandLine,
   Daf.Cli;
 
-// El ejemplo de entrada de una herramienta de linea de comandos: el builder, el trabajo escrito en
-// el sitio, y el codigo de salida que devuelve ese trabajo.
+// El ejemplo de entrada de una herramienta de linea de comandos: el builder, la accion de la raiz
+// escrita en el sitio, y el codigo de salida que devuelve esa accion.
 //
 //   QuickStart  -> 0, saluda
 //
@@ -77,7 +77,7 @@ uses
 begin
   var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
 
-  B.OnExecute(
+  B.SetAction(
     function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
     begin
       Writeln('Hola desde DAF');
@@ -94,7 +94,7 @@ Dos cosas sobre la forma, y las dos se equivocan con facilidad:
   escritos: no hay callback diferido `ConfigureServices`. `TCliApplication.CreateBuilder` devuelve un
   `ICliApplicationBuilder`, cuyo `Build` devuelve el `ICliApplication` cuyo `Run` es el código de salida.
 - `Daf.Extensions.DependencyInjection` está en el `uses` aunque no se registre nada: la firma de
-  `OnExecute` nombra `IServiceProvider`, y Delphi exige que el tipo esté visible para escribirla.
+  la acción nombra `IServiceProvider`, y Delphi exige que el tipo esté visible para escribirla.
 
 ## Añadir un servicio
 
@@ -117,7 +117,7 @@ uses
   ServiceWiring.Greeter in 'ServiceWiring.Greeter.pas';
 
 // Como entra un servicio en una herramienta de linea de comandos: se registra en el builder, que
-// ya esta vivo, y el trabajo lo resuelve del proveedor que recibe.
+// ya esta vivo, y la accion lo resuelve del proveedor que recibe.
 //
 //   ServiceWiring  -> 0, saluda a traves del servicio
 begin
@@ -125,7 +125,7 @@ begin
 
   B.Services.AddSingleton<IGreeter, TGreeter>;
 
-  B.OnExecute(
+  B.SetAction(
     function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
     begin
       Writeln(Services.GetRequiredService<IGreeter>.Greet);
@@ -137,7 +137,7 @@ end.
 ```
 
 - `Services` responde antes de construir nada, así que el `AddSingleton` surte efecto donde está
-  escrito, y `OnExecute` resuelve del proveedor que recibe.
+  escrito, y la acción que declara `SetAction` resuelve del proveedor que recibe.
 - El servicio vive en su propia unit. Un tipo declarado en el `.dpr` no está en la sección
   `interface` de ninguna unit, y resolverlo falla en ejecución con `ENonPublicType`. Es también por
   lo que el programa lleva `{$STRONGLINKTYPES ON}`: sin él el enlazador descarta la RTTI por la que

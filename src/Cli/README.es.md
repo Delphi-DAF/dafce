@@ -58,7 +58,7 @@ begin
       Result := 7;
     end);
 
-  B.OnExecute(
+  B.SetAction(
     function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
     begin
       var Who := NameOpt.ValueIn(Parsed);
@@ -77,7 +77,7 @@ begin
 end.
 ```
 
-`--version`, `--help`, una opción mal escrita y lo que se escape del trabajo ya están resueltos: los
+`--version`, `--help`, una opción mal escrita y lo que se escape de la acción ya están resueltos: los
 tres primeros los contesta la **gramática**, el último lo toma la política declarada, y `Run`
 traduce cada desenlace a un código de salida. Ninguna de esas cuatro líneas se escribe en el
 `.dpr`.
@@ -88,7 +88,7 @@ traduce cada desenlace a un código de salida. Ninguna de esas cuatro líneas se
 
 | Sample | Qué usa |
 |---|---|
-| [`QuickStart`](samples/QuickStart/) | el builder, el trabajo y el código de salida, y nada más |
+| [`QuickStart`](samples/QuickStart/) | el builder, la acción de la raíz y el código de salida, y nada más |
 | [`ServiceWiring`](samples/ServiceWiring/) | lo mismo, más un servicio registrado y resuelto |
 | [`GreetTool`](samples/GreetTool/) | la gramática, `--help`, códigos de salida por política — el bloque de arriba |
 | [`ConsoleSample`](samples/ConsoleSample/) | el estilo inmediato: el entorno compone la ruta del `appsettings.json` antes de construir nada, y `IOptions<T>` llega a un servicio por constructor |
@@ -127,13 +127,41 @@ Esto es lo que la capa añade sobre el host, y lo que cada herramienta de consol
 |---|---|---|
 | `SingleInstance(Id)` | Si el proceso llega a arrancar | **Antes** de construir el contenedor |
 | `OnUnhandled(Policy)` | Qué pasa con lo que se escapa, y con qué código de salida. Sin ella, `ExitPolicy.LogAndFail` | Alrededor del `Run` |
-| `OnExecute(Handler)` | El trabajo, escrito en el sitio | Dentro del `Run` |
-| `ICliHandler` registrado en `Services` | El trabajo, resuelto del contenedor | Dentro del `Run` |
+| `SetAction(Action)` | Lo que hace la raíz | Dentro del `Run` |
+| `SetAction(Command, Action)` | Lo que hace un comando cuando la invocación lo alcanza | Dentro del `Run` |
 | `RootCommand` | La gramática, que parsea `argv` | En el `Build` |
 
-Una aplicación declara su trabajo de una sola forma: con `OnExecute` o registrando **un**
-`ICliHandler`. Si declara las dos, o registra más de un `ICliHandler`, `Build` lanza
-`ECliCompositionError`.
+### Cada comando, su acción
+
+`Run` arranca el host, ejecuta la acción del comando que alcanzó la invocación y para el host; el
+proceso termina con el código que devuelve la acción. La acción recibe el `IServiceProvider` por
+parámetro, junto al resultado del parse:
+
+```pascal
+var Greet := CommandLine.Command('greet', 'Say hello');
+var Farewell := CommandLine.Command('farewell', 'Say goodbye');
+B.RootCommand.Add([Greet, Farewell]);
+
+B.SetAction(Greet,
+  function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+  begin
+    Writeln(Services.GetRequiredService<IGreeter>.Greet);
+    Result := TCliExit.Ok;
+  end);
+```
+
+- `SetAction(Action)` declara la acción de la raíz; `SetAction(Command, Action)`, la de un comando.
+  La acción se instala en el comando en el acto, así que un comando con subcomandos y acción es una
+  invocación por sí mismo.
+- Declarar en el builder la acción de un comando que ya tiene una lanza `ECliCompositionError` en esa
+  llamada. Un `Command.SetAction` escrito después la sustituye, como sustituye cualquier acción.
+- Una aplicación que no declara ninguna acción es sus tareas de arranque y sus servicios alojados, y
+  `Run` devuelve `TCliExit.Ok`.
+- Lo que se escapa de una acción va a la política de `OnUnhandled`.
+
+⚠️ Usa el parámetro `Services`. Una acción que captura la aplicación para leer `App.Services` forma
+con ella un ciclo de referencias —la aplicación sostiene la gramática, la gramática la acción, la
+acción la aplicación— y la aplicación no se libera nunca.
 
 ### Las políticas que vienen de serie
 
@@ -152,7 +180,7 @@ puede derivar de ella para agrupar las suyas.
 
 | Código | Significado |
 |---|---|
-| `TCliExit.Ok` (0) | El trabajo terminó bien, o contestaron `--version` / `--help` |
+| `TCliExit.Ok` (0) | La acción terminó bien, no había ninguna, o contestaron `--version` / `--help` |
 | `TCliExit.Failure` (1) | Lo que devuelve `ExitPolicy.LogAndFail` ante una excepción no capturada |
 | `TCliExit.InvocationError` (2) | La invocación no encaja con la gramática declarada |
 | `TCliExit.AlreadyRunning` (3) | Ya hay otra instancia con ese identificador |
@@ -168,14 +196,12 @@ terminó no sirve en un script.
   la gramática, u otra instancia que ya sostiene el identificador de instancia única.
 - Después de que `Run` haya vuelto, siempre — `Stop` libera el host.
 
-Así que lo que un programa necesite del contenedor una vez corrido el trabajo lo sostiene desde
-dentro del trabajo: `OnExecute` recibe el `IServiceProvider`, y un `ICliHandler` toma sus
-dependencias por constructor.
+Así que lo que un programa necesite del contenedor una vez corrida la acción lo sostiene desde
+dentro de la acción, que recibe el `IServiceProvider`.
 
-Ese `IServiceProvider` es el raíz, y desde él se resuelve también un `ICliHandler`: alrededor del
-trabajo no se abre ningún ámbito. Un servicio Scoped que el trabajo necesite sale de un ámbito que
-abre el propio trabajo —`Services.CreateScope`, o un `IServiceScopeFactory` recibido por
-constructor—; con la validación activa, como en `Development`, pedírselo al proveedor raíz se rechaza.
+Ese `IServiceProvider` es el raíz: alrededor de la acción no se abre ningún ámbito. Un servicio
+Scoped que la acción necesite sale de un ámbito que abre la propia acción —`Services.CreateScope`—;
+con la validación activa, como en `Development`, pedírselo al proveedor raíz se rechaza.
 
 ---
 
@@ -209,8 +235,8 @@ B.RootCommand.AllowUnmatchedTokens;
 | Métodos de extensión (`AddX`, `UseX`) | Métodos del propio record, o fachada `class` | Delphi no tiene métodos de extensión, y solo hay **un** `record helper` visible por tipo — una API fluida repartida entre units se rompe en silencio en cuanto alguien reordena un `uses` |
 | `IHostApplicationBuilder.Metrics` | **No se porta** | No hay pieza equivalente en DAF a la que apuntar |
 | `ConfigureContainer<T>` | **No se porta** | Un método genérico no es expresable en una interfaz de Delphi — no es que se descarte, es que no cabe. Las opciones del proveedor por defecto, que .NET fija a través de él, son `ServiceProviderOptions` |
-| Despacho de handler dentro de `System.CommandLine` | `OnExecute` / `ICliHandler` | `Daf.CommandLine` parsea y no despacha, a propósito: el desenlace de una invocación es un dato |
-| Sin global de aplicación | Igual | En consola no hay ningún `Application` global que el usuario espere: el trabajo recibe el `IServiceProvider` que necesita, y un `ICliHandler` registrado toma sus dependencias por constructor |
+| `Command.SetAction`, cuya acción recibe el `ParseResult` | `B.SetAction(Command, Action)`, cuya acción recibe además el `IServiceProvider` | `System.CommandLine` no tiene host. Aquí el host arranca antes de que corra la acción, y su proveedor llega por parámetro |
+| Sin global de aplicación | Igual | En consola no hay ningún `Application` global que el usuario espere: la acción recibe el `IServiceProvider` que necesita |
 
 La última fila es la que separa esta variante de las de escritorio: **VCL y FMX sí ofrecen un
 global**, porque su plataforma ya tiene uno.

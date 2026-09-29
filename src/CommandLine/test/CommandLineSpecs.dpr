@@ -10,7 +10,8 @@ uses
   Tokens.Feat in 'Tokens.Feat.pas',
   Help.Feat in 'Help.Feat.pas',
   Types.Feat in 'Types.Feat.pas',
-  Values.Feat in 'Values.Feat.pas';
+  Values.Feat in 'Values.Feat.pas',
+  Invocation.Feat in 'Invocation.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

@@ -170,7 +170,7 @@ Feature Command line grammar @commandline @grammar
       end)
 
   .Scenario('A command that only groups is not invocable')
-    .Given('a command that only contains subcommands',
+    .Given('a command that only contains subcommands and declares no action',
       procedure(W: TGrammarWorld)
       begin
         W.BuildGrammar;
@@ -186,6 +186,29 @@ Feature Command line grammar @commandline @grammar
         Expect(W.Parsed.Succeeded).ToBeFalse;
         Expect(W.Parsed.ErrorText).ToContain('requires a subcommand');
         Expect(W.Parsed.ErrorText).ToContain('native');
+      end)
+
+  .Scenario('A command with subcommands and an action is invocable')
+    .Given('a command with subcommands that declares its action',
+      procedure(W: TGrammarWorld)
+      begin
+        W.BuildGrammar;
+        W.Build.SetAction(
+          function(const Parsed: ICommandLineParseResult): Integer
+          begin
+            Result := 0;
+          end);
+      end)
+    .When('an invocation names it and names no leaf',
+      procedure(W: TGrammarWorld)
+      begin
+        W.Parsed := W.Root.Parse(['build']);
+      end)
+    .&Then('the parse succeeds and the command reached is that one',
+      procedure(W: TGrammarWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('');
+        Expect(W.Parsed.Command.FullPath).ToEqual('mytool build');
       end)
 
   .Scenario('A positional argument')

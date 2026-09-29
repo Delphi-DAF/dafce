@@ -12,7 +12,7 @@ uses
   ServiceWiring.Greeter in 'ServiceWiring.Greeter.pas';
 
 // Como entra un servicio en una herramienta de linea de comandos: se registra en el builder, que
-// ya esta vivo, y el trabajo lo resuelve del proveedor que recibe.
+// ya esta vivo, y la accion lo resuelve del proveedor que recibe.
 //
 //   ServiceWiring  -> 0, saluda a traves del servicio
 begin
@@ -20,7 +20,7 @@ begin
 
   B.Services.AddSingleton<IGreeter, TGreeter>;
 
-  B.OnExecute(
+  B.SetAction(
     function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
     begin
       Writeln(Services.GetRequiredService<IGreeter>.Greet);

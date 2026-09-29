@@ -39,7 +39,7 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
 - **Configuration**: `ConfigurationKeyName` — un miembro nombra la clave de configuración por la que se lee, así que una clave que el fichero escribe como `connection-string` llega a una propiedad que Delphi no puede llamar así. Sustituye al nombre del miembro, renombra la sección entera sobre un miembro de tipo objeto, y vale igual para propiedades que para campos
 - **Hosting**: `IStartupTask` y `AddStartupTask<T>` — inicialización que corre una vez al arrancar, con el proveedor ya construido y antes de los `IHostedService`. Si una falla, el arranque aborta
 - **Hosting**: `THost.CreateBuilder` e `IGenericHostBuilder` — el punto de entrada del host genérico, en la forma de la familia: `var Builder := THost.CreateBuilder;`. `THostBuilder.Create` sigue existiendo, y encadenar sobre él sigue fugando la instancia
-- **Application**: La familia de aplicaciones — `TCliApplication` (`Daf.Cli`), `TVclApplication` (`Daf.VCL`), `TFmxApplication` (`Daf.FMX`) y `TWebApplication` (`Daf.Web`): el mismo arranque hasta que la plataforma toma el bucle, y alrededor de `Run` el código de salida y los metadatos de versión. FMX no añade targets: siguen siendo Win32 y Win64
+- **Application**: La familia de aplicaciones — `TCliApplication` (`Daf.Cli`), `TVclApplication` (`Daf.VCL`), `TFmxApplication` (`Daf.FMX`) y `TWebApplication` (`Daf.Web`): el mismo arranque hasta que la plataforma toma el bucle, y alrededor de `Run` el código de salida y los metadatos de versión. La variante CLI ejecuta la acción del comando alcanzado, declarada con `B.SetAction`. FMX no añade targets: siguen siendo Win32 y Win64
 - **MiniSpec**: `TSpecRun` — una ejecución con suite, contexto, inyector y runner propios, lanzable dentro de otra sin alterar sus recuentos ni su informe
 - **MiniSpec**: `--allow-undefined` — un step undefined deja de fijar el código de salida; `MiniSpec.AllowUndefined(True)` lo declara en la suite. Por defecto rompe
 - **MiniSpec**: `SpecContext.ScenarioContext` devuelve el World del escenario, y un `[MiniInject]` de su tipo lo recibe
@@ -53,7 +53,7 @@ Los cambios que rompen compilación están recogidos, con su diff de ejemplo, en
   - `TNullable<T>` en `Daf.Nullable`
   - `TDeferredEnumerable<T>` y `TGeneratorEnumerator<T>` en `Daf.Enumerable`
   - `Daf.Comparers` — comparadores conscientes de NULL para `TValue` y `TNullable<T>`
-- **Daf.CommandLine**: Módulo nuevo — porting de `System.CommandLine` de .NET, con `--version` y un `--help` que `TCommandLineHelp` compone desde la gramática
+- **Daf.CommandLine**: Módulo nuevo — porting de `System.CommandLine` de .NET, con `--version`, un `--help` que `TCommandLineHelp` compone desde la gramática, y la invocación: cada comando declara su acción con `SetAction`, e `Invoke` ejecuta la del comando alcanzado. Un error de parse sale con 2, no con 1
 - **Daf.Linq**: Módulo nuevo — el equivalente de LINQ-to-Objects: secuencias perezosas sobre `System.IEnumerable<T>`, con `TQuery<T>` y `Linq.From<T>`
 - **Daf.Specification**: Módulo nuevo — el patrón Specification: `TSpecification<T>` reúne filtro, orden y paginación en una regla reutilizable y afirmable sin base de datos, con `IRepository<T>` como puerto
 - **SQLCute.InMemory**: Módulo nuevo — segundo back-end: `TInMemory` ejecuta un `IQuery` sobre colecciones cargadas —JOINs, GROUP BY, subconsultas, operaciones de conjunto— con semántica ANSI de NULL

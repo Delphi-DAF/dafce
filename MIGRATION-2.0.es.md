@@ -286,10 +286,10 @@ Es el frente más grande de 2.0 para cualquier cosa que tuviera un `.dpr`.
   de aplicación a propósito.
 
   La parte de método plantilla de `TDafApplication` —`AppClass`, el `Create(Host)` virtual,
-  `Execute` y `VersionInfo`— no tiene equivalente en las variantes. En CLI el trabajo es
-  `OnExecute` o un `ICliHandler` registrado; lo que corría a su alrededor es una tarea de arranque
-  (`AddStartupTask<T>`) o un servicio alojado; y la versión es un atributo `[Version]` sobre
-  cualquier clase.
+  `Execute` y `VersionInfo`— no tiene equivalente en las variantes. En CLI el trabajo es la acción
+  de la raíz, declarada con `B.SetAction`, que recibe el `IServiceProvider`; lo que corría a su
+  alrededor es una tarea de arranque (`AddStartupTask<T>`) o un servicio alojado; y la versión es un
+  atributo `[Version]` sobre cualquier clase.
 
 - **`Daf.Application.Version` se muda a `Daf.Commons`.** Añade `Daf.Commons` a `requires` si usabas
   `TVersionInfo` y no lo tenías ya. Y cambian dos cosas:

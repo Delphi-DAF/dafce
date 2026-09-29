@@ -41,7 +41,7 @@ begin
   ConfigOptions.Bind<TAppSettings>(B.Services, B.Configuration as IConfiguration);
   B.Services.AddSingleton<IGreeter, TGreeter>;
 
-  B.OnExecute(
+  B.SetAction(
     function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
     begin
       Services.GetService<IGreeter>.Greet;

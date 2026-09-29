@@ -58,7 +58,7 @@ begin
       Result := 7;
     end);
 
-  B.OnExecute(
+  B.SetAction(
     function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
     begin
       var Who := NameOpt.ValueIn(Parsed);
@@ -77,7 +77,7 @@ begin
 end.
 ```
 
-`--version`, `--help`, a mistyped option and whatever escapes the work are already covered: the
+`--version`, `--help`, a mistyped option and whatever escapes the action are already covered: the
 **grammar** answers the first three, the declared policy takes the last, and `Run` turns each
 outcome into an exit code. None of those four lines is written in the `.dpr`.
 
@@ -87,7 +87,7 @@ outcome into an exit code. None of those four lines is written in the `.dpr`.
 
 | Sample | What it uses |
 |---|---|
-| [`QuickStart`](samples/QuickStart/) | the builder, the work, the exit code — nothing else |
+| [`QuickStart`](samples/QuickStart/) | the builder, the root's action, the exit code — nothing else |
 | [`ServiceWiring`](samples/ServiceWiring/) | the same, plus a service registered and resolved |
 | [`GreetTool`](samples/GreetTool/) | the grammar, `--help`, exit codes by policy — the block above |
 | [`ConsoleSample`](samples/ConsoleSample/) | the immediate style: the environment composes the settings path before anything is built, and `IOptions<T>` reaches a service by constructor |
@@ -126,13 +126,42 @@ This is what the layer adds over the host, and what every console tool used to r
 |---|---|---|
 | `SingleInstance(Id)` | Whether the process starts at all | **Before** the container is built |
 | `OnUnhandled(Policy)` | What happens to what escapes, and with which exit code. Without it, `ExitPolicy.LogAndFail` | Around `Run` |
-| `OnExecute(Handler)` | The work, written in place | Inside `Run` |
-| `ICliHandler` registered in `Services` | The work, resolved from the container | Inside `Run` |
+| `SetAction(Action)` | What the root does | Inside `Run` |
+| `SetAction(Command, Action)` | What a command does when the invocation reaches it | Inside `Run` |
 | `RootCommand` | The grammar that parses `argv` | At `Build` |
 
-An application declares its work in a single way: `OnExecute`, or **one** registered `ICliHandler`.
-If it declares both, or registers more than one `ICliHandler`, `Build` raises
-`ECliCompositionError`.
+### Each command, its action
+
+`Run` starts the host, runs the action of the command the invocation reached, and stops the host; the
+process ends with the code the action answers. The action receives the `IServiceProvider` as a
+parameter, next to the parse result:
+
+```pascal
+var Greet := CommandLine.Command('greet', 'Say hello');
+var Farewell := CommandLine.Command('farewell', 'Say goodbye');
+B.RootCommand.Add([Greet, Farewell]);
+
+B.SetAction(Greet,
+  function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+  begin
+    Writeln(Services.GetRequiredService<IGreeter>.Greet);
+    Result := TCliExit.Ok;
+  end);
+```
+
+- `SetAction(Action)` declares the root's action; `SetAction(Command, Action)`, a command's. The
+  action is installed on the command there and then, so a command with subcommands and an action is
+  an invocation of its own.
+- Declaring in the builder the action of a command that already has one raises
+  `ECliCompositionError` at that call. A `Command.SetAction` written afterwards replaces it, as it
+  replaces any action.
+- An application that declares no action is its startup tasks and its hosted services, and `Run`
+  answers `TCliExit.Ok`.
+- What escapes an action goes to the `OnUnhandled` policy.
+
+⚠️ Use the `Services` parameter. An action that captures the application to read `App.Services`
+forms a reference cycle with it — the application holds the grammar, the grammar the action, the
+action the application — and the application is never released.
 
 ### The policies that come as standard
 
@@ -151,7 +180,7 @@ from it to group its own.
 
 | Code | Meaning |
 |---|---|
-| `TCliExit.Ok` (0) | The work succeeded, or `--version` / `--help` answered |
+| `TCliExit.Ok` (0) | The action succeeded, there was none, or `--version` / `--help` answered |
 | `TCliExit.Failure` (1) | What `ExitPolicy.LogAndFail` returns for an unhandled exception |
 | `TCliExit.InvocationError` (2) | The invocation does not fit the declared grammar |
 | `TCliExit.AlreadyRunning` (3) | Another instance holds the declared single-instance id |
@@ -167,13 +196,11 @@ how it ended is not usable in a script.
   fit the grammar, or another instance already holding the single-instance id.
 - After `Run` has returned, always — `Stop` releases the host.
 
-So whatever a program needs from the container once the work has run, it keeps from inside the work:
-`OnExecute` receives the `IServiceProvider`, and an `ICliHandler` takes its dependencies by
-constructor.
+So whatever a program needs from the container once the action has run, it keeps from inside the
+action, which receives the `IServiceProvider`.
 
-That `IServiceProvider` is the root one, and an `ICliHandler` is resolved from it too: no scope is
-opened around the work. A Scoped service the work needs comes from a scope the work opens —
-`Services.CreateScope`, or an `IServiceScopeFactory` taken by constructor —; with the validation on,
+That `IServiceProvider` is the root one: no scope is opened around the action. A Scoped service the
+action needs comes from a scope the action opens — `Services.CreateScope` —; with the validation on,
 as it is in `Development`, asking the root provider for it is rejected.
 
 ---
@@ -209,8 +236,8 @@ B.RootCommand.AllowUnmatchedTokens;
 | Extension methods (`AddX`, `UseX`) | Methods of the record, or a `class` facade | Delphi has no extension methods, and only **one** `record helper` is visible per type — a fluent API spread over units breaks silently when a `uses` is reordered |
 | `IHostApplicationBuilder.Metrics` | **Not ported** | There is no equivalent piece in DAF to point at |
 | `ConfigureContainer<T>` | **Not ported** | A generic method is not expressible in a Delphi interface — not rejected, unrepresentable. The default provider's options, which .NET sets through it, are `ServiceProviderOptions` |
-| Handler dispatch inside `System.CommandLine` | `OnExecute` / `ICliHandler` | `Daf.CommandLine` parses and does not dispatch, on purpose: the outcome of an invocation is data |
-| No app-global | Same | In console there is no `Application` global the user expects: the work receives the `IServiceProvider` it needs, and a registered `ICliHandler` takes its dependencies by constructor |
+| `Command.SetAction`, whose action receives the `ParseResult` | `B.SetAction(Command, Action)`, whose action also receives the `IServiceProvider` | `System.CommandLine` has no host. Here the host starts before the action runs and its provider arrives as a parameter |
+| No app-global | Same | In console there is no `Application` global the user expects: the action receives the `IServiceProvider` it needs |
 
 The last row is the one that separates this variant from the desktop ones: **VCL and FMX do offer a
 global**, because their platform already has one.

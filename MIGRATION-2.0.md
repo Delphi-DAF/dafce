@@ -284,9 +284,10 @@ This is the largest front of 2.0 for anything that had a `.dpr`.
   application global on purpose.
 
   The template-method side of `TDafApplication` —`AppClass`, the virtual `Create(Host)`, `Execute`
-  and `VersionInfo`— has no counterpart in the variants. In CLI the work is `OnExecute` or a
-  registered `ICliHandler`; what ran around it is a startup task (`AddStartupTask<T>`) or a hosted
-  service; and the version is a `[Version]` attribute on any class.
+  and `VersionInfo`— has no counterpart in the variants. In CLI the work is the root's action,
+  declared with `B.SetAction`, which receives the `IServiceProvider`; what ran around it is a startup
+  task (`AddStartupTask<T>`) or a hosted service; and the version is a `[Version]` attribute on any
+  class.
 
 - **`Daf.Application.Version` moved to `Daf.Commons`.** Add `Daf.Commons` to `requires` if you used
   `TVersionInfo` and did not already. Two things changed in it:

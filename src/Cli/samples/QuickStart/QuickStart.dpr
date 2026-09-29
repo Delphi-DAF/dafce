@@ -8,8 +8,8 @@ uses
   Daf.Configuration.CommandLine,
   Daf.Cli;
 
-// El ejemplo de entrada de una herramienta de linea de comandos: el builder, el trabajo escrito en
-// el sitio, y el codigo de salida que devuelve ese trabajo.
+// El ejemplo de entrada de una herramienta de linea de comandos: el builder, la accion de la raiz
+// escrita en el sitio, y el codigo de salida que devuelve esa accion.
 //
 //   QuickStart  -> 0, saluda
 //
@@ -17,7 +17,7 @@ uses
 begin
   var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
 
-  B.OnExecute(
+  B.SetAction(
     function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
     begin
       Writeln('Hola desde DAF');

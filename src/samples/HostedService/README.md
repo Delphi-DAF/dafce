@@ -21,17 +21,17 @@ los dos, así que no hay módulo bajo el que archivarlo.
 - **Ámbitos de log anidados**: `BeginScope('working with guid {guid}', […])` envuelve el bucle
   entero, y dentro `BeginScope('scope {number}', [Idx], procedure …)` envuelve cada vuelta.
 
-## El trabajo declarado es esperar
+## La acción de la raíz es esperar
 
-Una aplicación CLI puede no declarar trabajo, y para `TCliApplication` eso es un desenlace válido: la
-aplicación *son* sus tareas de arranque y sus servicios alojados. Pero entonces `Run` arranca el
-host, no encuentra trabajo y lo para, y como el apagado señaliza `ApplicationStopping` antes de
-llamar a `Stop`, **un servicio alojado no llega a dar una vuelta**. Por eso este `.dpr` declara su
-trabajo, y su trabajo es esperar:
+Una aplicación CLI puede no declarar ninguna acción, y para `TCliApplication` eso es un desenlace
+válido: la aplicación *son* sus tareas de arranque y sus servicios alojados. Pero entonces `Run`
+arranca el host, no encuentra acción y lo para, y como el apagado señaliza `ApplicationStopping` antes de
+llamar a `Stop`, **un servicio alojado no llega a dar una vuelta**. Por eso este `.dpr` declara la
+acción de la raíz, y lo que hace es esperar:
 
 ```pascal
 TShutdownHook.PresCtlCMsg := 'Pulse Ctrl+C para parar el servicio...';
-B.OnExecute(
+B.SetAction(
   function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
   begin
     TShutdownHook.WaitForShutdown;
@@ -54,7 +54,7 @@ INFO [HostedWorker.THostedWorker] I'm working at [12:17:07] ... | scope 2 | work
 ```
 
 Ctrl+C libera la espera: el worker avisa por su registro en `ApplicationStopping`, `Stop` espera a
-que su tarea termine y el `OnExecute` devuelve `TCliExit.Ok`. ⚠️ El gancho atiende **Ctrl+C** y nada
+que su tarea termine y la acción devuelve `TCliExit.Ok`. ⚠️ El gancho atiende **Ctrl+C** y nada
 más: cerrar la ventana de la consola no recorre esa parada.
 
 ## Ejecutar
