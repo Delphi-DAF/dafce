@@ -23,6 +23,25 @@ type
     function Greet: string;
   end;
 
+  TLoudGreeter = class(TInterfacedObject, IGreeter)
+  public
+    function Greet: string;
+  end;
+
+  IParsedEcho = interface(IInvokable)
+    ['{E2B7A415-3C9D-4F08-8B61-5D2F7C0A9E13}']
+    function Parsed: ICommandLineParseResult;
+  end;
+
+  /// Un trabajo que recibe sus dependencias por constructor, entre ellas el resultado del parse.
+  TParsedEcho = class(TInterfacedObject, IParsedEcho)
+  private
+    FParsed: ICommandLineParseResult;
+  public
+    constructor Create(const Parsed: ICommandLineParseResult);
+    function Parsed: ICommandLineParseResult;
+  end;
+
   IWelcome = interface(IInvokable)
     ['{3D0A8E27-5B1C-4F6E-9A42-7C1E0B9D5F31}']
     function Welcome: string;
@@ -75,6 +94,9 @@ type
   /// a ejecutar la accion para tener algo que dejar escrito, y entonces lo que el Then compara
   /// es la cadena que el propio montaje acaba de componer, no el comportamiento.
   TCliWorld = class
+  strict private
+    FContentRoot: string;
+    FAmbientContentRoot: string;
   public
     Builder: ICliApplicationBuilder;
     App: ICliApplication;
@@ -95,19 +117,40 @@ type
     PolicySaw: string;
     CountedBase: Integer;
     CountedDuring: Integer;
+    Loud: IOption<Boolean>;
+    ConfigFile: string;
+    /// Lo que llego al canal de arranque durante Invoke.
+    Reported: string;
+    ActionRan: Boolean;
+    /// El codigo de la segunda instancia, la que arranca mientras corre la primera.
+    SecondExit: Integer;
     constructor Create;
+    destructor Destroy; override;
+    /// Un appsettings.json que no se puede leer, en la raiz de contenido del host. Llega por
+    /// DAF_CONTENTROOT y no por argumento: un argumento que la gramatica no declara es una
+    /// invocacion que no encaja.
+    procedure WriteBrokenHostConfig;
+    /// Compone con una accion, construye y ejecuta, como lo haria el .dpr, con el canal de
+    /// arranque recogido en Reported. Devuelve el mensaje de lo que se escapo, o NoEscape.
+    function Invoke(const Args: TArray<string>; const ReadsConfiguration: Boolean): string;
   end;
 
 implementation
 
 uses
+  Winapi.Windows,
   System.Rtti,
   System.TypInfo,
   System.SyncObjs,
+  System.IOUtils,
   Daf.MiniSpec,
   Daf.Extensions.Configuration,
   Daf.Configuration.CommandLine,
   Daf.Extensions.Logging;
+
+const
+  NoEscape = '<nada>';
+  ContentRootVar = 'DAF_CONTENTROOT';
 
 var
   Log: string;
@@ -115,6 +158,22 @@ var
 function TGreeter.Greet: string;
 begin
   Result := 'hello';
+end;
+
+function TLoudGreeter.Greet: string;
+begin
+  Result := 'HELLO';
+end;
+
+constructor TParsedEcho.Create(const Parsed: ICommandLineParseResult);
+begin
+  inherited Create;
+  FParsed := Parsed;
+end;
+
+function TParsedEcho.Parsed: ICommandLineParseResult;
+begin
+  Result := FParsed;
 end;
 
 constructor TWelcome.Create(const Greeter: IGreeter);
@@ -173,6 +232,33 @@ constructor TCliWorld.Create;
 begin
   inherited;
   ExitCode := -1;
+  SecondExit := -1;
+end;
+
+destructor TCliWorld.Destroy;
+begin
+  if FContentRoot <> '' then
+  begin
+    var VarName: string := ContentRootVar;
+    if FAmbientContentRoot <> '' then
+      Winapi.Windows.SetEnvironmentVariable(PChar(VarName), PChar(FAmbientContentRoot))
+    else
+      Winapi.Windows.SetEnvironmentVariable(PChar(VarName), nil);
+    TDirectory.Delete(FContentRoot, True);
+  end;
+  inherited;
+end;
+
+procedure TCliWorld.WriteBrokenHostConfig;
+begin
+  FContentRoot := TPath.Combine(TPath.GetTempPath, 'daf-cli-hostcfg-' + TGuid.NewGuid.ToString);
+  TDirectory.CreateDirectory(FContentRoot);
+  ConfigFile := TPath.Combine(FContentRoot, 'appsettings.json');
+  TFile.WriteAllText(ConfigFile, '{ this is not json');
+
+  var VarName: string := ContentRootVar;
+  FAmbientContentRoot := System.SysUtils.GetEnvironmentVariable(VarName);
+  Winapi.Windows.SetEnvironmentVariable(PChar(VarName), PChar(FContentRoot));
 end;
 
 /// Busca un acceso global: cualquier metodo de clase que devuelva la aplicacion o su proveedor
@@ -245,6 +331,62 @@ begin
     for var Each in Saved do
       BootstrapLog.AddSink(Each);
   end;
+end;
+
+function TCliWorld.Invoke(const Args: TArray<string>; const ReadsConfiguration: Boolean): string;
+begin
+  var Sink := TLinesSink.Create;
+  var Keep: IBootstrapSink := Sink;
+  var Saved := BootstrapLog.Sinks;
+  BootstrapLog.ClearSinks;
+  BootstrapLog.AddSink(Keep);
+  try
+    try
+      Builder := TCliApplication.CreateBuilder(Args);
+      if ReadsConfiguration then
+        Builder.Configuration.Exists('Db:Server');
+      Builder.SetAction(
+        function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+        begin
+          ActionRan := True;
+          Result := TCliExit.Ok;
+        end);
+      App := Builder.Build;
+      ExitCode := App.Run;
+      Result := NoEscape;
+    except
+      on E: Exception do Result := E.Message;
+    end;
+  finally
+    Reported := Sink.Lines;
+    BootstrapLog.ClearSinks;
+    for var Each in Saved do
+      BootstrapLog.AddSink(Each);
+  end;
+end;
+
+/// Una aplicacion cuya accion arranca una segunda igual mientras corre, las dos con el mismo
+/// identificador de instancia unica si se da uno.
+function NestedInstances(const W: TCliWorld; const Id: string): ICliApplicationBuilder;
+begin
+  Result := TCliApplication.CreateBuilder;
+  if Id <> '' then
+    Result.SingleInstance(Id);
+  Result.SetAction(
+    function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+    begin
+      var Second := TCliApplication.CreateBuilder;
+      if Id <> '' then
+        Second.SingleInstance(Id);
+      Second.SetAction(
+        function(const SecondServices: IServiceProvider; const SecondParsed: ICommandLineParseResult): Integer
+        begin
+          W.Report := 'corrio';
+          Result := TCliExit.Ok;
+        end);
+      W.SecondExit := Second.Build.Run;
+      Result := TCliExit.Ok;
+    end);
 end;
 
 // --- Feature definition ---
@@ -680,6 +822,90 @@ Feature La variante CLI de la familia @cli @application-family
           .ToEqual('0/True');
       end)
 
+  .Scenario('Sin instancia unica declarada, corren varias a la vez')
+    .Given('una aplicacion sin instancia unica, cuya accion arranca una segunda igual mientras corre',
+      procedure(W: TCliWorld)
+      begin
+        W.Report := '<no corrio>';
+        W.Builder := NestedInstances(W, '');
+      end)
+    .When('se ejecuta la primera',
+      procedure(W: TCliWorld)
+      begin
+        W.App := W.Builder.Build;
+        W.ExitCode := W.App.Run;
+      end)
+    .&Then('la segunda ejecuta su accion y termina bien',
+      procedure(W: TCliWorld)
+      begin
+        Expect(Format('segunda=%d %s', [W.SecondExit, W.Report])).ToEqual('segunda=0 corrio');
+      end)
+
+  // El control del anterior: la misma pareja, declarando instancia unica.
+  .Scenario('Con instancia unica declarada, la segunda no arranca mientras corre la primera')
+    .Given('la misma aplicacion, con las dos instancias declaradas con el mismo identificador',
+      procedure(W: TCliWorld)
+      begin
+        W.Report := '<no corrio>';
+        W.Builder := NestedInstances(W, 'daf-cli-spec-nested');
+      end)
+    .When('se ejecuta la primera',
+      procedure(W: TCliWorld)
+      begin
+        W.App := W.Builder.Build;
+        W.ExitCode := W.App.Run;
+      end)
+    .&Then('la segunda termina sin ejecutar su accion, con el codigo de que ya habia otra',
+      procedure(W: TCliWorld)
+      begin
+        Expect(Format('segunda=%d %s', [W.SecondExit, W.Report]))
+          .ToEqual(Format('segunda=%d <no corrio>', [TCliExit.AlreadyRunning]));
+      end)
+
+  .Scenario('Una construccion que falla suelta el cerrojo')
+    .Given('una aplicacion con instancia unica cuya construccion fallo',
+      procedure(W: TCliWorld)
+      begin
+        var First := TCliApplication.CreateBuilder;
+        First.SingleInstance('daf-cli-spec-failed');
+        First.Services.AddSingleton<IWelcome, TWelcome>;
+        First.ServiceProviderOptions := TServiceProviderOptions.Create(True, True);
+        var Saved := BootstrapLog.Sinks;
+        BootstrapLog.ClearSinks;
+        try
+          try
+            First.Build;
+            W.PolicySaw := '<construyo sin protestar>';
+          except
+            on E: Exception do W.PolicySaw := '';
+          end;
+        finally
+          for var Sink in Saved do
+            BootstrapLog.AddSink(Sink);
+        end;
+      end)
+    .When('arranca una segunda con el mismo identificador',
+      procedure(W: TCliWorld)
+      begin
+        W.Report := '<no corrio>';
+        W.Builder := TCliApplication.CreateBuilder;
+        W.Builder.SingleInstance('daf-cli-spec-failed');
+        W.Builder.SetAction(
+          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          begin
+            W.Report := 'corrio';
+            Result := TCliExit.Ok;
+          end);
+        W.App := W.Builder.Build;
+        W.ExitCode := W.App.Run;
+      end)
+    .&Then('la segunda ejecuta su accion y termina bien',
+      procedure(W: TCliWorld)
+      begin
+        // PolicySaw es el control de que la primera construccion fallo de verdad.
+        Expect(Format('exit=%d %s%s', [W.ExitCode, W.Report, W.PolicySaw])).ToEqual('exit=0 corrio');
+      end)
+
   .Scenario('Una invocacion que no encaja tiene su texto y su codigo')
     .Given('una invocacion con un token que la gramatica no reconoce',
       procedure(W: TCliWorld)
@@ -696,6 +922,153 @@ Feature La variante CLI de la familia @cli @application-family
       procedure(W: TCliWorld)
       begin
         Expect(W.ExitCode).ToEqual(2);
+      end)
+
+.Rule('La gramatica contesta antes de que se cargue la configuracion')
+
+  .Scenario('La ayuda contesta con un fichero de configuracion roto')
+    .Given('un appsettings.json que no se puede leer en la raiz de contenido del host',
+      procedure(W: TCliWorld)
+      begin
+        W.WriteBrokenHostConfig;
+      end)
+    .When('se invoca pidiendo la ayuda, con una composicion que no lee la configuracion',
+      procedure(W: TCliWorld)
+      begin
+        W.Report := W.Invoke(['--help'], False);
+      end)
+    .&Then('la responde y termina bien',
+      procedure(W: TCliWorld)
+      begin
+        Expect(Format('exit=%d escapo=%s', [W.ExitCode, W.Report]))
+          .ToEqual('exit=0 escapo=' + NoEscape);
+      end)
+
+  .Scenario('La ayuda contesta aunque la composicion haya leido la configuracion')
+    .Given('un appsettings.json que no se puede leer en la raiz de contenido del host',
+      procedure(W: TCliWorld)
+      begin
+        W.WriteBrokenHostConfig;
+      end)
+    .When('se invoca pidiendo la ayuda, con una composicion que lee la configuracion',
+      procedure(W: TCliWorld)
+      begin
+        W.Report := W.Invoke(['--help'], True);
+      end)
+    .&Then('la responde y termina bien',
+      procedure(W: TCliWorld)
+      begin
+        Expect(Format('exit=%d escapo=%s', [W.ExitCode, W.Report]))
+          .ToEqual('exit=0 escapo=' + NoEscape);
+      end)
+    .&And('el fallo del fichero quedo informado por el canal de arranque',
+      procedure(W: TCliWorld)
+      begin
+        Expect(W.Reported).ToContain(W.ConfigFile);
+      end)
+
+  // Es verde tambien antes de que la carga se aplace --falla al crear el builder--, asi que lo que
+  // lo sostiene es que el mensaje nombre el fichero y que la accion no haya corrido.
+  .Scenario('Una accion no corre sobre una configuracion rota')
+    .Given('un appsettings.json que no se puede leer en la raiz de contenido del host',
+      procedure(W: TCliWorld)
+      begin
+        W.WriteBrokenHostConfig;
+      end)
+    .When('se invoca de modo que llega a la accion',
+      procedure(W: TCliWorld)
+      begin
+        W.Report := W.Invoke([], False);
+      end)
+    .&Then('la construccion falla nombrando el fichero',
+      procedure(W: TCliWorld)
+      begin
+        Expect(W.Report).ToContain(W.ConfigFile);
+      end)
+    .&And('la accion no corre',
+      procedure(W: TCliWorld)
+      begin
+        Expect(BoolToStr(W.ActionRan, True)).ToEqual('False');
+      end)
+
+.Rule('El resultado del parse esta en el contenedor')
+
+  .Scenario('Un trabajo recibe el resultado del parse por constructor')
+    .Given('un servicio cuyo constructor pide el resultado del parse',
+      procedure(W: TCliWorld)
+      begin
+        W.Builder := TCliApplication.CreateBuilder;
+        W.Builder.Services.AddSingleton<IParsedEcho, TParsedEcho>;
+        W.Builder.OnUnhandled(
+          function(const E: Exception; const Services: IServiceProvider): Integer
+          begin
+            W.PolicySaw := E.Message;
+            Result := TCliExit.Failure;
+          end);
+        W.Builder.SetAction(
+          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          begin
+            // Sin un constructor que el contenedor pueda satisfacer, el activador construye con el
+            // del ancestro, y el servicio queda sin resultado: eso no es lo mismo que otro.
+            var Echoed := Services.GetRequiredService<IParsedEcho>.Parsed;
+            if Echoed = nil then
+              W.Report := 'sin resultado'
+            else
+              W.Report := IfThen((Echoed as IInterface) = (Parsed as IInterface), 'el mismo', 'otro');
+            Result := TCliExit.Ok;
+          end);
+      end)
+    .When('la accion lo resuelve',
+      procedure(W: TCliWorld)
+      begin
+        W.App := W.Builder.Build;
+        W.ExitCode := W.App.Run;
+      end)
+    .&Then('el servicio tiene el mismo resultado que recibio la accion',
+      procedure(W: TCliWorld)
+      begin
+        Expect(W.Report + W.PolicySaw).ToEqual('el mismo');
+      end)
+
+  .Scenario('Lo que se registra depende de un argumento')
+    .Given('un registro por factory que elige la implementacion segun una opcion de la gramatica',
+      procedure(W: TCliWorld)
+      begin
+        W.Loud := CommandLine.Option<Boolean>('--loud', 'Saluda en alto');
+        W.Builder := TCliApplication.CreateBuilder(['--loud']);
+        W.Builder.RootCommand.Add(W.Loud);
+        var Loud := W.Loud;
+        W.Builder.Services.AddSingleton<IGreeter>(
+          function(Provider: IServiceProvider): IGreeter
+          begin
+            if Loud.ValueIn(Provider.GetRequiredService<ICommandLineParseResult>) then
+              Result := TLoudGreeter.Create
+            else
+              Result := TGreeter.Create;
+          end);
+        W.Builder.OnUnhandled(
+          function(const E: Exception; const Services: IServiceProvider): Integer
+          begin
+            W.PolicySaw := E.Message;
+            Result := TCliExit.Failure;
+          end);
+        W.Builder.SetAction(
+          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          begin
+            W.Report := Services.GetRequiredService<IGreeter>.Greet;
+            Result := TCliExit.Ok;
+          end);
+      end)
+    .When('se invoca con esa opcion',
+      procedure(W: TCliWorld)
+      begin
+        W.App := W.Builder.Build;
+        W.ExitCode := W.App.Run;
+      end)
+    .&Then('se resuelve la implementacion que la opcion elige',
+      procedure(W: TCliWorld)
+      begin
+        Expect(W.Report + W.PolicySaw).ToEqual('HELLO');
       end)
 
 .Rule('Un fallo al parar lo decide la politica')

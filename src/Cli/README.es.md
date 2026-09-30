@@ -98,8 +98,10 @@ traduce cada desenlace a un código de salida. Ninguna de esas cuatro líneas se
 
 ## El estilo inmediato
 
-El builder es utilizable **en cuanto se crea**: `Configuration` y `Environment` ya responden, así que
-se puede elegir una fuente a partir de lo ya configurado sin ningún callback diferido.
+El builder es utilizable **en cuanto se crea**: `Configuration` y `Environment` responden en cuanto se
+leen, así que se puede elegir una fuente a partir de lo ya configurado sin ningún callback diferido.
+Se cargan en esa primera lectura, o en el `Build` si la composición no los lee: crear el builder no
+abre ningún fichero.
 
 ```pascal
 var B := TCliApplication.CreateBuilder(Args);
@@ -125,11 +127,27 @@ Esto es lo que la capa añade sobre el host, y lo que cada herramienta de consol
 
 | Miembro | Qué decide | Cuándo |
 |---|---|---|
-| `SingleInstance(Id)` | Si el proceso llega a arrancar | Tras el parse, **antes** de construir el contenedor: `--help` y `--version` contestan sin él |
+| `SingleInstance(Id)` | Si el proceso llega a arrancar. Sin declararla no hay cerrojo, y pueden correr varias instancias a la vez | Tras el parse, **antes** de cargar la configuración y de construir el contenedor: `--help` y `--version` contestan sin él |
 | `OnUnhandled(Policy)` | Qué pasa con lo que se escapa, y con qué código de salida. Sin ella, `ExitPolicy.LogAndFail` | Alrededor del `Run` |
 | `SetAction(Action)` | Lo que hace la raíz | Dentro del `Run` |
 | `SetAction(Command, Action)` | Lo que hace un comando cuando la invocación lo alcanza | Dentro del `Run` |
-| `RootCommand` | La gramática, que parsea `argv` | En el `Build` |
+| `RootCommand` | La gramática, que parsea `argv` | En el `Build`, antes que nada más |
+
+### El parse va primero
+
+`Build` parsea antes de tomar el cerrojo de instancia única, de cargar la configuración y de construir
+el contenedor. `--version`, `--help` y una invocación que no encaja con la gramática se contestan
+desde el parse, así que ni otra instancia en marcha ni un fichero de configuración del host que no se
+puede leer les impiden contestar.
+
+Lo que la composición ejecuta antes del `Build` es suyo, y corre antes del parse:
+
+- leer `Configuration` o `Environment` carga la configuración en esa lectura;
+- una fuente que añade la propia aplicación se abre al añadirla, y falla ahí.
+
+Un fichero por defecto del host que no se puede leer —un `appsettings.json` mal formado— se informa
+por el canal de arranque donde se abre, y hace fallar el `Build` cuando la invocación llega a una
+acción.
 
 ### Cada comando, su acción
 
@@ -206,6 +224,36 @@ dentro de la acción, que recibe el `IServiceProvider`.
 Ese `IServiceProvider` es el raíz: alrededor de la acción no se abre ningún ámbito. Un servicio
 Scoped que la acción necesite sale de un ámbito que abre la propia acción —`Services.CreateScope`—;
 con la validación activa, como en `Development`, pedírselo al proveedor raíz se rechaza.
+
+### El resultado del parse, en el contenedor
+
+Cuando la invocación llega a una acción, el resultado del parse está también en el contenedor, como
+`ICommandLineParseResult`: el mismo objeto que recibe la acción. Un servicio lo pide por constructor:
+
+```pascal
+constructor TExportJob.Create(const Parsed: ICommandLineParseResult);
+begin
+  inherited Create;
+  FParsed := Parsed;
+end;
+```
+
+Y un registro puede depender de un argumento con una factory, que lee el resultado del parse al
+resolver:
+
+```pascal
+var DryRun := CommandLine.Option<Boolean>('--dry-run', 'Informa, no escribe');
+B.RootCommand.Add(DryRun);
+
+B.Services.AddSingleton<IWriter>(
+  function(Provider: IServiceProvider): IWriter
+  begin
+    if DryRun.ValueIn(Provider.GetRequiredService<ICommandLineParseResult>) then
+      Result := TReportWriter.Create
+    else
+      Result := TFileWriter.Create;
+  end);
+```
 
 ---
 

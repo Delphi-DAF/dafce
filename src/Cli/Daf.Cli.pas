@@ -92,16 +92,21 @@ type
     ['{71536E8D-49F8-45D8-AB43-C5F726B2F25A}']
     function GetRootCommand: IRootCommand;
     /// <summary>
-    /// La gramatica de esta herramienta, que parsea los argumentos en <c>Build</c>. Los mismos
-    /// argumentos estan tambien en la configuracion, como en .NET, y alli se leen sin la
+    /// La gramatica de esta herramienta, que parsea los argumentos en <c>Build</c> antes que nada
+    /// mas. Una invocacion que llega a una accion tiene el resultado del parse tambien en el
+    /// contenedor, como <c>ICommandLineParseResult</c>, y un servicio lo pide por constructor.
+    ///
+    /// Los mismos argumentos estan tambien en la configuracion, como en .NET, y alli se leen sin la
     /// gramatica: una bandera seguida de un posicional queda como clave con el posicional por
     /// valor. Lo que la gramatica declara se lee del resultado del parseo.
     /// </summary>
     property RootCommand: IRootCommand read GetRootCommand;
 
     /// <summary>
-    /// Declara que solo puede correr una instancia con ese identificador. Se comprueba ANTES
-    /// de construir el contenedor: una aplicacion que decide no arrancar no paga por arrancar.
+    /// Declara que solo puede correr una instancia con ese identificador. Sin declararla no hay
+    /// cerrojo, y pueden correr varias a la vez. Se comprueba despues del parse y antes de cargar
+    /// la configuracion y de construir el contenedor: una aplicacion que decide no arrancar no paga
+    /// por arrancar.
     /// </summary>
     function SingleInstance(const Id: string): ICliApplicationBuilder;
     /// <summary>
@@ -128,6 +133,15 @@ type
     /// </remarks>
     function SetAction(const Command: ICommand; const Action: TCliAction): ICliApplicationBuilder; overload;
 
+    /// <summary>
+    /// Parsea; registra el resultado del parse; toma el cerrojo, si se declaro instancia unica; y
+    /// construye el host, que carga la configuracion que la composicion no leyo.
+    /// </summary>
+    /// <remarks>
+    ///   La version, la ayuda y una invocacion que no encaja terminan en el parse: la aplicacion
+    ///   se construye sin host, y un fichero de configuracion del host que no se puede leer no le
+    ///   impide contestar. Si la invocacion llega a una accion, ese fichero hace fallar el Build.
+    /// </remarks>
     function Build: ICliApplication;
   end;
 
@@ -423,19 +437,37 @@ end;
 
 function TCliApplicationBuilder.Build: ICliApplication;
 begin
-  // El parse va primero: --version y --help los contesta la gramatica, y no necesitan ni el
-  // cerrojo de instancia unica ni un contenedor para imprimir una linea.
+  // El parse va primero: la version, la ayuda y una invocacion que no encaja los contesta la
+  // gramatica, sin el cerrojo de instancia unica, sin contenedor y sin cargar la configuracion
+  // que la composicion no leyo.
   var Parsed := FRootCommand.Parse(FArgs);
   if Parsed.VersionRequested or Parsed.HelpRequested or not Parsed.Succeeded then
     Exit(TCliApplication.Create(nil, FRootCommand, Parsed, FPolicy, FSlot, 0));
 
-  // Lo de ANTES del contenedor. Una aplicacion que decide no arrancar termina sin haber
-  // construido nada, y lo dice por su codigo de salida.
+  // En el contenedor, para que un servicio lo pida por constructor: es el mismo que recibe la
+  // accion.
+  FImpl.Services.AddSingleton<ICommandLineParseResult>(Parsed);
+
+  // Antes de cargar y de construir el contenedor. Una aplicacion que decide no arrancar termina
+  // sin haber construido nada, y lo dice por su codigo de salida.
   var Lock: THandle;
   if not AcquireInstanceLock(Lock) then
     Exit(TCliApplication.CreateSettled(TCliExit.AlreadyRunning));
 
-  Result := TCliApplication.Create(FImpl.Build, FRootCommand, Parsed, FPolicy, FSlot, Lock);
+  var Host: IHost;
+  try
+    Host := FImpl.Build;
+  except
+    // Sin aplicacion que lo suelte al destruirse: una construccion que falla no deja el cerrojo
+    // tomado para el resto del proceso.
+    if Lock <> 0 then
+    begin
+      ReleaseMutex(Lock);
+      CloseHandle(Lock);
+    end;
+    raise;
+  end;
+  Result := TCliApplication.Create(Host, FRootCommand, Parsed, FPolicy, FSlot, Lock);
 end;
 
 { TCliApplication }

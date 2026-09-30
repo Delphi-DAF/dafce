@@ -97,8 +97,10 @@ outcome into an exit code. None of those four lines is written in the `.dpr`.
 
 ## The immediate style
 
-The builder is usable **the moment it is created**: `Configuration` and `Environment` already answer,
-so a source can be chosen from what is already configured without a deferred callback.
+The builder is usable **the moment it is created**: `Configuration` and `Environment` answer as soon
+as they are read, so a source can be chosen from what is already configured without a deferred
+callback. They are loaded at that first read, or at `Build` if the composition never reads them:
+creating the builder opens no file.
 
 ```pascal
 var B := TCliApplication.CreateBuilder(Args);
@@ -124,11 +126,26 @@ This is what the layer adds over the host, and what every console tool used to r
 
 | Member | What it decides | When |
 |---|---|---|
-| `SingleInstance(Id)` | Whether the process starts at all | After the parse, **before** the container is built: `--help` and `--version` answer without it |
+| `SingleInstance(Id)` | Whether the process starts at all. Without it there is no lock, and several instances can run at once | After the parse, **before** the configuration is loaded and the container built: `--help` and `--version` answer without it |
 | `OnUnhandled(Policy)` | What happens to what escapes, and with which exit code. Without it, `ExitPolicy.LogAndFail` | Around `Run` |
 | `SetAction(Action)` | What the root does | Inside `Run` |
 | `SetAction(Command, Action)` | What a command does when the invocation reaches it | Inside `Run` |
-| `RootCommand` | The grammar that parses `argv` | At `Build` |
+| `RootCommand` | The grammar that parses `argv` | At `Build`, before anything else |
+
+### The parse comes first
+
+`Build` parses before it takes the single-instance lock, loads the configuration or builds the
+container. `--version`, `--help` and an invocation that does not fit the grammar are answered from
+the parse, so neither another running instance nor a host configuration file that cannot be read
+keeps them from answering.
+
+What the composition runs before `Build` is its own, and runs before the parse:
+
+- reading `Configuration` or `Environment` loads the configuration at that read;
+- a source the application adds itself is opened when it is added, and fails there.
+
+A default file of the host that cannot be read — a malformed `appsettings.json` — is reported through
+the startup channel where it is opened, and makes `Build` fail when the invocation reaches an action.
 
 ### Each command, its action
 
@@ -205,6 +222,37 @@ action, which receives the `IServiceProvider`.
 That `IServiceProvider` is the root one: no scope is opened around the action. A Scoped service the
 action needs comes from a scope the action opens — `Services.CreateScope` —; with the validation on,
 as it is in `Development`, asking the root provider for it is rejected.
+
+### The parse result in the container
+
+When the invocation reaches an action, the parse result is also in the container, as
+`ICommandLineParseResult`: the same object the action receives. A service asks for it by
+constructor:
+
+```pascal
+constructor TExportJob.Create(const Parsed: ICommandLineParseResult);
+begin
+  inherited Create;
+  FParsed := Parsed;
+end;
+```
+
+And a registration can depend on an argument through a factory, which reads the parse result when it
+resolves:
+
+```pascal
+var DryRun := CommandLine.Option<Boolean>('--dry-run', 'Report, do not write');
+B.RootCommand.Add(DryRun);
+
+B.Services.AddSingleton<IWriter>(
+  function(Provider: IServiceProvider): IWriter
+  begin
+    if DryRun.ValueIn(Provider.GetRequiredService<ICommandLineParseResult>) then
+      Result := TReportWriter.Create
+    else
+      Result := TFileWriter.Create;
+  end);
+```
 
 ---
 
