@@ -12,11 +12,11 @@ A single example is rarely enough. What about negative numbers? What about zero?
 .ScenarioOutline('Adding <A> and <B> should give <Result>')
   .When('I add <A> and <B>', procedure(Ctx: TCalculatorWorld)
     begin
-      Ctx.Result := Ctx.Calculator.Add(Ctx.A, Ctx.B);
+      Ctx.Calculator.Add(Ctx.A, Ctx.B);
     end)
   .&Then('the result is <Result>', procedure(Ctx: TCalculatorWorld)
     begin
-      Expect(Ctx.Result).ToEqual(Ctx.Result);
+      Expect(Ctx.Calculator.Result).ToEqual(Ctx.Result);
     end)
   .Examples([
     ['A',   'B',   'Result'],  // Headers = World field names

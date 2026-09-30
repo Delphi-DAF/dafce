@@ -12,11 +12,11 @@ Un solo ejemplo rara vez es suficiente. ¿Qué pasa con números negativos? ¿Co
 .ScenarioOutline('Sumar <A> y <B> debería dar <Resultado>')
   .When('sumo <A> y <B>', procedure(Ctx: TCalculatorWorld)
     begin
-      Ctx.Result := Ctx.Calculator.Add(Ctx.A, Ctx.B);
+      Ctx.Calculator.Add(Ctx.A, Ctx.B);
     end)
   .&Then('el resultado es <Resultado>', procedure(Ctx: TCalculatorWorld)
     begin
-      Expect(Ctx.Result).ToEqual(Ctx.Resultado);
+      Expect(Ctx.Calculator.Result).ToEqual(Ctx.Resultado);
     end)
   .Examples([
     ['A',   'B',   'Resultado'],  // Headers = nombres de campos del World

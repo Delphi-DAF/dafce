@@ -166,6 +166,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - **Commons**: `TMacrosList.GetValueFromIndex` devolvía cadena vacía en toda lectura de macro
 - **Docs**: El arranque que enseñaba la documentación **no compilaba**, y la guía de Hosting seguía prometiendo el descubrimiento automático de los `IAppModule`. Ahora enseña `AddModule<T>`
 - **Docs**: Los ejemplos de Hosting esperaban la señal de parada y no llamaban nunca a `Host.Stop`: copiados tal cual, los servicios alojados no se paraban y el contenedor no se liberaba. Ahora paran el host en un `finally`
+- **Docs**: El ejemplo de Scenario Outline de la guía de MiniSpec en inglés comparaba el resultado consigo mismo, así que copiado tal cual no podía fallar nunca
 - **Commons**: un tag de versión que no es SemVer se informaba como `0.0.0`; ahora el texto declarado sobrevive
 - **Commons**: un tag con sus propios metadatos de build producía dos secciones `+`, que SemVer no admite; lo que declara el tag y lo que vio el compilador comparten ya la única sección
 - **SystemProcess**: un `Kill` explícito se informaba como `Timeout`, y mataba al hijo dos veces —una al pedirlo y otra cuando el bucle de espera se enteraba—. Ahora informa `Killed` y mata una vez

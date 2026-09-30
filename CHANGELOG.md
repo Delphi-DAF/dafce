@@ -167,6 +167,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - **Commons**: `TMacrosList.GetValueFromIndex` returned an empty string on every macro read
 - **Docs**: The startup the documentation taught **did not compile**, and Hosting's guide still promised automatic discovery of `IAppModule`s. It now teaches `AddModule<T>`
 - **Docs**: Hosting's examples waited for the shutdown signal and never called `Host.Stop`: copied as they were, the hosted services never stopped and the container was never released. They now stop the host in a `finally`
+- **Docs**: The Scenario Outline example in the English MiniSpec guide compared the result with itself, so copied as it was it could never fail
 - **Commons**: A version tag that is not SemVer was reported as `0.0.0`; the declared text now survives
 - **Commons**: A tag carrying its own build metadata produced two `+` sections, which SemVer does not admit; what the tag declares and what the compiler saw now share the one section
 - **SystemProcess**: An explicit `Kill` reported `Timeout`, and killed the child twice — once when asked and again when the wait loop noticed. It now reports `Killed` and kills once
