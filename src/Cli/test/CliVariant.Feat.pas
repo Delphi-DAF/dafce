@@ -629,6 +629,57 @@ Feature La variante CLI de la familia @cli @application-family
           .ToEqual('0/True');
       end)
 
+  .Scenario('La version contesta aunque otra instancia sostenga el cerrojo')
+    .Given('una instancia ya corriendo con ese identificador, y una segunda que pide la version',
+      procedure(W: TCliWorld)
+      begin
+        var First := TCliApplication.CreateBuilder;
+        First.SingleInstance('daf-cli-spec');
+        W.Holder := First.Build;
+        W.Holder.Run;
+
+        W.Builder := TCliApplication.CreateBuilder(['--version']);
+        W.Builder.SingleInstance('daf-cli-spec');
+        W.Builder.RootCommand.WithVersion('2.0.0');
+        W.App := W.Builder.Build;
+      end)
+    .When('se ejecuta la segunda',
+      procedure(W: TCliWorld)
+      begin
+        W.ExitCode := W.App.Run;
+      end)
+    .&Then('contesta el parse y termina bien, sin levantar contenedor',
+      procedure(W: TCliWorld)
+      begin
+        Expect(Format('%d/%s', [W.ExitCode, BoolToStr(W.App.Services = nil, True)]))
+          .ToEqual('0/True');
+      end)
+
+  .Scenario('La ayuda contesta aunque otra instancia sostenga el cerrojo')
+    .Given('una instancia ya corriendo con ese identificador, y una segunda que pide la ayuda',
+      procedure(W: TCliWorld)
+      begin
+        var First := TCliApplication.CreateBuilder;
+        First.SingleInstance('daf-cli-spec');
+        W.Holder := First.Build;
+        W.Holder.Run;
+
+        W.Builder := TCliApplication.CreateBuilder(['--help']);
+        W.Builder.SingleInstance('daf-cli-spec');
+        W.App := W.Builder.Build;
+      end)
+    .When('se ejecuta la segunda',
+      procedure(W: TCliWorld)
+      begin
+        W.ExitCode := W.App.Run;
+      end)
+    .&Then('contesta el parse y termina bien, sin levantar contenedor',
+      procedure(W: TCliWorld)
+      begin
+        Expect(Format('%d/%s', [W.ExitCode, BoolToStr(W.App.Services = nil, True)]))
+          .ToEqual('0/True');
+      end)
+
   .Scenario('Una invocacion que no encaja tiene su texto y su codigo')
     .Given('una invocacion con un token que la gramatica no reconoce',
       procedure(W: TCliWorld)

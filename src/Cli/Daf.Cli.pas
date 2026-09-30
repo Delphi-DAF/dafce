@@ -423,17 +423,17 @@ end;
 
 function TCliApplicationBuilder.Build: ICliApplication;
 begin
+  // El parse va primero: --version y --help los contesta la gramatica, y no necesitan ni el
+  // cerrojo de instancia unica ni un contenedor para imprimir una linea.
+  var Parsed := FRootCommand.Parse(FArgs);
+  if Parsed.VersionRequested or Parsed.HelpRequested or not Parsed.Succeeded then
+    Exit(TCliApplication.Create(nil, FRootCommand, Parsed, FPolicy, FSlot, 0));
+
   // Lo de ANTES del contenedor. Una aplicacion que decide no arrancar termina sin haber
   // construido nada, y lo dice por su codigo de salida.
   var Lock: THandle;
   if not AcquireInstanceLock(Lock) then
     Exit(TCliApplication.CreateSettled(TCliExit.AlreadyRunning));
-
-  // El parse va aqui, antes de construir: --version y --help los contesta la gramatica, y no
-  // hay razon para levantar un contenedor entero para imprimir una linea.
-  var Parsed := FRootCommand.Parse(FArgs);
-  if Parsed.VersionRequested or Parsed.HelpRequested or not Parsed.Succeeded then
-    Exit(TCliApplication.Create(nil, FRootCommand, Parsed, FPolicy, FSlot, Lock));
 
   Result := TCliApplication.Create(FImpl.Build, FRootCommand, Parsed, FPolicy, FSlot, Lock);
 end;

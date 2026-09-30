@@ -125,7 +125,7 @@ Esto es lo que la capa añade sobre el host, y lo que cada herramienta de consol
 
 | Miembro | Qué decide | Cuándo |
 |---|---|---|
-| `SingleInstance(Id)` | Si el proceso llega a arrancar | **Antes** de construir el contenedor |
+| `SingleInstance(Id)` | Si el proceso llega a arrancar | Tras el parse, **antes** de construir el contenedor: `--help` y `--version` contestan sin él |
 | `OnUnhandled(Policy)` | Qué pasa con lo que se escapa, y con qué código de salida. Sin ella, `ExitPolicy.LogAndFail` | Alrededor del `Run` |
 | `SetAction(Action)` | Lo que hace la raíz | Dentro del `Run` |
 | `SetAction(Command, Action)` | Lo que hace un comando cuando la invocación lo alcanza | Dentro del `Run` |

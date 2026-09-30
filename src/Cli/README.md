@@ -124,7 +124,7 @@ This is what the layer adds over the host, and what every console tool used to r
 
 | Member | What it decides | When |
 |---|---|---|
-| `SingleInstance(Id)` | Whether the process starts at all | **Before** the container is built |
+| `SingleInstance(Id)` | Whether the process starts at all | After the parse, **before** the container is built: `--help` and `--version` answer without it |
 | `OnUnhandled(Policy)` | What happens to what escapes, and with which exit code. Without it, `ExitPolicy.LogAndFail` | Around `Run` |
 | `SetAction(Action)` | What the root does | Inside `Run` |
 | `SetAction(Command, Action)` | What a command does when the invocation reaches it | Inside `Run` |
