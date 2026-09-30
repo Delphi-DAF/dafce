@@ -36,8 +36,10 @@ Imagine you're developing a calculator. Before writing code, you describe **how 
 
 This simple sentence is an **executable specification**. With MiniSpec, you write it almost literally:
 
+<!-- quickstart: src/MiniSpec/samples/FirstSpec/Addition.Feat.pas -->
+
 ```pascal
-unit Calculator.Add.Feat;
+unit Addition.Feat;
 
 interface
 
@@ -51,7 +53,6 @@ type
   TCalculatorWorld = class
   public
     Calculator: TCalculator;  // The SUT (System Under Test)
-    Result: Integer;
     destructor Destroy; override;
   end;
 
@@ -76,32 +77,64 @@ Feature('Calculator - Addition')
 .Scenario('Add two positive numbers')
   .When('I add 2 and 3', procedure(Ctx: TCalculatorWorld)
     begin
-      Ctx.Result := Ctx.Calculator.Add(2, 3);
+      Ctx.Calculator.Add(2, 3);
     end)
   .&Then('the result is 5', procedure(Ctx: TCalculatorWorld)
     begin
-      Expect(Ctx.Result).ToEqual(5);
+      Expect(Ctx.Calculator.Result).ToEqual(5);
     end)
 
 end.
 ```
 
-The specification defines the behavior of `TCalculator` — the **SUT** (*System Under Test*). We don't care *how* it's implemented, only *what* it should do. The implementation is in `Calculator.Engine.pas`:
+The specification defines the behavior of `TCalculator` — the **SUT** (*System Under Test*). We don't care *how* it's implemented, only *what* it should do. The implementation is `Calculator.Engine.pas`, from the `samples/CalculatorSpecs/` sample:
+
+<!-- quickstart: src/MiniSpec/samples/CalculatorSpecs/Calculator.Engine.pas -->
 
 ```pascal
 unit Calculator.Engine;
 
 interface
 
+uses
+  System.SysUtils;
+
 type
   TCalculator = class
+  strict private
+    FResult: Integer;
   public
-    function Add(A, B: Integer): Integer;
-    // ... more operations
+    procedure Add(A, B: Integer);
+    procedure Subtract(A, B: Integer);
+    procedure Mult(A, B: Integer);
+    procedure Divide(A, B: Integer);
+    property Result: Integer read FResult;
   end;
 
 implementation
-  // The implementation that makes the specification pass
+
+procedure TCalculator.Add(A, B: Integer);
+begin
+  FResult := A + B;
+end;
+
+procedure TCalculator.Subtract(A, B: Integer);
+begin
+  FResult := A - B;
+end;
+
+procedure TCalculator.Mult(A, B: Integer);
+begin
+  FResult := A * B;
+end;
+
+procedure TCalculator.Divide(A, B: Integer);
+begin
+  if B = 0 then
+    raise EDivByZero.Create('Division by zero');
+  FResult := A div B;
+end;
+
 end.
 ```
 
@@ -120,16 +153,19 @@ end.
 
 ## Running the Specification
 
-To make the specification executable, you need a minimal program:
+To make the specification executable, you need a minimal program. Together with the feature above, it is the `samples/FirstSpec/` sample:
+
+<!-- quickstart: src/MiniSpec/samples/FirstSpec/FirstSpec.dpr -->
 
 ```pascal
-program CalculatorSpecs;
+program FirstSpec;
 
 {$APPTYPE CONSOLE}
 
 uses
   Daf.MiniSpec,
-  Calculator.Add.Feat in 'Calculator.Add.Feat.pas';
+  Calculator.Engine in '..\CalculatorSpecs\Calculator.Engine.pas',
+  Addition.Feat in 'Addition.Feat.pas';
 
 begin
   MiniSpec.Run;
@@ -140,13 +176,13 @@ When running, you'll see in the console:
 
 ```
 Feature: Calculator - Addition
-  Background:
+  Background: 
     ✓ Given I have a calculator (0 ms)
   Scenario: Add two positive numbers
-    ✓ When I add 2 and 3 (0 ms)
-    ✓ Then the result is 5 (0 ms)
+      ✓ When I add 2 and 3 (0 ms)
+      ✓ Then the result is 5 (2 ms)
 
-Passed: 1 | Failed: 0 | Pending: 0 | Undefined: 0 | Skipped: 0 | Total: 1 Specs in 1 Features | 0 ms | at 2026-01-30T14:57:07
+Passed: 1 | Failed: 0 | Pending: 0 | Undefined: 0 | Skipped: 0 | Total: 1 Specs in 1 Features | 0 ms | at 2026-09-30T11:15:11
 ```
 
 **The cycle is simple**: describe expected behavior → run → MiniSpec tells you if the code meets the specification.

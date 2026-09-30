@@ -6,6 +6,9 @@
         <Projects Include="samples\CalculatorSpecs\CalculatorSpecs.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="samples\FirstSpec\FirstSpec.dproj">
+            <Dependencies/>
+        </Projects>
         <Projects Include="samples\MastermindSpecs\MasterMind.Specs.dproj">
             <Dependencies/>
         </Projects>
@@ -26,6 +29,15 @@
     <Target Name="CalculatorSpecs:Make">
         <MSBuild Projects="samples\CalculatorSpecs\CalculatorSpecs.dproj" Targets="Make"/>
     </Target>
+    <Target Name="FirstSpec">
+        <MSBuild Projects="samples\FirstSpec\FirstSpec.dproj"/>
+    </Target>
+    <Target Name="FirstSpec:Clean">
+        <MSBuild Projects="samples\FirstSpec\FirstSpec.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="FirstSpec:Make">
+        <MSBuild Projects="samples\FirstSpec\FirstSpec.dproj" Targets="Make"/>
+    </Target>
     <Target Name="MasterMind_Specs">
         <MSBuild Projects="samples\MastermindSpecs\MasterMind.Specs.dproj"/>
     </Target>
@@ -36,13 +48,13 @@
         <MSBuild Projects="samples\MastermindSpecs\MasterMind.Specs.dproj" Targets="Make"/>
     </Target>
     <Target Name="Build">
-        <CallTarget Targets="CalculatorSpecs;MasterMind_Specs"/>
+        <CallTarget Targets="CalculatorSpecs;FirstSpec;MasterMind_Specs"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="CalculatorSpecs:Clean;MasterMind_Specs:Clean"/>
+        <CallTarget Targets="CalculatorSpecs:Clean;FirstSpec:Clean;MasterMind_Specs:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="CalculatorSpecs:Make;MasterMind_Specs:Make"/>
+        <CallTarget Targets="CalculatorSpecs:Make;FirstSpec:Make;MasterMind_Specs:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>
