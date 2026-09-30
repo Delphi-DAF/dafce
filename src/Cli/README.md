@@ -132,6 +132,9 @@ This is what the layer adds over the host, and what every console tool used to r
 | `SetAction(Command, Action)` | What a command does when the invocation reaches it | Inside `Run` |
 | `RootCommand` | The grammar that parses `argv` | At `Build`, before anything else |
 
+`RootCommand` is a `Daf.CommandLine` root: a banner above `--help` and `--version` goes on its
+`HelpAction` and `VersionAction`, as the [Daf.CommandLine README](../CommandLine/README.md) shows.
+
 ### The parse comes first
 
 `Build` parses before it takes the single-instance lock, loads the configuration or builds the

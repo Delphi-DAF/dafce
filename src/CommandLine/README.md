@@ -379,6 +379,8 @@ anything. Asking for either is a **valid outcome**, not a parse failure: `HelpRe
 `VersionRequested` are true and `Errors` is empty. Help is resolved *before* the grammar is validated.
 An application that declares its own `--help` or `--version` wins — it is the one that knows its case.
 `--version` sits on the root and not on each subcommand, as in .NET: a version belongs to the tool.
+What they write can be wrapped with something of your own: see *A banner above the help and the
+version*.
 
 ---
 
@@ -407,13 +409,13 @@ settles the invocation and answers the code the process ends with:
 
 | The parse result | What `Invoke` does | What it answers |
 |---|---|---|
-| asked for `--version` | writes the version to the output | `TCommandLineExit.Ok` (0) |
-| asked for `--help` | writes the help to the output | `Ok` (0) |
+| asked for `--version` | runs the root's `VersionAction`, which writes the version to the output | the code of the action: `TCommandLineExit.Ok` (0) by default |
+| asked for `--help` | runs the root's `HelpAction`, which writes the help to the output | the code of the action: `Ok` (0) by default |
 | carries errors | writes them to the error | `InvocationError` (2) |
 | reached a command with an action | runs it | the code the action answers |
 | reached a command without one | nothing | `Ok` (0) |
 
-No action runs in the first three rows.
+No command's action runs in the first three rows.
 
 - An action with no code of its own is a `procedure(const Parsed: ICommandLineParseResult)`, and the
   invocation answers `Ok` for it.
@@ -440,6 +442,41 @@ var Configuration: TInvocationConfiguration;
 Configuration.Output := Writer;            // any TTextWriter
 ExitCode := Parsed.Invoke(Configuration);
 ```
+
+### A banner above the help and the version
+
+The root settles the help and the version with two actions of its own, `HelpAction` and
+`VersionAction`, of the same type as the action of a command. The default ones write the help of the
+command reached, or the version, to the output of the invocation and answer `Ok`. To put something
+of your own above them, replace the action with one that writes it and then calls the default one:
+
+```pascal
+function WithBanner(const Default: TCommandAction): TCommandAction;
+begin
+  Result :=
+    function(const Parsed: ICommandLineParseResult): Integer
+    begin
+      Parsed.InvocationConfiguration.WriteOutput('buildtool -- (c) ACME');
+      Result := Default(Parsed);
+    end;
+end;
+
+Root.HelpAction := WithBanner(Root.HelpAction);
+Root.VersionAction := WithBanner(Root.VersionAction);
+```
+
+- The help is still the one derived from the grammar. A help action replaced on the root also wraps
+  the help of every subcommand.
+- `Parsed.InvocationConfiguration` is the configuration of the invocation that is running, and
+  `WriteOutput` writes a line to its `Output`, or to the console when it is `nil`: the banner goes
+  where the help goes.
+- What the action answers is what `Invoke` answers, and the default exception handler covers it as
+  it covers the action of a command.
+- In `System.CommandLine` these actions belong to `HelpOption` and `VersionOption`; here they belong
+  to the root.
+
+⚠️ Capture the default action, never the root. An action that holds the root it is installed on
+forms a reference cycle with it, and neither is ever released.
 
 ---
 

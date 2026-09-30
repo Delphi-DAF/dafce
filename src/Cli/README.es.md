@@ -133,6 +133,9 @@ Esto es lo que la capa añade sobre el host, y lo que cada herramienta de consol
 | `SetAction(Command, Action)` | Lo que hace un comando cuando la invocación lo alcanza | Dentro del `Run` |
 | `RootCommand` | La gramática, que parsea `argv` | En el `Build`, antes que nada más |
 
+`RootCommand` es una raíz de `Daf.CommandLine`: un banner encima de `--help` y de `--version` va en
+su `HelpAction` y su `VersionAction`, como enseña el [README de Daf.CommandLine](../CommandLine/README.es.md).
+
 ### El parse va primero
 
 `Build` parsea antes de tomar el cerrojo de instancia única, de cargar la configuración y de construir

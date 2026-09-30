@@ -124,6 +124,9 @@ type
     /// </summary>
     EnableDefaultExceptionHandler: Boolean;
     class operator Initialize(out Dest: TInvocationConfiguration);
+    /// <summary>Writes a line to <c>Output</c>, or to the console when it is <c>nil</c>.</summary>
+    /// <remarks>It is what the default help and version actions write with.</remarks>
+    procedure WriteOutput(const Text: string);
   end;
 
   /// <summary>How many values a symbol admits: a minimum and a maximum.</summary>
@@ -310,6 +313,29 @@ type
     function WithVersion(const AClass: TClass): IRootCommand; overload;
     /// <summary>What the tool answers with. Empty when no version was declared.</summary>
     function VersionInfo: TVersionInfo;
+    function GetHelpAction: TCommandAction;
+    procedure SetHelpAction(const Value: TCommandAction);
+    function GetVersionAction: TCommandAction;
+    procedure SetVersionAction(const Value: TCommandAction);
+    /// <summary>
+    ///   What settles an invocation that asks for help, whichever command it reached. Its code is
+    ///   the code of the invocation.
+    /// </summary>
+    /// <remarks>
+    ///   The default one writes the help of the command reached to the output of the invocation and
+    ///   answers <c>Ok</c>. An action that writes something of its own and then calls the default one
+    ///   puts it above the help, and the help is still the one derived from the grammar.
+    ///
+    ///   The replacement captures the default action, never the root: an action holding the root it
+    ///   is installed on is a cycle between counted references, and neither is ever freed.
+    /// </remarks>
+    property HelpAction: TCommandAction read GetHelpAction write SetHelpAction;
+    /// <summary>What settles an invocation that asks for the version. See <c>HelpAction</c>.</summary>
+    /// <remarks>
+    ///   The default one writes the declared version, with the platform it was compiled for, and
+    ///   answers <c>Ok</c>.
+    /// </remarks>
+    property VersionAction: TCommandAction read GetVersionAction write SetVersionAction;
   end;
 
   ICommandLineParseResult = interface
@@ -340,17 +366,26 @@ type
     ///   declared it collects them, because otherwise they are errors instead.
     /// </summary>
     function UnmatchedTokens: TArray<string>;
+    /// <summary>
+    ///   The configuration of the invocation settling this result, so an action writes where the
+    ///   invocation writes. Before any invocation, the default one: the console.
+    /// </summary>
+    function InvocationConfiguration: TInvocationConfiguration;
     /// <summary>Settles the invocation, writing to the console. See the overload.</summary>
     function Invoke: Integer; overload;
     /// <summary>
     ///   Settles the invocation and answers the code the process ends with. In this order: the
-    ///   version or the help, written to <c>Output</c>, answer <c>Ok</c>; parse errors, written to
-    ///   <c>Error</c>, answer <c>InvocationError</c>; otherwise the action of the command reached
-    ///   runs and its code is the answer -- <c>Ok</c> when the command has none.
+    ///   version or the help, settled by the <c>VersionAction</c> or the <c>HelpAction</c> of the
+    ///   root, whose code is the answer; parse errors, written to <c>Error</c>, answer
+    ///   <c>InvocationError</c>; otherwise the action of the command reached runs and its code is
+    ///   the answer -- <c>Ok</c> when the command has none.
     /// </summary>
     /// <remarks>
-    ///   Help, version and errors never run an action: asking how the tool works, or getting its
-    ///   syntax wrong, is not an invocation of the work.
+    ///   Help, version and errors never run the action of a command: asking how the tool works, or
+    ///   getting its syntax wrong, is not an invocation of the work.
+    ///
+    ///   The default exception handler covers the help and the version actions the same as the
+    ///   action of a command.
     /// </remarks>
     function Invoke(const Configuration: TInvocationConfiguration): Integer; overload;
   end;
@@ -625,6 +660,8 @@ type
 
   TParseResult = class(TInterfacedObject, ICommandLineParseResult)
   private
+    FRoot: IRootCommand;
+    FInvocationConfiguration: TInvocationConfiguration;
     FCommand: ICommand;
     FErrors: TArray<string>;
     FBindings: TArray<TBinding>;
@@ -634,6 +671,7 @@ type
     FVersionRequested: Boolean;
     function IndexOf(const Symbol: ISymbol): Integer;
   public
+    constructor Create(const Root: IRootCommand);
     function Command: ICommand;
     function Succeeded: Boolean;
     function Errors: TArray<string>;
@@ -646,6 +684,7 @@ type
     function RawOf(const Symbol: ISymbol): TNullable<string>;
     function RawValuesOf(const Symbol: ISymbol): TArray<string>;
     function UnmatchedTokens: TArray<string>;
+    function InvocationConfiguration: TInvocationConfiguration;
     function Invoke: Integer; overload;
     function Invoke(const Configuration: TInvocationConfiguration): Integer; overload;
     procedure Bind(const Symbol: ISymbol; const Raw: string);
@@ -692,7 +731,13 @@ type
   TRootCommand = class(TCommand, IRootCommand)
   private
     FVersionInfo: TVersionInfo;
+    FHelpAction: TCommandAction;
+    FVersionAction: TCommandAction;
   public
+    function GetHelpAction: TCommandAction;
+    procedure SetHelpAction(const Value: TCommandAction);
+    function GetVersionAction: TCommandAction;
+    procedure SetVersionAction(const Value: TCommandAction);
     function Parse(const Args: TArray<string>): ICommandLineParseResult; overload;
     function Parse: ICommandLineParseResult; overload;
     function WithVersion(const Version: string): IRootCommand; overload;
@@ -721,11 +766,24 @@ type
 
 { TInvocationConfiguration }
 
+procedure WriteTo(const Writer: TTextWriter; var Console: TextFile; const Text: string);
+begin
+  if Assigned(Writer) then
+    Writer.WriteLine(Text)
+  else
+    Writeln(Console, Text);
+end;
+
 class operator TInvocationConfiguration.Initialize(out Dest: TInvocationConfiguration);
 begin
   Dest.Output := nil;
   Dest.Error := nil;
   Dest.EnableDefaultExceptionHandler := True;
+end;
+
+procedure TInvocationConfiguration.WriteOutput(const Text: string);
+begin
+  WriteTo(Output, System.Output, Text);
 end;
 
 { TArity }
@@ -1388,6 +1446,12 @@ end;
 
 { TParseResult }
 
+constructor TParseResult.Create(const Root: IRootCommand);
+begin
+  inherited Create;
+  FRoot := Root;
+end;
+
 function TParseResult.IndexOf(const Symbol: ISymbol): Integer;
 var
   I: Integer;
@@ -1492,12 +1556,9 @@ begin
   Result := FUnmatched;
 end;
 
-procedure WriteTo(const Writer: TTextWriter; var Console: TextFile; const Text: string);
+function TParseResult.InvocationConfiguration: TInvocationConfiguration;
 begin
-  if Assigned(Writer) then
-    Writer.WriteLine(Text)
-  else
-    Writeln(Console, Text);
+  Result := FInvocationConfiguration;
 end;
 
 function TParseResult.Invoke: Integer;
@@ -1511,25 +1572,20 @@ function TParseResult.Invoke(const Configuration: TInvocationConfiguration): Int
 var
   Action: TCommandAction;
 begin
+  FInvocationConfiguration := Configuration;
+
   if FVersionRequested then
-  begin
-    WriteTo(Configuration.Output, System.Output, VersionInfo.VersionTag(VersionTemplateWithBuild));
-    Exit(TCommandLineExit.Ok);
-  end;
-
-  if FHelpRequested then
-  begin
-    WriteTo(Configuration.Output, System.Output, FHelpText);
-    Exit(TCommandLineExit.Ok);
-  end;
-
-  if not Succeeded then
+    Action := FRoot.VersionAction
+  else if FHelpRequested then
+    Action := FRoot.HelpAction
+  else if not Succeeded then
   begin
     WriteTo(Configuration.Error, System.ErrOutput, ErrorText);
     Exit(TCommandLineExit.InvocationError);
-  end;
+  end
+  else
+    Action := FCommand.Action();
 
-  Action := FCommand.Action();
   if not Assigned(Action) then
     Exit(TCommandLineExit.Ok);
 
@@ -1743,6 +1799,54 @@ begin
   Result := FVersionInfo;
 end;
 
+// Outside the classes, so the closures capture nothing: they read the help and the version from the
+// result they are handed, and a root holding a closure that holds the root is a cycle.
+function DefaultHelpAction: TCommandAction;
+begin
+  Result :=
+    function(const Parsed: ICommandLineParseResult): Integer
+    begin
+      Parsed.InvocationConfiguration.WriteOutput(Parsed.HelpText);
+      Result := TCommandLineExit.Ok;
+    end;
+end;
+
+function DefaultVersionAction: TCommandAction;
+begin
+  Result :=
+    function(const Parsed: ICommandLineParseResult): Integer
+    begin
+      Parsed.InvocationConfiguration.WriteOutput(Parsed.VersionInfo.VersionTag(VersionTemplateWithBuild));
+      Result := TCommandLineExit.Ok;
+    end;
+end;
+
+function TRootCommand.GetHelpAction: TCommandAction;
+begin
+  if Assigned(FHelpAction) then
+    Result := FHelpAction
+  else
+    Result := DefaultHelpAction();
+end;
+
+procedure TRootCommand.SetHelpAction(const Value: TCommandAction);
+begin
+  FHelpAction := Value;
+end;
+
+function TRootCommand.GetVersionAction: TCommandAction;
+begin
+  if Assigned(FVersionAction) then
+    Result := FVersionAction
+  else
+    Result := DefaultVersionAction();
+end;
+
+procedure TRootCommand.SetVersionAction(const Value: TCommandAction);
+begin
+  FVersionAction := Value;
+end;
+
 function TRootCommand.Parse: ICommandLineParseResult;
 var
   Args: TArray<string>;
@@ -1890,7 +1994,7 @@ var
   Step: TTokenRewrite;
   Action: TCommandAction;
 begin
-  Outcome := TParseResult.Create;
+  Outcome := TParseResult.Create(Self);
   Result := Outcome;
   Current := Self;
   Available := RecursiveOptionsOf(Current);

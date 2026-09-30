@@ -383,7 +383,8 @@ Pedir cualquiera de las dos es un **resultado válido**, no un fallo: `HelpReque
 `VersionRequested` son ciertos y `Errors` está vacío. La ayuda se resuelve *antes* de validar la
 gramática. Una aplicación que declare su propio `--help` o `--version` gana: es la que conoce su
 caso. Y `--version` va en la raíz y no en cada subcomando, como en .NET: la versión es de la
-herramienta.
+herramienta. Lo que escriben se puede envolver con algo propio: ver *Un banner encima de la ayuda y
+de la versión*.
 
 ---
 
@@ -412,13 +413,13 @@ resuelve la invocación y devuelve el código con el que termina el proceso:
 
 | El resultado del parse | Qué hace `Invoke` | Qué devuelve |
 |---|---|---|
-| pidió `--version` | escribe la versión en la salida | `TCommandLineExit.Ok` (0) |
-| pidió `--help` | escribe la ayuda en la salida | `Ok` (0) |
+| pidió `--version` | ejecuta la `VersionAction` de la raíz, que escribe la versión en la salida | el código de la acción: `TCommandLineExit.Ok` (0) la de serie |
+| pidió `--help` | ejecuta la `HelpAction` de la raíz, que escribe la ayuda en la salida | el código de la acción: `Ok` (0) la de serie |
 | trae errores | los escribe en el error | `InvocationError` (2) |
 | alcanzó un comando con acción | la ejecuta | el código que devuelve la acción |
 | alcanzó un comando sin ella | nada | `Ok` (0) |
 
-En las tres primeras filas no corre ninguna acción.
+En las tres primeras filas no corre la acción de ningún comando.
 
 - Una acción sin código propio es un `procedure(const Parsed: ICommandLineParseResult)`, y la
   invocación devuelve `Ok` por ella.
@@ -446,6 +447,40 @@ var Configuration: TInvocationConfiguration;
 Configuration.Output := Writer;            // cualquier TTextWriter
 ExitCode := Parsed.Invoke(Configuration);
 ```
+
+### Un banner encima de la ayuda y de la versión
+
+La raíz resuelve la ayuda y la versión con dos acciones propias, `HelpAction` y `VersionAction`, del
+mismo tipo que la acción de un comando. Las de serie escriben en la salida de la invocación la ayuda
+del comando alcanzado, o la versión, y devuelven `Ok`. Para poner algo tuyo encima, sustituye la
+acción por una que lo escriba y después llame a la de serie:
+
+```pascal
+function WithBanner(const Default: TCommandAction): TCommandAction;
+begin
+  Result :=
+    function(const Parsed: ICommandLineParseResult): Integer
+    begin
+      Parsed.InvocationConfiguration.WriteOutput('buildtool -- (c) ACME');
+      Result := Default(Parsed);
+    end;
+end;
+
+Root.HelpAction := WithBanner(Root.HelpAction);
+Root.VersionAction := WithBanner(Root.VersionAction);
+```
+
+- La ayuda sigue siendo la que se deriva de la gramática. Una acción de ayuda sustituida en la raíz
+  envuelve también la ayuda de cada subcomando.
+- `Parsed.InvocationConfiguration` es la configuración de la invocación en curso, y `WriteOutput`
+  escribe una línea en su `Output`, o en la consola si es `nil`: el banner va donde va la ayuda.
+- Lo que devuelve la acción es lo que devuelve `Invoke`, y el manejador de excepciones por defecto la
+  cubre como cubre la acción de un comando.
+- En `System.CommandLine` estas acciones son de `HelpOption` y de `VersionOption`; aquí son de la
+  raíz.
+
+⚠️ Captura la acción de serie, nunca la raíz. Una acción que sostiene la raíz en la que está
+instalada forma con ella un ciclo de referencias, y ninguna de las dos se libera nunca.
 
 ---
 
