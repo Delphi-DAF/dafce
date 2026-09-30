@@ -472,6 +472,7 @@ Root.VersionAction := WithBanner(Root.VersionAction);
   where the help goes.
 - What the action answers is what `Invoke` answers, and the default exception handler covers it as
   it covers the action of a command.
+- Assigning `nil` brings the default action back.
 - In `System.CommandLine` these actions belong to `HelpOption` and `VersionOption`; here they belong
   to the root.
 

@@ -320,6 +320,27 @@ Feature Replacing the help and the version actions @commandline @helpactions
         Expect(W.SeenConfiguration).ToEqual('output=the console error=the console handler=True');
       end)
 
+  .Scenario('Assigning nil brings the default action back')
+    .Given('a root command whose help action was replaced with one that writes a banner, and then given nil',
+      procedure(W: THelpActionsWorld)
+      begin
+        W.BuildGrammar;
+        W.Root.HelpAction := WithBanner(W.Root.HelpAction);
+        W.Root.HelpAction := nil;
+      end)
+    .When('the help is asked for',
+      procedure(W: THelpActionsWorld)
+      begin
+        W.Parsed := W.Root.Parse(['--help']);
+        W.ExitCode := W.Parsed.Invoke(W.Configuration);
+      end)
+    .&Then('the output is the default help, without the banner',
+      procedure(W: THelpActionsWorld)
+      begin
+        Expect(W.Output.ToString).ToEqual(RootHelpReference);
+        Expect(W.ExitCode).ToEqual(TCommandLineExit.Ok);
+      end)
+
   .Scenario('What the action answers is what the invocation answers')
     .Given('a replaced help action that answers a code other than 0',
       procedure(W: THelpActionsWorld)

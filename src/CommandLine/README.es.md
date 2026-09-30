@@ -476,6 +476,7 @@ Root.VersionAction := WithBanner(Root.VersionAction);
   escribe una línea en su `Output`, o en la consola si es `nil`: el banner va donde va la ayuda.
 - Lo que devuelve la acción es lo que devuelve `Invoke`, y el manejador de excepciones por defecto la
   cubre como cubre la acción de un comando.
+- Asignar `nil` devuelve la acción de serie.
 - En `System.CommandLine` estas acciones son de `HelpOption` y de `VersionOption`; aquí son de la
   raíz.
 

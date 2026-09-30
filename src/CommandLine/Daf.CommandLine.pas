@@ -324,7 +324,8 @@ type
     /// <remarks>
     ///   The default one writes the help of the command reached to the output of the invocation and
     ///   answers <c>Ok</c>. An action that writes something of its own and then calls the default one
-    ///   puts it above the help, and the help is still the one derived from the grammar.
+    ///   puts it above the help, and the help is still the one derived from the grammar. Assigning
+    ///   <c>nil</c> brings the default one back.
     ///
     ///   The replacement captures the default action, never the root: an action holding the root it
     ///   is installed on is a cycle between counted references, and neither is ever freed.
