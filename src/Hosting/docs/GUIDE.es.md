@@ -26,7 +26,7 @@
 ```
 THost.CreateBuilder ──► IGenericHostBuilder
   ├── Configuration: IConfigurationManager   ← las fuentes, y su lectura
-  ├── Environment: IHostEnvironment          ← ya resuelto, derivado de la config de host
+  ├── Environment: IHostEnvironment          ← resuelto al leerlo, derivado de la config de host
   ├── Services: IServiceCollection           ← registros DI
   ├── Logging: ILoggingBuilder               ← solo se compone si lo tocas
   ├── Properties                             ← datos que comparten las piezas del arranque
@@ -72,14 +72,15 @@ libera el host, y una variable que sigue apuntando a él toca memoria devuelta a
 
 ## Pipeline de configuración
 
-Hay **una** configuración, y ya viene poblada cuando el builder se entrega.
+Hay **una** configuración, y se puebla la primera vez que se lee.
 `Builder.Configuration` es un `IConfigurationManager` —constructor y lector a la vez—, así que una
 fuente se puede elegir a partir de lo ya configurado.
 
 ### 1. Lo que siembra el builder
 
-Antes de entregarse, el builder carga las fuentes que carga `Host.CreateApplicationBuilder`, en este
-orden, y cada una gana a las anteriores:
+La primera vez que la composición lee `Configuration` o `Environment` —o en el `Build`, si no lee
+ninguna—, el builder carga las fuentes que carga `Host.CreateApplicationBuilder`, en este orden, y
+cada una gana a las anteriores:
 
 1. las variables de entorno del proceso con prefijo `DAF_`, sin el prefijo —`DAF_ENVIRONMENT` fija
    `environment`— y, si se le dieron argumentos, la línea de comandos;
@@ -102,13 +103,17 @@ relativo se resuelve contra la carpeta del ejecutable. La excepción es el direc
 que es donde arranca un servicio de Windows: ahí el content root es la carpeta del ejecutable.
 `Environment.BinPath` es siempre esa carpeta, sea cual sea el directorio de trabajo.
 
-Los ficheros se leen una vez, al crear el builder: un cambio en ellos no se nota mientras el proceso
-sigue vivo.
+Los ficheros se leen una vez, en esa primera lectura: un cambio en ellos no se nota mientras el
+proceso sigue vivo, y crear el builder no abre ninguno.
+
+Un fichero por defecto que no se puede leer —un `appsettings.json` mal formado— se informa por el
+canal de arranque al abrirse, y la lectura sigue con las demás fuentes; el `Build` falla después con
+esa misma excepción. Una fuente que añades tú falla al añadirla, en tu código.
 
 ### 2. El entorno, ya resuelto
 
-`Builder.Environment` se deriva de esa siembra dentro del constructor. Eso es lo que permite que el
-paso siguiente dependa de él: no hay ninguna fase que esperar.
+`Builder.Environment` se deriva de esa siembra al cargarla. Eso es lo que permite que el paso
+siguiente dependa de él: no hay ninguna fase que esperar.
 
 ### 3. Tus propias fuentes
 

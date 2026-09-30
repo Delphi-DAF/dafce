@@ -26,7 +26,7 @@
 ```
 THost.CreateBuilder ──► IGenericHostBuilder
   ├── Configuration: IConfigurationManager   ← sources, and reading them back
-  ├── Environment: IHostEnvironment          ← already resolved, derived from host config
+  ├── Environment: IHostEnvironment          ← resolved when read, derived from host config
   ├── Services: IServiceCollection           ← DI registrations
   ├── Logging: ILoggingBuilder               ← only composed if you touch it
   ├── Properties                             ← data the startup pieces share
@@ -72,14 +72,15 @@ goes out of scope.
 
 ## Configuration Pipeline
 
-There is **one** configuration, and it is already populated when the builder hands itself back.
+There is **one** configuration, and it is populated the first time it is read.
 `Builder.Configuration` is an `IConfigurationManager` — a builder and a reader at the same time —
 so a source can be chosen from what is already configured.
 
 ### 1. What the builder seeds
 
-Before returning, the builder loads the sources `Host.CreateApplicationBuilder` loads, in this
-order, each one winning over the ones before it:
+The first time the composition reads `Configuration` or `Environment` — or at `Build`, if it reads
+neither — the builder loads the sources `Host.CreateApplicationBuilder` loads, in this order, each
+one winning over the ones before it:
 
 1. the process environment variables prefixed `DAF_`, with the prefix stripped — `DAF_ENVIRONMENT`
    sets `environment` — and, if it was given arguments, the command line;
@@ -102,13 +103,17 @@ relative one is resolved against the folder of the executable. The exception is 
 directory, which is where a Windows service starts: there the content root is the folder of the
 executable. `Environment.BinPath` is always that folder, whatever the working directory.
 
-The files are read once, when the builder is created: a change to them is not picked up while the
-process runs.
+The files are read once, at that first read: a change to them is not picked up while the process
+runs, and creating the builder opens none of them.
+
+A default file that cannot be read — a malformed `appsettings.json` — is reported through the startup
+channel when it is opened, and the read goes on with the other sources; `Build` then fails with that
+same exception. A source you add yourself fails when you add it, in your code.
 
 ### 2. The environment, already resolved
 
-`Builder.Environment` is derived from that seed inside the constructor. That is what lets the next
-step depend on it: there is no phase to wait for.
+`Builder.Environment` is derived from that seed as it loads. That is what lets the next step depend
+on it: there is no phase to wait for.
 
 ### 3. Your own sources
 

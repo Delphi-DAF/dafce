@@ -7,18 +7,25 @@
 
 interface
 
+uses
+  Daf.Hosting;
+
 type
   TDefaultSourcesWorld = class
   strict private
     FEnvVar: string;
   public
     Folder: string;
+    Builder: IGenericHostBuilder;
     /// Lo que el host acabo leyendo para la clave de la spec, o que no la tiene.
     Report: string;
     constructor Create;
     destructor Destroy; override;
     procedure WriteJson(const FileName, Server: string);
+    procedure WriteBrokenJson(const FileName: string);
     procedure SetEnvVar(const Value: string);
+    procedure CreateBuilder(const ExtraArgs: TArray<string>);
+    procedure BuildCreated;
     procedure BuildHost(const ExtraArgs: TArray<string>);
   end;
 
@@ -31,8 +38,7 @@ uses
   Daf.MiniSpec,
   Daf.Extensions.Configuration,
   Daf.Extensions.DependencyInjection,
-  Daf.Extensions.Hosting,
-  Daf.Hosting;
+  Daf.Extensions.Hosting;
 
 const
   Section = 'DafDefaultSourcesSpec';
@@ -61,16 +67,30 @@ begin
     Format('{ "%s": { "Server": "%s" } }', [Section, Server]));
 end;
 
+procedure TDefaultSourcesWorld.WriteBrokenJson(const FileName: string);
+begin
+  TFile.WriteAllText(TPath.Combine(Folder, FileName), '{ this is not json');
+end;
+
 procedure TDefaultSourcesWorld.SetEnvVar(const Value: string);
 begin
   FEnvVar := Section + '__Server';
   SetEnvironmentVariable(PChar(FEnvVar), PChar(Value));
 end;
 
+procedure TDefaultSourcesWorld.CreateBuilder(const ExtraArgs: TArray<string>);
+begin
+  Builder := THostBuilder.Create(['--contentRoot=' + Folder] + ExtraArgs);
+end;
+
 procedure TDefaultSourcesWorld.BuildHost(const ExtraArgs: TArray<string>);
 begin
-  var Builder := THostBuilder.Create(['--contentRoot=' + Folder] + ExtraArgs);
-  var Owner: IHostApplicationBuilder := Builder;
+  CreateBuilder(ExtraArgs);
+  BuildCreated;
+end;
+
+procedure TDefaultSourcesWorld.BuildCreated;
+begin
   try
     // Se lee del host: al construirlo, el builder suelta su configuracion.
     var Host := Builder.Build;
@@ -260,6 +280,49 @@ Feature Fuentes de configuracion por defecto @hosting @defaultsources
       procedure(W: TDefaultSourcesWorld)
       begin
         Expect(W.Report).ToEqual('from-args');
+      end)
+
+.Rule('El host carga sus fuentes en la primera lectura de su configuracion, o al construirse')
+
+  .Scenario('Crear el builder no abre ningun fichero')
+    .Given('un appsettings.json que no se puede leer en el content root',
+      procedure(W: TDefaultSourcesWorld)
+      begin
+        W.WriteBrokenJson('appsettings.json');
+      end)
+    .When('se crea el builder',
+      procedure(W: TDefaultSourcesWorld)
+      begin
+        try
+          W.CreateBuilder([]);
+          W.Report := '<creado>';
+        except
+          on E: Exception do W.Report := E.ClassName + ': ' + E.Message;
+        end;
+      end)
+    .&Then('no falla',
+      procedure(W: TDefaultSourcesWorld)
+      begin
+        Expect(W.Report).ToEqual('<creado>');
+      end)
+
+  // El fichero se escribe con el builder ya creado: si se cargara al crearlo, la clave no estaria.
+  .Scenario('Una composicion que no lee la configuracion la recibe al construir el host')
+    .Given('un builder recien creado, y despues un appsettings.json en su content root',
+      procedure(W: TDefaultSourcesWorld)
+      begin
+        W.CreateBuilder([]);
+        W.WriteJson('appsettings.json', 'from-json');
+      end)
+    .When('se construye el host sin haber leido la configuracion',
+      procedure(W: TDefaultSourcesWorld)
+      begin
+        W.BuildCreated;
+      end)
+    .&Then('la configuracion del host lleva la clave del fichero',
+      procedure(W: TDefaultSourcesWorld)
+      begin
+        Expect(W.Report).ToEqual('from-json');
       end);
 
 end.

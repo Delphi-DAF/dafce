@@ -157,7 +157,8 @@ Lifetime.StopApplication;
 
 For a program with a main line, the `Application` module wraps this pipeline and adds `Run`,
 version metadata and a global accessor. The builder is usable the moment it is created: `Services`,
-`Configuration` and `Environment` already answer, so registrations happen where they are written.
+`Configuration` and `Environment` answer as soon as they are read, so registrations happen where they
+are written.
 `Build` returns the application, and its `Run` gives the exit code.
 
 ```pascal

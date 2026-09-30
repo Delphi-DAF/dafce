@@ -99,20 +99,26 @@ type
   end;
 
   /// <summary>
-  /// El componedor generico de la familia, en estilo inmediato: al volver del constructor sus
-  /// propiedades ya estan vivas, y lo registrado ocurre donde esta escrito.
+  /// El componedor generico de la familia, en estilo inmediato: sus propiedades responden en
+  /// cuanto se leen, y lo registrado ocurre donde esta escrito.
   /// </summary>
   /// <remarks>
-  ///   Baja a detalle de implementacion: la maquinaria de construccion es la misma --las cinco
-  ///   Initialize*, las dos fases y el informe por el canal de arranque--, lo que cambia es
-  ///   quien la llama y cuando. Tres Initialize* suben al constructor; las dos que dependen de
-  ///   lo que el usuario anada despues se quedan en Build.
+  ///   La configuracion de host, el entorno y las fuentes por defecto se resuelven en la primera
+  ///   lectura de Configuration, Environment, Properties o del valor por defecto de
+  ///   ServiceProviderOptions, o en Build si la composicion no los lee: crear el builder no abre
+  ///   ningun fichero. Una fuente que el host anade por su cuenta y falla se informa al abrirla, y
+  ///   su excepcion sale en Build.
   /// </remarks>
   THostBuilder = class(TInterfacedObject, IGenericHostBuilder, IHostApplicationBuilder)
   private
     // "Build ya se llamo" es de este builder, no del proceso: como class var, un proceso
     // solo podia construir un host en toda su vida, y un arnes de specs construye varios.
     FHostBuilt: Boolean;
+    // Sigue en True despues de Build, que suelta los campos: un getter posterior no vuelve a cargar.
+    FConfigurationResolved: Boolean;
+    // La primera fuente del host que fallo. La relanza Build; si Build no corre, se libera con el
+    // builder.
+    FSourceFailure: Exception;
     FArgs: TArray<string>;
     FEnvironment: IHostEnvironment;
     FHostBuilderContext: IHostBuilderContext;
@@ -136,6 +142,9 @@ type
     function GetLogging: ILoggingBuilder;
     function GetServiceProviderOptions: TServiceProviderOptions;
     procedure SetServiceProviderOptions(const Value: TServiceProviderOptions);
+    procedure EnsureConfiguration;
+    procedure AddHostSource(const Add: TProc);
+    procedure AddHostFile(const FileName: string);
     procedure InitializeHostConfiguration;
     procedure InitializeHostingEnvironment;
     procedure InitializeDefaultAppConfiguration;
@@ -144,9 +153,9 @@ type
     procedure InitializeServiceProvider;
   public
     /// <param name="Args">
-    ///   Los argumentos del proceso, que entran como fuente de configuracion. Una variante que
-    ///   declare gramatica de linea de comandos NO debe pasarlos aqui: serian dos lecturas del
-    ///   mismo argv con reglas distintas, y discrepan por construccion.
+    ///   Los argumentos del proceso, que entran como fuente de configuracion, como en .NET. Una
+    ///   variante con gramatica los pasa tambien: la configuracion y la gramatica son dos lecturas
+    ///   del mismo argv con reglas distintas, y lo que la gramatica declara se lee de su parse.
     /// </param>
     /// <param name="Configuration">
     ///   Un manager ya sembrado, para que una variante pueda aportar sus fuentes ANTES de que
@@ -535,16 +544,9 @@ begin
   FArgs := Args;
   FConfiguration := Configuration;
 
-  // Las tres que no dependen de lo que el usuario anada despues suben aqui: al volver, la
-  // configuracion y el entorno YA responden. Es lo que distingue al estilo inmediato, y lo que
-  // permite leer el entorno para decidir que fuente anadir sin ningun callback.
-  InitializeHostConfiguration;
-  InitializeHostingEnvironment;
-  InitializeDefaultAppConfiguration;
-  InitializeHostBuilderContext;
-
   // Vivos desde ya, que es lo que el estilo inmediato promete: Services y Logging responden al
-  // volver del constructor, sin haber construido nada.
+  // volver del constructor, sin haber construido nada. La configuracion espera a su primera
+  // lectura, en EnsureConfiguration.
   FServices := TServiceCollection.Create;
   FLoggingImpl := TLoggingBuilder.Create;
   FLogging := FLoggingImpl;
@@ -552,11 +554,14 @@ end;
 
 destructor THostBuilder.Destroy;
 begin
+  // Una fuente que fallo sin que Build llegara a correr: su informe ya salio al abrirla.
+  FSourceFailure.Free;
   inherited;
 end;
 
 function THostBuilder.GetProperties: TDictionary<string, TValue>;
 begin
+  EnsureConfiguration;
   Result := FHostBuilderContext.Properties
 end;
 
@@ -567,11 +572,13 @@ end;
 
 function THostBuilder.GetConfiguration: IConfigurationManager;
 begin
+  EnsureConfiguration;
   Result := FConfiguration;
 end;
 
 function THostBuilder.GetEnvironment: IHostEnvironment;
 begin
+  EnsureConfiguration;
   Result := FEnvironment;
 end;
 
@@ -588,6 +595,7 @@ function THostBuilder.GetServiceProviderOptions: TServiceProviderOptions;
 begin
   if FServiceProviderOptionsFixed then
     Exit(FServiceProviderOptions);
+  EnsureConfiguration;
   Result := TServiceProviderOptions.Create(FEnvironment.IsDevelopment, FEnvironment.IsDevelopment);
 end;
 
@@ -595,6 +603,43 @@ procedure THostBuilder.SetServiceProviderOptions(const Value: TServiceProviderOp
 begin
   FServiceProviderOptions := Value;
   FServiceProviderOptionsFixed := True;
+end;
+
+procedure THostBuilder.EnsureConfiguration;
+begin
+  // El unico punto por el que se carga la configuracion. Una variante con gramatica contesta la
+  // ayuda sin pasar por aqui si su composicion no la lee.
+  if FConfigurationResolved then Exit;
+  FConfigurationResolved := True;
+  InitializeHostConfiguration;
+  InitializeHostingEnvironment;
+  InitializeDefaultAppConfiguration;
+  InitializeHostBuilderContext;
+end;
+
+procedure THostBuilder.AddHostSource(const Add: TProc);
+begin
+  try
+    Add;
+  except
+    // El manager ya lo informo al abrirla. Se guarda la primera y se sigue con las demas, asi que
+    // una lectura durante la composicion responde con lo que si se pudo cargar.
+    on E: Exception do
+      if not Assigned(FSourceFailure) then
+      begin
+        AcquireExceptionObject;
+        FSourceFailure := E;
+      end;
+  end;
+end;
+
+procedure THostBuilder.AddHostFile(const FileName: string);
+begin
+  AddHostSource(
+    procedure
+    begin
+      JsonConfig.AddFile(FConfiguration, TPath.Combine(FEnvironment.ContentRootPath, FileName), [csoOptional]);
+    end);
 end;
 
 procedure THostBuilder.InitializeHostConfiguration;
@@ -608,10 +653,18 @@ begin
   // El orden es el del linaje, y decide quien gana: primero el entorno del proceso, despues los
   // argumentos. Las variables DAF_ se leen sin el prefijo, como las DOTNET_ en .NET, asi que
   // DAF_ENVIRONMENT y --environment fijan la misma clave.
-  FConfiguration.Add(TEnvironmentVariablesConfigurationSource.Create('DAF_'));
+  AddHostSource(
+    procedure
+    begin
+      FConfiguration.Add(TEnvironmentVariablesConfigurationSource.Create('DAF_'));
+    end);
 
   if Length(FArgs) > 0 then
-    CommandLineConfig.AddArgs(FConfiguration, FArgs);
+    AddHostSource(
+      procedure
+      begin
+        CommandLineConfig.AddArgs(FConfiguration, FArgs);
+      end);
 end;
 
 procedure THostBuilder.InitializeHostingEnvironment;
@@ -624,24 +677,26 @@ begin
   // Las fuentes de aplicacion de Host.CreateApplicationBuilder, en su orden: los ficheros del
   // content root, que necesitan el entorno ya resuelto; todas las variables de entorno; y otra
   // vez los argumentos, que tienen que ganar a todo lo anterior.
-  JsonConfig.AddFile(FConfiguration,
-    TPath.Combine(FEnvironment.ContentRootPath, 'appsettings.json'), [csoOptional]);
-  JsonConfig.AddFile(FConfiguration,
-    TPath.Combine(FEnvironment.ContentRootPath, 'appsettings.' + FEnvironment.EnvironmentName + '.json'),
-    [csoOptional]);
+  AddHostFile('appsettings.json');
+  AddHostFile('appsettings.' + FEnvironment.EnvironmentName + '.json');
   if FEnvironment.ApplicationName <> '' then
   begin
     // Un separador de ruta en el nombre sacaria el fichero del content root.
     var App := FEnvironment.ApplicationName.Replace('\', '_').Replace('/', '_');
-    JsonConfig.AddFile(FConfiguration,
-      TPath.Combine(FEnvironment.ContentRootPath, App + '.settings.json'), [csoOptional]);
-    JsonConfig.AddFile(FConfiguration,
-      TPath.Combine(FEnvironment.ContentRootPath, App + '.settings.' + FEnvironment.EnvironmentName + '.json'),
-      [csoOptional]);
+    AddHostFile(App + '.settings.json');
+    AddHostFile(App + '.settings.' + FEnvironment.EnvironmentName + '.json');
   end;
-  FConfiguration.Add(TEnvironmentVariablesConfigurationSource.Create);
+  AddHostSource(
+    procedure
+    begin
+      FConfiguration.Add(TEnvironmentVariablesConfigurationSource.Create);
+    end);
   if Length(FArgs) > 0 then
-    CommandLineConfig.AddArgs(FConfiguration, FArgs);
+    AddHostSource(
+      procedure
+      begin
+        CommandLineConfig.AddArgs(FConfiguration, FArgs);
+      end);
 end;
 
 procedure THostBuilder.InitializeHostBuilderContext;
@@ -678,6 +733,17 @@ end;
 
 function THostBuilder.Build: IHost;
 begin
+  // Lo que la composicion no leyo se carga aqui. Una fuente del host que fallo ya se informo al
+  // abrirla, asi que sale antes del try de abajo, que la informaria otra vez como fallo del host.
+  EnsureConfiguration;
+  if Assigned(FSourceFailure) then
+  begin
+    FHostBuilt := True;
+    var Failure := FSourceFailure;
+    FSourceFailure := nil;
+    raise Failure;
+  end;
+
   try
     if (FHostBuilt) then
       raise Exception.Create('Build already called');

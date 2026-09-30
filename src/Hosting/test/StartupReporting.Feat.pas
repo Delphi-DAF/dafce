@@ -26,6 +26,9 @@ type
     Host: IHost;
     Failure: string;
     ConfigFile: string;
+    Read: string;
+    /// Lo que el canal de arranque llevaba recibido en el momento de la lectura.
+    ReportedOnRead: string;
     constructor Create;
     destructor Destroy; override;
     /// Un fichero de configuracion que no se puede leer: el fallo tipico de la fase en la que
@@ -33,6 +36,8 @@ type
     /// por eso son dos.
     procedure WriteBrokenConfig;
     procedure BuildWithBrokenConfig;
+    /// El mismo fichero, pero como fuente del host: su carpeta es el content root.
+    procedure ComposeOverBrokenHostConfig;
     procedure BuildWithFailingStartup(const WithLogging: Boolean);
     procedure StartHost;
   end;
@@ -155,6 +160,23 @@ begin
   end;
 end;
 
+procedure TReportingWorld.ComposeOverBrokenHostConfig;
+const
+  ProbeKey = 'DafReportingSpec:Probe';
+begin
+  Read := '<not read>';
+  try
+    var Builder := THostBuilder.Create(['--contentRoot=' + ExtractFileDir(ConfigFile),
+      '--' + ProbeKey + '=from-args']);
+    var Owner: IHostApplicationBuilder := Builder;
+    Read := Builder.Configuration[ProbeKey];
+    ReportedOnRead := TProbe.Bootstrap;
+    Host := Builder.Build;
+  except
+    on E: Exception do Failure := E.Message;
+  end;
+end;
+
 procedure TReportingWorld.BuildWithFailingStartup(const WithLogging: Boolean);
 begin
   var Builder := THostBuilder.Create;
@@ -223,6 +245,39 @@ Feature The startup report changes hands when the provider exists @hosting @boot
         // atajo global con la categoria del framework ya clavada.
         Expect(TProbe.Bootstrap).ToContain('] TConfigurationManager |');
         Expect(TProbe.Bootstrap).ToContain('a configuration source could not be added');
+      end)
+
+  .Scenario('A host source that fails does not interrupt the composition')
+    .Given('a host whose content root holds an appsettings.json that cannot be parsed',
+      procedure(W: TReportingWorld)
+      begin
+        W.WriteBrokenConfig;
+      end)
+    .When('the composition reads the configuration, and then builds the host',
+      procedure(W: TReportingWorld)
+      begin
+        W.ComposeOverBrokenHostConfig;
+      end)
+    .&Then('the read answers with what the other sources carry',
+      procedure(W: TReportingWorld)
+      begin
+        Expect(W.Read).ToEqual('from-args');
+      end)
+    .&And('the bootstrap channel had reported the file by the time of the read',
+      procedure(W: TReportingWorld)
+      begin
+        Expect(W.ReportedOnRead).ToContain(W.ConfigFile);
+      end)
+    .&And('Build fails with that same cause',
+      procedure(W: TReportingWorld)
+      begin
+        Expect(W.Failure).ToContain('Cannot parse json');
+        Expect(W.Failure).ToContain(W.ConfigFile);
+      end)
+    .&And('the failure is reported where the file was opened, and only there',
+      procedure(W: TReportingWorld)
+      begin
+        Expect(TProbe.Bootstrap).ToEqual(W.ReportedOnRead);
       end)
 
 .Rule('Once the provider is built, the pipeline reports')

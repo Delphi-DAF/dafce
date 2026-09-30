@@ -200,8 +200,7 @@ begin
   Defaults.Add(TWebDefaults.PortKey, TWebDefaults.DefaultPort.ToString);
   MemoryConfig.AddCollection(Manager, Defaults);
 
-  // Los argumentos SI entran como configuracion aqui: esta variante no declara gramatica, asi
-  // que no hay dos lecturas de argv con que chocar.
+  // Los argumentos entran como configuracion, como en .NET.
   FImpl := THostBuilder.Create(Args, Manager);
   FOwned := FImpl;
 end;

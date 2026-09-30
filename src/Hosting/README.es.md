@@ -157,7 +157,8 @@ Lifetime.StopApplication;
 
 Para un programa con línea principal, el módulo `Application` envuelve este pipeline y añade `Run`,
 metadatos de versión y un accesor global. El builder es usable en cuanto se crea: `Services`,
-`Configuration` y `Environment` ya responden, así que los registros ocurren donde están escritos.
+`Configuration` y `Environment` responden en cuanto se leen, así que los registros ocurren donde
+están escritos.
 `Build` devuelve la aplicación, y su `Run` da el código de salida.
 
 ```pascal

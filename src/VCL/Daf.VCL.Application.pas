@@ -121,8 +121,7 @@ end;
 constructor TVclApplicationBuilder.Create(const Args: TArray<string>);
 begin
   inherited Create;
-  // Los argumentos SI entran como configuracion: esta variante no declara gramatica, asi que no
-  // hay dos lecturas de argv con que chocar.
+  // Los argumentos entran como configuracion, como en .NET.
   FImpl := THostBuilder.Create(Args);
   FOwned := FImpl;
 end;

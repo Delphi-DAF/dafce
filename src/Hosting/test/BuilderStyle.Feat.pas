@@ -44,8 +44,9 @@ uses
   Daf.Extensions.DependencyInjection,
   Daf.Extensions.Hosting;
 
-// El directorio de trabajo es del proceso: se cambia solo mientras se crea el builder, que es
-// cuando el host lo lee. Y sin DAF_CONTENTROOT, que el entorno de desarrollo puede traer puesta.
+// El directorio de trabajo es del proceso: se cambia solo mientras se crea el builder y se lee su
+// entorno, que es cuando el host lo resuelve. Y sin DAF_CONTENTROOT, que el entorno de desarrollo
+// puede traer puesta.
 function CreateInDirectory(const Dir: string): IGenericHostBuilder;
 begin
   var VarName: string := 'DAF_CONTENTROOT';
@@ -55,6 +56,7 @@ begin
   TDirectory.SetCurrentDirectory(Dir);
   try
     Result := THostBuilder.Create;
+    Result.GetEnvironment;
   finally
     TDirectory.SetCurrentDirectory(Previous);
     if Ambient <> '' then
@@ -196,9 +198,10 @@ Feature Several startups in one process @hosting @builder-style
         var VarName: string := 'DAF_ENVIRONMENT';
         Winapi.Windows.SetEnvironmentVariable(PChar(VarName), 'Staging');
         try
-          // El entorno se resuelve al construir, no al consultarlo, asi que queda fijado antes
-          // de que el finally quite la variable.
+          // El entorno se resuelve en la primera lectura: se lee aqui, con la variable puesta,
+          // para que el finally la pueda quitar.
           W.Builder := THostBuilder.Create;
+          W.Builder.GetEnvironment;
         finally
           Winapi.Windows.SetEnvironmentVariable(PChar(VarName), nil);
         end;
