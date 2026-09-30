@@ -167,6 +167,10 @@ type
     ///   nada. Lo que se escapa de la accion lo decide la politica de <c>OnUnhandled</c>, y no el
     ///   manejador por defecto de la invocacion.
     ///
+    ///   Lo que se escapa de una accion de ayuda o de version sustituida lo escribe el manejador por
+    ///   defecto de la invocacion en el error, y el codigo es <c>TCliExit.Failure</c>: se resuelve
+    ///   sin host, y la politica no interviene.
+    ///
     ///   Un fallo de la parada lo decide tambien la politica, que lo recibe sin proveedor. Si la
     ///   accion ya habia fallado, el codigo es el que la politica dio a ese primer fallo, y el de la
     ///   parada solo se informa.
@@ -521,14 +525,15 @@ var
 begin
   if FSettled then Exit(FSettledCode);
 
+  // Sin host, Build ya vio que el parse pidio la version o la ayuda, o que no encajaba: lo resuelve
+  // la invocacion sin ejecutar la accion de ningun comando, y con su manejador por defecto para lo
+  // que se escape de una accion de ayuda o de version sustituida.
+  if not Assigned(FHost) then
+    Exit(FParsed.Invoke(Configuration));
+
   // Lo que se escapa de la accion es de la politica: con el manejador de la invocacion puesto, la
   // politica no veria nunca la excepcion.
   Configuration.EnableDefaultExceptionHandler := False;
-
-  // Sin host, Build ya vio que el parse pidio la version o la ayuda, o que no encajaba: la
-  // invocacion lo resuelve sin ejecutar ninguna accion.
-  if not Assigned(FHost) then
-    Exit(FParsed.Invoke(Configuration));
 
   var ActionFailed := False;
   FHost.Start;

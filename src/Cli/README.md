@@ -134,6 +134,8 @@ This is what the layer adds over the host, and what every console tool used to r
 
 `RootCommand` is a `Daf.CommandLine` root: a banner above `--help` and `--version` goes on its
 `HelpAction` and `VersionAction`, as the [Daf.CommandLine README](../CommandLine/README.md) shows.
+They run without a host, so `OnUnhandled` does not see what escapes them: it is written to the error
+as `EClass: message`, and the process ends with `TCliExit.Failure`.
 
 ### The parse comes first
 

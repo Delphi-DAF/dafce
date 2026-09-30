@@ -771,6 +771,42 @@ Feature La variante CLI de la familia @cli @application-family
           .ToEqual('0/True');
       end)
 
+  .Scenario('Lo que se escapa de una accion de ayuda sustituida lo resuelve la invocacion')
+    .Given('una aplicacion invocada pidiendo la ayuda, con una politica declarada y una accion de ayuda que lanza',
+      procedure(W: TCliWorld)
+      begin
+        W.Builder := TCliApplication.CreateBuilder(['--help']);
+        W.Builder.OnUnhandled(
+          function(const E: Exception; const Services: IServiceProvider): Integer
+          begin
+            W.PolicySaw := E.Message;
+            Result := 42;
+          end);
+        W.Builder.RootCommand.HelpAction :=
+          function(const Parsed: ICommandLineParseResult): Integer
+          begin
+            raise Exception.Create('sin banner');
+          end;
+        W.App := W.Builder.Build;
+      end)
+    .When('se ejecuta',
+      procedure(W: TCliWorld)
+      begin
+        try
+          W.ExitCode := W.App.Run;
+          W.Report := '<no lanzo>';
+        except
+          on E: Exception do
+            W.Report := E.ClassName + ': ' + E.Message;
+        end;
+      end)
+    .&Then('el Run no lanza, y el proceso termina con Failure sin pasar por la politica',
+      procedure(W: TCliWorld)
+      begin
+        Expect(Format('%s exit=%d politica=%s', [W.Report, W.ExitCode, W.PolicySaw]))
+          .ToEqual('<no lanzo> exit=1 politica=');
+      end)
+
   .Scenario('La version contesta aunque otra instancia sostenga el cerrojo')
     .Given('una instancia ya corriendo con ese identificador, y una segunda que pide la version',
       procedure(W: TCliWorld)

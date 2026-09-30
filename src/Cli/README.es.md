@@ -135,6 +135,8 @@ Esto es lo que la capa añade sobre el host, y lo que cada herramienta de consol
 
 `RootCommand` es una raíz de `Daf.CommandLine`: un banner encima de `--help` y de `--version` va en
 su `HelpAction` y su `VersionAction`, como enseña el [README de Daf.CommandLine](../CommandLine/README.es.md).
+Corren sin host, así que `OnUnhandled` no ve lo que se escapa de ellas: se escribe en el error como
+`EClase: mensaje`, y el proceso termina con `TCliExit.Failure`.
 
 ### El parse va primero
 
