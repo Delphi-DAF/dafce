@@ -51,10 +51,10 @@ begin
   B.SingleInstance('daf-greet-tool');
 
   // La politica es un callback, asi que una suite puede compartir la suya sin heredar nada mas.
-  B.OnUnhandled(
-    function(const E: Exception; const Services: IServiceProvider): Integer
+  B.OnException(
+    function(const Failure: TCliFailure): Integer
     begin
-      Writeln(ErrOutput, 'greet: ', E.Message);
+      Writeln(ErrOutput, 'greet: ', Failure.Error.Message);
       Result := 7;
     end);
 
@@ -128,14 +128,14 @@ Esto es lo que la capa añade sobre el host, y lo que cada herramienta de consol
 | Miembro | Qué decide | Cuándo |
 |---|---|---|
 | `SingleInstance(Id)` | Si el proceso llega a arrancar. Sin declararla no hay cerrojo, y pueden correr varias instancias a la vez | Tras el parse, **antes** de cargar la configuración y de construir el contenedor: `--help` y `--version` contestan sin él |
-| `OnUnhandled(Policy)` | Qué pasa con lo que se escapa, y con qué código de salida. Sin ella, `ExitPolicy.LogAndFail` | Alrededor del `Run` |
+| `OnException(Policy)` | Qué pasa con lo que se escapa, y con qué código de salida. Sin ella, `ExitPolicy.LogAndFail` | Alrededor del `Run` |
 | `SetAction(Action)` | Lo que hace la raíz | Dentro del `Run` |
 | `SetAction(Command, Action)` | Lo que hace un comando cuando la invocación lo alcanza | Dentro del `Run` |
 | `RootCommand` | La gramática, que parsea `argv` | En el `Build`, antes que nada más |
 
 `RootCommand` es una raíz de `Daf.CommandLine`: un banner encima de `--help` y de `--version` va en
 su `HelpAction` y su `VersionAction`, como enseña el [README de Daf.CommandLine](../CommandLine/README.es.md).
-Corren sin host, así que `OnUnhandled` no ve lo que se escapa de ellas: se escribe en el error como
+Corren sin host, así que `OnException` no ve lo que se escapa de ellas: se escribe en el error como
 `EClase: mensaje`, y el proceso termina con `TCliExit.Failure`.
 
 ### El parse va primero
@@ -180,9 +180,9 @@ B.SetAction(Greet,
   llamada. Un `Command.SetAction` escrito después la sustituye, como sustituye cualquier acción.
 - Una aplicación que no declara ninguna acción es sus tareas de arranque y sus servicios alojados, y
   `Run` devuelve `TCliExit.Ok`.
-- Lo que se escapa de una acción va a la política de `OnUnhandled`.
-- Un fallo al parar el host va a la misma política, y `Services` es `nil`: el contenedor ya se apagó,
-  y el host ya informó del fallo.
+- Lo que se escapa de una acción va a la política de `OnException`.
+- Un fallo al parar el host va a la misma política, con `Failure.Services` a `nil` y
+  `Failure.Reported` a `True`: el contenedor ya se apagó, y el host ya informó del fallo.
   Si la acción ya había fallado, el código de salida es el que la política dio a ese primer fallo, y
   el de la parada solo se informa.
 
@@ -192,11 +192,13 @@ acción la aplicación— y la aplicación no se libera nunca.
 
 ### Las políticas que vienen de serie
 
-`OnUnhandled` acepta cualquier callback, y tres están ya escritas:
+`OnException` acepta cualquier callback. Recibe un `TCliFailure` —la excepción en `Error`, el
+contenedor en `Services`, `nil` si no lo hay, y `Reported` si el host ya la informó— y devuelve el
+código de salida. Tres están ya escritas:
 
 | | Qué hace |
 |---|---|
-| `ExitPolicy.LogAndFail` | informa por el canal de arranque y devuelve `TCliExit.Failure`; un fallo de la parada, que el host ya informó, no lo vuelve a informar. **Es la que se aplica si no se llama a `OnUnhandled`** |
+| `ExitPolicy.LogAndFail` | informa por el canal de arranque y devuelve `TCliExit.Failure`; un fallo de la parada, que el host ya informó, no lo vuelve a informar. **Es la que se aplica si no se llama a `OnException`** |
 | `ExitPolicy.Rethrow` | deja salir la excepción del `Run`, para quien lo llamó. El host se para igual — la parada está en el `finally` |
 | `ExitPolicy.Silent` | devuelve `TCliExit.Failure` y no dice nada |
 

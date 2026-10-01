@@ -51,10 +51,10 @@ begin
   B.SingleInstance('daf-greet-tool');
 
   // La politica es un callback, asi que una suite puede compartir la suya sin heredar nada mas.
-  B.OnUnhandled(
-    function(const E: Exception; const Services: IServiceProvider): Integer
+  B.OnException(
+    function(const Failure: TCliFailure): Integer
     begin
-      Writeln(ErrOutput, 'greet: ', E.Message);
+      Writeln(ErrOutput, 'greet: ', Failure.Error.Message);
       Result := 7;
     end);
 
@@ -127,14 +127,14 @@ This is what the layer adds over the host, and what every console tool used to r
 | Member | What it decides | When |
 |---|---|---|
 | `SingleInstance(Id)` | Whether the process starts at all. Without it there is no lock, and several instances can run at once | After the parse, **before** the configuration is loaded and the container built: `--help` and `--version` answer without it |
-| `OnUnhandled(Policy)` | What happens to what escapes, and with which exit code. Without it, `ExitPolicy.LogAndFail` | Around `Run` |
+| `OnException(Policy)` | What happens to what escapes, and with which exit code. Without it, `ExitPolicy.LogAndFail` | Around `Run` |
 | `SetAction(Action)` | What the root does | Inside `Run` |
 | `SetAction(Command, Action)` | What a command does when the invocation reaches it | Inside `Run` |
 | `RootCommand` | The grammar that parses `argv` | At `Build`, before anything else |
 
 `RootCommand` is a `Daf.CommandLine` root: a banner above `--help` and `--version` goes on its
 `HelpAction` and `VersionAction`, as the [Daf.CommandLine README](../CommandLine/README.md) shows.
-They run without a host, so `OnUnhandled` does not see what escapes them: it is written to the error
+They run without a host, so `OnException` does not see what escapes them: it is written to the error
 as `EClass: message`, and the process ends with `TCliExit.Failure`.
 
 ### The parse comes first
@@ -179,9 +179,10 @@ B.SetAction(Greet,
   replaces any action.
 - An application that declares no action is its startup tasks and its hosted services, and `Run`
   answers `TCliExit.Ok`.
-- What escapes an action goes to the `OnUnhandled` policy.
-- A failure while stopping the host goes to the same policy, and `Services` is `nil`: the container
-  is already shut down, and the host has already reported the failure. If the action had already failed, the exit code is the one the policy gave
+- What escapes an action goes to the `OnException` policy.
+- A failure while stopping the host goes to the same policy, with `Failure.Services` as `nil` and
+  `Failure.Reported` as `True`: the container is already shut down, and the host has already
+  reported the failure. If the action had already failed, the exit code is the one the policy gave
   that first failure, and the shutdown failure is only reported.
 
 ⚠️ Use the `Services` parameter. An action that captures the application to read `App.Services`
@@ -190,11 +191,13 @@ action the application — and the application is never released.
 
 ### The policies that come as standard
 
-`OnUnhandled` takes any callback, and three are already written:
+`OnException` takes any callback. It receives a `TCliFailure` — the exception in `Error`, the
+container in `Services`, `nil` when there is none, and `Reported` when the host has already reported
+it — and returns the exit code. Three are already written:
 
 | | What it does |
 |---|---|
-| `ExitPolicy.LogAndFail` | reports through the startup channel and returns `TCliExit.Failure`; a shutdown failure, which the host already reported, is not reported again. **This is the one that applies when `OnUnhandled` is not called** |
+| `ExitPolicy.LogAndFail` | reports through the startup channel and returns `TCliExit.Failure`; a shutdown failure, which the host already reported, is not reported again. **This is the one that applies when `OnException` is not called** |
 | `ExitPolicy.Rethrow` | lets the exception out of `Run`, for whoever called it. The host is stopped either way — the shutdown is in the `finally` |
 | `ExitPolicy.Silent` | returns `TCliExit.Failure` and says nothing |
 

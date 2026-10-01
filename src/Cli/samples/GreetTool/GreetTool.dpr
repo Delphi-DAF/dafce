@@ -32,10 +32,10 @@ begin
   B.SingleInstance('daf-greet-tool');
 
   // La politica es un callback, asi que una suite puede compartir la suya sin heredar nada mas.
-  B.OnUnhandled(
-    function(const E: Exception; const Services: IServiceProvider): Integer
+  B.OnException(
+    function(const Failure: TCliFailure): Integer
     begin
-      Writeln(ErrOutput, 'greet: ', E.Message);
+      Writeln(ErrOutput, 'greet: ', Failure.Error.Message);
       Result := 7;
     end);
 

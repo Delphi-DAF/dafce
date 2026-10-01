@@ -590,10 +590,10 @@ Feature La variante CLI de la familia @cli @application-family
       procedure(W: TCliWorld)
       begin
         W.Builder := TCliApplication.CreateBuilder;
-        W.Builder.OnUnhandled(
-          function(const E: Exception; const Services: IServiceProvider): Integer
+        W.Builder.OnException(
+          function(const Failure: TCliFailure): Integer
           begin
-            W.PolicySaw := E.Message;
+            W.PolicySaw := Failure.Error.Message;
             Result := 42;
           end);
         W.Builder.SetAction(
@@ -624,7 +624,7 @@ Feature La variante CLI de la familia @cli @application-family
       procedure(W: TCliWorld)
       begin
         W.Builder := TCliApplication.CreateBuilder;
-        W.Builder.OnUnhandled(ExitPolicy.Rethrow());
+        W.Builder.OnException(ExitPolicy.Rethrow());
         W.Builder.SetAction(
           function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
           begin
@@ -776,10 +776,10 @@ Feature La variante CLI de la familia @cli @application-family
       procedure(W: TCliWorld)
       begin
         W.Builder := TCliApplication.CreateBuilder(['--help']);
-        W.Builder.OnUnhandled(
-          function(const E: Exception; const Services: IServiceProvider): Integer
+        W.Builder.OnException(
+          function(const Failure: TCliFailure): Integer
           begin
-            W.PolicySaw := E.Message;
+            W.PolicySaw := Failure.Error.Message;
             Result := 42;
           end);
         W.Builder.RootCommand.HelpAction :=
@@ -1035,10 +1035,10 @@ Feature La variante CLI de la familia @cli @application-family
       begin
         W.Builder := TCliApplication.CreateBuilder;
         W.Builder.Services.AddSingleton<IParsedEcho, TParsedEcho>;
-        W.Builder.OnUnhandled(
-          function(const E: Exception; const Services: IServiceProvider): Integer
+        W.Builder.OnException(
+          function(const Failure: TCliFailure): Integer
           begin
-            W.PolicySaw := E.Message;
+            W.PolicySaw := Failure.Error.Message;
             Result := TCliExit.Failure;
           end);
         W.Builder.SetAction(
@@ -1082,10 +1082,10 @@ Feature La variante CLI de la familia @cli @application-family
             else
               Result := TGreeter.Create;
           end);
-        W.Builder.OnUnhandled(
-          function(const E: Exception; const Services: IServiceProvider): Integer
+        W.Builder.OnException(
+          function(const Failure: TCliFailure): Integer
           begin
-            W.PolicySaw := E.Message;
+            W.PolicySaw := Failure.Error.Message;
             Result := TCliExit.Failure;
           end);
         W.Builder.SetAction(
@@ -1114,10 +1114,11 @@ Feature La variante CLI de la familia @cli @application-family
       procedure(W: TCliWorld)
       begin
         W.Builder := TCliApplication.CreateBuilder;
-        W.Builder.OnUnhandled(
-          function(const E: Exception; const Services: IServiceProvider): Integer
+        W.Builder.OnException(
+          function(const Failure: TCliFailure): Integer
           begin
-            W.PolicySaw := W.PolicySaw + E.Message + IfThen(Services = nil, ' sin', ' con') + ' proveedor;';
+            W.PolicySaw := W.PolicySaw + Failure.Error.Message +
+              IfThen(Failure.Services = nil, ' sin', ' con') + ' proveedor;';
             Result := 42;
           end);
         Hosting.AddHostedService(W.Builder.Services, TRefusingStop);
@@ -1151,11 +1152,11 @@ Feature La variante CLI de la familia @cli @application-family
         W.Builder := TCliApplication.CreateBuilder;
         // Un codigo distinto para cada fallo: con uno solo, el de la accion y el de la parada
         // darian el mismo verde.
-        W.Builder.OnUnhandled(
-          function(const E: Exception; const Services: IServiceProvider): Integer
+        W.Builder.OnException(
+          function(const Failure: TCliFailure): Integer
           begin
-            W.PolicySaw := W.PolicySaw + E.Message + ';';
-            if E.Message = 'el trabajo fallo' then
+            W.PolicySaw := W.PolicySaw + Failure.Error.Message + ';';
+            if Failure.Error.Message = 'el trabajo fallo' then
               Result := 42
             else
               Result := 43;
@@ -1220,7 +1221,7 @@ Feature La variante CLI de la familia @cli @application-family
       begin
         W.CountedBase := TCounted.Alive;
         W.Builder := TCliApplication.CreateBuilder;
-        W.Builder.OnUnhandled(ExitPolicy.Rethrow());
+        W.Builder.OnException(ExitPolicy.Rethrow());
         W.Builder.Services.AddSingleton<ICounted, TCounted>;
         Hosting.AddHostedService(W.Builder.Services, TRefusingStop);
         W.Builder.SetAction(

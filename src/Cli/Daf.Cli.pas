@@ -53,18 +53,33 @@ type
     const Parsed: ICommandLineParseResult): Integer;
 
   /// <summary>
+  /// Lo que la politica recibe de un fallo.
+  /// </summary>
+  TCliFailure = record
+  public
+    /// <summary>La excepcion que se escapo.</summary>
+    Error: Exception;
+    /// <summary>
+    /// El contenedor, o nil si no lo hay: en la parada ya se apago.
+    /// </summary>
+    Services: IServiceProvider;
+    /// <summary>
+    /// El host ya lo informo al ocurrir. Es el caso de un fallo de la parada.
+    /// </summary>
+    Reported: Boolean;
+    constructor Create(const AError: Exception; const AServices: IServiceProvider;
+      const AReported: Boolean);
+  end;
+
+  /// <summary>
   /// Que hacer con lo que se escapa, y con que codigo termina el proceso.
   /// </summary>
   /// <remarks>
   ///   Es un callback y no un enumerado cerrado porque una suite de aplicaciones tiene su
   ///   propio criterio de codigos de salida, y con un enumerado cada criterio nuevo seria un
   ///   cambio en el framework. Las de siempre estan escritas en <see cref="ExitPolicy"/>.
-  ///
-  ///   Services llega vacio cuando lo que se escapa es un fallo de la parada: el contenedor ya se
-  ///   apago, y el host ya lo informo al ocurrir.
   /// </remarks>
-  TCliExceptionPolicy = reference to function(const E: Exception;
-    const Services: IServiceProvider): Integer;
+  TCliExceptionPolicy = reference to function(const Failure: TCliFailure): Integer;
 
   /// <summary>
   /// Las politicas de siempre, ya escritas. Fachada <c>class</c> y no <c>record</c>: se hereda
@@ -72,8 +87,8 @@ type
   /// </summary>
   ExitPolicy = class
   public
-    /// <summary>Informa por el canal de arranque y devuelve Failure. Un fallo de la parada, que el
-    /// host ya informo, no lo vuelve a informar.</summary>
+    /// <summary>Informa por el canal de arranque y devuelve Failure. Lo que el host ya informo no lo
+    /// vuelve a informar.</summary>
     class function LogAndFail: TCliExceptionPolicy; virtual;
     /// <summary>Propaga: la excepcion sale del Run y la ve quien invoco.</summary>
     class function Rethrow: TCliExceptionPolicy; virtual;
@@ -113,7 +128,7 @@ type
     /// La politica que envuelve al Run, y la que decide lo que se escapa de una accion o de la
     /// parada. Sin ella, LogAndFail.
     /// </summary>
-    function OnUnhandled(const Policy: TCliExceptionPolicy): ICliApplicationBuilder;
+    function OnException(const Policy: TCliExceptionPolicy): ICliApplicationBuilder;
     /// <summary>La accion de la raiz. Ver la sobrecarga.</summary>
     function SetAction(const Action: TCliAction): ICliApplicationBuilder; overload;
     /// <summary>
@@ -164,7 +179,7 @@ type
     /// </summary>
     /// <remarks>
     ///   La version, la ayuda y los errores de parse los resuelve la invocacion sin arrancar
-    ///   nada. Lo que se escapa de la accion lo decide la politica de <c>OnUnhandled</c>, y no el
+    ///   nada. Lo que se escapa de la accion lo decide la politica de <c>OnException</c>, y no el
     ///   manejador por defecto de la invocacion.
     ///
     ///   Lo que se escapa de una accion de ayuda o de version sustituida lo escribe el manejador por
@@ -252,7 +267,7 @@ type
     constructor Create(const Args: TArray<string>);
     destructor Destroy; override;
     function SingleInstance(const Id: string): ICliApplicationBuilder;
-    function OnUnhandled(const Policy: TCliExceptionPolicy): ICliApplicationBuilder;
+    function OnException(const Policy: TCliExceptionPolicy): ICliApplicationBuilder;
     function SetAction(const Action: TCliAction): ICliApplicationBuilder; overload;
     function SetAction(const Command: ICommand; const Action: TCliAction): ICliApplicationBuilder; overload;
     function Build: ICliApplication;
@@ -272,18 +287,28 @@ uses
   Winapi.Windows,
   System.IOUtils;
 
+{ TCliFailure }
+
+constructor TCliFailure.Create(const AError: Exception; const AServices: IServiceProvider;
+  const AReported: Boolean);
+begin
+  Error := AError;
+  Services := AServices;
+  Reported := AReported;
+end;
+
 { ExitPolicy }
 
 class function ExitPolicy.LogAndFail: TCliExceptionPolicy;
 begin
   Result :=
-    function(const E: Exception; const Services: IServiceProvider): Integer
+    function(const Failure: TCliFailure): Integer
     begin
       // Por el canal de arranque y no por el pipeline: a estas alturas el proveedor puede estar
-      // ya soltandose, y este informe es lo ultimo que se puede decir. Sin proveedor, el fallo es
-      // de la parada, y el host ya lo informo.
-      if Services <> nil then
-        BootstrapLog.LoggerFor('TCliApplication').LogError(E, 'the application ended on an unhandled exception');
+      // ya soltandose, o no haber existido nunca, y este informe es lo ultimo que se puede decir.
+      if not Failure.Reported then
+        BootstrapLog.LoggerFor('TCliApplication').LogError(Failure.Error,
+          'the application ended on an unhandled exception');
       Result := TCliExit.Failure;
     end;
 end;
@@ -291,19 +316,19 @@ end;
 class function ExitPolicy.Rethrow: TCliExceptionPolicy;
 begin
   Result :=
-    function(const E: Exception; const Services: IServiceProvider): Integer
+    function(const Failure: TCliFailure): Integer
     begin
-      // E es la excepcion que el handler de Run esta manejando, y el handler la libera al salir por
+      // Es la excepcion que el handler de Run esta manejando, y el handler la libera al salir por
       // otra. Sin quitarsela antes, quien la capture fuera recibe memoria ya devuelta.
       AcquireExceptionObject;
-      raise E at ReturnAddress;
+      raise Failure.Error at ReturnAddress;
     end;
 end;
 
 class function ExitPolicy.Silent: TCliExceptionPolicy;
 begin
   Result :=
-    function(const E: Exception; const Services: IServiceProvider): Integer
+    function(const Failure: TCliFailure): Integer
     begin
       Result := TCliExit.Failure;
     end;
@@ -404,7 +429,7 @@ begin
   Result := Self;
 end;
 
-function TCliApplicationBuilder.OnUnhandled(const Policy: TCliExceptionPolicy): ICliApplicationBuilder;
+function TCliApplicationBuilder.OnException(const Policy: TCliExceptionPolicy): ICliApplicationBuilder;
 begin
   FPolicy := Policy;
   Result := Self;
@@ -545,7 +570,7 @@ begin
       on E: Exception do
       begin
         ActionFailed := True;
-        Result := FPolicy(E, FHost.Services);
+        Result := FPolicy(TCliFailure.Create(E, FHost.Services, False));
       end;
     end;
   finally
@@ -559,7 +584,7 @@ begin
       // informo el suyo.
       on E: Exception do
         if not ActionFailed then
-          Result := FPolicy(E, Default(IServiceProvider));
+          Result := FPolicy(TCliFailure.Create(E, nil, True));
     end;
   end;
 end;
