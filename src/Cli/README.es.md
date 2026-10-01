@@ -202,6 +202,12 @@ B.SetAction(Greet,
   vez. Antes de declarar `OnException`, decide la política por defecto.
 - Un `EAbort` —lo que lanza `Abort`— no llega a la política: el proceso termina con
   `TCliExit.Failure` y no se informa nada.
+- Mientras corre el `Run`, el gancho `ApplicationHandleException` del RTL apunta a la política, como
+  en una aplicación VCL: lo que lanza un procedimiento encolado cuando lo procesa `CheckSynchronize`,
+  y lo que lanzan el `OnCreate` o el `OnDestroy` de un módulo de datos, le llegan con el contenedor.
+  Como en VCL, un `OnCreate` que lanza no impide que el módulo se cree.
+- El código de salida es el que la política dio al primer fallo, aunque la acción termine bien
+  después.
 
 ⚠️ Usa el parámetro `Services`. Una acción que captura la aplicación para leer `App.Services` forma
 con ella un ciclo de referencias —la aplicación sostiene la gramática, la gramática la acción, la

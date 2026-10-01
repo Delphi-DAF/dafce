@@ -201,6 +201,12 @@ B.SetAction(Greet,
   second time. Before `OnException` is declared, the default policy decides.
 - An `EAbort` — what `Abort` raises — does not reach the policy: the process ends with
   `TCliExit.Failure` and nothing is reported.
+- While `Run` is running, the RTL's `ApplicationHandleException` hook points at the policy, as in a
+  VCL application: what a queued procedure raises when `CheckSynchronize` processes it, and what the
+  `OnCreate` or `OnDestroy` of a data module raises, reach it with the container. As in VCL, an
+  `OnCreate` that raises does not keep the module from being created.
+- The exit code is the one the policy gave the first failure, even if the action ends well
+  afterwards.
 
 ⚠️ Use the `Services` parameter. An action that captures the application to read `App.Services`
 forms a reference cycle with it — the application holds the grammar, the grammar the action, the

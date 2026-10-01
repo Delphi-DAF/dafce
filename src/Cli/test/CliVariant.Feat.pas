@@ -147,6 +147,7 @@ implementation
 
 uses
   Winapi.Windows,
+  System.Classes,
   System.Rtti,
   System.TypInfo,
   System.SyncObjs,
@@ -244,6 +245,27 @@ end;
 
 procedure TRefusingStart.Stop;
 begin
+end;
+
+type
+  /// Un modulo de datos cuyo OnCreate lanza. Sin DFM: CreateNew no lo pide, y AfterConstruction
+  /// dispara el OnCreate igual.
+  TFailingModule = class(TDataModule)
+  private
+    procedure Refuse(Sender: TObject);
+  public
+    constructor CreateFailing;
+  end;
+
+constructor TFailingModule.CreateFailing;
+begin
+  OnCreate := Refuse;
+  inherited CreateNew(nil);
+end;
+
+procedure TFailingModule.Refuse(Sender: TObject);
+begin
+  raise Exception.Create('el modulo fallo al crearse');
 end;
 
 constructor TCliWorld.Create;
@@ -1568,6 +1590,105 @@ Feature La variante CLI de la familia @cli @application-family
       begin
         Expect(Format('llamadas=%d salio=%s', [W.PolicyCalls, W.Report]))
           .ToEqual('llamadas=1 salio=el trabajo fallo');
+      end)
+
+.Rule('Mientras corre el Run, lo que el RTL no tiene a quien entregar va a la politica')
+
+  .Scenario('Un modulo de datos cuyo OnCreate lanza')
+    .Given('una aplicacion CLI con una politica de excepciones declarada, y una accion que crea un modulo de datos cuyo OnCreate lanza',
+      procedure(W: TCliWorld)
+      begin
+        W.Builder := TCliApplication.CreateBuilder;
+        W.Builder.OnException(
+          function(const Failure: TCliFailure): Integer
+          begin
+            W.PolicySaw := Failure.Error.Message;
+            Result := 42;
+          end);
+        W.Builder.SetAction(
+          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          begin
+            var Module := TFailingModule.CreateFailing;
+            W.Report := 'creado';
+            Module.Free;
+            Result := TCliExit.Ok;
+          end);
+        W.App := W.Builder.Build;
+      end)
+    .When('se ejecuta',
+      procedure(W: TCliWorld)
+      begin
+        W.ExitCode := W.App.Run;
+      end)
+    .&Then('la politica lo decide, el modulo se crea igual, y el proceso termina con el codigo de ella',
+      procedure(W: TCliWorld)
+      begin
+        Expect(Format('exit=%d %s politica=%s', [W.ExitCode, W.Report, W.PolicySaw]))
+          .ToEqual('exit=42 creado politica=el modulo fallo al crearse');
+      end)
+
+  .Scenario('Un procedimiento encolado que lanza')
+    .Given('una aplicacion CLI con una politica de excepciones declarada, y una accion que encola un procedimiento que lanza',
+      procedure(W: TCliWorld)
+      begin
+        W.Builder := TCliApplication.CreateBuilder;
+        W.Builder.OnException(
+          function(const Failure: TCliFailure): Integer
+          begin
+            W.PolicySaw := Failure.Error.Message + IfThen(Failure.Services = nil, ' sin', ' con') +
+              ' proveedor';
+            Result := 42;
+          end);
+        W.Builder.SetAction(
+          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          begin
+            TThread.ForceQueue(nil,
+              procedure
+              begin
+                raise Exception.Create('lo encolado fallo');
+              end);
+            CheckSynchronize;
+            W.Report := 'siguio';
+            Result := TCliExit.Ok;
+          end);
+        W.App := W.Builder.Build;
+      end)
+    .When('se ejecuta',
+      procedure(W: TCliWorld)
+      begin
+        W.ExitCode := W.App.Run;
+      end)
+    .&Then('la politica lo decide con proveedor, la accion sigue, y el proceso termina con el codigo de ella',
+      procedure(W: TCliWorld)
+      begin
+        Expect(Format('exit=%d %s politica=%s', [W.ExitCode, W.Report, W.PolicySaw]))
+          .ToEqual('exit=42 siguio politica=lo encolado fallo con proveedor');
+      end)
+
+  .Scenario('Al terminar el Run, el RTL recupera el gancho que tenia')
+    .Given('una aplicacion CLI cuya accion mira el gancho del RTL',
+      procedure(W: TCliWorld)
+      begin
+        W.Builder := TCliApplication.CreateBuilder;
+        W.Builder.SetAction(
+          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          begin
+            W.Report := W.Report + ' durante=' + IfThen(Assigned(ApplicationHandleException), 'puesto', 'nil');
+            Result := TCliExit.Ok;
+          end);
+        W.App := W.Builder.Build;
+      end)
+    .When('se ejecuta',
+      procedure(W: TCliWorld)
+      begin
+        W.Report := 'antes=' + IfThen(Assigned(ApplicationHandleException), 'puesto', 'nil');
+        W.ExitCode := W.App.Run;
+        W.Report := W.Report + ' despues=' + IfThen(Assigned(ApplicationHandleException), 'puesto', 'nil');
+      end)
+    .&Then('el gancho esta puesto solo mientras corre',
+      procedure(W: TCliWorld)
+      begin
+        Expect(W.Report).ToEqual('antes=nil durante=puesto despues=nil');
       end)
 
 .Rule('Las opciones del contenedor llegan por el builder de la variante')

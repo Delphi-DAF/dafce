@@ -200,9 +200,16 @@ type
     ///   accion de ayuda o de version sustituida, que llega sin proveedor.
     ///
     ///   Un fallo del arranque llega con el proveedor y ya informado, la accion no corre, y el host
-    ///   se para igual. Un fallo de la parada llega sin proveedor. Si la accion o el arranque ya
-    ///   habian fallado, el codigo es el que la politica dio a ese primer fallo, y el de la parada
+    ///   se para igual. Un fallo de la parada llega sin proveedor, y si ya habia fallado algo antes
     ///   solo se informa.
+    ///
+    ///   Mientras corre, el gancho ApplicationHandleException del RTL apunta a la politica, como en
+    ///   una aplicacion VCL: lo que lanza un procedimiento encolado al procesarse en
+    ///   CheckSynchronize, o el OnCreate o el OnDestroy de un modulo de datos, le llega con el
+    ///   proveedor, y un OnCreate que lanza no impide crear el modulo.
+    ///
+    ///   El codigo de salida es el que la politica dio al primer fallo, aunque la accion termine
+    ///   despues bien.
     /// </remarks>
     function Run: Integer;
     /// <summary>
@@ -255,8 +262,10 @@ type
     TFailures = class(TInterfacedObject, IFailures)
     private
       FPolicy: TCliExceptionPolicy;
-      // Se comparan por identidad y se consumen en la primera consulta que los encuentra: los dos
-      // hablan de una excepcion que esta saliendo hacia el except del .dpr.
+      // Los dos se comparan por identidad, y hablan de una excepcion que esta saliendo hacia el
+      // except del .dpr. Lo informado se consume al entregarse; lo que la politica dejo salir no,
+      // porque puede volver mas de una vez: desde el gancho del RTL, a traves del Run y hasta el
+      // except del .dpr.
       FReported: TObject;
       FLetOut: TObject;
     public
@@ -275,6 +284,12 @@ type
     FSettledCode: Integer;
     FSettled: Boolean;
     FInstanceLock: THandle;
+    FFailed: Boolean;
+    FFailedCode: Integer;
+    /// <summary>El primer codigo que decide la politica es el del proceso.</summary>
+    procedure Settle(const Code: Integer);
+    /// <summary>El gancho del RTL mientras corre el Run.</summary>
+    procedure HandleRtlException(Sender: TObject);
   public
     /// <summary>El punto de entrada de una aplicacion CLI de la familia.</summary>
     class function CreateBuilder(const Args: TArray<string> = nil): ICliApplicationBuilder; static;
@@ -330,6 +345,7 @@ implementation
 
 uses
   Winapi.Windows,
+  System.Classes,
   System.IOUtils;
 
 { TCliFailure }
@@ -406,6 +422,13 @@ end;
 function TCliApplication.TFailures.Decide(const E: Exception; const Services: IServiceProvider;
   const Reported: Boolean): Integer;
 begin
+  // Lo que la politica ya dejo salir sigue saliendo, sin decidirse otra vez.
+  if (FLetOut <> nil) and (FLetOut = E) then
+  begin
+    // Es la excepcion que maneja el except de quien llama, y la liberaria al salir por otra.
+    AcquireExceptionObject;
+    raise E at ReturnAddress;
+  end;
   // Como en TApplication.HandleException: Abort es la excepcion silenciosa, una salida y no un
   // fallo que informar.
   if E is EAbort then
@@ -425,13 +448,6 @@ end;
 
 function TCliApplication.TFailures.Handle(const E: Exception): Integer;
 begin
-  if (FLetOut <> nil) and (FLetOut = E) then
-  begin
-    FLetOut := nil;
-    // Es la excepcion que maneja el except de quien llama, y la liberaria al salir por otra.
-    AcquireExceptionObject;
-    raise E at ReturnAddress;
-  end;
   var Reported := (FReported <> nil) and (FReported = E);
   if Reported then
     FReported := nil;
@@ -642,56 +658,87 @@ begin
     Result := nil;
 end;
 
+procedure TCliApplication.Settle(const Code: Integer);
+begin
+  // El gancho del RTL puede llegar desde otro hilo: el OnDestroy de un modulo de datos que se
+  // libera alli.
+  TMonitor.Enter(Self);
+  try
+    if not FFailed then
+    begin
+      FFailed := True;
+      FFailedCode := Code;
+    end;
+  finally
+    TMonitor.Exit(Self);
+  end;
+end;
+
+procedure TCliApplication.HandleRtlException(Sender: TObject);
+begin
+  // Lo que el RTL entrega aqui es la excepcion que su except esta manejando.
+  if ExceptObject is Exception then
+    Settle(FFailures.Decide(Exception(ExceptObject), FSlot.Services, False));
+end;
+
 function TCliApplication.Run: Integer;
 var
   Configuration: TInvocationConfiguration;
+  PreviousHook: TNotifyEvent;
+  Started: Boolean;
 begin
   if FSettled then Exit(FSettledCode);
+  Result := TCliExit.Ok;
 
   // Lo que se escapa es de la politica: con el manejador de la invocacion puesto, la politica no
   // lo veria nunca.
   Configuration.EnableDefaultExceptionHandler := False;
 
-  // Sin host, Build ya vio que el parse pidio la version o la ayuda, o que no encajaba: lo resuelve
-  // la invocacion sin ejecutar la accion de ningun comando.
-  if not Assigned(FHost) then
-    try
-      Exit(FParsed.Invoke(Configuration));
-    except
-      on E: Exception do
-        Exit(FFailures.Decide(E, nil, False));
-    end;
-
-  var Failed := False;
+  // Lo que el RTL no tiene a quien entregar va a la politica mientras corre, como hace la VCL.
+  PreviousHook := ApplicationHandleException;
+  ApplicationHandleException := HandleRtlException;
   try
-    var Started := False;
-    try
-      FHost.Start;
-      Started := True;
-      FSlot.Fill(FHost.Services);
-      Result := FParsed.Invoke(Configuration);
-    except
-      on E: Exception do
-      begin
-        Failed := True;
-        // El host informa por el canal de arranque lo que hace fallar su arranque.
-        Result := FFailures.Decide(E, FHost.Services, not Started);
+    // Sin host, Build ya vio que el parse pidio la version o la ayuda, o que no encajaba: lo
+    // resuelve la invocacion sin ejecutar la accion de ningun comando.
+    if not Assigned(FHost) then
+      try
+        Result := FParsed.Invoke(Configuration);
+      except
+        on E: Exception do
+          Settle(FFailures.Decide(E, nil, False));
+      end
+    else
+      try
+        Started := False;
+        try
+          FHost.Start;
+          Started := True;
+          FSlot.Fill(FHost.Services);
+          Result := FParsed.Invoke(Configuration);
+        except
+          // El host informa por el canal de arranque lo que hace fallar su arranque.
+          on E: Exception do
+            Settle(FFailures.Decide(E, FHost.Services, not Started));
+        end;
+      finally
+        // Antes de parar: el soporte vive lo que vivan los comandos, y el proveedor no debe
+        // sobrevivir a Stop dentro de el.
+        FSlot.Clear;
+        try
+          StopAndNil(FHost);
+        except
+          // Si ya habia fallado algo, el codigo es el que la politica dio a ese fallo, y Stop ya
+          // informo el suyo.
+          on E: Exception do
+            if not FFailed then
+              Settle(FFailures.Decide(E, nil, True));
+        end;
       end;
-    end;
   finally
-    // Antes de parar: el soporte vive lo que vivan los comandos, y el proveedor no debe
-    // sobrevivir a Stop dentro de el.
-    FSlot.Clear;
-    try
-      StopAndNil(FHost);
-    except
-      // Si el arranque o la accion ya habian fallado, el codigo es el que la politica dio a ese
-      // fallo, y Stop ya informo el suyo.
-      on E: Exception do
-        if not Failed then
-          Result := FFailures.Decide(E, nil, True);
-    end;
+    ApplicationHandleException := PreviousHook;
   end;
-end;
 
+  if FFailed then
+    Result := FFailedCode;
+end;
 end.
