@@ -290,6 +290,12 @@ This is the largest front of 2.0 for anything that had a `.dpr`.
   task (`AddStartupTask<T>`) or a hosted service; and the version is a `[Version]` attribute on any
   class.
 
+- **The `try`/`except` around `Run` becomes a policy.** Catching what escapes, reporting it and
+  choosing the exit code is `B.OnException(Policy)`, declared before the rest of the composition.
+  The `except` of the `.dpr` only hands what escapes before `Run` to `B.HandleException(E)`, which
+  passes it to that same policy and returns the exit code. `Daf.Cli`'s `GreetTool` sample shows
+  the whole `.dpr`.
+
 - **`Daf.Application.Version` moved to `Daf.Commons`.** Add `Daf.Commons` to `requires` if you used
   `TVersionInfo` and did not already. Two things changed in it:
 

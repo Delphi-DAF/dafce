@@ -90,6 +90,13 @@ type
     procedure Stop;
   end;
 
+  /// Falla al arrancar, que es lo que pone a prueba el borde del Run antes de la accion.
+  TRefusingStart = class(TInterfacedObject, IHostedService)
+  public
+    procedure Start;
+    procedure Stop;
+  end;
+
   /// El estado que el Given deja montado y el When usa. Un World de solo texto obliga al Given
   /// a ejecutar la accion para tener algo que dejar escrito, y entonces lo que el Then compara
   /// es la cadena que el propio montaje acaba de componer, no el comportamiento.
@@ -115,6 +122,7 @@ type
     ExitCode: Integer;
     Report: string;
     PolicySaw: string;
+    PolicyCalls: Integer;
     CountedBase: Integer;
     CountedDuring: Integer;
     Loud: IOption<Boolean>;
@@ -146,6 +154,7 @@ uses
   Daf.MiniSpec,
   Daf.Extensions.Configuration,
   Daf.Configuration.CommandLine,
+  Daf.Configuration.Json,
   Daf.Extensions.Logging;
 
 const
@@ -226,6 +235,15 @@ end;
 procedure TRefusingStop.Stop;
 begin
   raise Exception.Create('la parada fallo');
+end;
+
+procedure TRefusingStart.Start;
+begin
+  raise Exception.Create('el arranque fallo');
+end;
+
+procedure TRefusingStart.Stop;
+begin
 end;
 
 constructor TCliWorld.Create;
@@ -649,6 +667,37 @@ Feature La variante CLI de la familia @cli @application-family
         Expect(W.Report).ToEqual('Exception: el trabajo fallo');
       end)
 
+  .Scenario('Un Abort termina con Failure sin pasar por la politica')
+    .Given('una aplicacion CLI con una politica de excepciones declarada, y una accion que llama a Abort',
+      procedure(W: TCliWorld)
+      begin
+        W.Builder := TCliApplication.CreateBuilder;
+        W.Builder.OnException(
+          function(const Failure: TCliFailure): Integer
+          begin
+            W.PolicySaw := Failure.Error.ClassName;
+            Result := 42;
+          end);
+        W.Builder.SetAction(
+          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          begin
+            Abort;
+            Result := TCliExit.Ok;
+          end);
+        W.App := W.Builder.Build;
+      end)
+    .When('se ejecuta',
+      procedure(W: TCliWorld)
+      begin
+        W.ExitCode := W.App.Run;
+      end)
+    .&Then('el proceso termina con Failure, y la politica no lo ve',
+      procedure(W: TCliWorld)
+      begin
+        Expect(Format('exit=%d politica=%s', [W.ExitCode, W.PolicySaw]))
+          .ToEqual(Format('exit=%d politica=', [TCliExit.Failure]));
+      end)
+
   // Dos formas de decir lo mismo son el defecto, no una precedencia que haya que recordar.
   .Scenario('Dos acciones para el mismo comando')
     .Given('un comando que ya tiene accion',
@@ -771,7 +820,7 @@ Feature La variante CLI de la familia @cli @application-family
           .ToEqual('0/True');
       end)
 
-  .Scenario('Lo que se escapa de una accion de ayuda sustituida lo resuelve la invocacion')
+  .Scenario('Lo que se escapa de una accion de ayuda sustituida lo decide la politica')
     .Given('una aplicacion invocada pidiendo la ayuda, con una politica declarada y una accion de ayuda que lanza',
       procedure(W: TCliWorld)
       begin
@@ -779,7 +828,8 @@ Feature La variante CLI de la familia @cli @application-family
         W.Builder.OnException(
           function(const Failure: TCliFailure): Integer
           begin
-            W.PolicySaw := Failure.Error.Message;
+            W.PolicySaw := Failure.Error.Message + IfThen(Failure.Services = nil, ' sin', ' con') +
+              ' proveedor';
             Result := 42;
           end);
         W.Builder.RootCommand.HelpAction :=
@@ -800,11 +850,11 @@ Feature La variante CLI de la familia @cli @application-family
             W.Report := E.ClassName + ': ' + E.Message;
         end;
       end)
-    .&Then('el Run no lanza, y el proceso termina con Failure sin pasar por la politica',
+    .&Then('el Run no lanza, y el proceso termina con el codigo de la politica, que la recibe sin proveedor',
       procedure(W: TCliWorld)
       begin
         Expect(Format('%s exit=%d politica=%s', [W.Report, W.ExitCode, W.PolicySaw]))
-          .ToEqual('<no lanzo> exit=1 politica=');
+          .ToEqual('<no lanzo> exit=42 politica=sin banner sin proveedor');
       end)
 
   .Scenario('La version contesta aunque otra instancia sostenga el cerrojo')
@@ -1107,6 +1157,94 @@ Feature La variante CLI de la familia @cli @application-family
         Expect(W.Report + W.PolicySaw).ToEqual('HELLO');
       end)
 
+.Rule('Un fallo al arrancar lo decide la politica')
+
+  .Scenario('Falla un servicio alojado al arrancar')
+    .Given('una aplicacion CLI con una politica de excepciones declarada, y un servicio alojado que falla al arrancar detras de otro que arranca bien',
+      procedure(W: TCliWorld)
+      begin
+        Log := '';
+        W.Builder := TCliApplication.CreateBuilder;
+        W.Builder.OnException(
+          function(const Failure: TCliFailure): Integer
+          begin
+            W.PolicySaw := W.PolicySaw + Failure.Error.Message +
+              IfThen(Failure.Reported, ' informado', ' sin informar') +
+              IfThen(Failure.Services = nil, ' sin', ' con') + ' proveedor;';
+            Result := 42;
+          end);
+        Hosting.AddHostedService(W.Builder.Services, THostedNote);
+        Hosting.AddHostedService(W.Builder.Services, TRefusingStart);
+        W.Builder.SetAction(
+          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          begin
+            W.ActionRan := True;
+            Result := TCliExit.Ok;
+          end);
+        W.App := W.Builder.Build;
+      end)
+    .When('se ejecuta',
+      procedure(W: TCliWorld)
+      begin
+        try
+          W.ExitCode := RunQuietly(W.App);
+          W.Report := '<no lanzo>';
+        except
+          on E: Exception do
+            W.Report := E.Message;
+        end;
+      end)
+    .&Then('el Run no lanza, y la politica la recibe ya informada y con proveedor',
+      procedure(W: TCliWorld)
+      begin
+        Expect(Format('%s exit=%d %s', [W.Report, W.ExitCode, W.PolicySaw]))
+          .ToEqual('<no lanzo> exit=42 el arranque fallo informado con proveedor;');
+      end)
+    .&And('la accion no corre, y el host se para',
+      procedure(W: TCliWorld)
+      begin
+        Expect(Format('accion=%s %s', [BoolToStr(W.ActionRan, True), Log]))
+          .ToEqual('accion=False hosted:start;hosted:stop;');
+      end)
+
+  .Scenario('Con la politica por defecto, un fallo al arrancar se informa una sola vez')
+    .Given('una aplicacion CLI sin politica declarada, y un servicio alojado que falla al arrancar',
+      procedure(W: TCliWorld)
+      begin
+        W.Builder := TCliApplication.CreateBuilder;
+        Hosting.AddHostedService(W.Builder.Services, TRefusingStart);
+        W.Builder.SetAction(
+          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          begin
+            Result := TCliExit.Ok;
+          end);
+        W.App := W.Builder.Build;
+      end)
+    .When('se ejecuta',
+      procedure(W: TCliWorld)
+      begin
+        var Sink := TLinesSink.Create;
+        var Keep: IBootstrapSink := Sink;
+        try
+          W.ExitCode := RunReporting(W.App, Sink);
+        finally
+          W.Report := Sink.Lines;
+        end;
+      end)
+    .&Then('el canal de arranque lo recibe una vez, y el proceso termina con Failure',
+      procedure(W: TCliWorld)
+      begin
+        var Times := 0;
+        var From := Pos('el arranque fallo', W.Report);
+        while From > 0 do
+        begin
+          Inc(Times);
+          From := PosEx('el arranque fallo', W.Report, From + 1);
+        end;
+        Expect(Format('%d informe(s), codigo %d', [Times, W.ExitCode]))
+          .ToEqual(Format('1 informe(s), codigo %d', [TCliExit.Failure]));
+      end)
+
 .Rule('Un fallo al parar lo decide la politica')
 
   .Scenario('La accion termina bien y la parada falla')
@@ -1256,6 +1394,180 @@ Feature La variante CLI de la familia @cli @application-family
         Expect(Format('during=%d %s after=%s container=%d', [W.CountedDuring, W.Report,
           IfThen(Assigned(W.Watched), 'alive', 'released'), TCounted.Alive - W.CountedBase]))
           .ToEqual('during=1 la parada fallo before=alive after=released container=0');
+      end)
+
+.Rule('Lo que se escapa antes del Run lo decide la misma politica')
+
+  .Scenario('La composicion anade un fichero obligatorio que no existe')
+    .Given('una aplicacion CLI con una politica de excepciones declarada, y un fichero de configuracion que no existe',
+      procedure(W: TCliWorld)
+      begin
+        W.ConfigFile := TPath.Combine(TPath.GetTempPath, 'daf-cli-missing-' + TGuid.NewGuid.ToString + '.json');
+        W.Builder := TCliApplication.CreateBuilder;
+        W.Builder.OnException(
+          function(const Failure: TCliFailure): Integer
+          begin
+            W.Report := Failure.Error.Message;
+            W.PolicySaw := IfThen(Failure.Reported, 'informado', 'sin informar') +
+              IfThen(Failure.Services = nil, ' sin', ' con') + ' proveedor';
+            Result := 42;
+          end);
+      end)
+    .When('la composicion lo anade como obligatorio, y el except del .dpr delega en el builder',
+      procedure(W: TCliWorld)
+      begin
+        // La carga de la fuente tambien informa por el canal de arranque; se aparta para que no se
+        // confunda con la salida de las specs.
+        var Saved := BootstrapLog.Sinks;
+        BootstrapLog.ClearSinks;
+        try
+          try
+            JsonConfig.AddFile(W.Builder.Configuration, W.ConfigFile);
+            W.ExitCode := W.Builder.Build.Run;
+          except
+            on E: Exception do
+              W.ExitCode := W.Builder.HandleException(E);
+          end;
+        finally
+          for var Sink in Saved do
+            BootstrapLog.AddSink(Sink);
+        end;
+      end)
+    .&Then('la politica la recibe sin proveedor, y el proceso termina con su codigo',
+      procedure(W: TCliWorld)
+      begin
+        Expect(Format('exit=%d %s', [W.ExitCode, W.PolicySaw])).ToEqual('exit=42 sin informar sin proveedor');
+      end)
+    .&And('lo que recibe nombra el fichero',
+      procedure(W: TCliWorld)
+      begin
+        Expect(W.Report).ToContain(W.ConfigFile);
+      end)
+
+  .Scenario('Con la politica por defecto, un error de composicion se informa')
+    .Given('una aplicacion CLI sin politica declarada, con un comando que ya tiene accion',
+      procedure(W: TCliWorld)
+      begin
+        W.Builder := TCliApplication.CreateBuilder;
+        W.Greet := CommandLine.Command('greet').SetAction(
+          function(const Parsed: ICommandLineParseResult): Integer
+          begin
+            Result := 0;
+          end);
+        W.Builder.RootCommand.Add(W.Greet);
+      end)
+    .When('la composicion le declara otra, y el except del .dpr delega en el builder',
+      procedure(W: TCliWorld)
+      begin
+        var Sink := TLinesSink.Create;
+        var Keep: IBootstrapSink := Sink;
+        var Saved := BootstrapLog.Sinks;
+        BootstrapLog.ClearSinks;
+        BootstrapLog.AddSink(Keep);
+        try
+          try
+            W.Builder.SetAction(W.Greet,
+              function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+              begin
+                Result := 0;
+              end);
+            W.ExitCode := W.Builder.Build.Run;
+          except
+            on E: Exception do
+              W.ExitCode := W.Builder.HandleException(E);
+          end;
+        finally
+          W.Report := Sink.Lines;
+          BootstrapLog.ClearSinks;
+          for var Each in Saved do
+            BootstrapLog.AddSink(Each);
+        end;
+      end)
+    .&Then('el canal de arranque lo recibe, y el proceso termina con Failure',
+      procedure(W: TCliWorld)
+      begin
+        Expect(Format('codigo %d, informa=%s', [W.ExitCode,
+          BoolToStr(W.Report.Contains('already has an action'), True)]))
+          .ToEqual(Format('codigo %d, informa=True', [TCliExit.Failure]));
+      end)
+
+  .Scenario('Un fallo de la construccion llega a la politica ya informado')
+    .Given('una aplicacion CLI con una politica de excepciones declarada, y un servicio cuya dependencia nadie registra, con la validacion fijada',
+      procedure(W: TCliWorld)
+      begin
+        W.Builder := TCliApplication.CreateBuilder;
+        W.Builder.OnException(
+          function(const Failure: TCliFailure): Integer
+          begin
+            W.PolicySaw := IfThen(Failure.Reported, 'informado', 'sin informar') +
+              IfThen(Failure.Services = nil, ' sin', ' con') + ' proveedor';
+            Result := 42;
+          end);
+        W.Builder.Services.AddSingleton<IWelcome, TWelcome>;
+        W.Builder.ServiceProviderOptions := TServiceProviderOptions.Create(True, True);
+      end)
+    .When('se construye, y el except del .dpr delega en el builder',
+      procedure(W: TCliWorld)
+      begin
+        var Saved := BootstrapLog.Sinks;
+        BootstrapLog.ClearSinks;
+        try
+          try
+            W.ExitCode := W.Builder.Build.Run;
+          except
+            on E: Exception do
+              W.ExitCode := W.Builder.HandleException(E);
+          end;
+        finally
+          for var Sink in Saved do
+            BootstrapLog.AddSink(Sink);
+        end;
+      end)
+    .&Then('la politica la recibe informada y sin proveedor, y el proceso termina con su codigo',
+      procedure(W: TCliWorld)
+      begin
+        Expect(Format('exit=%d %s', [W.ExitCode, W.PolicySaw])).ToEqual('exit=42 informado sin proveedor');
+      end)
+
+  .Scenario('Lo que la politica deja salir del Run no se decide dos veces')
+    .Given('una aplicacion CLI cuya politica cuenta sus llamadas y deja salir la excepcion, y una accion que lanza',
+      procedure(W: TCliWorld)
+      begin
+        W.Builder := TCliApplication.CreateBuilder;
+        W.Builder.OnException(
+          function(const Failure: TCliFailure): Integer
+          begin
+            Inc(W.PolicyCalls);
+            Result := ExitPolicy.Rethrow()(Failure);
+          end);
+        W.Builder.SetAction(
+          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          begin
+            raise Exception.Create('el trabajo fallo');
+          end);
+        W.App := W.Builder.Build;
+      end)
+    .When('se ejecuta, y el except del .dpr delega en el builder lo que sale',
+      procedure(W: TCliWorld)
+      begin
+        try
+          try
+            W.ExitCode := W.App.Run;
+          except
+            on E: Exception do
+              W.ExitCode := W.Builder.HandleException(E);
+          end;
+          W.Report := '<no lanzo>';
+        except
+          on E: Exception do
+            W.Report := E.Message;
+        end;
+      end)
+    .&Then('la politica la decide una vez, y la excepcion sigue saliendo',
+      procedure(W: TCliWorld)
+      begin
+        Expect(Format('llamadas=%d salio=%s', [W.PolicyCalls, W.Report]))
+          .ToEqual('llamadas=1 salio=el trabajo fallo');
       end)
 
 .Rule('Las opciones del contenedor llegan por el builder de la variante')

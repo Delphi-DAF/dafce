@@ -31,8 +31,8 @@ uses
 
 // Una herramienta CLI de la familia, con gramatica de verdad. Lo que enseña es el BORDE del Run:
 // --version y --help los contesta el parse, una invocacion que no encaja sale con su propio
-// codigo, y lo que se escape aplica la politica declarada. Ninguna de esas cuatro lineas se
-// escribe en el .dpr: se declaran.
+// codigo, y lo que se escape --de la accion o de la composicion-- lo decide la politica declarada.
+// El .dpr solo escribe el except que se la pasa.
 //
 //   GreetTool --name Jorge      -> 0, saluda
 //   GreetTool --name Jorge --shout -> 0, saluda gritando
@@ -41,16 +41,10 @@ uses
 //   GreetTool                   -> 2, falta un argumento obligatorio
 //   GreetTool --name boom       -> 7, la politica traduce la excepcion
 begin
-  var NameOpt := CommandLine.Option<string>('--name', 'A quien saludar').Required;
-  var ShoutOpt := CommandLine.Option<Boolean>('--shout', 'En mayusculas').WithAlias('-s');
-
   var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
-  B.RootCommand.WithVersion('2.0.0').Add([NameOpt, ShoutOpt]);
 
-  // Solo una instancia: la segunda no llega a construir el contenedor.
-  B.SingleInstance('daf-greet-tool');
-
-  // La politica es un callback, asi que una suite puede compartir la suya sin heredar nada mas.
+  // La politica es un callback, asi que una suite puede compartir la suya sin heredar nada mas. Va
+  // lo primero porque decide tambien lo que se escape de la composicion.
   B.OnException(
     function(const Failure: TCliFailure): Integer
     begin
@@ -58,22 +52,35 @@ begin
       Result := 7;
     end);
 
-  B.SetAction(
-    function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
-    begin
-      var Who := NameOpt.ValueIn(Parsed);
-      if Who = 'boom' then
-        raise Exception.Create('ese nombre no me gusta');
+  try
+    var NameOpt := CommandLine.Option<string>('--name', 'A quien saludar').Required;
+    var ShoutOpt := CommandLine.Option<Boolean>('--shout', 'En mayusculas').WithAlias('-s');
+    B.RootCommand.WithVersion('2.0.0').Add([NameOpt, ShoutOpt]);
 
-      var Greeting := 'Hola, ' + Who;
-      if ShoutOpt.ValueIn(Parsed) then
-        Greeting := Greeting.ToUpper;
+    // Solo una instancia: la segunda no llega a construir el contenedor.
+    B.SingleInstance('daf-greet-tool');
 
-      Writeln(Greeting);
-      Result := TCliExit.Ok;
-    end);
+    B.SetAction(
+      function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+      begin
+        var Who := NameOpt.ValueIn(Parsed);
+        if Who = 'boom' then
+          raise Exception.Create('ese nombre no me gusta');
 
-  ExitCode := B.Build.Run;
+        var Greeting := 'Hola, ' + Who;
+        if ShoutOpt.ValueIn(Parsed) then
+          Greeting := Greeting.ToUpper;
+
+        Writeln(Greeting);
+        Result := TCliExit.Ok;
+      end);
+
+    ExitCode := B.Build.Run;
+  except
+    // Lo que se escapa antes del Run --de la composicion o del Build-- va a la misma politica.
+    on E: Exception do
+      ExitCode := B.HandleException(E);
+  end;
 end.
 ```
 
@@ -128,15 +135,16 @@ Esto es lo que la capa añade sobre el host, y lo que cada herramienta de consol
 | Miembro | Qué decide | Cuándo |
 |---|---|---|
 | `SingleInstance(Id)` | Si el proceso llega a arrancar. Sin declararla no hay cerrojo, y pueden correr varias instancias a la vez | Tras el parse, **antes** de cargar la configuración y de construir el contenedor: `--help` y `--version` contestan sin él |
-| `OnException(Policy)` | Qué pasa con lo que se escapa, y con qué código de salida. Sin ella, `ExitPolicy.LogAndFail` | Alrededor del `Run` |
+| `OnException(Policy)` | Qué pasa con lo que se escapa, y con qué código de salida. Sin ella, `ExitPolicy.LogAndFail` | Alrededor del `Run`, y en el `except` del `.dpr` |
+| `HandleException(E)` | Pasa a la misma política lo que se escapa antes del `Run` —la composición, el `Build`— y devuelve el código de salida | En el `except` del `.dpr` |
 | `SetAction(Action)` | Lo que hace la raíz | Dentro del `Run` |
 | `SetAction(Command, Action)` | Lo que hace un comando cuando la invocación lo alcanza | Dentro del `Run` |
 | `RootCommand` | La gramática, que parsea `argv` | En el `Build`, antes que nada más |
 
 `RootCommand` es una raíz de `Daf.CommandLine`: un banner encima de `--help` y de `--version` va en
 su `HelpAction` y su `VersionAction`, como enseña el [README de Daf.CommandLine](../CommandLine/README.es.md).
-Corren sin host, así que `OnException` no ve lo que se escapa de ellas: se escribe en el error como
-`EClase: mensaje`, y el proceso termina con `TCliExit.Failure`.
+Corren sin host: lo que se escapa de ellas va a la política de `OnException`, con
+`Failure.Services` a `nil`.
 
 ### El parse va primero
 
@@ -180,11 +188,20 @@ B.SetAction(Greet,
   llamada. Un `Command.SetAction` escrito después la sustituye, como sustituye cualquier acción.
 - Una aplicación que no declara ninguna acción es sus tareas de arranque y sus servicios alojados, y
   `Run` devuelve `TCliExit.Ok`.
-- Lo que se escapa de una acción va a la política de `OnException`.
-- Un fallo al parar el host va a la misma política, con `Failure.Services` a `nil` y
-  `Failure.Reported` a `True`: el contenedor ya se apagó, y el host ya informó del fallo.
-  Si la acción ya había fallado, el código de salida es el que la política dio a ese primer fallo, y
-  el de la parada solo se informa.
+- Lo que se escapa del arranque del host, de una acción o de la parada va a la política de
+  `OnException`. Un fallo del arranque llega con `Failure.Reported` a `True`, porque el host ya lo
+  informó; la acción no corre, y el host se para igual.
+- Un fallo al parar el host llega con `Failure.Services` a `nil` y `Failure.Reported` a `True`: el
+  contenedor ya se apagó, y el host ya informó del fallo. Si el arranque o la acción ya habían
+  fallado, el código de salida es el que la política dio a ese primer fallo, y el de la parada solo
+  se informa.
+- Lo que se escapa antes del `Run` —la composición, o el `Build`— llega a la misma política cuando el
+  `except` del `.dpr` se lo pasa a `HandleException`, como hace el sample de arriba. Llega con
+  `Failure.Services` a `nil`, y con `Failure.Reported` a `True` si el host lo informó al
+  construirse. Lo que la política ya dejó salir del `Run` se relanza sin pasar por ella una segunda
+  vez. Antes de declarar `OnException`, decide la política por defecto.
+- Un `EAbort` —lo que lanza `Abort`— no llega a la política: el proceso termina con
+  `TCliExit.Failure` y no se informa nada.
 
 ⚠️ Usa el parámetro `Services`. Una acción que captura la aplicación para leer `App.Services` forma
 con ella un ciclo de referencias —la aplicación sostiene la gramática, la gramática la acción, la
@@ -198,7 +215,7 @@ código de salida. Tres están ya escritas:
 
 | | Qué hace |
 |---|---|
-| `ExitPolicy.LogAndFail` | informa por el canal de arranque y devuelve `TCliExit.Failure`; un fallo de la parada, que el host ya informó, no lo vuelve a informar. **Es la que se aplica si no se llama a `OnException`** |
+| `ExitPolicy.LogAndFail` | informa por el canal de arranque y devuelve `TCliExit.Failure`; lo que el host ya informó (`Failure.Reported`) no lo vuelve a informar. **Es la que se aplica si no se llama a `OnException`** |
 | `ExitPolicy.Rethrow` | deja salir la excepción del `Run`, para quien lo llamó. El host se para igual — la parada está en el `finally` |
 | `ExitPolicy.Silent` | devuelve `TCliExit.Failure` y no dice nada |
 
@@ -210,7 +227,7 @@ puede derivar de ella para agrupar las suyas.
 | Código | Significado |
 |---|---|
 | `TCliExit.Ok` (0) | La acción terminó bien, no había ninguna, o contestaron `--version` / `--help` |
-| `TCliExit.Failure` (1) | Lo que devuelve `ExitPolicy.LogAndFail` ante una excepción no capturada |
+| `TCliExit.Failure` (1) | Lo que devuelve `ExitPolicy.LogAndFail` ante una excepción no capturada, y con lo que termina un `Abort` |
 | `TCliExit.InvocationError` (2) | La invocación no encaja con la gramática declarada |
 | `TCliExit.AlreadyRunning` (3) | Ya hay otra instancia con ese identificador |
 

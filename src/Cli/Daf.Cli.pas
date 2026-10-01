@@ -60,11 +60,12 @@ type
     /// <summary>La excepcion que se escapo.</summary>
     Error: Exception;
     /// <summary>
-    /// El contenedor, o nil si no lo hay: en la parada ya se apago.
+    /// El contenedor, o nil si no lo hay: antes de que Build lo construya, en una invocacion que se
+    /// resolvio sin host, y en la parada, que ya lo apago.
     /// </summary>
     Services: IServiceProvider;
     /// <summary>
-    /// El host ya lo informo al ocurrir. Es el caso de un fallo de la parada.
+    /// El host ya lo informo al ocurrir: un fallo de su construccion, de su arranque o de su parada.
     /// </summary>
     Reported: Boolean;
     constructor Create(const AError: Exception; const AServices: IServiceProvider;
@@ -125,10 +126,25 @@ type
     /// </summary>
     function SingleInstance(const Id: string): ICliApplicationBuilder;
     /// <summary>
-    /// La politica que envuelve al Run, y la que decide lo que se escapa de una accion o de la
-    /// parada. Sin ella, LogAndFail.
+    /// La politica que decide lo que se escapa, y con que codigo termina el proceso: dentro del Run,
+    /// lo que se escapa del arranque, de una accion o de la parada; fuera, lo que se le pase por
+    /// <see cref="HandleException"/>. Sin ella, LogAndFail.
     /// </summary>
+    /// <remarks>
+    ///   Un EAbort no llega a la politica: termina con <c>TCliExit.Failure</c> sin informar nada.
+    /// </remarks>
     function OnException(const Policy: TCliExceptionPolicy): ICliApplicationBuilder;
+    /// <summary>
+    /// Pasa por la politica de <c>OnException</c> lo que se escapa antes del Run --de la
+    /// composicion o del Build-- y devuelve el codigo con el que termina el proceso. Es lo que
+    /// llama el except del .dpr.
+    /// </summary>
+    /// <remarks>
+    ///   Se llama desde el except que maneja <c>E</c>. Lo que la politica ya dejo salir del Run se
+    ///   relanza sin volver a pasar por ella, y lo que el host ya informo al construirse le llega
+    ///   con <c>Reported</c>.
+    /// </remarks>
+    function HandleException(const E: Exception): Integer;
     /// <summary>La accion de la raiz. Ver la sobrecarga.</summary>
     function SetAction(const Action: TCliAction): ICliApplicationBuilder; overload;
     /// <summary>
@@ -179,16 +195,14 @@ type
     /// </summary>
     /// <remarks>
     ///   La version, la ayuda y los errores de parse los resuelve la invocacion sin arrancar
-    ///   nada. Lo que se escapa de la accion lo decide la politica de <c>OnException</c>, y no el
-    ///   manejador por defecto de la invocacion.
+    ///   nada. Todo lo que se escapa lo decide la politica de <c>OnException</c>, y no el
+    ///   manejador por defecto de la invocacion: el arranque, la accion, la parada, y tambien una
+    ///   accion de ayuda o de version sustituida, que llega sin proveedor.
     ///
-    ///   Lo que se escapa de una accion de ayuda o de version sustituida lo escribe el manejador por
-    ///   defecto de la invocacion en el error, y el codigo es <c>TCliExit.Failure</c>: se resuelve
-    ///   sin host, y la politica no interviene.
-    ///
-    ///   Un fallo de la parada lo decide tambien la politica, que lo recibe sin proveedor. Si la
-    ///   accion ya habia fallado, el codigo es el que la politica dio a ese primer fallo, y el de la
-    ///   parada solo se informa.
+    ///   Un fallo del arranque llega con el proveedor y ya informado, la accion no corre, y el host
+    ///   se para igual. Un fallo de la parada llega sin proveedor. Si la accion o el arranque ya
+    ///   habian fallado, el codigo es el que la politica dio a ese primer fallo, y el de la parada
+    ///   solo se informa.
     /// </remarks>
     function Run: Integer;
     /// <summary>
@@ -222,11 +236,41 @@ type
       procedure Fill(const Value: IServiceProvider);
       procedure Clear;
     end;
+
+    /// <summary>
+    /// El unico sitio donde se decide lo que se escapa. Lo comparten el builder, por lo que le
+    /// llega a HandleException, y la aplicacion, por lo que se escapa dentro del Run.
+    /// </summary>
+    IFailures = interface
+      procedure SetPolicy(const Policy: TCliExceptionPolicy);
+      /// <summary>Un EAbort termina con Failure; lo demas lo decide la politica.</summary>
+      function Decide(const E: Exception; const Services: IServiceProvider;
+        const Reported: Boolean): Integer;
+      /// <summary>La construccion del host ya lo informo.</summary>
+      procedure MarkReported(const E: Exception);
+      /// <summary>Lo que se escapa antes del Run, o lo que la politica ya dejo salir de el.</summary>
+      function Handle(const E: Exception): Integer;
+    end;
+
+    TFailures = class(TInterfacedObject, IFailures)
+    private
+      FPolicy: TCliExceptionPolicy;
+      // Se comparan por identidad y se consumen en la primera consulta que los encuentra: los dos
+      // hablan de una excepcion que esta saliendo hacia el except del .dpr.
+      FReported: TObject;
+      FLetOut: TObject;
+    public
+      procedure SetPolicy(const Policy: TCliExceptionPolicy);
+      function Decide(const E: Exception; const Services: IServiceProvider;
+        const Reported: Boolean): Integer;
+      procedure MarkReported(const E: Exception);
+      function Handle(const E: Exception): Integer;
+    end;
   private
     FHost: IHost;
     FRootCommand: IRootCommand;
     FParsed: ICommandLineParseResult;
-    FPolicy: TCliExceptionPolicy;
+    FFailures: IFailures;
     FSlot: IServicesSlot;
     FSettledCode: Integer;
     FSettled: Boolean;
@@ -235,7 +279,7 @@ type
     /// <summary>El punto de entrada de una aplicacion CLI de la familia.</summary>
     class function CreateBuilder(const Args: TArray<string> = nil): ICliApplicationBuilder; static;
     constructor Create(const Host: IHost; const RootCommand: IRootCommand;
-      const Parsed: ICommandLineParseResult; const Policy: TCliExceptionPolicy;
+      const Parsed: ICommandLineParseResult; const Failures: IFailures;
       const Slot: IServicesSlot; const InstanceLock: THandle);
     constructor CreateSettled(const Code: Integer);
     destructor Destroy; override;
@@ -252,7 +296,7 @@ type
     FArgs: TArray<string>;
     FRootCommand: IRootCommand;
     FSingleInstanceId: string;
-    FPolicy: TCliExceptionPolicy;
+    FFailures: TCliApplication.IFailures;
     FSlot: TCliApplication.IServicesSlot;
     function GetRootCommand: IRootCommand;
     function GetServices: IServiceCollection;
@@ -268,6 +312,7 @@ type
     destructor Destroy; override;
     function SingleInstance(const Id: string): ICliApplicationBuilder;
     function OnException(const Policy: TCliExceptionPolicy): ICliApplicationBuilder;
+    function HandleException(const E: Exception): Integer;
     function SetAction(const Action: TCliAction): ICliApplicationBuilder; overload;
     function SetAction(const Command: ICommand; const Action: TCliAction): ICliApplicationBuilder; overload;
     function Build: ICliApplication;
@@ -351,6 +396,48 @@ begin
   FServices := nil;
 end;
 
+{ TCliApplication.TFailures }
+
+procedure TCliApplication.TFailures.SetPolicy(const Policy: TCliExceptionPolicy);
+begin
+  FPolicy := Policy;
+end;
+
+function TCliApplication.TFailures.Decide(const E: Exception; const Services: IServiceProvider;
+  const Reported: Boolean): Integer;
+begin
+  // Como en TApplication.HandleException: Abort es la excepcion silenciosa, una salida y no un
+  // fallo que informar.
+  if E is EAbort then
+    Exit(TCliExit.Failure);
+  try
+    Result := FPolicy(TCliFailure.Create(E, Services, Reported));
+  except
+    FLetOut := ExceptObject;
+    raise;
+  end;
+end;
+
+procedure TCliApplication.TFailures.MarkReported(const E: Exception);
+begin
+  FReported := E;
+end;
+
+function TCliApplication.TFailures.Handle(const E: Exception): Integer;
+begin
+  if (FLetOut <> nil) and (FLetOut = E) then
+  begin
+    FLetOut := nil;
+    // Es la excepcion que maneja el except de quien llama, y la liberaria al salir por otra.
+    AcquireExceptionObject;
+    raise E at ReturnAddress;
+  end;
+  var Reported := (FReported <> nil) and (FReported = E);
+  if Reported then
+    FReported := nil;
+  Result := Decide(E, nil, Reported);
+end;
+
 { TCliApplicationBuilder }
 
 // Fuera de las clases, para que el cierre capture la accion y el soporte y nada mas: ni el builder
@@ -374,7 +461,8 @@ begin
   FOwned := FImpl;
 
   FRootCommand := CommandLine.Root(TPath.GetFileNameWithoutExtension(ParamStr(0)));
-  FPolicy := ExitPolicy.LogAndFail();
+  FFailures := TCliApplication.TFailures.Create;
+  FFailures.SetPolicy(ExitPolicy.LogAndFail());
   FSlot := TCliApplication.TServicesSlot.Create;
 end;
 
@@ -431,8 +519,13 @@ end;
 
 function TCliApplicationBuilder.OnException(const Policy: TCliExceptionPolicy): ICliApplicationBuilder;
 begin
-  FPolicy := Policy;
+  FFailures.SetPolicy(Policy);
   Result := Self;
+end;
+
+function TCliApplicationBuilder.HandleException(const E: Exception): Integer;
+begin
+  Result := FFailures.Handle(E);
 end;
 
 function TCliApplicationBuilder.SetAction(const Action: TCliAction): ICliApplicationBuilder;
@@ -471,7 +564,7 @@ begin
   // que la composicion no leyo.
   var Parsed := FRootCommand.Parse(FArgs);
   if Parsed.VersionRequested or Parsed.HelpRequested or not Parsed.Succeeded then
-    Exit(TCliApplication.Create(nil, FRootCommand, Parsed, FPolicy, FSlot, 0));
+    Exit(TCliApplication.Create(nil, FRootCommand, Parsed, FFailures, FSlot, 0));
 
   // En el contenedor, para que un servicio lo pida por constructor: es el mismo que recibe la
   // accion.
@@ -487,16 +580,21 @@ begin
   try
     Host := FImpl.Build;
   except
-    // Sin aplicacion que lo suelte al destruirse: una construccion que falla no deja el cerrojo
-    // tomado para el resto del proceso.
-    if Lock <> 0 then
+    on E: Exception do
     begin
-      ReleaseMutex(Lock);
-      CloseHandle(Lock);
+      // Sin aplicacion que lo suelte al destruirse: una construccion que falla no deja el cerrojo
+      // tomado para el resto del proceso.
+      if Lock <> 0 then
+      begin
+        ReleaseMutex(Lock);
+        CloseHandle(Lock);
+      end;
+      // El host informa por el canal de arranque todo lo que hace fallar su construccion.
+      FFailures.MarkReported(E);
+      raise;
     end;
-    raise;
   end;
-  Result := TCliApplication.Create(Host, FRootCommand, Parsed, FPolicy, FSlot, Lock);
+  Result := TCliApplication.Create(Host, FRootCommand, Parsed, FFailures, FSlot, Lock);
 end;
 
 { TCliApplication }
@@ -507,14 +605,14 @@ begin
 end;
 
 constructor TCliApplication.Create(const Host: IHost; const RootCommand: IRootCommand;
-  const Parsed: ICommandLineParseResult; const Policy: TCliExceptionPolicy;
+  const Parsed: ICommandLineParseResult; const Failures: IFailures;
   const Slot: IServicesSlot; const InstanceLock: THandle);
 begin
   inherited Create;
   FHost := Host;
   FRootCommand := RootCommand;
   FParsed := Parsed;
-  FPolicy := Policy;
+  FFailures := Failures;
   FSlot := Slot;
   FInstanceLock := InstanceLock;
 end;
@@ -550,27 +648,34 @@ var
 begin
   if FSettled then Exit(FSettledCode);
 
-  // Sin host, Build ya vio que el parse pidio la version o la ayuda, o que no encajaba: lo resuelve
-  // la invocacion sin ejecutar la accion de ningun comando, y con su manejador por defecto para lo
-  // que se escape de una accion de ayuda o de version sustituida.
-  if not Assigned(FHost) then
-    Exit(FParsed.Invoke(Configuration));
-
-  // Lo que se escapa de la accion es de la politica: con el manejador de la invocacion puesto, la
-  // politica no veria nunca la excepcion.
+  // Lo que se escapa es de la politica: con el manejador de la invocacion puesto, la politica no
+  // lo veria nunca.
   Configuration.EnableDefaultExceptionHandler := False;
 
-  var ActionFailed := False;
-  FHost.Start;
-  try
-    FSlot.Fill(FHost.Services);
+  // Sin host, Build ya vio que el parse pidio la version o la ayuda, o que no encajaba: lo resuelve
+  // la invocacion sin ejecutar la accion de ningun comando.
+  if not Assigned(FHost) then
     try
+      Exit(FParsed.Invoke(Configuration));
+    except
+      on E: Exception do
+        Exit(FFailures.Decide(E, nil, False));
+    end;
+
+  var Failed := False;
+  try
+    var Started := False;
+    try
+      FHost.Start;
+      Started := True;
+      FSlot.Fill(FHost.Services);
       Result := FParsed.Invoke(Configuration);
     except
       on E: Exception do
       begin
-        ActionFailed := True;
-        Result := FPolicy(TCliFailure.Create(E, FHost.Services, False));
+        Failed := True;
+        // El host informa por el canal de arranque lo que hace fallar su arranque.
+        Result := FFailures.Decide(E, FHost.Services, not Started);
       end;
     end;
   finally
@@ -580,11 +685,11 @@ begin
     try
       StopAndNil(FHost);
     except
-      // Si la accion ya habia fallado, el codigo es el que la politica dio a ese fallo, y Stop ya
-      // informo el suyo.
+      // Si el arranque o la accion ya habian fallado, el codigo es el que la politica dio a ese
+      // fallo, y Stop ya informo el suyo.
       on E: Exception do
-        if not ActionFailed then
-          Result := FPolicy(TCliFailure.Create(E, nil, True));
+        if not Failed then
+          Result := FFailures.Decide(E, nil, True);
     end;
   end;
 end;
