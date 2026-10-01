@@ -164,6 +164,23 @@ type
     ///   alojados, y termina con Ok.
     /// </remarks>
     function SetAction(const Command: ICommand; const Action: TCliAction): ICliApplicationBuilder; overload;
+    /// <summary>La accion standalone de la raiz. Ver la sobrecarga.</summary>
+    function SetStandaloneAction(const Action: TCommandAction): ICliApplicationBuilder; overload;
+    /// <summary>
+    /// Declara la accion de un comando que corre sin host: cuando la invocacion alcanza ese
+    /// comando no hay cerrojo de instancia unica, ni tareas de arranque, ni servicios alojados, ni
+    /// configuracion, ni contenedor. Recibe solo el resultado del parse.
+    /// </summary>
+    /// <remarks>
+    ///   Es para lo que se contesta con los argumentos solos, como un <c>init</c> que escribe la
+    ///   configuracion que una ejecucion normal exige, y que por eso no puede depender de ella.
+    ///
+    ///   Como <c>SetAction</c>: si el comando ya tiene accion, lanza
+    ///   <see cref="ECliCompositionError"/> en el acto. Un <c>Command.SetAction</c> posterior
+    ///   sustituye la accion, y el comando sigue sin host. Lo que se escapa de ella va a la
+    ///   politica de <c>OnException</c>, sin proveedor.
+    /// </remarks>
+    function SetStandaloneAction(const Command: ICommand; const Action: TCommandAction): ICliApplicationBuilder; overload;
 
     /// <summary>
     /// Parsea los argumentos con la gramatica y la congela. Es para la composicion que decide con
@@ -184,9 +201,10 @@ type
     /// construye el host, que carga la configuracion que la composicion no leyo.
     /// </summary>
     /// <remarks>
-    ///   La version, la ayuda y una invocacion que no encaja terminan en el parse: la aplicacion
-    ///   se construye sin host, y un fichero de configuracion del host que no se puede leer no le
-    ///   impide contestar. Si la invocacion llega a una accion, ese fichero hace fallar el Build.
+    ///   La version, la ayuda, una invocacion que no encaja y un comando standalone terminan en el
+    ///   parse: la aplicacion se construye sin host, y un fichero de configuracion del host que no
+    ///   se puede leer no le impide contestar. Si la invocacion llega a una accion con host, ese
+    ///   fichero hace fallar el Build.
     /// </remarks>
     function Build: ICliApplication;
   end;
@@ -209,10 +227,11 @@ type
     /// script.
     /// </summary>
     /// <remarks>
-    ///   La version, la ayuda y los errores de parse los resuelve la invocacion sin arrancar
-    ///   nada. Todo lo que se escapa lo decide la politica de <c>OnException</c>, y no el
-    ///   manejador por defecto de la invocacion: el arranque, la accion, la parada, y tambien una
-    ///   accion de ayuda o de version sustituida, que llega sin proveedor.
+    ///   La version, la ayuda, los errores de parse y un comando standalone los resuelve la
+    ///   invocacion sin arrancar nada. Todo lo que se escapa lo decide la politica de
+    ///   <c>OnException</c>, y no el manejador por defecto de la invocacion: el arranque, la accion,
+    ///   la parada, y tambien una accion de ayuda o de version sustituida o una accion standalone,
+    ///   que llegan sin proveedor.
     ///
     ///   Un fallo del arranque llega con el proveedor y ya informado, la accion no corre, y el host
     ///   se para igual. Un fallo de la parada llega sin proveedor, y si ya habia fallado algo antes
@@ -229,7 +248,8 @@ type
     function Run: Integer;
     /// <summary>
     /// El contenedor, o nil si la invocacion se resolvio sin construirlo --otra instancia ya
-    /// corriendo, o <c>--version</c> y <c>--help</c>, que los contesta la gramatica--.
+    /// corriendo, <c>--version</c> y <c>--help</c>, que los contesta la gramatica, o un comando
+    /// standalone--.
     /// </summary>
     property Services: IServiceProvider read GetServices;
   end;
@@ -329,7 +349,10 @@ type
     FFailures: TCliApplication.IFailures;
     FSlot: TCliApplication.IServicesSlot;
     FParsed: ICommandLineParseResult;
+    FStandalone: TArray<ICommand>;
     function GetRootCommand: IRootCommand;
+    procedure CheckNoAction(const Command: ICommand);
+    function IsStandalone(const Command: ICommand): Boolean;
     function GetServices: IServiceCollection;
     function GetConfiguration: IConfigurationManager;
     function GetEnvironment: IHostEnvironment;
@@ -346,6 +369,8 @@ type
     function HandleException(const E: Exception): Integer;
     function SetAction(const Action: TCliAction): ICliApplicationBuilder; overload;
     function SetAction(const Command: ICommand; const Action: TCliAction): ICliApplicationBuilder; overload;
+    function SetStandaloneAction(const Action: TCommandAction): ICliApplicationBuilder; overload;
+    function SetStandaloneAction(const Command: ICommand; const Action: TCommandAction): ICliApplicationBuilder; overload;
     function ParseArgs: ICommandLineParseResult;
     function Build: ICliApplication;
     property RootCommand: IRootCommand read GetRootCommand;
@@ -566,14 +591,43 @@ begin
   Result := SetAction(FRootCommand, Action);
 end;
 
-function TCliApplicationBuilder.SetAction(const Command: ICommand; const Action: TCliAction): ICliApplicationBuilder;
+procedure TCliApplicationBuilder.CheckNoAction(const Command: ICommand);
 begin
   var Existing := Command.Action();
   if Assigned(Existing) then
     raise ECliCompositionError.CreateFmt('Command "%s" already has an action. Two ways of saying the ' +
       'same thing is a precedence rule nobody remembers -- keep one.', [Command.FullPath]);
+end;
+
+function TCliApplicationBuilder.SetAction(const Command: ICommand; const Action: TCliAction): ICliApplicationBuilder;
+begin
+  CheckNoAction(Command);
   Command.SetAction(ServiceAction(Action, FSlot));
   Result := Self;
+end;
+
+function TCliApplicationBuilder.SetStandaloneAction(const Action: TCommandAction): ICliApplicationBuilder;
+begin
+  Result := SetStandaloneAction(FRootCommand, Action);
+end;
+
+function TCliApplicationBuilder.SetStandaloneAction(const Command: ICommand;
+  const Action: TCommandAction): ICliApplicationBuilder;
+begin
+  CheckNoAction(Command);
+  Command.SetAction(Action);
+  // Lo que queda sin host es el comando, no la accion: una que se le asigne despues lo sustituye
+  // sin devolverle el host.
+  FStandalone := FStandalone + [Command];
+  Result := Self;
+end;
+
+function TCliApplicationBuilder.IsStandalone(const Command: ICommand): Boolean;
+begin
+  for var Each in FStandalone do
+    if (Each as IInterface) = (Command as IInterface) then
+      Exit(True);
+  Result := False;
 end;
 
 function TCliApplicationBuilder.AcquireInstanceLock(out Lock: THandle): Boolean;
@@ -603,11 +657,12 @@ end;
 
 function TCliApplicationBuilder.Build: ICliApplication;
 begin
-  // El parse va primero: la version, la ayuda y una invocacion que no encaja los contesta la
-  // gramatica, sin el cerrojo de instancia unica, sin contenedor y sin cargar la configuracion
-  // que la composicion no leyo.
+  // El parse va primero: la version, la ayuda, una invocacion que no encaja y un comando
+  // standalone se resuelven sin el cerrojo de instancia unica, sin contenedor y sin cargar la
+  // configuracion que la composicion no leyo.
   var Parsed := ParseArgs;
-  if Parsed.VersionRequested or Parsed.HelpRequested or not Parsed.Succeeded then
+  if Parsed.VersionRequested or Parsed.HelpRequested or not Parsed.Succeeded or
+    IsStandalone(Parsed.Command) then
     Exit(TCliApplication.Create(nil, FRootCommand, Parsed, FFailures, FSlot, 0));
 
   // En el contenedor, para que un servicio lo pida por constructor: es el mismo que recibe la

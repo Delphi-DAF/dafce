@@ -116,6 +116,9 @@ type
     FileArg: IArgument<string>;
     Greet: ICommand;
     Farewell: ICommand;
+    Init: ICommand;
+    /// <summary>Si habia contenedor entre el Build y el Run: el Run lo suelta al parar.</summary>
+    Container: string;
     Parsed: ICommandLineParseResult;
     /// Empieza en -1 y no en 0: "termino con 0" es justo lo que tendria un campo que el When no
     /// llego a escribir.
@@ -1177,6 +1180,241 @@ Feature La variante CLI de la familia @cli @application-family
       procedure(W: TCliWorld)
       begin
         Expect(W.Report + W.PolicySaw).ToEqual('HELLO');
+      end)
+
+.Rule('Una accion standalone corre sin host')
+
+  .Scenario('Un comando standalone corre sin contenedor ni servicios alojados')
+    .Given('una aplicacion CLI con tareas de arranque y servicios alojados, y un comando con una accion standalone',
+      procedure(W: TCliWorld)
+      begin
+        Log := '';
+        W.Builder := TCliApplication.CreateBuilder(['init']);
+        Hosting.AddStartupTask(W.Builder.Services, TStartupNote);
+        Hosting.AddHostedService(W.Builder.Services, THostedNote);
+        W.Init := CommandLine.Command('init', 'Escribe la configuracion de partida');
+        W.Builder.RootCommand.Add(W.Init);
+        W.Builder.SetStandaloneAction(W.Init,
+          function(const Parsed: ICommandLineParseResult): Integer
+          begin
+            W.ActionRan := True;
+            Result := 5;
+          end);
+      end)
+    .When('se construye y se invoca ese comando',
+      procedure(W: TCliWorld)
+      begin
+        W.App := W.Builder.Build;
+        W.Container := IfThen(W.App.Services = nil, 'no', 'si');
+        W.ExitCode := W.App.Run;
+      end)
+    .&Then('corre su accion y termina con su codigo, sin contenedor',
+      procedure(W: TCliWorld)
+      begin
+        Expect(Format('exit=%d corrio=%s contenedor=%s', [W.ExitCode, BoolToStr(W.ActionRan, True),
+          W.Container])).ToEqual('exit=5 corrio=True contenedor=no');
+      end)
+    .&And('no corre ninguna tarea de arranque ni ningun servicio alojado',
+      procedure(W: TCliWorld)
+      begin
+        Expect('log=' + Log).ToEqual('log=');
+      end)
+
+  .Scenario('Un comando standalone corre aunque otra instancia sostenga el cerrojo')
+    .Given('una instancia ya corriendo con ese identificador, y una segunda igual invocada con un comando standalone',
+      procedure(W: TCliWorld)
+      begin
+        var First := TCliApplication.CreateBuilder;
+        First.SingleInstance('daf-cli-spec');
+        W.Holder := First.Build;
+        W.Holder.Run;
+
+        W.Builder := TCliApplication.CreateBuilder(['init']);
+        W.Builder.SingleInstance('daf-cli-spec');
+        W.Init := CommandLine.Command('init');
+        W.Builder.RootCommand.Add(W.Init);
+        W.Builder.SetStandaloneAction(W.Init,
+          function(const Parsed: ICommandLineParseResult): Integer
+          begin
+            W.ActionRan := True;
+            Result := TCliExit.Ok;
+          end);
+        W.App := W.Builder.Build;
+      end)
+    .When('arranca la segunda',
+      procedure(W: TCliWorld)
+      begin
+        W.ExitCode := W.App.Run;
+      end)
+    .&Then('corre su accion y termina bien',
+      procedure(W: TCliWorld)
+      begin
+        Expect(Format('exit=%d corrio=%s', [W.ExitCode, BoolToStr(W.ActionRan, True)]))
+          .ToEqual('exit=0 corrio=True');
+      end)
+
+  .Scenario('Un comando standalone corre con un fichero de configuracion del host roto')
+    .Given('un appsettings.json que no se puede leer en la raiz de contenido del host',
+      procedure(W: TCliWorld)
+      begin
+        W.WriteBrokenHostConfig;
+      end)
+    .When('se invoca un comando standalone',
+      procedure(W: TCliWorld)
+      begin
+        try
+          W.Builder := TCliApplication.CreateBuilder(['init']);
+          W.Init := CommandLine.Command('init');
+          W.Builder.RootCommand.Add(W.Init);
+          W.Builder.SetStandaloneAction(W.Init,
+            function(const Parsed: ICommandLineParseResult): Integer
+            begin
+              W.ActionRan := True;
+              Result := TCliExit.Ok;
+            end);
+          W.App := W.Builder.Build;
+          W.ExitCode := W.App.Run;
+          W.Report := NoEscape;
+        except
+          on E: Exception do W.Report := E.Message;
+        end;
+      end)
+    .&Then('corre su accion y termina bien',
+      procedure(W: TCliWorld)
+      begin
+        Expect(Format('exit=%d corrio=%s escapo=%s', [W.ExitCode, BoolToStr(W.ActionRan, True), W.Report]))
+          .ToEqual('exit=0 corrio=True escapo=' + NoEscape);
+      end)
+
+  .Scenario('Lo que se escapa de una accion standalone lo decide la politica')
+    .Given('una aplicacion CLI con una politica declarada, y una accion standalone que lanza',
+      procedure(W: TCliWorld)
+      begin
+        W.Builder := TCliApplication.CreateBuilder;
+        W.Builder.OnException(
+          function(const Failure: TCliFailure): Integer
+          begin
+            W.PolicySaw := Failure.Error.Message + IfThen(Failure.Services = nil, ' sin', ' con') +
+              ' proveedor';
+            Result := 42;
+          end);
+        W.Builder.SetStandaloneAction(
+          function(const Parsed: ICommandLineParseResult): Integer
+          begin
+            raise Exception.Create('init fallo');
+          end);
+        W.App := W.Builder.Build;
+      end)
+    .When('se ejecuta',
+      procedure(W: TCliWorld)
+      begin
+        W.ExitCode := W.App.Run;
+      end)
+    .&Then('la politica la recibe sin proveedor, y el proceso termina con su codigo',
+      procedure(W: TCliWorld)
+      begin
+        Expect(Format('exit=%d %s', [W.ExitCode, W.PolicySaw])).ToEqual('exit=42 init fallo sin proveedor');
+      end)
+
+  .Scenario('Una accion standalone para un comando que ya tiene accion')
+    .Given('un comando que ya tiene accion',
+      procedure(W: TCliWorld)
+      begin
+        W.Builder := TCliApplication.CreateBuilder;
+        W.Init := CommandLine.Command('init').SetAction(
+          function(const Parsed: ICommandLineParseResult): Integer
+          begin
+            Result := 0;
+          end);
+        W.Builder.RootCommand.Add(W.Init);
+      end)
+    .When('se le declara una accion standalone en el builder',
+      procedure(W: TCliWorld)
+      begin
+        try
+          W.Builder.SetStandaloneAction(W.Init,
+            function(const Parsed: ICommandLineParseResult): Integer
+            begin
+              Result := 0;
+            end);
+          W.Report := '<declaro sin protestar>';
+        except
+          on E: Exception do
+            W.Report := E.ClassName + ': ' + E.Message;
+        end;
+      end)
+    .&Then('la declaracion falla con un error de composicion que nombra el comando',
+      procedure(W: TCliWorld)
+      begin
+        Expect(W.Report).ToStartWith('ECliCompositionError: ');
+        Expect(W.Report).ToContain('init');
+      end)
+
+  .Scenario('Reasignar la accion de un comando standalone lo deja sin host')
+    .Given('un comando con una accion standalone que despues se sustituye en el propio comando',
+      procedure(W: TCliWorld)
+      begin
+        W.Builder := TCliApplication.CreateBuilder(['init']);
+        W.Init := CommandLine.Command('init');
+        W.Builder.RootCommand.Add(W.Init);
+        W.Builder.SetStandaloneAction(W.Init,
+          function(const Parsed: ICommandLineParseResult): Integer
+          begin
+            W.Report := 'la primera';
+            Result := TCliExit.Ok;
+          end);
+        W.Init.SetAction(
+          function(const Parsed: ICommandLineParseResult): Integer
+          begin
+            W.Report := 'la ultima';
+            Result := TCliExit.Ok;
+          end);
+      end)
+    .When('se construye y se invoca ese comando',
+      procedure(W: TCliWorld)
+      begin
+        W.App := W.Builder.Build;
+        W.Container := IfThen(W.App.Services = nil, 'no', 'si');
+        W.ExitCode := W.App.Run;
+      end)
+    .&Then('corre la ultima accion, sin contenedor',
+      procedure(W: TCliWorld)
+      begin
+        Expect(Format('%s contenedor=%s', [W.Report, W.Container])).ToEqual('la ultima contenedor=no');
+      end)
+
+  .Scenario('Los demas comandos siguen con host')
+    .Given('una aplicacion CLI con un comando standalone y otro con una accion que usa servicios',
+      procedure(W: TCliWorld)
+      begin
+        W.Builder := TCliApplication.CreateBuilder(['greet']);
+        W.Builder.Services.AddSingleton<IGreeter, TGreeter>;
+        W.Init := CommandLine.Command('init');
+        W.Greet := CommandLine.Command('greet');
+        W.Builder.RootCommand.Add([W.Init, W.Greet]);
+        W.Builder.SetStandaloneAction(W.Init,
+          function(const Parsed: ICommandLineParseResult): Integer
+          begin
+            W.Report := 'init';
+            Result := TCliExit.Ok;
+          end);
+        W.Builder.SetAction(W.Greet,
+          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          begin
+            W.Report := Services.GetRequiredService<IGreeter>.Greet;
+            Result := TCliExit.Ok;
+          end);
+        W.App := W.Builder.Build;
+      end)
+    .When('se invoca el comando con servicios',
+      procedure(W: TCliWorld)
+      begin
+        W.ExitCode := W.App.Run;
+      end)
+    .&Then('corre con el contenedor',
+      procedure(W: TCliWorld)
+      begin
+        Expect(Format('exit=%d %s', [W.ExitCode, W.Report])).ToEqual('exit=0 hello');
       end)
 
 .Rule('La composicion puede decidir con el resultado del parse')

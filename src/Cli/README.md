@@ -138,6 +138,7 @@ This is what the layer adds over the host, and what every console tool used to r
 | `HandleException(E)` | Hands what escapes before `Run` — the composition, `Build` — to the same policy, and returns the exit code | In the `.dpr`'s `except` |
 | `SetAction(Action)` | What the root does | Inside `Run` |
 | `SetAction(Command, Action)` | What a command does when the invocation reaches it | Inside `Run` |
+| `SetStandaloneAction(Command, Action)` | What a command does without a host: no lock, no startup tasks, no hosted services, no configuration, no container | Inside `Run` |
 | `RootCommand` | The grammar that parses `argv` | At `Build`, before anything else |
 
 `RootCommand` is a `Daf.CommandLine` root: a banner above `--help` and `--version` goes on its
@@ -213,6 +214,29 @@ B.SetAction(Greet,
 forms a reference cycle with it — the application holds the grammar, the grammar the action, the
 action the application — and the application is never released.
 
+### A command without a host
+
+`SetStandaloneAction(Command, Action)` declares the action of a command that runs without a host.
+When the invocation reaches it there is no single-instance lock, no startup task, no hosted service,
+no configuration and no container: the action receives only the parse result, as a `TCommandAction`
+of `Daf.CommandLine`.
+
+```pascal
+var Init := CommandLine.Command('init', 'Write the starting configuration');
+B.RootCommand.Add(Init);
+B.SetStandaloneAction(Init,
+  function(const Parsed: ICommandLineParseResult): Integer
+  begin
+    TFile.WriteAllText('appsettings.json', '{}');
+    Result := TCliExit.Ok;
+  end);
+```
+
+It is for what the arguments alone answer, such as an `init` that writes the configuration an
+ordinary run requires. Like `SetAction`, it raises `ECliCompositionError` when the command already
+has an action. A `Command.SetAction` written afterwards replaces the action, and the command stays
+without a host. What escapes it goes to the `OnException` policy, with `Failure.Services` as `nil`.
+
 ### The policies that come as standard
 
 `OnException` takes any callback. It receives a `TCliFailure` — the exception in `Error`, the
@@ -245,7 +269,7 @@ how it ended is not usable in a script.
 `Services` is the container, and it answers **between `Build` and `Run`**. It is `nil` in two cases:
 
 - The invocation was settled without building one: `--version`, `--help`, an invocation that does not
-  fit the grammar, or another instance already holding the single-instance id.
+  fit the grammar, a standalone command, or another instance already holding the single-instance id.
 - After `Run` has returned, always — `Stop` releases the host.
 
 So whatever a program needs from the container once the action has run, it keeps from inside the

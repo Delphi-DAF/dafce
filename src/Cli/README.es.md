@@ -139,6 +139,7 @@ Esto es lo que la capa añade sobre el host, y lo que cada herramienta de consol
 | `HandleException(E)` | Pasa a la misma política lo que se escapa antes del `Run` —la composición, el `Build`— y devuelve el código de salida | En el `except` del `.dpr` |
 | `SetAction(Action)` | Lo que hace la raíz | Dentro del `Run` |
 | `SetAction(Command, Action)` | Lo que hace un comando cuando la invocación lo alcanza | Dentro del `Run` |
+| `SetStandaloneAction(Command, Action)` | Lo que hace un comando sin host: sin cerrojo, sin tareas de arranque, sin servicios alojados, sin configuración y sin contenedor | Dentro del `Run` |
 | `RootCommand` | La gramática, que parsea `argv` | En el `Build`, antes que nada más |
 
 `RootCommand` es una raíz de `Daf.CommandLine`: un banner encima de `--help` y de `--version` va en
@@ -214,6 +215,29 @@ B.SetAction(Greet,
 con ella un ciclo de referencias —la aplicación sostiene la gramática, la gramática la acción, la
 acción la aplicación— y la aplicación no se libera nunca.
 
+### Un comando sin host
+
+`SetStandaloneAction(Command, Action)` declara la acción de un comando que corre sin host. Cuando la
+invocación lo alcanza no hay cerrojo de instancia única, ni tareas de arranque, ni servicios alojados,
+ni configuración, ni contenedor: la acción recibe solo el resultado del parse, como un
+`TCommandAction` de `Daf.CommandLine`.
+
+```pascal
+var Init := CommandLine.Command('init', 'Escribe la configuración de partida');
+B.RootCommand.Add(Init);
+B.SetStandaloneAction(Init,
+  function(const Parsed: ICommandLineParseResult): Integer
+  begin
+    TFile.WriteAllText('appsettings.json', '{}');
+    Result := TCliExit.Ok;
+  end);
+```
+
+Es para lo que se contesta con los argumentos solos, como un `init` que escribe la configuración que
+una ejecución normal exige. Como `SetAction`, lanza `ECliCompositionError` si el comando ya tiene
+acción. Un `Command.SetAction` escrito después sustituye la acción, y el comando sigue sin host. Lo
+que se escapa de ella va a la política de `OnException`, con `Failure.Services` a `nil`.
+
 ### Las políticas que vienen de serie
 
 `OnException` acepta cualquier callback. Recibe un `TCliFailure` —la excepción en `Error`, el
@@ -246,7 +270,8 @@ terminó no sirve en un script.
 `Services` es el contenedor, y responde **entre el `Build` y el `Run`**. Vale `nil` en dos casos:
 
 - La invocación se resolvió sin construirlo: `--version`, `--help`, una invocación que no encaja con
-  la gramática, u otra instancia que ya sostiene el identificador de instancia única.
+  la gramática, un comando standalone, u otra instancia que ya sostiene el identificador de instancia
+  única.
 - Después de que `Run` haya vuelto, siempre — `Stop` libera el host.
 
 Así que lo que un programa necesite del contenedor una vez corrida la acción lo sostiene desde
