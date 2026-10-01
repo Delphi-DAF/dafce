@@ -481,6 +481,23 @@ forms a reference cycle with it, and neither is ever released.
 
 ---
 
+## A frozen grammar
+
+`Freeze` closes a grammar. From then on, adding a command, an option or an argument, or changing one
+already declared — an alias, the arity, the accepted values, the default, a validation, the version —
+raises `ECommandLine` naming the symbol. It reaches everything already declared below the root. The
+actions stay open, the help and the version ones included, because they are read when the result is
+invoked:
+
+```pascal
+Root.Freeze;
+Root.SetAction(Greet);                             // fine
+Root.Add(CommandLine.Option<Boolean>('--loud'));   // ECommandLine
+```
+
+Code that decides with a parse result can rely on the grammar staying the one it was parsed with.
+`System.CommandLine` has no counterpart.
+
 ## Divergences from `System.CommandLine`
 
 **1 · The value is read the other way round.** In .NET you write `result.GetValue(fileOption)`. Here

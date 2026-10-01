@@ -485,6 +485,23 @@ instalada forma con ella un ciclo de referencias, y ninguna de las dos se libera
 
 ---
 
+## Una gramática congelada
+
+`Freeze` cierra una gramática. A partir de ahí, añadir un comando, una opción o un argumento, o
+cambiar uno ya declarado —un alias, la aridad, los valores admitidos, el valor por defecto, una
+validación, la versión— lanza `ECommandLine` nombrando el símbolo. Alcanza a todo lo ya declarado
+bajo la raíz. Las acciones siguen abiertas, también las de ayuda y versión, porque se leen al invocar
+el resultado:
+
+```pascal
+Root.Freeze;
+Root.SetAction(Greet);                             // bien
+Root.Add(CommandLine.Option<Boolean>('--loud'));   // ECommandLine
+```
+
+El código que decide con un resultado del parse puede contar con que la gramática sigue siendo con la
+que se parseó. `System.CommandLine` no tiene equivalente.
+
 ## Divergencias con `System.CommandLine`
 
 **1 · El valor se lee al revés.** En .NET se escribe `result.GetValue(fileOption)`. Aquí,

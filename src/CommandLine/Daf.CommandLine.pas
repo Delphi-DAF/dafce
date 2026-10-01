@@ -313,6 +313,16 @@ type
     function WithVersion(const AClass: TClass): IRootCommand; overload;
     /// <summary>What the tool answers with. Empty when no version was declared.</summary>
     function VersionInfo: TVersionInfo;
+    /// <summary>
+    ///   Closes the grammar: from here on, changing it raises <c>ECommandLine</c>. It reaches every
+    ///   command, option and argument already declared below the root.
+    /// </summary>
+    /// <remarks>
+    ///   What it closes is what the parse judges by -- symbols, aliases, arities, accepted values,
+    ///   defaults, validations, the version. The actions stay open, the help and the version ones
+    ///   included: they are read when the result is invoked, not when it is parsed.
+    /// </remarks>
+    procedure Freeze;
     function GetHelpAction: TCommandAction;
     procedure SetHelpAction(const Value: TCommandAction);
     function GetVersionAction: TCommandAction;
@@ -484,6 +494,10 @@ type
     FAliases: TArray<string>;
     FDescription: string;
     FHidden: Boolean;
+    FFrozen: Boolean;
+  protected
+    /// <summary>Raises when the grammar this symbol belongs to was frozen.</summary>
+    procedure CheckOpen;
   public
     constructor Create(const AName: string);
     function AsObject: TObject;
@@ -495,6 +509,7 @@ type
     procedure AddAlias(const Alias: string);
     procedure SetDescription(const Text: string);
     procedure Hide;
+    procedure Freeze; virtual;
   end;
 
   TValuedSymbol = class(TSymbol, IValued)
@@ -727,6 +742,7 @@ type
     function SetAction(const Action: TCommandActionProc): ICommand; overload;
     function Action: TCommandAction;
     procedure SetPathPrefix(const Value: string);
+    procedure Freeze; override;
   end;
 
   TRootCommand = class(TCommand, IRootCommand)
@@ -899,6 +915,7 @@ end;
 
 procedure TSymbol.AddAlias(const Alias: string);
 begin
+  CheckOpen;
   FAliases := FAliases + [Alias];
 end;
 
@@ -909,12 +926,25 @@ end;
 
 procedure TSymbol.SetDescription(const Text: string);
 begin
+  CheckOpen;
   FDescription := Text;
 end;
 
 procedure TSymbol.Hide;
 begin
+  CheckOpen;
   FHidden := True;
+end;
+
+procedure TSymbol.CheckOpen;
+begin
+  if FFrozen then
+    raise ECommandLine.CreateFmt('The grammar is frozen: "%s" can no longer change', [Name]);
+end;
+
+procedure TSymbol.Freeze;
+begin
+  FFrozen := True;
 end;
 
 { TValuedSymbol }
@@ -1054,6 +1084,7 @@ end;
 
 procedure TValuedSymbol.SetArity(const Value: TArity);
 begin
+  CheckOpen;
   FArity := Value;
 end;
 
@@ -1061,6 +1092,7 @@ procedure TValuedSymbol.SetAccepted(const Values: array of string);
 var
   I: Integer;
 begin
+  CheckOpen;
   SetLength(FAccepted, Length(Values));
   for I := Low(Values) to High(Values) do
     FAccepted[I - Low(Values)] := Values[I];
@@ -1068,12 +1100,14 @@ end;
 
 procedure TValuedSymbol.SetDefaultText(const Text: string);
 begin
+  CheckOpen;
   FHasDefault := True;
   FDefaultText := Text;
 end;
 
 procedure TValuedSymbol.AddValidator(const Validator: TUntypedValidator);
 begin
+  CheckOpen;
   if not Assigned(Validator) then
     // A validation that was declared and is not there would never run and never say so,
     // which is the shape of defect this whole module exists to remove.
@@ -1098,6 +1132,7 @@ procedure TValuedSymbol.DemandExistingPath;
 var
   Who: string;
 begin
+  CheckOpen;
   DemandPathType('AcceptExistingOnly');
   // The NAME is captured, not Self. A closure kept on the object that captures the
   // object is a cycle, and a cycle between counted references is a leak the compiler
@@ -1117,6 +1152,7 @@ procedure TValuedSymbol.DemandLegalFileName;
 var
   Who: string;
 begin
+  CheckOpen;
   DemandPathType('AcceptLegalFileNamesOnly');
   Who := Name;
   AddValidator(
@@ -1237,6 +1273,7 @@ end;
 
 procedure TValuedSymbol<T>.SetDefaultValue(const Value: T);
 begin
+  CheckOpen;
   FDefaultValue := Value;
   FDefaultFactory := nil;
   FDefaultKnown := True;
@@ -1245,6 +1282,7 @@ end;
 
 procedure TValuedSymbol<T>.SetDefaultFactory(const Factory: TFunc<T>; const Text: string);
 begin
+  CheckOpen;
   if not Assigned(Factory) then
     raise ECommandLine.CreateFmt('The computed default of "%s" is not assigned', [Name]);
   FDefaultFactory := Factory;
@@ -1257,6 +1295,7 @@ end;
 
 procedure TValuedSymbol<T>.AddTypedValidator(const Validation: TCommandLineValidator<T>);
 begin
+  CheckOpen;
   if not Assigned(Validation) then
     raise ECommandLine.CreateFmt('A validation declared on "%s" is not assigned', [Name]);
   if IsCollection then
@@ -1293,6 +1332,7 @@ end;
 
 function TOption<T>.AllowMultipleArgumentsPerToken: IOption<T>;
 begin
+  CheckOpen;
   FMultiplePerToken := True;
   Result := Self;
 end;
@@ -1339,12 +1379,14 @@ end;
 
 function TOption<T>.Recursive: IOption<T>;
 begin
+  CheckOpen;
   FRecursive := True;
   Result := Self;
 end;
 
 function TOption<T>.Required: IOption<T>;
 begin
+  CheckOpen;
   FRequiredFlag := True;
   Result := Self;
 end;
@@ -1636,18 +1678,21 @@ end;
 
 function TCommand.Add(const Option: IOption): ICommand;
 begin
+  CheckOpen;
   FOptions := FOptions + [Option];
   Result := Self;
 end;
 
 function TCommand.Add(const Argument: IArgument): ICommand;
 begin
+  CheckOpen;
   FArguments := FArguments + [Argument];
   Result := Self;
 end;
 
 function TCommand.Add(const Subcommand: ICommand): ICommand;
 begin
+  CheckOpen;
   FSubcommands := FSubcommands + [Subcommand];
   (Subcommand.AsObject as TCommand).SetPathPrefix(FullPath);
   Result := Self;
@@ -1720,6 +1765,7 @@ end;
 
 function TCommand.AllowUnmatchedTokens: ICommand;
 begin
+  CheckOpen;
   FAllowUnmatched := True;
   Result := Self;
 end;
@@ -1776,6 +1822,17 @@ begin
     (Child.AsObject as TCommand).SetPathPrefix(FullPath);
 end;
 
+procedure TCommand.Freeze;
+begin
+  inherited;
+  for var Option in FOptions do
+    (Option.AsObject as TSymbol).Freeze;
+  for var Argument in FArguments do
+    (Argument.AsObject as TSymbol).Freeze;
+  for var Subcommand in FSubcommands do
+    (Subcommand.AsObject as TSymbol).Freeze;
+end;
+
 { TRootCommand }
 
 function TRootCommand.WithVersion(const Version: string): IRootCommand;
@@ -1785,12 +1842,14 @@ end;
 
 function TRootCommand.WithVersion(const Version, AppName, Company: string): IRootCommand;
 begin
+  CheckOpen;
   FVersionInfo := TVersionInfo.Create(Version, AppName, Company);
   Result := Self;
 end;
 
 function TRootCommand.WithVersion(const AClass: TClass): IRootCommand;
 begin
+  CheckOpen;
   FVersionInfo := TVersionInfo.GetFrom(AClass);
   Result := Self;
 end;

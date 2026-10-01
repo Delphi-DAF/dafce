@@ -12,6 +12,7 @@ uses
   Types.Feat in 'Types.Feat.pas',
   Values.Feat in 'Values.Feat.pas',
   Invocation.Feat in 'Invocation.Feat.pas',
+  FrozenGrammar.Feat in 'FrozenGrammar.Feat.pas',
   HelpActions.Feat in 'HelpActions.Feat.pas';
 
 begin

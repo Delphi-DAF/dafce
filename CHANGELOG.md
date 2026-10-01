@@ -55,7 +55,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
   - `TNullable<T>` in `Daf.Nullable`
   - `TDeferredEnumerable<T>` and `TGeneratorEnumerator<T>` in `Daf.Enumerable`
   - `Daf.Comparers` — NULL-aware comparers for `TValue` and `TNullable<T>`
-- **Daf.CommandLine**: New module — a port of .NET's `System.CommandLine`, with `--version`, a `--help` that `TCommandLineHelp` renders from the grammar, and invocation: each command declares its action with `SetAction`, and `Invoke` runs the one of the command reached. The root's `HelpAction` and `VersionAction` can be replaced, to write something above the help and the version. A parse error answers 2, not 1
+- **Daf.CommandLine**: New module — a port of .NET's `System.CommandLine`, with `--version`, a `--help` that `TCommandLineHelp` renders from the grammar, and invocation: each command declares its action with `SetAction`, and `Invoke` runs the one of the command reached. The root's `HelpAction` and `VersionAction` can be replaced, to write something above the help and the version, and `Freeze` closes a grammar so that it can no longer change. A parse error answers 2, not 1
 - **Daf.Linq**: New module — the LINQ-to-Objects equivalent: lazy sequences over `System.IEnumerable<T>`, with `TQuery<T>` and `Linq.From<T>`
 - **Daf.Specification**: New module — the Specification pattern: `TSpecification<T>` gathers filter, order and paging into a reusable rule that can be asserted without a database, with `IRepository<T>` as the port
 - **SQLCute.InMemory**: New module — a second back-end: `TInMemory` runs an `IQuery` over loaded collections —JOINs, GROUP BY, subqueries, set operations— with ANSI NULL semantics

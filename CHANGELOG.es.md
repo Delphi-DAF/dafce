@@ -54,7 +54,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
   - `TNullable<T>` en `Daf.Nullable`
   - `TDeferredEnumerable<T>` y `TGeneratorEnumerator<T>` en `Daf.Enumerable`
   - `Daf.Comparers` — comparadores conscientes de NULL para `TValue` y `TNullable<T>`
-- **Daf.CommandLine**: Módulo nuevo — porting de `System.CommandLine` de .NET, con `--version`, un `--help` que `TCommandLineHelp` compone desde la gramática, y la invocación: cada comando declara su acción con `SetAction`, e `Invoke` ejecuta la del comando alcanzado. La `HelpAction` y la `VersionAction` de la raíz se pueden sustituir, para escribir algo encima de la ayuda y de la versión. Un error de parse sale con 2, no con 1
+- **Daf.CommandLine**: Módulo nuevo — porting de `System.CommandLine` de .NET, con `--version`, un `--help` que `TCommandLineHelp` compone desde la gramática, y la invocación: cada comando declara su acción con `SetAction`, e `Invoke` ejecuta la del comando alcanzado. La `HelpAction` y la `VersionAction` de la raíz se pueden sustituir, para escribir algo encima de la ayuda y de la versión, y `Freeze` cierra una gramática para que ya no cambie. Un error de parse sale con 2, no con 1
 - **Daf.Linq**: Módulo nuevo — el equivalente de LINQ-to-Objects: secuencias perezosas sobre `System.IEnumerable<T>`, con `TQuery<T>` y `Linq.From<T>`
 - **Daf.Specification**: Módulo nuevo — el patrón Specification: `TSpecification<T>` reúne filtro, orden y paginación en una regla reutilizable y afirmable sin base de datos, con `IRepository<T>` como puerto
 - **SQLCute.InMemory**: Módulo nuevo — segundo back-end: `TInMemory` ejecuta un `IQuery` sobre colecciones cargadas —JOINs, GROUP BY, subconsultas, operaciones de conjunto— con semántica ANSI de NULL
