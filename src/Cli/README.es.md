@@ -148,12 +148,13 @@ Corren sin host: lo que se escapa de ellas va a la política de `OnException`, c
 
 ### El parse va primero
 
-`Build` parsea antes de tomar el cerrojo de instancia única, de cargar la configuración y de construir
-el contenedor. `--version`, `--help` y una invocación que no encaja con la gramática se contestan
+`Build` parsea —salvo que ya lo hiciera `ParseArgs`— antes de tomar el cerrojo de instancia única, de
+cargar la configuración y de construir el contenedor. `--version`, `--help` y una invocación que no encaja con la gramática se contestan
 desde el parse, así que ni otra instancia en marcha ni un fichero de configuración del host que no se
 puede leer les impiden contestar.
 
-Lo que la composición ejecuta antes del `Build` es suyo, y corre antes del parse:
+Lo que la composición ejecuta antes del `Build` es suyo, y corre antes del parse salvo que llame
+primero a `ParseArgs`:
 
 - leer `Configuration` o `Environment` carga la configuración en esa lectura;
 - una fuente que añade la propia aplicación se abre al añadirla, y falla ahí.
@@ -284,6 +285,36 @@ B.Services.AddSingleton<IWriter>(
       Result := TFileWriter.Create;
   end);
 ```
+
+### La composición decide con el parse
+
+`B.ParseArgs` parsea los argumentos con la gramática y la congela, así que la composición puede
+decidir con lo parseado: qué fuente añadir, qué implementación registrar. Parsea una sola vez: el
+`Build` usa el mismo resultado.
+
+```pascal
+var Parsed := B.ParseArgs;
+if Loud.ValueIn(Parsed) then
+  B.Services.AddSingleton<IGreeter, TLoudGreeter>
+else
+  B.Services.AddSingleton<IGreeter, TGreeter>;
+```
+
+Después de `ParseArgs`, cambiar la gramática lanza `ECommandLine`; las acciones se siguen pudiendo
+declarar.
+
+Una composición que se salta el resto cuando el parse se contesta solo —ayuda, versión o una
+invocación que no encaja— y va directa al `Build` deja contestar a la gramática aunque lo que iba a
+añadir después no se pueda leer:
+
+```pascal
+var Parsed := B.ParseArgs;
+if Parsed.Succeeded and not Parsed.HelpRequested and not Parsed.VersionRequested then
+  JsonConfig.AddFile(B.Configuration, 'web.json');
+ExitCode := B.Build.Run;
+```
+
+Una validación que lee la configuración solo ve las fuentes añadidas antes de `ParseArgs`.
 
 ---
 

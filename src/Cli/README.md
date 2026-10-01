@@ -147,12 +147,13 @@ They run without a host: what escapes them goes to the `OnException` policy, wit
 
 ### The parse comes first
 
-`Build` parses before it takes the single-instance lock, loads the configuration or builds the
-container. `--version`, `--help` and an invocation that does not fit the grammar are answered from
+`Build` parses — unless `ParseArgs` already did — before it takes the single-instance lock, loads
+the configuration or builds the container. `--version`, `--help` and an invocation that does not fit the grammar are answered from
 the parse, so neither another running instance nor a host configuration file that cannot be read
 keeps them from answering.
 
-What the composition runs before `Build` is its own, and runs before the parse:
+What the composition runs before `Build` is its own, and runs before the parse unless it calls
+`ParseArgs` first:
 
 - reading `Configuration` or `Environment` loads the configuration at that read;
 - a source the application adds itself is opened when it is added, and fails there.
@@ -284,6 +285,35 @@ B.Services.AddSingleton<IWriter>(
       Result := TFileWriter.Create;
   end);
 ```
+
+### The composition decides with the parse
+
+`B.ParseArgs` parses the arguments with the grammar and freezes it, so the composition can decide
+with what was parsed — which source to add, which implementation to register. It parses once:
+`Build` uses the same result.
+
+```pascal
+var Parsed := B.ParseArgs;
+if Loud.ValueIn(Parsed) then
+  B.Services.AddSingleton<IGreeter, TLoudGreeter>
+else
+  B.Services.AddSingleton<IGreeter, TGreeter>;
+```
+
+After `ParseArgs`, changing the grammar raises `ECommandLine`; the actions can still be declared.
+
+A composition that skips the rest when the parse answers on its own — help, version, or an
+invocation that does not fit — and goes straight to `Build` lets the grammar answer even when what it
+would add next cannot be read:
+
+```pascal
+var Parsed := B.ParseArgs;
+if Parsed.Succeeded and not Parsed.HelpRequested and not Parsed.VersionRequested then
+  JsonConfig.AddFile(B.Configuration, 'web.json');
+ExitCode := B.Build.Run;
+```
+
+A validation that reads the configuration sees only the sources added before `ParseArgs`.
 
 ---
 

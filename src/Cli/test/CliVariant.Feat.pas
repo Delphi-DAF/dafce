@@ -1179,6 +1179,126 @@ Feature La variante CLI de la familia @cli @application-family
         Expect(W.Report + W.PolicySaw).ToEqual('HELLO');
       end)
 
+.Rule('La composicion puede decidir con el resultado del parse')
+
+  .Scenario('La composicion registra segun un argumento')
+    .Given('una aplicacion CLI invocada con una opcion de su gramatica, y una accion que saluda',
+      procedure(W: TCliWorld)
+      begin
+        W.Loud := CommandLine.Option<Boolean>('--loud', 'Saluda en alto');
+        W.Builder := TCliApplication.CreateBuilder(['--loud']);
+        W.Builder.RootCommand.Add(W.Loud);
+        W.Builder.OnException(
+          function(const Failure: TCliFailure): Integer
+          begin
+            W.PolicySaw := Failure.Error.Message;
+            Result := TCliExit.Failure;
+          end);
+        W.Builder.SetAction(
+          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          begin
+            W.Report := Services.GetRequiredService<IGreeter>.Greet;
+            Result := TCliExit.Ok;
+          end);
+      end)
+    .When('la composicion lee el parse, registra segun la opcion, y se ejecuta',
+      procedure(W: TCliWorld)
+      begin
+        var Parsed := W.Builder.ParseArgs;
+        if W.Loud.ValueIn(Parsed) then
+          W.Builder.Services.AddSingleton<IGreeter, TLoudGreeter>
+        else
+          W.Builder.Services.AddSingleton<IGreeter, TGreeter>;
+        W.App := W.Builder.Build;
+        W.ExitCode := W.App.Run;
+      end)
+    .&Then('se resuelve lo que la opcion eligio',
+      procedure(W: TCliWorld)
+      begin
+        Expect(W.Report + W.PolicySaw).ToEqual('HELLO');
+      end)
+
+  .Scenario('Build usa el parse que ParseArgs ya hizo')
+    .Given('una aplicacion CLI cuya accion compara el resultado que recibe',
+      procedure(W: TCliWorld)
+      begin
+        W.Builder := TCliApplication.CreateBuilder;
+        W.Builder.SetAction(
+          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          begin
+            W.Report := IfThen((Parsed as IInterface) = (W.Parsed as IInterface), 'el mismo', 'otro');
+            Result := TCliExit.Ok;
+          end);
+      end)
+    .When('la composicion parsea, y despues se construye y se ejecuta',
+      procedure(W: TCliWorld)
+      begin
+        W.Parsed := W.Builder.ParseArgs;
+        W.App := W.Builder.Build;
+        W.ExitCode := W.App.Run;
+      end)
+    .&Then('la accion recibe el mismo resultado',
+      procedure(W: TCliWorld)
+      begin
+        Expect(W.Report).ToEqual('el mismo');
+      end)
+
+  .Scenario('Tras ParseArgs, la gramatica no admite cambios')
+    .Given('una aplicacion CLI cuya composicion ya parseo',
+      procedure(W: TCliWorld)
+      begin
+        W.Builder := TCliApplication.CreateBuilder;
+        W.Builder.ParseArgs;
+      end)
+    .When('se le anade una opcion a la gramatica',
+      procedure(W: TCliWorld)
+      begin
+        try
+          W.Builder.RootCommand.Add(CommandLine.Option<Boolean>('--tarde'));
+          W.Report := '<anadio sin protestar>';
+        except
+          on E: Exception do
+            W.Report := E.ClassName + ': ' + E.Message;
+        end;
+      end)
+    .&Then('falla con un ECommandLine',
+      procedure(W: TCliWorld)
+      begin
+        Expect(W.Report).ToStartWith('ECommandLine: ');
+      end)
+
+  .Scenario('Cortar tras ParseArgs deja contestar la ayuda aunque falte un fichero obligatorio')
+    .Given('una aplicacion invocada pidiendo la ayuda, con una politica declarada, y un fichero de configuracion que no existe',
+      procedure(W: TCliWorld)
+      begin
+        W.ConfigFile := TPath.Combine(TPath.GetTempPath, 'daf-cli-missing-' + TGuid.NewGuid.ToString + '.json');
+        W.Builder := TCliApplication.CreateBuilder(['--help']);
+        W.Builder.OnException(
+          function(const Failure: TCliFailure): Integer
+          begin
+            W.PolicySaw := Failure.Error.Message;
+            Result := 42;
+          end);
+      end)
+    .When('la composicion parsea, y solo anade el fichero si el parse no se contesta solo',
+      procedure(W: TCliWorld)
+      begin
+        try
+          var Parsed := W.Builder.ParseArgs;
+          if Parsed.Succeeded and not Parsed.HelpRequested and not Parsed.VersionRequested then
+            JsonConfig.AddFile(W.Builder.Configuration, W.ConfigFile);
+          W.ExitCode := W.Builder.Build.Run;
+        except
+          on E: Exception do
+            W.ExitCode := W.Builder.HandleException(E);
+        end;
+      end)
+    .&Then('contesta la ayuda y termina bien, sin pasar por la politica',
+      procedure(W: TCliWorld)
+      begin
+        Expect(Format('exit=%d politica=%s', [W.ExitCode, W.PolicySaw])).ToEqual('exit=0 politica=');
+      end)
+
 .Rule('Un fallo al arrancar lo decide la politica')
 
   .Scenario('Falla un servicio alojado al arrancar')

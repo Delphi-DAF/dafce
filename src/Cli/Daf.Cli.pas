@@ -108,9 +108,10 @@ type
     ['{71536E8D-49F8-45D8-AB43-C5F726B2F25A}']
     function GetRootCommand: IRootCommand;
     /// <summary>
-    /// La gramatica de esta herramienta, que parsea los argumentos en <c>Build</c> antes que nada
-    /// mas. Una invocacion que llega a una accion tiene el resultado del parse tambien en el
-    /// contenedor, como <c>ICommandLineParseResult</c>, y un servicio lo pide por constructor.
+    /// La gramatica de esta herramienta, que parsea los argumentos en <c>ParseArgs</c>, o en
+    /// <c>Build</c> antes que nada mas si la composicion no lo pidio. Una invocacion que llega a una
+    /// accion tiene el resultado del parse tambien en el contenedor, como
+    /// <c>ICommandLineParseResult</c>, y un servicio lo pide por constructor.
     ///
     /// Los mismos argumentos estan tambien en la configuracion, como en .NET, y alli se leen sin la
     /// gramatica: una bandera seguida de un posicional queda como clave con el posicional por
@@ -165,7 +166,21 @@ type
     function SetAction(const Command: ICommand; const Action: TCliAction): ICliApplicationBuilder; overload;
 
     /// <summary>
-    /// Parsea; registra el resultado del parse; toma el cerrojo, si se declaro instancia unica; y
+    /// Parsea los argumentos con la gramatica y la congela. Es para la composicion que decide con
+    /// lo parseado: que fuente anadir, que implementacion registrar.
+    /// </summary>
+    /// <remarks>
+    ///   Parsea una sola vez: llamarlo de nuevo, o el Build despues, devuelve el mismo resultado. A
+    ///   partir de aqui, cambiar la gramatica lanza ECommandLine; las acciones siguen abiertas.
+    ///
+    ///   Una composicion que corta cuando el parse se contesta solo --ayuda, version o una
+    ///   invocacion que no encaja-- y va directa al Build deja contestar a la gramatica aunque lo
+    ///   que iba a anadir despues no se pueda leer.
+    /// </remarks>
+    function ParseArgs: ICommandLineParseResult;
+
+    /// <summary>
+    /// Parsea, si no lo hizo ya ParseArgs; registra el resultado del parse; toma el cerrojo, si se declaro instancia unica; y
     /// construye el host, que carga la configuracion que la composicion no leyo.
     /// </summary>
     /// <remarks>
@@ -313,6 +328,7 @@ type
     FSingleInstanceId: string;
     FFailures: TCliApplication.IFailures;
     FSlot: TCliApplication.IServicesSlot;
+    FParsed: ICommandLineParseResult;
     function GetRootCommand: IRootCommand;
     function GetServices: IServiceCollection;
     function GetConfiguration: IConfigurationManager;
@@ -330,6 +346,7 @@ type
     function HandleException(const E: Exception): Integer;
     function SetAction(const Action: TCliAction): ICliApplicationBuilder; overload;
     function SetAction(const Command: ICommand; const Action: TCliAction): ICliApplicationBuilder; overload;
+    function ParseArgs: ICommandLineParseResult;
     function Build: ICliApplication;
     property RootCommand: IRootCommand read GetRootCommand;
     property Services: IServiceCollection read GetServices;
@@ -573,12 +590,23 @@ begin
   end;
 end;
 
+function TCliApplicationBuilder.ParseArgs: ICommandLineParseResult;
+begin
+  if not Assigned(FParsed) then
+  begin
+    // Antes de parsear: lo que se parsea es lo que ya no puede cambiar.
+    FRootCommand.Freeze;
+    FParsed := FRootCommand.Parse(FArgs);
+  end;
+  Result := FParsed;
+end;
+
 function TCliApplicationBuilder.Build: ICliApplication;
 begin
   // El parse va primero: la version, la ayuda y una invocacion que no encaja los contesta la
   // gramatica, sin el cerrojo de instancia unica, sin contenedor y sin cargar la configuracion
   // que la composicion no leyo.
-  var Parsed := FRootCommand.Parse(FArgs);
+  var Parsed := ParseArgs;
   if Parsed.VersionRequested or Parsed.HelpRequested or not Parsed.Succeeded then
     Exit(TCliApplication.Create(nil, FRootCommand, Parsed, FFailures, FSlot, 0));
 
