@@ -831,14 +831,15 @@ Feature La variante CLI de la familia @cli @application-family
     .When('arranca la segunda',
       procedure(W: TCliWorld)
       begin
+        // Antes del Run: al terminar, Run suelta el host y Services es nil en cualquier caso.
+        W.Container := IfThen(W.App.Services = nil, 'no', 'si');
         W.ExitCode := W.App.Run;
       end)
     .&Then('termina sin haber construido el contenedor y lo dice por su codigo de salida',
       procedure(W: TCliWorld)
       begin
-        // Sin contenedor: no se llego a construir nada.
-        Expect(Format('%d/%s', [W.ExitCode, BoolToStr(W.App.Services = nil, True)]))
-          .ToEqual('3/True');
+        Expect(Format('exit=%d contenedor=%s', [W.ExitCode, W.Container]))
+          .ToEqual('exit=3 contenedor=no');
       end)
 
   .Scenario('La version la resuelve la gramatica, no la aplicacion')
@@ -852,14 +853,15 @@ Feature La variante CLI de la familia @cli @application-family
     .When('se ejecuta',
       procedure(W: TCliWorld)
       begin
+        W.Container := IfThen(W.App.Services = nil, 'no', 'si');
         W.ExitCode := W.App.Run;
       end)
     .&Then('contesta el parse y termina bien, sin levantar contenedor',
       procedure(W: TCliWorld)
       begin
         // Ni siquiera se construyo el contenedor: la gramatica contesto sola.
-        Expect(Format('%d/%s', [W.ExitCode, BoolToStr(W.App.Services = nil, True)]))
-          .ToEqual('0/True');
+        Expect(Format('exit=%d contenedor=%s', [W.ExitCode, W.Container]))
+          .ToEqual('exit=0 contenedor=no');
       end)
 
   .Scenario('Lo que se escapa de una accion de ayuda sustituida lo decide la politica')
@@ -916,13 +918,14 @@ Feature La variante CLI de la familia @cli @application-family
     .When('se ejecuta la segunda',
       procedure(W: TCliWorld)
       begin
+        W.Container := IfThen(W.App.Services = nil, 'no', 'si');
         W.ExitCode := W.App.Run;
       end)
     .&Then('contesta el parse y termina bien, sin levantar contenedor',
       procedure(W: TCliWorld)
       begin
-        Expect(Format('%d/%s', [W.ExitCode, BoolToStr(W.App.Services = nil, True)]))
-          .ToEqual('0/True');
+        Expect(Format('exit=%d contenedor=%s', [W.ExitCode, W.Container]))
+          .ToEqual('exit=0 contenedor=no');
       end)
 
   .Scenario('La ayuda contesta aunque otra instancia sostenga el cerrojo')
@@ -941,13 +944,14 @@ Feature La variante CLI de la familia @cli @application-family
     .When('se ejecuta la segunda',
       procedure(W: TCliWorld)
       begin
+        W.Container := IfThen(W.App.Services = nil, 'no', 'si');
         W.ExitCode := W.App.Run;
       end)
     .&Then('contesta el parse y termina bien, sin levantar contenedor',
       procedure(W: TCliWorld)
       begin
-        Expect(Format('%d/%s', [W.ExitCode, BoolToStr(W.App.Services = nil, True)]))
-          .ToEqual('0/True');
+        Expect(Format('exit=%d contenedor=%s', [W.ExitCode, W.Container]))
+          .ToEqual('exit=0 contenedor=no');
       end)
 
   .Scenario('Sin instancia unica declarada, corren varias a la vez')
