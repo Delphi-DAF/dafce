@@ -238,9 +238,13 @@ begin
   if Active then
     Exit;
 
-  if not CanBindPort(Port) then  begin
-    FireOnError(Exception.CreateFmt('Cannot start: port %d is in use', [Port]));
-    Abort;
+  if not CanBindPort(Port) then
+  begin
+    // Lanzarla y no abortar: un Abort no llega a la politica de la aplicacion, y el proceso
+    // terminaria sin decir que puerto no pudo tomar.
+    var Failure := Exception.CreateFmt('Cannot start: port %d is in use', [Port]);
+    FireOnError(Failure);
+    raise Failure;
   end;
 
   if Assigned(FOnStarting) then

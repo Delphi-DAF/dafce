@@ -198,6 +198,37 @@ Feature HTTP server @httpserver
         Expect(W.Trace).ToEqual('starting,started,stopping,stopped,');
       end)
 
+.Rule('Starting on a port that cannot be bound raises an exception that names the port @socket')
+
+  .Scenario('Starting on a held port')
+    .Given('another socket genuinely listening on a port, and a server on that port',
+      procedure(W: TServerWorld)
+      begin
+        W.Held := THeldPort.Create(FindFreePort);
+        W.NewServerOn(W.Held.Port);
+      end)
+    .When('the server is started',
+      procedure(W: TServerWorld)
+      begin
+        try
+          W.Server.Start;
+          W.Trace := '<started>';
+        except
+          on E: Exception do
+            W.Trace := E.ClassName + ': ' + E.Message;
+        end;
+      end)
+    .&Then('it raises an exception that names the port',
+      procedure(W: TServerWorld)
+      begin
+        Expect(W.Trace).ToContain(Format('port %d', [W.Port]));
+      end)
+    .&And('the server reports itself inactive',
+      procedure(W: TServerWorld)
+      begin
+        Expect(W.Server.Active).ToEqual(False);
+      end)
+
 .Rule('The contract does not name its implementation''s library')
 
   .Scenario('The contract survives replacing the server')
