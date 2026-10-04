@@ -43,6 +43,7 @@ requires
   Daf.Logging;
 
 contains
-  Daf.Hosting in 'Daf.Hosting.pas';
+  Daf.Hosting in 'Daf.Hosting.pas',
+  Daf.Hosting.Edge in 'Daf.Hosting.Edge.pas';
 
 end.

@@ -46,7 +46,7 @@ begin
   // La politica es un callback, asi que una suite puede compartir la suya sin heredar nada mas. Va
   // lo primero porque decide tambien lo que se escape de la composicion.
   B.OnException(
-    function(const Failure: TCliFailure): Integer
+    function(const Failure: TAppFailure): Integer
     begin
       Writeln(ErrOutput, 'greet: ', Failure.Error.Message);
       Result := 7;
@@ -240,7 +240,7 @@ que se escapa de ella va a la política de `OnException`, con `Failure.Services`
 
 ### Las políticas que vienen de serie
 
-`OnException` acepta cualquier callback. Recibe un `TCliFailure` —la excepción en `Error`, el
+`OnException` acepta cualquier callback. Recibe un `TAppFailure` —la excepción en `Error`, el
 contenedor en `Services`, `nil` si no lo hay, y `Reported` si el host ya la informó— y devuelve el
 código de salida. Tres están ya escritas:
 

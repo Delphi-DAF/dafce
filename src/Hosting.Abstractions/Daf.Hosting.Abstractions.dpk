@@ -38,6 +38,7 @@ requires
   Daf.Configuration.Abstractions;
 
 contains
-  Daf.Extensions.Hosting in 'Daf.Extensions.Hosting.pas';
+  Daf.Extensions.Hosting in 'Daf.Extensions.Hosting.pas',
+  Daf.Extensions.Hosting.Failures in 'Daf.Extensions.Hosting.Failures.pas';
 
 end.

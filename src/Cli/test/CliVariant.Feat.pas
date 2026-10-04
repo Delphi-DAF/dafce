@@ -251,6 +251,23 @@ begin
 end;
 
 type
+  /// La politica de una suite, derivada de las de serie con solo esta unit en el uses: es lo que
+  /// escribe el .dpr de una aplicacion CLI.
+  TSuiteExitPolicy = class(ExitPolicy)
+  public
+    class function LogAndFail: TAppExceptionPolicy; override;
+  end;
+
+class function TSuiteExitPolicy.LogAndFail: TAppExceptionPolicy;
+begin
+  Result :=
+    function(const Failure: TAppFailure): Integer
+    begin
+      Result := 42;
+    end;
+end;
+
+type
   /// Un modulo de datos cuyo OnCreate lanza. Sin DFM: CreateNew no lo pide, y AfterConstruction
   /// dispara el OnCreate igual.
   TFailingModule = class(TDataModule)
@@ -634,7 +651,7 @@ Feature La variante CLI de la familia @cli @application-family
       begin
         W.Builder := TCliApplication.CreateBuilder;
         W.Builder.OnException(
-          function(const Failure: TCliFailure): Integer
+          function(const Failure: TAppFailure): Integer
           begin
             W.PolicySaw := Failure.Error.Message;
             Result := 42;
@@ -698,7 +715,7 @@ Feature La variante CLI de la familia @cli @application-family
       begin
         W.Builder := TCliApplication.CreateBuilder;
         W.Builder.OnException(
-          function(const Failure: TCliFailure): Integer
+          function(const Failure: TAppFailure): Integer
           begin
             W.PolicySaw := Failure.Error.ClassName;
             Result := 42;
@@ -851,7 +868,7 @@ Feature La variante CLI de la familia @cli @application-family
       begin
         W.Builder := TCliApplication.CreateBuilder(['--help']);
         W.Builder.OnException(
-          function(const Failure: TCliFailure): Integer
+          function(const Failure: TAppFailure): Integer
           begin
             W.PolicySaw := Failure.Error.Message + IfThen(Failure.Services = nil, ' sin', ' con') +
               ' proveedor';
@@ -1111,7 +1128,7 @@ Feature La variante CLI de la familia @cli @application-family
         W.Builder := TCliApplication.CreateBuilder;
         W.Builder.Services.AddSingleton<IParsedEcho, TParsedEcho>;
         W.Builder.OnException(
-          function(const Failure: TCliFailure): Integer
+          function(const Failure: TAppFailure): Integer
           begin
             W.PolicySaw := Failure.Error.Message;
             Result := TCliExit.Failure;
@@ -1158,7 +1175,7 @@ Feature La variante CLI de la familia @cli @application-family
               Result := TGreeter.Create;
           end);
         W.Builder.OnException(
-          function(const Failure: TCliFailure): Integer
+          function(const Failure: TAppFailure): Integer
           begin
             W.PolicySaw := Failure.Error.Message;
             Result := TCliExit.Failure;
@@ -1292,7 +1309,7 @@ Feature La variante CLI de la familia @cli @application-family
       begin
         W.Builder := TCliApplication.CreateBuilder;
         W.Builder.OnException(
-          function(const Failure: TCliFailure): Integer
+          function(const Failure: TAppFailure): Integer
           begin
             W.PolicySaw := Failure.Error.Message + IfThen(Failure.Services = nil, ' sin', ' con') +
               ' proveedor';
@@ -1427,7 +1444,7 @@ Feature La variante CLI de la familia @cli @application-family
         W.Builder := TCliApplication.CreateBuilder(['--loud']);
         W.Builder.RootCommand.Add(W.Loud);
         W.Builder.OnException(
-          function(const Failure: TCliFailure): Integer
+          function(const Failure: TAppFailure): Integer
           begin
             W.PolicySaw := Failure.Error.Message;
             Result := TCliExit.Failure;
@@ -1512,7 +1529,7 @@ Feature La variante CLI de la familia @cli @application-family
         W.ConfigFile := TPath.Combine(TPath.GetTempPath, 'daf-cli-missing-' + TGuid.NewGuid.ToString + '.json');
         W.Builder := TCliApplication.CreateBuilder(['--help']);
         W.Builder.OnException(
-          function(const Failure: TCliFailure): Integer
+          function(const Failure: TAppFailure): Integer
           begin
             W.PolicySaw := Failure.Error.Message;
             Result := 42;
@@ -1537,6 +1554,47 @@ Feature La variante CLI de la familia @cli @application-family
         Expect(Format('exit=%d politica=%s', [W.ExitCode, W.PolicySaw])).ToEqual('exit=0 politica=');
       end)
 
+.Rule('La politica y los codigos de salida son de la familia')
+
+  .Scenario('Los codigos de la familia y los de la invocacion coinciden')
+    .Given('la variante CLI compilada').NoAction
+    .When('se leen Ok y Failure de la familia y de la invocacion',
+      procedure(W: TCliWorld)
+      begin
+        W.Report := Format('ok=%d/%d failure=%d/%d', [TAppExit.Ok, TCommandLineExit.Ok,
+          TAppExit.Failure, TCommandLineExit.Failure]);
+      end)
+    .&Then('son los mismos',
+      procedure(W: TCliWorld)
+      begin
+        Expect(W.Report).ToEqual(Format('ok=%d/%d failure=%d/%d', [TCommandLineExit.Ok,
+          TCommandLineExit.Ok, TCommandLineExit.Failure, TCommandLineExit.Failure]));
+      end)
+
+  .Scenario('La politica de una suite se deriva con la unit de la variante')
+    .Given('una aplicacion CLI con la politica de una suite, derivada de ExitPolicy, y una accion que lanza',
+      procedure(W: TCliWorld)
+      begin
+        W.Builder := TCliApplication.CreateBuilder;
+        W.Builder.OnException(TSuiteExitPolicy.LogAndFail());
+        W.Builder.SetAction(
+          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          begin
+            raise Exception.Create('el trabajo fallo');
+          end);
+        W.App := W.Builder.Build;
+      end)
+    .When('se ejecuta',
+      procedure(W: TCliWorld)
+      begin
+        W.ExitCode := W.App.Run;
+      end)
+    .&Then('el proceso termina con el codigo de la politica de la suite',
+      procedure(W: TCliWorld)
+      begin
+        Expect(W.ExitCode).ToEqual(42);
+      end)
+
 .Rule('Un fallo al arrancar lo decide la politica')
 
   .Scenario('Falla un servicio alojado al arrancar')
@@ -1546,7 +1604,7 @@ Feature La variante CLI de la familia @cli @application-family
         Log := '';
         W.Builder := TCliApplication.CreateBuilder;
         W.Builder.OnException(
-          function(const Failure: TCliFailure): Integer
+          function(const Failure: TAppFailure): Integer
           begin
             W.PolicySaw := W.PolicySaw + Failure.Error.Message +
               IfThen(Failure.Reported, ' informado', ' sin informar') +
@@ -1633,7 +1691,7 @@ Feature La variante CLI de la familia @cli @application-family
       begin
         W.Builder := TCliApplication.CreateBuilder;
         W.Builder.OnException(
-          function(const Failure: TCliFailure): Integer
+          function(const Failure: TAppFailure): Integer
           begin
             W.PolicySaw := W.PolicySaw + Failure.Error.Message +
               IfThen(Failure.Services = nil, ' sin', ' con') + ' proveedor;';
@@ -1671,7 +1729,7 @@ Feature La variante CLI de la familia @cli @application-family
         // Un codigo distinto para cada fallo: con uno solo, el de la accion y el de la parada
         // darian el mismo verde.
         W.Builder.OnException(
-          function(const Failure: TCliFailure): Integer
+          function(const Failure: TAppFailure): Integer
           begin
             W.PolicySaw := W.PolicySaw + Failure.Error.Message + ';';
             if Failure.Error.Message = 'el trabajo fallo' then
@@ -1785,7 +1843,7 @@ Feature La variante CLI de la familia @cli @application-family
         W.ConfigFile := TPath.Combine(TPath.GetTempPath, 'daf-cli-missing-' + TGuid.NewGuid.ToString + '.json');
         W.Builder := TCliApplication.CreateBuilder;
         W.Builder.OnException(
-          function(const Failure: TCliFailure): Integer
+          function(const Failure: TAppFailure): Integer
           begin
             W.Report := Failure.Error.Message;
             W.PolicySaw := IfThen(Failure.Reported, 'informado', 'sin informar') +
@@ -1877,7 +1935,7 @@ Feature La variante CLI de la familia @cli @application-family
       begin
         W.Builder := TCliApplication.CreateBuilder;
         W.Builder.OnException(
-          function(const Failure: TCliFailure): Integer
+          function(const Failure: TAppFailure): Integer
           begin
             W.PolicySaw := IfThen(Failure.Reported, 'informado', 'sin informar') +
               IfThen(Failure.Services = nil, ' sin', ' con') + ' proveedor';
@@ -1915,7 +1973,7 @@ Feature La variante CLI de la familia @cli @application-family
       begin
         W.Builder := TCliApplication.CreateBuilder;
         W.Builder.OnException(
-          function(const Failure: TCliFailure): Integer
+          function(const Failure: TAppFailure): Integer
           begin
             Inc(W.PolicyCalls);
             Result := ExitPolicy.Rethrow()(Failure);
@@ -1958,7 +2016,7 @@ Feature La variante CLI de la familia @cli @application-family
       begin
         W.Builder := TCliApplication.CreateBuilder;
         W.Builder.OnException(
-          function(const Failure: TCliFailure): Integer
+          function(const Failure: TAppFailure): Integer
           begin
             W.PolicySaw := Failure.Error.Message;
             Result := 42;
@@ -1991,7 +2049,7 @@ Feature La variante CLI de la familia @cli @application-family
       begin
         W.Builder := TCliApplication.CreateBuilder;
         W.Builder.OnException(
-          function(const Failure: TCliFailure): Integer
+          function(const Failure: TAppFailure): Integer
           begin
             W.PolicySaw := Failure.Error.Message + IfThen(Failure.Services = nil, ' sin', ' con') +
               ' proveedor';

@@ -27,7 +27,7 @@ begin
   // La politica es un callback, asi que una suite puede compartir la suya sin heredar nada mas. Va
   // lo primero porque decide tambien lo que se escape de la composicion.
   B.OnException(
-    function(const Failure: TCliFailure): Integer
+    function(const Failure: TAppFailure): Integer
     begin
       Writeln(ErrOutput, 'greet: ', Failure.Error.Message);
       Result := 7;

@@ -115,6 +115,7 @@
         <DCCReference Include="Daf.Commons.dcp"/>
         <DCCReference Include="Daf.Logging.Abstractions.dcp"/>
         <DCCReference Include="Daf.Hosting.pas"/>
+        <DCCReference Include="Daf.Hosting.Edge.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\source.optset</DependentOn>

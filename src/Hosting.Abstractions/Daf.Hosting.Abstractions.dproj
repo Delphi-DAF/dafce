@@ -112,6 +112,7 @@
         <DCCReference Include="Daf.DependencyInjection.Abstractions.dcp"/>
         <DCCReference Include="Daf.Configuration.Abstractions.dcp"/>
         <DCCReference Include="Daf.Extensions.Hosting.pas"/>
+        <DCCReference Include="Daf.Extensions.Hosting.Failures.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\source.optset</DependentOn>
