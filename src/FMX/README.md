@@ -33,6 +33,12 @@ App.Run(TMainForm);          // creates the form, then FMX.Forms.Application tak
 
 Its name is deliberately **not** `Application`: in the same `.dpr` this one and the platform's coexist. **The preferred route is still injection** — `DafApp` is the way out for code the container never sees, not a way around the container.
 
+### A single instance
+
+`B.SingleInstance(Id)` declares that only one instance with that id runs at a time, as in the VCL
+variant. A second instance builds no container and creates no form, `Run` returns without entering
+the loop, and the process exit code becomes `TAppExit.AlreadyRunning`.
+
 ---
 
 ## Registering the destination

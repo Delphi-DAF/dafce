@@ -202,9 +202,44 @@ end.
   stays one-way.
 - **`MapControllers`** resolves the router, and resolving it **is** the discovery: the router scans
   the RTTI for `[WebRoute]` as it is built.
-- **`Run`** starts the host, starts the server, waits for shutdown and stops both. The loop belongs
-  to DAF here, so the `.dpr` ends when `Run` ends — unlike VCL and FMX, where the loop is the
-  platform's.
+- **`Run`** starts the host, starts the server, waits for shutdown and stops both, and answers
+  `TAppExit.Ok` when it ends well. The loop belongs to DAF here, so the `.dpr` ends when `Run` ends —
+  unlike VCL and FMX, where the loop is the platform's.
+
+### What escapes
+
+`Builder.OnException(Policy)` declares what happens to what escapes, and with which exit code;
+without it, `ExitPolicy.LogAndFail`. It is the application family's policy: the same `TAppFailure`
+and `ExitPolicy` as the CLI variant, and `Daf.Web.Application` exposes them.
+
+```pascal
+begin
+  var Builder := TWebApplication.CreateBuilder;
+  Builder.OnException(ExitPolicy.LogAndFail());
+  try
+    Builder.Services.AddScoped<IUserService, TUserService>;
+    WebApp.AddHttpServer(Builder.Services);
+    var App := Builder.Build;
+    App.MapControllers;
+    ExitCode := App.Run;
+  except
+    on E: Exception do
+      ExitCode := Builder.HandleException(E);
+  end;
+end.
+```
+
+- What escapes the host's startup, the server's startup or the shutdown goes to the policy, and
+  `Run` answers the code it gave the first failure. A startup failure arrives with
+  `Failure.Reported` as `True`; the server does not start, and the host is stopped anyway. A
+  shutdown failure arrives with `Failure.Services` as `nil`.
+- What escapes before `Run` — the composition, `Build` — reaches the same policy when the `.dpr`'s
+  `except` hands it to `HandleException`, which answers the exit code. Before `OnException` is
+  declared, the default policy decides.
+- An `EAbort` does not reach the policy: `Run` answers `TAppExit.Failure` and nothing is reported.
+- What fails inside a request does not reach the policy: the server answers it with its error
+  response. The RTL's `ApplicationHandleException` hook stays the one WebBroker's request handler
+  sets.
 
 ### The port
 
@@ -240,7 +275,7 @@ TDafHttpServer = class(TInterfacedObject, IDafHttpServer)
 end;
 ```
 
-`Create` reads the port from `Config['Port']`. `Start` refuses to bind a port already in use: it fires `OnError` with a message naming the port and aborts, rather than letting a socket error escape from inside the server. `CanBindPort` answers the same question ahead of time, and releases whatever it bound.
+`Create` reads the port from `Config['Port']`. `Start` refuses to bind a port already in use: it fires `OnError` and then raises an exception that names the port, before touching the socket. `CanBindPort` answers the same question ahead of time, and releases whatever it bound.
 
 ### Driving it yourself
 

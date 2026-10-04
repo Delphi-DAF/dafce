@@ -44,6 +44,27 @@ return until the loop ends, and it stops the host on the way out.
 
 ---
 
+## A single instance
+
+```pascal
+var B := TVclApplication.CreateBuilder;
+B.SingleInstance('MyCompany.MyApp');
+var App := B.Build;
+App.Run(TMainForm);
+```
+
+`SingleInstance(Id)` declares that only one instance with that id runs at a time; without it there is
+no lock. `Build` takes the lock before loading the configuration and building the container. When
+another instance holds it, `Build` returns a settled application: `Run` and `StartUpTo` return
+without creating the form or entering the loop, `Services` and `MainForm` are `nil`, `DafApp` does
+not point at it, and the process exit code becomes `TAppExit.AlreadyRunning`. The application
+releases the lock when it is freed, and a build that fails releases it too.
+
+It is only the lock: bringing the running instance to the front, or handing it the second one's
+arguments, is up to the application.
+
+---
+
 ## The `DafApp` global
 
 ```pascal

@@ -65,6 +65,9 @@ returns the empty string and the constructor fails converting it. Assigning `Por
 above, overrides it. Composing through the application variant instead of by hand seeds the port for
 you — see the [guide](docs/GUIDE.md#the-web-application-variant).
 
+A port already in use makes `Start` fire `OnError` and then raise an exception that names the port:
+`Cannot start: port 8080 is in use`.
+
 ---
 
 ## Response helpers

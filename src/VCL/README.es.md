@@ -43,6 +43,27 @@ vuelve hasta que el bucle termina, y al salir para el host.
 
 ---
 
+## Una sola instancia
+
+```pascal
+var B := TVclApplication.CreateBuilder;
+B.SingleInstance('MiEmpresa.MiAplicacion');
+var App := B.Build;
+App.Run(TMainForm);
+```
+
+`SingleInstance(Id)` declara que solo puede correr una instancia con ese identificador; sin
+declararla no hay cerrojo. `Build` toma el cerrojo antes de cargar la configuración y de construir el
+contenedor. Si otra instancia lo tiene, `Build` devuelve una aplicación resuelta: `Run` y `StartUpTo`
+vuelven sin crear el formulario ni entrar en el bucle, `Services` y `MainForm` valen `nil`, `DafApp`
+no la apunta, y el código de salida del proceso pasa a ser `TAppExit.AlreadyRunning`. La aplicación
+suelta el cerrojo al liberarse, y una construcción que falla también lo suelta.
+
+Es solo el cerrojo: traer al frente la instancia que corre, o pasarle los argumentos de la segunda,
+queda en manos de la aplicación.
+
+---
+
 ## El global `DafApp`
 
 ```pascal

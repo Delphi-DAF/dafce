@@ -202,9 +202,44 @@ end.
   de paquetes va en un solo sentido.
 - **`MapControllers`** resuelve el router, y resolverlo **es** el descubrimiento: el router recorre
   la RTTI buscando `[WebRoute]` al construirse.
-- **`Run`** arranca el host, arranca el servidor, espera al apagado y para los dos. Aquí el bucle es
-  de DAF, así que el `.dpr` acaba cuando acaba `Run` —al contrario que en VCL y FMX, donde el bucle
-  es de la plataforma—.
+- **`Run`** arranca el host, arranca el servidor, espera al apagado y para los dos, y devuelve
+  `TAppExit.Ok` si termina bien. Aquí el bucle es de DAF, así que el `.dpr` acaba cuando acaba `Run`
+  —al contrario que en VCL y FMX, donde el bucle es de la plataforma—.
+
+### Lo que se escapa
+
+`Builder.OnException(Policy)` declara qué pasa con lo que se escapa, y con qué código de salida; sin
+ella, `ExitPolicy.LogAndFail`. Es la política de la familia de aplicaciones: los mismos `TAppFailure`
+y `ExitPolicy` que la variante CLI, y `Daf.Web.Application` los expone.
+
+```pascal
+begin
+  var Builder := TWebApplication.CreateBuilder;
+  Builder.OnException(ExitPolicy.LogAndFail());
+  try
+    Builder.Services.AddScoped<IUserService, TUserService>;
+    WebApp.AddHttpServer(Builder.Services);
+    var App := Builder.Build;
+    App.MapControllers;
+    ExitCode := App.Run;
+  except
+    on E: Exception do
+      ExitCode := Builder.HandleException(E);
+  end;
+end.
+```
+
+- Lo que se escapa del arranque del host, del arranque del servidor o de la parada va a la política,
+  y `Run` devuelve el código que ella dio al primer fallo. Un fallo del arranque llega con
+  `Failure.Reported` a `True`; el servidor no arranca, y el host se para igual. Un fallo de la parada
+  llega con `Failure.Services` a `nil`.
+- Lo que se escapa antes del `Run` —la composición, el `Build`— llega a la misma política cuando el
+  `except` del `.dpr` se lo pasa a `HandleException`, que devuelve el código de salida. Antes de
+  declarar `OnException`, decide la política por defecto.
+- Un `EAbort` no llega a la política: `Run` devuelve `TAppExit.Failure` y no se informa nada.
+- Lo que falla dentro de una petición no llega a la política: el servidor lo contesta con su
+  respuesta de error. El gancho `ApplicationHandleException` del RTL sigue siendo el que pone el
+  manejador de peticiones de WebBroker.
 
 ### El puerto
 
@@ -240,7 +275,7 @@ TDafHttpServer = class(TInterfacedObject, IDafHttpServer)
 end;
 ```
 
-`Create` lee el puerto de `Config['Port']`. `Start` se niega a arrancar sobre un puerto ocupado: dispara `OnError` con un mensaje que nombra el puerto y aborta, en vez de dejar escapar un error de socket desde dentro del servidor. `CanBindPort` responde a lo mismo por adelantado, y suelta lo que haya reservado.
+`Create` lee el puerto de `Config['Port']`. `Start` se niega a arrancar sobre un puerto ocupado: dispara `OnError` y después lanza una excepción que nombra el puerto, antes de tocar el socket. `CanBindPort` responde a lo mismo por adelantado, y suelta lo que haya reservado.
 
 ### Manejarlo tú
 

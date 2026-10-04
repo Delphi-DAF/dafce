@@ -33,6 +33,12 @@ Este `Run` **no** es el de la CLI. En CLI y en Web DAF es dueño del proceso: `R
 
 Su nombre **no** es `Application` a propósito: en el mismo `.dpr` conviven éste y el de la plataforma. **La vía preferente sigue siendo la inyección** — `DafApp` es la salida para el código que el contenedor nunca ve, no un rodeo para evitarlo.
 
+### Una sola instancia
+
+`B.SingleInstance(Id)` declara que solo puede correr una instancia con ese identificador, como en la
+variante VCL. Una segunda instancia no construye el contenedor ni crea el formulario, `Run` vuelve
+sin entrar en el bucle, y el código de salida del proceso pasa a ser `TAppExit.AlreadyRunning`.
+
 ---
 
 ## Registrar el destino

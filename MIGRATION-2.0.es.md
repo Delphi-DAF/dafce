@@ -293,10 +293,10 @@ Es el frente más grande de 2.0 para cualquier cosa que tuviera un `.dpr`.
   atributo `[Version]` sobre cualquier clase.
 
 - **El `try`/`except` alrededor del `Run` pasa a ser una política.** Capturar lo que se escapa,
-  informarlo y elegir el código de salida es `B.OnException(Policy)`, declarada antes que el resto
-  de la composición. El `except` del `.dpr` solo pasa lo que se escapa antes del `Run` a
-  `B.HandleException(E)`, que se lo da a esa misma política y devuelve el código de salida. El
-  sample `GreetTool` de `Daf.Cli` enseña el `.dpr` entero.
+  informarlo y elegir el código de salida es `B.OnException(Policy)` en las variantes CLI y Web,
+  declarada antes que el resto de la composición. El `except` del `.dpr` solo pasa lo que se escapa
+  antes del `Run` a `B.HandleException(E)`, que se lo da a esa misma política y devuelve el código de
+  salida. El sample `GreetTool` de `Daf.Cli` enseña el `.dpr` entero.
 
 - **`Daf.Application.Version` se muda a `Daf.Commons`.** Añade `Daf.Commons` a `requires` si usabas
   `TVersionInfo` y no lo tenías ya. Y cambian dos cosas:

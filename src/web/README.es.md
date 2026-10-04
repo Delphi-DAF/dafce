@@ -65,6 +65,9 @@ devuelve la cadena vacía y el constructor falla al convertirla. Asignar `Port` 
 lo sustituye. Componer por la variante de aplicación en vez de a mano siembra el puerto por ti —ver
 la [guía](docs/GUIDE.es.md#la-variante-de-aplicación-web)—.
 
+Con el puerto ocupado, `Start` dispara `OnError` y después lanza una excepción que nombra el puerto:
+`Cannot start: port 8080 is in use`.
+
 ---
 
 ## Helpers de respuesta

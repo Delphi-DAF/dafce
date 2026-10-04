@@ -67,8 +67,9 @@ write by hand:
 
 | What | Where | Which variants |
 |---|---|---|
-| Deciding whether the process starts at all | `SingleInstance(Id)` | CLI |
-| The policy for what escapes, and the exit code | `OnException(Policy)` | CLI |
+| Deciding whether the process starts at all | `SingleInstance(Id)` | CLI, VCL, FMX |
+| The policy for what escapes, and the exit code | `OnException(Policy)` | CLI, Web |
+| Handing that policy what escapes before `Run` | `HandleException(E)`, in the `.dpr`'s `except` | CLI, Web |
 | The action of the command reached, and its exit code | `SetAction(Action)` / `SetAction(Command, Action)` | CLI |
 | `--version`, `--help`, invalid invocation | `RootCommand`, answered by the parse | CLI |
 | The HTTP server, wired to DI and the host | `WebApp.AddHttpServer` + `MapControllers` | Web |

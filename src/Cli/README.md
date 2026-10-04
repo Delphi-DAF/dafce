@@ -239,7 +239,8 @@ without a host. What escapes it goes to the `OnException` policy, with `Failure.
 
 ### The policies that come as standard
 
-`OnException` takes any callback. It receives a `TAppFailure` — the exception in `Error`, the
+`OnException` takes any callback, and the policy is the application family's: the Web variant takes
+the same one. It receives a `TAppFailure` — the exception in `Error`, the
 container in `Services`, `nil` when there is none, and `Reported` when the host has already reported
 it — and returns the exit code. Three are already written:
 

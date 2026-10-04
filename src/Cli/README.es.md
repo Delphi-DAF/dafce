@@ -240,7 +240,8 @@ que se escapa de ella va a la política de `OnException`, con `Failure.Services`
 
 ### Las políticas que vienen de serie
 
-`OnException` acepta cualquier callback. Recibe un `TAppFailure` —la excepción en `Error`, el
+`OnException` acepta cualquier callback, y la política es la de la familia de aplicaciones: la
+variante Web acepta la misma. Recibe un `TAppFailure` —la excepción en `Error`, el
 contenedor en `Services`, `nil` si no lo hay, y `Reported` si el host ya la informó— y devuelve el
 código de salida. Tres están ya escritas:
 
