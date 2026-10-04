@@ -19,6 +19,22 @@ type
     function Name: string;
   end;
 
+  /// Nadie lo registra: es lo que hace fallar la construccion con la validacion fijada.
+  IUnregistered = interface(IInvokable)
+    ['{3F0C8E5A-1B7D-4E2A-9C64-8D2F5A7B1E09}']
+  end;
+
+  INeedsUnregistered = interface(IInvokable)
+    ['{C47A1D93-6E2B-4F58-A0D1-5B9E3C7F2A64}']
+  end;
+
+  TNeedsUnregistered = class(TInterfacedObject, INeedsUnregistered)
+  private
+    FDependency: IUnregistered;
+  public
+    constructor Create(const Dependency: IUnregistered);
+  end;
+
   /// El estado que el Given deja montado y el When usa. Un World de solo texto obliga al Given a
   /// ejecutar la accion para tener algo que dejar escrito, y entonces lo que el Then compara es la
   /// cadena que el propio montaje acaba de componer, no el comportamiento.
@@ -28,7 +44,13 @@ type
     App: IVclApplication;
     /// La primera aplicacion construida; la actual es App.
     Earlier: IVclApplication;
+    /// La instancia que ya corre, y que sostiene el cerrojo mientras viva.
+    Holder: IVclApplication;
     Report: string;
+    /// El codigo de salida del proceso al empezar: una aplicacion resuelta lo cambia, y el runner
+    /// sale con el.
+    SavedExitCode: Integer;
+    constructor Create;
     destructor Destroy; override;
   end;
 
@@ -42,13 +64,38 @@ type
 implementation
 
 uses
+  System.StrUtils,
   Vcl.Forms,
   Daf.MiniSpec,
   Daf.Extensions.Logging,
   SpecForm;
 
+/// Lo que se ve de una aplicacion de escritorio despues de arrancarla hasta el bucle.
+function Outcome(const App: IVclApplication): string;
+begin
+  // La expresion condicional y no IfThen, que evalua sus dos argumentos: el ClassName de un
+  // formulario nil.
+  Result := Format('contenedor=%s formulario=%s', [if App.Services = nil then 'no' else 'si',
+    if App.MainForm = nil then 'no' else App.MainForm.ClassName]);
+end;
+
+constructor TVclWorld.Create;
+begin
+  inherited;
+  SavedExitCode := System.ExitCode;
+end;
+
+constructor TNeedsUnregistered.Create(const Dependency: IUnregistered);
+begin
+  inherited Create;
+  FDependency := Dependency;
+end;
+
 destructor TVclWorld.Destroy;
 begin
+  System.ExitCode := SavedExitCode;
+  if Holder <> nil then
+    Holder.Stop;
   // Lo que el World sostiene lo cierra el World: una aplicacion construida y abandonada retiene
   // su host y deja el global apuntandola. Stop es idempotente, asi que el escenario que ya la
   // paro no paga por esto.
@@ -109,6 +156,91 @@ Feature La variante VCL de la familia @vcl @application-family
         Expect(Format('servicio=%s formulario=%s',
           [W.App.Services.GetRequiredService<IDesktopService>.Name,
            W.App.MainForm.ClassName])).ToEqual('servicio=desktop formulario=TSpecForm');
+      end)
+
+.Rule('Las variantes de escritorio pueden declarar instancia unica')
+
+  .Scenario('Con instancia unica declarada, la segunda no arranca')
+    .Given('una aplicacion VCL con un identificador de instancia unica, y una segunda declarada igual',
+      procedure(W: TVclWorld)
+      begin
+        var First := TVclApplication.CreateBuilder;
+        First.SingleInstance('daf-vcl-spec');
+        W.Holder := First.Build;
+        W.Builder := TVclApplication.CreateBuilder;
+        W.Builder.SingleInstance('daf-vcl-spec');
+        W.App := W.Builder.Build;
+      end)
+    .When('se arranca la segunda hasta el borde del bucle',
+      procedure(W: TVclWorld)
+      begin
+        W.App.StartUpTo(TSpecForm);
+        W.Report := Format('%s exit=%d global=%s', [Outcome(W.App), System.ExitCode,
+          IfThen(DafApp = W.Holder, 'la primera', 'otra')]);
+      end)
+    .&Then('vuelve sin construir el contenedor ni crear el formulario, y el proceso termina con el codigo de otra instancia en marcha',
+      procedure(W: TVclWorld)
+      begin
+        Expect(W.Report).ToEqual(Format('contenedor=no formulario=no exit=%d global=la primera',
+          [TAppExit.AlreadyRunning]));
+      end)
+
+  .Scenario('Sin instancia unica declarada, corren varias')
+    .Given('una aplicacion VCL que no declara instancia unica, y una segunda igual',
+      procedure(W: TVclWorld)
+      begin
+        W.Holder := TVclApplication.CreateBuilder.Build;
+        W.Builder := TVclApplication.CreateBuilder;
+        W.App := W.Builder.Build;
+      end)
+    .When('se arranca la segunda hasta el borde del bucle',
+      procedure(W: TVclWorld)
+      begin
+        W.App.StartUpTo(TSpecForm);
+        W.Report := Outcome(W.App);
+      end)
+    .&Then('la segunda construye su contenedor y crea su formulario',
+      procedure(W: TVclWorld)
+      begin
+        Expect(W.Report).ToEqual('contenedor=si formulario=TSpecForm');
+      end)
+
+  .Scenario('Una construccion que falla suelta el cerrojo')
+    .Given('una aplicacion VCL con instancia unica cuya construccion fallo',
+      procedure(W: TVclWorld)
+      begin
+        var First := TVclApplication.CreateBuilder;
+        First.SingleInstance('daf-vcl-spec-failed');
+        First.Services.AddSingleton<INeedsUnregistered, TNeedsUnregistered>;
+        First.ServiceProviderOptions := TServiceProviderOptions.Create(True, True);
+        var Saved := BootstrapLog.Sinks;
+        BootstrapLog.ClearSinks;
+        try
+          try
+            First.Build;
+            W.Report := '<construyo sin protestar>';
+          except
+            on E: Exception do W.Report := '';
+          end;
+        finally
+          for var Sink in Saved do
+            BootstrapLog.AddSink(Sink);
+        end;
+      end)
+    .When('arranca una segunda con el mismo identificador',
+      procedure(W: TVclWorld)
+      begin
+        W.Builder := TVclApplication.CreateBuilder;
+        W.Builder.SingleInstance('daf-vcl-spec-failed');
+        W.App := W.Builder.Build;
+        W.App.StartUpTo(TSpecForm);
+        W.Report := W.Report + Outcome(W.App);
+      end)
+    .&Then('la segunda construye su contenedor y crea su formulario',
+      procedure(W: TVclWorld)
+      begin
+        // El vacio delante es el control de que la primera construccion fallo de verdad.
+        Expect(W.Report).ToEqual('contenedor=si formulario=TSpecForm');
       end)
 
 .Rule('El acceso global')

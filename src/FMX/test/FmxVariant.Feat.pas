@@ -30,7 +30,13 @@ type
     /// La primera aplicacion construida; la actual es App.
     Earlier: IFmxApplication;
     Info: PTypeInfo;
+    /// La instancia que ya corre, y que sostiene el cerrojo mientras viva.
+    Holder: IFmxApplication;
     Report: string;
+    /// El codigo de salida del proceso al empezar: una aplicacion resuelta lo cambia, y el runner
+    /// sale con el.
+    SavedExitCode: Integer;
+    constructor Create;
     destructor Destroy; override;
   end;
 
@@ -46,11 +52,21 @@ implementation
 
 uses
   System.Rtti,
+  System.StrUtils,
   Daf.MiniSpec,
   Daf.Extensions.Logging;
 
+constructor TFmxWorld.Create;
+begin
+  inherited;
+  SavedExitCode := System.ExitCode;
+end;
+
 destructor TFmxWorld.Destroy;
 begin
+  System.ExitCode := SavedExitCode;
+  if Holder <> nil then
+    Holder.Stop;
   // Lo que el World sostiene lo cierra el World: una aplicacion construida y abandonada retiene
   // su host y deja el global apuntandola. Stop es idempotente, asi que el escenario que ya la
   // paro no paga por esto.
@@ -151,6 +167,36 @@ Feature La variante FMX de la familia @fmx @application-family
         // Escrito literal a proposito: si alguien anade un miembro a una variante y no a la
         // otra, esto lo dice. Es lo unico que queda cuando el formulario no se puede crear.
         Expect(W.Report).ToEqual('GetServices,Run,StartUpTo,Stop,GetMainForm');
+      end)
+
+.Rule('Las variantes de escritorio pueden declarar instancia unica')
+
+  // Una aplicacion resuelta no llega a tocar FireMonkey, asi que StartUpTo si se puede llamar aqui;
+  // si la segunda no quedara resuelta, moriria al crear el formulario y el escenario se pondria rojo.
+  .Scenario('Con instancia unica declarada, la segunda no arranca')
+    .Given('una aplicacion FMX con un identificador de instancia unica, y una segunda declarada igual',
+      procedure(W: TFmxWorld)
+      begin
+        var First := TFmxApplication.CreateBuilder;
+        First.SingleInstance('daf-fmx-spec');
+        W.Holder := First.Build;
+        W.Builder := TFmxApplication.CreateBuilder;
+        W.Builder.SingleInstance('daf-fmx-spec');
+        W.App := W.Builder.Build;
+      end)
+    .When('se arranca la segunda hasta el borde del bucle',
+      procedure(W: TFmxWorld)
+      begin
+        W.App.StartUpTo(nil);
+        W.Report := Format('contenedor=%s formulario=%s exit=%d global=%s', [
+          IfThen(W.App.Services = nil, 'no', 'si'), IfThen(W.App.MainForm = nil, 'no', 'si'),
+          System.ExitCode, IfThen(DafApp = W.Holder, 'la primera', 'otra')]);
+      end)
+    .&Then('vuelve sin construir el contenedor ni crear el formulario, y el proceso termina con el codigo de otra instancia en marcha',
+      procedure(W: TFmxWorld)
+      begin
+        Expect(W.Report).ToEqual(Format('contenedor=no formulario=no exit=%d global=la primera',
+          [TAppExit.AlreadyRunning]));
       end)
 
 .Rule('El acceso global')

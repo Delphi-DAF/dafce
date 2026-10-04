@@ -12,9 +12,13 @@ uses
   Daf.Extensions.DependencyInjection,
   Daf.Extensions.Hosting,
   Daf.Extensions.Logging,
+  Daf.Extensions.Hosting.Failures,
   Daf.Hosting;
 
 type
+  // El de la familia, para que un .dpr de escritorio lea el codigo con esta unit sola.
+  TAppExit = Daf.Extensions.Hosting.Failures.TAppExit;
+
   IVclApplication = interface(IInvokable)
     ['{B2918C19-A3F1-4201-B5FE-C09A0BDAAE8E}']
     function GetServices: IServiceProvider;
@@ -51,6 +55,17 @@ type
 
   IVclApplicationBuilder = interface(IHostApplicationBuilder)
     ['{5F7C5FB6-0B3B-44F3-9898-655B8637CA00}']
+    /// <summary>
+    /// Declara que solo puede correr una instancia con ese identificador. Sin declararla no hay
+    /// cerrojo, y pueden correr varias a la vez. Se comprueba en el Build, antes de cargar la
+    /// configuracion y de construir el contenedor.
+    /// </summary>
+    /// <remarks>
+    ///   La segunda instancia se construye resuelta: Run y StartUpTo vuelven sin crear el formulario
+    ///   ni entrar en el bucle, Services y MainForm valen nil, no se publica como DafApp, y el codigo
+    ///   de salida del proceso pasa a ser <c>TAppExit.AlreadyRunning</c>.
+    /// </remarks>
+    function SingleInstance(const Id: string): IVclApplicationBuilder;
     function Build: IVclApplication;
   end;
 
@@ -58,9 +73,13 @@ type
   private
     FHost: IHost;
     FMainForm: TComponent;
+    FInstanceLock: THandle;
+    FSettled: Boolean;
   public
     class function CreateBuilder(const Args: TArray<string> = nil): IVclApplicationBuilder; static;
-    constructor Create(const Host: IHost);
+    constructor Create(const Host: IHost; const InstanceLock: THandle);
+    /// <summary>Otra instancia ya corre: no hay host, ni formulario, ni bucle.</summary>
+    constructor CreateSettled;
     destructor Destroy; override;
     function GetServices: IServiceProvider;
     function GetMainForm: TComponent;
@@ -73,6 +92,7 @@ type
   private
     FImpl: THostBuilder;
     FOwned: IHostApplicationBuilder;
+    FSingleInstanceId: string;
     function GetServices: IServiceCollection;
     function GetConfiguration: IConfigurationManager;
     function GetEnvironment: IHostEnvironment;
@@ -82,6 +102,7 @@ type
     procedure SetServiceProviderOptions(const Value: TServiceProviderOptions);
   public
     constructor Create(const Args: TArray<string>);
+    function SingleInstance(const Id: string): IVclApplicationBuilder;
     function Build: IVclApplication;
     property Services: IServiceCollection read GetServices;
     property Configuration: IConfigurationManager read GetConfiguration;
@@ -107,6 +128,9 @@ type
 function DafApp: IVclApplication;
 
 implementation
+
+uses
+  Daf.Hosting.Edge;
 
 var
   CurrentApp: IVclApplication = nil;
@@ -161,9 +185,30 @@ begin
   FImpl.ServiceProviderOptions := Value;
 end;
 
-function TVclApplicationBuilder.Build: IVclApplication;
+function TVclApplicationBuilder.SingleInstance(const Id: string): IVclApplicationBuilder;
 begin
-  Result := TVclApplication.Create(FImpl.Build);
+  FSingleInstanceId := Id;
+  Result := Self;
+end;
+
+function TVclApplicationBuilder.Build: IVclApplication;
+var
+  Lock: THandle;
+  Host: IHost;
+begin
+  // Antes de cargar y de construir el contenedor: una instancia que no debe arrancar no paga por
+  // arrancar.
+  if not TInstanceLock.Acquire(FSingleInstanceId, Lock) then
+    Exit(TVclApplication.CreateSettled);
+  try
+    Host := FImpl.Build;
+  except
+    // Sin aplicacion que lo suelte al destruirse: una construccion que falla no deja el cerrojo
+    // tomado para el resto del proceso.
+    TInstanceLock.Release(Lock);
+    raise;
+  end;
+  Result := TVclApplication.Create(Host, Lock);
   CurrentApp := Result;
 end;
 
@@ -174,10 +219,17 @@ begin
   Result := TVclApplicationBuilder.Create(Args);
 end;
 
-constructor TVclApplication.Create(const Host: IHost);
+constructor TVclApplication.Create(const Host: IHost; const InstanceLock: THandle);
 begin
   inherited Create;
   FHost := Host;
+  FInstanceLock := InstanceLock;
+end;
+
+constructor TVclApplication.CreateSettled;
+begin
+  inherited Create;
+  FSettled := True;
 end;
 
 destructor TVclApplication.Destroy;
@@ -188,12 +240,16 @@ begin
     on E: Exception do
       ; // El host ya lo informo al ocurrir, y un destructor que lanza deja el objeto a medio liberar.
   end;
+  TInstanceLock.Release(FInstanceLock);
   inherited;
 end;
 
 function TVclApplication.GetServices: IServiceProvider;
 begin
-  Result := FHost.Services;
+  if Assigned(FHost) then
+    Result := FHost.Services
+  else
+    Result := nil;
 end;
 
 function TVclApplication.GetMainForm: TComponent;
@@ -203,6 +259,11 @@ end;
 
 procedure TVclApplication.StartUpTo(const MainFormClass: TComponentClass);
 begin
+  if FSettled then
+  begin
+    System.ExitCode := TAppExit.AlreadyRunning;
+    Exit;
+  end;
   FHost.Start;
   Vcl.Forms.Application.Initialize;
   Vcl.Forms.Application.CreateForm(MainFormClass, FMainForm);
@@ -210,6 +271,11 @@ end;
 
 procedure TVclApplication.Run(const MainFormClass: TComponentClass);
 begin
+  if FSettled then
+  begin
+    System.ExitCode := TAppExit.AlreadyRunning;
+    Exit;
+  end;
   StartUpTo(MainFormClass);
   try
     // A partir de aqui manda la plataforma. Run no vuelve hasta que su bucle termina.
