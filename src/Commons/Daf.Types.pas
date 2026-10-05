@@ -162,6 +162,8 @@ uses
   Winapi.Messages,
 {$ENDIF MSWINDOWS}
 {$IFDEF POSIX}
+  Posix.Unistd,
+  Posix.Dlfcn, // lo pide la expansion inline de environ
 {$IFDEF MACOS}
 {$ENDIF MACOS}
 {$IFDEF ANDROID}
@@ -248,6 +250,7 @@ begin
   ClearBuffer;
   FVars.Clear;
 
+{$IFDEF MSWINDOWS}
   FBuffer := GetEnvironmentStringsW;
 
   if FBuffer = nil then
@@ -273,6 +276,26 @@ begin
     FreeEnvironmentStringsW(FBuffer);
     FBuffer := nil;
   end;
+{$ENDIF MSWINDOWS}
+{$IFDEF POSIX}
+  // Las claves se guardan en mayusculas, como en Windows, para que una busqueda encuentre la variable
+  // igual en todas las plataformas. El entorno POSIX si distingue mayusculas: dos variables que solo
+  // difieran en ellas quedan en una, la ultima que entrega environ.
+  var Entry: PMarshaledAString := environ;
+  if Entry = nil then
+    Exit;
+
+  while Entry^ <> nil do
+  begin
+    var EnvLine := UTF8ToString(Entry^);
+
+    var i := EnvLine.IndexOf('=');
+    if i > 0 then
+      FVars.AddOrSetValue(EnvLine.Substring(0, i).ToUpper, EnvLine.Substring(i + 1));
+
+    Inc(Entry);
+  end;
+{$ENDIF POSIX}
 end;
 
 { TMacrosList }

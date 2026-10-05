@@ -106,6 +106,7 @@
         <DCCReference Include="Rtti.Feat.pas"/>
         <DCCReference Include="PropertyAssign.Feat.pas"/>
         <DCCReference Include="Version.Feat.pas"/>
+        <DCCReference Include="EnvVars.Feat.pas"/>
         <DCCReference Include="MissingMacros.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

@@ -15,7 +15,8 @@ uses
   MissingMacros.Feat in 'MissingMacros.Feat.pas',
   Rtti.Feat in 'Rtti.Feat.pas',
   PropertyAssign.Feat in 'PropertyAssign.Feat.pas',
-  Version.Feat in 'Version.Feat.pas';
+  Version.Feat in 'Version.Feat.pas',
+  EnvVars.Feat in 'EnvVars.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;
