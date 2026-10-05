@@ -14,7 +14,7 @@ implementation
 initialization
 
   Feature('''
-  La partida termina al acertar el códgio secreto
+  La partida termina al acertar el código secreto
 
     Como jugador,
     Quiero que el sistema me indique que he acertado el código
