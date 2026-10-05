@@ -97,6 +97,10 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
+        <DCCReference Include="Emission.SpecHelpers.pas"/>
+        <DCCReference Include="Emitter.Feat.pas"/>
+        <DCCReference Include="Repository.Feat.pas"/>
+        <DCCReference Include="Parity.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>

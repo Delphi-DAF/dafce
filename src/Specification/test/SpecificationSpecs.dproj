@@ -98,6 +98,10 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
+        <DCCReference Include="Model.Feat.pas"/>
+        <DCCReference Include="Authoring.Feat.pas"/>
+        <DCCReference Include="Metamodel.Feat.pas"/>
+        <DCCReference Include="Specification.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>

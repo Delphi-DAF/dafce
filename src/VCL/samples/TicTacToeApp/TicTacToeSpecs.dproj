@@ -100,11 +100,15 @@
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
         <DCCReference Include="Domain\TicTacToe.Game.pas"/>
+        <DCCReference Include="Presentation\TicTacToe.ViewPort.pas"/>
+        <DCCReference Include="Presentation\TicTacToe.ViewModel.pas"/>
         <DCCReference Include="Specs\TicTacToe.SpecHelpers.pas"/>
         <DCCReference Include="Specs\TicTacToe.Placement.Steps.pas"/>
         <DCCReference Include="Specs\TicTacToe.Movement.Steps.pas"/>
         <DCCReference Include="Specs\TicTacToe.Victory.Steps.pas"/>
         <DCCReference Include="Specs\TicTacToe.UX.Steps.pas"/>
+        <DCCReference Include="Specs\TicTacToe.NewGame.Steps.pas"/>
+        <DCCReference Include="Specs\TicTacToe.NewGame.Feat.pas"/>
         <DCCReference Include="Specs\TicTacToe.Placement.Feat.pas"/>
         <DCCReference Include="Specs\TicTacToe.Movement.Feat.pas"/>
         <DCCReference Include="Specs\TicTacToe.Victory.Feat.pas"/>

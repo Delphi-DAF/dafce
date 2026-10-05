@@ -71,6 +71,7 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
+        <DCCReference Include="Catalog.Domain.pas"/>
         <None Include="README.md"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

@@ -97,6 +97,12 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
+        <DCCReference Include="FastPath.Feat.pas"/>
+        <DCCReference Include="Projection.Feat.pas"/>
+        <DCCReference Include="Context.Feat.pas"/>
+        <DCCReference Include="EmptyIn.Feat.pas"/>
+        <DCCReference Include="Parity.Feat.pas"/>
+        <DCCReference Include="ReadOnly.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>

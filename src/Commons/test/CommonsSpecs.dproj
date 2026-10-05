@@ -101,6 +101,8 @@
         <DCCReference Include="Nullable.Feat.pas"/>
         <DCCReference Include="Enumerable.Feat.pas"/>
         <DCCReference Include="Comparers.Feat.pas"/>
+        <DCCReference Include="Arrays.Feat.pas"/>
+        <DCCReference Include="Macros.Feat.pas"/>
         <DCCReference Include="Rtti.Feat.pas"/>
         <DCCReference Include="PropertyAssign.Feat.pas"/>
         <DCCReference Include="Version.Feat.pas"/>
