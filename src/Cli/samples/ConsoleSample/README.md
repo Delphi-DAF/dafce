@@ -20,7 +20,7 @@ más configuración y el patrón de opciones.
   que quedárselo y soltar la opción deja un puntero colgando. La otra forma correcta es sostener la
   `IOptions<T>` en un campo.
 - La acción que declara `B.SetAction` recibe el `IServiceProvider` ya construido y el
-  `ICommandLineParseResult`, y lo que devuelve es el código de salida — `TCliExit.Ok` aquí.
+  `IParseResult`, y lo que devuelve es el código de salida — `TCliExit.Ok` aquí.
 - `TActivatorUtilities.CreateInstance<T>` construye un objeto **no contado**: el dueño es quien
   llama. Sin el `Free` se fugan dos cosas, el accesor y la interfaz que sostiene dentro, porque su
   campo no se finaliza nunca.

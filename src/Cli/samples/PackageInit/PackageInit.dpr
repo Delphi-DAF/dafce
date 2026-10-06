@@ -21,7 +21,7 @@ begin
     AddLegacyEngine(B.Services);
 
     B.SetAction(
-      function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+      function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
       begin
         // Si la tarea de arranque no hubiera corrido, esto lanzaria.
         Writeln(TLegacyEngine.Evaluate('2+2'));

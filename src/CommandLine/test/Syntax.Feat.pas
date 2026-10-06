@@ -32,7 +32,7 @@ type
     UserOpt: IOption<string>;
     Plain: IRootCommand;
     KeepOpt: IOption<string>;
-    Parsed: ICommandLineParseResult;
+    Parsed: IParseResult;
     ReadVerbosity: string;
     ReadOut: string;
     ReadTarget: string;
@@ -92,12 +92,12 @@ end;
 
 procedure TSyntaxWorld.BuildGrammar;
 begin
-  ForceOpt := CommandLine.Option<Boolean>('--force', 'Do it anyway').WithAlias('-f');
-  DryOpt := CommandLine.Option<Boolean>('--dry', 'Say what would happen').WithAlias('-d');
-  CrossOpt := CommandLine.Option<Boolean>('--cross', 'Cross compile').WithAlias('-x');
-  OutOpt := CommandLine.Option<string>('--out', 'Where it goes').WithAlias('-o');
-  VerbosityOpt := CommandLine.Option<string>('--verbosity', 'How much to say').WithAlias('-v');
-  TargetArg := CommandLine.Argument<string>('target', 'What to build');
+  ForceOpt := CommandLine.Option<Boolean>('--force', ['-f']).Description('Do it anyway');
+  DryOpt := CommandLine.Option<Boolean>('--dry', ['-d']).Description('Say what would happen');
+  CrossOpt := CommandLine.Option<Boolean>('--cross', ['-x']).Description('Cross compile');
+  OutOpt := CommandLine.Option<string>('--out', ['-o']).Description('Where it goes');
+  VerbosityOpt := CommandLine.Option<string>('--verbosity', ['-v']).Description('How much to say');
+  TargetArg := CommandLine.Argument<string>('target').Description('What to build');
   Build := CommandLine.Command('build', 'Build things')
     .Add([ForceOpt, DryOpt, CrossOpt, OutOpt, VerbosityOpt, TargetArg]);
   Root := CommandLine.Root('mytool', 'A tool that builds things');
@@ -106,27 +106,27 @@ end;
 
 procedure TSyntaxWorld.BuildMany;
 begin
-  ItemsOpt := CommandLine.Option<string>('--items', 'Several at once')
-    .WithArity(TArity.ZeroOrMore).AllowMultipleArgumentsPerToken;
+  ItemsOpt := CommandLine.Option<string>('--items').Description('Several at once')
+    .Arity(TArgumentArity.ZeroOrMore).AllowMultipleArgumentsPerToken;
   // The same arity WITHOUT the mark, which is the half of the requirement that says
   // what does NOT change.
-  LooseOpt := CommandLine.Option<string>('--loose', 'Several, one mention each')
-    .WithArity(TArity.ZeroOrMore);
-  NameArg := CommandLine.Argument<string>('name', 'What it is called').WithArity(TArity.ZeroOrOne);
+  LooseOpt := CommandLine.Option<string>('--loose').Description('Several, one mention each')
+    .Arity(TArgumentArity.ZeroOrMore);
+  NameArg := CommandLine.Argument<string>('name').Description('What it is called').Arity(TArgumentArity.ZeroOrOne);
   Many := CommandLine.Root('tool', 'A tool');
   Many.Add([ItemsOpt, LooseOpt, NameArg]);
 end;
 
 procedure TSyntaxWorld.BuildWrapper;
 begin
-  UserOpt := CommandLine.Option<string>('--user', 'Who to run as').WithAlias('-u');
+  UserOpt := CommandLine.Option<string>('--user', ['-u']).Description('Who to run as');
   Wrapper := CommandLine.Root('sudo', 'Runs something as somebody else');
   Wrapper.Add(UserOpt);
   // Called as a statement and not chained: it answers ICommand, and a root that went
   // through it would stop being an IRootCommand.
   Wrapper.AllowUnmatchedTokens;
 
-  KeepOpt := CommandLine.Option<string>('--keep', 'What to keep');
+  KeepOpt := CommandLine.Option<string>('--keep').Description('What to keep');
   Plain := CommandLine.Root('tool', 'A tool that wraps nobody');
   Plain.Add(KeepOpt);
 end;
@@ -275,7 +275,7 @@ Feature Command line syntax @commandline @syntax
     .&Then('help is asked for, as if both had been written apart',
       procedure(W: TSyntaxWorld)
       begin
-        Expect(W.Parsed.HelpRequested).ToBeTrue;
+        Expect(W.Parsed.IsHelpRequested).ToBeTrue;
       end)
 
 .Rule('the Windows prefix is admitted alongside the POSIX one')

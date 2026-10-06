@@ -75,15 +75,15 @@ type
   TUntypedParser = reference to function(const Raw: string; out Value: TValue; out Error: string): Boolean;
   TUntypedValidator = reference to function(const Value: TValue; out Error: string): Boolean;
 
-  ICommandLineParseResult = interface;
+  IParseResult = interface;
 
   /// <summary>
   ///   What a command does when an invocation reaches it. It receives the parse result, reads the
   ///   values from it like any other code does, and answers the code the process ends with.
   /// </summary>
-  TCommandAction = reference to function(const Parsed: ICommandLineParseResult): Integer;
+  TCommandAction = reference to function(const Parsed: IParseResult): Integer;
   /// <summary>An action with no code of its own: the invocation answers <c>TCommandLineExit.Ok</c> for it.</summary>
-  TCommandActionProc = reference to procedure(const Parsed: ICommandLineParseResult);
+  TCommandActionProc = reference to procedure(const Parsed: IParseResult);
 
   /// <summary>The codes an invocation ends with when the action is not the one deciding.</summary>
   /// <remarks>
@@ -136,26 +136,59 @@ type
   ///   demands exactly one -- and it is what makes "required" and "many values" the
   ///   same idea seen from its two ends.
   /// </remarks>
-  TArity = record
+  TArgumentArity = record
   strict private
     FMin: Integer;
     FMax: Integer;
   public
     const Unbounded = MaxInt;
-    class function Create(AMin, AMax: Integer): TArity; static;
-    class function Zero: TArity; static;
-    class function ZeroOrOne: TArity; static;
-    class function ExactlyOne: TArity; static;
-    class function ZeroOrMore: TArity; static;
-    class function OneOrMore: TArity; static;
-    function Min: Integer;
-    function Max: Integer;
+    class function Create(AMin, AMax: Integer): TArgumentArity; static;
+    class function Zero: TArgumentArity; static;
+    class function ZeroOrOne: TArgumentArity; static;
+    class function ExactlyOne: TArgumentArity; static;
+    class function ZeroOrMore: TArgumentArity; static;
+    class function OneOrMore: TArgumentArity; static;
+    function MinimumNumberOfValues: Integer;
+    function MaximumNumberOfValues: Integer;
     /// <summary>True when more than one value fits, so repeating is not an error.</summary>
     function AllowsMany: Boolean;
     /// <summary>True when at least one value has to be there.</summary>
     function DemandsValue: Boolean;
     /// <summary>Says the arity in words, for an error message that has to name it.</summary>
     function Describe: string;
+  end;
+
+  /// <summary>A collection a symbol owns: its aliases.</summary>
+  /// <remarks>
+  ///   The symbol creates it and frees it, as a memo does with its lines, and freezing the
+  ///   grammar closes it. It keeps the NAME of its owner and not a reference to it: the
+  ///   refusal can say whose collection it is without the two holding each other.
+  /// </remarks>
+  TCommandLineCollection<T> = class
+  public type
+    TEnumerator = record
+    private
+      FItems: TArray<T>;
+      FIndex: Integer;
+      function GetCurrent: T;
+    public
+      function MoveNext: Boolean;
+      property Current: T read GetCurrent;
+    end;
+  private
+    FItems: TArray<T>;
+    FOwnerName: string;
+    FFrozen: Boolean;
+    function GetItem(Index: Integer): T;
+  public
+    constructor Create(const OwnerName: string);
+    /// <summary>Raises <c>ECommandLine</c> once the grammar is frozen.</summary>
+    procedure Add(const Item: T);
+    function Count: Integer;
+    function ToArray: TArray<T>;
+    function GetEnumerator: TEnumerator;
+    procedure Freeze;
+    property Items[Index: Integer]: T read GetItem; default;
   end;
 
   /// <summary>Anything the grammar is made of: a command, an option, an argument.</summary>
@@ -168,8 +201,9 @@ type
     /// </summary>
     function AsObject: TObject;
     function Name: string;
-    function Aliases: TArray<string>;
-    function Description: string;
+    /// <summary>The other names it answers to. <c>Aliases.Add</c> declares one.</summary>
+    function Aliases: TCommandLineCollection<string>;
+    function Description: string; overload;
     /// <summary>
     ///   True when <c>Token</c> is this symbol's name or one of its aliases.
     ///   Compared WITHOUT regard to case -- a declared divergence from .NET, which is
@@ -204,14 +238,14 @@ type
     /// <summary>True when the token is the whole statement: <c>--verbose</c>.</summary>
     function IsFlag: Boolean;
     function TypeName: string;
-    function Arity: TArity;
+    function Arity: TArgumentArity; overload;
     /// <summary>
     ///   The values this symbol accepts, or empty when it does not restrict them. An
     ///   enumerated type fills this in by itself.
     /// </summary>
     function AcceptedValues: TArray<string>;
     /// <summary>True when a default was declared, which is what satisfies "required".</summary>
-    function HasDefault: Boolean;
+    function HasDefaultValue: Boolean;
     /// <summary>The declared default rendered as text, for the help.</summary>
     function DefaultText: string;
   end;
@@ -248,8 +282,7 @@ type
     function Add(const Subcommand: ICommand): ICommand; overload;
     /// <summary>Convenience for several at once, the nearest thing to a C# collection initializer.</summary>
     function Add(const Symbols: array of ISymbol): ICommand; overload;
-    function WithAlias(const Alias: string): ICommand;
-    function Describe(const Text: string): ICommand;
+    function Description(const Text: string): ICommand; overload;
     function Options: TArray<IOption>;
     function Arguments: TArray<IArgument>;
     function Subcommands: TArray<ICommand>;
@@ -266,7 +299,7 @@ type
     ///   silence is the worse of the two failures.
     ///
     ///   It answers <c>ICommand</c>, so on a root it is called as a statement rather than
-    ///   chained -- the same caveat as <c>Describe</c>.
+    ///   chained -- the same caveat as <c>Description</c>.
     /// </remarks>
     function AllowUnmatchedTokens: ICommand;
     /// <summary>Keeps it out of the help of its parent. See <c>ISymbol.IsHidden</c>.</summary>
@@ -285,7 +318,7 @@ type
     ///   it only groups, and the invocation has to name one of its leaves.
     ///
     ///   It answers <c>ICommand</c>, so on a root it is called as a statement rather than
-    ///   chained -- the same caveat as <c>Describe</c>.
+    ///   chained -- the same caveat as <c>Description</c>.
     /// </remarks>
     function SetAction(const Action: TCommandAction): ICommand; overload;
     /// <summary>The same, for an action with no code of its own: the invocation answers <c>Ok</c>.</summary>
@@ -296,9 +329,9 @@ type
 
   IRootCommand = interface(ICommand)
     ['{7C4B1A20-0006-4F31-9C10-4B0E2D5A0006}']
-    function Parse(const Args: TArray<string>): ICommandLineParseResult; overload;
+    function Parse(const Args: TArray<string>): IParseResult; overload;
     /// <summary>Parses the process command line, <c>ParamStr(1)</c> onwards.</summary>
-    function Parse: ICommandLineParseResult; overload;
+    function Parse: IParseResult; overload;
     /// <summary>
     ///   Declares the version this tool answers with. It lives on the ROOT and not on
     ///   each command, as in .NET: a version belongs to the tool, not to its orders.
@@ -349,7 +382,7 @@ type
     property VersionAction: TCommandAction read GetVersionAction write SetVersionAction;
   end;
 
-  ICommandLineParseResult = interface
+  IParseResult = interface
     ['{7C4B1A20-0007-4F31-9C10-4B0E2D5A0007}']
     /// <summary>The leaf command the invocation reached.</summary>
     function Command: ICommand;
@@ -357,10 +390,10 @@ type
     function Errors: TArray<string>;
     function ErrorText: string;
     /// <summary>True when help was asked for. Asking is a valid outcome, not a failure.</summary>
-    function HelpRequested: Boolean;
+    function IsHelpRequested: Boolean;
     function HelpText: string;
     /// <summary>True when the version was asked for. Also an outcome, not a failure.</summary>
-    function VersionRequested: Boolean;
+    function IsVersionRequested: Boolean;
     /// <summary>The version the root declared. Formatting it is the caller's decision.</summary>
     function VersionInfo: TVersionInfo;
     /// <summary>True when the invocation carried this symbol at all.</summary>
@@ -410,10 +443,16 @@ type
     ///   Reads as <c>FileOption.ValueIn(Parsed)</c>. The order is inverted with respect
     ///   to .NET's <c>result.GetValue(fileOption)</c> on purpose -- see the unit header.
     /// </remarks>
-    function ValueIn(const Parsed: ICommandLineParseResult): T;
+    function ValueIn(const Parsed: IParseResult): T;
     /// <summary>Every value the invocation carried, for an arity that admits many.</summary>
-    function ValuesIn(const Parsed: ICommandLineParseResult): TArray<T>;
-    function WithDefault(const Value: T): IOption<T>; overload;
+    function ValuesIn(const Parsed: IParseResult): TArray<T>;
+    /// <summary>Declares the default as a constant.</summary>
+    function DefaultValue(const Value: T): IOption<T>;
+    /// <summary>
+    ///   The calculation declared for the default; <c>nil</c> when the default is a constant
+    ///   or there is none.
+    /// </summary>
+    function DefaultValueFactory: TFunc<T>; overload;
     /// <summary>Declares the default as a CALCULATION, run only if it is needed.</summary>
     /// <remarks>
     ///   A default that depends on the surroundings -- a temporary directory, today's
@@ -431,16 +470,15 @@ type
     ///   showing no default beats inventing one or paying for a side effect to paint a
     ///   line. With no text, no default is shown.
     /// </remarks>
-    function WithDefault(const Factory: TFunc<T>; const Text: string = ''): IOption<T>; overload;
-    function WithAlias(const Alias: string): IOption<T>;
-    function WithArity(const Value: TArity): IOption<T>;
-    function Describe(const Text: string): IOption<T>;
+    function DefaultValueFactory(const Factory: TFunc<T>; const Text: string = ''): IOption<T>; overload;
+    function Arity(const Value: TArgumentArity): IOption<T>; overload;
+    function Description(const Text: string): IOption<T>; overload;
     /// <summary>Makes it available to every descendant of the declaring command.</summary>
     function Recursive: IOption<T>;
     /// <summary>Makes the invocation have to carry it, unless it has a default.</summary>
     function Required: IOption<T>;
     /// <summary>Restricts it to a declared set of values, listed when one is refused.</summary>
-    function AcceptOnly(const Values: array of string): IOption<T>;
+    function AcceptOnlyFromAmong(const Values: array of string): IOption<T>;
     /// <summary>Keeps it out of the help. See <c>ISymbol.IsHidden</c>.</summary>
     function Hidden: IOption<T>;
     /// <summary>Adds a validation of its own, which runs inside the parse.</summary>
@@ -471,13 +509,14 @@ type
 
   /// <summary>An argument identified by its place, not by a name behind dashes.</summary>
   IArgument<T> = interface(IArgument)
-    function ValueIn(const Parsed: ICommandLineParseResult): T;
-    function ValuesIn(const Parsed: ICommandLineParseResult): TArray<T>;
-    function WithDefault(const Value: T): IArgument<T>; overload;
-    function WithDefault(const Factory: TFunc<T>; const Text: string = ''): IArgument<T>; overload;
-    function WithArity(const Value: TArity): IArgument<T>;
-    function Describe(const Text: string): IArgument<T>;
-    function AcceptOnly(const Values: array of string): IArgument<T>;
+    function ValueIn(const Parsed: IParseResult): T;
+    function ValuesIn(const Parsed: IParseResult): TArray<T>;
+    function DefaultValue(const Value: T): IArgument<T>;
+    function DefaultValueFactory: TFunc<T>; overload;
+    function DefaultValueFactory(const Factory: TFunc<T>; const Text: string = ''): IArgument<T>; overload;
+    function Arity(const Value: TArgumentArity): IArgument<T>; overload;
+    function Description(const Text: string): IArgument<T>; overload;
+    function AcceptOnlyFromAmong(const Values: array of string): IArgument<T>;
     function Validate(const Validation: TCommandLineValidator<T>): IArgument<T>;
     function AcceptExistingOnly: IArgument<T>;
     function AcceptLegalFileNamesOnly: IArgument<T>;
@@ -491,22 +530,23 @@ type
   TSymbol = class(TInterfacedObject, ISymbol)
   private
     FName: string;
-    FAliases: TArray<string>;
+    FAliases: TCommandLineCollection<string>;
     FDescription: string;
     FHidden: Boolean;
     FFrozen: Boolean;
+    class procedure RaiseFrozen(const SymbolName: string); static;
   protected
     /// <summary>Raises when the grammar this symbol belongs to was frozen.</summary>
     procedure CheckOpen;
   public
     constructor Create(const AName: string);
+    destructor Destroy; override;
     function AsObject: TObject;
     function Name: string;
-    function Aliases: TArray<string>;
-    function Description: string;
+    function Aliases: TCommandLineCollection<string>;
+    function Description: string; overload;
     function Matches(const Token: string): Boolean;
     function IsHidden: Boolean;
-    procedure AddAlias(const Alias: string);
     procedure SetDescription(const Text: string);
     procedure Hide;
     procedure Freeze; virtual;
@@ -521,7 +561,7 @@ type
     ///   values, and each of them is converted on its own.
     /// </summary>
     FElementTypeInfo: PTypeInfo;
-    FArity: TArity;
+    FArity: TArgumentArity;
     FAccepted: TArray<string>;
     FHasDefault: Boolean;
     FDefaultText: string;
@@ -538,11 +578,11 @@ type
     function TryAccept(const Raw: string; out Error: string): Boolean;
     function IsFlag: Boolean;
     function TypeName: string;
-    function Arity: TArity;
+    function Arity: TArgumentArity; overload;
     function AcceptedValues: TArray<string>;
-    function HasDefault: Boolean;
+    function HasDefaultValue: Boolean;
     function DefaultText: string;
-    procedure SetArity(const Value: TArity);
+    procedure SetArity(const Value: TArgumentArity);
     procedure SetAccepted(const Values: array of string);
     procedure SetDefaultText(const Text: string);
     procedure AddValidator(const Validator: TUntypedValidator);
@@ -565,13 +605,14 @@ type
     /// <summary>True once <c>FDefaultValue</c> holds the default, computed or written.</summary>
     FDefaultKnown: Boolean;
     function DefaultOf: T;
-    function ReadValue(const Parsed: ICommandLineParseResult): T;
-    function ReadValues(const Parsed: ICommandLineParseResult): TArray<T>;
+    function ReadValue(const Parsed: IParseResult): T;
+    function ReadValues(const Parsed: IParseResult): TArray<T>;
     procedure SetDefaultValue(const Value: T);
     procedure SetDefaultFactory(const Factory: TFunc<T>; const Text: string);
     procedure AddTypedValidator(const Validation: TCommandLineValidator<T>);
   public
     constructor Create(const AName: string; const AParser: TCommandLineParser<T>);
+    function DefaultValueFactory: TFunc<T>; overload;
   end;
 
   TOption<T> = class(TValuedSymbol<T>, IOption, IOption<T>)
@@ -584,16 +625,15 @@ type
     function IsRequired: Boolean;
     function AllowsMultipleArgumentsPerToken: Boolean;
     function AllowMultipleArgumentsPerToken: IOption<T>;
-    function ValueIn(const Parsed: ICommandLineParseResult): T;
-    function ValuesIn(const Parsed: ICommandLineParseResult): TArray<T>;
-    function WithDefault(const Value: T): IOption<T>; overload;
-    function WithDefault(const Factory: TFunc<T>; const Text: string = ''): IOption<T>; overload;
-    function WithAlias(const Alias: string): IOption<T>;
-    function WithArity(const Value: TArity): IOption<T>;
-    function Describe(const Text: string): IOption<T>;
+    function ValueIn(const Parsed: IParseResult): T;
+    function ValuesIn(const Parsed: IParseResult): TArray<T>;
+    function DefaultValue(const Value: T): IOption<T>;
+    function DefaultValueFactory(const Factory: TFunc<T>; const Text: string = ''): IOption<T>; overload;
+    function Arity(const Value: TArgumentArity): IOption<T>; overload;
+    function Description(const Text: string): IOption<T>; overload;
     function Recursive: IOption<T>;
     function Required: IOption<T>;
-    function AcceptOnly(const Values: array of string): IOption<T>;
+    function AcceptOnlyFromAmong(const Values: array of string): IOption<T>;
     function Validate(const Validation: TCommandLineValidator<T>): IOption<T>;
     function AcceptExistingOnly: IOption<T>;
     function AcceptLegalFileNamesOnly: IOption<T>;
@@ -602,13 +642,13 @@ type
 
   TArgument<T> = class(TValuedSymbol<T>, IArgument, IArgument<T>)
   public
-    function ValueIn(const Parsed: ICommandLineParseResult): T;
-    function ValuesIn(const Parsed: ICommandLineParseResult): TArray<T>;
-    function WithDefault(const Value: T): IArgument<T>; overload;
-    function WithDefault(const Factory: TFunc<T>; const Text: string = ''): IArgument<T>; overload;
-    function WithArity(const Value: TArity): IArgument<T>;
-    function Describe(const Text: string): IArgument<T>;
-    function AcceptOnly(const Values: array of string): IArgument<T>;
+    function ValueIn(const Parsed: IParseResult): T;
+    function ValuesIn(const Parsed: IParseResult): TArray<T>;
+    function DefaultValue(const Value: T): IArgument<T>;
+    function DefaultValueFactory(const Factory: TFunc<T>; const Text: string = ''): IArgument<T>; overload;
+    function Arity(const Value: TArgumentArity): IArgument<T>; overload;
+    function Description(const Text: string): IArgument<T>; overload;
+    function AcceptOnlyFromAmong(const Values: array of string): IArgument<T>;
     function Validate(const Validation: TCommandLineValidator<T>): IArgument<T>;
     function AcceptExistingOnly: IArgument<T>;
     function AcceptLegalFileNamesOnly: IArgument<T>;
@@ -617,14 +657,16 @@ type
 
   /// <summary>Where a grammar starts. The facade, in the shape Daf.Linq uses.</summary>
   /// <remarks>
-  ///   The description is taken at declaration, as in .NET's
-  ///   <c>new Command("build", "Build things")</c>. The fluent <c>Describe</c> says the
-  ///   same thing later; it is the one to avoid on a root, because it answers
+  ///   A command and a root take their description at declaration, as in .NET's
+  ///   <c>new Command("build", "Build things")</c>. An option and an argument take theirs
+  ///   through <c>Description</c>, and an option takes its aliases at declaration, as in
+  ///   .NET. The fluent <c>Description</c> is the one to avoid on a root, because it answers
   ///   <c>ICommand</c> and a root would stop being an <c>IRootCommand</c>.
   /// </remarks>
   CommandLine = record
   public
-    class function Option<T>(const Name: string; const Description: string = ''): IOption<T>; overload; static;
+    class function Option<T>(const Name: string): IOption<T>; overload; static;
+    class function Option<T>(const Name: string; const Aliases: array of string): IOption<T>; overload; static;
     /// <summary>Declares an option together with the conversion that reads its type.</summary>
     /// <remarks>
     ///   The conversion is taken HERE, at declaration, and not set afterwards: a symbol
@@ -632,11 +674,11 @@ type
     ///   refused on the spot when it does not. It also serves a type the
     ///   engine already knows, for reading it some other way.
     /// </remarks>
+    class function Option<T>(const Name: string; const Parser: TCommandLineParser<T>): IOption<T>; overload; static;
     class function Option<T>(const Name: string; const Parser: TCommandLineParser<T>;
-      const Description: string = ''): IOption<T>; overload; static;
-    class function Argument<T>(const Name: string; const Description: string = ''): IArgument<T>; overload; static;
-    class function Argument<T>(const Name: string; const Parser: TCommandLineParser<T>;
-      const Description: string = ''): IArgument<T>; overload; static;
+      const Aliases: array of string): IOption<T>; overload; static;
+    class function Argument<T>(const Name: string): IArgument<T>; overload; static;
+    class function Argument<T>(const Name: string; const Parser: TCommandLineParser<T>): IArgument<T>; overload; static;
     class function Command(const Name: string; const Description: string = ''): ICommand; static;
     class function Root(const Name: string; const Description: string = ''): IRootCommand; static;
   end;
@@ -674,7 +716,7 @@ type
     Values: TArray<string>;
   end;
 
-  TParseResult = class(TInterfacedObject, ICommandLineParseResult)
+  TParseResult = class(TInterfacedObject, IParseResult)
   private
     FRoot: IRootCommand;
     FInvocationConfiguration: TInvocationConfiguration;
@@ -692,9 +734,9 @@ type
     function Succeeded: Boolean;
     function Errors: TArray<string>;
     function ErrorText: string;
-    function HelpRequested: Boolean;
+    function IsHelpRequested: Boolean;
     function HelpText: string;
-    function VersionRequested: Boolean;
+    function IsVersionRequested: Boolean;
     function VersionInfo: TVersionInfo;
     function WasProvided(const Symbol: ISymbol): Boolean;
     function RawOf(const Symbol: ISymbol): TNullable<string>;
@@ -728,8 +770,7 @@ type
     function Add(const Argument: IArgument): ICommand; overload;
     function Add(const Subcommand: ICommand): ICommand; overload;
     function Add(const Symbols: array of ISymbol): ICommand; overload;
-    function WithAlias(const Alias: string): ICommand;
-    function Describe(const Text: string): ICommand;
+    function Description(const Text: string): ICommand; overload;
     function Options: TArray<IOption>;
     function Arguments: TArray<IArgument>;
     function Subcommands: TArray<ICommand>;
@@ -755,8 +796,8 @@ type
     procedure SetHelpAction(const Value: TCommandAction);
     function GetVersionAction: TCommandAction;
     procedure SetVersionAction(const Value: TCommandAction);
-    function Parse(const Args: TArray<string>): ICommandLineParseResult; overload;
-    function Parse: ICommandLineParseResult; overload;
+    function Parse(const Args: TArray<string>): IParseResult; overload;
+    function Parse: IParseResult; overload;
     function WithVersion(const Version: string): IRootCommand; overload;
     function WithVersion(const Version, AppName, Company: string): IRootCommand; overload;
     function WithVersion(const AClass: TClass): IRootCommand; overload;
@@ -803,9 +844,9 @@ begin
   WriteTo(Output, System.Output, Text);
 end;
 
-{ TArity }
+{ TArgumentArity }
 
-class function TArity.Create(AMin, AMax: Integer): TArity;
+class function TArgumentArity.Create(AMin, AMax: Integer): TArgumentArity;
 begin
   if AMin < 0 then
     raise ECommandLine.Create('An arity minimum cannot be negative');
@@ -815,52 +856,52 @@ begin
   Result.FMax := AMax;
 end;
 
-class function TArity.Zero: TArity;
+class function TArgumentArity.Zero: TArgumentArity;
 begin
-  Result := TArity.Create(0, 0);
+  Result := TArgumentArity.Create(0, 0);
 end;
 
-class function TArity.ZeroOrOne: TArity;
+class function TArgumentArity.ZeroOrOne: TArgumentArity;
 begin
-  Result := TArity.Create(0, 1);
+  Result := TArgumentArity.Create(0, 1);
 end;
 
-class function TArity.ExactlyOne: TArity;
+class function TArgumentArity.ExactlyOne: TArgumentArity;
 begin
-  Result := TArity.Create(1, 1);
+  Result := TArgumentArity.Create(1, 1);
 end;
 
-class function TArity.ZeroOrMore: TArity;
+class function TArgumentArity.ZeroOrMore: TArgumentArity;
 begin
-  Result := TArity.Create(0, Unbounded);
+  Result := TArgumentArity.Create(0, Unbounded);
 end;
 
-class function TArity.OneOrMore: TArity;
+class function TArgumentArity.OneOrMore: TArgumentArity;
 begin
-  Result := TArity.Create(1, Unbounded);
+  Result := TArgumentArity.Create(1, Unbounded);
 end;
 
-function TArity.Min: Integer;
+function TArgumentArity.MinimumNumberOfValues: Integer;
 begin
   Result := FMin;
 end;
 
-function TArity.Max: Integer;
+function TArgumentArity.MaximumNumberOfValues: Integer;
 begin
   Result := FMax;
 end;
 
-function TArity.AllowsMany: Boolean;
+function TArgumentArity.AllowsMany: Boolean;
 begin
   Result := FMax > 1;
 end;
 
-function TArity.DemandsValue: Boolean;
+function TArgumentArity.DemandsValue: Boolean;
 begin
   Result := FMin >= 1;
 end;
 
-function TArity.Describe: string;
+function TArgumentArity.Describe: string;
 begin
   if (FMin = 0) and (FMax = 0) then
     Exit('no value');
@@ -873,12 +914,73 @@ begin
   Result := 'at least one value';
 end;
 
+{ TCommandLineCollection<T>.TEnumerator }
+
+function TCommandLineCollection<T>.TEnumerator.GetCurrent: T;
+begin
+  Result := FItems[FIndex];
+end;
+
+function TCommandLineCollection<T>.TEnumerator.MoveNext: Boolean;
+begin
+  Inc(FIndex);
+  Result := FIndex < Length(FItems);
+end;
+
+{ TCommandLineCollection<T> }
+
+constructor TCommandLineCollection<T>.Create(const OwnerName: string);
+begin
+  inherited Create;
+  FOwnerName := OwnerName;
+end;
+
+procedure TCommandLineCollection<T>.Add(const Item: T);
+begin
+  if FFrozen then
+    TSymbol.RaiseFrozen(FOwnerName);
+  FItems := FItems + [Item];
+end;
+
+procedure TCommandLineCollection<T>.Freeze;
+begin
+  FFrozen := True;
+end;
+
+function TCommandLineCollection<T>.Count: Integer;
+begin
+  Result := Length(FItems);
+end;
+
+function TCommandLineCollection<T>.GetItem(Index: Integer): T;
+begin
+  Result := FItems[Index];
+end;
+
+function TCommandLineCollection<T>.ToArray: TArray<T>;
+begin
+  Result := Copy(FItems);
+end;
+
+function TCommandLineCollection<T>.GetEnumerator: TEnumerator;
+begin
+  Result.FItems := FItems;
+  Result.FIndex := -1;
+end;
+
 { TSymbol }
 
 constructor TSymbol.Create(const AName: string);
 begin
   inherited Create;
   FName := AName;
+  FAliases := TCommandLineCollection<string>.Create(AName);
+end;
+
+destructor TSymbol.Destroy;
+begin
+  FAliases.Free;
+  inherited;
 end;
 
 function TSymbol.AsObject: TObject;
@@ -891,7 +993,7 @@ begin
   Result := FName;
 end;
 
-function TSymbol.Aliases: TArray<string>;
+function TSymbol.Aliases: TCommandLineCollection<string>;
 begin
   Result := FAliases;
 end;
@@ -913,12 +1015,6 @@ begin
   Result := False;
 end;
 
-procedure TSymbol.AddAlias(const Alias: string);
-begin
-  CheckOpen;
-  FAliases := FAliases + [Alias];
-end;
-
 function TSymbol.IsHidden: Boolean;
 begin
   Result := FHidden;
@@ -936,15 +1032,21 @@ begin
   FHidden := True;
 end;
 
+class procedure TSymbol.RaiseFrozen(const SymbolName: string);
+begin
+  raise ECommandLine.CreateFmt('The grammar is frozen: "%s" can no longer change', [SymbolName]);
+end;
+
 procedure TSymbol.CheckOpen;
 begin
   if FFrozen then
-    raise ECommandLine.CreateFmt('The grammar is frozen: "%s" can no longer change', [Name]);
+    RaiseFrozen(Name);
 end;
 
 procedure TSymbol.Freeze;
 begin
   FFrozen := True;
+  FAliases.Freeze;
 end;
 
 { TValuedSymbol }
@@ -971,11 +1073,11 @@ begin
   // Derived from the type, so the ordinary case is never written by hand.
   // A collection says "many" by being one, which is how .NET derives it too.
   if IsCollection then
-    FArity := TArity.ZeroOrMore
+    FArity := TArgumentArity.ZeroOrMore
   else if IsFlag then
-    FArity := TArity.ZeroOrOne
+    FArity := TArgumentArity.ZeroOrOne
   else
-    FArity := TArity.ExactlyOne;
+    FArity := TArgumentArity.ExactlyOne;
 end;
 
 function TValuedSymbol.IsCollection: Boolean;
@@ -1059,7 +1161,7 @@ begin
   Result := TCommandLineValue.TypeName(FTypeInfo);
 end;
 
-function TValuedSymbol.Arity: TArity;
+function TValuedSymbol.Arity: TArgumentArity;
 begin
   Result := FArity;
 end;
@@ -1072,7 +1174,7 @@ begin
   Result := TCommandLineValue.AcceptedValuesOf(FTypeInfo);
 end;
 
-function TValuedSymbol.HasDefault: Boolean;
+function TValuedSymbol.HasDefaultValue: Boolean;
 begin
   Result := FHasDefault;
 end;
@@ -1082,7 +1184,7 @@ begin
   Result := FDefaultText;
 end;
 
-procedure TValuedSymbol.SetArity(const Value: TArity);
+procedure TValuedSymbol.SetArity(const Value: TArgumentArity);
 begin
   CheckOpen;
   FArity := Value;
@@ -1202,6 +1304,11 @@ begin
   FDefaultKnown := True;
 end;
 
+function TValuedSymbol<T>.DefaultValueFactory: TFunc<T>;
+begin
+  Result := FDefaultFactory;
+end;
+
 function TValuedSymbol<T>.DefaultOf: T;
 begin
   // Run here and nowhere else: this is the one place reached only when the invocation
@@ -1215,7 +1322,7 @@ begin
   Result := FDefaultValue;
 end;
 
-function TValuedSymbol<T>.ReadValue(const Parsed: ICommandLineParseResult): T;
+function TValuedSymbol<T>.ReadValue(const Parsed: IParseResult): T;
 var
   Raw: TNullable<string>;
   Raws: TArray<string>;
@@ -1250,7 +1357,7 @@ begin
   Result := Converted.AsType<T>;
 end;
 
-function TValuedSymbol<T>.ReadValues(const Parsed: ICommandLineParseResult): TArray<T>;
+function TValuedSymbol<T>.ReadValues(const Parsed: IParseResult): TArray<T>;
 var
   Raw: string;
   Converted: TValue;
@@ -1287,7 +1394,7 @@ begin
     raise ECommandLine.CreateFmt('The computed default of "%s" is not assigned', [Name]);
   FDefaultFactory := Factory;
   FDefaultKnown := False;
-  // HasDefault is what satisfies "required", and it is set even with no text to show:
+  // HasDefaultValue is what satisfies "required", and it is set even with no text to show:
   // the value exists, it is just not known yet. SetDefaultText('') leaves the help
   // showing no default rather than a false one.
   SetDefaultText(Text);
@@ -1337,41 +1444,35 @@ begin
   Result := Self;
 end;
 
-function TOption<T>.ValueIn(const Parsed: ICommandLineParseResult): T;
+function TOption<T>.ValueIn(const Parsed: IParseResult): T;
 begin
   Result := ReadValue(Parsed);
 end;
 
-function TOption<T>.ValuesIn(const Parsed: ICommandLineParseResult): TArray<T>;
+function TOption<T>.ValuesIn(const Parsed: IParseResult): TArray<T>;
 begin
   Result := ReadValues(Parsed);
 end;
 
-function TOption<T>.WithDefault(const Value: T): IOption<T>;
+function TOption<T>.DefaultValue(const Value: T): IOption<T>;
 begin
   SetDefaultValue(Value);
   Result := Self;
 end;
 
-function TOption<T>.WithDefault(const Factory: TFunc<T>; const Text: string): IOption<T>;
+function TOption<T>.DefaultValueFactory(const Factory: TFunc<T>; const Text: string): IOption<T>;
 begin
   SetDefaultFactory(Factory, Text);
   Result := Self;
 end;
 
-function TOption<T>.WithAlias(const Alias: string): IOption<T>;
-begin
-  AddAlias(Alias);
-  Result := Self;
-end;
-
-function TOption<T>.WithArity(const Value: TArity): IOption<T>;
+function TOption<T>.Arity(const Value: TArgumentArity): IOption<T>;
 begin
   SetArity(Value);
   Result := Self;
 end;
 
-function TOption<T>.Describe(const Text: string): IOption<T>;
+function TOption<T>.Description(const Text: string): IOption<T>;
 begin
   SetDescription(Text);
   Result := Self;
@@ -1391,7 +1492,7 @@ begin
   Result := Self;
 end;
 
-function TOption<T>.AcceptOnly(const Values: array of string): IOption<T>;
+function TOption<T>.AcceptOnlyFromAmong(const Values: array of string): IOption<T>;
 begin
   SetAccepted(Values);
   Result := Self;
@@ -1423,41 +1524,41 @@ end;
 
 { TArgument<T> }
 
-function TArgument<T>.ValueIn(const Parsed: ICommandLineParseResult): T;
+function TArgument<T>.ValueIn(const Parsed: IParseResult): T;
 begin
   Result := ReadValue(Parsed);
 end;
 
-function TArgument<T>.ValuesIn(const Parsed: ICommandLineParseResult): TArray<T>;
+function TArgument<T>.ValuesIn(const Parsed: IParseResult): TArray<T>;
 begin
   Result := ReadValues(Parsed);
 end;
 
-function TArgument<T>.WithDefault(const Value: T): IArgument<T>;
+function TArgument<T>.DefaultValue(const Value: T): IArgument<T>;
 begin
   SetDefaultValue(Value);
   Result := Self;
 end;
 
-function TArgument<T>.WithDefault(const Factory: TFunc<T>; const Text: string): IArgument<T>;
+function TArgument<T>.DefaultValueFactory(const Factory: TFunc<T>; const Text: string): IArgument<T>;
 begin
   SetDefaultFactory(Factory, Text);
   Result := Self;
 end;
 
-function TArgument<T>.WithArity(const Value: TArity): IArgument<T>;
+function TArgument<T>.Arity(const Value: TArgumentArity): IArgument<T>;
 begin
   SetArity(Value);
   Result := Self;
 end;
 
-function TArgument<T>.Describe(const Text: string): IArgument<T>;
+function TArgument<T>.Description(const Text: string): IArgument<T>;
 begin
   SetDescription(Text);
   Result := Self;
 end;
 
-function TArgument<T>.AcceptOnly(const Values: array of string): IArgument<T>;
+function TArgument<T>.AcceptOnlyFromAmong(const Values: array of string): IArgument<T>;
 begin
   SetAccepted(Values);
   Result := Self;
@@ -1527,7 +1628,7 @@ begin
   Result := string.Join(sLineBreak, FErrors);
 end;
 
-function TParseResult.HelpRequested: Boolean;
+function TParseResult.IsHelpRequested: Boolean;
 begin
   Result := FHelpRequested;
 end;
@@ -1537,7 +1638,7 @@ begin
   Result := FHelpText;
 end;
 
-function TParseResult.VersionRequested: Boolean;
+function TParseResult.IsVersionRequested: Boolean;
 begin
   Result := FVersionRequested;
 end;
@@ -1723,13 +1824,7 @@ begin
     raise ECommandLine.Create('Only options, arguments and subcommands can be added to a command');
 end;
 
-function TCommand.WithAlias(const Alias: string): ICommand;
-begin
-  AddAlias(Alias);
-  Result := Self;
-end;
-
-function TCommand.Describe(const Text: string): ICommand;
+function TCommand.Description(const Text: string): ICommand;
 begin
   SetDescription(Text);
   Result := Self;
@@ -1788,7 +1883,7 @@ begin
   if not Assigned(Action) then
     Exit(nil);
   Result :=
-    function(const Parsed: ICommandLineParseResult): Integer
+    function(const Parsed: IParseResult): Integer
     begin
       Action(Parsed);
       Result := TCommandLineExit.Ok;
@@ -1864,7 +1959,7 @@ end;
 function DefaultHelpAction: TCommandAction;
 begin
   Result :=
-    function(const Parsed: ICommandLineParseResult): Integer
+    function(const Parsed: IParseResult): Integer
     begin
       Parsed.InvocationConfiguration.WriteOutput(Parsed.HelpText);
       Result := TCommandLineExit.Ok;
@@ -1874,7 +1969,7 @@ end;
 function DefaultVersionAction: TCommandAction;
 begin
   Result :=
-    function(const Parsed: ICommandLineParseResult): Integer
+    function(const Parsed: IParseResult): Integer
     begin
       Parsed.InvocationConfiguration.WriteOutput(Parsed.VersionInfo.VersionTag(VersionTemplateWithBuild));
       Result := TCommandLineExit.Ok;
@@ -1907,7 +2002,7 @@ begin
   FVersionAction := Value;
 end;
 
-function TRootCommand.Parse: ICommandLineParseResult;
+function TRootCommand.Parse: IParseResult;
 var
   Args: TArray<string>;
   I: Integer;
@@ -2036,7 +2131,7 @@ begin
   Result := (Option <> nil) and not Option.IsFlag;
 end;
 
-function TRootCommand.Parse(const Args: TArray<string>): ICommandLineParseResult;
+function TRootCommand.Parse(const Args: TArray<string>): IParseResult;
 var
   Outcome: TParseResult;
   Current: ICommand;
@@ -2196,7 +2291,7 @@ begin
       // option, at `--`, and at the maximum the arity declared, so what is swallowed is
       // bounded by what was declared rather than by where the invocation happens to end.
       if Option.AllowsMultipleArgumentsPerToken and Option.Arity.AllowsMany then
-        while (Index + 1 < Length(Tokens)) and (Length(Outcome.RawValuesOf(Option)) < Option.Arity.Max) do
+        while (Index + 1 < Length(Tokens)) and (Length(Outcome.RawValuesOf(Option)) < Option.Arity.MaximumNumberOfValues) do
         begin
           Next := Tokens[Index + 1];
           if (Next = EndOfOptions) or TTokenNormalizer.LooksLikeOption(Next) then
@@ -2252,11 +2347,11 @@ begin
   // What the invocation had to carry and did not. A declared default satisfies the
   // demand, because the value exists -- which is what "required" asks for.
   for Option in OptionsInScope(Current, Available) do
-    if Option.IsRequired and not Option.HasDefault and not Outcome.WasProvided(Option) then
+    if Option.IsRequired and not Option.HasDefaultValue and not Outcome.WasProvided(Option) then
       Outcome.AddError(Format('Option "%s" is required', [Option.Name]));
 
   for Argument in Current.Arguments do
-    if Argument.Arity.DemandsValue and not Argument.HasDefault and not Outcome.WasProvided(Argument) then
+    if Argument.Arity.DemandsValue and not Argument.HasDefaultValue and not Outcome.WasProvided(Argument) then
       Outcome.AddError(Format('Argument "%s" is required', [Argument.Name]));
 
   Outcome.SetCommand(Current);
@@ -2264,42 +2359,39 @@ end;
 
 { CommandLine }
 
-class function CommandLine.Option<T>(const Name: string; const Description: string): IOption<T>;
-var
-  Created: TOption<T>;
+class function CommandLine.Option<T>(const Name: string): IOption<T>;
 begin
-  Created := TOption<T>.Create(Name, nil);
-  Created.SetDescription(Description);
-  Result := Created;
+  Result := TOption<T>.Create(Name, nil);
+end;
+
+class function CommandLine.Option<T>(const Name: string; const Aliases: array of string): IOption<T>;
+begin
+  Result := Option<T>(Name, nil, Aliases);
+end;
+
+class function CommandLine.Option<T>(const Name: string; const Parser: TCommandLineParser<T>): IOption<T>;
+begin
+  Result := TOption<T>.Create(Name, Parser);
 end;
 
 class function CommandLine.Option<T>(const Name: string; const Parser: TCommandLineParser<T>;
-  const Description: string): IOption<T>;
+  const Aliases: array of string): IOption<T>;
 var
-  Created: TOption<T>;
+  Alias: string;
 begin
-  Created := TOption<T>.Create(Name, Parser);
-  Created.SetDescription(Description);
-  Result := Created;
+  Result := TOption<T>.Create(Name, Parser);
+  for Alias in Aliases do
+    Result.Aliases.Add(Alias);
 end;
 
-class function CommandLine.Argument<T>(const Name: string; const Description: string): IArgument<T>;
-var
-  Created: TArgument<T>;
+class function CommandLine.Argument<T>(const Name: string): IArgument<T>;
 begin
-  Created := TArgument<T>.Create(Name, nil);
-  Created.SetDescription(Description);
-  Result := Created;
+  Result := TArgument<T>.Create(Name, nil);
 end;
 
-class function CommandLine.Argument<T>(const Name: string; const Parser: TCommandLineParser<T>;
-  const Description: string): IArgument<T>;
-var
-  Created: TArgument<T>;
+class function CommandLine.Argument<T>(const Name: string; const Parser: TCommandLineParser<T>): IArgument<T>;
 begin
-  Created := TArgument<T>.Create(Name, Parser);
-  Created.SetDescription(Description);
-  Result := Created;
+  Result := TArgument<T>.Create(Name, Parser);
 end;
 
 class function CommandLine.Command(const Name: string; const Description: string): ICommand;

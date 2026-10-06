@@ -95,9 +95,9 @@ var IsVerbose := Params['verbose'].AsBoolean;
 // now
 uses Daf.CommandLine;
 
-var FileOpt    := CommandLine.Option<string>('--file', 'File to compile');
-var PortOpt    := CommandLine.Option<Integer>('--port', 'Port to listen on');
-var VerboseOpt := CommandLine.Option<Boolean>('--verbose', 'Say more');
+var FileOpt    := CommandLine.Option<string>('--file').Description('File to compile');
+var PortOpt    := CommandLine.Option<Integer>('--port').Description('Port to listen on');
+var VerboseOpt := CommandLine.Option<Boolean>('--verbose').Description('Say more');
 
 var Root := CommandLine.Root('mytool', 'A tool');
 Root.Add([FileOpt, PortOpt, VerboseOpt]);
@@ -125,11 +125,11 @@ The mechanical part, term by term:
 | `Daf.CmdLn` | `Daf.CommandLine` |
 |---|---|
 | `TCmdLnParserBuilder.Create` … `.Build` | `CommandLine.Root(name, description)` |
-| `.Arg<T>('name')` | `CommandLine.Option<T>('--name', description)`, added with `Root.Add` — the dashes are written now |
-| `.Arg<string>('output\|o')` | `CommandLine.Option<string>('--output', …).WithAlias('-o')` |
-| `A.Default(V)` | `.WithDefault(V)`, and a computed form for a default that has to be worked out |
+| `.Arg<T>('name')` | `CommandLine.Option<T>('--name')`, added with `Root.Add` — the dashes are written now |
+| `.Arg<string>('output\|o')` | `CommandLine.Option<string>('--output', ['-o'])` |
+| `A.Default(V)` | `.DefaultValue(V)`, and `.DefaultValueFactory(…)` for a default that has to be worked out |
 | `A.Required(True)` | `.Required` |
-| `A.Help('…')` | the description, second parameter of `Option<T>` — and this one is **shown**: help is generated |
+| `A.Help('…')` | `.Description('…')` — and this one is **shown**: help is generated |
 | `.Command('build')` … `.EndCommand` | `CommandLine.Command('build', description)`, hung with `Parent.Add(Child)` |
 | `Params['x'].AsString` / `.AsInteger` / `.AsBoolean` | `XOpt.ValueIn(Parsed)`, typed by the option itself |
 | `Params.GetSection('build')['output']` | `OutputOpt.ValueIn(Parsed)`: there is no section to navigate |
@@ -280,7 +280,7 @@ This is the largest front of 2.0 for anything that had a `.dpr`.
   package. Their replacement is the variant from the entry above, and each member goes somewhere:
   `CreateHostBuilder` becomes your variant's `CreateBuilder`; `IDafApplication` becomes the
   `I…Application` that `Build` returns; `RunAsync` is `Run` under its own name;
-  `VersionRequested` is `ICommandLineParseResult.VersionRequested`, answered by the grammar; and
+  `VersionRequested` is `IParseResult.IsVersionRequested`, answered by the grammar; and
   `App` becomes `DafApp`, which exists **only in VCL and FMX** — in CLI and Web there is no
   application global on purpose.
 

@@ -34,15 +34,15 @@ begin
     end);
 
   try
-    var NameOpt := CommandLine.Option<string>('--name', 'A quien saludar').Required;
-    var ShoutOpt := CommandLine.Option<Boolean>('--shout', 'En mayusculas').WithAlias('-s');
+    var NameOpt := CommandLine.Option<string>('--name').Description('A quien saludar').Required;
+    var ShoutOpt := CommandLine.Option<Boolean>('--shout', ['-s']).Description('En mayusculas');
     B.RootCommand.WithVersion('2.0.0').Add([NameOpt, ShoutOpt]);
 
     // Solo una instancia: la segunda no llega a construir el contenedor.
     B.SingleInstance('daf-greet-tool');
 
     B.SetAction(
-      function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+      function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
       begin
         var Who := NameOpt.ValueIn(Parsed);
         if Who = 'boom' then

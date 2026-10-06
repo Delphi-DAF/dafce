@@ -33,7 +33,7 @@ type
     Many: IRootCommand;
     FilesOpt: IOption<TArray<string>>;
 
-    Parsed: ICommandLineParseResult;
+    Parsed: IParseResult;
     Report: string;
     ReadArityMin: Integer;
     ReadArityMax: Integer;
@@ -59,10 +59,10 @@ uses
 
 procedure TTypesWorld.BuildWideTypes;
 begin
-  SinceOpt := CommandLine.Option<TDateTime>('--since', 'Oldest date considered');
-  IdOpt := CommandLine.Option<TGUID>('--id', 'Which run');
-  BytesOpt := CommandLine.Option<Int64>('--bytes', 'How many bytes at most');
-  PriceOpt := CommandLine.Option<Currency>('--price', 'What it costs');
+  SinceOpt := CommandLine.Option<TDateTime>('--since').Description('Oldest date considered');
+  IdOpt := CommandLine.Option<TGUID>('--id').Description('Which run');
+  BytesOpt := CommandLine.Option<Int64>('--bytes').Description('How many bytes at most');
+  PriceOpt := CommandLine.Option<Currency>('--price').Description('What it costs');
   Wide := CommandLine.Root('tool', 'A tool');
   Wide.Add([SinceOpt, IdOpt, BytesOpt, PriceOpt]);
 end;
@@ -70,7 +70,7 @@ end;
 procedure TTypesWorld.BuildCollection;
 begin
   // No arity declared: a collection says its own, the way .NET derives it from the type.
-  FilesOpt := CommandLine.Option<TArray<string>>('--files', 'Files to compile');
+  FilesOpt := CommandLine.Option<TArray<string>>('--files').Description('Files to compile');
   Many := CommandLine.Root('tool', 'A tool');
   Many.Add(FilesOpt);
 end;
@@ -96,8 +96,7 @@ begin
         TryStrToInt(Parts[2], Value.Patch);
       if not Result then
         Error := Format('"%s" is not a version: its three parts have to be numbers', [Raw]);
-    end,
-    'Lowest version accepted');
+    end).Description('Lowest version accepted');
   Own := CommandLine.Root('tool', 'A tool');
   Own.Add(MinVersionOpt);
 end;
@@ -316,7 +315,7 @@ Feature Command line types @commandline @types
         // disappear, and this is where it is: the check stays at declaration, which is
         // the only place it is worth anything.
         try
-          CommandLine.Option<TSemVer>('--min', 'Lowest version accepted');
+          CommandLine.Option<TSemVer>('--min').Description('Lowest version accepted');
           W.Report := '<the declaration was accepted>';
         except
           on E: Exception do
@@ -342,15 +341,15 @@ Feature Command line types @commandline @types
     .When('its arity is inspected',
       procedure(W: TTypesWorld)
       begin
-        W.ReadArityMin := W.FilesOpt.Arity.Min;
-        W.ReadArityMax := W.FilesOpt.Arity.Max;
+        W.ReadArityMin := W.FilesOpt.Arity.MinimumNumberOfValues;
+        W.ReadArityMax := W.FilesOpt.Arity.MaximumNumberOfValues;
         W.ReadAllowsMany := W.FilesOpt.Arity.AllowsMany;
       end)
     .&Then('it admits any number of values, as in .NET',
       procedure(W: TTypesWorld)
       begin
         Expect(W.ReadArityMin).ToEqual(0);
-        Expect(W.ReadArityMax).ToEqual(TArity.Unbounded);
+        Expect(W.ReadArityMax).ToEqual(TArgumentArity.Unbounded);
         Expect(W.ReadAllowsMany).ToBeTrue;
       end)
 

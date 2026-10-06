@@ -21,7 +21,7 @@ begin
   B.Services.AddSingleton<IGreeter, TGreeter>;
 
   B.SetAction(
-    function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+    function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
     begin
       Writeln(Services.GetRequiredService<IGreeter>.Greet);
       Result := TCliExit.Ok;

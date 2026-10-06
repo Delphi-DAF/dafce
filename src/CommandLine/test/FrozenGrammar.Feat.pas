@@ -43,7 +43,7 @@ end;
 
 procedure TFrozenGrammarWorld.FreezeGrammar;
 begin
-  NameOpt := CommandLine.Option<string>('--name', 'Who to greet');
+  NameOpt := CommandLine.Option<string>('--name').Description('Who to greet');
   Sub := CommandLine.Command('build', 'Build things');
   Root := CommandLine.Root('tool', 'A tool');
   Root.Add(NameOpt).Add(Sub);
@@ -122,6 +122,28 @@ Feature A frozen grammar takes no more changes, and still takes actions @command
         Expect(W.Report).ToStartWith('ECommandLine: ');
       end)
 
+  .Scenario('Adding an alias to an option declared before freezing')
+    .Given('a frozen grammar',
+      procedure(W: TFrozenGrammarWorld)
+      begin
+        W.FreezeGrammar;
+      end)
+    .When('one of its options gets an alias',
+      procedure(W: TFrozenGrammarWorld)
+      begin
+        W.Report := W.Attempt(
+          procedure
+          begin
+            W.NameOpt.Aliases.Add('-n');
+          end);
+      end)
+    .&Then('it fails with an ECommandLine that says the grammar is frozen',
+      procedure(W: TFrozenGrammarWorld)
+      begin
+        Expect(W.Report).ToStartWith('ECommandLine: ');
+        Expect(W.Report).ToContain('frozen');
+      end)
+
   .Scenario('Changing a subcommand of a frozen root')
     .Given('a frozen grammar',
       procedure(W: TFrozenGrammarWorld)
@@ -180,13 +202,13 @@ Feature A frozen grammar takes no more changes, and still takes actions @command
           begin
             var NameOpt := W.NameOpt;
             W.Root.SetAction(
-              function(const Parsed: ICommandLineParseResult): Integer
+              function(const Parsed: IParseResult): Integer
               begin
                 W.Seen := NameOpt.ValueIn(Parsed);
                 Result := 7;
               end);
             W.Root.HelpAction :=
-              function(const Parsed: ICommandLineParseResult): Integer
+              function(const Parsed: IParseResult): Integer
               begin
                 Result := 0;
               end;

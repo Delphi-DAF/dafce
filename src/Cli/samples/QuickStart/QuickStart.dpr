@@ -18,7 +18,7 @@ begin
   var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
 
   B.SetAction(
-    function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+    function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
     begin
       Writeln('Hola desde DAF');
       Result := TCliExit.Ok;

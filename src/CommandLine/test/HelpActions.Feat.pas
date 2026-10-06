@@ -17,7 +17,7 @@ type
     DiagOpt: IOption<Integer>;
     NameOpt: IOption<string>;
     OutOpt: IOption<string>;
-    Parsed: ICommandLineParseResult;
+    Parsed: IParseResult;
     Output: TStringWriter;
     Error: TStringWriter;
     RootHelp: string;
@@ -91,7 +91,7 @@ const
 function WithBanner(const Inner: TCommandAction): TCommandAction;
 begin
   Result :=
-    function(const Parsed: ICommandLineParseResult): Integer
+    function(const Parsed: IParseResult): Integer
     begin
       Parsed.InvocationConfiguration.WriteOutput(Banner);
       Result := Inner(Parsed);
@@ -135,9 +135,9 @@ end;
 
 procedure THelpActionsWorld.BuildGrammar;
 begin
-  DiagOpt := CommandLine.Option<Integer>('--diag', 'Diagnostics level').Hidden;
-  NameOpt := CommandLine.Option<string>('--name', 'What to call it');
-  OutOpt := CommandLine.Option<string>('--out', 'Where it goes');
+  DiagOpt := CommandLine.Option<Integer>('--diag').Description('Diagnostics level').Hidden;
+  NameOpt := CommandLine.Option<string>('--name').Description('What to call it');
+  OutOpt := CommandLine.Option<string>('--out').Description('Where it goes');
   Build := CommandLine.Command('build', 'Build things').Add(OutOpt);
   Root := CommandLine.Root('tool', 'A tool with a version').WithVersion('3.1.4');
   Root.Add([DiagOpt, NameOpt, Build]);
@@ -275,7 +275,7 @@ Feature Replacing the help and the version actions @commandline @helpactions
         W.BuildGrammar;
         var Default := W.Root.HelpAction;
         W.Root.HelpAction :=
-          function(const Parsed: ICommandLineParseResult): Integer
+          function(const Parsed: IParseResult): Integer
           begin
             W.SeenOutput := W.WriterName(Parsed.InvocationConfiguration.Output);
             Parsed.InvocationConfiguration.WriteOutput(Banner);
@@ -347,7 +347,7 @@ Feature Replacing the help and the version actions @commandline @helpactions
       begin
         W.BuildGrammar;
         W.Root.HelpAction :=
-          function(const Parsed: ICommandLineParseResult): Integer
+          function(const Parsed: IParseResult): Integer
           begin
             Result := 7;
           end;
@@ -371,7 +371,7 @@ Feature Replacing the help and the version actions @commandline @helpactions
       begin
         W.BuildGrammar;
         W.Root.VersionAction :=
-          function(const Parsed: ICommandLineParseResult): Integer
+          function(const Parsed: IParseResult): Integer
           begin
             raise EBannerFailed.Create('no banner today');
           end;

@@ -66,7 +66,7 @@ begin
   Result := Symbol.Description;
   if Length(Symbol.AcceptedValues) > 0 then
     Result := Trim(Result + ' [allowed: ' + string.Join('|', Symbol.AcceptedValues) + ']');
-  if Symbol.HasDefault and (Symbol.DefaultText <> '') then
+  if Symbol.HasDefaultValue and (Symbol.DefaultText <> '') then
     Result := Trim(Result + ' [default: ' + Symbol.DefaultText + ']');
   if Required then
     Result := Trim(Result + ' [required]');
@@ -170,7 +170,8 @@ begin
       Lines.Add('Arguments:');
       for Argument in Command.Arguments do
         if not Argument.IsHidden then
-          Lines.Add(Padded(ArgumentLabel(Argument), Annotated(Argument, Argument.Arity.DemandsValue and not Argument.HasDefault)));
+          Lines.Add(Padded(ArgumentLabel(Argument),
+            Annotated(Argument, Argument.Arity.DemandsValue and not Argument.HasDefaultValue)));
     end;
 
     if VisibleSubcommands(Command) > 0 then
@@ -186,7 +187,7 @@ begin
     Lines.Add('Options:');
     for Option in Command.Options do
       if not Option.IsHidden then
-        Lines.Add(Padded(OptionLabel(Option), Annotated(Option, Option.IsRequired and not Option.HasDefault)));
+        Lines.Add(Padded(OptionLabel(Option), Annotated(Option, Option.IsRequired and not Option.HasDefaultValue)));
     // Listed because they answer, not because anybody declared them. When the
     // application declared its own, the loop above already printed that one.
     if not DeclaresOwnHelp(Command) then

@@ -95,9 +95,9 @@ var IsVerbose := Params['verbose'].AsBoolean;
 // ahora
 uses Daf.CommandLine;
 
-var FileOpt    := CommandLine.Option<string>('--file', 'Fichero a compilar');
-var PortOpt    := CommandLine.Option<Integer>('--port', 'Puerto en el que escuchar');
-var VerboseOpt := CommandLine.Option<Boolean>('--verbose', 'Contar más');
+var FileOpt    := CommandLine.Option<string>('--file').Description('Fichero a compilar');
+var PortOpt    := CommandLine.Option<Integer>('--port').Description('Puerto en el que escuchar');
+var VerboseOpt := CommandLine.Option<Boolean>('--verbose').Description('Contar más');
 
 var Root := CommandLine.Root('mytool', 'Una herramienta');
 Root.Add([FileOpt, PortOpt, VerboseOpt]);
@@ -125,11 +125,11 @@ La parte mecánica, término a término:
 | `Daf.CmdLn` | `Daf.CommandLine` |
 |---|---|
 | `TCmdLnParserBuilder.Create` … `.Build` | `CommandLine.Root(nombre, descripción)` |
-| `.Arg<T>('name')` | `CommandLine.Option<T>('--name', descripción)`, añadida con `Root.Add` — los guiones se escriben ahora |
-| `.Arg<string>('output\|o')` | `CommandLine.Option<string>('--output', …).WithAlias('-o')` |
-| `A.Default(V)` | `.WithDefault(V)`, y una forma calculada para el que haya que averiguar |
+| `.Arg<T>('name')` | `CommandLine.Option<T>('--name')`, añadida con `Root.Add` — los guiones se escriben ahora |
+| `.Arg<string>('output\|o')` | `CommandLine.Option<string>('--output', ['-o'])` |
+| `A.Default(V)` | `.DefaultValue(V)`, y `.DefaultValueFactory(…)` para el que haya que averiguar |
 | `A.Required(True)` | `.Required` |
-| `A.Help('…')` | la descripción, segundo parámetro de `Option<T>` — y esta sí **se ve**: la ayuda se genera |
+| `A.Help('…')` | `.Description('…')` — y esta sí **se ve**: la ayuda se genera |
 | `.Command('build')` … `.EndCommand` | `CommandLine.Command('build', descripción)`, colgada con `Parent.Add(Child)` |
 | `Params['x'].AsString` / `.AsInteger` / `.AsBoolean` | `XOpt.ValueIn(Parsed)`, tipado por la propia opción |
 | `Params.GetSection('build')['output']` | `OutputOpt.ValueIn(Parsed)`: no hay sección que navegar |
@@ -282,7 +282,7 @@ Es el frente más grande de 2.0 para cualquier cosa que tuviera un `.dpr`.
   `Daf.Application`. Su relevo es la variante de la entrada de arriba, y cada miembro tiene
   destino: `CreateHostBuilder` pasa a ser el `CreateBuilder` de tu variante; `IDafApplication`,
   la `I…Application` que devuelve `Build`; `RunAsync` es `Run` con su propio nombre;
-  `VersionRequested` es `ICommandLineParseResult.VersionRequested`, contestado por la gramática;
+  `VersionRequested` es `IParseResult.IsVersionRequested`, contestado por la gramática;
   y `App` pasa a ser `DafApp`, que existe **solo en VCL y FMX** — en CLI y en Web no hay global
   de aplicación a propósito.
 

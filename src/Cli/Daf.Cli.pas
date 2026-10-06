@@ -51,7 +51,7 @@ type
   ///   sostiene la gramatica, la gramatica la accion, y la accion la aplicacion.
   /// </remarks>
   TCliAction = reference to function(const Services: IServiceProvider;
-    const Parsed: ICommandLineParseResult): Integer;
+    const Parsed: IParseResult): Integer;
 
   // Los de la familia, para que un .dpr de CLI los escriba con esta unit sola.
   TAppExit = Daf.Extensions.Hosting.Failures.TAppExit;
@@ -72,7 +72,7 @@ type
     /// La gramatica de esta herramienta, que parsea los argumentos en <c>ParseArgs</c>, o en
     /// <c>Build</c> antes que nada mas si la composicion no lo pidio. Una invocacion que llega a una
     /// accion tiene el resultado del parse tambien en el contenedor, como
-    /// <c>ICommandLineParseResult</c>, y un servicio lo pide por constructor.
+    /// <c>IParseResult</c>, y un servicio lo pide por constructor.
     ///
     /// Los mismos argumentos estan tambien en la configuracion, como en .NET, y alli se leen sin la
     /// gramatica: una bandera seguida de un posicional queda como clave con el posicional por
@@ -155,7 +155,7 @@ type
     ///   invocacion que no encaja-- y va directa al Build deja contestar a la gramatica aunque lo
     ///   que iba a anadir despues no se pueda leer.
     /// </remarks>
-    function ParseArgs: ICommandLineParseResult;
+    function ParseArgs: IParseResult;
 
     /// <summary>
     /// Parsea, si no lo hizo ya ParseArgs; registra el resultado del parse; toma el cerrojo, si se declaro instancia unica; y
@@ -242,7 +242,7 @@ type
   private
     FHost: IHost;
     FRootCommand: IRootCommand;
-    FParsed: ICommandLineParseResult;
+    FParsed: IParseResult;
     FFailures: IAppFailures;
     FSlot: IServicesSlot;
     FSettledCode: Integer;
@@ -258,7 +258,7 @@ type
     /// <summary>El punto de entrada de una aplicacion CLI de la familia.</summary>
     class function CreateBuilder(const Args: TArray<string> = nil): ICliApplicationBuilder; static;
     constructor Create(const Host: IHost; const RootCommand: IRootCommand;
-      const Parsed: ICommandLineParseResult; const Failures: IAppFailures;
+      const Parsed: IParseResult; const Failures: IAppFailures;
       const Slot: IServicesSlot; const InstanceLock: THandle);
     constructor CreateSettled(const Code: Integer);
     destructor Destroy; override;
@@ -277,7 +277,7 @@ type
     FSingleInstanceId: string;
     FFailures: IAppFailures;
     FSlot: TCliApplication.IServicesSlot;
-    FParsed: ICommandLineParseResult;
+    FParsed: IParseResult;
     FStandalone: TArray<ICommand>;
     function GetRootCommand: IRootCommand;
     procedure CheckNoAction(const Command: ICommand);
@@ -299,7 +299,7 @@ type
     function SetAction(const Command: ICommand; const Action: TCliAction): ICliApplicationBuilder; overload;
     function SetStandaloneAction(const Action: TCommandAction): ICliApplicationBuilder; overload;
     function SetStandaloneAction(const Command: ICommand; const Action: TCommandAction): ICliApplicationBuilder; overload;
-    function ParseArgs: ICommandLineParseResult;
+    function ParseArgs: IParseResult;
     function Build: ICliApplication;
     property RootCommand: IRootCommand read GetRootCommand;
     property Services: IServiceCollection read GetServices;
@@ -341,7 +341,7 @@ end;
 function ServiceAction(const Action: TCliAction; const Slot: TCliApplication.IServicesSlot): TCommandAction;
 begin
   Result :=
-    function(const Parsed: ICommandLineParseResult): Integer
+    function(const Parsed: IParseResult): Integer
     begin
       Result := Action(Slot.Services, Parsed);
     end;
@@ -467,7 +467,7 @@ begin
   Result := False;
 end;
 
-function TCliApplicationBuilder.ParseArgs: ICommandLineParseResult;
+function TCliApplicationBuilder.ParseArgs: IParseResult;
 begin
   if not Assigned(FParsed) then
   begin
@@ -484,13 +484,13 @@ begin
   // standalone se resuelven sin el cerrojo de instancia unica, sin contenedor y sin cargar la
   // configuracion que la composicion no leyo.
   var Parsed := ParseArgs;
-  if Parsed.VersionRequested or Parsed.HelpRequested or not Parsed.Succeeded or
+  if Parsed.IsVersionRequested or Parsed.IsHelpRequested or not Parsed.Succeeded or
     IsStandalone(Parsed.Command) then
     Exit(TCliApplication.Create(nil, FRootCommand, Parsed, FFailures, FSlot, 0));
 
   // En el contenedor, para que un servicio lo pida por constructor: es el mismo que recibe la
   // accion.
-  FImpl.Services.AddSingleton<ICommandLineParseResult>(Parsed);
+  FImpl.Services.AddSingleton<IParseResult>(Parsed);
 
   // Antes de cargar y de construir el contenedor. Una aplicacion que decide no arrancar termina
   // sin haber construido nada, y lo dice por su codigo de salida.
@@ -523,7 +523,7 @@ begin
 end;
 
 constructor TCliApplication.Create(const Host: IHost; const RootCommand: IRootCommand;
-  const Parsed: ICommandLineParseResult; const Failures: IAppFailures;
+  const Parsed: IParseResult; const Failures: IAppFailures;
   const Slot: IServicesSlot; const InstanceLock: THandle);
 begin
   inherited Create;

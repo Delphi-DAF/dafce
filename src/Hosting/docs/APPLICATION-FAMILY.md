@@ -53,7 +53,7 @@ and delegates. Two lifecycle contracts, not four variations of one.
 | `TDafApplication.CreateHostBuilder` | the `CreateBuilder` of your variant |
 | `IDafApplication` | the `I…Application` your variant's `Build` returns |
 | `TDafApplication.RunAsync` | `Run`. It was the same call under another name, and Delphi has no `async`/`await` to make it anything else |
-| `TDafApplication.VersionRequested` | `ICommandLineParseResult.VersionRequested` — the grammar answers `--version`, and the hand-written check is gone rather than moved |
+| `TDafApplication.VersionRequested` | `IParseResult.IsVersionRequested` — the grammar answers `--version`, and the hand-written check is gone rather than moved |
 | `TDafApplication.App` | `DafApp`, **only in VCL and FMX**. CLI and Web have no global on purpose |
 | `Daf.Application.Version` | `Daf.Commons`, unchanged — all four variants reach `TVersionInfo` and `[Version]` from there |
 

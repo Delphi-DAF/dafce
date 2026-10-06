@@ -22,7 +22,7 @@ type
     Calc: IRootCommand;
     AmountOpt: IOption<Integer>;
     CountArg: IArgument<Integer>;
-    Parsed: ICommandLineParseResult;
+    Parsed: IParseResult;
     ReadFile: string;
     ReadPort: Integer;
     ReadTarget: string;
@@ -42,12 +42,13 @@ uses
 
 procedure TGrammarWorld.BuildGrammar;
 begin
-  FileOpt := CommandLine.Option<string>('--file').Describe('File to compile').WithDefault('none');
-  PortOpt := CommandLine.Option<Integer>('--port').Describe('Port to listen on');
-  VerboseOpt := CommandLine.Option<Boolean>('--verbose').Describe('Show more detail').Recursive;
-  TargetArg := CommandLine.Argument<string>('target').Describe('What to build');
-  Native := CommandLine.Command('native').Describe('Build a native binary').Add([FileOpt, PortOpt, TargetArg]);
-  Build := CommandLine.Command('build').WithAlias('b').Describe('Build things').Add(Native);
+  FileOpt := CommandLine.Option<string>('--file').Description('File to compile').DefaultValue('none');
+  PortOpt := CommandLine.Option<Integer>('--port').Description('Port to listen on');
+  VerboseOpt := CommandLine.Option<Boolean>('--verbose').Description('Show more detail').Recursive;
+  TargetArg := CommandLine.Argument<string>('target').Description('What to build');
+  Native := CommandLine.Command('native').Description('Build a native binary').Add([FileOpt, PortOpt, TargetArg]);
+  Build := CommandLine.Command('build').Description('Build things').Add(Native);
+  Build.Aliases.Add('b');
   Root := CommandLine.Root('mytool', 'A tool that builds things');
   Root.Add(VerboseOpt);
   Root.Add(Build);
@@ -55,8 +56,8 @@ end;
 
 procedure TGrammarWorld.BuildCalc;
 begin
-  AmountOpt := CommandLine.Option<Integer>('--amount').Describe('How much');
-  CountArg := CommandLine.Argument<Integer>('count').Describe('How many');
+  AmountOpt := CommandLine.Option<Integer>('--amount').Description('How much');
+  CountArg := CommandLine.Argument<Integer>('count').Description('How many');
   Calc := CommandLine.Root('calc', 'Does sums');
   Calc.Add([AmountOpt, CountArg]);
 end;
@@ -194,7 +195,7 @@ Feature Command line grammar @commandline @grammar
       begin
         W.BuildGrammar;
         W.Build.SetAction(
-          function(const Parsed: ICommandLineParseResult): Integer
+          function(const Parsed: IParseResult): Integer
           begin
             Result := 0;
           end);

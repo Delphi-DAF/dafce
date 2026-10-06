@@ -30,16 +30,16 @@ type
 
   IParsedEcho = interface(IInvokable)
     ['{E2B7A415-3C9D-4F08-8B61-5D2F7C0A9E13}']
-    function Parsed: ICommandLineParseResult;
+    function Parsed: IParseResult;
   end;
 
   /// Un trabajo que recibe sus dependencias por constructor, entre ellas el resultado del parse.
   TParsedEcho = class(TInterfacedObject, IParsedEcho)
   private
-    FParsed: ICommandLineParseResult;
+    FParsed: IParseResult;
   public
-    constructor Create(const Parsed: ICommandLineParseResult);
-    function Parsed: ICommandLineParseResult;
+    constructor Create(const Parsed: IParseResult);
+    function Parsed: IParseResult;
   end;
 
   IWelcome = interface(IInvokable)
@@ -119,7 +119,7 @@ type
     Init: ICommand;
     /// <summary>Si habia contenedor entre el Build y el Run: el Run lo suelta al parar.</summary>
     Container: string;
-    Parsed: ICommandLineParseResult;
+    Parsed: IParseResult;
     /// Empieza en -1 y no en 0: "termino con 0" es justo lo que tendria un campo que el When no
     /// llego a escribir.
     ExitCode: Integer;
@@ -178,13 +178,13 @@ begin
   Result := 'HELLO';
 end;
 
-constructor TParsedEcho.Create(const Parsed: ICommandLineParseResult);
+constructor TParsedEcho.Create(const Parsed: IParseResult);
 begin
   inherited Create;
   FParsed := Parsed;
 end;
 
-function TParsedEcho.Parsed: ICommandLineParseResult;
+function TParsedEcho.Parsed: IParseResult;
 begin
   Result := FParsed;
 end;
@@ -406,7 +406,7 @@ begin
       if ReadsConfiguration then
         Builder.Configuration.Exists('Db:Server');
       Builder.SetAction(
-        function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+        function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
         begin
           ActionRan := True;
           Result := TCliExit.Ok;
@@ -433,13 +433,13 @@ begin
   if Id <> '' then
     Result.SingleInstance(Id);
   Result.SetAction(
-    function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+    function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
     begin
       var Second := TCliApplication.CreateBuilder;
       if Id <> '' then
         Second.SingleInstance(Id);
       Second.SetAction(
-        function(const SecondServices: IServiceProvider; const SecondParsed: ICommandLineParseResult): Integer
+        function(const SecondServices: IServiceProvider; const SecondParsed: IParseResult): Integer
         begin
           W.Report := 'corrio';
           Result := TCliExit.Ok;
@@ -483,8 +483,8 @@ Feature La variante CLI de la familia @cli @application-family
     .Given('una gramatica con una bandera y un argumento posicional',
       procedure(W: TCliWorld)
       begin
-        W.Verbose := CommandLine.Option<Boolean>('--verbose', 'Cuenta lo que hace');
-        W.FileArg := CommandLine.Argument<string>('file', 'Que fichero');
+        W.Verbose := CommandLine.Option<Boolean>('--verbose').Description('Cuenta lo que hace');
+        W.FileArg := CommandLine.Argument<string>('file').Description('Que fichero');
 
         W.Builder := TCliApplication.CreateBuilder(['--verbose', 'informe.txt']);
         W.Builder.RootCommand.Add([W.Verbose, W.FileArg]);
@@ -511,7 +511,7 @@ Feature La variante CLI de la familia @cli @application-family
       begin
         W.Builder := TCliApplication.CreateBuilder(['--Db:Server=localhost']);
         W.Builder.SetAction(
-          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
           begin
             Result := 0;
           end);
@@ -535,7 +535,7 @@ Feature La variante CLI de la familia @cli @application-family
         W.Builder := TCliApplication.CreateBuilder(['--Db:Server=localhost']);
         W.Builder.RootCommand.AllowUnmatchedTokens;
         W.Builder.SetAction(
-          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
           begin
             W.Report := Services.GetRequiredService<IConfiguration>['Db:Server'];
             Result := 0;
@@ -565,13 +565,13 @@ Feature La variante CLI de la familia @cli @application-family
         W.Farewell := CommandLine.Command('farewell');
         W.Builder.RootCommand.Add([W.Greet, W.Farewell]);
         W.Builder.SetAction(W.Greet,
-          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
           begin
             W.Report := W.Report + 'greet:' + Services.GetRequiredService<IGreeter>.Greet + ';';
             Result := 7;
           end);
         W.Builder.SetAction(W.Farewell,
-          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
           begin
             W.Report := W.Report + 'farewell;';
             Result := 8;
@@ -601,7 +601,7 @@ Feature La variante CLI de la familia @cli @application-family
         W.Builder := TCliApplication.CreateBuilder;
         W.Builder.Services.AddSingleton<IGreeter, TGreeter>;
         W.Builder.SetAction(
-          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
           begin
             W.Report := Services.GetRequiredService<IGreeter>.Greet;
             Result := 5;
@@ -657,7 +657,7 @@ Feature La variante CLI de la familia @cli @application-family
             Result := 42;
           end);
         W.Builder.SetAction(
-          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
           begin
             raise Exception.Create('el trabajo fallo');
           end);
@@ -686,7 +686,7 @@ Feature La variante CLI de la familia @cli @application-family
         W.Builder := TCliApplication.CreateBuilder;
         W.Builder.OnException(ExitPolicy.Rethrow());
         W.Builder.SetAction(
-          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
           begin
             raise Exception.Create('el trabajo fallo');
           end);
@@ -721,7 +721,7 @@ Feature La variante CLI de la familia @cli @application-family
             Result := 42;
           end);
         W.Builder.SetAction(
-          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
           begin
             Abort;
             Result := TCliExit.Ok;
@@ -747,7 +747,7 @@ Feature La variante CLI de la familia @cli @application-family
       begin
         W.Builder := TCliApplication.CreateBuilder;
         W.Greet := CommandLine.Command('greet').SetAction(
-          function(const Parsed: ICommandLineParseResult): Integer
+          function(const Parsed: IParseResult): Integer
           begin
             Result := 0;
           end);
@@ -758,7 +758,7 @@ Feature La variante CLI de la familia @cli @application-family
       begin
         try
           W.Builder.SetAction(W.Greet,
-            function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+            function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
             begin
               Result := 0;
             end);
@@ -783,7 +783,7 @@ Feature La variante CLI de la familia @cli @application-family
         W.Builder := TCliApplication.CreateBuilder;
         W.Builder.Services.AddSingleton<ICounted, TCounted>;
         W.Builder.SetAction(
-          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
           begin
             Services.GetRequiredService<ICounted>;
             W.CountedDuring := TCounted.Alive - W.CountedBase;
@@ -877,7 +877,7 @@ Feature La variante CLI de la familia @cli @application-family
             Result := 42;
           end);
         W.Builder.RootCommand.HelpAction :=
-          function(const Parsed: ICommandLineParseResult): Integer
+          function(const Parsed: IParseResult): Integer
           begin
             raise Exception.Create('sin banner');
           end;
@@ -1023,7 +1023,7 @@ Feature La variante CLI de la familia @cli @application-family
         W.Builder := TCliApplication.CreateBuilder;
         W.Builder.SingleInstance('daf-cli-spec-failed');
         W.Builder.SetAction(
-          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
           begin
             W.Report := 'corrio';
             Result := TCliExit.Ok;
@@ -1138,7 +1138,7 @@ Feature La variante CLI de la familia @cli @application-family
             Result := TCliExit.Failure;
           end);
         W.Builder.SetAction(
-          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
           begin
             // Sin un constructor que el contenedor pueda satisfacer, el activador construye con el
             // del ancestro, y el servicio queda sin resultado: eso no es lo mismo que otro.
@@ -1166,14 +1166,14 @@ Feature La variante CLI de la familia @cli @application-family
     .Given('un registro por factory que elige la implementacion segun una opcion de la gramatica',
       procedure(W: TCliWorld)
       begin
-        W.Loud := CommandLine.Option<Boolean>('--loud', 'Saluda en alto');
+        W.Loud := CommandLine.Option<Boolean>('--loud').Description('Saluda en alto');
         W.Builder := TCliApplication.CreateBuilder(['--loud']);
         W.Builder.RootCommand.Add(W.Loud);
         var Loud := W.Loud;
         W.Builder.Services.AddSingleton<IGreeter>(
           function(Provider: IServiceProvider): IGreeter
           begin
-            if Loud.ValueIn(Provider.GetRequiredService<ICommandLineParseResult>) then
+            if Loud.ValueIn(Provider.GetRequiredService<IParseResult>) then
               Result := TLoudGreeter.Create
             else
               Result := TGreeter.Create;
@@ -1185,7 +1185,7 @@ Feature La variante CLI de la familia @cli @application-family
             Result := TCliExit.Failure;
           end);
         W.Builder.SetAction(
-          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
           begin
             W.Report := Services.GetRequiredService<IGreeter>.Greet;
             Result := TCliExit.Ok;
@@ -1216,7 +1216,7 @@ Feature La variante CLI de la familia @cli @application-family
         W.Init := CommandLine.Command('init', 'Escribe la configuracion de partida');
         W.Builder.RootCommand.Add(W.Init);
         W.Builder.SetStandaloneAction(W.Init,
-          function(const Parsed: ICommandLineParseResult): Integer
+          function(const Parsed: IParseResult): Integer
           begin
             W.ActionRan := True;
             Result := 5;
@@ -1255,7 +1255,7 @@ Feature La variante CLI de la familia @cli @application-family
         W.Init := CommandLine.Command('init');
         W.Builder.RootCommand.Add(W.Init);
         W.Builder.SetStandaloneAction(W.Init,
-          function(const Parsed: ICommandLineParseResult): Integer
+          function(const Parsed: IParseResult): Integer
           begin
             W.ActionRan := True;
             Result := TCliExit.Ok;
@@ -1288,7 +1288,7 @@ Feature La variante CLI de la familia @cli @application-family
           W.Init := CommandLine.Command('init');
           W.Builder.RootCommand.Add(W.Init);
           W.Builder.SetStandaloneAction(W.Init,
-            function(const Parsed: ICommandLineParseResult): Integer
+            function(const Parsed: IParseResult): Integer
             begin
               W.ActionRan := True;
               Result := TCliExit.Ok;
@@ -1320,7 +1320,7 @@ Feature La variante CLI de la familia @cli @application-family
             Result := 42;
           end);
         W.Builder.SetStandaloneAction(
-          function(const Parsed: ICommandLineParseResult): Integer
+          function(const Parsed: IParseResult): Integer
           begin
             raise Exception.Create('init fallo');
           end);
@@ -1343,7 +1343,7 @@ Feature La variante CLI de la familia @cli @application-family
       begin
         W.Builder := TCliApplication.CreateBuilder;
         W.Init := CommandLine.Command('init').SetAction(
-          function(const Parsed: ICommandLineParseResult): Integer
+          function(const Parsed: IParseResult): Integer
           begin
             Result := 0;
           end);
@@ -1354,7 +1354,7 @@ Feature La variante CLI de la familia @cli @application-family
       begin
         try
           W.Builder.SetStandaloneAction(W.Init,
-            function(const Parsed: ICommandLineParseResult): Integer
+            function(const Parsed: IParseResult): Integer
             begin
               Result := 0;
             end);
@@ -1379,13 +1379,13 @@ Feature La variante CLI de la familia @cli @application-family
         W.Init := CommandLine.Command('init');
         W.Builder.RootCommand.Add(W.Init);
         W.Builder.SetStandaloneAction(W.Init,
-          function(const Parsed: ICommandLineParseResult): Integer
+          function(const Parsed: IParseResult): Integer
           begin
             W.Report := 'la primera';
             Result := TCliExit.Ok;
           end);
         W.Init.SetAction(
-          function(const Parsed: ICommandLineParseResult): Integer
+          function(const Parsed: IParseResult): Integer
           begin
             W.Report := 'la ultima';
             Result := TCliExit.Ok;
@@ -1414,13 +1414,13 @@ Feature La variante CLI de la familia @cli @application-family
         W.Greet := CommandLine.Command('greet');
         W.Builder.RootCommand.Add([W.Init, W.Greet]);
         W.Builder.SetStandaloneAction(W.Init,
-          function(const Parsed: ICommandLineParseResult): Integer
+          function(const Parsed: IParseResult): Integer
           begin
             W.Report := 'init';
             Result := TCliExit.Ok;
           end);
         W.Builder.SetAction(W.Greet,
-          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
           begin
             W.Report := Services.GetRequiredService<IGreeter>.Greet;
             Result := TCliExit.Ok;
@@ -1444,7 +1444,7 @@ Feature La variante CLI de la familia @cli @application-family
     .Given('una aplicacion CLI invocada con una opcion de su gramatica, y una accion que saluda',
       procedure(W: TCliWorld)
       begin
-        W.Loud := CommandLine.Option<Boolean>('--loud', 'Saluda en alto');
+        W.Loud := CommandLine.Option<Boolean>('--loud').Description('Saluda en alto');
         W.Builder := TCliApplication.CreateBuilder(['--loud']);
         W.Builder.RootCommand.Add(W.Loud);
         W.Builder.OnException(
@@ -1454,7 +1454,7 @@ Feature La variante CLI de la familia @cli @application-family
             Result := TCliExit.Failure;
           end);
         W.Builder.SetAction(
-          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
           begin
             W.Report := Services.GetRequiredService<IGreeter>.Greet;
             Result := TCliExit.Ok;
@@ -1483,7 +1483,7 @@ Feature La variante CLI de la familia @cli @application-family
       begin
         W.Builder := TCliApplication.CreateBuilder;
         W.Builder.SetAction(
-          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
           begin
             W.Report := IfThen((Parsed as IInterface) = (W.Parsed as IInterface), 'el mismo', 'otro');
             Result := TCliExit.Ok;
@@ -1544,7 +1544,7 @@ Feature La variante CLI de la familia @cli @application-family
       begin
         try
           var Parsed := W.Builder.ParseArgs;
-          if Parsed.Succeeded and not Parsed.HelpRequested and not Parsed.VersionRequested then
+          if Parsed.Succeeded and not Parsed.IsHelpRequested and not Parsed.IsVersionRequested then
             JsonConfig.AddFile(W.Builder.Configuration, W.ConfigFile);
           W.ExitCode := W.Builder.Build.Run;
         except
@@ -1582,7 +1582,7 @@ Feature La variante CLI de la familia @cli @application-family
         W.Builder := TCliApplication.CreateBuilder;
         W.Builder.OnException(TSuiteExitPolicy.LogAndFail());
         W.Builder.SetAction(
-          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
           begin
             raise Exception.Create('el trabajo fallo');
           end);
@@ -1618,7 +1618,7 @@ Feature La variante CLI de la familia @cli @application-family
         Hosting.AddHostedService(W.Builder.Services, THostedNote);
         Hosting.AddHostedService(W.Builder.Services, TRefusingStart);
         W.Builder.SetAction(
-          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
           begin
             W.ActionRan := True;
             Result := TCliExit.Ok;
@@ -1656,7 +1656,7 @@ Feature La variante CLI de la familia @cli @application-family
         W.Builder := TCliApplication.CreateBuilder;
         Hosting.AddHostedService(W.Builder.Services, TRefusingStart);
         W.Builder.SetAction(
-          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
           begin
             Result := TCliExit.Ok;
           end);
@@ -1703,7 +1703,7 @@ Feature La variante CLI de la familia @cli @application-family
           end);
         Hosting.AddHostedService(W.Builder.Services, TRefusingStop);
         W.Builder.SetAction(
-          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
           begin
             Result := TCliExit.Ok;
           end);
@@ -1743,7 +1743,7 @@ Feature La variante CLI de la familia @cli @application-family
           end);
         Hosting.AddHostedService(W.Builder.Services, TRefusingStop);
         W.Builder.SetAction(
-          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
           begin
             raise Exception.Create('el trabajo fallo');
           end);
@@ -1767,7 +1767,7 @@ Feature La variante CLI de la familia @cli @application-family
         W.Builder := TCliApplication.CreateBuilder;
         Hosting.AddHostedService(W.Builder.Services, TRefusingStop);
         W.Builder.SetAction(
-          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
           begin
             Result := TCliExit.Ok;
           end);
@@ -1805,7 +1805,7 @@ Feature La variante CLI de la familia @cli @application-family
         W.Builder.Services.AddSingleton<ICounted, TCounted>;
         Hosting.AddHostedService(W.Builder.Services, TRefusingStop);
         W.Builder.SetAction(
-          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
           begin
             Services.GetRequiredService<ICounted>;
             W.CountedDuring := TCounted.Alive - W.CountedBase;
@@ -1892,7 +1892,7 @@ Feature La variante CLI de la familia @cli @application-family
       begin
         W.Builder := TCliApplication.CreateBuilder;
         W.Greet := CommandLine.Command('greet').SetAction(
-          function(const Parsed: ICommandLineParseResult): Integer
+          function(const Parsed: IParseResult): Integer
           begin
             Result := 0;
           end);
@@ -1909,7 +1909,7 @@ Feature La variante CLI de la familia @cli @application-family
         try
           try
             W.Builder.SetAction(W.Greet,
-              function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+              function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
               begin
                 Result := 0;
               end);
@@ -1983,7 +1983,7 @@ Feature La variante CLI de la familia @cli @application-family
             Result := ExitPolicy.Rethrow()(Failure);
           end);
         W.Builder.SetAction(
-          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
           begin
             raise Exception.Create('el trabajo fallo');
           end);
@@ -2026,7 +2026,7 @@ Feature La variante CLI de la familia @cli @application-family
             Result := 42;
           end);
         W.Builder.SetAction(
-          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
           begin
             var Module := TFailingModule.CreateFailing;
             W.Report := 'creado';
@@ -2060,7 +2060,7 @@ Feature La variante CLI de la familia @cli @application-family
             Result := 42;
           end);
         W.Builder.SetAction(
-          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
           begin
             TThread.ForceQueue(nil,
               procedure
@@ -2091,7 +2091,7 @@ Feature La variante CLI de la familia @cli @application-family
       begin
         W.Builder := TCliApplication.CreateBuilder;
         W.Builder.SetAction(
-          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
           begin
             W.Report := W.Report + ' durante=' + IfThen(Assigned(ApplicationHandleException), 'puesto', 'nil');
             Result := TCliExit.Ok;

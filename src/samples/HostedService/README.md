@@ -32,7 +32,7 @@ acción de la raíz, y lo que hace es esperar:
 ```pascal
 TShutdownHook.PresCtlCMsg := 'Pulse Ctrl+C para parar el servicio...';
 B.SetAction(
-  function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+  function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
   begin
     TShutdownHook.WaitForShutdown;
     Result := TCliExit.Ok;

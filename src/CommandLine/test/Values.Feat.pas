@@ -44,7 +44,7 @@ type
     MsgArg: IArgument<string>;
     VerboseOpt: IOption<Boolean>;
 
-    Parsed: ICommandLineParseResult;
+    Parsed: IParseResult;
     ReadPortMin: Integer;
     ReadPortMax: Integer;
     ReadFlagMin: Integer;
@@ -87,17 +87,17 @@ var
 
 procedure TValuesWorld.BuildArity;
 begin
-  PortOpt := CommandLine.Option<Integer>('--port', 'Port to listen on');
-  FilesOpt := CommandLine.Option<string>('--files', 'Files to compile').WithArity(TArity.ZeroOrMore);
-  FlagOpt := CommandLine.Option<Boolean>('--flag', 'A flag');
+  PortOpt := CommandLine.Option<Integer>('--port').Description('Port to listen on');
+  FilesOpt := CommandLine.Option<string>('--files').Description('Files to compile').Arity(TArgumentArity.ZeroOrMore);
+  FlagOpt := CommandLine.Option<Boolean>('--flag').Description('A flag');
   Arity := CommandLine.Root('tool', 'A tool');
   Arity.Add([PortOpt, FilesOpt, FlagOpt]);
 end;
 
 procedure TValuesWorld.BuildRequiredOptions;
 begin
-  MustOpt := CommandLine.Option<string>('--must', 'Has to be there').Required;
-  FallbackOpt := CommandLine.Option<string>('--fallback', 'Required, but has a default').Required.WithDefault('D');
+  MustOpt := CommandLine.Option<string>('--must').Description('Has to be there').Required;
+  FallbackOpt := CommandLine.Option<string>('--fallback').Description('Required, but has a default').Required.DefaultValue('D');
   NeedOpts := CommandLine.Root('tool', 'A tool');
   NeedOpts.Add([MustOpt, FallbackOpt]);
 end;
@@ -105,15 +105,15 @@ end;
 procedure TValuesWorld.BuildRequiredArgument;
 begin
   // A string argument gets ExactlyOne by default, so it is required without saying so.
-  TargetArg := CommandLine.Argument<string>('target', 'What to build');
+  TargetArg := CommandLine.Argument<string>('target').Description('What to build');
   NeedArg := CommandLine.Root('tool', 'A tool');
   NeedArg.Add(TargetArg);
 end;
 
 procedure TValuesWorld.BuildBounded;
 begin
-  LevelOpt := CommandLine.Option<TVerbosity>('--level', 'How much to say');
-  ModeOpt := CommandLine.Option<string>('--mode', 'How to run').AcceptOnly(['fast', 'safe']);
+  LevelOpt := CommandLine.Option<TVerbosity>('--level').Description('How much to say');
+  ModeOpt := CommandLine.Option<string>('--mode').Description('How to run').AcceptOnlyFromAmong(['fast', 'safe']);
   Bounded := CommandLine.Root('tool', 'A tool');
   Bounded.Add([LevelOpt, ModeOpt]);
 end;
@@ -122,7 +122,7 @@ procedure TValuesWorld.BuildChecked;
 begin
   // A validation runs INSIDE the parse, so a value the type admits and the application
   // does not is an invocation error like any other.
-  CountOpt := CommandLine.Option<Integer>('--count', 'How many to make')
+  CountOpt := CommandLine.Option<Integer>('--count').Description('How many to make')
     .Validate(
     function(const Value: Integer; out Error: string): Boolean
     begin
@@ -132,10 +132,10 @@ begin
     end);
   // Written over that same hook, not over a mechanism of its own. It does touch disk,
   // which is the conscious exception to a validation being a pure question.
-  InputOpt := CommandLine.Option<string>('--in', 'Where to read from').AcceptExistingOnly;
+  InputOpt := CommandLine.Option<string>('--in').Description('Where to read from').AcceptExistingOnly;
   // A NAME and not a path: the separators are refused too, which is what tells this
   // validation from the one above it.
-  NameOpt := CommandLine.Option<string>('--name', 'What to call the report').AcceptLegalFileNamesOnly;
+  NameOpt := CommandLine.Option<string>('--name').Description('What to call the report').AcceptLegalFileNamesOnly;
   Checked := CommandLine.Root('tool', 'A tool');
   Checked.Add([CountOpt, InputOpt, NameOpt]);
 end;
@@ -146,15 +146,15 @@ begin
   // A default that depends on the surroundings cannot be written as a constant in the
   // grammar, which runs before there is anything to know. The text next to
   // it is what the help shows, because the help does NOT run the calculation.
-  OutOpt := CommandLine.Option<string>('--out', 'Where to write')
-    .WithDefault(
+  OutOpt := CommandLine.Option<string>('--out').Description('Where to write')
+    .DefaultValueFactory(
     function: string
     begin
       Inc(DefaultRuns);
       Result := 'computed-place';
     end, 'the current directory');
-  SeedOpt := CommandLine.Option<Integer>('--seed', 'Starting point')
-    .WithDefault(
+  SeedOpt := CommandLine.Option<Integer>('--seed').Description('Starting point')
+    .DefaultValueFactory(
     function: Integer
     begin
       Inc(DefaultRuns);
@@ -166,8 +166,8 @@ end;
 
 procedure TValuesWorld.BuildEscaped;
 begin
-  MsgArg := CommandLine.Argument<string>('msg', 'The message');
-  VerboseOpt := CommandLine.Option<Boolean>('--verbose', 'Say more');
+  MsgArg := CommandLine.Argument<string>('msg').Description('The message');
+  VerboseOpt := CommandLine.Option<Boolean>('--verbose').Description('Say more');
   Escaped := CommandLine.Root('tool', 'A tool');
   Escaped.Add([MsgArg, VerboseOpt]);
 end;
@@ -263,10 +263,10 @@ Feature Command line values @commandline @values
     .When('each arity is inspected',
       procedure(W: TValuesWorld)
       begin
-        W.ReadPortMin := W.PortOpt.Arity.Min;
-        W.ReadPortMax := W.PortOpt.Arity.Max;
-        W.ReadFlagMin := W.FlagOpt.Arity.Min;
-        W.ReadFlagMax := W.FlagOpt.Arity.Max;
+        W.ReadPortMin := W.PortOpt.Arity.MinimumNumberOfValues;
+        W.ReadPortMax := W.PortOpt.Arity.MaximumNumberOfValues;
+        W.ReadFlagMin := W.FlagOpt.Arity.MinimumNumberOfValues;
+        W.ReadFlagMax := W.FlagOpt.Arity.MaximumNumberOfValues;
       end)
     .&Then('the integer demands exactly one value and the boolean admits none or one',
       procedure(W: TValuesWorld)
@@ -556,7 +556,7 @@ Feature Command line values @commandline @values
       procedure(W: TValuesWorld)
       begin
         try
-          CommandLine.Option<Integer>('--retries', 'How many times to try').AcceptLegalFileNamesOnly;
+          CommandLine.Option<Integer>('--retries').Description('How many times to try').AcceptLegalFileNamesOnly;
           W.Report := '<the declaration was accepted>';
         except
           on E: Exception do

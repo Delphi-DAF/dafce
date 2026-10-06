@@ -16,7 +16,7 @@ positional arguments, then read the values back **with the very objects you decl
 ```pascal
 uses Daf.CommandLine;
 
-var FileOpt := CommandLine.Option<string>('--file', 'File to compile');
+var FileOpt := CommandLine.Option<string>('--file').Description('File to compile');
 var Root := CommandLine.Root('mytool', 'A tool');
 Root.Add(FileOpt);
 
@@ -40,8 +40,8 @@ run time.
 | `IRootCommand` | Where a grammar starts; the only one that can `Parse`, and the one that carries the version |
 | `IOption<T>` | A named, dashed value — `--file main.pas`. Also the key it is read with |
 | `IArgument<T>` | A **positional** value, identified by its place: `mytool build main.pas` |
-| `TArity` | How many values a symbol admits, minimum and maximum |
-| `ICommandLineParseResult` | What an invocation produced: the leaf reached, the values, the errors, the help, the version. `Invoke` runs it |
+| `TArgumentArity` | How many values a symbol admits, minimum and maximum |
+| `IParseResult` | What an invocation produced: the leaf reached, the values, the errors, the help, the version. `Invoke` runs it |
 | `TCommandAction` | What a command does when an invocation reaches it: receives the parse result, answers the exit code |
 | `TInvocationConfiguration` | Where `Invoke` writes, and whether a default handler catches what the action lets escape |
 | `TCommandLineExit` | The codes `Invoke` answers when the action is not the one deciding |
@@ -54,15 +54,16 @@ run time.
 Fluent methods live **on the interfaces**, never on a `class helper`.
 
 ```pascal
-var VerboseOpt := CommandLine.Option<Boolean>('--verbose', 'Say more').Recursive;
-var OutOpt     := CommandLine.Option<string>('--out', 'Where it goes').WithDefault('bin\out.exe');
-var LevelOpt   := CommandLine.Option<TVerbosity>('--level', 'How much to say');
-var FilesOpt   := CommandLine.Option<string>('--file', 'Files').WithArity(TArity.ZeroOrMore);
-var KeyOpt     := CommandLine.Option<string>('--key', 'API key').Required;
-var TargetArg  := CommandLine.Argument<string>('target', 'The project to build');
+var VerboseOpt := CommandLine.Option<Boolean>('--verbose').Description('Say more').Recursive;
+var OutOpt     := CommandLine.Option<string>('--out').Description('Where it goes').DefaultValue('bin\out.exe');
+var LevelOpt   := CommandLine.Option<TVerbosity>('--level').Description('How much to say');
+var FilesOpt   := CommandLine.Option<string>('--file').Description('Files').Arity(TArgumentArity.ZeroOrMore);
+var KeyOpt     := CommandLine.Option<string>('--key').Description('API key').Required;
+var TargetArg  := CommandLine.Argument<string>('target').Description('The project to build');
 
 var Native := CommandLine.Command('native', 'Build a native binary').Add([TargetArg, OutOpt]);
-var Build  := CommandLine.Command('build', 'Build things').WithAlias('b').Add(Native);
+var Build  := CommandLine.Command('build', 'Build things').Add(Native);
+Build.Aliases.Add('b');
 
 var Root := CommandLine.Root('buildtool', 'A small build tool').WithVersion('1.0.0');
 Root.Add([VerboseOpt, Build]);
@@ -75,15 +76,15 @@ initializer.
 |---------|-----|
 | Subcommands, any depth | `Parent.Add(Child)`. A command with subcommands and no action requires a leaf to be named |
 | Positional arguments | `CommandLine.Argument<T>(...)`, bound by position in declaration order |
-| Command aliases | `.WithAlias('b')` — `mytool b native` reaches `mytool build native` |
+| Aliases | `CommandLine.Option<T>('--verbose', ['-v'])` on an option; `Command.Aliases.Add('b')` on a command — `mytool b native` reaches `mytool build native` |
 | Recursive options | `.Recursive` — declared once, available to every descendant |
-| Defaults | `.WithDefault(Value)`, returned when the invocation did not carry the option |
+| Defaults | `.DefaultValue(Value)`, returned when the invocation did not carry the option |
 | Required | `.Required` on an option; an argument is required by its arity |
-| Arity | `.WithArity(TArity.ZeroOrMore)` and the other four |
-| Bounded values | an enumerated `T`, or `.AcceptOnly(['fast', 'safe'])` |
+| Arity | `.Arity(TArgumentArity.ZeroOrMore)` and the other four |
+| Bounded values | an enumerated `T`, or `.AcceptOnlyFromAmong(['fast', 'safe'])` |
 | Several values per mention | `.AllowMultipleArgumentsPerToken` — `--items a b c` without repeating the name |
 | Collecting what is not ours | `Command.AllowUnmatchedTokens`, read back as `UnmatchedTokens` |
-| Version | `.WithVersion('1.0.0')` on the root; also `.WithVersion(tag, name, company)` or `.WithVersion(TSomeClass)` to take it from a `[Version]` annotation. `ICommandLineParseResult.VersionInfo` gives it back |
+| Version | `.WithVersion('1.0.0')` on the root; also `.WithVersion(tag, name, company)` or `.WithVersion(TSomeClass)` to take it from a `[Version]` annotation. `IParseResult.VersionInfo` gives it back |
 
 ---
 
@@ -94,7 +95,7 @@ var Path  := OutOpt.ValueIn(Parsed);        // one value, statically typed
 var Files := FilesOpt.ValuesIn(Parsed);     // TArray<string>, for an arity that admits many
 ```
 
-`ICommandLineParseResult.WasProvided` tells **absent** from **present but empty**: `--file ''` is not the same
+`IParseResult.WasProvided` tells **absent** from **present but empty**: `--file ''` is not the same
 answer as no `--file` at all.
 
 ---
@@ -106,11 +107,11 @@ written by hand: a `Boolean` admits none or one, anything else demands exactly o
 
 | | Meaning |
 |---|---|
-| `TArity.Zero` | no values |
-| `TArity.ZeroOrOne` | none or one — the default for a `Boolean` |
-| `TArity.ExactlyOne` | one, and it has to be there — the default for everything else |
-| `TArity.ZeroOrMore` | any number |
-| `TArity.OneOrMore` | at least one |
+| `TArgumentArity.Zero` | no values |
+| `TArgumentArity.ZeroOrOne` | none or one — the default for a `Boolean` |
+| `TArgumentArity.ExactlyOne` | one, and it has to be there — the default for everything else |
+| `TArgumentArity.ZeroOrMore` | any number |
+| `TArgumentArity.OneOrMore` | at least one |
 
 It buys three things that look unrelated:
 
@@ -148,7 +149,7 @@ the widths people use, dates, identifiers and paths.
 
 An enumerated type names its own accepted values, so they appear in the help and in the error without
 anybody writing them twice — and they are matched without regard to case, as in .NET.
-`.AcceptOnly([...])` is the same closure for a type that does not express it.
+`.AcceptOnlyFromAmong([...])` is the same closure for a type that does not express it.
 
 A `Boolean` option is a flag: naming it is enough, and `--flag false`, `--flag=false` and
 `--flag true` all work.
@@ -156,7 +157,7 @@ A `Boolean` option is a flag: naming it is enough, and `--flag false`, `--flag=f
 A **collection** is one value made of the tokens it was given, so reading it answers the whole array:
 
 ```pascal
-FilesOpt := CommandLine.Option<TArray<string>>('--files', 'Files to compile');
+FilesOpt := CommandLine.Option<TArray<string>>('--files').Description('Files to compile');
 // tool --files a.pas --files b.pas   ->  FilesOpt.ValueIn(Parsed) = ['a.pas', 'b.pas']
 ```
 
@@ -204,7 +205,7 @@ grammar can act on it.
 A validation receives the value **already converted** and may refuse it. It runs **inside** the parse:
 
 ```pascal
-CountOpt := CommandLine.Option<Integer>('--count', 'How many to make')
+CountOpt := CommandLine.Option<Integer>('--count').Description('How many to make')
   .Validate(
   function(const Value: Integer; out Error: string): Boolean
   begin
@@ -235,12 +236,12 @@ Delphi has no way of saying "the element of `T`" in an interface. It is refused 
 
 ## A default value that is a calculation
 
-`WithDefault(Value)` takes a constant, evaluated when the grammar is declared. There is a computed
-form, evaluated **only if the invocation did not carry the symbol**:
+`DefaultValue(Value)` takes a constant, evaluated when the grammar is declared. `DefaultValueFactory`
+takes a calculation, evaluated **only if the invocation did not carry the symbol**:
 
 ```pascal
-OutOpt := CommandLine.Option<string>('--out', 'Where to write')
-  .WithDefault(
+OutOpt := CommandLine.Option<string>('--out').Description('Where to write')
+  .DefaultValueFactory(
   function: string
   begin
     Result := TPath.GetTempPath;
@@ -259,7 +260,7 @@ it, and no default at all when there is none.
 ## A symbol that does not appear in the help
 
 ```pascal
-DiagOpt := CommandLine.Option<Integer>('--diag', 'Diagnostics level').Hidden;
+DiagOpt := CommandLine.Option<Integer>('--diag').Description('Diagnostics level').Hidden;
 ```
 
 It is what a diagnostic option, one in transition, or one only an internal script uses needs: to exist
@@ -329,8 +330,8 @@ saying so instead of hanging.
 ### Several values behind one name
 
 ```pascal
-var ItemsOpt := CommandLine.Option<string>('--items', 'Several at once')
-  .WithArity(TArity.ZeroOrMore).AllowMultipleArgumentsPerToken;
+var ItemsOpt := CommandLine.Option<string>('--items').Description('Several at once')
+  .Arity(TArgumentArity.ZeroOrMore).AllowMultipleArgumentsPerToken;
 ```
 
 `--items a b c` then means all three. It is **opt-in**: .NET calls it the same thing.
@@ -375,8 +376,8 @@ Options:
 ```
 
 Every grammar answers `--help` and `-h`, and every **root** answers `--version`, without declaring
-anything. Asking for either is a **valid outcome**, not a parse failure: `HelpRequested` /
-`VersionRequested` are true and `Errors` is empty. Help is resolved *before* the grammar is validated.
+anything. Asking for either is a **valid outcome**, not a parse failure: `IsHelpRequested` /
+`IsVersionRequested` are true and `Errors` is empty. Help is resolved *before* the grammar is validated.
 An application that declares its own `--help` or `--version` wins — it is the one that knows its case.
 `--version` sits on the root and not on each subcommand, as in .NET: a version belongs to the tool.
 What they write can be wrapped with something of your own: see *A banner above the help and the
@@ -389,9 +390,9 @@ version*.
 A command declares what it does when an invocation reaches it, and the parse result runs it:
 
 ```pascal
-var NameOpt := CommandLine.Option<string>('--name', 'Who to greet').WithDefault('world');
+var NameOpt := CommandLine.Option<string>('--name').Description('Who to greet').DefaultValue('world');
 var Greet := CommandLine.Command('greet', 'Say hello').Add(NameOpt).SetAction(
-  function(const Parsed: ICommandLineParseResult): Integer
+  function(const Parsed: IParseResult): Integer
   begin
     Writeln('Hello, ', NameOpt.ValueIn(Parsed));
     Result := TCommandLineExit.Ok;
@@ -417,13 +418,13 @@ settles the invocation and answers the code the process ends with:
 
 No command's action runs in the first three rows.
 
-- An action with no code of its own is a `procedure(const Parsed: ICommandLineParseResult)`, and the
+- An action with no code of its own is a `procedure(const Parsed: IParseResult)`, and the
   invocation answers `Ok` for it.
 - Declaring the action again replaces it.
 - A command with subcommands **and** an action is an invocation of its own: `mytool` alone runs
   `mytool`'s action. Without one it only groups, and `mytool` alone fails with
   `Command "mytool" requires a subcommand: …`.
-- `SetAction` answers `ICommand`, so on a root it is a statement, like `Describe`.
+- `SetAction` answers `ICommand`, so on a root it is a statement, like `Description(Text)`.
 
 ### Where it writes, and what it does with an exception
 
@@ -454,7 +455,7 @@ of your own above them, replace the action with one that writes it and then call
 function WithBanner(const Default: TCommandAction): TCommandAction;
 begin
   Result :=
-    function(const Parsed: ICommandLineParseResult): Integer
+    function(const Parsed: IParseResult): Integer
     begin
       Parsed.InvocationConfiguration.WriteOutput('buildtool -- (c) ACME');
       Result := Default(Parsed);
@@ -504,7 +505,7 @@ Code that decides with a parse result can rely on the grammar staying the one it
 you write `fileOption.ValueIn(parsed)`: the object asks the result:
 
 - An interface **cannot declare a generic method at all** — `E2535 Interface methods must not have
-  parameterized methods`. So `ICommandLineParseResult.GetValue<T>` cannot exist, whatever else were
+  parameterized methods`. So `IParseResult.GetValue<T>` cannot exist, whatever else were
   true.
 - Even on a class, Delphi does not infer `T` through an `IOption<T>` parameter — `E2010 Incompatible
   types: 'IOption<T>' and 'IOption<string>'`. Inference works when the parameter *is* `T`, not when

@@ -53,15 +53,15 @@ begin
     end);
 
   try
-    var NameOpt := CommandLine.Option<string>('--name', 'A quien saludar').Required;
-    var ShoutOpt := CommandLine.Option<Boolean>('--shout', 'En mayusculas').WithAlias('-s');
+    var NameOpt := CommandLine.Option<string>('--name').Description('A quien saludar').Required;
+    var ShoutOpt := CommandLine.Option<Boolean>('--shout', ['-s']).Description('En mayusculas');
     B.RootCommand.WithVersion('2.0.0').Add([NameOpt, ShoutOpt]);
 
     // Solo una instancia: la segunda no llega a construir el contenedor.
     B.SingleInstance('daf-greet-tool');
 
     B.SetAction(
-      function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+      function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
       begin
         var Who := NameOpt.ValueIn(Parsed);
         if Who = 'boom' then
@@ -174,7 +174,7 @@ var Farewell := CommandLine.Command('farewell', 'Say goodbye');
 B.RootCommand.Add([Greet, Farewell]);
 
 B.SetAction(Greet,
-  function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+  function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
   begin
     Writeln(Services.GetRequiredService<IGreeter>.Greet);
     Result := TCliExit.Ok;
@@ -225,7 +225,7 @@ of `Daf.CommandLine`.
 var Init := CommandLine.Command('init', 'Write the starting configuration');
 B.RootCommand.Add(Init);
 B.SetStandaloneAction(Init,
-  function(const Parsed: ICommandLineParseResult): Integer
+  function(const Parsed: IParseResult): Integer
   begin
     TFile.WriteAllText('appsettings.json', '{}');
     Result := TCliExit.Ok;
@@ -283,11 +283,11 @@ as it is in `Development`, asking the root provider for it is rejected.
 ### The parse result in the container
 
 When the invocation reaches an action, the parse result is also in the container, as
-`ICommandLineParseResult`: the same object the action receives. A service asks for it by
+`IParseResult`: the same object the action receives. A service asks for it by
 constructor:
 
 ```pascal
-constructor TExportJob.Create(const Parsed: ICommandLineParseResult);
+constructor TExportJob.Create(const Parsed: IParseResult);
 begin
   inherited Create;
   FParsed := Parsed;
@@ -298,13 +298,13 @@ And a registration can depend on an argument through a factory, which reads the 
 resolves:
 
 ```pascal
-var DryRun := CommandLine.Option<Boolean>('--dry-run', 'Report, do not write');
+var DryRun := CommandLine.Option<Boolean>('--dry-run').Description('Report, do not write');
 B.RootCommand.Add(DryRun);
 
 B.Services.AddSingleton<IWriter>(
   function(Provider: IServiceProvider): IWriter
   begin
-    if DryRun.ValueIn(Provider.GetRequiredService<ICommandLineParseResult>) then
+    if DryRun.ValueIn(Provider.GetRequiredService<IParseResult>) then
       Result := TReportWriter.Create
     else
       Result := TFileWriter.Create;
@@ -333,7 +333,7 @@ would add next cannot be read:
 
 ```pascal
 var Parsed := B.ParseArgs;
-if Parsed.Succeeded and not Parsed.HelpRequested and not Parsed.VersionRequested then
+if Parsed.Succeeded and not Parsed.IsHelpRequested and not Parsed.IsVersionRequested then
   JsonConfig.AddFile(B.Configuration, 'web.json');
 ExitCode := B.Build.Run;
 ```

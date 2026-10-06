@@ -51,7 +51,7 @@ type
     HiddenRoot: IRootCommand;
     DiagOpt: IOption<Integer>;
     PlainOpt: IOption<string>;
-    Parsed: ICommandLineParseResult;
+    Parsed: IParseResult;
     Rendered: string;
     RenderedAgain: string;
     Listed: string;
@@ -74,25 +74,25 @@ uses
 
 procedure THelpWorld.BuildGrammar;
 begin
-  VerboseOpt := CommandLine.Option<Boolean>('--verbose').Describe('Show more detail').Recursive;
-  FileOpt := CommandLine.Option<string>('--file').Describe('File to compile');
-  PortOpt := CommandLine.Option<Integer>('--port').Describe('Port to listen on');
-  Build := CommandLine.Command('build').Describe('Build things').Add(FileOpt);
-  Serve := CommandLine.Command('serve').Describe('Serve things').Add(PortOpt);
+  VerboseOpt := CommandLine.Option<Boolean>('--verbose').Description('Show more detail').Recursive;
+  FileOpt := CommandLine.Option<string>('--file').Description('File to compile');
+  PortOpt := CommandLine.Option<Integer>('--port').Description('Port to listen on');
+  Build := CommandLine.Command('build').Description('Build things').Add(FileOpt);
+  Serve := CommandLine.Command('serve').Description('Serve things').Add(PortOpt);
   Root := CommandLine.Root('mytool', 'A tool that builds things');
   Root.Add([VerboseOpt, Build, Serve]);
 end;
 
 procedure THelpWorld.BuildOwnHelpGrammar;
 begin
-  OwnHelpOpt := CommandLine.Option<Boolean>('--help').Describe('The help this application wants');
+  OwnHelpOpt := CommandLine.Option<Boolean>('--help').Description('The help this application wants');
   OwnRoot := CommandLine.Root('owntool', 'Brings its own help');
   OwnRoot.Add(OwnHelpOpt);
 end;
 
 procedure THelpWorld.BuildVersionGrammar;
 begin
-  DefaultedOpt := CommandLine.Option<string>('--out', 'Where it goes').WithDefault('bin\out.exe');
+  DefaultedOpt := CommandLine.Option<string>('--out').Description('Where it goes').DefaultValue('bin\out.exe');
   VersionBuild := CommandLine.Command('build', 'Build things').Add(DefaultedOpt);
   VersionRoot := CommandLine.Root('mytool', 'A tool with a version').WithVersion('1.2.3');
   VersionRoot.Add(VersionBuild);
@@ -109,7 +109,7 @@ end;
 
 procedure THelpWorld.BuildOwnVersionGrammar;
 begin
-  OwnVersionOpt := CommandLine.Option<Boolean>('--version', 'The version this application wants');
+  OwnVersionOpt := CommandLine.Option<Boolean>('--version').Description('The version this application wants');
   OwnVersionRoot := CommandLine.Root('owntool', 'Brings its own version').WithVersion('9.9.9');
   OwnVersionRoot.Add(OwnVersionOpt);
 end;
@@ -117,8 +117,8 @@ end;
 procedure THelpWorld.BuildHiddenGrammar;
 begin
   // Hidden touches the help and nothing else: it is declared, parsed and read the same.
-  DiagOpt := CommandLine.Option<Integer>('--diag').Describe('Diagnostics level').Hidden;
-  PlainOpt := CommandLine.Option<string>('--name').Describe('What to call it');
+  DiagOpt := CommandLine.Option<Integer>('--diag').Description('Diagnostics level').Hidden;
+  PlainOpt := CommandLine.Option<string>('--name').Description('What to call it');
   HiddenRoot := CommandLine.Root('mytool', 'A tool with something not advertised');
   HiddenRoot.Add([DiagOpt, PlainOpt]);
 end;
@@ -223,7 +223,7 @@ Feature Command line help @commandline @help
     .When('a new option is declared and the help is asked for again',
       procedure(W: THelpWorld)
       begin
-        W.TargetOpt := CommandLine.Option<string>('--target').Describe('Where it goes');
+        W.TargetOpt := CommandLine.Option<string>('--target').Description('Where it goes');
         W.Build.Add(W.TargetOpt);
         W.RenderedAgain := W.Build.HelpText;
       end)
@@ -250,7 +250,7 @@ Feature Command line help @commandline @help
     .&Then('the result says the help was asked for, and carries its text',
       procedure(W: THelpWorld)
       begin
-        Expect(W.Parsed.HelpRequested).ToBeTrue;
+        Expect(W.Parsed.IsHelpRequested).ToBeTrue;
         Expect(W.Parsed.HelpText).ToContain('Usage:');
         Expect(W.Parsed.HelpText).ToContain('build');
       end)
@@ -275,7 +275,7 @@ Feature Command line help @commandline @help
     .&Then('the help obtained is that subcommand''s',
       procedure(W: THelpWorld)
       begin
-        Expect(W.Parsed.HelpRequested).ToBeTrue;
+        Expect(W.Parsed.IsHelpRequested).ToBeTrue;
         Expect(W.Parsed.Command.Name).ToEqual('build');
         Expect(W.Parsed.HelpText).ToContain('--file');
         Expect(W.Parsed.HelpText.Contains('--port')).ToBeFalse;
@@ -295,7 +295,7 @@ Feature Command line help @commandline @help
     .&Then('the one the application declared wins, since it is the one that knows its case',
       procedure(W: THelpWorld)
       begin
-        Expect(W.Parsed.HelpRequested).ToBeFalse;
+        Expect(W.Parsed.IsHelpRequested).ToBeFalse;
         Expect(W.Parsed.WasProvided(W.OwnHelpOpt)).ToBeTrue;
         Expect(W.OwnHelpOpt.ValueIn(W.Parsed)).ToBeTrue;
         Expect(W.Parsed.Succeeded).ToBeTrue;
@@ -317,7 +317,7 @@ Feature Command line help @commandline @help
     .&Then('the result says the version was asked for, with its text',
       procedure(W: THelpWorld)
       begin
-        Expect(W.Parsed.VersionRequested).ToBeTrue;
+        Expect(W.Parsed.IsVersionRequested).ToBeTrue;
         // Se afirma sobre las piezas y no sobre el texto compuesto: el render lleva la plataforma,
         // y el mismo runner corre en Win32 y en Win64.
         Expect(W.Parsed.VersionInfo.Tag).ToEqual('1.2.3');
@@ -344,7 +344,7 @@ Feature Command line help @commandline @help
     .&Then('the version is not answered, because --version is the root command''s',
       procedure(W: THelpWorld)
       begin
-        Expect(W.Parsed.VersionRequested).ToBeFalse;
+        Expect(W.Parsed.IsVersionRequested).ToBeFalse;
       end)
 
   .Scenario('A grammar that declares a version option of its own')
@@ -361,7 +361,7 @@ Feature Command line help @commandline @help
     .&Then('the one the application declared wins, as happens with --help',
       procedure(W: THelpWorld)
       begin
-        Expect(W.Parsed.VersionRequested).ToBeFalse;
+        Expect(W.Parsed.IsVersionRequested).ToBeFalse;
         Expect(W.Parsed.WasProvided(W.OwnVersionOpt)).ToBeTrue;
         Expect(W.OwnVersionOpt.ValueIn(W.Parsed)).ToBeTrue;
         Expect(W.Parsed.Succeeded).ToBeTrue;
@@ -402,7 +402,7 @@ Feature Command line help @commandline @help
     .&Then('the annotation is what the result carries',
       procedure(W: THelpWorld)
       begin
-        Expect(W.Parsed.VersionRequested).ToBeTrue;
+        Expect(W.Parsed.IsVersionRequested).ToBeTrue;
         Expect(W.Parsed.VersionInfo.Tag).ToEqual('4.5.6');
         Expect(W.Parsed.VersionInfo.ApplicationName).ToEqual('AnnotatedTool');
       end)
@@ -421,7 +421,7 @@ Feature Command line help @commandline @help
     .&Then('the version it hands over says it is a debug build',
       procedure(W: THelpWorld)
       begin
-        Expect(W.Parsed.VersionRequested).ToBeTrue;
+        Expect(W.Parsed.IsVersionRequested).ToBeTrue;
         Expect(W.Parsed.VersionInfo.Debug).ToBeTrue;
       end)
 

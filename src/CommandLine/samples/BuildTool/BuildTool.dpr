@@ -79,10 +79,10 @@ type
     FTarget: IArgument<string>;
     procedure DeclareGrammar;
     procedure DeclareActions;
-    procedure ShowCommon(const Parsed: ICommandLineParseResult);
-    procedure ReportNative(const Parsed: ICommandLineParseResult);
-    procedure ReportWeb(const Parsed: ICommandLineParseResult);
-    procedure ReportServe(const Parsed: ICommandLineParseResult);
+    procedure ShowCommon(const Parsed: IParseResult);
+    procedure ReportNative(const Parsed: IParseResult);
+    procedure ReportWeb(const Parsed: IParseResult);
+    procedure ReportServe(const Parsed: IParseResult);
     /// <summary>One step of the walkthrough: the invocation, what it wrote, and its exit code.</summary>
     function Walk(const Args: TArray<string>): Integer;
   public
@@ -121,13 +121,12 @@ begin
   // The one-character aliases are what make `-vm` a bundle: a group is only split when
   // every letter of it names a declared option, so declaring them is what admits the
   // form. Nothing else changes -- `--verbose` still works spelled out.
-  FVerbose := CommandLine.Option<Boolean>('--verbose', 'Say more about what is happening')
-    .WithAlias('-v').Recursive;
-  FOut := CommandLine.Option<string>('--out', 'Where the binary goes').WithDefault('bin\out.exe');
-  FMinify := CommandLine.Option<Boolean>('--minify', 'Shrink the produced assets').WithAlias('-m');
+  FVerbose := CommandLine.Option<Boolean>('--verbose', ['-v']).Description('Say more about what is happening').Recursive;
+  FOut := CommandLine.Option<string>('--out').Description('Where the binary goes').DefaultValue('bin\out.exe');
+  FMinify := CommandLine.Option<Boolean>('--minify', ['-m']).Description('Shrink the produced assets');
   // A range is a validation and not a mechanism of its own, which is also how
   // System.CommandLine answers one. It receives the value already converted.
-  FPort := CommandLine.Option<Integer>('--port', 'Port to listen on').WithDefault(8080)
+  FPort := CommandLine.Option<Integer>('--port').Description('Port to listen on').DefaultValue(8080)
     .Validate(
     function(const Value: Integer; out Error: string): Boolean
     begin
@@ -138,7 +137,7 @@ begin
     end);
   // Nothing here lists the accepted values: the enumerated type does it, both in the
   // help and in the error when one is refused.
-  FLevel := CommandLine.Option<TVerbosity>('--level', 'How much to say').WithDefault(TVerbosity.Normal);
+  FLevel := CommandLine.Option<TVerbosity>('--level').Description('How much to say').DefaultValue(TVerbosity.Normal);
   // A type the engine does not know, made usable in ONE place. The conversion is passed
   // where the option is declared, because a symbol either knows how to convert its type
   // or its declaration is refused there and then.
@@ -149,9 +148,8 @@ begin
       Result := TSemVer.TryParse(Raw, Value);
       if not Result then
         Error := Format('"%s" is not a version: write it as major.minor.patch', [Raw]);
-    end,
-    'Lowest SDK this build targets');
-  FTarget := CommandLine.Argument<string>('target', 'The project to build');
+    end).Description('Lowest SDK this build targets');
+  FTarget := CommandLine.Argument<string>('target').Description('The project to build');
 
   // Everything below is Add, and no two calls add the same KIND of thing. Worth
   // reading one by one, because the shape of the grammar comes entirely from which
@@ -165,7 +163,8 @@ begin
 
   // A GROUP: here Add takes SUBCOMMANDS, and that is what makes `build` a group.
   // From this line on, `buildtool build` is incomplete and must name native or web.
-  FBuild := CommandLine.Command('build', 'Build things').WithAlias('b').Add([FNative, FWeb]);
+  FBuild := CommandLine.Command('build', 'Build things').Add([FNative, FWeb]);
+  FBuild.Aliases.Add('b');
 
   // THE ROOT, mixing both kinds: one recursive option and two subcommands. Because
   // FVerbose is recursive, adding it once here is what puts it on every leaf.
@@ -184,7 +183,7 @@ begin
 end;
 
 // What every leaf has in common, including the option nobody declared on it.
-procedure TBuildTool.ShowCommon(const Parsed: ICommandLineParseResult);
+procedure TBuildTool.ShowCommon(const Parsed: IParseResult);
 begin
   Writeln('  command : ', Parsed.Command.FullPath);
 
@@ -198,7 +197,7 @@ begin
     Writeln('  target  : ', FTarget.ValueIn(Parsed));
 end;
 
-procedure TBuildTool.ReportNative(const Parsed: ICommandLineParseResult);
+procedure TBuildTool.ReportNative(const Parsed: IParseResult);
 begin
   ShowCommon(Parsed);
   // A string, statically. Reading it into an Integer would not compile.
@@ -209,13 +208,13 @@ begin
     Writeln('  min-sdk : ', FMinSdk.ValueIn(Parsed).ToString);
 end;
 
-procedure TBuildTool.ReportWeb(const Parsed: ICommandLineParseResult);
+procedure TBuildTool.ReportWeb(const Parsed: IParseResult);
 begin
   ShowCommon(Parsed);
   Writeln('  minify  : ', BoolToStr(FMinify.ValueIn(Parsed), True));
 end;
 
-procedure TBuildTool.ReportServe(const Parsed: ICommandLineParseResult);
+procedure TBuildTool.ReportServe(const Parsed: IParseResult);
 begin
   ShowCommon(Parsed);
   // An Integer, statically: it goes straight into arithmetic, with no conversion.

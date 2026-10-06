@@ -16,7 +16,7 @@ type
     First: ICommand;
     Second: ICommand;
     CountOpt: IOption<Integer>;
-    Parsed: ICommandLineParseResult;
+    Parsed: IParseResult;
     Output: TStringWriter;
     Error: TStringWriter;
     /// <summary>The actions that ran, in order.</summary>
@@ -97,13 +97,13 @@ Feature Invoking a parse result @commandline @invocation
       procedure(W: TInvocationWorld)
       begin
         W.First := CommandLine.Command('first').SetAction(
-          function(const Parsed: ICommandLineParseResult): Integer
+          function(const Parsed: IParseResult): Integer
           begin
             W.Track('first');
             Result := 11;
           end);
         W.Second := CommandLine.Command('second').SetAction(
-          function(const Parsed: ICommandLineParseResult): Integer
+          function(const Parsed: IParseResult): Integer
           begin
             W.Track('second');
             Result := 22;
@@ -131,7 +131,7 @@ Feature Invoking a parse result @commandline @invocation
         W.Root := CommandLine.Root('tool');
         W.Root.Add(W.CountOpt);
         W.Root.SetAction(
-          function(const Parsed: ICommandLineParseResult): Integer
+          function(const Parsed: IParseResult): Integer
           begin
             W.ReadCount := W.CountOpt.ValueIn(Parsed);
             Result := TCommandLineExit.Ok;
@@ -155,7 +155,7 @@ Feature Invoking a parse result @commandline @invocation
       begin
         W.Root := CommandLine.Root('tool');
         W.Root.SetAction(
-          procedure(const Parsed: ICommandLineParseResult)
+          procedure(const Parsed: IParseResult)
           begin
             W.Track('root');
           end);
@@ -178,7 +178,7 @@ Feature Invoking a parse result @commandline @invocation
       begin
         W.First := CommandLine.Command('first');
         W.Second := CommandLine.Command('second').SetAction(
-          function(const Parsed: ICommandLineParseResult): Integer
+          function(const Parsed: IParseResult): Integer
           begin
             W.Track('second');
             Result := 22;
@@ -204,13 +204,13 @@ Feature Invoking a parse result @commandline @invocation
       begin
         W.Root := CommandLine.Root('tool');
         W.Root.SetAction(
-          function(const Parsed: ICommandLineParseResult): Integer
+          function(const Parsed: IParseResult): Integer
           begin
             W.Track('one');
             Result := 1;
           end);
         W.Root.SetAction(
-          function(const Parsed: ICommandLineParseResult): Integer
+          function(const Parsed: IParseResult): Integer
           begin
             W.Track('two');
             Result := 2;
@@ -236,7 +236,7 @@ Feature Invoking a parse result @commandline @invocation
       begin
         W.Root := CommandLine.Root('tool', 'Does things');
         W.Root.SetAction(
-          function(const Parsed: ICommandLineParseResult): Integer
+          function(const Parsed: IParseResult): Integer
           begin
             W.Track('root');
             Result := 5;
@@ -266,7 +266,7 @@ Feature Invoking a parse result @commandline @invocation
       begin
         W.Root := CommandLine.Root('tool').WithVersion('2.0.0');
         W.Root.SetAction(
-          function(const Parsed: ICommandLineParseResult): Integer
+          function(const Parsed: IParseResult): Integer
           begin
             W.Track('root');
             Result := 5;
@@ -298,7 +298,7 @@ Feature Invoking a parse result @commandline @invocation
         W.Root := CommandLine.Root('tool');
         W.Root.Add(W.CountOpt);
         W.Root.SetAction(
-          function(const Parsed: ICommandLineParseResult): Integer
+          function(const Parsed: IParseResult): Integer
           begin
             W.Track('root');
             Result := 5;
@@ -352,7 +352,7 @@ Feature Invoking a parse result @commandline @invocation
       begin
         W.Root := CommandLine.Root('tool');
         W.Root.SetAction(
-          function(const Parsed: ICommandLineParseResult): Integer
+          function(const Parsed: IParseResult): Integer
           begin
             raise EActionFailed.Create('the work failed');
           end);
@@ -380,7 +380,7 @@ Feature Invoking a parse result @commandline @invocation
       begin
         W.Root := CommandLine.Root('tool');
         W.Root.SetAction(
-          function(const Parsed: ICommandLineParseResult): Integer
+          function(const Parsed: IParseResult): Integer
           begin
             raise EActionFailed.Create('the work failed');
           end);

@@ -53,15 +53,15 @@ begin
     end);
 
   try
-    var NameOpt := CommandLine.Option<string>('--name', 'A quien saludar').Required;
-    var ShoutOpt := CommandLine.Option<Boolean>('--shout', 'En mayusculas').WithAlias('-s');
+    var NameOpt := CommandLine.Option<string>('--name').Description('A quien saludar').Required;
+    var ShoutOpt := CommandLine.Option<Boolean>('--shout', ['-s']).Description('En mayusculas');
     B.RootCommand.WithVersion('2.0.0').Add([NameOpt, ShoutOpt]);
 
     // Solo una instancia: la segunda no llega a construir el contenedor.
     B.SingleInstance('daf-greet-tool');
 
     B.SetAction(
-      function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+      function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
       begin
         var Who := NameOpt.ValueIn(Parsed);
         if Who = 'boom' then
@@ -176,7 +176,7 @@ var Farewell := CommandLine.Command('farewell', 'Say goodbye');
 B.RootCommand.Add([Greet, Farewell]);
 
 B.SetAction(Greet,
-  function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+  function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
   begin
     Writeln(Services.GetRequiredService<IGreeter>.Greet);
     Result := TCliExit.Ok;
@@ -226,7 +226,7 @@ ni configuración, ni contenedor: la acción recibe solo el resultado del parse,
 var Init := CommandLine.Command('init', 'Escribe la configuración de partida');
 B.RootCommand.Add(Init);
 B.SetStandaloneAction(Init,
-  function(const Parsed: ICommandLineParseResult): Integer
+  function(const Parsed: IParseResult): Integer
   begin
     TFile.WriteAllText('appsettings.json', '{}');
     Result := TCliExit.Ok;
@@ -285,10 +285,10 @@ con la validación activa, como en `Development`, pedírselo al proveedor raíz 
 ### El resultado del parse, en el contenedor
 
 Cuando la invocación llega a una acción, el resultado del parse está también en el contenedor, como
-`ICommandLineParseResult`: el mismo objeto que recibe la acción. Un servicio lo pide por constructor:
+`IParseResult`: el mismo objeto que recibe la acción. Un servicio lo pide por constructor:
 
 ```pascal
-constructor TExportJob.Create(const Parsed: ICommandLineParseResult);
+constructor TExportJob.Create(const Parsed: IParseResult);
 begin
   inherited Create;
   FParsed := Parsed;
@@ -299,13 +299,13 @@ Y un registro puede depender de un argumento con una factory, que lee el resulta
 resolver:
 
 ```pascal
-var DryRun := CommandLine.Option<Boolean>('--dry-run', 'Informa, no escribe');
+var DryRun := CommandLine.Option<Boolean>('--dry-run').Description('Informa, no escribe');
 B.RootCommand.Add(DryRun);
 
 B.Services.AddSingleton<IWriter>(
   function(Provider: IServiceProvider): IWriter
   begin
-    if DryRun.ValueIn(Provider.GetRequiredService<ICommandLineParseResult>) then
+    if DryRun.ValueIn(Provider.GetRequiredService<IParseResult>) then
       Result := TReportWriter.Create
     else
       Result := TFileWriter.Create;
@@ -335,7 +335,7 @@ añadir después no se pueda leer:
 
 ```pascal
 var Parsed := B.ParseArgs;
-if Parsed.Succeeded and not Parsed.HelpRequested and not Parsed.VersionRequested then
+if Parsed.Succeeded and not Parsed.IsHelpRequested and not Parsed.IsVersionRequested then
   JsonConfig.AddFile(B.Configuration, 'web.json');
 ExitCode := B.Build.Run;
 ```

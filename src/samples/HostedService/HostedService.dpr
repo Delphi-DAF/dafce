@@ -42,7 +42,7 @@ begin
     // que espera aqui. Al volver, Run para el host y con el al worker.
     TShutdownHook.PresCtlCMsg := 'Pulse Ctrl+C para parar el servicio...';
     B.SetAction(
-      function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+      function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
       begin
         TShutdownHook.WaitForShutdown;
         Result := TCliExit.Ok;

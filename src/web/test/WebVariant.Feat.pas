@@ -580,7 +580,7 @@ Feature La variante Web de la familia @web @application-family
         W.CliBuilder := TCliApplication.CreateBuilder;
         W.CliBuilder.OnException(Policy);
         W.CliBuilder.SetAction(
-          function(const Services: IServiceProvider; const Parsed: ICommandLineParseResult): Integer
+          function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
           begin
             raise Exception.Create('el trabajo fallo');
           end);
