@@ -151,8 +151,10 @@ creyendo que ya está:
   pasar un número negativo, y `--port 80xyz` se aceptaba como `80`. Ahora `-5` es un valor, y
   `80xyz` se rechaza nombrando la opción, y leer la opción lanza ese error. Si algo se apoyaba en
   ese truncado, recibe un error donde antes recibía un número.
-- **No hay invocación.** Ninguno de los dos despacha a un handler: `Daf.CommandLine` parsea y
-  devuelve valores tipados, y qué hacer con ellos sigue siendo decisión de la aplicación.
+- **El despacho puede pasar a la gramática.** `Daf.CmdLn` devolvía los valores y dejaba el despacho a
+  la aplicación. En `Daf.CommandLine` cada comando puede declarar su acción con `SetAction`, e
+  `Invoke` sobre el resultado del parse ejecuta la del comando alcanzado y devuelve el código de
+  salida. El código que despacha a mano sobre `Parsed.Command` sigue funcionando.
 
 `Daf.Configuration.CommandLine` no se toca. Leer la línea de comandos como **fuente de
 configuración** —`--Logging:LogLevel=Debug` pisando `appsettings.json`— es otro trabajo y no
