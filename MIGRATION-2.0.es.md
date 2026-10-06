@@ -134,7 +134,7 @@ La parte mecánica, término a término:
 | `Params['x'].AsString` / `.AsInteger` / `.AsBoolean` | `XOpt.ValueIn(Parsed)`, tipado por la propia opción |
 | `Params.GetSection('build')['output']` | `OutputOpt.ValueIn(Parsed)`: no hay sección que navegar |
 | `Params.Command = 'build'` | `Parsed.Command`, un `ICommand` — compáralo con el objeto que declaraste |
-| `Parser.Parse(…) = nil` | `Parsed.Succeeded` en falso, con `Parsed.Errors` y `Parsed.ErrorText` |
+| `Parser.Parse(…) = nil` | `Parsed.Succeeded` en falso. `Parsed.Errors` lleva cada error con el resultado de su símbolo, y `Parsed.ErrorText` su texto |
 
 **Lo que no pasa igual.** Se dice porque una migración que solo enseña la mitad fácil deja al lector
 creyendo que ya está:
@@ -149,8 +149,8 @@ creyendo que ya está:
   sí.
 - **Dos limitaciones del motor de tipos viejo ya no están, y su resultado cambió.** No se podía
   pasar un número negativo, y `--port 80xyz` se aceptaba como `80`. Ahora `-5` es un valor, y
-  `80xyz` se rechaza nombrando la opción. Si algo se apoyaba en ese truncado, recibe un error donde
-  antes recibía un número.
+  `80xyz` se rechaza nombrando la opción, y leer la opción lanza ese error. Si algo se apoyaba en
+  ese truncado, recibe un error donde antes recibía un número.
 - **No hay invocación.** Ninguno de los dos despacha a un handler: `Daf.CommandLine` parsea y
   devuelve valores tipados, y qué hacer con ellos sigue siendo decisión de la aplicación.
 

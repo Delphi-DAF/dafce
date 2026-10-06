@@ -29,6 +29,7 @@ type
     ReadVerbose: Boolean;
     ReadAmount: Integer;
     ReadCount: Integer;
+    Report: string;
     procedure BuildGrammar;
     procedure BuildCalc;
   end;
@@ -36,6 +37,7 @@ type
 implementation
 
 uses
+  System.SysUtils,
   Daf.MiniSpec;
 
 { TGrammarWorld }
@@ -303,7 +305,13 @@ Feature Command line grammar @commandline @grammar
       procedure(W: TGrammarWorld)
       begin
         W.Parsed := W.Calc.Parse(['--amount', '80xyz']);
-        W.ReadAmount := W.AmountOpt.ValueIn(W.Parsed);
+        try
+          W.ReadAmount := W.AmountOpt.ValueIn(W.Parsed);
+          W.Report := 'read ' + IntToStr(W.ReadAmount);
+        except
+          on E: Exception do
+            W.Report := E.ClassName + ': ' + E.Message;
+        end;
       end)
     .&Then('the parse fails naming the argument and the value received',
       procedure(W: TGrammarWorld)
@@ -312,11 +320,11 @@ Feature Command line grammar @commandline @grammar
         Expect(W.Parsed.ErrorText).ToContain('80xyz');
         Expect(W.Parsed.ErrorText).ToContain('--amount');
       end)
-    .&And('80 is not accepted: an invalid invocation does not produce a value',
+    .&And('80 is not accepted: reading the option raises the error, although the invocation named it',
       procedure(W: TGrammarWorld)
       begin
-        Expect(W.ReadAmount).ToNotEqual(80);
-        Expect(W.Parsed.WasProvided(W.AmountOpt)).ToBeFalse;
+        Expect(W.Report).ToEqual('ECommandLine: "80xyz" is not a valid integer for --amount');
+        Expect(W.Parsed.WasProvided(W.AmountOpt)).ToBeTrue;
       end);
 
 end.

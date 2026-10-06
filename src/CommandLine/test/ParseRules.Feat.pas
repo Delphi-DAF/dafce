@@ -60,6 +60,8 @@ type
     destructor Destroy; override;
     function Configuration: TInvocationConfiguration;
     function RanText: string;
+    /// <summary>What reading --port answers, or the exception it raises, as text.</summary>
+    function ReadPort: string;
     procedure BuildFlat;
     procedure BuildGroup;
     procedure BuildChecked;
@@ -112,6 +114,16 @@ begin
     Result := '<nothing>'
   else
     Result := Ran;
+end;
+
+function TParseRulesWorld.ReadPort: string;
+begin
+  try
+    Result := Format('port=%d', [PortOpt.ValueIn(Parsed)]);
+  except
+    on E: Exception do
+      Result := E.ClassName + ': ' + E.Message;
+  end;
 end;
 
 procedure TParseRulesWorld.BuildFlat;
@@ -211,8 +223,8 @@ Feature Command line parse rules @commandline @parserules
 
 .Rule('the errors of an invocation come out in a fixed order')
 
-  .Scenario('Errors come out in the order of their tokens, and what is missing after them')
-    .Given('a command with an integer option and a required one',
+  .Scenario('The errors of the tokens come first, then each option in the order it was declared')
+    .Given('a command with an integer option and a required one, declared before it',
       procedure(W: TParseRulesWorld)
       begin
         W.BuildFlat;
@@ -222,17 +234,17 @@ Feature Command line parse rules @commandline @parserules
       begin
         W.Parsed := W.Flat.Parse(['--port', 'x', '--bogus', 'extra']);
       end)
-    .&Then('the three come out in the order they were written, and the missing option last',
+    .&Then('the tokens nobody claimed come first, then the missing option, then the value that does not convert',
       procedure(W: TParseRulesWorld)
       begin
         Expect(W.Parsed.ErrorText).ToEqual(Lines([
-          '"x" is not a valid integer for --port',
           'Unknown option "--bogus" for tool',
           'Unexpected argument "extra" for tool',
-          'Option "--seed" is required']));
+          'Option "--seed" is required',
+          '"x" is not a valid integer for --port']));
       end)
 
-  .Scenario('A missing subcommand comes after the errors of the tokens and before a missing option')
+  .Scenario('A missing subcommand comes first, ahead of the errors of the tokens')
     .Given('a root that only groups, with a required option',
       procedure(W: TParseRulesWorld)
       begin
@@ -243,12 +255,12 @@ Feature Command line parse rules @commandline @parserules
       begin
         W.Parsed := W.Group.Parse(['--bogus']);
       end)
-    .&Then('the unknown option comes first, then the missing subcommand, then the missing option',
+    .&Then('the missing subcommand comes first, then the unknown option, then the missing option',
       procedure(W: TParseRulesWorld)
       begin
         Expect(W.Parsed.ErrorText).ToEqual(Lines([
-          'Unknown option "--bogus" for tool',
           'Command "tool" requires a subcommand: build, serve',
+          'Unknown option "--bogus" for tool',
           'Option "--seed" is required']));
       end)
 
@@ -312,7 +324,7 @@ Feature Command line parse rules @commandline @parserules
         Expect(W.Report).ToEqual('runs=0');
       end)
 
-.Rule('a repeated option fails for the first check its values meet')
+.Rule('a repeated option fails for the repetition, which is checked before its values convert')
 
   .Scenario('A repeated option whose second value is invalid fails for the repetition')
     .Given('an option that admits one value',
@@ -324,16 +336,16 @@ Feature Command line parse rules @commandline @parserules
       procedure(W: TParseRulesWorld)
       begin
         W.Parsed := W.Flat.Parse(['--seed', '1', '--port', '1', '--port', 'x']);
-        W.Report := Format('port=%d', [W.PortOpt.ValueIn(W.Parsed)]);
+        W.Report := W.ReadPort;
       end)
-    .&Then('the only error is the repetition, and the first value is the one read',
+    .&Then('the only error is the repetition, and reading the option raises it',
       procedure(W: TParseRulesWorld)
       begin
         Expect(W.Parsed.ErrorText).ToEqual('Option "--port" was given more than once, and it takes exactly one value');
-        Expect(W.Report).ToEqual('port=1');
+        Expect(W.Report).ToEqual('ECommandLine: Option "--port" was given more than once, and it takes exactly one value');
       end)
 
-  .Scenario('A repeated option whose first value is invalid fails for the conversion, and keeps the second')
+  .Scenario('A repeated option whose first value is invalid fails for the repetition too')
     .Given('an option that admits one value',
       procedure(W: TParseRulesWorld)
       begin
@@ -343,18 +355,18 @@ Feature Command line parse rules @commandline @parserules
       procedure(W: TParseRulesWorld)
       begin
         W.Parsed := W.Flat.Parse(['--seed', '1', '--port', 'x', '--port', '2']);
-        W.Report := Format('port=%d', [W.PortOpt.ValueIn(W.Parsed)]);
+        W.Report := W.ReadPort;
       end)
-    .&Then('the only error is the conversion, and the second value is the one read',
+    .&Then('the arity is checked before the conversion: the only error is the repetition, and reading raises it',
       procedure(W: TParseRulesWorld)
       begin
-        Expect(W.Parsed.ErrorText).ToEqual('"x" is not a valid integer for --port');
-        Expect(W.Report).ToEqual('port=2');
+        Expect(W.Parsed.ErrorText).ToEqual('Option "--port" was given more than once, and it takes exactly one value');
+        Expect(W.Report).ToEqual('ECommandLine: Option "--port" was given more than once, and it takes exactly one value');
       end)
 
-.Rule('a required symbol whose value does not convert is also reported as missing')
+.Rule('a required symbol whose value does not convert has a result, so it is not reported as missing')
 
-  .Scenario('A required option whose value does not convert fails twice')
+  .Scenario('A required option whose value does not convert fails once')
     .Given('a required integer option',
       procedure(W: TParseRulesWorld)
       begin
@@ -365,15 +377,13 @@ Feature Command line parse rules @commandline @parserules
       begin
         W.Parsed := W.Flat.Parse(['--seed', 'x']);
       end)
-    .&Then('the conversion fails, and the option is reported as missing too',
+    .&Then('the only error is the conversion',
       procedure(W: TParseRulesWorld)
       begin
-        Expect(W.Parsed.ErrorText).ToEqual(Lines([
-          '"x" is not a valid integer for --seed',
-          'Option "--seed" is required']));
+        Expect(W.Parsed.ErrorText).ToEqual('"x" is not a valid integer for --seed');
       end)
 
-  .Scenario('A required argument whose value does not convert fails twice')
+  .Scenario('A required argument whose value does not convert fails once')
     .Given('an integer argument, which demands its value',
       procedure(W: TParseRulesWorld)
       begin
@@ -384,12 +394,10 @@ Feature Command line parse rules @commandline @parserules
       begin
         W.Parsed := W.Calc.Parse(['abc']);
       end)
-    .&Then('the conversion fails, and the argument is reported as missing too',
+    .&Then('the only error is the conversion',
       procedure(W: TParseRulesWorld)
       begin
-        Expect(W.Parsed.ErrorText).ToEqual(Lines([
-          '"abc" is not a valid integer for count',
-          'Argument "count" is required']));
+        Expect(W.Parsed.ErrorText).ToEqual('"abc" is not a valid integer for count');
       end)
 
 .Rule('--help and --version end the parse where they appear')
@@ -537,7 +545,7 @@ Feature Command line parse rules @commandline @parserules
         Expect(W.Report).ToEqual('force=True source=a.txt');
       end)
 
-  .Scenario('A flag followed by 0 takes it as its value')
+  .Scenario('A flag followed by 0 leaves it as a positional, because 0 is not a boolean')
     .Given('a flag and a positional argument',
       procedure(W: TParseRulesWorld)
       begin
@@ -550,11 +558,11 @@ Feature Command line parse rules @commandline @parserules
         W.Report := Format('force=%s source=%s',
           [BoolToStr(W.ForceOpt.ValueIn(W.Parsed), True), W.SourceArg.ValueIn(W.Parsed)]);
       end)
-    .&Then('0 is the value of the flag, and the file name goes to the positional',
+    .&Then('the flag is on, 0 goes to the positional, and the file name behind it is unexpected',
       procedure(W: TParseRulesWorld)
       begin
-        Expect(W.Parsed.ErrorText).ToEqual('');
-        Expect(W.Report).ToEqual('force=False source=a.txt');
+        Expect(W.Parsed.ErrorText).ToEqual('Unexpected argument "a.txt" for copy');
+        Expect(W.Report).ToEqual('force=True source=0');
       end)
 
 .Rule('positionals are handed out in order, and -- ends the options once')

@@ -105,6 +105,8 @@
         <DCCReference Include="Daf.CommandLine.Tokens.pas"/>
         <DCCReference Include="Daf.CommandLine.Values.pas"/>
         <DCCReference Include="Daf.CommandLine.Help.pas"/>
+        <DCCReference Include="Daf.CommandLine.Parsing.pas"/>
+        <DCCReference Include="Daf.CommandLine.Resources.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\source.optset</DependentOn>

@@ -122,7 +122,8 @@ type
 implementation
 
 uses
-  System.IOUtils;
+  System.IOUtils,
+  Daf.CommandLine.Resources;
 
 // The first `=` or `:`, whichever comes first -- and only that first one delimits, so a
 // value is free to contain either character: `--url:http://host:8080` keeps its value
@@ -295,8 +296,7 @@ begin
       // three changes removing.
       Result.Tokens := nil;
       Result.Changed := True;
-      Result.Error := Format('Unknown option "%s" inside the group "%s", so nothing in the group is taken',
-        [ShortPrefix + Letter, Token]);
+      Result.Error := Format(SUnknownOptionInGroup, [ShortPrefix + Letter, Token]);
       Exit;
     end;
     Parts := Parts + [ShortPrefix + Letter];
@@ -369,8 +369,7 @@ begin
   Result := nil;
   if Depth > TResponseFiles.MaxDepth then
   begin
-    Errors := Errors + [Format('Response file "%s" is nested deeper than %d, which is what a file naming itself looks like',
-      [Path, TResponseFiles.MaxDepth])];
+    Errors := Errors + [Format(SResponseFileTooDeep, [Path, TResponseFiles.MaxDepth])];
     Exit;
   end;
   if not TFile.Exists(Path) then
@@ -378,7 +377,7 @@ begin
     // A file that is not there is an invalid invocation and not a literal token:
     // letting it through turns a typo into an argument with an at sign in front of it,
     // travelling all the way to wherever it ends up used.
-    Errors := Errors + [Format('Response file "%s" does not exist', [Path])];
+    Errors := Errors + [Format(SResponseFileMissing, [Path])];
     Exit;
   end;
   try
@@ -386,7 +385,7 @@ begin
   except
     on E: Exception do
     begin
-      Errors := Errors + [Format('Response file "%s" could not be read: %s', [Path, E.Message])];
+      Errors := Errors + [Format(SResponseFileUnreadable, [Path, E.Message])];
       Exit;
     end;
   end;

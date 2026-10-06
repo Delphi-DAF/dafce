@@ -35,6 +35,8 @@ contains
   Daf.CommandLine in 'Daf.CommandLine.pas',
   Daf.CommandLine.Tokens in 'Daf.CommandLine.Tokens.pas',
   Daf.CommandLine.Values in 'Daf.CommandLine.Values.pas',
-  Daf.CommandLine.Help in 'Daf.CommandLine.Help.pas';
+  Daf.CommandLine.Help in 'Daf.CommandLine.Help.pas',
+  Daf.CommandLine.Parsing in 'Daf.CommandLine.Parsing.pas',
+  Daf.CommandLine.Resources in 'Daf.CommandLine.Resources.pas';
 
 end.

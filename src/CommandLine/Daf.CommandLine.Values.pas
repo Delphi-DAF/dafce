@@ -52,6 +52,10 @@ type
     /// </summary>
     class function AcceptedValuesOf(TypeInf: PTypeInfo): TArray<string>; static;
     /// <summary>True when <c>Raw</c> denotes a boolean, and only then.</summary>
+    /// <remarks>
+    ///   <c>true</c> and <c>false</c>, in any casing, which is what .NET's <c>bool.TryParse</c> takes.
+    ///   <c>1</c> and <c>0</c> are not booleans: behind a flag they are the next positional.
+    /// </remarks>
     class function IsBooleanLiteral(const Raw: string): Boolean; static;
     /// <summary>Converts, or answers False. Never converts partially.</summary>
     class function TryParse(TypeInf: PTypeInfo; const Raw: string; out Value: TValue): Boolean; static;
@@ -76,7 +80,7 @@ end;
 class function TCommandLineValue.IsEnum(TypeInf: PTypeInfo): Boolean;
 begin
   // Boolean is an enumeration too, and it is NOT one of these: it is the flag, with a
-  // parse of its own that also takes 1 and 0.
+  // parse of its own.
   Result := (TypeInf <> nil) and (TypeInf.Kind = tkEnumeration) and not IsFlag(TypeInf) and
     (TypeInf <> System.TypeInfo(ByteBool)) and (TypeInf <> System.TypeInfo(WordBool)) and
     (TypeInf <> System.TypeInfo(LongBool));
@@ -168,7 +172,7 @@ end;
 
 class function TCommandLineValue.IsBooleanLiteral(const Raw: string): Boolean;
 begin
-  Result := SameText(Raw, 'true') or SameText(Raw, 'false') or (Raw = '1') or (Raw = '0');
+  Result := SameText(Raw, 'true') or SameText(Raw, 'false');
 end;
 
 // The braces StringToGUID demands are optional here: a command line writes an
@@ -224,12 +228,12 @@ begin
 
   if IsFlag(TypeInf) then
   begin
-    if SameText(Raw, 'true') or (Raw = '1') then
+    if SameText(Raw, 'true') then
     begin
       Value := TValue.From<Boolean>(True);
       Exit(True);
     end;
-    if SameText(Raw, 'false') or (Raw = '0') then
+    if SameText(Raw, 'false') then
     begin
       Value := TValue.From<Boolean>(False);
       Exit(True);

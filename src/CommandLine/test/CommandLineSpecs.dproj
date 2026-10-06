@@ -107,6 +107,7 @@
         <DCCReference Include="FrozenGrammar.Feat.pas"/>
         <DCCReference Include="HelpActions.Feat.pas"/>
         <DCCReference Include="ParseRules.Feat.pas"/>
+        <DCCReference Include="Results.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>

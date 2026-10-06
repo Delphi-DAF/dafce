@@ -78,10 +78,11 @@ uses
   Daf.MiniSpec;
 
 var
-  // How many times a computed default has run. A counter of the unit and not a field
-  // of the world: what has to be observed is that the calculation did NOT run, and a
+  // How many times each computed default has run. Counters of the unit and not fields
+  // of the world: what has to be observed is that a calculation did NOT run, and a
   // counter the closure reaches without capturing the world is the plainest way to.
-  DefaultRuns: Integer;
+  OutRuns: Integer;
+  SeedRuns: Integer;
 
 { TValuesWorld }
 
@@ -142,7 +143,8 @@ end;
 
 procedure TValuesWorld.BuildComputed;
 begin
-  DefaultRuns := 0;
+  OutRuns := 0;
+  SeedRuns := 0;
   // A default that depends on the surroundings cannot be written as a constant in the
   // grammar, which runs before there is anything to know. The text next to
   // it is what the help shows, because the help does NOT run the calculation.
@@ -150,14 +152,14 @@ begin
     .DefaultValueFactory(
     function: string
     begin
-      Inc(DefaultRuns);
+      Inc(OutRuns);
       Result := 'computed-place';
     end, 'the current directory');
   SeedOpt := CommandLine.Option<Integer>('--seed').Description('Starting point')
     .DefaultValueFactory(
     function: Integer
     begin
-      Inc(DefaultRuns);
+      Inc(SeedRuns);
       Result := 7;
     end);
   Computed := CommandLine.Root('tool', 'A tool');
@@ -196,7 +198,13 @@ Feature Command line values @commandline @values
       procedure(W: TValuesWorld)
       begin
         W.Parsed := W.Arity.Parse(['--port', '1', '--port', '2']);
-        W.ReadPort := W.PortOpt.ValueIn(W.Parsed);
+        try
+          W.ReadPort := W.PortOpt.ValueIn(W.Parsed);
+          W.Report := 'read ' + IntToStr(W.ReadPort);
+        except
+          on E: Exception do
+            W.Report := E.ClassName + ': ' + E.Message;
+        end;
       end)
     .&Then('the parse fails naming the option',
       procedure(W: TValuesWorld)
@@ -205,12 +213,10 @@ Feature Command line values @commandline @values
         Expect(W.Parsed.ErrorText).ToContain('--port');
         Expect(W.Parsed.ErrorText).ToContain('more than once');
       end)
-    .&And('it does not quietly settle on either of the two values',
+    .&And('it does not quietly settle on either of the two values: reading it raises the error',
       procedure(W: TValuesWorld)
       begin
-        // 2 is the value the invocation gave last, so this is what separates "the parse
-        // failed" from "the parse failed and no value was settled on anyway".
-        Expect(W.ReadPort).ToNotEqual(2);
+        Expect(W.Report).ToEqual('ECommandLine: Option "--port" was given more than once, and it takes exactly one value');
       end)
 
   .Scenario('An option that admits several values')
@@ -591,7 +597,7 @@ Feature Command line values @commandline @values
       begin
         Expect(W.Parsed.ErrorText).ToEqual('');
         Expect(W.ReadOut).ToEqual('computed-place');
-        Expect(DefaultRuns).ToEqual(1);
+        Expect(OutRuns).ToEqual(1);
       end)
 
   .Scenario('The calculation does not run when the invocation brings the value')
@@ -609,10 +615,43 @@ Feature Command line values @commandline @values
     .&Then('the value read is the invocation''s and the calculation never ran',
       procedure(W: TValuesWorld)
       begin
-        // The part that matters: a default that opens a file or reads the environment
-        // must not be paid for when nobody is going to use it.
         Expect(W.ReadOut).ToEqual('given');
-        Expect(DefaultRuns).ToEqual(0);
+        Expect(OutRuns).ToEqual(0);
+      end)
+
+  .Scenario('The calculation runs at parse, even when nobody reads the value')
+    .Given('an option whose default value is declared as a calculation',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildComputed;
+      end)
+    .When('an invocation that does not name it is parsed, and nothing is read',
+      procedure(W: TValuesWorld)
+      begin
+        W.Parsed := W.Computed.Parse([]);
+      end)
+    .&Then('the calculation has run once, because the default is part of the parse result',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(OutRuns).ToEqual(1);
+      end)
+
+  .Scenario('The calculation runs on every parse')
+    .Given('an option whose default value is declared as a calculation',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildComputed;
+      end)
+    .When('two invocations that do not name it are parsed',
+      procedure(W: TValuesWorld)
+      begin
+        W.Computed.Parse([]);
+        W.Parsed := W.Computed.Parse([]);
+      end)
+    .&Then('the calculation has run once for each, and nothing was kept from the first',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(OutRuns).ToEqual(2);
       end)
 
   .Scenario('The help shows the text declared with the calculation, and does not run it')
@@ -637,7 +676,7 @@ Feature Command line values @commandline @values
       begin
         Expect(W.HelpText).ToContain('[default: the current directory]');
         Expect(W.SeedDefault).ToEqual('not shown');
-        Expect(DefaultRuns).ToEqual(0);
+        Expect(OutRuns + SeedRuns).ToEqual(0);
       end)
 
 .Rule('-- ends the options')

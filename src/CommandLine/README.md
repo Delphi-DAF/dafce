@@ -41,7 +41,10 @@ run time.
 | `IOption<T>` | A named, dashed value — `--file main.pas`. Also the key it is read with |
 | `IArgument<T>` | A **positional** value, identified by its place: `mytool build main.pas` |
 | `TArgumentArity` | How many values a symbol admits, minimum and maximum |
-| `IParseResult` | What an invocation produced: the leaf reached, the values, the errors, the help, the version. `Invoke` runs it |
+| `IParseResult` | What an invocation produced: the tree of results, the leaf reached, the errors, the help, the version. `Invoke` runs it |
+| `ICommandResult`, `IOptionResult`, `IArgumentResult` | The result of one symbol the invocation reached: its tokens, its errors, its parent |
+| `TParseError` | One error of the parse, and the result of the symbol it belongs to |
+| `TToken` | One token of the invocation, as the parse read it |
 | `TCommandAction` | What a command does when an invocation reaches it: receives the parse result, answers the exit code |
 | `TInvocationConfiguration` | Where `Invoke` writes, and whether a default handler catches what the action lets escape |
 | `TCommandLineExit` | The codes `Invoke` answers when the action is not the one deciding |
@@ -95,8 +98,70 @@ var Path  := OutOpt.ValueIn(Parsed);        // one value, statically typed
 var Files := FilesOpt.ValuesIn(Parsed);     // TArray<string>, for an arity that admits many
 ```
 
-`IParseResult.WasProvided` tells **absent** from **present but empty**: `--file ''` is not the same
-answer as no `--file` at all.
+What `ValueIn` answers depends on what the parse made of the symbol:
+
+| The symbol | `ValueIn` answers |
+|---|---|
+| carried by the invocation | its value |
+| not carried, with a declared default, on a command the invocation went through | the declared default |
+| not carried, in any other case | the default of its **type**: `0`, `''`, an empty array |
+| refused by the parse: a value that does not convert, a repetition, a required option that is missing | nothing: it raises `ECommandLine` with that error |
+
+The parse validates the command reached whole, and the commands above it only in their recursive
+options and in the ones with a default. An option of a parent that is neither, written before the
+subcommand, is taken but not validated: `tool --port x run` parses, and reading `--port` raises
+`"x" is not a valid integer for --port`.
+
+`ValueIn` also takes the result of a symbol — `PortOpt.ValueIn(Parsed.CommandResult)` — and answers
+the same: the tree is one, whichever node asks. `RequiredValueIn` reads the same way and raises when
+the symbol has no result at all. On an argument with no result it answers what .NET's
+`GetRequiredValue` answers for the type: it raises for a `string`, a class or an interface, and any
+other type gives its default.
+
+`IParseResult.WasProvided` says whether the invocation **named** the symbol. `--file ''` is not the
+same answer as no `--file` at all, and `--port 80xyz` was provided although reading it raises.
+
+---
+
+## The parse result is a tree
+
+Every command the invocation reached has a result, from the root to the innermost one, and so does
+every option and argument it carried or that took its default. `Parsed.RootCommandResult` is where
+the tree starts and `Parsed.CommandResult` is the innermost command. `GetResult` finds the result of
+a declared symbol, on the parse result or on any of its nodes, and answers `nil` when there is none.
+
+```pascal
+var Port := Parsed.GetResult(PortOpt);         // an IOptionResult, or nil
+if (Port <> nil) and not Port.IsImplicit then
+  Writeln('named ', Port.IdentifierTokenCount, ' time(s), with ', Length(Port.Tokens), ' value(s)');
+```
+
+| A result | answers |
+|---|---|
+| `Parent` | the result of the command it hangs from; `nil` for the root |
+| `Tokens` | the tokens of the invocation that produced it |
+| `Errors` | the errors of the parse that belong to it |
+| `Children`, on a command | the results that hang from it |
+| `IsImplicit`, on an option | the invocation did not name it: the parse created it for its default, or for a required option that is missing, and then it carries that error |
+| `IsImplicit`, on an argument | it took its default |
+| `IdentifierToken`, `IdentifierTokenCount`, on an option | the first token that named it, and how many times it was named |
+
+Each error says whose it is: `TParseError.SymbolResult` is the result of its symbol, and `nil` for an
+error of reading the invocation, such as a response file that does not exist. A token that nothing
+claims is an error of the command reached.
+
+The errors come out in this order:
+
+1. a missing subcommand;
+2. the errors of reading the invocation;
+3. the tokens nothing claimed, in the order they were written;
+4. the validation, from the innermost command up to the root: each command's options in the order
+   they were declared, then its arguments.
+
+An option's arity is checked before its value is converted, and a failed one is all that option
+reports: repeated with two values, it fails for the repetition whatever the values are. A required
+option or argument whose value does not convert has a result, so it reports the conversion and not
+that it is missing.
 
 ---
 
@@ -152,7 +217,8 @@ anybody writing them twice — and they are matched without regard to case, as i
 `.AcceptOnlyFromAmong([...])` is the same closure for a type that does not express it.
 
 A `Boolean` option is a flag: naming it is enough, and `--flag false`, `--flag=false` and
-`--flag true` all work.
+`--flag true` all work. Only `true` and `false`, in any casing, are booleans: `--flag 0` names the
+flag, and the `0` goes to the next positional.
 
 A **collection** is one value made of the tokens it was given, so reading it answers the whole array:
 
@@ -237,7 +303,8 @@ Delphi has no way of saying "the element of `T`" in an interface. It is refused 
 ## A default value that is a calculation
 
 `DefaultValue(Value)` takes a constant, evaluated when the grammar is declared. `DefaultValueFactory`
-takes a calculation, evaluated **only if the invocation did not carry the symbol**:
+takes a calculation, which the parse runs **when the invocation reaches the command that declares the
+symbol and does not carry it**:
 
 ```pascal
 OutOpt := CommandLine.Option<string>('--out').Description('Where to write')
@@ -252,8 +319,8 @@ A default that depends on the surroundings cannot be written as a constant in a 
 before there is anything to know. Without this, the application leaves the default empty and fills it
 in after reading — and then the help shows a default the program does not use.
 
-The calculation runs at most once, and **the help does not run it**: it shows the text declared beside
-it, and no default at all when there is none.
+Each parse runs it once, whether the value is read afterwards or not, and **the help does not run
+it**: it shows the text declared beside it, and no default at all when there is none.
 
 ---
 
@@ -532,6 +599,10 @@ does not fit the grammar, and 1 stays for an action that failed.
 handling of the process termination — no Ctrl+C, no grace period before terminating.
 `TInvocationConfiguration` carries the output, the error and the default exception handler, and
 nothing else.
+
+**6 · Reading a refused value raises `ECommandLine`.** .NET raises `InvalidOperationException`. Here
+it is the module's own exception, the one it raises for a grammar declared wrong or changed once
+frozen.
 
 ---
 

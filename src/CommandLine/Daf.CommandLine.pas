@@ -76,6 +76,10 @@ type
   TUntypedValidator = reference to function(const Value: TValue; out Error: string): Boolean;
 
   IParseResult = interface;
+  ISymbolResult = interface;
+  ICommandResult = interface;
+  IOptionResult = interface;
+  IArgumentResult = interface;
 
   /// <summary>
   ///   What a command does when an invocation reaches it. It receives the parse result, reads the
@@ -156,6 +160,8 @@ type
     function DemandsValue: Boolean;
     /// <summary>Says the arity in words, for an error message that has to name it.</summary>
     function Describe: string;
+    class operator Equal(const A, B: TArgumentArity): Boolean;
+    class operator NotEqual(const A, B: TArgumentArity): Boolean;
   end;
 
   /// <summary>A collection a symbol owns: its aliases.</summary>
@@ -223,6 +229,27 @@ type
     ///   that will not say what failed turns a mistake into a riddle.
     /// </remarks>
     function IsHidden: Boolean;
+    /// <summary>The commands it was added to, in the order they took it.</summary>
+    /// <remarks>
+    ///   They are held weakly: a symbol does not keep its commands alive, so a grammar dropped by
+    ///   whoever built it is freed whole.
+    /// </remarks>
+    function Parents: TArray<ISymbol>;
+  end;
+
+  {$SCOPEDENUMS ON}
+  /// <summary>What a token of the invocation turned out to be.</summary>
+  TTokenType = (Argument, Command, Option, DoubleDash, Directive);
+  {$SCOPEDENUMS OFF}
+
+  /// <summary>One token of the invocation, as the parse read it.</summary>
+  TToken = record
+    Value: string;
+    TokenType: TTokenType;
+    /// <summary>The symbol the token reaches; <c>nil</c> when it reaches none.</summary>
+    Symbol: ISymbol;
+    class operator Equal(const A, B: TToken): Boolean;
+    class operator NotEqual(const A, B: TToken): Boolean;
   end;
 
   /// <summary>A symbol that carries a value, and therefore a declared type.</summary>
@@ -286,6 +313,8 @@ type
     function Options: TArray<IOption>;
     function Arguments: TArray<IArgument>;
     function Subcommands: TArray<ICommand>;
+    /// <summary>Everything declared on it: its subcommands, then its options, then its arguments.</summary>
+    function Children: TArray<ISymbol>;
     /// <summary>How this command is invoked, e.g. <c>mytool build</c>.</summary>
     function FullPath: string;
     /// <summary>True when a token matching nothing is a parse error, which is the default.</summary>
@@ -382,12 +411,96 @@ type
     property VersionAction: TCommandAction read GetVersionAction write SetVersionAction;
   end;
 
+  /// <summary>One error of the parse, and the result of the symbol it belongs to.</summary>
+  TParseError = record
+    Message: string;
+    /// <summary>
+    ///   <c>nil</c> for an error of reading the invocation itself, such as a response file that does
+    ///   not exist: it happened before any symbol was reached.
+    /// </summary>
+    SymbolResult: ISymbolResult;
+  end;
+
+  /// <summary>What the parse made of one symbol: a node of the tree the parse result is.</summary>
+  /// <remarks>
+  ///   A result is a view of the parse that produced it. Kept beyond the parse result, it still says
+  ///   its own symbol and tokens, and answers nothing about the rest of the tree.
+  /// </remarks>
+  ISymbolResult = interface
+    ['{7C4B1A20-0009-4F31-9C10-4B0E2D5A0009}']
+    /// <summary>The result of the command it hangs from; <c>nil</c> for the root.</summary>
+    /// <remarks>
+    ///   Held weakly, as the tree holds its children. A chain such as <c>X.Parent.Tokens</c> keeps the
+    ///   parent alive in a hidden temporary until the routine that writes it returns.
+    /// </remarks>
+    function Parent: ISymbolResult;
+    /// <summary>The tokens of the invocation that produced it.</summary>
+    function Tokens: TArray<TToken>;
+    /// <summary>The errors of the parse that belong to it, in the order they were found.</summary>
+    function Errors: TArray<TParseError>;
+    /// <summary>Adds an error of its own to the parse.</summary>
+    procedure AddError(const Message: string);
+    /// <summary>The result of a symbol anywhere in the tree; <c>nil</c> when it has none.</summary>
+    function GetResult(const Option: IOption): IOptionResult; overload;
+    function GetResult(const Argument: IArgument): IArgumentResult; overload;
+    function GetResult(const Command: ICommand): ICommandResult; overload;
+  end;
+
+  ICommandResult = interface(ISymbolResult)
+    ['{7C4B1A20-000A-4F31-9C10-4B0E2D5A000A}']
+    function Command: ICommand;
+    /// <summary>The token that named the command. The root's carries its name.</summary>
+    function IdentifierToken: TToken;
+    /// <summary>The results that hang from it, in the order the parse created them.</summary>
+    function Children: TArray<ISymbolResult>;
+  end;
+
+  IOptionResult = interface(ISymbolResult)
+    ['{7C4B1A20-000B-4F31-9C10-4B0E2D5A000B}']
+    function Option: IOption;
+    /// <summary>
+    ///   True when the invocation did not name it: the parse created it for a default, or for a
+    ///   required option that is missing, and then it carries that error.
+    /// </summary>
+    function IsImplicit: Boolean;
+    /// <summary>The token that named it first; null when it is implicit.</summary>
+    function IdentifierToken: TNullable<TToken>;
+    /// <summary>How many times the invocation named it.</summary>
+    function IdentifierTokenCount: Integer;
+  end;
+
+  IArgumentResult = interface(ISymbolResult)
+    ['{7C4B1A20-000C-4F31-9C10-4B0E2D5A000C}']
+    function Argument: IArgument;
+    /// <summary>True when it took its default because the invocation carried no value for it.</summary>
+    /// <remarks>
+    ///   A required argument that is missing also has a result, with that error, and it is NOT
+    ///   implicit: the same as in .NET, where only the default makes an argument result implicit.
+    /// </remarks>
+    function IsImplicit: Boolean;
+  end;
+
   IParseResult = interface
     ['{7C4B1A20-0007-4F31-9C10-4B0E2D5A0007}']
     /// <summary>The leaf command the invocation reached.</summary>
     function Command: ICommand;
+    /// <summary>The result of the command the invocation reached.</summary>
+    function CommandResult: ICommandResult;
+    /// <summary>The result of the root, where the tree starts.</summary>
+    function RootCommandResult: ICommandResult;
+    /// <summary>The tokens the invocation was read into, response files already expanded.</summary>
+    function Tokens: TArray<TToken>;
+    function GetResult(const Option: IOption): IOptionResult; overload;
+    function GetResult(const Argument: IArgument): IArgumentResult; overload;
+    function GetResult(const Command: ICommand): ICommandResult; overload;
     function Succeeded: Boolean;
-    function Errors: TArray<string>;
+    /// <summary>The errors of the parse, in the order they were found.</summary>
+    /// <remarks>
+    ///   A missing subcommand comes first, ahead of the errors of reading the invocation. The rest
+    ///   follow the three steps: reading, then the tokens no symbol claimed, then the validation of
+    ///   each command -- its options in the order they were declared, then its arguments.
+    /// </remarks>
+    function Errors: TArray<TParseError>;
     function ErrorText: string;
     /// <summary>True when help was asked for. Asking is a valid outcome, not a failure.</summary>
     function IsHelpRequested: Boolean;
@@ -437,13 +550,24 @@ type
   /// <summary>An option whose value is read back with the very object declared here.</summary>
   IOption<T> = interface(IOption)
     /// <summary>
-    ///   The declared default, or the parsed value when the invocation carried one.
+    ///   The value the invocation carried, or the declared default when the invocation reached its
+    ///   command and did not carry it.
     /// </summary>
     /// <remarks>
     ///   Reads as <c>FileOption.ValueIn(Parsed)</c>. The order is inverted with respect
     ///   to .NET's <c>result.GetValue(fileOption)</c> on purpose -- see the unit header.
+    ///
+    ///   A value the parse refused raises <c>ECommandLine</c> with that error: one that does not
+    ///   convert, a repetition, a required option that is missing. An option of a command the
+    ///   invocation did not reach has no result, and reads as the default of its TYPE, not the
+    ///   declared one.
     /// </remarks>
-    function ValueIn(const Parsed: IParseResult): T;
+    function ValueIn(const Parsed: IParseResult): T; overload;
+    /// <summary>The same, read on the result of a symbol: the tree is the same whichever node asks.</summary>
+    function ValueIn(const SymbolResult: ISymbolResult): T; overload;
+    /// <summary>The value, raising <c>ECommandLine</c> when the option has no result at all.</summary>
+    function RequiredValueIn(const Parsed: IParseResult): T; overload;
+    function RequiredValueIn(const SymbolResult: ISymbolResult): T; overload;
     /// <summary>Every value the invocation carried, for an arity that admits many.</summary>
     function ValuesIn(const Parsed: IParseResult): TArray<T>;
     /// <summary>Declares the default as a constant.</summary>
@@ -453,7 +577,7 @@ type
     ///   or there is none.
     /// </summary>
     function DefaultValueFactory: TFunc<T>; overload;
-    /// <summary>Declares the default as a CALCULATION, run only if it is needed.</summary>
+    /// <summary>Declares the default as a CALCULATION, which the parse runs when the invocation does not carry the symbol.</summary>
     /// <remarks>
     ///   A default that depends on the surroundings -- a temporary directory, today's
     ///   date, an environment variable -- cannot be written as a constant in the
@@ -461,9 +585,9 @@ type
     ///   this the application leaves the default empty and fills it in after reading, and
     ///   then the help shows a default that is not the one the program uses.
     ///
-    ///   The calculation runs ONLY when the invocation did not carry the symbol, and at
-    ///   most once: it may open a file or read the environment, and paying for that twice
-    ///   is a cost nobody asked for.
+    ///   Each parse runs it once, when the invocation reaches the command that declares the
+    ///   symbol and does not carry it -- whether or not the value is read afterwards, because the
+    ///   default is part of the parse result. Nothing is kept from one parse for the next.
     ///
     ///   <c>Text</c> is what the help shows, because the help does NOT run the
     ///   calculation -- it has no way of knowing whether this one has effects, and
@@ -509,7 +633,16 @@ type
 
   /// <summary>An argument identified by its place, not by a name behind dashes.</summary>
   IArgument<T> = interface(IArgument)
-    function ValueIn(const Parsed: IParseResult): T;
+    /// <summary>The value, read as <c>IOption&lt;T&gt;.ValueIn</c> reads it.</summary>
+    function ValueIn(const Parsed: IParseResult): T; overload;
+    function ValueIn(const SymbolResult: ISymbolResult): T; overload;
+    /// <summary>The value, and when the argument has no result, what .NET's GetRequiredValue answers.</summary>
+    /// <remarks>
+    ///   It raises <c>ECommandLine</c> when the default of the type is null in .NET: a string, a class,
+    ///   an interface. Any other type answers its default, and an array answers empty.
+    /// </remarks>
+    function RequiredValueIn(const Parsed: IParseResult): T; overload;
+    function RequiredValueIn(const SymbolResult: ISymbolResult): T; overload;
     function ValuesIn(const Parsed: IParseResult): TArray<T>;
     function DefaultValue(const Value: T): IArgument<T>;
     function DefaultValueFactory: TFunc<T>; overload;
@@ -528,12 +661,21 @@ type
   // (E2506), and the CommandLine facade below reaches them from generic methods.
 
   TSymbol = class(TInterfacedObject, ISymbol)
+  private type
+    /// <summary>
+    ///   A record and not the interface itself, because a dynamic array cannot mark its elements
+    ///   <c>[weak]</c>, and a symbol holding its command strongly is a cycle: the command holds it.
+    /// </summary>
+    TParentLink = record
+      [weak] Symbol: ISymbol;
+    end;
   private
     FName: string;
     FAliases: TCommandLineCollection<string>;
     FDescription: string;
     FHidden: Boolean;
     FFrozen: Boolean;
+    FParents: TArray<TParentLink>;
     class procedure RaiseFrozen(const SymbolName: string); static;
   protected
     /// <summary>Raises when the grammar this symbol belongs to was frozen.</summary>
@@ -547,6 +689,8 @@ type
     function Description: string; overload;
     function Matches(const Token: string): Boolean;
     function IsHidden: Boolean;
+    function Parents: TArray<ISymbol>;
+    procedure AddParent(const Parent: ISymbol);
     procedure SetDescription(const Text: string);
     procedure Hide;
     procedure Freeze; virtual;
@@ -567,14 +711,33 @@ type
     FDefaultText: string;
     FParser: TUntypedParser;
     FValidators: TArray<TUntypedValidator>;
-    /// <summary>Converts one token, through the declared conversion when there is one.</summary>
-    function Convert(const Raw: string; out Value: TValue; out Error: string): Boolean;
     /// <summary>True when the declared type takes many values rather than one.</summary>
     function IsCollection: Boolean;
     /// <summary>Refuses at DECLARATION a path validation on something that is not one.</summary>
     procedure DemandPathType(const What: string);
+    /// <summary>
+    ///   The values of this symbol's result, converted. False when the symbol has no result;
+    ///   <c>FromDefault</c> says the one value is the whole default. Raises the error of a result
+    ///   the parse refused.
+    /// </summary>
+    function TryReadIn(const Found: ISymbolResult; out Values: TArray<TValue>; out FromDefault: Boolean): Boolean;
+    /// <summary>The same, raising when there is no result and the default of the type is null in .NET.</summary>
+    function TryReadRequiredIn(const Found: ISymbolResult; MissingRaises: Boolean; out Values: TArray<TValue>;
+      out FromDefault: Boolean): Boolean;
+    /// <summary>True for the types whose default is null in .NET: a string, a class, an interface.</summary>
+    function DefaultIsNull: Boolean;
   public
     constructor Create(const AName: string; ATypeInfo: PTypeInfo; const AParser: TUntypedParser);
+    /// <summary>Converts one token, through the declared conversion when there is one.</summary>
+    /// <remarks>It does not look at the accepted values nor run the validations: see <c>TryAcceptValue</c>.</remarks>
+    function Convert(const Raw: string; out Value: TValue; out Error: string): Boolean;
+    /// <summary>
+    ///   What the parse does with one token: the accepted values, then the conversion, then the
+    ///   validations. The first refusal is the error.
+    /// </summary>
+    function TryAcceptValue(const Raw: string; out Value: TValue; out Error: string): Boolean;
+    /// <summary>The declared default, calculated now when it is a calculation.</summary>
+    function BoxedDefault: TValue; virtual; abstract;
     function TryAccept(const Raw: string; out Error: string): Boolean;
     function IsFlag: Boolean;
     function TypeName: string;
@@ -602,17 +765,19 @@ type
   protected
     FDefaultValue: T;
     FDefaultFactory: TFunc<T>;
-    /// <summary>True once <c>FDefaultValue</c> holds the default, computed or written.</summary>
-    FDefaultKnown: Boolean;
     function DefaultOf: T;
-    function ReadValue(const Parsed: IParseResult): T;
-    function ReadValues(const Parsed: IParseResult): TArray<T>;
+    function Unbox(const Values: TArray<TValue>; FromDefault: Boolean): T;
+    /// <summary><c>Found</c> is this symbol's result, or <c>nil</c> when it has none.</summary>
+    function ValueOf(const Found: ISymbolResult): T;
+    function RequiredValueOf(const Found: ISymbolResult; MissingRaises: Boolean): T;
+    function ValuesOf(const Found: ISymbolResult): TArray<T>;
     procedure SetDefaultValue(const Value: T);
     procedure SetDefaultFactory(const Factory: TFunc<T>; const Text: string);
     procedure AddTypedValidator(const Validation: TCommandLineValidator<T>);
   public
     constructor Create(const AName: string; const AParser: TCommandLineParser<T>);
     function DefaultValueFactory: TFunc<T>; overload;
+    function BoxedDefault: TValue; override;
   end;
 
   TOption<T> = class(TValuedSymbol<T>, IOption, IOption<T>)
@@ -620,12 +785,16 @@ type
     FRecursive: Boolean;
     FRequiredFlag: Boolean;
     FMultiplePerToken: Boolean;
+    function Found(const Where: ISymbolResult): ISymbolResult;
   public
     function IsRecursive: Boolean;
     function IsRequired: Boolean;
     function AllowsMultipleArgumentsPerToken: Boolean;
     function AllowMultipleArgumentsPerToken: IOption<T>;
-    function ValueIn(const Parsed: IParseResult): T;
+    function ValueIn(const Parsed: IParseResult): T; overload;
+    function ValueIn(const SymbolResult: ISymbolResult): T; overload;
+    function RequiredValueIn(const Parsed: IParseResult): T; overload;
+    function RequiredValueIn(const SymbolResult: ISymbolResult): T; overload;
     function ValuesIn(const Parsed: IParseResult): TArray<T>;
     function DefaultValue(const Value: T): IOption<T>;
     function DefaultValueFactory(const Factory: TFunc<T>; const Text: string = ''): IOption<T>; overload;
@@ -641,8 +810,13 @@ type
   end;
 
   TArgument<T> = class(TValuedSymbol<T>, IArgument, IArgument<T>)
+  private
+    function Found(const Where: ISymbolResult): ISymbolResult;
   public
-    function ValueIn(const Parsed: IParseResult): T;
+    function ValueIn(const Parsed: IParseResult): T; overload;
+    function ValueIn(const SymbolResult: ISymbolResult): T; overload;
+    function RequiredValueIn(const Parsed: IParseResult): T; overload;
+    function RequiredValueIn(const SymbolResult: ISymbolResult): T; overload;
     function ValuesIn(const Parsed: IParseResult): TArray<T>;
     function DefaultValue(const Value: T): IArgument<T>;
     function DefaultValueFactory(const Factory: TFunc<T>; const Text: string = ''): IArgument<T>; overload;
@@ -700,7 +874,9 @@ implementation
 
 uses
   Daf.CommandLine.Values,
-  Daf.CommandLine.Help;
+  Daf.CommandLine.Help,
+  Daf.CommandLine.Parsing,
+  Daf.CommandLine.Resources;
 
 const
   /// <summary>
@@ -711,48 +887,6 @@ const
   IllegalInFileName: TSysCharSet = ['<', '>', ':', '"', '/', '\', '|', '?', '*'];
 
 type
-  TBinding = record
-    Key: ISymbol;
-    Values: TArray<string>;
-  end;
-
-  TParseResult = class(TInterfacedObject, IParseResult)
-  private
-    FRoot: IRootCommand;
-    FInvocationConfiguration: TInvocationConfiguration;
-    FCommand: ICommand;
-    FErrors: TArray<string>;
-    FBindings: TArray<TBinding>;
-    FUnmatched: TArray<string>;
-    FHelpRequested: Boolean;
-    FHelpText: string;
-    FVersionRequested: Boolean;
-    function IndexOf(const Symbol: ISymbol): Integer;
-  public
-    constructor Create(const Root: IRootCommand);
-    function Command: ICommand;
-    function Succeeded: Boolean;
-    function Errors: TArray<string>;
-    function ErrorText: string;
-    function IsHelpRequested: Boolean;
-    function HelpText: string;
-    function IsVersionRequested: Boolean;
-    function VersionInfo: TVersionInfo;
-    function WasProvided(const Symbol: ISymbol): Boolean;
-    function RawOf(const Symbol: ISymbol): TNullable<string>;
-    function RawValuesOf(const Symbol: ISymbol): TArray<string>;
-    function UnmatchedTokens: TArray<string>;
-    function InvocationConfiguration: TInvocationConfiguration;
-    function Invoke: Integer; overload;
-    function Invoke(const Configuration: TInvocationConfiguration): Integer; overload;
-    procedure Bind(const Symbol: ISymbol; const Raw: string);
-    procedure AddError(const Text: string);
-    procedure AddUnmatched(const Token: string);
-    procedure SetCommand(const Value: ICommand);
-    procedure RequestHelp(const ForCommand: ICommand);
-    procedure RequestVersion(const ForCommand: ICommand);
-  end;
-
   TCommand = class(TSymbol, ICommand)
   private
     FOptions: TArray<IOption>;
@@ -760,9 +894,8 @@ type
     FSubcommands: TArray<ICommand>;
     FAllowUnmatched: Boolean;
     FAction: TCommandAction;
-    // The path is kept as text, set by the parent when the child is added. A child
-    // does NOT hold a reference to its parent: that would be a cycle between counted
-    // interfaces, and a cycle is a leak the compiler never mentions.
+    // The path is kept as text, set by the parent when the child is added, so it is there
+    // for the help and the errors without walking the parents, which are held weakly.
     FPathPrefix: string;
     procedure AddSymbol(const Symbol: ISymbol);
   public
@@ -774,6 +907,7 @@ type
     function Options: TArray<IOption>;
     function Arguments: TArray<IArgument>;
     function Subcommands: TArray<ICommand>;
+    function Children: TArray<ISymbol>;
     function FullPath: string;
     function TreatsUnmatchedTokensAsErrors: Boolean;
     function AllowUnmatchedTokens: ICommand;
@@ -802,24 +936,6 @@ type
     function WithVersion(const Version, AppName, Company: string): IRootCommand; overload;
     function WithVersion(const AClass: TClass): IRootCommand; overload;
     function VersionInfo: TVersionInfo;
-  end;
-
-  /// <summary>The grammar in scope, answering the three questions the rewriting asks.</summary>
-  /// <remarks>
-  ///   It is mutable and reused as the walk descends, because which options are
-  ///   declared depends on the command reached: `mytool build native -fdx` can only be
-  ///   split once `native` is where we are.
-  /// </remarks>
-  TScopeKnowledge = class(TInterfacedObject, IKnownTokens)
-  private
-    FCurrent: ICommand;
-    FAvailable: TArray<IOption>;
-    FAtRoot: Boolean;
-  public
-    procedure Enter(const Command: ICommand; const Available: TArray<IOption>; AtRoot: Boolean);
-    function Knows(const Token: string): Boolean;
-    function KnowsShort(const Letter: Char): Boolean;
-    function ShortTakesValue(const Letter: Char): Boolean;
   end;
 
 { TInvocationConfiguration }
@@ -904,14 +1020,40 @@ end;
 function TArgumentArity.Describe: string;
 begin
   if (FMin = 0) and (FMax = 0) then
-    Exit('no value');
+    Exit(SArityNone);
   if (FMin = 0) and (FMax = 1) then
-    Exit('at most one value');
+    Exit(SArityAtMostOne);
   if (FMin = 1) and (FMax = 1) then
-    Exit('exactly one value');
+    Exit(SArityExactlyOne);
   if FMin = 0 then
-    Exit('any number of values');
-  Result := 'at least one value';
+    Exit(SArityAny);
+  Result := SArityAtLeastOne;
+end;
+
+class operator TArgumentArity.Equal(const A, B: TArgumentArity): Boolean;
+begin
+  Result := (A.FMin = B.FMin) and (A.FMax = B.FMax);
+end;
+
+class operator TArgumentArity.NotEqual(const A, B: TArgumentArity): Boolean;
+begin
+  Result := not (A = B);
+end;
+
+{ TToken }
+
+class operator TToken.Equal(const A, B: TToken): Boolean;
+begin
+  // The symbol by identity, as .NET compares it by reference: two references to one symbol are
+  // the same symbol, whichever interface they came through.
+  Result := (A.Value = B.Value) and (A.TokenType = B.TokenType) and
+    (((A.Symbol = nil) and (B.Symbol = nil)) or
+    ((A.Symbol <> nil) and (B.Symbol <> nil) and (A.Symbol.AsObject = B.Symbol.AsObject)));
+end;
+
+class operator TToken.NotEqual(const A, B: TToken): Boolean;
+begin
+  Result := not (A = B);
 end;
 
 { TCommandLineCollection<T>.TEnumerator }
@@ -1020,6 +1162,28 @@ begin
   Result := FHidden;
 end;
 
+function TSymbol.Parents: TArray<ISymbol>;
+var
+  Link: TParentLink;
+  Parent: ISymbol;
+begin
+  Result := nil;
+  for Link in FParents do
+  begin
+    Parent := Link.Symbol;
+    if Parent <> nil then
+      Result := Result + [Parent];
+  end;
+end;
+
+procedure TSymbol.AddParent(const Parent: ISymbol);
+var
+  Link: TParentLink;
+begin
+  Link.Symbol := Parent;
+  FParents := FParents + [Link];
+end;
+
 procedure TSymbol.SetDescription(const Text: string);
 begin
   CheckOpen;
@@ -1088,11 +1252,18 @@ end;
 function TValuedSymbol.TryAccept(const Raw: string; out Error: string): Boolean;
 var
   Parsed: TValue;
+begin
+  Result := TryAcceptValue(Raw, Parsed, Error);
+end;
+
+function TValuedSymbol.TryAcceptValue(const Raw: string; out Value: TValue; out Error: string): Boolean;
+var
   Allowed: TArray<string>;
   Candidate: string;
   Check: TUntypedValidator;
 begin
   Error := '';
+  Value := TValue.Empty;
   Allowed := AcceptedValues;
   if Length(Allowed) > 0 then
   begin
@@ -1107,12 +1278,12 @@ begin
     begin
       // Refusing without saying what was expected forces the caller to read the
       // tool's source in order to use the tool.
-      Error := Format('"%s" is not a valid value for %s. Accepted: %s', [Raw, Name, string.Join(', ', Allowed)]);
+      Error := Format(SValueNotAccepted, [Raw, Name, string.Join(', ', Allowed)]);
       Exit;
     end;
   end;
 
-  if not Convert(Raw, Parsed, Error) then
+  if not Convert(Raw, Value, Error) then
     Exit(False);
 
   // Validation runs HERE, inside the parse, and its refusal goes out through the same
@@ -1120,14 +1291,39 @@ begin
   // is no longer an invocation error, and whoever invoked the tool would get two lists
   // instead of one.
   for Check in FValidators do
-    if not Check(Parsed, Error) then
+    if not Check(Value, Error) then
     begin
       if Error = '' then
-        Error := Format('"%s" is not a valid value for %s', [Raw, Name]);
+        Error := Format(SValueRefused, [Raw, Name]);
       Exit(False);
     end;
 
   Result := True;
+end;
+
+function TValuedSymbol.TryReadIn(const Found: ISymbolResult; out Values: TArray<TValue>;
+  out FromDefault: Boolean): Boolean;
+begin
+  Values := nil;
+  FromDefault := False;
+  Result := Found <> nil;
+  if Result then
+    Values := ResultValues(Found, FromDefault);
+end;
+
+function TValuedSymbol.TryReadRequiredIn(const Found: ISymbolResult; MissingRaises: Boolean;
+  out Values: TArray<TValue>; out FromDefault: Boolean): Boolean;
+begin
+  Result := TryReadIn(Found, Values, FromDefault);
+  if not Result and (MissingRaises or DefaultIsNull) then
+    raise ECommandLine.CreateFmt(SValueNotProvided, [Name]);
+end;
+
+function TValuedSymbol.DefaultIsNull: Boolean;
+begin
+  // C#'s null, mapped by kind: a Delphi string has no null of its own, but a .NET string does.
+  Result := FTypeInfo.Kind in [tkString, tkLString, tkWString, tkUString, tkClass, tkClassRef, tkInterface,
+    tkPointer, tkProcedure];
 end;
 
 function TValuedSymbol.Convert(const Raw: string; out Value: TValue; out Error: string): Boolean;
@@ -1140,7 +1336,7 @@ begin
     if not Result and (Error = '') then
       // A conversion of its own that refuses without saying why leaves the caller with
       // nothing to act on, so the engine supplies the message.
-      Error := Format('"%s" is not a valid %s for %s', [Raw, TypeName, Name]);
+      Error := Format(SValueNotConverted, [Raw, TypeName, Name]);
     Exit;
   end;
   Result := TCommandLineValue.TryParse(FElementTypeInfo, Raw, Value);
@@ -1148,7 +1344,7 @@ begin
     // Names both the symbol and the text received: "80xyz" is not a valid integer
     // for --port. Refusing without saying what was refused is barely better than
     // inventing a value out of it.
-    Error := Format('"%s" is not a valid %s for %s', [Raw, TypeName, Name]);
+    Error := Format(SValueNotConverted, [Raw, TypeName, Name]);
 end;
 
 function TValuedSymbol.IsFlag: Boolean;
@@ -1246,7 +1442,7 @@ begin
       Error := '';
       Result := FileExists(Value.AsString) or DirectoryExists(Value.AsString);
       if not Result then
-        Error := Format('"%s" does not exist, and %s only accepts a path that does', [Value.AsString, Who]);
+        Error := Format(SPathMissing, [Value.AsString, Who]);
     end);
 end;
 
@@ -1274,7 +1470,7 @@ begin
           Break;
         end;
       if not Result then
-        Error := Format('"%s" is not a legal file name, and %s accepts only one that is', [Raw, Who]);
+        Error := Format(SFileNameIllegal, [Raw, Who]);
     end);
 end;
 
@@ -1301,7 +1497,6 @@ begin
       end;
   inherited Create(AName, TypeInfo(T), Untyped);
   FDefaultValue := Default (T);
-  FDefaultKnown := True;
 end;
 
 function TValuedSymbol<T>.DefaultValueFactory: TFunc<T>;
@@ -1311,71 +1506,73 @@ end;
 
 function TValuedSymbol<T>.DefaultOf: T;
 begin
-  // Run here and nowhere else: this is the one place reached only when the invocation
-  // did not carry the symbol. And run at most once, because a calculation that reads the
-  // environment or opens a file should not be paid for twice.
-  if not FDefaultKnown then
-  begin
-    FDefaultValue := FDefaultFactory();
-    FDefaultKnown := True;
-  end;
-  Result := FDefaultValue;
+  if Assigned(FDefaultFactory) then
+    Result := FDefaultFactory()
+  else
+    Result := FDefaultValue;
 end;
 
-function TValuedSymbol<T>.ReadValue(const Parsed: IParseResult): T;
+function TValuedSymbol<T>.BoxedDefault: TValue;
+begin
+  Result := TValue.From<T>(DefaultOf);
+end;
+
+function TValuedSymbol<T>.Unbox(const Values: TArray<TValue>; FromDefault: Boolean): T;
+begin
+  // A default is held whole, collection or not.
+  if FromDefault then
+    Exit(Values[0].AsType<T>);
+  // A collection holds ONE value, and that value is every token it was given. The array is built
+  // through RTTI because T is the array type and the element type is only known to the engine:
+  // TValue.FromArray is what bridges the two.
+  if IsCollection then
+    Exit(TValue.FromArray(FTypeInfo, Values).AsType<T>);
+  if Length(Values) = 0 then
+    Exit(Default (T));
+  Result := Values[0].AsType<T>;
+end;
+
+function TValuedSymbol<T>.ValueOf(const Found: ISymbolResult): T;
 var
-  Raw: TNullable<string>;
-  Raws: TArray<string>;
-  Elements: TArray<TValue>;
-  Converted: TValue;
-  Error: string;
+  Values: TArray<TValue>;
+  FromDefault: Boolean;
+begin
+  // No result is a command the invocation did not reach, and it reads as the default of the type,
+  // the CreateDefaultValue of .NET: nothing in this invocation gave the symbol a value.
+  if not TryReadIn(Found, Values, FromDefault) then
+    Exit(Default (T));
+  Result := Unbox(Values, FromDefault);
+end;
+
+function TValuedSymbol<T>.RequiredValueOf(const Found: ISymbolResult; MissingRaises: Boolean): T;
+var
+  Values: TArray<TValue>;
+  FromDefault: Boolean;
+begin
+  if not TryReadRequiredIn(Found, MissingRaises, Values, FromDefault) then
+    Exit(Default (T));
+  Result := Unbox(Values, FromDefault);
+end;
+
+function TValuedSymbol<T>.ValuesOf(const Found: ISymbolResult): TArray<T>;
+var
+  Values: TArray<TValue>;
+  FromDefault: Boolean;
   I: Integer;
 begin
-  if Parsed = nil then
-    Exit(DefaultOf);
-
-  // A collection holds ONE value, and that value is every token it was given. The array
-  // is built through RTTI because T is the array type and the element type is only known
-  // to the engine: TValue.FromArray is what bridges the two.
-  if IsCollection then
-  begin
-    Raws := Parsed.RawValuesOf(Self);
-    if Length(Raws) = 0 then
-      Exit(DefaultOf);
-    SetLength(Elements, Length(Raws));
-    for I := 0 to High(Raws) do
-      if not Convert(Raws[I], Elements[I], Error) then
-        raise ECommandLine.Create(Error);
-    Exit(TValue.FromArray(FTypeInfo, Elements).AsType<T>);
-  end;
-
-  Raw := Parsed.RawOf(Self);
-  if Raw.IsNull then
-    Exit(DefaultOf);
-  if not Convert(Raw.Value, Converted, Error) then
-    raise ECommandLine.Create(Error);
-  Result := Converted.AsType<T>;
-end;
-
-function TValuedSymbol<T>.ReadValues(const Parsed: IParseResult): TArray<T>;
-var
-  Raw: string;
-  Converted: TValue;
-  Error: string;
-begin
   Result := nil;
-  if Parsed = nil then
+  // What the invocation carried, and only that: a default is not a value it carried.
+  if not TryReadIn(Found, Values, FromDefault) or FromDefault then
     Exit;
   // One value of the declared type, and for a collection that one value is the array.
   if IsCollection then
   begin
-    if Length(Parsed.RawValuesOf(Self)) > 0 then
-      Result := [ReadValue(Parsed)];
+    Result := [Unbox(Values, False)];
     Exit;
   end;
-  for Raw in Parsed.RawValuesOf(Self) do
-    if Convert(Raw, Converted, Error) then
-      Result := Result + [Converted.AsType<T>];
+  SetLength(Result, Length(Values));
+  for I := 0 to High(Values) do
+    Result[I] := Values[I].AsType<T>;
 end;
 
 procedure TValuedSymbol<T>.SetDefaultValue(const Value: T);
@@ -1383,7 +1580,6 @@ begin
   CheckOpen;
   FDefaultValue := Value;
   FDefaultFactory := nil;
-  FDefaultKnown := True;
   SetDefaultText(TValue.From<T>(Value).ToString);
 end;
 
@@ -1393,7 +1589,6 @@ begin
   if not Assigned(Factory) then
     raise ECommandLine.CreateFmt('The computed default of "%s" is not assigned', [Name]);
   FDefaultFactory := Factory;
-  FDefaultKnown := False;
   // HasDefaultValue is what satisfies "required", and it is set even with no text to show:
   // the value exists, it is just not known yet. SetDefaultText('') leaves the help
   // showing no default rather than a false one.
@@ -1444,14 +1639,48 @@ begin
   Result := Self;
 end;
 
+function TOption<T>.Found(const Where: ISymbolResult): ISymbolResult;
+var
+  Me: IOption;
+begin
+  if Where = nil then
+    Exit(nil);
+  Me := Self;
+  Result := Where.GetResult(Me);
+end;
+
 function TOption<T>.ValueIn(const Parsed: IParseResult): T;
 begin
-  Result := ReadValue(Parsed);
+  if Parsed = nil then
+    Result := ValueOf(nil)
+  else
+    Result := ValueOf(Found(Parsed.RootCommandResult));
+end;
+
+function TOption<T>.ValueIn(const SymbolResult: ISymbolResult): T;
+begin
+  Result := ValueOf(Found(SymbolResult));
+end;
+
+function TOption<T>.RequiredValueIn(const Parsed: IParseResult): T;
+begin
+  if Parsed = nil then
+    Result := RequiredValueOf(nil, True)
+  else
+    Result := RequiredValueOf(Found(Parsed.RootCommandResult), True);
+end;
+
+function TOption<T>.RequiredValueIn(const SymbolResult: ISymbolResult): T;
+begin
+  Result := RequiredValueOf(Found(SymbolResult), True);
 end;
 
 function TOption<T>.ValuesIn(const Parsed: IParseResult): TArray<T>;
 begin
-  Result := ReadValues(Parsed);
+  if Parsed = nil then
+    Result := nil
+  else
+    Result := ValuesOf(Found(Parsed.RootCommandResult));
 end;
 
 function TOption<T>.DefaultValue(const Value: T): IOption<T>;
@@ -1524,14 +1753,48 @@ end;
 
 { TArgument<T> }
 
+function TArgument<T>.Found(const Where: ISymbolResult): ISymbolResult;
+var
+  Me: IArgument;
+begin
+  if Where = nil then
+    Exit(nil);
+  Me := Self;
+  Result := Where.GetResult(Me);
+end;
+
 function TArgument<T>.ValueIn(const Parsed: IParseResult): T;
 begin
-  Result := ReadValue(Parsed);
+  if Parsed = nil then
+    Result := ValueOf(nil)
+  else
+    Result := ValueOf(Found(Parsed.RootCommandResult));
+end;
+
+function TArgument<T>.ValueIn(const SymbolResult: ISymbolResult): T;
+begin
+  Result := ValueOf(Found(SymbolResult));
+end;
+
+function TArgument<T>.RequiredValueIn(const Parsed: IParseResult): T;
+begin
+  if Parsed = nil then
+    Result := RequiredValueOf(nil, False)
+  else
+    Result := RequiredValueOf(Found(Parsed.RootCommandResult), False);
+end;
+
+function TArgument<T>.RequiredValueIn(const SymbolResult: ISymbolResult): T;
+begin
+  Result := RequiredValueOf(Found(SymbolResult), False);
 end;
 
 function TArgument<T>.ValuesIn(const Parsed: IParseResult): TArray<T>;
 begin
-  Result := ReadValues(Parsed);
+  if Parsed = nil then
+    Result := nil
+  else
+    Result := ValuesOf(Found(Parsed.RootCommandResult));
 end;
 
 function TArgument<T>.DefaultValue(const Value: T): IArgument<T>;
@@ -1588,199 +1851,13 @@ begin
   Result := Self;
 end;
 
-{ TParseResult }
-
-constructor TParseResult.Create(const Root: IRootCommand);
-begin
-  inherited Create;
-  FRoot := Root;
-end;
-
-function TParseResult.IndexOf(const Symbol: ISymbol): Integer;
-var
-  I: Integer;
-begin
-  Result := -1;
-  if Symbol = nil then
-    Exit;
-  for I := 0 to High(FBindings) do
-    if FBindings[I].Key.AsObject = Symbol.AsObject then
-      Exit(I);
-end;
-
-function TParseResult.Command: ICommand;
-begin
-  Result := FCommand;
-end;
-
-function TParseResult.Succeeded: Boolean;
-begin
-  Result := Length(FErrors) = 0;
-end;
-
-function TParseResult.Errors: TArray<string>;
-begin
-  Result := FErrors;
-end;
-
-function TParseResult.ErrorText: string;
-begin
-  Result := string.Join(sLineBreak, FErrors);
-end;
-
-function TParseResult.IsHelpRequested: Boolean;
-begin
-  Result := FHelpRequested;
-end;
-
-function TParseResult.HelpText: string;
-begin
-  Result := FHelpText;
-end;
-
-function TParseResult.IsVersionRequested: Boolean;
-begin
-  Result := FVersionRequested;
-end;
-
-function TParseResult.VersionInfo: TVersionInfo;
-var
-  Root: IRootCommand;
-begin
-  // No se guarda una copia: el resultado ya tiene el comando que respondio, y la version es suya.
-  if Supports(FCommand, IRootCommand, Root) then
-    Result := Root.VersionInfo
-  else
-    Result := Default(TVersionInfo);
-end;
-
-function TParseResult.WasProvided(const Symbol: ISymbol): Boolean;
-begin
-  Result := IndexOf(Symbol) >= 0;
-end;
-
-function TParseResult.RawOf(const Symbol: ISymbol): TNullable<string>;
-var
-  At: Integer;
-begin
-  At := IndexOf(Symbol);
-  if (At < 0) or (Length(FBindings[At].Values) = 0) then
-    Exit(TNullable<string>.Null);
-  Result := TNullable<string>.From(FBindings[At].Values[0]);
-end;
-
-function TParseResult.RawValuesOf(const Symbol: ISymbol): TArray<string>;
-var
-  At: Integer;
-begin
-  At := IndexOf(Symbol);
-  if At < 0 then
-    Exit(nil);
-  Result := FBindings[At].Values;
-end;
-
-procedure TParseResult.Bind(const Symbol: ISymbol; const Raw: string);
-var
-  At: Integer;
-  Entry: TBinding;
-begin
-  At := IndexOf(Symbol);
-  if At >= 0 then
-  begin
-    FBindings[At].Values := FBindings[At].Values + [Raw];
-    Exit;
-  end;
-  Entry.Key := Symbol;
-  Entry.Values := [Raw];
-  FBindings := FBindings + [Entry];
-end;
-
-function TParseResult.UnmatchedTokens: TArray<string>;
-begin
-  Result := FUnmatched;
-end;
-
-function TParseResult.InvocationConfiguration: TInvocationConfiguration;
-begin
-  Result := FInvocationConfiguration;
-end;
-
-function TParseResult.Invoke: Integer;
-var
-  Configuration: TInvocationConfiguration;
-begin
-  Result := Invoke(Configuration);
-end;
-
-function TParseResult.Invoke(const Configuration: TInvocationConfiguration): Integer;
-var
-  Action: TCommandAction;
-begin
-  FInvocationConfiguration := Configuration;
-
-  if FVersionRequested then
-    Action := FRoot.VersionAction
-  else if FHelpRequested then
-    Action := FRoot.HelpAction
-  else if not Succeeded then
-  begin
-    WriteTo(Configuration.Error, System.ErrOutput, ErrorText);
-    Exit(TCommandLineExit.InvocationError);
-  end
-  else
-    Action := FCommand.Action();
-
-  if not Assigned(Action) then
-    Exit(TCommandLineExit.Ok);
-
-  if not Configuration.EnableDefaultExceptionHandler then
-    Exit(Action(Self));
-
-  try
-    Result := Action(Self);
-  except
-    on E: Exception do
-    begin
-      WriteTo(Configuration.Error, System.ErrOutput, E.ClassName + ': ' + E.Message);
-      Result := TCommandLineExit.Failure;
-    end;
-  end;
-end;
-
-procedure TParseResult.AddError(const Text: string);
-begin
-  FErrors := FErrors + [Text];
-end;
-
-procedure TParseResult.AddUnmatched(const Token: string);
-begin
-  FUnmatched := FUnmatched + [Token];
-end;
-
-procedure TParseResult.SetCommand(const Value: ICommand);
-begin
-  FCommand := Value;
-end;
-
-procedure TParseResult.RequestHelp(const ForCommand: ICommand);
-begin
-  FHelpRequested := True;
-  FCommand := ForCommand;
-  FHelpText := ForCommand.HelpText;
-end;
-
-procedure TParseResult.RequestVersion(const ForCommand: ICommand);
-begin
-  FVersionRequested := True;
-  FCommand := ForCommand;
-end;
-
 { TCommand }
 
 function TCommand.Add(const Option: IOption): ICommand;
 begin
   CheckOpen;
   FOptions := FOptions + [Option];
+  (Option.AsObject as TSymbol).AddParent(Self);
   Result := Self;
 end;
 
@@ -1788,6 +1865,7 @@ function TCommand.Add(const Argument: IArgument): ICommand;
 begin
   CheckOpen;
   FArguments := FArguments + [Argument];
+  (Argument.AsObject as TSymbol).AddParent(Self);
   Result := Self;
 end;
 
@@ -1796,6 +1874,7 @@ begin
   CheckOpen;
   FSubcommands := FSubcommands + [Subcommand];
   (Subcommand.AsObject as TCommand).SetPathPrefix(FullPath);
+  (Subcommand.AsObject as TSymbol).AddParent(Self);
   Result := Self;
 end;
 
@@ -1843,6 +1922,29 @@ end;
 function TCommand.Subcommands: TArray<ICommand>;
 begin
   Result := FSubcommands;
+end;
+
+function TCommand.Children: TArray<ISymbol>;
+var
+  I, At: Integer;
+begin
+  SetLength(Result, Length(FSubcommands) + Length(FOptions) + Length(FArguments));
+  At := 0;
+  for I := 0 to High(FSubcommands) do
+  begin
+    Result[At] := FSubcommands[I];
+    Inc(At);
+  end;
+  for I := 0 to High(FOptions) do
+  begin
+    Result[At] := FOptions[I];
+    Inc(At);
+  end;
+  for I := 0 to High(FArguments) do
+  begin
+    Result[At] := FArguments[I];
+    Inc(At);
+  end;
 end;
 
 function TCommand.FullPath: string;
@@ -2013,348 +2115,9 @@ begin
   Result := Parse(Args);
 end;
 
-// Finds an option by token among the command's own and those inherited from ancestors
-// that declared them recursive.
-function FindOption(const Current: ICommand; const Inherited_: TArray<IOption>; const Token: string): IOption;
-var
-  Candidate: IOption;
-begin
-  for Candidate in Current.Options do
-    if Candidate.Matches(Token) then
-      Exit(Candidate);
-  for Candidate in Inherited_ do
-    if Candidate.Matches(Token) then
-      Exit(Candidate);
-  Result := nil;
-end;
-
-function FindSubcommand(const Current: ICommand; const Token: string): ICommand;
-var
-  Candidate: ICommand;
-begin
-  for Candidate in Current.Subcommands do
-    if Candidate.Matches(Token) then
-      Exit(Candidate);
-  Result := nil;
-end;
-
-function RecursiveOptionsOf(const Current: ICommand): TArray<IOption>;
-var
-  Candidate: IOption;
-begin
-  Result := nil;
-  for Candidate in Current.Options do
-    if Candidate.IsRecursive then
-      Result := Result + [Candidate];
-end;
-
-// The command's own options plus the inherited ones, with no repeats: a recursive
-// option declared on the command itself would otherwise be checked twice and reported
-// twice.
-function OptionsInScope(const Current: ICommand; const Inherited_: TArray<IOption>): TArray<IOption>;
-var
-  Candidate, Seen: IOption;
-  Known: Boolean;
-begin
-  Result := Current.Options;
-  for Candidate in Inherited_ do
-  begin
-    Known := False;
-    for Seen in Result do
-      if Seen.AsObject = Candidate.AsObject then
-      begin
-        Known := True;
-        Break;
-      end;
-    if not Known then
-      Result := Result + [Candidate];
-  end;
-end;
-
-function NamesOf(const Commands: TArray<ICommand>): string;
-var
-  Names: TArray<string>;
-  Candidate: ICommand;
-begin
-  Names := nil;
-  for Candidate in Commands do
-    Names := Names + [Candidate.Name];
-  Result := string.Join(', ', Names);
-end;
-
-function IsHelpToken(const Token: string): Boolean;
-var
-  Known: string;
-begin
-  for Known in HelpTokens do
-    if SameText(Token, Known) then
-      Exit(True);
-  Result := False;
-end;
-
-function IsVersionToken(const Token: string): Boolean;
-begin
-  Result := SameText(Token, VersionToken);
-end;
-
-{ TScopeKnowledge }
-
-procedure TScopeKnowledge.Enter(const Command: ICommand; const Available: TArray<IOption>; AtRoot: Boolean);
-begin
-  FCurrent := Command;
-  FAvailable := Available;
-  FAtRoot := AtRoot;
-end;
-
-function TScopeKnowledge.Knows(const Token: string): Boolean;
-begin
-  // The two built-in tokens count as known. Otherwise `/help` would not reach the help and
-  // `-h` could be swallowed into a bundle, which is the kind of hole a rewriting opens by only
-  // ever looking at what the application declared.
-  Result := (FindOption(FCurrent, FAvailable, Token) <> nil) or IsHelpToken(Token) or
-    (FAtRoot and IsVersionToken(Token));
-end;
-
-function TScopeKnowledge.KnowsShort(const Letter: Char): Boolean;
-begin
-  // Declared only, built-ins out: this is what decides whether a token is a group, and a help
-  // letter the application never declared does not make `-Fecha` one.
-  Result := FindOption(FCurrent, FAvailable, ShortPrefix + Letter) <> nil;
-end;
-
-function TScopeKnowledge.ShortTakesValue(const Letter: Char): Boolean;
-var
-  Option: IOption;
-begin
-  Option := FindOption(FCurrent, FAvailable, ShortPrefix + Letter);
-  // A built-in answers nil and is a flag: asking for help takes no value.
-  Result := (Option <> nil) and not Option.IsFlag;
-end;
-
 function TRootCommand.Parse(const Args: TArray<string>): IParseResult;
-var
-  Outcome: TParseResult;
-  Current: ICommand;
-  Available: TArray<IOption>;
-  Index: Integer;
-  Positional: Integer;
-  Token, OptionName, InlineValue, Raw, Error, Next: string;
-  HasInline, OptionsEnded: Boolean;
-  Option: IOption;
-  Argument: IArgument;
-  Subcommand: ICommand;
-  Scope: TScopeKnowledge;
-  Known: IKnownTokens;
-  Tokens, Expansion: TArray<string>;
-  Step: TTokenRewrite;
-  Action: TCommandAction;
 begin
-  Outcome := TParseResult.Create(Self);
-  Result := Outcome;
-  Current := Self;
-  Available := RecursiveOptionsOf(Current);
-  Index := 0;
-  Positional := 0;
-  OptionsEnded := False;
-
-  Scope := TScopeKnowledge.Create;
-  Known := Scope;
-  Scope.Enter(Current, Available, True);
-
-  // Response files are resolved before anything else is decided about any token,
-  // because all they do is contribute tokens and nothing else.
-  Tokens := TResponseFiles.Expand(Args, Expansion);
-  for Error in Expansion do
-    Outcome.AddError(Error);
-
-  while Index < Length(Tokens) do
-  begin
-    Token := Tokens[Index];
-
-    // POSIX: `--` ends the options. Everything after it is a value, dashes and all,
-    // which is the only way to pass a positional whose value looks like an option.
-    if (Token = EndOfOptions) and not OptionsEnded then
-    begin
-      OptionsEnded := True;
-      Inc(Index);
-      Continue;
-    end;
-
-    // Before anything else is decided about this token, it is put in the canonical form
-    // the rest of this loop already understands. The rewriting is asked
-    // HERE, and not once over the whole array, because it needs to know what is
-    // declared and that depends on the command reached.
-    if not OptionsEnded then
-    begin
-      Step := TTokenNormalizer.Rewrite(Token, Known);
-      if Step.Error <> '' then
-      begin
-        Outcome.AddError(Step.Error);
-        Inc(Index);
-        Continue;
-      end;
-      if Step.Changed then
-      begin
-        Tokens := TTokenNormalizer.Splice(Tokens, Index, Step.Tokens);
-        Continue;
-      end;
-    end;
-
-    TTokenNormalizer.SplitToken(Token, OptionName, InlineValue, HasInline);
-
-    if not OptionsEnded then
-    begin
-      // Help is resolved BEFORE the grammar is validated: asking how the
-      // syntax works is not an invalid invocation, and a tool that demands you get the
-      // syntax right in order to explain the syntax is no use. An application that
-      // declared its own --help wins, so this only fires when nothing answers the token.
-      if IsHelpToken(OptionName) and (FindOption(Current, Available, OptionName) = nil) then
-      begin
-        Outcome.RequestHelp(Current);
-        Exit;
-      end;
-
-      // --version belongs to the ROOT, as in .NET: a subcommand does not answer it,
-      // because a version is the tool's and not each order's.
-      if IsVersionToken(OptionName) and (Current.AsObject = Self) and
-        (FindOption(Current, Available, OptionName) = nil) then
-      begin
-        Outcome.RequestVersion(Current);
-        Exit;
-      end;
-    end;
-
-    if not OptionsEnded and TTokenNormalizer.LooksLikeOption(Token) then
-    begin
-      Option := FindOption(Current, Available, OptionName);
-      if Option = nil then
-      begin
-        // A wrapper hands on what is not its own; anything else refuses it, which is
-        // still the default. The token goes on WHOLE, value and all, so
-        // whoever receives it gets what was written.
-        if Current.TreatsUnmatchedTokensAsErrors then
-          Outcome.AddError(Format('Unknown option "%s" for %s', [OptionName, Current.FullPath]))
-        else
-          Outcome.AddUnmatched(Token);
-        Inc(Index);
-        Continue;
-      end;
-
-      // Repeating an option that admits one value is an ambiguous invocation, and an
-      // ambiguous invocation has to fail. Quietly keeping the last one is the same sin
-      // as reading 80xyz as 80: a value the parser chose on its own.
-      if not Option.Arity.AllowsMany and Outcome.WasProvided(Option) then
-      begin
-        Outcome.AddError(Format('Option "%s" was given more than once, and it takes %s',
-          [Option.Name, Option.Arity.Describe]));
-        if not HasInline and not Option.IsFlag and (Index + 1 < Length(Tokens)) then
-          Inc(Index);
-        Inc(Index);
-        Continue;
-      end;
-
-      if HasInline then
-        Raw := InlineValue
-      else if Option.IsFlag then
-      begin
-        // A flag may carry its value explicitly -- `--minify false` -- because its
-        // arity admits none or one. Only a boolean literal counts as that value;
-        // anything else is somebody else's token.
-        if (Index + 1 < Length(Tokens)) and TCommandLineValue.IsBooleanLiteral(Tokens[Index + 1]) then
-        begin
-          Inc(Index);
-          Raw := Tokens[Index];
-        end
-        else
-          Raw := 'true';
-      end
-      else
-      begin
-        if Index + 1 >= Length(Tokens) then
-        begin
-          Outcome.AddError(Format('Option "%s" requires a %s value', [Option.Name, Option.TypeName]));
-          Inc(Index);
-          Continue;
-        end;
-        Inc(Index);
-        // Taken unconditionally, dash or no dash: this is what lets --port -5 through.
-        Raw := Tokens[Index];
-      end;
-
-      if Option.TryAccept(Raw, Error) then
-        Outcome.Bind(Option, Raw)
-      else
-        Outcome.AddError(Error);
-
-      // One mention of the name, several values -- but only for an option that asked
-      // for it. Taking them stops at the next token that looks like an
-      // option, at `--`, and at the maximum the arity declared, so what is swallowed is
-      // bounded by what was declared rather than by where the invocation happens to end.
-      if Option.AllowsMultipleArgumentsPerToken and Option.Arity.AllowsMany then
-        while (Index + 1 < Length(Tokens)) and (Length(Outcome.RawValuesOf(Option)) < Option.Arity.MaximumNumberOfValues) do
-        begin
-          Next := Tokens[Index + 1];
-          if (Next = EndOfOptions) or TTokenNormalizer.LooksLikeOption(Next) then
-            Break;
-          Inc(Index);
-          if Option.TryAccept(Next, Error) then
-            Outcome.Bind(Option, Next)
-          else
-            Outcome.AddError(Error);
-        end;
-
-      Inc(Index);
-      Continue;
-    end;
-
-    if not OptionsEnded then
-    begin
-      Subcommand := FindSubcommand(Current, Token);
-      if Subcommand <> nil then
-      begin
-        Current := Subcommand;
-        Available := Available + RecursiveOptionsOf(Current);
-        Scope.Enter(Current, Available, False);
-        Positional := 0;
-        Inc(Index);
-        Continue;
-      end;
-    end;
-
-    if Positional <= High(Current.Arguments) then
-    begin
-      Argument := Current.Arguments[Positional];
-      if Argument.TryAccept(Token, Error) then
-        Outcome.Bind(Argument, Token)
-      else
-        Outcome.AddError(Error);
-      // One that admits many keeps consuming; one that does not hands over to the next.
-      if not Argument.Arity.AllowsMany then
-        Inc(Positional);
-    end
-    else if Current.TreatsUnmatchedTokensAsErrors then
-      Outcome.AddError(Format('Unexpected argument "%s" for %s', [Token, Current.FullPath]))
-    else
-      Outcome.AddUnmatched(Token);
-    Inc(Index);
-  end;
-
-  // A command that only groups is not an invocation of its own; one with an action is.
-  Action := Current.Action();
-  if (Length(Current.Subcommands) > 0) and not Assigned(Action) then
-    Outcome.AddError(Format('Command "%s" requires a subcommand: %s', [Current.FullPath, NamesOf(Current.Subcommands)]));
-
-  // What the invocation had to carry and did not. A declared default satisfies the
-  // demand, because the value exists -- which is what "required" asks for.
-  for Option in OptionsInScope(Current, Available) do
-    if Option.IsRequired and not Option.HasDefaultValue and not Outcome.WasProvided(Option) then
-      Outcome.AddError(Format('Option "%s" is required', [Option.Name]));
-
-  for Argument in Current.Arguments do
-    if Argument.Arity.DemandsValue and not Argument.HasDefaultValue and not Outcome.WasProvided(Argument) then
-      Outcome.AddError(Format('Argument "%s" is required', [Argument.Name]));
-
-  Outcome.SetCommand(Current);
+  Result := ParseInvocation(Self, Args);
 end;
 
 { CommandLine }

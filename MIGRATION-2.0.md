@@ -134,7 +134,7 @@ The mechanical part, term by term:
 | `Params['x'].AsString` / `.AsInteger` / `.AsBoolean` | `XOpt.ValueIn(Parsed)`, typed by the option itself |
 | `Params.GetSection('build')['output']` | `OutputOpt.ValueIn(Parsed)`: there is no section to navigate |
 | `Params.Command = 'build'` | `Parsed.Command`, an `ICommand` — compare it against the object you declared |
-| `Parser.Parse(…) = nil` | `Parsed.Succeeded` false, with `Parsed.Errors` and `Parsed.ErrorText` |
+| `Parser.Parse(…) = nil` | `Parsed.Succeeded` false. `Parsed.Errors` holds each error with the result of its symbol, and `Parsed.ErrorText` their text |
 
 **What does not carry over unchanged.** Naming it because a migration that only shows the easy half
 leaves you thinking you are done:
@@ -148,8 +148,8 @@ leaves you thinking you are done:
   worked stops working; a test that asserted the failure will.
 - **Two limitations of the old value engine are gone, and their outcome changed.** A negative number
   could not be passed at all, and `--port 80xyz` was accepted as `80`. Now `-5` is a value, and
-  `80xyz` is refused naming the option. If anything relied on that truncation, it gets an error
-  where it used to get a number.
+  `80xyz` is refused naming the option, and reading the option raises that error. If anything
+  relied on that truncation, it gets an error where it used to get a number.
 - **There is no invocation.** Neither module dispatches to a handler: `Daf.CommandLine` parses and
   hands back typed values, and what to do with them stays the application's decision.
 

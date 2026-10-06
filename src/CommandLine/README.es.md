@@ -41,7 +41,10 @@ en ejecución.
 | `IOption<T>` | Un valor con nombre y guiones —`--file main.pas`—. Y la llave con la que se lee |
 | `IArgument<T>` | Un valor **posicional**, identificado por su sitio: `mitool build main.pas` |
 | `TArgumentArity` | Cuántos valores admite un símbolo, mínimo y máximo |
-| `IParseResult` | Lo que produjo una invocación: la hoja alcanzada, los valores, los errores, la ayuda, la versión. `Invoke` la ejecuta |
+| `IParseResult` | Lo que produjo una invocación: el árbol de resultados, la hoja alcanzada, los errores, la ayuda, la versión. `Invoke` la ejecuta |
+| `ICommandResult`, `IOptionResult`, `IArgumentResult` | El resultado de un símbolo que la invocación alcanzó: sus tokens, sus errores, su padre |
+| `TParseError` | Un error del parse, y el resultado del símbolo al que pertenece |
+| `TToken` | Un token de la invocación, tal como lo leyó el parse |
 | `TCommandAction` | Lo que hace un comando cuando una invocación lo alcanza: recibe el resultado del parse y devuelve el código de salida |
 | `TInvocationConfiguration` | Dónde escribe `Invoke`, y si un manejador por defecto captura lo que la acción deja escapar |
 | `TCommandLineExit` | Los códigos que devuelve `Invoke` cuando no es la acción quien decide |
@@ -95,8 +98,71 @@ var Path  := OutOpt.ValueIn(Parsed);        // un valor, con su tipo estático
 var Files := FilesOpt.ValuesIn(Parsed);     // TArray<string>, para una aridad que admite varios
 ```
 
-`IParseResult.WasProvided` distingue **ausente** de **presente pero vacía**: `--file ''` no es la
-misma respuesta que no pasar `--file`.
+Lo que devuelve `ValueIn` depende de lo que el parse hizo con el símbolo:
+
+| El símbolo | `ValueIn` devuelve |
+|---|---|
+| lo trajo la invocación | su valor |
+| no lo trajo, tiene default declarado y está en un comando por el que pasó la invocación | el default declarado |
+| no lo trajo, en cualquier otro caso | el default de su **tipo**: `0`, `''`, un array vacío |
+| el parse lo rechazó: un valor que no convierte, una repetición, una opción requerida que falta | nada: lanza `ECommandLine` con ese error |
+
+El parse valida entero el comando alcanzado, y los que tiene por encima solo en sus opciones
+recursivas y en las que tienen default. Una opción de un padre que no es ninguna de las dos, escrita
+antes del subcomando, se toma pero no se valida: `tool --port x run` parsea, y leer `--port` lanza
+`"x" is not a valid integer for --port`.
+
+`ValueIn` acepta también el resultado de un símbolo —`PortOpt.ValueIn(Parsed.CommandResult)`— y
+devuelve lo mismo: el árbol es uno, pregunte el nodo que pregunte. `RequiredValueIn` lee igual y lanza
+cuando el símbolo no tiene resultado. En un argumento sin resultado devuelve lo que el
+`GetRequiredValue` de .NET devuelve para su tipo: lanza con un `string`, una clase o una interfaz, y
+cualquier otro tipo da su default.
+
+`IParseResult.WasProvided` dice si la invocación **nombró** el símbolo. `--file ''` no es la misma
+respuesta que no pasar `--file`, y `--port 80xyz` cuenta como pasada aunque leerla lance.
+
+---
+
+## El resultado del parse es un árbol
+
+Cada comando que alcanzó la invocación tiene un resultado, del raíz al más interno, y también cada
+opción y argumento que trajo o que tomó su default. `Parsed.RootCommandResult` es donde empieza el
+árbol y `Parsed.CommandResult` es el comando más interno. `GetResult` encuentra el resultado de un
+símbolo declarado, sobre el resultado del parse o sobre cualquiera de sus nodos, y devuelve `nil`
+cuando no lo hay.
+
+```pascal
+var Port := Parsed.GetResult(PortOpt);         // un IOptionResult, o nil
+if (Port <> nil) and not Port.IsImplicit then
+  Writeln('nombrada ', Port.IdentifierTokenCount, ' vez/veces, con ', Length(Port.Tokens), ' valor(es)');
+```
+
+| Un resultado | devuelve |
+|---|---|
+| `Parent` | el resultado del comando del que cuelga; `nil` en el raíz |
+| `Tokens` | los tokens de la invocación que lo produjeron |
+| `Errors` | los errores del parse que son suyos |
+| `Children`, en un comando | los resultados que cuelgan de él |
+| `IsImplicit`, en una opción | la invocación no la nombró: el parse la creó por su default, o por ser una requerida que falta, y entonces lleva ese error |
+| `IsImplicit`, en un argumento | tomó su default |
+| `IdentifierToken`, `IdentifierTokenCount`, en una opción | el primer token que la nombró, y cuántas veces se nombró |
+
+Cada error dice de quién es: `TParseError.SymbolResult` es el resultado de su símbolo, y `nil` en un
+error de la lectura de la invocación, como un fichero de respuesta que no existe. Un token que no
+reclama nadie es un error del comando alcanzado.
+
+Los errores salen en este orden:
+
+1. un subcomando que falta;
+2. los errores de leer la invocación;
+3. los tokens que nadie reclamó, en el orden en que se escribieron;
+4. la validación, del comando más interno al raíz: las opciones de cada comando en el orden en que se
+   declararon, y después sus argumentos.
+
+La aridad de una opción se comprueba antes de convertir su valor, y si falla es lo único que esa
+opción informa: repetida con dos valores, falla por la repetición sean cuales sean los valores. Una
+opción o un argumento requerido cuyo valor no convierte tiene resultado, así que informa de la
+conversión y no de que falta.
 
 ---
 
@@ -153,7 +219,8 @@ nadie los escriba dos veces — y se comparan sin distinguir mayúsculas, como e
 `.AcceptOnlyFromAmong([...])` es el mismo cierre para un tipo que no lo expresa.
 
 Una opción `Boolean` es un flag: basta con nombrarla, y valen `--flag false`, `--flag=false` y
-`--flag true`.
+`--flag true`. Solo `true` y `false`, en cualquier caja, son booleanos: `--flag 0` nombra el flag, y
+el `0` va al siguiente posicional.
 
 Una **colección** es un valor hecho con los tokens que le dieron, así que leerla devuelve el array
 entero:
@@ -239,7 +306,8 @@ nombrar, porque Delphi no tiene forma de decir «el elemento de `T`» en una int
 ## Un valor por defecto que es un cálculo
 
 `DefaultValue(Valor)` toma una constante y se evalúa al declarar la gramática. `DefaultValueFactory`
-toma un cálculo, que se evalúa **solo si la invocación no trajo el símbolo**:
+toma un cálculo, que el parse ejecuta **cuando la invocación alcanza el comando que declara el símbolo
+y no lo trae**:
 
 ```pascal
 OutOpt := CommandLine.Option<string>('--out').Description('Dónde escribir')
@@ -254,8 +322,8 @@ Un default que depende del entorno no se puede escribir como constante en una gr
 de saberlo. Sin esto, la aplicación deja el default vacío y lo rellena después de leer — y entonces la
 ayuda muestra un default que el programa no usa.
 
-El cálculo corre como máximo una vez, y **la ayuda no lo ejecuta**: muestra el texto que se declare
-junto a él, y ningún default cuando no hay ninguno.
+Cada parse lo ejecuta una vez, se lea después el valor o no, y **la ayuda no lo ejecuta**: muestra el
+texto que se declare junto a él, y ningún default cuando no hay ninguno.
 
 ---
 
@@ -536,6 +604,10 @@ invocación que no encaja con la gramática, y el 1 queda para una acción que f
 terminación del proceso —ni Ctrl+C, ni tiempo de gracia antes de terminar—.
 `TInvocationConfiguration` lleva la salida, el error y el manejador de excepciones por defecto, y
 nada más.
+
+**6 · Leer un valor rechazado lanza `ECommandLine`.** .NET lanza `InvalidOperationException`. Aquí es
+la excepción propia del módulo, la que lanza ante una gramática mal declarada o cambiada después de
+congelarla.
 
 ---
 

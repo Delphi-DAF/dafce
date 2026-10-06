@@ -14,7 +14,8 @@ uses
   Invocation.Feat in 'Invocation.Feat.pas',
   FrozenGrammar.Feat in 'FrozenGrammar.Feat.pas',
   HelpActions.Feat in 'HelpActions.Feat.pas',
-  ParseRules.Feat in 'ParseRules.Feat.pas';
+  ParseRules.Feat in 'ParseRules.Feat.pas',
+  Results.Feat in 'Results.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;
