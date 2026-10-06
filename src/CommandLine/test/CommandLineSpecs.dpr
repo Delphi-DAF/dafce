@@ -13,7 +13,8 @@ uses
   Values.Feat in 'Values.Feat.pas',
   Invocation.Feat in 'Invocation.Feat.pas',
   FrozenGrammar.Feat in 'FrozenGrammar.Feat.pas',
-  HelpActions.Feat in 'HelpActions.Feat.pas';
+  HelpActions.Feat in 'HelpActions.Feat.pas',
+  ParseRules.Feat in 'ParseRules.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;
