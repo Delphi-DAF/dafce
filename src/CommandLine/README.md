@@ -45,10 +45,13 @@ run time.
 | `ICommandResult`, `IOptionResult`, `IArgumentResult` | The result of one symbol the invocation reached: its tokens, its errors, its parent |
 | `TParseError` | One error of the parse, and the result of the symbol it belongs to |
 | `TToken` | One token of the invocation, as the parse read it |
-| `TCommandAction` | What a command does when an invocation reaches it: receives the parse result, answers the exit code |
+| `ICommandLineAction` | What an invocation runs: the action of a command or of an option. `TSynchronousCommandLineAction` is the base of one written as a class |
+| `TCommandAction` | The action of a command written as a function: receives the parse result, answers the exit code |
+| `IHelpOption`, `IVersionOption` | The help and the version: two options every root has, each with an action that writes them |
+| `IParseErrorAction` | What `Invoke` runs for a parse error: what was meant, the errors and the help |
 | `TInvocationConfiguration` | Where `Invoke` writes, and whether a default handler catches what the action lets escape |
 | `TCommandLineExit` | The codes `Invoke` answers when the action is not the one deciding |
-| `CommandLine` | The entry point: `Option<T>`, `Argument<T>`, `Command`, `Root` |
+| `CommandLine` | The entry point: `Option<T>`, `Argument<T>`, `Command`, `Root`, `HelpOption`, `VersionOption` |
 
 ---
 
@@ -86,7 +89,7 @@ initializer.
 | Arity | `.Arity(TArgumentArity.ZeroOrMore)` and the other four |
 | Bounded values | an enumerated `T`, or `.AcceptOnlyFromAmong(['fast', 'safe'])` |
 | Several values per mention | `.AllowMultipleArgumentsPerToken` — `--items a b c` without repeating the name |
-| Collecting what is not ours | `Command.AllowUnmatchedTokens`, read back as `UnmatchedTokens` |
+| Collecting what is not ours | `Command.AllowUnmatchedTokens`; `UnmatchedTokens` gives back what nothing claimed, error or not |
 | Version | `.WithVersion('1.0.0')` on the root; also `.WithVersion(tag, name, company)` or `.WithVersion(TSomeClass)` to take it from a `[Version]` annotation. `IParseResult.VersionInfo` gives it back |
 
 ---
@@ -148,7 +151,7 @@ if (Port <> nil) and not Port.IsImplicit then
 
 Each error says whose it is: `TParseError.SymbolResult` is the result of its symbol, and `nil` for an
 error of reading the invocation, such as a response file that does not exist. A token that nothing
-claims is an error of the command reached.
+claims is an error of the command reached, unless the root collects it.
 
 The errors come out in this order:
 
@@ -414,7 +417,8 @@ var Parsed := Sudo.Parse(['-u', 'admin', 'apt', 'update']);
 var Rest   := Parsed.UnmatchedTokens;   // ['apt', 'update']
 ```
 
-Without it — and that is still the default — a token matching nothing is a parse error.
+Without it — and that is still the default — a token matching nothing is a parse error, and
+`UnmatchedTokens` carries it all the same. A root that collects outranks a subcommand that does not.
 
 ---
 
@@ -442,10 +446,15 @@ Options:
   --version             Show version information
 ```
 
-Every grammar answers `--help` and `-h`, and every **root** answers `--version`, without declaring
-anything. Asking for either is a **valid outcome**, not a parse failure: `IsHelpRequested` /
-`IsVersionRequested` are true and `Errors` is empty. Help is resolved *before* the grammar is validated.
-An application that declares its own `--help` or `--version` wins — it is the one that knows its case.
+Every **root** has a help option and a version option among its options, without declaring anything:
+the help answers to `--help`, `-h`, `/h`, `-?` and `/?` on every command, and the version to
+`--version`. Asking for either is a **valid outcome**, not a parse failure: `IsHelpRequested` /
+`IsVersionRequested` are true. The whole invocation is still read, and asking for the help clears the
+errors of the rest of it: `mytool --port abc --help` writes the help and answers 0. `--version` with
+another option, argument or subcommand is an error of its own,
+`--version option cannot be combined with other arguments.`, which stays in `Errors` while the version
+is written all the same. An application that declares its own `--help` or `--version` wins — it is
+the one that knows its case.
 `--version` sits on the root and not on each subcommand, as in .NET: a version belongs to the tool.
 What they write can be wrapped with something of your own: see *A banner above the help and the
 version*.
@@ -477,13 +486,12 @@ settles the invocation and answers the code the process ends with:
 
 | The parse result | What `Invoke` does | What it answers |
 |---|---|---|
-| asked for `--version` | runs the root's `VersionAction`, which writes the version to the output | the code of the action: `TCommandLineExit.Ok` (0) by default |
-| asked for `--help` | runs the root's `HelpAction`, which writes the help to the output | the code of the action: `Ok` (0) by default |
-| carries errors | writes them to the error | `InvocationError` (2) |
+| named an option with a terminating action — `--help` and `--version` among them | runs it: the default ones write the help of the command reached, or the version, to the output | the code of the action: `TCommandLineExit.Ok` (0) by default |
+| carries errors | writes what was probably meant and the help of the command reached to the output, and the errors to the error — see *What a parse error writes* | `InvocationError` (2) |
 | reached a command with an action | runs it | the code the action answers |
 | reached a command without one | nothing | `Ok` (0) |
 
-No command's action runs in the first three rows.
+No command's action runs in the first two rows.
 
 - An action with no code of its own is a `procedure(const Parsed: IParseResult)`, and the
   invocation answers `Ok` for it.
@@ -492,6 +500,64 @@ No command's action runs in the first three rows.
   `mytool`'s action. Without one it only groups, and `mytool` alone fails with
   `Command "mytool" requires a subcommand: …`.
 - `SetAction` answers `ICommand`, so on a root it is a statement, like `Description(Text)`.
+- `SetAction` also takes an `ICommandLineAction`: an action written as a class, on
+  `TSynchronousCommandLineAction`. `Command.Action` gives it back.
+
+### An option with an action
+
+An option carries an action too: `Option.SetAction(Action)`, with an `ICommandLineAction`. One whose
+`IsTerminating` is true runs instead of the action of the command reached, as the help and the version
+do. Every one whose `IsTerminating` is false runs before it, in the order they were named, and so does
+the one of an option that took its default. When one of those answers a code other than 0, that code
+is what `Invoke` answers.
+
+```pascal
+type
+  TTraceAction = class(TSynchronousCommandLineAction)
+  public
+    function IsTerminating: Boolean; override;
+    function Invoke(const Parsed: IParseResult): Integer; override;
+  end;
+
+function TTraceAction.IsTerminating: Boolean;
+begin
+  Result := False;
+end;
+
+function TTraceAction.Invoke(const Parsed: IParseResult): Integer;
+begin
+  Parsed.InvocationConfiguration.WriteOutput('tracing on');
+  Result := TCommandLineExit.Ok;
+end;
+
+var TraceOpt := CommandLine.Option<Boolean>('--trace').SetAction(TTraceAction.Create);
+```
+
+`IParseResult.Action` is the action `Invoke` runs last: the terminating one of a named option, the one
+for a parse error, or else the action of the command reached.
+
+### What a parse error writes
+
+```
+$ mytool --verbse
+'--verbse' was not matched. Did you mean one of the following?
+--verbose
+
+Unknown option "--verbse" for mytool
+
+<the help of mytool>
+```
+
+The suggestions and the help go to the output, and the errors to the error, followed by a blank
+line. A name is suggested when it is at most 3 edits away from a token nothing claimed, and only the
+closest are; a hidden option or command never is. `Parsed.Action` is then an `IParseErrorAction`,
+whose `ShowTypoCorrections` and `ShowHelp` turn those two parts off:
+
+```pascal
+var OnError: IParseErrorAction;
+if Supports(Parsed.Action, IParseErrorAction, OnError) then
+  OnError.ShowHelp := False;
+```
 
 ### Where it writes, and what it does with an exception
 
@@ -499,9 +565,9 @@ No command's action runs in the first three rows.
 
 | Field | Default | What it says |
 |---|---|---|
-| `Output` | `nil`, the console | where the help and the version are written — any `TTextWriter` |
+| `Output` | `nil`, the console | where the help, the version and the suggestions of what was meant are written — any `TTextWriter` |
 | `Error` | `nil`, the console's error | where parse errors and escaped exceptions are written |
-| `EnableDefaultExceptionHandler` | `True` | on, an exception leaving the action is written to `Error` as `EClass: message` and `Invoke` answers `TCommandLineExit.Failure` (1); off, it leaves `Invoke` and the caller sees it |
+| `EnableDefaultExceptionHandler` | `True` | on, an exception leaving an action is written to `Error` as `Unhandled exception: EClass: message`, with its stack when a provider of stack traces is installed, and `Invoke` answers `TCommandLineExit.Failure` (1); off, it leaves `Invoke` and the caller sees it |
 
 A `TInvocationConfiguration` declared and never assigned already holds those defaults:
 
@@ -513,9 +579,9 @@ ExitCode := Parsed.Invoke(Configuration);
 
 ### A banner above the help and the version
 
-The root settles the help and the version with two actions of its own, `HelpAction` and
-`VersionAction`, of the same type as the action of a command. The default ones write the help of the
-command reached, or the version, to the output of the invocation and answer `Ok`. To put something
+The root gives the actions of its help and version options as `HelpAction` and `VersionAction`,
+functions of the type a command's action takes. The default ones write the help of the command
+reached, or the version, to the output of the invocation and answer `Ok`. To put something
 of your own above them, replace the action with one that writes it and then calls the default one:
 
 ```pascal
@@ -541,8 +607,8 @@ Root.VersionAction := WithBanner(Root.VersionAction);
 - What the action answers is what `Invoke` answers, and the default exception handler covers it as
   it covers the action of a command.
 - Assigning `nil` brings the default action back.
-- In `System.CommandLine` these actions belong to `HelpOption` and `VersionOption`; here they belong
-  to the root.
+- Replacing them on the root replaces the action of its help or version option, which is where
+  `System.CommandLine` keeps them. The replacement clears the parse errors, as the help does.
 
 ⚠️ Capture the default action, never the root. An action that holds the root it is installed on
 forms a reference cycle with it, and neither is ever released.
@@ -604,6 +670,14 @@ nothing else.
 it is the module's own exception, the one it raises for a grammar declared wrong or changed once
 frozen.
 
+**7 · Nothing is written in color.** .NET writes parse errors and an escaped exception in red on a
+console. Here they are plain text, and an escaped exception carries its stack only when a provider of
+stack traces is installed.
+
+**8 · An option the application declares wins over the help and the version of the root.** In .NET
+the help and version options a root brings answer first; here an option declared with one of their
+names does.
+
 ---
 
 ## What is not here (yet)
@@ -613,7 +687,7 @@ Nothing below changes the shape of the API, so all of it is additive:
 - **The widths nobody has asked for yet** — `short`, `byte` and the unsigned ones. A type enters when
   somebody asks for it; until then a conversion of its own covers it in one line.
 
-The `[diagram]` and `[suggest]` directives, pre-actions and shell completion are not ported.
+The `[diagram]` and `[suggest]` directives and shell completion are not ported.
 
 ---
 

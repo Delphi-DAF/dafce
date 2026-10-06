@@ -71,12 +71,14 @@ Everything lives in one class, `TBuildTool`, and each part answers a different q
   the conversion itself wrote — a type a third party adds fails as well as one of serie.
 
 - **`Run` is `Parse(Args).Invoke`, and what it answers is the exit code.** Help and version are
-  written and answer 0, and a parse error goes to the error output and answers 2. Help is answered
-  before anything is judged: asking how a tool works is an outcome, not a mistake.
+  written and answer 0. A parse error writes what was probably meant, then the errors to the error
+  output, then the help of the command reached, and answers 2. Asking for help clears the errors of
+  the rest of the invocation.
 
 - **`Walk` invokes with a `TInvocationConfiguration` whose `Error` is a `TStringWriter`**, so the
   walkthrough writes each error right after the invocation that caused it, followed by its exit
-  code. Run with arguments, the tool writes its errors to the console's error output.
+  code. It leaves out the help that follows an error: the `Action` of the parse result is then an
+  `IParseErrorAction`, and its `ShowHelp` turns it off. Run with arguments, the tool writes all of it.
 
 ## The invocations that fail on purpose
 

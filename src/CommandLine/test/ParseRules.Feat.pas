@@ -400,9 +400,9 @@ Feature Command line parse rules @commandline @parserules
         Expect(W.Parsed.ErrorText).ToEqual('"abc" is not a valid integer for count');
       end)
 
-.Rule('--help and --version end the parse where they appear')
+.Rule('the parse reads the whole invocation, and asking for the help clears what else went wrong')
 
-  .Scenario('--help behind an unknown option asks for the help and keeps the error')
+  .Scenario('--help behind an unknown option asks for the help and clears the error')
     .Given('a command with an action and a required option',
       procedure(W: TParseRulesWorld)
       begin
@@ -414,11 +414,12 @@ Feature Command line parse rules @commandline @parserules
         W.Parsed := W.Flat.Parse(['--bogus', '--help']);
         W.ExitCode := W.Parsed.Invoke(W.Configuration);
       end)
-    .&Then('the help is asked for, and the error of the unknown option stays in the result',
+    .&Then('the help is asked for, the unknown option was read, and its error is not in the result',
       procedure(W: TParseRulesWorld)
       begin
         Expect(W.Parsed.IsHelpRequested).ToBeTrue;
-        Expect(W.Parsed.ErrorText).ToEqual('Unknown option "--bogus" for tool');
+        Expect(string.Join(' ', W.Parsed.UnmatchedTokens)).ToEqual('--bogus');
+        Expect(W.Parsed.ErrorText).ToEqual('');
       end)
     .&And('the invocation writes the help and no error, does not run the action, and answers 0',
       procedure(W: TParseRulesWorld)
@@ -429,7 +430,7 @@ Feature Command line parse rules @commandline @parserules
         Expect(W.ExitCode).ToEqual(TCommandLineExit.Ok);
       end)
 
-  .Scenario('--help behind a value that does not convert asks for the help and keeps the error')
+  .Scenario('--help behind a value that does not convert asks for the help and clears the error')
     .Given('a command with an integer option',
       procedure(W: TParseRulesWorld)
       begin
@@ -440,14 +441,14 @@ Feature Command line parse rules @commandline @parserules
       begin
         W.Parsed := W.Flat.Parse(['--port', 'x', '--help']);
       end)
-    .&Then('the help is asked for, and the error of the conversion stays in the result',
+    .&Then('the help is asked for, and the error of the conversion is not in the result',
       procedure(W: TParseRulesWorld)
       begin
         Expect(W.Parsed.IsHelpRequested).ToBeTrue;
-        Expect(W.Parsed.ErrorText).ToEqual('"x" is not a valid integer for --port');
+        Expect(W.Parsed.ErrorText).ToEqual('');
       end)
 
-  .Scenario('Nothing behind --help is read')
+  .Scenario('What is behind --help is read')
     .Given('a root that only groups',
       procedure(W: TParseRulesWorld)
       begin
@@ -458,15 +459,15 @@ Feature Command line parse rules @commandline @parserules
       begin
         W.Parsed := W.Group.Parse(['--help', 'build', '--bogus']);
       end)
-    .&Then('the help is the one of the root, and neither the subcommand nor the unknown option counts',
+    .&Then('the help is the one of the subcommand, and the error of the unknown option is not in the result',
       procedure(W: TParseRulesWorld)
       begin
         Expect(W.Parsed.IsHelpRequested).ToBeTrue;
-        Expect(W.Parsed.Command.FullPath).ToEqual('tool');
+        Expect(W.Parsed.Command.FullPath).ToEqual('tool build');
         Expect(W.Parsed.ErrorText).ToEqual('');
       end)
 
-  .Scenario('Nothing behind --version is read')
+  .Scenario('A stray token behind --version is read, and is not an error')
     .Given('a command with a version',
       procedure(W: TParseRulesWorld)
       begin
@@ -477,10 +478,13 @@ Feature Command line parse rules @commandline @parserules
       begin
         W.Parsed := W.Flat.Parse(['--version', 'extra']);
       end)
-    .&Then('the version is asked for, and the stray argument is not reported',
+    .&Then('the version is asked for, and the stray argument is collected apart without an error',
       procedure(W: TParseRulesWorld)
       begin
+        // A token that matches nothing is not another argument for the version: it has no result, and
+        // its own error is cleared by the version, as any error but the version's own.
         Expect(W.Parsed.IsVersionRequested).ToBeTrue;
+        Expect(string.Join(' ', W.Parsed.UnmatchedTokens)).ToEqual('extra');
         Expect(W.Parsed.ErrorText).ToEqual('');
       end)
 

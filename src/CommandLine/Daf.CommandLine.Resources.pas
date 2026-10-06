@@ -2,7 +2,8 @@
 
 {
   The texts the command line writes to whoever invokes the tool: every parse error, the words an
-  error uses to describe an arity, and what reading a refused value raises.
+  error uses to describe an arity, what reading a refused value raises, the descriptions of the help
+  and the version, and what the invocation writes around an error.
 
   They are resourcestrings, in a unit of their own, so they can be replaced without touching the code
   that writes them.
@@ -38,6 +39,12 @@ resourcestring
   SFileNameIllegal = '"%s" is not a legal file name, and %s accepts only one that is';
 
   SValueNotProvided = '%s is required but was not provided';
+
+  SHelpOptionDescription = 'Show help and usage information';
+  SVersionOptionDescription = 'Show version information';
+  SVersionOptionNotCombined = '%s option cannot be combined with other arguments.';
+  STokenNotMatched = '''%s'' was not matched. Did you mean one of the following?';
+  SUnhandledException = 'Unhandled exception: ';
 
 implementation
 

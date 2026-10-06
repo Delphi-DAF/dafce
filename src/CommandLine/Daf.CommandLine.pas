@@ -89,6 +89,52 @@ type
   /// <summary>An action with no code of its own: the invocation answers <c>TCommandLineExit.Ok</c> for it.</summary>
   TCommandActionProc = reference to procedure(const Parsed: IParseResult);
 
+  /// <summary>What an invocation runs: the action of a command, of an option, or the one it picks for a parse error.</summary>
+  ICommandLineAction = interface
+    ['{7C4B1A20-000D-4F31-9C10-4B0E2D5A000D}']
+    /// <summary>
+    ///   True when it runs instead of the action of the command reached. An option's action that is not
+    ///   terminating runs before it, and the action of the command still runs.
+    /// </summary>
+    function IsTerminating: Boolean;
+    /// <summary>True when, winning the invocation, it discards the parse errors that are not its own.</summary>
+    function ClearsParseErrors: Boolean;
+    /// <summary>Runs it, and answers the code the process ends with.</summary>
+    function Invoke(const Parsed: IParseResult): Integer;
+  end;
+
+  /// <summary>What the invocation runs when the parse ends with errors and no action takes them.</summary>
+  /// <remarks>
+  ///   It writes the suggestions of what was meant to the output, the errors to the error followed by a
+  ///   blank line, and the help of the command reached to the output, and answers
+  ///   <c>TCommandLineExit.InvocationError</c>. <c>IParseResult.Action</c> hands it over, so the two
+  ///   parts that are not the errors can be turned off before invoking.
+  /// </remarks>
+  IParseErrorAction = interface(ICommandLineAction)
+    ['{7C4B1A20-000E-4F31-9C10-4B0E2D5A000E}']
+    function GetShowHelp: Boolean;
+    procedure SetShowHelp(Value: Boolean);
+    function GetShowTypoCorrections: Boolean;
+    procedure SetShowTypoCorrections(Value: Boolean);
+    /// <summary>On, the help follows the errors. On by default.</summary>
+    property ShowHelp: Boolean read GetShowHelp write SetShowHelp;
+    /// <summary>On, what was meant is suggested before the errors. On by default.</summary>
+    property ShowTypoCorrections: Boolean read GetShowTypoCorrections write SetShowTypoCorrections;
+  end;
+
+  /// <summary>The action of serie of a help option: it writes the help of the command reached.</summary>
+  IHelpAction = interface(ICommandLineAction)
+    ['{7C4B1A20-000F-4F31-9C10-4B0E2D5A000F}']
+  end;
+
+  /// <summary>The base of an action written as a class: terminating, and clearing no errors.</summary>
+  TSynchronousCommandLineAction = class abstract(TInterfacedObject, ICommandLineAction)
+  public
+    function IsTerminating: Boolean; virtual;
+    function ClearsParseErrors: Boolean; virtual;
+    function Invoke(const Parsed: IParseResult): Integer; virtual; abstract;
+  end;
+
   /// <summary>The codes an invocation ends with when the action is not the one deciding.</summary>
   /// <remarks>
   ///   They are contract with whoever invokes the tool from a script, who reads them and nothing
@@ -117,14 +163,18 @@ type
   /// </remarks>
   TInvocationConfiguration = record
   public
-    /// <summary>Where the help and the version are written. <c>nil</c> is the console.</summary>
+    /// <summary>
+    ///   Where the help, the version and the suggestions of what was meant are written. <c>nil</c> is
+    ///   the console.
+    /// </summary>
     Output: TTextWriter;
     /// <summary>Where parse errors and escaped exceptions are written. <c>nil</c> is the console's error.</summary>
     Error: TTextWriter;
     /// <summary>
-    ///   On, an exception leaving the action is written to <c>Error</c> as <c>Class: Message</c> and
-    ///   the invocation answers <c>TCommandLineExit.Failure</c>. Off, it leaves the invocation and
-    ///   whoever invoked sees it.
+    ///   On, an exception leaving an action is written to <c>Error</c> as <c>Unhandled exception: </c>
+    ///   followed by its class and its message, and its stack when a provider of stack traces gives
+    ///   one, and the invocation answers <c>TCommandLineExit.Failure</c>. Off, it leaves the invocation
+    ///   and whoever invoked sees it.
     /// </summary>
     EnableDefaultExceptionHandler: Boolean;
     class operator Initialize(out Dest: TInvocationConfiguration);
@@ -292,6 +342,30 @@ type
     ///   option that takes one value may be obligatory or not, and arity cannot say.
     /// </summary>
     function IsRequired: Boolean;
+    /// <summary>What naming it in the invocation runs; <c>nil</c> when it runs nothing.</summary>
+    /// <remarks>
+    ///   A terminating action runs instead of the action of the command reached; one that is not runs
+    ///   before it. The help and the version are options with a terminating action.
+    /// </remarks>
+    function Action: ICommandLineAction;
+  end;
+
+  /// <summary>The option that asks for the help: recursive, and with a terminating action that writes it.</summary>
+  /// <remarks>
+  ///   Every root has one, answering to the five names of <c>HelpTokens</c>. Its action clears the parse
+  ///   errors, because whoever asks how the tool works is not told what else they got wrong.
+  /// </remarks>
+  IHelpOption = interface(IOption)
+    ['{7C4B1A20-0011-4F31-9C10-4B0E2D5A0011}']
+  end;
+
+  /// <summary>The option that asks for the version of the tool, with a terminating action that writes it.</summary>
+  /// <remarks>
+  ///   Every root has one, and only the root: a version belongs to the tool. Its action clears every parse
+  ///   error but its own, and its own is to be combined with another symbol of the grammar.
+  /// </remarks>
+  IVersionOption = interface(IOption)
+    ['{7C4B1A20-0012-4F31-9C10-4B0E2D5A0012}']
   end;
 
   IArgument = interface(IValued)
@@ -349,11 +423,13 @@ type
     ///   It answers <c>ICommand</c>, so on a root it is called as a statement rather than
     ///   chained -- the same caveat as <c>Description</c>.
     /// </remarks>
+    function SetAction(const Action: ICommandLineAction): ICommand; overload;
+    /// <summary>The same, written as a function. The command holds it inside an action.</summary>
     function SetAction(const Action: TCommandAction): ICommand; overload;
     /// <summary>The same, for an action with no code of its own: the invocation answers <c>Ok</c>.</summary>
     function SetAction(const Action: TCommandActionProc): ICommand; overload;
     /// <summary>The declared action, or <c>nil</c> when there is none.</summary>
-    function Action: TCommandAction;
+    function Action: ICommandLineAction;
   end;
 
   IRootCommand = interface(ICommand)
@@ -394,6 +470,9 @@ type
     ///   the code of the invocation.
     /// </summary>
     /// <remarks>
+    ///   It is the action of the root's help option, written as a function: replacing it here
+    ///   replaces it there, and the function replacing it clears the parse errors as the help does.
+    ///
     ///   The default one writes the help of the command reached to the output of the invocation and
     ///   answers <c>Ok</c>. An action that writes something of its own and then calls the default one
     ///   puts it above the help, and the help is still the one derived from the grammar. Assigning
@@ -405,8 +484,8 @@ type
     property HelpAction: TCommandAction read GetHelpAction write SetHelpAction;
     /// <summary>What settles an invocation that asks for the version. See <c>HelpAction</c>.</summary>
     /// <remarks>
-    ///   The default one writes the declared version, with the platform it was compiled for, and
-    ///   answers <c>Ok</c>.
+    ///   The action of the root's version option. The default one writes the declared version, with
+    ///   the platform it was compiled for, and answers <c>Ok</c>.
     /// </remarks>
     property VersionAction: TCommandAction read GetVersionAction write SetVersionAction;
   end;
@@ -499,13 +578,20 @@ type
     ///   A missing subcommand comes first, ahead of the errors of reading the invocation. The rest
     ///   follow the three steps: reading, then the tokens no symbol claimed, then the validation of
     ///   each command -- its options in the order they were declared, then its arguments.
+    ///
+    ///   An action that wins and clears the parse errors, as the help and the version do, leaves only
+    ///   the ones of its own option.
     /// </remarks>
     function Errors: TArray<TParseError>;
     function ErrorText: string;
-    /// <summary>True when help was asked for. Asking is a valid outcome, not a failure.</summary>
+    /// <summary>
+    ///   True when the action that wins is the one of a help option. Asking is a valid outcome, not a
+    ///   failure.
+    /// </summary>
     function IsHelpRequested: Boolean;
+    /// <summary>The help of the command reached when it was asked for; empty otherwise.</summary>
     function HelpText: string;
-    /// <summary>True when the version was asked for. Also an outcome, not a failure.</summary>
+    /// <summary>True when the action that wins is the one of a version option. Also an outcome, not a failure.</summary>
     function IsVersionRequested: Boolean;
     /// <summary>The version the root declared. Formatting it is the caller's decision.</summary>
     function VersionInfo: TVersionInfo;
@@ -518,11 +604,18 @@ type
     function RawOf(const Symbol: ISymbol): TNullable<string>;
     /// <summary>Every raw value bound to a symbol, for an arity that admits many.</summary>
     function RawValuesOf(const Symbol: ISymbol): TArray<string>;
-    /// <summary>
-    ///   The tokens the grammar did not claim. Always empty unless the command reached
-    ///   declared it collects them, because otherwise they are errors instead.
-    /// </summary>
+    /// <summary>The tokens the grammar did not claim, error or not.</summary>
+    /// <remarks>
+    ///   Whether they are an error is the command's to say: they are, unless the command reached
+    ///   collects them, or the root does. Offered either way, they are what a wrapper hands on and what
+    ///   a typo is compared with.
+    /// </remarks>
     function UnmatchedTokens: TArray<string>;
+    /// <summary>
+    ///   The action invoking runs: the terminating action of an option the invocation named, the
+    ///   one written for parse errors, or else the action of the command reached.
+    /// </summary>
+    function Action: ICommandLineAction;
     /// <summary>
     ///   The configuration of the invocation settling this result, so an action writes where the
     ///   invocation writes. Before any invocation, the default one: the console.
@@ -531,18 +624,18 @@ type
     /// <summary>Settles the invocation, writing to the console. See the overload.</summary>
     function Invoke: Integer; overload;
     /// <summary>
-    ///   Settles the invocation and answers the code the process ends with. In this order: the
-    ///   version or the help, settled by the <c>VersionAction</c> or the <c>HelpAction</c> of the
-    ///   root, whose code is the answer; parse errors, written to <c>Error</c>, answer
-    ///   <c>InvocationError</c>; otherwise the action of the command reached runs and its code is
-    ///   the answer -- <c>Ok</c> when the command has none.
+    ///   Settles the invocation and answers the code the process ends with. The actions of the named
+    ///   options that do not terminate run first, all of them, and then <c>Action</c>. The code is the
+    ///   last one other than 0 that one of the first answered, or else the code of <c>Action</c> --
+    ///   <c>Ok</c> when there is none.
     /// </summary>
     /// <remarks>
     ///   Help, version and errors never run the action of a command: asking how the tool works, or
-    ///   getting its syntax wrong, is not an invocation of the work.
+    ///   getting its syntax wrong, is not an invocation of the work. A parse error writes what was
+    ///   meant to <c>Output</c>, the errors to <c>Error</c> and the help of the command reached to
+    ///   <c>Output</c>, and answers <c>InvocationError</c>.
     ///
-    ///   The default exception handler covers the help and the version actions the same as the
-    ///   action of a command.
+    ///   The default exception handler covers every action the same.
     /// </remarks>
     function Invoke(const Configuration: TInvocationConfiguration): Integer; overload;
   end;
@@ -629,6 +722,9 @@ type
     ///   whoever wrote it knows. .NET calls it the same thing, for the same reason.
     /// </remarks>
     function AllowMultipleArgumentsPerToken: IOption<T>;
+    /// <summary>Declares what naming it runs. Declaring it again replaces it.</summary>
+    /// <remarks>Like the action of a command, it stays open after <c>Freeze</c>.</remarks>
+    function SetAction(const Action: ICommandLineAction): IOption<T>;
   end;
 
   /// <summary>An argument identified by its place, not by a name behind dashes.</summary>
@@ -785,12 +881,15 @@ type
     FRecursive: Boolean;
     FRequiredFlag: Boolean;
     FMultiplePerToken: Boolean;
+    FAction: ICommandLineAction;
     function Found(const Where: ISymbolResult): ISymbolResult;
   public
     function IsRecursive: Boolean;
     function IsRequired: Boolean;
     function AllowsMultipleArgumentsPerToken: Boolean;
     function AllowMultipleArgumentsPerToken: IOption<T>;
+    function Action: ICommandLineAction;
+    function SetAction(const Action: ICommandLineAction): IOption<T>;
     function ValueIn(const Parsed: IParseResult): T; overload;
     function ValueIn(const SymbolResult: ISymbolResult): T; overload;
     function RequiredValueIn(const Parsed: IParseResult): T; overload;
@@ -854,13 +953,20 @@ type
     class function Argument<T>(const Name: string): IArgument<T>; overload; static;
     class function Argument<T>(const Name: string; const Parser: TCommandLineParser<T>): IArgument<T>; overload; static;
     class function Command(const Name: string; const Description: string = ''): ICommand; static;
+    /// <summary>A root, with a help option and a version option already among its options.</summary>
     class function Root(const Name: string; const Description: string = ''): IRootCommand; static;
+    /// <summary>A help option answering to the names of <c>HelpTokens</c>.</summary>
+    class function HelpOption: IHelpOption; overload; static;
+    class function HelpOption(const Name: string; const Aliases: array of string): IHelpOption; overload; static;
+    /// <summary>A version option answering to <c>VersionToken</c>.</summary>
+    class function VersionOption: IVersionOption; overload; static;
+    class function VersionOption(const Name: string; const Aliases: array of string): IVersionOption; overload; static;
   end;
 
 const
-  /// <summary>The help tokens every grammar answers to unless it declares its own.</summary>
-  HelpTokens: array [0 .. 1] of string = ('--help', '-h');
-  /// <summary>The version token the ROOT answers to unless it declares its own.</summary>
+  /// <summary>The names the help option of every root answers to: its name, then its aliases.</summary>
+  HelpTokens: array [0 .. 4] of string = ('--help', '-h', '/h', '-?', '/?');
+  /// <summary>The name the version option of every root answers to.</summary>
   VersionToken = '--version';
   /// <summary>Everything after this token is a value, dashes and all. POSIX.</summary>
   /// <remarks>
@@ -876,6 +982,7 @@ uses
   Daf.CommandLine.Values,
   Daf.CommandLine.Help,
   Daf.CommandLine.Parsing,
+  Daf.CommandLine.Invocation,
   Daf.CommandLine.Resources;
 
 const
@@ -893,7 +1000,7 @@ type
     FArguments: TArray<IArgument>;
     FSubcommands: TArray<ICommand>;
     FAllowUnmatched: Boolean;
-    FAction: TCommandAction;
+    FAction: ICommandLineAction;
     // The path is kept as text, set by the parent when the child is added, so it is there
     // for the help and the errors without walking the parents, which are held weakly.
     FPathPrefix: string;
@@ -913,19 +1020,34 @@ type
     function AllowUnmatchedTokens: ICommand;
     function Hidden: ICommand;
     function HelpText: string;
+    function SetAction(const Action: ICommandLineAction): ICommand; overload;
     function SetAction(const Action: TCommandAction): ICommand; overload;
     function SetAction(const Action: TCommandActionProc): ICommand; overload;
-    function Action: TCommandAction;
+    function Action: ICommandLineAction;
     procedure SetPathPrefix(const Value: string);
     procedure Freeze; override;
+  end;
+
+  THelpOption = class(TOption<Boolean>, IHelpOption)
+  public
+    constructor Create(const AName: string; const AAliases: array of string);
+    /// <summary>The one every root has: the names of <c>HelpTokens</c>.</summary>
+    constructor CreateDefault;
+  end;
+
+  TVersionOption = class(TOption<Boolean>, IVersionOption)
+  public
+    constructor Create(const AName: string; const AAliases: array of string);
   end;
 
   TRootCommand = class(TCommand, IRootCommand)
   private
     FVersionInfo: TVersionInfo;
-    FHelpAction: TCommandAction;
-    FVersionAction: TCommandAction;
+    // Also among its options, which hold them; these are for its two shortcuts to their actions.
+    FHelpOption: THelpOption;
+    FVersionOption: TVersionOption;
   public
+    constructor Create(const AName: string);
     function GetHelpAction: TCommandAction;
     procedure SetHelpAction(const Value: TCommandAction);
     function GetVersionAction: TCommandAction;
@@ -958,6 +1080,18 @@ end;
 procedure TInvocationConfiguration.WriteOutput(const Text: string);
 begin
   WriteTo(Output, System.Output, Text);
+end;
+
+{ TSynchronousCommandLineAction }
+
+function TSynchronousCommandLineAction.IsTerminating: Boolean;
+begin
+  Result := True;
+end;
+
+function TSynchronousCommandLineAction.ClearsParseErrors: Boolean;
+begin
+  Result := False;
 end;
 
 { TArgumentArity }
@@ -1639,6 +1773,17 @@ begin
   Result := Self;
 end;
 
+function TOption<T>.Action: ICommandLineAction;
+begin
+  Result := FAction;
+end;
+
+function TOption<T>.SetAction(const Action: ICommandLineAction): IOption<T>;
+begin
+  FAction := Action;
+  Result := Self;
+end;
+
 function TOption<T>.Found(const Where: ISymbolResult): ISymbolResult;
 var
   Me: IOption;
@@ -1992,19 +2137,23 @@ begin
     end;
 end;
 
-function TCommand.SetAction(const Action: TCommandAction): ICommand;
+function TCommand.SetAction(const Action: ICommandLineAction): ICommand;
 begin
   FAction := Action;
   Result := Self;
 end;
 
-function TCommand.SetAction(const Action: TCommandActionProc): ICommand;
+function TCommand.SetAction(const Action: TCommandAction): ICommand;
 begin
-  FAction := AsCommandAction(Action);
-  Result := Self;
+  Result := SetAction(FunctionAction(Action));
 end;
 
-function TCommand.Action: TCommandAction;
+function TCommand.SetAction(const Action: TCommandActionProc): ICommand;
+begin
+  Result := SetAction(AsCommandAction(Action));
+end;
+
+function TCommand.Action: ICommandLineAction;
 begin
   Result := FAction;
 end;
@@ -2030,7 +2179,54 @@ begin
     (Subcommand.AsObject as TSymbol).Freeze;
 end;
 
+{ THelpOption }
+
+constructor THelpOption.Create(const AName: string; const AAliases: array of string);
+var
+  Alias: string;
+begin
+  inherited Create(AName, nil);
+  for Alias in AAliases do
+    Aliases.Add(Alias);
+  SetDescription(SHelpOptionDescription);
+  SetArity(TArgumentArity.Zero);
+  FRecursive := True;
+  FAction := NewHelpAction;
+end;
+
+constructor THelpOption.CreateDefault;
+var
+  I: Integer;
+begin
+  Create(HelpTokens[0], []);
+  for I := 1 to High(HelpTokens) do
+    Aliases.Add(HelpTokens[I]);
+end;
+
+{ TVersionOption }
+
+constructor TVersionOption.Create(const AName: string; const AAliases: array of string);
+var
+  Alias: string;
+begin
+  inherited Create(AName, nil);
+  for Alias in AAliases do
+    Aliases.Add(Alias);
+  SetDescription(SVersionOptionDescription);
+  SetArity(TArgumentArity.Zero);
+  FAction := NewVersionAction;
+end;
+
 { TRootCommand }
+
+constructor TRootCommand.Create(const AName: string);
+begin
+  inherited Create(AName);
+  FHelpOption := THelpOption.CreateDefault;
+  Add(IHelpOption(FHelpOption));
+  FVersionOption := TVersionOption.Create(VersionToken, []);
+  Add(IVersionOption(FVersionOption));
+end;
 
 function TRootCommand.WithVersion(const Version: string): IRootCommand;
 begin
@@ -2056,52 +2252,44 @@ begin
   Result := FVersionInfo;
 end;
 
-// Outside the classes, so the closures capture nothing: they read the help and the version from the
-// result they are handed, and a root holding a closure that holds the root is a cycle.
-function DefaultHelpAction: TCommandAction;
+// Outside the classes, so the closure captures the action it is handed and nothing else: a function
+// holding the root, set as the action of one of its options, is a cycle between counted references.
+function AsFunction(const Action: ICommandLineAction): TCommandAction;
 begin
+  if Action = nil then
+    Exit(nil);
   Result :=
     function(const Parsed: IParseResult): Integer
     begin
-      Parsed.InvocationConfiguration.WriteOutput(Parsed.HelpText);
-      Result := TCommandLineExit.Ok;
-    end;
-end;
-
-function DefaultVersionAction: TCommandAction;
-begin
-  Result :=
-    function(const Parsed: IParseResult): Integer
-    begin
-      Parsed.InvocationConfiguration.WriteOutput(Parsed.VersionInfo.VersionTag(VersionTemplateWithBuild));
-      Result := TCommandLineExit.Ok;
+      Result := Action.Invoke(Parsed);
     end;
 end;
 
 function TRootCommand.GetHelpAction: TCommandAction;
 begin
-  if Assigned(FHelpAction) then
-    Result := FHelpAction
-  else
-    Result := DefaultHelpAction();
+  Result := AsFunction(FHelpOption.Action);
 end;
 
 procedure TRootCommand.SetHelpAction(const Value: TCommandAction);
 begin
-  FHelpAction := Value;
+  // A function in the place of the help settles the invocation as the help does.
+  if Assigned(Value) then
+    FHelpOption.SetAction(FunctionAction(Value, True))
+  else
+    FHelpOption.SetAction(NewHelpAction);
 end;
 
 function TRootCommand.GetVersionAction: TCommandAction;
 begin
-  if Assigned(FVersionAction) then
-    Result := FVersionAction
-  else
-    Result := DefaultVersionAction();
+  Result := AsFunction(FVersionOption.Action);
 end;
 
 procedure TRootCommand.SetVersionAction(const Value: TCommandAction);
 begin
-  FVersionAction := Value;
+  if Assigned(Value) then
+    FVersionOption.SetAction(FunctionAction(Value, True))
+  else
+    FVersionOption.SetAction(NewVersionAction);
 end;
 
 function TRootCommand.Parse: IParseResult;
@@ -2173,6 +2361,26 @@ begin
   Created := TRootCommand.Create(Name);
   Created.SetDescription(Description);
   Result := Created;
+end;
+
+class function CommandLine.HelpOption: IHelpOption;
+begin
+  Result := THelpOption.CreateDefault;
+end;
+
+class function CommandLine.HelpOption(const Name: string; const Aliases: array of string): IHelpOption;
+begin
+  Result := THelpOption.Create(Name, Aliases);
+end;
+
+class function CommandLine.VersionOption: IVersionOption;
+begin
+  Result := TVersionOption.Create(VersionToken, []);
+end;
+
+class function CommandLine.VersionOption(const Name: string; const Aliases: array of string): IVersionOption;
+begin
+  Result := TVersionOption.Create(Name, Aliases);
 end;
 
 end.

@@ -32,6 +32,8 @@ type
     UserOpt: IOption<string>;
     Plain: IRootCommand;
     KeepOpt: IOption<string>;
+    // A root that collects, over a subcommand that declares nothing about it.
+    Outer: IRootCommand;
     Parsed: IParseResult;
     ReadVerbosity: string;
     ReadOut: string;
@@ -129,6 +131,10 @@ begin
   KeepOpt := CommandLine.Option<string>('--keep').Description('What to keep');
   Plain := CommandLine.Root('tool', 'A tool that wraps nobody');
   Plain.Add(KeepOpt);
+
+  Outer := CommandLine.Root('outer', 'Collects what nobody recognises');
+  Outer.AllowUnmatchedTokens;
+  Outer.Add(CommandLine.Command('inner', 'Declares nothing about it'));
 end;
 
 initialization
@@ -545,10 +551,41 @@ Feature Command line syntax @commandline @syntax
         Expect(W.Parsed.Succeeded).ToBeFalse;
         Expect(W.Parsed.ErrorText).ToContain('stray');
       end)
-    .&And('nothing is collected apart',
+
+  .Scenario('What matches nothing is offered apart even when it is an error')
+    .Given('a command that has declared nothing about it',
       procedure(W: TSyntaxWorld)
       begin
-        Expect('[' + string.Join(' ', W.Parsed.UnmatchedTokens) + ']').ToEqual('[]');
+        W.BuildWrapper;
+      end)
+    .When('the invocation passes a token that matches nothing',
+      procedure(W: TSyntaxWorld)
+      begin
+        W.Parsed := W.Plain.Parse(['--keep', 'x', 'stray']);
+      end)
+    .&Then('the parse fails, and the token is available apart',
+      procedure(W: TSyntaxWorld)
+      begin
+        Expect(W.Parsed.Succeeded).ToBeFalse;
+        Expect(string.Join(' ', W.Parsed.UnmatchedTokens)).ToEqual('stray');
+      end)
+
+  .Scenario('A root that collects outranks a subcommand that does not')
+    .Given('a root declared not to treat what it does not recognise as an error, with a subcommand that declares nothing',
+      procedure(W: TSyntaxWorld)
+      begin
+        W.BuildWrapper;
+      end)
+    .When('the invocation names the subcommand and passes a token that matches nothing',
+      procedure(W: TSyntaxWorld)
+      begin
+        W.Parsed := W.Outer.Parse(['inner', 'stray']);
+      end)
+    .&Then('the parse succeeds, and the token is available apart',
+      procedure(W: TSyntaxWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('');
+        Expect(string.Join(' ', W.Parsed.UnmatchedTokens)).ToEqual('stray');
       end)
 
 .Scenario('A single-dash token whose only known letter is the help one is handed on whole')

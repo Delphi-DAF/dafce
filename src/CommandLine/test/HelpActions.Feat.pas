@@ -365,6 +365,33 @@ Feature Replacing the help and the version actions @commandline @helpactions
         Expect(W.Output.ToString).ToEqual('');
       end)
 
+  .Scenario('Replacing it on the root is replacing it on the option')
+    .Given('a root command whose help action was replaced',
+      procedure(W: THelpActionsWorld)
+      begin
+        W.BuildGrammar;
+        W.Root.HelpAction :=
+          function(const Parsed: IParseResult): Integer
+          begin
+            W.SeenOutput := 'the replaced action';
+            Result := 7;
+          end;
+      end)
+    .When('the action of its help option is read, and run',
+      procedure(W: THelpActionsWorld)
+      var
+        Option: IOption;
+      begin
+        for Option in W.Root.Options do
+          if Supports(Option, IHelpOption) then
+            W.ExitCode := Option.Action.Invoke(W.Root.Parse([]));
+      end)
+    .&Then('it is the replaced action',
+      procedure(W: THelpActionsWorld)
+      begin
+        Expect(Format('ran=%s exit=%d', [W.SeenOutput, W.ExitCode])).ToEqual('ran=the replaced action exit=7');
+      end)
+
   .Scenario('A replaced action that raises goes through the default handler')
     .Given('a replaced version action that raises an exception',
       procedure(W: THelpActionsWorld)
@@ -385,7 +412,7 @@ Feature Replacing the help and the version actions @commandline @helpactions
     .&Then('the exception is written to the error, and the invocation answers 1',
       procedure(W: THelpActionsWorld)
       begin
-        Expect(W.Error.ToString).ToEqual('EBannerFailed: no banner today' + sLineBreak);
+        Expect(W.Error.ToString).ToEqual('Unhandled exception: EBannerFailed: no banner today' + sLineBreak);
         Expect(W.ExitCode).ToEqual(TCommandLineExit.Failure);
       end);
 

@@ -16,6 +16,7 @@ type
     First: ICommand;
     Second: ICommand;
     CountOpt: IOption<Integer>;
+    QuietOpt: IOption<Boolean>;
     Parsed: IParseResult;
     Output: TStringWriter;
     Error: TStringWriter;
@@ -310,17 +311,84 @@ Feature Invoking a parse result @commandline @invocation
         W.Parsed := W.Root.Parse(['--count', 'abc']);
         W.ExitCode := W.Parsed.Invoke(W.Configuration);
       end)
-    .&Then('the error is written to the error, and the action does not run',
+    .&Then('the error is written to the error, the help of the command to the output, and the action does not run',
       procedure(W: TInvocationWorld)
       begin
-        Expect(W.Error.ToString).ToContain('"abc" is not a valid');
-        Expect(W.Output.ToString).ToEqual('');
+        Expect(W.Error.ToString).ToEqual('"abc" is not a valid integer for --count' + sLineBreak + sLineBreak);
+        Expect(W.Output.ToString).ToEqual(W.Root.HelpText + sLineBreak);
         Expect(W.RanText).ToEqual('<nothing>');
       end)
     .&And('the invocation answers 2',
       procedure(W: TInvocationWorld)
       begin
         Expect(W.ExitCode).ToEqual(2);
+      end)
+
+  .Scenario('Asking for the help clears the errors of the rest')
+    .Given('a command with an integer option',
+      procedure(W: TInvocationWorld)
+      begin
+        W.CountOpt := CommandLine.Option<Integer>('--count');
+        W.Root := CommandLine.Root('tool', 'Does things');
+        W.Root.Add(W.CountOpt);
+        W.Root.SetAction(
+          function(const Parsed: IParseResult): Integer
+          begin
+            W.Track('root');
+            Result := 5;
+          end);
+      end)
+    .When('the result of parsing an invocation that passes it something that is not an integer, and --help, is invoked',
+      procedure(W: TInvocationWorld)
+      begin
+        W.Parsed := W.Root.Parse(['--count', 'abc', '--help']);
+        W.ExitCode := W.Parsed.Invoke(W.Configuration);
+      end)
+    .&Then('the help is written to the output, and no error is written',
+      procedure(W: TInvocationWorld)
+      begin
+        Expect(W.Output.ToString).ToEqual(W.Root.HelpText + sLineBreak);
+        Expect(W.Error.ToString).ToEqual('');
+        Expect(W.RanText).ToEqual('<nothing>');
+      end)
+    .&And('the invocation answers 0',
+      procedure(W: TInvocationWorld)
+      begin
+        Expect(W.ExitCode).ToEqual(TCommandLineExit.Ok);
+      end)
+
+  .Scenario('The version together with another argument is written all the same')
+    .Given('a root command with a declared version, and an option',
+      procedure(W: TInvocationWorld)
+      begin
+        W.QuietOpt := CommandLine.Option<Boolean>('--quiet');
+        W.Root := CommandLine.Root('tool').WithVersion('2.0.0');
+        W.Root.Add(W.QuietOpt);
+        W.Root.SetAction(
+          function(const Parsed: IParseResult): Integer
+          begin
+            W.Track('root');
+            Result := 5;
+          end);
+      end)
+    .When('the result of parsing an invocation that passes --version and that option is invoked',
+      procedure(W: TInvocationWorld)
+      begin
+        W.Parsed := W.Root.Parse(['--version', '--quiet']);
+        W.ExitCode := W.Parsed.Invoke(W.Configuration);
+      end)
+    .&Then('the version is written to the output, and the result carries the error that says it does not combine',
+      procedure(W: TInvocationWorld)
+      begin
+        Expect(W.Output.ToString).ToStartWith('2.0.0+');
+        Expect(W.Error.ToString).ToEqual('');
+        Expect(W.Parsed.ErrorText).ToEqual('--version option cannot be combined with other arguments.');
+        Expect(W.RanText).ToEqual('<nothing>');
+      end)
+    .&And('the invocation answers 0',
+      procedure(W: TInvocationWorld)
+      begin
+        Expect(W.ExitCode).ToEqual(TCommandLineExit.Ok);
       end)
 
 .Rule('the invocation takes where to write and what to do with what escapes')
@@ -363,10 +431,11 @@ Feature Invoking a parse result @commandline @invocation
         W.Parsed := W.Root.Parse([]);
         W.ExitCode := W.Parsed.Invoke(W.Configuration);
       end)
-    .&Then('the exception is written to the error',
+    .&Then('the exception is written to the error as unhandled, with its class and its message',
       procedure(W: TInvocationWorld)
       begin
-        Expect(W.Error.ToString).ToEqual('EActionFailed: the work failed' + sLineBreak);
+        // No provider of stack traces is installed here, so nothing follows the message.
+        Expect(W.Error.ToString).ToEqual('Unhandled exception: EActionFailed: the work failed' + sLineBreak);
       end)
     .&And('the invocation answers 1',
       procedure(W: TInvocationWorld)

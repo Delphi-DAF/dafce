@@ -37,6 +37,7 @@ contains
   Daf.CommandLine.Values in 'Daf.CommandLine.Values.pas',
   Daf.CommandLine.Help in 'Daf.CommandLine.Help.pas',
   Daf.CommandLine.Parsing in 'Daf.CommandLine.Parsing.pas',
+  Daf.CommandLine.Invocation in 'Daf.CommandLine.Invocation.pas',
   Daf.CommandLine.Resources in 'Daf.CommandLine.Resources.pas';
 
 end.

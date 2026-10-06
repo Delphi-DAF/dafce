@@ -26,12 +26,15 @@ implementation
 
 uses
   System.SysUtils,
-  System.Classes;
+  System.Classes,
+  Daf.CommandLine.Resources;
 
 const
   // Where the description column starts. Anything longer gets its description on the
   // next line rather than pushing the column out for every other row.
   DescriptionColumn = 24;
+  // The names of the help this renderer lists.
+  ListedHelpTokens: array [0 .. 1] of string = ('--help', '-h');
 
 function Padded(const Left, Right: string): string;
 begin
@@ -118,15 +121,22 @@ begin
       Inc(Result);
 end;
 
+// The help and the version options a root brings with it are listed by their own lines, below.
+function IsStandardOption(const Option: IOption): Boolean;
+begin
+  Result := Supports(Option, IHelpOption) or Supports(Option, IVersionOption);
+end;
+
 function DeclaresOwnHelp(const Command: ICommand): Boolean;
 var
   Option: IOption;
   Token: string;
 begin
   for Option in Command.Options do
-    for Token in HelpTokens do
-      if Option.Matches(Token) then
-        Exit(True);
+    if not IsStandardOption(Option) then
+      for Token in ListedHelpTokens do
+        if Option.Matches(Token) then
+          Exit(True);
   Result := False;
 end;
 
@@ -135,7 +145,7 @@ var
   Option: IOption;
 begin
   for Option in Command.Options do
-    if Option.Matches(VersionToken) then
+    if not IsStandardOption(Option) and Option.Matches(VersionToken) then
       Exit(True);
   Result := False;
 end;
@@ -186,15 +196,15 @@ begin
     Lines.Add('');
     Lines.Add('Options:');
     for Option in Command.Options do
-      if not Option.IsHidden then
+      if not Option.IsHidden and not IsStandardOption(Option) then
         Lines.Add(Padded(OptionLabel(Option), Annotated(Option, Option.IsRequired and not Option.HasDefaultValue)));
     // Listed because they answer, not because anybody declared them. When the
     // application declared its own, the loop above already printed that one.
     if not DeclaresOwnHelp(Command) then
-      Lines.Add(Padded(HelpTokens[0] + ', ' + HelpTokens[1], 'Show help and usage information'));
+      Lines.Add(Padded(ListedHelpTokens[0] + ', ' + ListedHelpTokens[1], SHelpOptionDescription));
     // The version is the root's, so only the root advertises it.
     if Supports(Command, IRootCommand, Root) and not Root.VersionInfo.IsEmpty and not DeclaresOwnVersion(Command) then
-      Lines.Add(Padded(VersionToken, 'Show version information'));
+      Lines.Add(Padded(VersionToken, SVersionOptionDescription));
 
     Result := Lines.Text;
   finally

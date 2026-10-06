@@ -45,10 +45,13 @@ en ejecución.
 | `ICommandResult`, `IOptionResult`, `IArgumentResult` | El resultado de un símbolo que la invocación alcanzó: sus tokens, sus errores, su padre |
 | `TParseError` | Un error del parse, y el resultado del símbolo al que pertenece |
 | `TToken` | Un token de la invocación, tal como lo leyó el parse |
-| `TCommandAction` | Lo que hace un comando cuando una invocación lo alcanza: recibe el resultado del parse y devuelve el código de salida |
+| `ICommandLineAction` | Lo que ejecuta una invocación: la acción de un comando o de una opción. `TSynchronousCommandLineAction` es la base de una escrita como clase |
+| `TCommandAction` | La acción de un comando escrita como función: recibe el resultado del parse y devuelve el código de salida |
+| `IHelpOption`, `IVersionOption` | La ayuda y la versión: dos opciones que tiene toda raíz, cada una con una acción que las escribe |
+| `IParseErrorAction` | Lo que ejecuta `Invoke` ante un error de parse: lo que se quiso escribir, los errores y la ayuda |
 | `TInvocationConfiguration` | Dónde escribe `Invoke`, y si un manejador por defecto captura lo que la acción deja escapar |
 | `TCommandLineExit` | Los códigos que devuelve `Invoke` cuando no es la acción quien decide |
-| `CommandLine` | El punto de entrada: `Option<T>`, `Argument<T>`, `Command`, `Root` |
+| `CommandLine` | El punto de entrada: `Option<T>`, `Argument<T>`, `Command`, `Root`, `HelpOption`, `VersionOption` |
 
 ---
 
@@ -86,7 +89,7 @@ Root.Add([VerboseOpt, Build]);
 | Aridad | `.Arity(TArgumentArity.ZeroOrMore)` y las otras cuatro |
 | Valores acotados | una `T` enumerada, o `.AcceptOnlyFromAmong(['fast', 'safe'])` |
 | Varios valores por mención | `.AllowMultipleArgumentsPerToken` — `--items a b c` sin repetir el nombre |
-| Recoger lo ajeno | `Comando.AllowUnmatchedTokens`, leído en `UnmatchedTokens` |
+| Recoger lo ajeno | `Comando.AllowUnmatchedTokens`; `UnmatchedTokens` devuelve lo que nadie reclamó, sea error o no |
 | Versión | `.WithVersion('1.0.0')` en la raíz; también `.WithVersion(tag, nombre, compañía)` o `.WithVersion(TUnaClase)` para tomarla de una anotación `[Version]`. `IParseResult.VersionInfo` la devuelve |
 
 ---
@@ -149,7 +152,7 @@ if (Port <> nil) and not Port.IsImplicit then
 
 Cada error dice de quién es: `TParseError.SymbolResult` es el resultado de su símbolo, y `nil` en un
 error de la lectura de la invocación, como un fichero de respuesta que no existe. Un token que no
-reclama nadie es un error del comando alcanzado.
+reclama nadie es un error del comando alcanzado, salvo que la raíz lo recoja.
 
 Los errores salen en este orden:
 
@@ -419,7 +422,8 @@ var Parsed := Sudo.Parse(['-u', 'admin', 'apt', 'update']);
 var Resto  := Parsed.UnmatchedTokens;   // ['apt', 'update']
 ```
 
-Sin eso —y sigue siendo el defecto— un token que no casa con nada es un error de parseo.
+Sin eso —y sigue siendo el defecto— un token que no casa con nada es un error de parseo, y
+`UnmatchedTokens` lo trae igual. Una raíz que recoge manda sobre un subcomando que no.
 
 ---
 
@@ -447,11 +451,15 @@ Options:
   --version             Show version information
 ```
 
-Toda gramática responde a `--help` y `-h`, y toda **raíz** responde a `--version`, sin declarar nada.
-Pedir cualquiera de las dos es un **resultado válido**, no un fallo: `IsHelpRequested` /
-`IsVersionRequested` son ciertos y `Errors` está vacío. La ayuda se resuelve *antes* de validar la
-gramática. Una aplicación que declare su propio `--help` o `--version` gana: es la que conoce su
-caso. Y `--version` va en la raíz y no en cada subcomando, como en .NET: la versión es de la
+Toda **raíz** tiene entre sus opciones una de ayuda y otra de versión, sin declarar nada: la ayuda
+responde a `--help`, `-h`, `/h`, `-?` y `/?` en cualquier comando, y la versión a `--version`. Pedir
+cualquiera de las dos es un **resultado válido**, no un fallo: `IsHelpRequested` /
+`IsVersionRequested` son ciertos. La invocación se lee entera igualmente, y pedir la ayuda borra los
+errores del resto: `mitool --port abc --help` escribe la ayuda y devuelve 0. `--version` con otra
+opción, otro argumento o un subcomando es un error suyo,
+`--version option cannot be combined with other arguments.`, que queda en `Errors` mientras la versión
+se escribe igual. Una aplicación que declare su propio `--help` o `--version` gana: es la que conoce
+su caso. Y `--version` va en la raíz y no en cada subcomando, como en .NET: la versión es de la
 herramienta. Lo que escriben se puede envolver con algo propio: ver *Un banner encima de la ayuda y
 de la versión*.
 
@@ -482,13 +490,12 @@ resuelve la invocación y devuelve el código con el que termina el proceso:
 
 | El resultado del parse | Qué hace `Invoke` | Qué devuelve |
 |---|---|---|
-| pidió `--version` | ejecuta la `VersionAction` de la raíz, que escribe la versión en la salida | el código de la acción: `TCommandLineExit.Ok` (0) la de serie |
-| pidió `--help` | ejecuta la `HelpAction` de la raíz, que escribe la ayuda en la salida | el código de la acción: `Ok` (0) la de serie |
-| trae errores | los escribe en el error | `InvocationError` (2) |
+| nombró una opción con acción terminal —`--help` y `--version` entre ellas— | la ejecuta: las de serie escriben en la salida la ayuda del comando alcanzado, o la versión | el código de la acción: `TCommandLineExit.Ok` (0) la de serie |
+| trae errores | escribe en la salida lo que probablemente se quiso escribir y la ayuda del comando alcanzado, y en el error los errores —ver *Lo que escribe un error de parse*— | `InvocationError` (2) |
 | alcanzó un comando con acción | la ejecuta | el código que devuelve la acción |
 | alcanzó un comando sin ella | nada | `Ok` (0) |
 
-En las tres primeras filas no corre la acción de ningún comando.
+En las dos primeras filas no corre la acción de ningún comando.
 
 - Una acción sin código propio es un `procedure(const Parsed: IParseResult)`, y la
   invocación devuelve `Ok` por ella.
@@ -497,6 +504,64 @@ En las tres primeras filas no corre la acción de ningún comando.
   acción de `mitool`. Sin ella solo agrupa, y `mitool` a secas falla con
   `Command "mitool" requires a subcommand: …`.
 - `SetAction` devuelve `ICommand`, así que en una raíz es una sentencia, como `Description(Texto)`.
+- `SetAction` también recibe una `ICommandLineAction`: una acción escrita como clase, sobre
+  `TSynchronousCommandLineAction`. `Command.Action` la devuelve.
+
+### Una opción con acción
+
+Una opción también lleva acción: `Opcion.SetAction(Accion)`, con una `ICommandLineAction`. Una cuyo
+`IsTerminating` es cierto se ejecuta en lugar de la acción del comando alcanzado, como la ayuda y la
+versión. Las que tienen `IsTerminating` falso se ejecutan antes que ella, en el orden en que se
+nombraron, y también la de una opción que tomó su valor por defecto. Cuando una de ellas devuelve un
+código distinto de 0, ese código es el que devuelve `Invoke`.
+
+```pascal
+type
+  TTraceAction = class(TSynchronousCommandLineAction)
+  public
+    function IsTerminating: Boolean; override;
+    function Invoke(const Parsed: IParseResult): Integer; override;
+  end;
+
+function TTraceAction.IsTerminating: Boolean;
+begin
+  Result := False;
+end;
+
+function TTraceAction.Invoke(const Parsed: IParseResult): Integer;
+begin
+  Parsed.InvocationConfiguration.WriteOutput('tracing on');
+  Result := TCommandLineExit.Ok;
+end;
+
+var TraceOpt := CommandLine.Option<Boolean>('--trace').SetAction(TTraceAction.Create);
+```
+
+`IParseResult.Action` es la acción que `Invoke` ejecuta la última: la terminal de una opción nombrada,
+la de un error de parse, o si no la acción del comando alcanzado.
+
+### Lo que escribe un error de parse
+
+```
+$ mitool --verbse
+'--verbse' was not matched. Did you mean one of the following?
+--verbose
+
+Unknown option "--verbse" for mitool
+
+<la ayuda de mitool>
+```
+
+Las sugerencias y la ayuda van a la salida, y los errores al error, seguidos de una línea en blanco.
+Un nombre se sugiere cuando está a 3 ediciones o menos de un token que nadie reclamó, y solo los más
+cercanos; una opción o un comando ocultos, nunca. `Parsed.Action` es entonces una
+`IParseErrorAction`, cuyos `ShowTypoCorrections` y `ShowHelp` apagan esas dos partes:
+
+```pascal
+var OnError: IParseErrorAction;
+if Supports(Parsed.Action, IParseErrorAction, OnError) then
+  OnError.ShowHelp := False;
+```
 
 ### Dónde escribe, y qué hace con una excepción
 
@@ -505,9 +570,9 @@ defecto.
 
 | Campo | Por defecto | Qué dice |
 |---|---|---|
-| `Output` | `nil`, la consola | dónde se escriben la ayuda y la versión — cualquier `TTextWriter` |
+| `Output` | `nil`, la consola | dónde se escriben la ayuda, la versión y las sugerencias de lo que se quiso escribir — cualquier `TTextWriter` |
 | `Error` | `nil`, el error de la consola | dónde se escriben los errores de parse y las excepciones que se escapan |
-| `EnableDefaultExceptionHandler` | `True` | encendido, una excepción que sale de la acción se escribe en `Error` como `EClase: mensaje` e `Invoke` devuelve `TCommandLineExit.Failure` (1); apagado, sale de `Invoke` y la ve quien llamó |
+| `EnableDefaultExceptionHandler` | `True` | encendido, una excepción que sale de una acción se escribe en `Error` como `Unhandled exception: EClase: mensaje`, con su pila cuando hay instalado un proveedor de pilas, e `Invoke` devuelve `TCommandLineExit.Failure` (1); apagado, sale de `Invoke` y la ve quien llamó |
 
 Una `TInvocationConfiguration` declarada y sin asignar ya lleva esos valores:
 
@@ -519,9 +584,9 @@ ExitCode := Parsed.Invoke(Configuration);
 
 ### Un banner encima de la ayuda y de la versión
 
-La raíz resuelve la ayuda y la versión con dos acciones propias, `HelpAction` y `VersionAction`, del
-mismo tipo que la acción de un comando. Las de serie escriben en la salida de la invocación la ayuda
-del comando alcanzado, o la versión, y devuelven `Ok`. Para poner algo tuyo encima, sustituye la
+La raíz da las acciones de sus opciones de ayuda y de versión como `HelpAction` y `VersionAction`,
+funciones del tipo que toma la acción de un comando. Las de serie escriben en la salida de la
+invocación la ayuda del comando alcanzado, o la versión, y devuelven `Ok`. Para poner algo tuyo encima, sustituye la
 acción por una que lo escriba y después llame a la de serie:
 
 ```pascal
@@ -546,8 +611,8 @@ Root.VersionAction := WithBanner(Root.VersionAction);
 - Lo que devuelve la acción es lo que devuelve `Invoke`, y el manejador de excepciones por defecto la
   cubre como cubre la acción de un comando.
 - Asignar `nil` devuelve la acción de serie.
-- En `System.CommandLine` estas acciones son de `HelpOption` y de `VersionOption`; aquí son de la
-  raíz.
+- Sustituirlas en la raíz sustituye la acción de su opción de ayuda o de versión, que es donde las
+  tiene `System.CommandLine`. La sustituta borra los errores de parse, como la ayuda.
 
 ⚠️ Captura la acción de serie, nunca la raíz. Una acción que sostiene la raíz en la que está
 instalada forma con ella un ciclo de referencias, y ninguna de las dos se libera nunca.
@@ -609,6 +674,14 @@ nada más.
 la excepción propia del módulo, la que lanza ante una gramática mal declarada o cambiada después de
 congelarla.
 
+**7 · Nada se escribe en color.** .NET escribe en rojo los errores de parse y una excepción que se
+escapa, en una consola. Aquí son texto plano, y una excepción que se escapa lleva su pila solo cuando
+hay instalado un proveedor de pilas.
+
+**8 · Una opción que declara la aplicación gana a la ayuda y a la versión de la raíz.** En .NET
+responden antes las opciones de ayuda y de versión que trae la raíz; aquí, una opción declarada con
+uno de sus nombres.
+
 ---
 
 ## Lo que todavía no está
@@ -618,7 +691,7 @@ Nada de lo de abajo cambia la forma del API, así que todo es aditivo:
 - **Los anchos que nadie ha pedido todavía** — `short`, `byte` y los sin signo. Un tipo entra cuando
   alguien lo pide; hasta entonces una conversión propia lo cubre en una línea.
 
-Las directivas `[diagram]` y `[suggest]`, las pre-acciones y el autocompletado no se portan.
+Las directivas `[diagram]` y `[suggest]` y el autocompletado no se portan.
 
 ---
 

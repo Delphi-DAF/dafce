@@ -38,6 +38,7 @@ type
     VersionRoot: IRootCommand;
     VersionBuild: ICommand;
     DefaultedOpt: IOption<string>;
+    QuietOpt: IOption<Boolean>;
     OwnVersionRoot: IRootCommand;
     OwnVersionOpt: IOption<Boolean>;
     // Las tres vias de declarar la version, y la de no declararla.
@@ -55,6 +56,10 @@ type
     Rendered: string;
     RenderedAgain: string;
     Listed: string;
+    /// <summary>Each name tried, and whether it asked for the help.</summary>
+    Answered: string;
+    /// <summary>Whose the errors of the parse are: the version option's, or another symbol's.</summary>
+    ErrorOwners: string;
     ReadDiag: Integer;
     procedure BuildGrammar;
     procedure BuildOwnHelpGrammar;
@@ -94,8 +99,9 @@ procedure THelpWorld.BuildVersionGrammar;
 begin
   DefaultedOpt := CommandLine.Option<string>('--out').Description('Where it goes').DefaultValue('bin\out.exe');
   VersionBuild := CommandLine.Command('build', 'Build things').Add(DefaultedOpt);
+  QuietOpt := CommandLine.Option<Boolean>('--quiet').Description('Say less');
   VersionRoot := CommandLine.Root('mytool', 'A tool with a version').WithVersion('1.2.3');
-  VersionRoot.Add(VersionBuild);
+  VersionRoot.Add([QuietOpt, VersionBuild]);
 end;
 
 procedure THelpWorld.BuildVersionSourcesGrammar;
@@ -281,6 +287,28 @@ Feature Command line help @commandline @help
         Expect(W.Parsed.HelpText.Contains('--port')).ToBeFalse;
       end)
 
+  .Scenario('The help answers to its aliases')
+    .Given('a grammar that declares no help option',
+      procedure(W: THelpWorld)
+      begin
+        W.BuildGrammar;
+      end)
+    .When('invocations passing each of the other names of the help are parsed',
+      procedure(W: THelpWorld)
+      var
+        Names: TArray<string>;
+        Name: string;
+      begin
+        Names := ['-?', '-h', '/h', '/?'];
+        for Name in Names do
+          W.Answered := W.Answered + Format('%s=%s ', [Name, BoolToStr(W.Root.Parse([Name]).IsHelpRequested, True)]);
+      end)
+    .&Then('each of them asks for the help, as --help does',
+      procedure(W: THelpWorld)
+      begin
+        Expect(W.Answered).ToEqual('-?=True -h=True /h=True /?=True ');
+      end)
+
   .Scenario('A grammar that declares a help option of its own')
     .Given('a grammar that declares an option called --help on purpose',
       procedure(W: THelpWorld)
@@ -345,6 +373,33 @@ Feature Command line help @commandline @help
       procedure(W: THelpWorld)
       begin
         Expect(W.Parsed.IsVersionRequested).ToBeFalse;
+      end)
+
+  .Scenario('The version does not combine with other arguments')
+    .Given('a grammar whose root declares its version, and an option',
+      procedure(W: THelpWorld)
+      begin
+        W.BuildVersionGrammar;
+      end)
+    .When('an invocation passing --version and that option is parsed',
+      procedure(W: THelpWorld)
+      var
+        Error: TParseError;
+        AsOption: IOptionResult;
+      begin
+        W.Parsed := W.VersionRoot.Parse(['--version', '--quiet']);
+        for Error in W.Parsed.Errors do
+          if Supports(Error.SymbolResult, IOptionResult, AsOption) and Supports(AsOption.Option, IVersionOption) then
+            W.ErrorOwners := W.ErrorOwners + 'version '
+          else
+            W.ErrorOwners := W.ErrorOwners + 'other ';
+      end)
+    .&Then('the parse fails with an error of the version option that says it does not combine with other arguments',
+      procedure(W: THelpWorld)
+      begin
+        Expect(W.Parsed.Succeeded).ToBeFalse;
+        Expect(W.ErrorOwners).ToEqual('version ');
+        Expect(W.Parsed.ErrorText).ToEqual('--version option cannot be combined with other arguments.');
       end)
 
   .Scenario('A grammar that declares a version option of its own')

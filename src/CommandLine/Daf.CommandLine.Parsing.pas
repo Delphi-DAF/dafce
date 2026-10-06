@@ -3,8 +3,9 @@
 {
   The parse, in the three steps System.CommandLine takes. The invocation is read into typed tokens;
   the tokens build a tree with one result per symbol the invocation reached; and the tree is
-  validated -- the innermost command whole, its parents only in their recursive options and in the
-  ones with a default.
+  validated -- the innermost command whole, its parents only in their recursive options, in the ones
+  with a default and in the version. Building and validating the tree is also where the action the
+  invocation runs is picked, and the errors it clears are dropped.
 
   Reading follows the rules of DAF: the Windows prefix, a group of one-letter options, a value glued to
   its option, and an option that takes the next token whatever it is.
@@ -42,6 +43,7 @@ uses
   Daf.Application.Version,
   Daf.CommandLine.Tokens,
   Daf.CommandLine.Values,
+  Daf.CommandLine.Invocation,
   Daf.CommandLine.Resources;
 
 type
@@ -54,6 +56,8 @@ type
     procedure AddError(const Message: string; const Node: ISymbolResult);
     procedure InsertFirstError(const Message: string; const Node: ISymbolResult);
     function Errors: TArray<TParseError>;
+    /// <summary>Replaces the errors, which is how the action that wins discards the ones it clears.</summary>
+    procedure SetErrors(const Value: TArray<TParseError>);
     function ErrorCount: Integer;
     procedure AddUnmatched(const Token: string);
     function Unmatched: TArray<string>;
@@ -72,6 +76,7 @@ type
     procedure AddError(const Message: string; const Node: ISymbolResult);
     procedure InsertFirstError(const Message: string; const Node: ISymbolResult);
     function Errors: TArray<TParseError>;
+    procedure SetErrors(const Value: TArray<TParseError>);
     function ErrorCount: Integer;
     procedure AddUnmatched(const Token: string);
     function Unmatched: TArray<string>;
@@ -181,16 +186,15 @@ type
     FCommandResult: ICommandResult;
     FTokens: TArray<TToken>;
     FErrorsShared: Boolean;
-    FHelpRequested: Boolean;
-    FHelpText: string;
-    FVersionRequested: Boolean;
+    FAction: ICommandLineAction;
+    FActionOwner: IOption;
+    FPreActions: TArray<ICommandLineAction>;
     FInvocationConfiguration: TInvocationConfiguration;
     function ResultOf(const Symbol: ISymbol): ISymbolResult;
   public
     constructor Create(const ARoot: IRootCommand; const ATree: ISymbolResultTree; const ARootResult: ICommandResult);
-    procedure Close(const Innermost: ICommandResult; const Tokens: TArray<TToken>);
-    procedure RequestHelp(const ForCommand: ICommand);
-    procedure RequestVersion;
+    procedure Close(const Innermost: ICommandResult; const Tokens: TArray<TToken>; const Action: ICommandLineAction;
+      const ActionOwner: IOption; const PreActions: TArray<ICommandLineAction>);
     function Command: ICommand;
     function CommandResult: ICommandResult;
     function RootCommandResult: ICommandResult;
@@ -209,6 +213,7 @@ type
     function RawOf(const Symbol: ISymbol): TNullable<string>;
     function RawValuesOf(const Symbol: ISymbol): TArray<string>;
     function UnmatchedTokens: TArray<string>;
+    function Action: ICommandLineAction;
     function InvocationConfiguration: TInvocationConfiguration;
     function Invoke: Integer; overload;
     function Invoke(const Configuration: TInvocationConfiguration): Integer; overload;
@@ -224,9 +229,8 @@ type
   private
     FCurrent: ICommand;
     FAvailable: TArray<IOption>;
-    FAtRoot: Boolean;
   public
-    procedure Enter(const Command: ICommand; const Available: TArray<IOption>; AtRoot: Boolean);
+    procedure Enter(const Command: ICommand; const Available: TArray<IOption>);
     function Knows(const Token: string): Boolean;
     function KnowsShort(const Letter: Char): Boolean;
     function ShortTakesValue(const Letter: Char): Boolean;
@@ -234,8 +238,7 @@ type
 
   {$SCOPEDENUMS ON}
   /// <summary>What reading made of a token, finer than its token type.</summary>
-  TItemKind = (Positional, CommandName, OptionName, OptionValue, DoubleDash, UnknownOption, BadGroup, Help,
-    Version);
+  TItemKind = (Positional, CommandName, OptionName, OptionValue, DoubleDash, UnknownOption, BadGroup);
   {$SCOPEDENUMS OFF}
 
   TItem = record
@@ -257,38 +260,48 @@ type
     FInnermost: ICommandResult;
     FArgumentIndex: Integer;
     FArgumentCount: Integer;
+    FAction: ICommandLineAction;
+    FActionOwner: IOption;
+    FPreActions: TArray<ICommandLineAction>;
     procedure Unmatched(const Token, Message: string);
     procedure ParseSubcommand;
     procedure ParseOption;
     procedure ParseArgument;
-    procedure ValidateWhatWasRead;
+    procedure ValidateVersionAlone(const VersionResult: ISymbolResult; const Node: ICommandResult);
     procedure ValidateCommand(const Node: ICommandResult; Complete: Boolean);
     procedure ValidateAndAddDefaultResults;
+    procedure KeepErrorsOf(const Owner: IOption);
+    procedure DropErrorsOf(const Node: ICommandResult);
+    procedure AddPreActionsForImplicitOptions;
   public
     constructor Create(const Root: IRootCommand; const Items: TArray<TItem>; const ReadErrors: TArray<string>);
     function Run: IParseResult;
   end;
 
-procedure WriteError(const Configuration: TInvocationConfiguration; const Text: string);
+// True for the help and the version options a root brings with it.
+function IsStandardOption(const Option: IOption): Boolean;
 begin
-  if Assigned(Configuration.Error) then
-    Configuration.Error.WriteLine(Text)
-  else
-    Writeln(System.ErrOutput, Text);
+  Result := Supports(Option, IHelpOption) or Supports(Option, IVersionOption);
 end;
 
-// Finds an option by token among the command's own and those inherited from ancestors
-// that declared them recursive.
-function FindOption(const Current: ICommand; const Inherited_: TArray<IOption>; const Token: string): IOption;
+// Finds an option by token among the command's own and those inherited from ancestors that declared
+// them recursive. What the application declared comes before the help and the version, which answer
+// only when nothing declared does: an application that declares its own --help knows its case.
+function FindOption(const Current: ICommand; const Inherited_: TArray<IOption>; const Token: string;
+  IncludeStandard: Boolean = True): IOption;
 var
   Candidate: IOption;
+  Standard: Boolean;
 begin
-  for Candidate in Current.Options do
-    if Candidate.Matches(Token) then
-      Exit(Candidate);
-  for Candidate in Inherited_ do
-    if Candidate.Matches(Token) then
-      Exit(Candidate);
+  for Standard := False to IncludeStandard do
+  begin
+    for Candidate in Current.Options do
+      if (IsStandardOption(Candidate) = Standard) and Candidate.Matches(Token) then
+        Exit(Candidate);
+    for Candidate in Inherited_ do
+      if (IsStandardOption(Candidate) = Standard) and Candidate.Matches(Token) then
+        Exit(Candidate);
+  end;
   Result := nil;
 end;
 
@@ -321,21 +334,6 @@ begin
   for Candidate in Commands do
     Names := Names + [Candidate.Name];
   Result := string.Join(', ', Names);
-end;
-
-function IsHelpToken(const Token: string): Boolean;
-var
-  Known: string;
-begin
-  for Known in HelpTokens do
-    if SameText(Token, Known) then
-      Exit(True);
-  Result := False;
-end;
-
-function IsVersionToken(const Token: string): Boolean;
-begin
-  Result := SameText(Token, VersionToken);
 end;
 
 { TSymbolResultTree }
@@ -382,6 +380,11 @@ end;
 function TSymbolResultTree.Errors: TArray<TParseError>;
 begin
   Result := FErrors;
+end;
+
+procedure TSymbolResultTree.SetErrors(const Value: TArray<TParseError>);
+begin
+  FErrors := Value;
 end;
 
 function TSymbolResultTree.ErrorCount: Integer;
@@ -726,22 +729,15 @@ begin
   FCommandResult := ARootResult;
 end;
 
-procedure TParseResult.Close(const Innermost: ICommandResult; const Tokens: TArray<TToken>);
+procedure TParseResult.Close(const Innermost: ICommandResult; const Tokens: TArray<TToken>;
+  const Action: ICommandLineAction; const ActionOwner: IOption; const PreActions: TArray<ICommandLineAction>);
 begin
   FCommandResult := Innermost;
   FTokens := Tokens;
+  FAction := Action;
+  FActionOwner := ActionOwner;
+  FPreActions := PreActions;
   FErrorsShared := FTree.ErrorCount > 0;
-end;
-
-procedure TParseResult.RequestHelp(const ForCommand: ICommand);
-begin
-  FHelpRequested := True;
-  FHelpText := ForCommand.HelpText;
-end;
-
-procedure TParseResult.RequestVersion;
-begin
-  FVersionRequested := True;
 end;
 
 function TParseResult.ResultOf(const Symbol: ISymbol): ISymbolResult;
@@ -814,17 +810,21 @@ end;
 
 function TParseResult.IsHelpRequested: Boolean;
 begin
-  Result := FHelpRequested;
+  // The action that wins is the one of a help option.
+  Result := (FActionOwner <> nil) and Supports(FActionOwner, IHelpOption);
 end;
 
 function TParseResult.HelpText: string;
 begin
-  Result := FHelpText;
+  if IsHelpRequested then
+    Result := FCommandResult.Command.HelpText
+  else
+    Result := '';
 end;
 
 function TParseResult.IsVersionRequested: Boolean;
 begin
-  Result := FVersionRequested;
+  Result := (FActionOwner <> nil) and Supports(FActionOwner, IVersionOption);
 end;
 
 function TParseResult.VersionInfo: TVersionInfo;
@@ -885,6 +885,14 @@ begin
   Result := FTree.Unmatched;
 end;
 
+function TParseResult.Action: ICommandLineAction;
+begin
+  if FAction <> nil then
+    Result := FAction
+  else
+    Result := FCommandResult.Command.Action;
+end;
+
 function TParseResult.InvocationConfiguration: TInvocationConfiguration;
 begin
   Result := FInvocationConfiguration;
@@ -898,63 +906,31 @@ begin
 end;
 
 function TParseResult.Invoke(const Configuration: TInvocationConfiguration): Integer;
-var
-  Action: TCommandAction;
 begin
   FInvocationConfiguration := Configuration;
-
-  if FVersionRequested then
-    Action := FRoot.VersionAction
-  else if FHelpRequested then
-    Action := FRoot.HelpAction
-  else if not Succeeded then
-  begin
-    WriteError(Configuration, ErrorText);
-    Exit(TCommandLineExit.InvocationError);
-  end
-  else
-    Action := Command.Action();
-
-  if not Assigned(Action) then
-    Exit(TCommandLineExit.Ok);
-
-  if not Configuration.EnableDefaultExceptionHandler then
-    Exit(Action(Self));
-
-  try
-    Result := Action(Self);
-  except
-    on E: Exception do
-    begin
-      WriteError(Configuration, E.ClassName + ': ' + E.Message);
-      Result := TCommandLineExit.Failure;
-    end;
-  end;
+  Result := InvokeActions(Self, FPreActions);
 end;
 
 { TScopeKnowledge }
 
-procedure TScopeKnowledge.Enter(const Command: ICommand; const Available: TArray<IOption>; AtRoot: Boolean);
+procedure TScopeKnowledge.Enter(const Command: ICommand; const Available: TArray<IOption>);
 begin
   FCurrent := Command;
   FAvailable := Available;
-  FAtRoot := AtRoot;
 end;
 
 function TScopeKnowledge.Knows(const Token: string): Boolean;
 begin
-  // The two built-in tokens count as known. Otherwise `/help` would not reach the help and
-  // `-h` could be swallowed into a bundle, which is the kind of hole a rewriting opens by only
-  // ever looking at what the application declared.
-  Result := (FindOption(FCurrent, FAvailable, Token) <> nil) or IsHelpToken(Token) or
-    (FAtRoot and IsVersionToken(Token));
+  // The help and the version count as known. Otherwise `/help` would not reach the help and `-h`
+  // could be swallowed into a bundle.
+  Result := FindOption(FCurrent, FAvailable, Token) <> nil;
 end;
 
 function TScopeKnowledge.KnowsShort(const Letter: Char): Boolean;
 begin
-  // Declared only, built-ins out: this is what decides whether a token is a group, and a help
-  // letter the application never declared does not make `-Fecha` one.
-  Result := FindOption(FCurrent, FAvailable, ShortPrefix + Letter) <> nil;
+  // Declared only, the help and the version out: this is what decides whether a token is a group,
+  // and a help letter the application never declared does not make `-Fecha` one.
+  Result := FindOption(FCurrent, FAvailable, ShortPrefix + Letter, False) <> nil;
 end;
 
 function TScopeKnowledge.ShortTakesValue(const Letter: Char): Boolean;
@@ -1039,7 +1015,7 @@ begin
   Available := RecursiveOptionsOf(Current);
   Scope := TScopeKnowledge.Create;
   Known := Scope;
-  Scope.Enter(Current, Available, True);
+  Scope.Enter(Current, Available);
   Ended := False;
   Index := 0;
 
@@ -1082,26 +1058,10 @@ begin
 
     TTokenNormalizer.SplitToken(Token, OptionName, InlineValue, HasInline);
 
-    // An application that declared its own --help wins, so the built-in only answers when
-    // nothing declared does. --version belongs to the ROOT, as in .NET: a subcommand does not
-    // answer it, because a version is the tool's and not each order's.
-    if IsHelpToken(OptionName) and (FindOption(Current, Available, OptionName) = nil) then
+    // A declared name is an option whatever it looks like: the help answers to `/h` and `/?`.
+    Option := FindOption(Current, Available, OptionName);
+    if TTokenNormalizer.LooksLikeOption(Token) or (Option <> nil) then
     begin
-      Emit(Token, TTokenType.Option, nil, TItemKind.Help);
-      Inc(Index);
-      Continue;
-    end;
-    if IsVersionToken(OptionName) and (Current.AsObject = Root.AsObject) and
-      (FindOption(Current, Available, OptionName) = nil) then
-    begin
-      Emit(Token, TTokenType.Option, nil, TItemKind.Version);
-      Inc(Index);
-      Continue;
-    end;
-
-    if TTokenNormalizer.LooksLikeOption(Token) then
-    begin
-      Option := FindOption(Current, Available, OptionName);
       if Option = nil then
       begin
         // The token stays WHOLE, value and all, so a wrapper hands on what was written.
@@ -1117,10 +1077,10 @@ begin
       end
       else if Option.IsFlag then
       begin
-        // A flag may carry its value explicitly -- `--minify false` -- because its arity admits
-        // none or one. Only a boolean literal counts as that value; anything else is somebody
-        // else's token.
-        Took := (Index + 1 < Length(Tokens)) and TCommandLineValue.IsBooleanLiteral(Tokens[Index + 1]);
+        // A flag may carry its value explicitly -- `--minify false` -- when its arity admits one.
+        // Only a boolean literal counts as that value; anything else is somebody else's token.
+        Took := (Option.Arity.MaximumNumberOfValues > 0) and (Index + 1 < Length(Tokens)) and
+          TCommandLineValue.IsBooleanLiteral(Tokens[Index + 1]);
         if Took then
         begin
           Inc(Index);
@@ -1162,7 +1122,7 @@ begin
       Emit(Token, TTokenType.Command, Subcommand, TItemKind.CommandName);
       Current := Subcommand;
       Available := Available + RecursiveOptionsOf(Current);
-      Scope.Enter(Current, Available, False);
+      Scope.Enter(Current, Available);
       Inc(Index);
       Continue;
     end;
@@ -1198,11 +1158,15 @@ end;
 
 procedure TParseOperation.Unmatched(const Token, Message: string);
 begin
-  // A wrapper hands on what is not its own; anything else refuses it, which is the default.
-  if FInnermost.Command.TreatsUnmatchedTokensAsErrors then
-    FInnermost.AddError(Message)
-  else
-    FTree.AddUnmatched(Token);
+  // Offered apart always, error or not: it is what a wrapper hands on, and what a typo is compared
+  // with. It is an error when the command reached refuses it, which is the default -- unless the root
+  // collects it, which outranks the subcommand.
+  FTree.AddUnmatched(Token);
+  if not FInnermost.Command.TreatsUnmatchedTokensAsErrors then
+    Exit;
+  if ((FInnermost as TObject) <> (FRootResult as TObject)) and not FRoot.TreatsUnmatchedTokensAsErrors then
+    Exit;
+  FInnermost.AddError(Message);
 end;
 
 procedure TParseOperation.ParseSubcommand;
@@ -1222,6 +1186,7 @@ end;
 procedure TParseOperation.ParseOption;
 var
   Option: IOption;
+  Action: ICommandLineAction;
   Found: ISymbolResult;
   Node: TOptionResult;
 begin
@@ -1229,6 +1194,17 @@ begin
   Found := FTree.Find(Option.AsObject);
   if Found = nil then
   begin
+    // The first time it is named is when its action joins the invocation: a terminating one wins it,
+    // the last one named if there are several, and one that is not runs before the winner.
+    Action := Option.Action;
+    if Action <> nil then
+      if Action.IsTerminating then
+      begin
+        FAction := Action;
+        FActionOwner := Option;
+      end
+      else
+        FPreActions := FPreActions + [Action];
     Found := TOptionResult.Create(FTree, FInnermost, Option);
     FTree.Add(Option.AsObject, Found);
   end;
@@ -1279,16 +1255,26 @@ begin
   Inc(FIndex);
 end;
 
-procedure TParseOperation.ValidateWhatWasRead;
+procedure TParseOperation.ValidateVersionAlone(const VersionResult: ISymbolResult; const Node: ICommandResult);
 var
-  Node: ISymbolResult;
+  Child: ISymbolResult;
+  AsOption, Version: IOptionResult;
+  Named: string;
 begin
-  // Help and version end the parse where they appear, before the grammar is validated: asking how
-  // the syntax works is not an invalid invocation. What was read up to there is still checked, and
-  // nothing is reported missing.
-  for Node in FTree.Results do
-    if (Node as TObject) is TValuedResult then
-      ((Node as TObject) as TValuedResult).Validate;
+  // The version is the only thing an invocation asking for it carries. A token that matches nothing is
+  // not counted: it has no result here, and its own error is somebody else's.
+  for Child in Node.Children do
+  begin
+    if Supports(Child, IOptionResult, AsOption) and (Supports(AsOption.Option, IVersionOption) or AsOption.IsImplicit) then
+      Continue;
+    Version := VersionResult as IOptionResult;
+    if Version.IdentifierToken.HasValue then
+      Named := Version.IdentifierToken.Value.Value
+    else
+      Named := Version.Option.Name;
+    VersionResult.AddError(Format(SVersionOptionNotCombined, [Named]));
+    Exit;
+  end;
 end;
 
 procedure TParseOperation.ValidateCommand(const Node: ICommandResult; Complete: Boolean);
@@ -1296,10 +1282,11 @@ var
   Option: IOption;
   Argument: IArgument;
   Found: ISymbolResult;
+  ErrorsBefore: Integer;
 begin
   for Option in Node.Command.Options do
   begin
-    if not Complete and not (Option.IsRecursive or Option.HasDefaultValue) then
+    if not Complete and not (Option.IsRecursive or Option.HasDefaultValue or Supports(Option, IVersionOption)) then
       Continue;
     Found := FTree.Find(Option.AsObject);
     if Found = nil then
@@ -1316,7 +1303,10 @@ begin
         Continue;
       end;
     end;
+    ErrorsBefore := FTree.ErrorCount;
     (Found as TValuedResult).Validate;
+    if (FTree.ErrorCount = ErrorsBefore) and Supports(Option, IVersionOption) then
+      ValidateVersionAlone(Found, Node);
   end;
 
   for Argument in Node.Command.Arguments do
@@ -1341,11 +1331,55 @@ begin
   end;
 end;
 
+procedure TParseOperation.KeepErrorsOf(const Owner: IOption);
+var
+  Kept: TArray<TParseError>;
+  Error: TParseError;
+  AsOption: IOptionResult;
+begin
+  Kept := nil;
+  // A winner no option owns keeps none.
+  if Owner <> nil then
+    for Error in FTree.Errors do
+      if Supports(Error.SymbolResult, IOptionResult, AsOption) and (AsOption.Option.AsObject = Owner.AsObject) then
+        Kept := Kept + [Error];
+  FTree.SetErrors(Kept);
+end;
+
+procedure TParseOperation.DropErrorsOf(const Node: ICommandResult);
+var
+  Kept: TArray<TParseError>;
+  Error: TParseError;
+begin
+  Kept := nil;
+  for Error in FTree.Errors do
+    if (Error.SymbolResult = nil) or ((Error.SymbolResult as TObject) <> (Node as TObject)) then
+      Kept := Kept + [Error];
+  FTree.SetErrors(Kept);
+end;
+
+procedure TParseOperation.AddPreActionsForImplicitOptions;
+var
+  Node: ISymbolResult;
+  AsOption: IOptionResult;
+  Action: ICommandLineAction;
+begin
+  // An option that took its default runs its action too, unless it terminates: a default is not
+  // a reason to replace the action of the command.
+  for Node in FTree.Results do
+    if Supports(Node, IOptionResult, AsOption) and AsOption.IsImplicit then
+    begin
+      Action := AsOption.Option.Action;
+      if (Action <> nil) and not Action.IsTerminating and (Action <> FAction) then
+        FPreActions := FPreActions + [Action];
+    end;
+end;
+
 procedure TParseOperation.ValidateAndAddDefaultResults;
 var
   Node: ISymbolResult;
   Command: ICommand;
-  Action: TCommandAction;
+  CommandAction: ICommandLineAction;
 begin
   ValidateCommand(FInnermost, True);
   Node := FInnermost.Parent;
@@ -1355,12 +1389,28 @@ begin
     Node := Node.Parent;
   end;
 
-  // A command that only groups is not an invocation of its own; one with an action is.
-  Command := FInnermost.Command;
-  Action := Command.Action();
-  if (Length(Command.Subcommands) > 0) and not Assigned(Action) then
-    FTree.InsertFirstError(Format(SCommandRequiresSubcommand, [Command.FullPath, NamesOf(Command.Subcommands)]),
-      FInnermost);
+  if FAction = nil then
+  begin
+    // A command that only groups is not an invocation of its own; one with an action is.
+    Command := FInnermost.Command;
+    CommandAction := Command.Action;
+    if (CommandAction = nil) and (Length(Command.Subcommands) > 0) then
+      FTree.InsertFirstError(Format(SCommandRequiresSubcommand, [Command.FullPath, NamesOf(Command.Subcommands)]),
+        FInnermost);
+    if (CommandAction <> nil) and CommandAction.ClearsParseErrors then
+      DropErrorsOf(FInnermost)
+    else if FTree.ErrorCount > 0 then
+      FAction := NewParseErrorAction;
+  end
+  else if (FTree.ErrorCount > 0) and FAction.ClearsParseErrors then
+  begin
+    // The winner keeps only the errors of the option it belongs to, and the actions of the options
+    // that took their default do not join it.
+    KeepErrorsOf(FActionOwner);
+    Exit;
+  end;
+
+  AddPreActionsForImplicitOptions;
 end;
 
 function TParseOperation.Run: IParseResult;
@@ -1368,25 +1418,11 @@ var
   Outcome: TParseResult;
   Tokens: TArray<TToken>;
   Item: TItem;
-  Ended: Boolean;
 begin
   Outcome := TParseResult.Create(FRoot, FTree, FRootResult);
   Result := Outcome;
-  Ended := False;
-  while not Ended and (FIndex < Length(FItems)) do
+  while FIndex < Length(FItems) do
     case FItems[FIndex].Kind of
-      TItemKind.Help:
-        begin
-          ValidateWhatWasRead;
-          Outcome.RequestHelp(FInnermost.Command);
-          Ended := True;
-        end;
-      TItemKind.Version:
-        begin
-          ValidateWhatWasRead;
-          Outcome.RequestVersion;
-          Ended := True;
-        end;
       TItemKind.BadGroup:
         begin
           FInnermost.AddError(FItems[FIndex].Error);
@@ -1407,13 +1443,12 @@ begin
     else
       ParseArgument;
     end;
-  if not Ended then
-    ValidateAndAddDefaultResults;
+  ValidateAndAddDefaultResults;
 
   Tokens := nil;
   for Item in FItems do
     Tokens := Tokens + [Item.Token];
-  Outcome.Close(FInnermost, Tokens);
+  Outcome.Close(FInnermost, Tokens, FAction, FActionOwner, FPreActions);
 end;
 
 function ParseInvocation(const Root: IRootCommand; const Args: TArray<string>): IParseResult;

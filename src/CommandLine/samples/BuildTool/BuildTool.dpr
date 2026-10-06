@@ -225,9 +225,10 @@ end;
 
 function TBuildTool.Run(const Args: TArray<string>): Integer;
 begin
-  // Help and version are written and answer 0, a parse error goes to the error output
-  // and answers 2, and otherwise the action of the leaf reached runs. Help is answered
-  // before anything is judged: asking how a tool works is an outcome, not a mistake.
+  // Help and version are written and answer 0, and otherwise the action of the leaf
+  // reached runs. A parse error writes what was probably meant, the errors to the error
+  // output and the help of the command reached, and answers 2. Asking for help clears
+  // the errors of the rest: asking how a tool works is an outcome, not a mistake.
   Result := FRoot.Parse(Args).Invoke;
 end;
 
@@ -235,16 +236,22 @@ function TBuildTool.Walk(const Args: TArray<string>): Integer;
 var
   Configuration: TInvocationConfiguration;
   Errors: TStringWriter;
+  Parsed: IParseResult;
+  OnError: IParseErrorAction;
 begin
   Writeln('$ buildtool ', string.Join(' ', Args));
   // The walkthrough reads top to bottom, so a parse error is written in its place, after
-  // the invocation that caused it, and not on the console's error output.
+  // the invocation that caused it, and not on the console's error output. It is about the
+  // errors, so the help that follows each one is left out.
   Errors := TStringWriter.Create;
   try
     Configuration.Error := Errors;
-    Result := FRoot.Parse(Args).Invoke(Configuration);
+    Parsed := FRoot.Parse(Args);
+    if Supports(Parsed.Action, IParseErrorAction, OnError) then
+      OnError.ShowHelp := False;
+    Result := Parsed.Invoke(Configuration);
     if Errors.ToString <> '' then
-      Write('  ! ', Errors.ToString);
+      Writeln('  ! ', Errors.ToString.TrimRight);
   finally
     Errors.Free;
   end;
