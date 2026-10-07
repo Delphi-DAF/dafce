@@ -328,6 +328,8 @@ Tres vienen de serie, escritas sobre ese mismo gancho:
 Aplican a una ruta —un `string`, un `TFilePath` o un `TDirectoryPath`, y un `TArray` de cualquiera de
 ellos, donde corren por elemento—. Declarar una sobre algo que no es una ruta se rechaza al
 declararla. Un valor vacío no es ni un nombre ni una ruta legales — divergencia 10, más abajo.
+Las validaciones miran lo que escribió la invocación, así que un valor por defecto no se valida:
+`.AcceptLegalFileNamesOnly.DefaultValue('')` lee el vacío por defecto, y rechaza `--report ""`.
 
 Una validación del **resultado** recibe el resultado de su símbolo y rechaza con `AddError`.
 `Validators.Add` la declara en un comando, una opción o un argumento:

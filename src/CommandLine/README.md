@@ -325,6 +325,8 @@ Three come as standard, written over that same hook:
 They apply to a path — a `string`, a `TFilePath` or a `TDirectoryPath`, and a `TArray` of any of them,
 where they run per element. Declaring one on something that is not a path is refused at the
 declaration. An empty value is neither a legal name nor a legal path — divergence 10 below.
+The validations look at what the invocation wrote, so a default is not validated:
+`.AcceptLegalFileNamesOnly.DefaultValue('')` reads the empty default, and refuses `--report ""`.
 
 A validation of the **result** receives the result of its symbol and refuses with `AddError`.
 `Validators.Add` declares one on a command, an option or an argument:

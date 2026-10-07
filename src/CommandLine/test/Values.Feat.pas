@@ -38,6 +38,9 @@ type
     InputOpt: IOption<string>;
     NameOpt: IOption<string>;
     PathOpt: IOption<string>;
+    // A file name whose default is empty.
+    Defaulted: IRootCommand;
+    ReportOpt: IOption<string>;
 
     Computed: IRootCommand;
     OutOpt: IOption<string>;
@@ -75,6 +78,7 @@ type
     procedure BuildRequiredArgument;
     procedure BuildBounded;
     procedure BuildChecked;
+    procedure BuildDefaulted;
     procedure BuildComputed;
     procedure BuildComputedFromAnother;
     procedure BuildEscaped;
@@ -161,6 +165,14 @@ begin
   PathOpt := CommandLine.Option<string>('--path').Description('Where to put the report').AcceptLegalFilePathsOnly;
   Checked := CommandLine.Root('tool', 'A tool');
   Checked.Add([CountOpt, InputOpt, NameOpt, PathOpt]);
+end;
+
+procedure TValuesWorld.BuildDefaulted;
+begin
+  ReportOpt := CommandLine.Option<string>('--report').Description('What to call the report')
+    .AcceptLegalFileNamesOnly.DefaultValue('');
+  Defaulted := CommandLine.Root('tool', 'A tool');
+  Defaulted.Add(ReportOpt);
 end;
 
 procedure TValuesWorld.BuildComputed;
@@ -720,6 +732,42 @@ Feature Command line values @commandline @values
         // The control the refusing scenario needs, and what tells a path from a name.
         Expect(W.Parsed.ErrorText).ToEqual('');
         Expect(W.ReadName).ToEqual('reports/march.txt');
+      end)
+
+  .Scenario('A file name that is empty by default')
+    .Given('an option declared to accept only a legal file name, with an empty default',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildDefaulted;
+      end)
+    .When('an invocation that does not name it is parsed',
+      procedure(W: TValuesWorld)
+      begin
+        W.Parsed := W.Defaulted.Parse([]);
+        W.ReadName := W.ReportOpt.ValueIn(W.Parsed);
+      end)
+    .&Then('the parse succeeds and the empty default is read, because a default is not validated',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('');
+        Expect(W.ReadName).ToEqual('');
+      end)
+
+  .Scenario('An empty file name written in the invocation, with a default declared')
+    .Given('an option declared to accept only a legal file name, with an empty default',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildDefaulted;
+      end)
+    .When('the invocation passes an empty value',
+      procedure(W: TValuesWorld)
+      begin
+        W.Parsed := W.Defaulted.Parse(['--report', '']);
+      end)
+    .&Then('the parse fails as it does with no default: what is validated is what the invocation wrote',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('"" is not a legal file name, and --report accepts only one that is');
       end)
 
 .Rule('a validation that only fits a path is refused where it is declared')
