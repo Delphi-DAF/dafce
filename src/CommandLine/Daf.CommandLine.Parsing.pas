@@ -26,13 +26,14 @@ function ParseInvocation(const Root: IRootCommand; const Args: TArray<string>): 
 /// <summary>The values of an option's or an argument's result.</summary>
 /// <remarks>
 ///   The ones the validation converted, or the default it took: then <c>FromDefault</c> is True and the
-///   one value is the whole default. A result the validation never reached -- an option of a parent
+///   one value is the whole default. <c>Whole</c> is True for that one value, and for the one a conversion of
+///   its own answered. A result the validation never reached -- an option of a parent
 ///   that is neither recursive nor defaulted -- is converted now, once, without the accepted values or
 ///   the validations, and its error joins the tree as the validation's would.
 ///
 ///   Raises <c>ECommandLine</c> with the error of a result that has one.
 /// </remarks>
-function ResultValues(const Found: ISymbolResult; out FromDefault: Boolean): TArray<TValue>;
+function ResultValues(const Found: ISymbolResult; out FromDefault, Whole: Boolean): TArray<TValue>;
 
 implementation
 
@@ -123,6 +124,7 @@ type
     FValued: TValuedSymbol;
     FValues: TArray<TValue>;
     FFromDefault: Boolean;
+    FWhole: Boolean;
     FState: TConversionState;
     FFailure: string;
     FValidated: Boolean;
@@ -132,15 +134,22 @@ type
     function ArityError: string; virtual; abstract;
     function IsImplicitResult: Boolean; virtual; abstract;
   public
+    /// <summary>The result of the argument its value is carried in: itself, or the one of an option.</summary>
+    function ValueResult: IArgumentResult; virtual; abstract;
     constructor Create(const ATree: ISymbolResultTree; const AParent: ISymbolResult; AValued: TValuedSymbol);
     /// <summary>An error of the parse that also stands for its value: reading it raises this.</summary>
     procedure Fail(const Message: string);
+    /// <summary>
+    ///   Its arity, the first step of its validation: False, with the error added, when its tokens are not the
+    ///   number it admits. A result that took its default has nothing to count.
+    /// </summary>
+    function CheckArity: Boolean;
     /// <summary>
     ///   Its turn in the validation: the default when it is implicit; otherwise its arity, then each
     ///   token through the accepted values, the conversion and the validations. Runs once.
     /// </summary>
     procedure Validate;
-    function ReadValues(out FromDefault: Boolean): TArray<TValue>;
+    function ReadValues(out FromDefault, Whole: Boolean): TArray<TValue>;
   end;
 
   TOptionResult = class(TValuedResult, IOptionResult)
@@ -153,6 +162,7 @@ type
     function IsImplicitResult: Boolean; override;
   public
     constructor Create(const ATree: ISymbolResultTree; const AParent: ISymbolResult; const AOption: IOption);
+    function ValueResult: IArgumentResult; override;
     /// <summary>The invocation named it once more.</summary>
     procedure Named(const Token: TToken);
     function Option: IOption;
@@ -165,17 +175,49 @@ type
   private
     FArgument: IArgument;
     FImplicit: Boolean;
+    FOnlyTaken: Boolean;
+    function ArgumentLimitReached: Boolean;
   protected
     function ArityError: string; override;
     function IsImplicitResult: Boolean; override;
   public
     constructor Create(const ATree: ISymbolResultTree; const AParent: ISymbolResult; const AArgument: IArgument);
+    function ValueResult: IArgumentResult; override;
+    procedure OnlyTake(NumberOfTokens: Integer);
     /// <summary>The validation created it for its default.</summary>
     procedure TakeDefault;
     /// <summary>An error of an argument is an error of its value too, as in .NET.</summary>
     procedure AddError(const Message: string); override;
     function Argument: IArgument;
     function IsImplicit: Boolean;
+  end;
+
+  /// <summary>
+  ///   The result of the argument an option carries its value in, as .NET keeps under each option result:
+  ///   what the validations of the value receive. It is the option's result seen as an argument's -- its
+  ///   tokens, its parent -- and an error added to it fails the option's conversion.
+  /// </summary>
+  /// <remarks>
+  ///   Built when it is needed and not kept in the tree: <c>GetResult</c> does not find it, as .NET does not
+  ///   find an option's internal argument.
+  /// </remarks>
+  TOptionArgumentResult = class(TInterfacedObject, ISymbolResult, IArgumentResult)
+  private
+    FOption: TOptionResult;
+    // Holds the option's result alive while the view is used.
+    FOptionRef: IOptionResult;
+  public
+    constructor Create(AOption: TOptionResult);
+    function Parent: ISymbolResult;
+    function Tokens: TArray<TToken>;
+    function Errors: TArray<TParseError>;
+    procedure AddError(const Message: string);
+    function GetResult(const Option: IOption): IOptionResult; overload;
+    function GetResult(const Argument: IArgument): IArgumentResult; overload;
+    function GetResult(const Command: ICommand): ICommandResult; overload;
+    function Argument: IArgument;
+    function IsImplicit: Boolean;
+    procedure OnlyTake(NumberOfTokens: Integer);
   end;
 
   TParseResult = class(TInterfacedObject, IParseResult)
@@ -263,11 +305,12 @@ type
     FAction: ICommandLineAction;
     FActionOwner: IOption;
     FPreActions: TArray<ICommandLineAction>;
+    FCapturing: Boolean;
     procedure Unmatched(const Token, Message: string);
+    function IsCapturingRemainingTokens(Kind: TItemKind): Boolean;
     procedure ParseSubcommand;
     procedure ParseOption;
     procedure ParseArgument;
-    procedure ValidateVersionAlone(const VersionResult: ISymbolResult; const Node: ICommandResult);
     procedure ValidateCommand(const Node: ICommandResult; Complete: Boolean);
     procedure ValidateAndAddDefaultResults;
     procedure KeepErrorsOf(const Owner: IOption);
@@ -545,6 +588,18 @@ begin
   inherited AddError(Message);
 end;
 
+function TValuedResult.CheckArity: Boolean;
+var
+  Error: string;
+begin
+  if (FState <> TConversionState.Pending) or IsImplicitResult then
+    Exit(FState <> TConversionState.Failed);
+  Error := ArityError;
+  Result := Error = '';
+  if not Result then
+    Fail(Error);
+end;
+
 procedure TValuedResult.ConvertTokens(Accept: Boolean);
 var
   Error: string;
@@ -552,12 +607,40 @@ var
   Value: TValue;
   Values: TArray<TValue>;
   Converted: Boolean;
+  Parser: TUntypedWholeParser;
+  Owner: ISymbolResultTree;
+  ErrorsBefore: Integer;
 begin
   // When the arity fails nothing else is reported for it, as in .NET.
   Error := ArityError;
   if Error <> '' then
   begin
     Fail(Error);
+    Exit;
+  end;
+
+  // A conversion of its own takes every token and answers the value whole. It refuses by adding an error,
+  // and an exception it raises leaves the parse as it is.
+  Parser := FValued.WholeParser();
+  if Assigned(Parser) then
+  begin
+    Owner := FTree;
+    ErrorsBefore := 0;
+    if Owner <> nil then
+      ErrorsBefore := Owner.ErrorCount;
+    Value := Parser(ValueResult);
+    if FState = TConversionState.Failed then
+      Exit;
+    if (Owner <> nil) and (Owner.ErrorCount <> ErrorsBefore) then
+    begin
+      FState := TConversionState.Failed;
+      FFailure := Owner.Errors[Owner.ErrorCount - 1].Message;
+      Exit;
+    end;
+    FValues := [Value];
+    FFromDefault := False;
+    FWhole := True;
+    FState := TConversionState.Converted;
     Exit;
   end;
   Values := nil;
@@ -596,8 +679,11 @@ begin
     Exit;
   if IsImplicitResult then
   begin
-    // The default is part of the result, so it is calculated here, read or not.
-    Boxed := FValued.BoxedDefault;
+    // The default is part of the result, so it is calculated here, read or not. A calculation that adds an
+    // error fails the value, as a conversion would.
+    Boxed := FValued.BoxedDefault(ValueResult);
+    if FState = TConversionState.Failed then
+      Exit;
     FValues := [Boxed];
     FFromDefault := True;
     FState := TConversionState.Converted;
@@ -606,7 +692,7 @@ begin
   ConvertTokens(True);
 end;
 
-function TValuedResult.ReadValues(out FromDefault: Boolean): TArray<TValue>;
+function TValuedResult.ReadValues(out FromDefault, Whole: Boolean): TArray<TValue>;
 begin
   if FState = TConversionState.Pending then
   begin
@@ -620,6 +706,7 @@ begin
   if FState = TConversionState.Failed then
     raise ECommandLine.Create(FFailure);
   FromDefault := FFromDefault;
+  Whole := FWhole or FFromDefault;
   Result := FValues;
 end;
 
@@ -630,6 +717,11 @@ constructor TOptionResult.Create(const ATree: ISymbolResultTree; const AParent: 
 begin
   inherited Create(ATree, AParent, AOption.AsObject as TValuedSymbol);
   FOption := AOption;
+end;
+
+function TOptionResult.ValueResult: IArgumentResult;
+begin
+  Result := TOptionArgumentResult.Create(Self);
 end;
 
 procedure TOptionResult.Named(const Token: TToken);
@@ -685,6 +777,76 @@ begin
   FArgument := AArgument;
 end;
 
+function TArgumentResult.ValueResult: IArgumentResult;
+begin
+  Result := Self;
+end;
+
+function TArgumentResult.ArgumentLimitReached: Boolean;
+begin
+  Result := FArgument.Arity.MaximumNumberOfValues = Length(FTokens);
+end;
+
+procedure TArgumentResult.OnlyTake(NumberOfTokens: Integer);
+var
+  Owner: ISymbolResultTree;
+  Command: ICommandResult;
+  Arguments: TArray<IArgument>;
+  Index, NextIndex, ToPass: Integer;
+  Found: ISymbolResult;
+  Next: TArgumentResult;
+  Token: TToken;
+begin
+  if NumberOfTokens < 0 then
+    raise ECommandLine.CreateFmt('OnlyTake takes a number of tokens that is not negative, and got %d',
+      [NumberOfTokens]);
+  if FOnlyTaken then
+    raise ECommandLine.Create('OnlyTake can only be called once');
+  FOnlyTaken := True;
+  if NumberOfTokens >= Length(FTokens) then
+    Exit;
+
+  Owner := FTree;
+  Command := FParent as ICommandResult;
+  Arguments := Command.Command.Arguments;
+  Index := 0;
+  while (Index < Length(Arguments)) and (Arguments[Index].AsObject <> FArgument.AsObject) do
+    Inc(Index);
+  NextIndex := Index + 1;
+  ToPass := Length(FTokens) - NumberOfTokens;
+
+  // The tokens beyond the ones kept go to the arguments that follow, each up to what its arity admits.
+  while (ToPass > 0) and (NextIndex < Length(Arguments)) do
+  begin
+    Found := Owner.Find(Arguments[NextIndex].AsObject);
+    if Found = nil then
+    begin
+      Found := TArgumentResult.Create(Owner, Command, Arguments[NextIndex]);
+      Owner.Add(Arguments[NextIndex].AsObject, Found);
+    end;
+    Next := (Found as TObject) as TArgumentResult;
+    while not Next.ArgumentLimitReached and (ToPass > 0) do
+    begin
+      Token := FTokens[NumberOfTokens];
+      Delete(FTokens, NumberOfTokens, 1);
+      Next.AddToken(Token);
+      Dec(ToPass);
+    end;
+    Inc(NextIndex);
+  end;
+
+  // What no argument takes is a token nothing claimed, of the command this argument belongs to.
+  while ToPass > 0 do
+  begin
+    Token := FTokens[NumberOfTokens];
+    Delete(FTokens, NumberOfTokens, 1);
+    Owner.AddUnmatched(Token.Value);
+    if Command.Command.TreatsUnmatchedTokensAsErrors then
+      Command.AddError(Format(SUnexpectedArgument, [Token.Value, Command.Command.FullPath]));
+    Dec(ToPass);
+  end;
+end;
+
 procedure TArgumentResult.TakeDefault;
 begin
   FImplicit := True;
@@ -715,6 +877,66 @@ end;
 function TArgumentResult.IsImplicit: Boolean;
 begin
   Result := FImplicit;
+end;
+
+{ TOptionArgumentResult }
+
+constructor TOptionArgumentResult.Create(AOption: TOptionResult);
+begin
+  inherited Create;
+  FOption := AOption;
+  FOptionRef := AOption;
+end;
+
+function TOptionArgumentResult.Parent: ISymbolResult;
+begin
+  Result := FOptionRef;
+end;
+
+function TOptionArgumentResult.Tokens: TArray<TToken>;
+begin
+  Result := FOption.Tokens;
+end;
+
+function TOptionArgumentResult.Errors: TArray<TParseError>;
+begin
+  Result := FOption.Errors;
+end;
+
+procedure TOptionArgumentResult.AddError(const Message: string);
+begin
+  FOption.Fail(Message);
+end;
+
+function TOptionArgumentResult.GetResult(const Option: IOption): IOptionResult;
+begin
+  Result := FOption.GetResult(Option);
+end;
+
+function TOptionArgumentResult.GetResult(const Argument: IArgument): IArgumentResult;
+begin
+  Result := FOption.GetResult(Argument);
+end;
+
+function TOptionArgumentResult.GetResult(const Command: ICommand): ICommandResult;
+begin
+  Result := FOption.GetResult(Command);
+end;
+
+function TOptionArgumentResult.Argument: IArgument;
+begin
+  Result := FOption.FValued.ValueArgument;
+end;
+
+function TOptionArgumentResult.IsImplicit: Boolean;
+begin
+  Result := FOption.IsImplicit;
+end;
+
+procedure TOptionArgumentResult.OnlyTake(NumberOfTokens: Integer);
+begin
+  raise ECommandLine.CreateFmt('OnlyTake is supported only for an argument of a command, and "%s" is an option',
+    [FOption.Option.Name]);
 end;
 
 { TParseResult }
@@ -1255,35 +1477,30 @@ begin
   Inc(FIndex);
 end;
 
-procedure TParseOperation.ValidateVersionAlone(const VersionResult: ISymbolResult; const Node: ICommandResult);
-var
-  Child: ISymbolResult;
-  AsOption, Version: IOptionResult;
-  Named: string;
-begin
-  // The version is the only thing an invocation asking for it carries. A token that matches nothing is
-  // not counted: it has no result here, and its own error is somebody else's.
-  for Child in Node.Children do
-  begin
-    if Supports(Child, IOptionResult, AsOption) and (Supports(AsOption.Option, IVersionOption) or AsOption.IsImplicit) then
-      Continue;
-    Version := VersionResult as IOptionResult;
-    if Version.IdentifierToken.HasValue then
-      Named := Version.IdentifierToken.Value.Value
-    else
-      Named := Version.Option.Name;
-    VersionResult.AddError(Format(SVersionOptionNotCombined, [Named]));
-    Exit;
-  end;
-end;
-
 procedure TParseOperation.ValidateCommand(const Node: ICommandResult; Complete: Boolean);
 var
   Option: IOption;
   Argument: IArgument;
   Found: ISymbolResult;
+  CommandValidator: TCommandValidator;
+  OptionValidator: TOptionValidator;
+  ArgumentValidator: TArgumentValidator;
+  ValueResult: IArgumentResult;
   ErrorsBefore: Integer;
 begin
+  // The validations of the command run on the innermost one only, and first: an error of theirs says the
+  // invocation makes no sense, and the errors of its parts would only repeat it.
+  if Complete then
+  begin
+    ErrorsBefore := FTree.ErrorCount;
+    for CommandValidator in Node.Command.Validators do
+      CommandValidator(Node);
+    if FTree.ErrorCount <> ErrorsBefore then
+      Exit;
+  end;
+
+  // Each option and each argument: its arity, then its validations, then its conversion. An error at a
+  // step stops the steps behind it.
   for Option in Node.Command.Options do
   begin
     if not Complete and not (Option.IsRecursive or Option.HasDefaultValue or Supports(Option, IVersionOption)) then
@@ -1303,10 +1520,20 @@ begin
         Continue;
       end;
     end;
+    if not (Found as TValuedResult).CheckArity then
+      Continue;
     ErrorsBefore := FTree.ErrorCount;
+    for OptionValidator in Option.Validators do
+      OptionValidator(Found as IOptionResult);
+    if FTree.ErrorCount <> ErrorsBefore then
+      Continue;
+    // Then the validations of the value, on the argument the option carries it in.
+    ValueResult := (Found as TValuedResult).ValueResult;
+    for ArgumentValidator in (Found as TValuedResult).FValued.ValueValidators do
+      ArgumentValidator(ValueResult);
+    if FTree.ErrorCount <> ErrorsBefore then
+      Continue;
     (Found as TValuedResult).Validate;
-    if (FTree.ErrorCount = ErrorsBefore) and Supports(Option, IVersionOption) then
-      ValidateVersionAlone(Found, Node);
   end;
 
   for Argument in Node.Command.Arguments do
@@ -1327,6 +1554,13 @@ begin
       end;
       (Found as TArgumentResult).TakeDefault;
     end;
+    if not (Found as TValuedResult).CheckArity then
+      Continue;
+    ErrorsBefore := FTree.ErrorCount;
+    for ArgumentValidator in Argument.Validators do
+      ArgumentValidator(Found as IArgumentResult);
+    if FTree.ErrorCount <> ErrorsBefore then
+      Continue;
     (Found as TValuedResult).Validate;
   end;
 end;
@@ -1413,6 +1647,26 @@ begin
   AddPreActionsForImplicitOptions;
 end;
 
+function TParseOperation.IsCapturingRemainingTokens(Kind: TItemKind): Boolean;
+var
+  Arguments: TArray<IArgument>;
+  Index, Count: Integer;
+begin
+  // The next argument to fill, past the ones whose arity is full.
+  Arguments := FInnermost.Command.Arguments;
+  Index := FArgumentIndex;
+  Count := FArgumentCount;
+  while (Index < Length(Arguments)) and (Count >= Arguments[Index].Arity.MaximumNumberOfValues) do
+  begin
+    Count := 0;
+    Inc(Index);
+  end;
+  // It takes a token of any kind once it has started, and a positional to start with: an option before the
+  // first value is still an option.
+  Result := (Index < Length(Arguments)) and Arguments[Index].CapturesRemainingTokens and
+    ((Kind = TItemKind.Positional) or (Index > 0) or (Count > 0));
+end;
+
 function TParseOperation.Run: IParseResult;
 var
   Outcome: TParseResult;
@@ -1422,6 +1676,16 @@ begin
   Outcome := TParseResult.Create(FRoot, FTree, FRootResult);
   Result := Outcome;
   while FIndex < Length(FItems) do
+  begin
+    // An argument that keeps the tail takes every token as one more value; `--` too, once it has started.
+    if IsCapturingRemainingTokens(FItems[FIndex].Kind) and
+      ((FItems[FIndex].Kind <> TItemKind.DoubleDash) or FCapturing) then
+    begin
+      FCapturing := True;
+      ParseArgument;
+      Continue;
+    end;
+    FCapturing := False;
     case FItems[FIndex].Kind of
       TItemKind.BadGroup:
         begin
@@ -1443,6 +1707,7 @@ begin
     else
       ParseArgument;
     end;
+  end;
   ValidateAndAddDefaultResults;
 
   Tokens := nil;
@@ -1466,9 +1731,9 @@ begin
   end;
 end;
 
-function ResultValues(const Found: ISymbolResult; out FromDefault: Boolean): TArray<TValue>;
+function ResultValues(const Found: ISymbolResult; out FromDefault, Whole: Boolean): TArray<TValue>;
 begin
-  Result := ((Found as TObject) as TValuedResult).ReadValues(FromDefault);
+  Result := ((Found as TObject) as TValuedResult).ReadValues(FromDefault, Whole);
 end;
 
 end.

@@ -109,6 +109,7 @@
         <DCCReference Include="ParseRules.Feat.pas"/>
         <DCCReference Include="Results.Feat.pas"/>
         <DCCReference Include="Actions.Feat.pas"/>
+        <DCCReference Include="Validators.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>

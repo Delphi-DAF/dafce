@@ -32,6 +32,13 @@ type
 
     Many: IRootCommand;
     FilesOpt: IOption<TArray<string>>;
+    // A conversion over every token: a collection, and two arguments sharing the tokens.
+    Whole: IRootCommand;
+    SortedOpt: IOption<TArray<string>>;
+    FirstArg: IArgument<string>;
+    RestArg: IArgument<TArray<string>>;
+    ReadFirst: string;
+    ReadRest: TArray<string>;
 
     Parsed: IParseResult;
     Report: string;
@@ -47,12 +54,14 @@ type
     procedure BuildOwnType;
     procedure BuildWideTypes;
     procedure BuildCollection;
+    procedure BuildWholeConversions;
   end;
 
 implementation
 
 uses
   System.SysUtils,
+  System.Generics.Collections,
   Daf.MiniSpec;
 
 { TTypesWorld }
@@ -73,6 +82,29 @@ begin
   FilesOpt := CommandLine.Option<TArray<string>>('--files').Description('Files to compile');
   Many := CommandLine.Root('tool', 'A tool');
   Many.Add(FilesOpt);
+end;
+
+procedure TTypesWorld.BuildWholeConversions;
+begin
+  SortedOpt := CommandLine.Option<TArray<string>>('--sorted').AllowMultipleArgumentsPerToken.CustomParser(
+    function(const Found: IArgumentResult): TArray<string>
+    var
+      I: Integer;
+    begin
+      SetLength(Result, Length(Found.Tokens));
+      for I := 0 to High(Result) do
+        Result[I] := Found.Tokens[I].Value;
+      TArray.Sort<string>(Result);
+    end);
+  FirstArg := CommandLine.Argument<string>('first').Arity(TArgumentArity.ZeroOrMore).CustomParser(
+    function(const Found: IArgumentResult): string
+    begin
+      Found.OnlyTake(1);
+      Result := Found.Tokens[0].Value;
+    end);
+  RestArg := CommandLine.Argument<TArray<string>>('rest');
+  Whole := CommandLine.Root('tool', 'A tool');
+  Whole.Add([SortedOpt, FirstArg, RestArg]);
 end;
 
 procedure TTypesWorld.BuildOwnType;
@@ -160,6 +192,72 @@ Feature Command line types @commandline @types
         // Reaching this step at all is half the assertion: Parse returned instead of
         // raising. The other half is that the error is in the same list as the rest.
         Expect(Length(W.Parsed.Errors)).ToEqual(1);
+      end)
+
+.Rule('a conversion of its own can take every token of the symbol')
+
+  .Scenario('A conversion of its own over a collection')
+    .Given('a collection option with a conversion of its own that takes all its tokens and answers them sorted',
+      procedure(W: TTypesWorld)
+      begin
+        W.BuildWholeConversions;
+      end)
+    .When('the invocation passes it c, a and b',
+      procedure(W: TTypesWorld)
+      begin
+        W.Parsed := W.Whole.Parse(['--sorted', 'c', 'a', 'b']);
+        W.ReadFiles := W.SortedOpt.ValueIn(W.Parsed);
+      end)
+    .&Then('the collection read is a, b, c',
+      procedure(W: TTypesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('');
+        Expect(string.Join(',', W.ReadFiles)).ToEqual('a,b,c');
+      end)
+
+  .Scenario('A conversion that leaves tokens for the next argument')
+    .Given('a command with two arguments of variable arity, the first with a conversion that keeps only its first token',
+      procedure(W: TTypesWorld)
+      begin
+        W.BuildWholeConversions;
+      end)
+    .When('the invocation passes three values',
+      procedure(W: TTypesWorld)
+      begin
+        W.Parsed := W.Whole.Parse(['x', 'y', 'z']);
+        W.ReadFirst := W.FirstArg.ValueIn(W.Parsed);
+        W.ReadRest := W.RestArg.ValueIn(W.Parsed);
+      end)
+    .&Then('the first argument reads the first one, and the second the other two',
+      procedure(W: TTypesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('');
+        Expect(Format('first=%s rest=%s', [W.ReadFirst, string.Join(',', W.ReadRest)])).ToEqual('first=x rest=y,z');
+      end)
+
+  .Scenario('A conversion of one token is still refused on a collection')
+    .Given('a collection type').NoAction
+    .When('an option is declared with it and a conversion of one token',
+      procedure(W: TTypesWorld)
+      begin
+        try
+          CommandLine.Option<TArray<string>>('--parts',
+            function(const Raw: string; out Value: TArray<string>; out Error: string): Boolean
+            begin
+              Error := '';
+              Value := [Raw];
+              Result := True;
+            end);
+          W.Report := '<the declaration was accepted>';
+        except
+          on E: Exception do
+            W.Report := E.ClassName + ': ' + E.Message;
+        end;
+      end)
+    .&Then('the declaration is refused, naming the symbol',
+      procedure(W: TTypesWorld)
+      begin
+        Expect(W.Report).ToStartWith('ECommandLine: Symbol "--parts" is a collection');
       end)
 
 .Rule('the engine covers the types a command line really uses')
@@ -302,30 +400,33 @@ Feature Command line types @commandline @types
         Expect(W.Parsed.ErrorText).ToContain('12.34.56');
       end)
 
-.Rule('a type with neither support nor a conversion is refused where it is declared')
+.Rule('a type with neither support nor a conversion is refused before any invocation is read')
 
   .Scenario('A type of the application, declared with no conversion')
     // Nothing to build and nothing to assert: TSemVer is a compiled type, and whether the
     // engine knows it cannot be asked before a symbol is declared with it.
     .Given('a type the engine does not know').NoAction
-    .When('an option is declared with it and no conversion for it',
+    .When('an option is declared with it and no conversion for it, and an invocation is parsed',
       procedure(W: TTypesWorld)
       begin
-        // The limit moved -- the engine covers more types now -- but it did not
-        // disappear, and this is where it is: the check stays at declaration, which is
-        // the only place it is worth anything.
+        // The conversion of its own is declared after the option is, so the declaration cannot know yet
+        // whether there will be one. Adding the option to a command is the first place that can.
         try
-          CommandLine.Option<TSemVer>('--min').Description('Lowest version accepted');
-          W.Report := '<the declaration was accepted>';
+          var Min := CommandLine.Option<TSemVer>('--min').Description('Lowest version accepted');
+          W.Report := 'declared';
+          var Root := CommandLine.Root('tool', 'A tool');
+          Root.Add(Min);
+          Root.Parse(['--min', '1.2.3']);
+          W.Report := W.Report + ', <added and parsed>';
         except
           on E: Exception do
-            W.Report := E.ClassName + ': ' + E.Message;
+            W.Report := W.Report + ', ' + E.ClassName + ': ' + E.Message;
         end;
       end)
-    .&Then('the declaration itself is refused, naming the symbol and the type',
+    .&Then('it is refused before the invocation is read, naming the symbol and the type',
       procedure(W: TTypesWorld)
       begin
-        Expect(W.Report).ToStartWith('ECommandLine: ');
+        Expect(W.Report).ToStartWith('declared, ECommandLine: ');
         Expect(W.Report).ToContain('--min');
         Expect(W.Report).ToContain('TSemVer');
       end)

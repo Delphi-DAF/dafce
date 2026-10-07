@@ -165,6 +165,38 @@ Feature A frozen grammar takes no more changes, and still takes actions @command
         Expect(W.Report).ToStartWith('ECommandLine: ');
       end)
 
+  .Scenario('Adding a validation to a frozen grammar')
+    .Given('a frozen grammar',
+      procedure(W: TFrozenGrammarWorld)
+      begin
+        W.FreezeGrammar;
+      end)
+    .When('the root and one of its options each get a validation of their result',
+      procedure(W: TFrozenGrammarWorld)
+      begin
+        W.Report := W.Attempt(
+          procedure
+          begin
+            W.Root.Validators.Add(
+              procedure(const Result: ICommandResult)
+              begin
+              end);
+          end) + ' | ' + W.Attempt(
+          procedure
+          begin
+            W.NameOpt.Validators.Add(
+              procedure(const Result: IOptionResult)
+              begin
+              end);
+          end);
+      end)
+    .&Then('both fail with an ECommandLine that says the grammar is frozen',
+      procedure(W: TFrozenGrammarWorld)
+      begin
+        Expect(W.Report).ToEqual('ECommandLine: The grammar is frozen: "tool" can no longer change | ' +
+          'ECommandLine: The grammar is frozen: "--name" can no longer change');
+      end)
+
   .Scenario('Declaring the version of a frozen root')
     .Given('a frozen grammar',
       procedure(W: TFrozenGrammarWorld)

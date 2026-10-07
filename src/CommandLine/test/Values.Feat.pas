@@ -38,6 +38,10 @@ type
 
     Computed: IRootCommand;
     OutOpt: IOption<string>;
+    // A default calculated from another option of the same invocation.
+    FromAnother: IRootCommand;
+    WhoOpt: IOption<string>;
+    FileOpt: IOption<string>;
     SeedOpt: IOption<Integer>;
 
     Escaped: IRootCommand;
@@ -68,6 +72,7 @@ type
     procedure BuildBounded;
     procedure BuildChecked;
     procedure BuildComputed;
+    procedure BuildComputedFromAnother;
     procedure BuildEscaped;
   end;
 
@@ -164,6 +169,23 @@ begin
     end);
   Computed := CommandLine.Root('tool', 'A tool');
   Computed.Add([OutOpt, SeedOpt]);
+end;
+
+procedure TValuesWorld.BuildComputedFromAnother;
+var
+  Who: IOption<string>;
+begin
+  // The calculation receives the result of the option it is the default of, and reads another value of the
+  // same invocation through it.
+  Who := CommandLine.Option<string>('--who').Description('Who it is for');
+  WhoOpt := Who;
+  FileOpt := CommandLine.Option<string>('--file').Description('Where to write').DefaultValueFactory(
+    function(const Found: IArgumentResult): string
+    begin
+      Result := Who.ValueIn(Found) + '.txt';
+    end, '<who>.txt');
+  FromAnother := CommandLine.Root('tool', 'A tool');
+  FromAnother.Add([WhoOpt, FileOpt]);
 end;
 
 procedure TValuesWorld.BuildEscaped;
@@ -579,6 +601,25 @@ Feature Command line values @commandline @values
       end)
 
 .Rule('a default value can be a calculation instead of a constant')
+
+  .Scenario('A computed default that reads another value of the invocation')
+    .Given('an option whose default value is a calculation that reads another option',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildComputedFromAnother;
+      end)
+    .When('an invocation that names the other option and not this one is parsed and read',
+      procedure(W: TValuesWorld)
+      begin
+        W.Parsed := W.FromAnother.Parse(['--who', 'ana']);
+        W.ReadOut := W.FileOpt.ValueIn(W.Parsed);
+      end)
+    .&Then('the value read is the one the calculation made from the other value',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('');
+        Expect(W.ReadOut).ToEqual('ana.txt');
+      end)
 
   .Scenario('A computed default value')
     .Given('an option whose default value is declared as a calculation',

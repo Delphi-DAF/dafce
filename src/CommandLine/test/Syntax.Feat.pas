@@ -34,6 +34,14 @@ type
     KeepOpt: IOption<string>;
     // A root that collects, over a subcommand that declares nothing about it.
     Outer: IRootCommand;
+    // An argument that keeps the tail of the invocation, next to one that does not.
+    Tail: IRootCommand;
+    TailArg: IArgument<TArray<string>>;
+    TailVerboseOpt: IOption<Boolean>;
+    Loose: IRootCommand;
+    LooseArg: IArgument<TArray<string>>;
+    LooseVerboseOpt: IOption<Boolean>;
+    ReadTail: TArray<string>;
     Parsed: IParseResult;
     ReadVerbosity: string;
     ReadOut: string;
@@ -45,6 +53,7 @@ type
     procedure BuildGrammar;
     procedure BuildMany;
     procedure BuildWrapper;
+    procedure BuildTails;
     /// <summary>Writes a response file and remembers it, so nothing is left behind.</summary>
     function WriteResponseFile(const FileName: string; const Lines: array of string): string;
     /// <summary>A path in the temp folder that is guaranteed not to exist.</summary>
@@ -83,6 +92,20 @@ begin
     Content[I - Low(Lines)] := Lines[I];
   TFile.WriteAllText(Result, string.Join(sLineBreak, Content));
   FWritten := FWritten + [Result];
+end;
+
+procedure TSyntaxWorld.BuildTails;
+begin
+  TailVerboseOpt := CommandLine.Option<Boolean>('--verbose').Description('Say more');
+  TailArg := CommandLine.Argument<TArray<string>>('command').Description('What to run, and its arguments')
+    .CaptureRemainingTokens;
+  Tail := CommandLine.Root('exec', 'Runs a command');
+  Tail.Add([TailVerboseOpt, TailArg]);
+
+  LooseVerboseOpt := CommandLine.Option<Boolean>('--verbose').Description('Say more');
+  LooseArg := CommandLine.Argument<TArray<string>>('files').Description('Files to read');
+  Loose := CommandLine.Root('cat', 'Reads files');
+  Loose.Add([LooseVerboseOpt, LooseArg]);
 end;
 
 function TSyntaxWorld.MissingResponseFile: string;
@@ -625,6 +648,48 @@ Feature Command line syntax @commandline @syntax
         Expect(W.Parsed.Succeeded).ToBeFalse;
         Expect(W.Parsed.ErrorText).ToContain('"-Fecha"');
         Expect(Pos('inside the group', W.Parsed.ErrorText)).ToEqual(0);
+      end)
+
+.Rule('an argument can keep what is left of the invocation')
+
+  .Scenario('The whole tail for the argument')
+    .Given('a command with an argument declared to keep what is left, and an option --verbose',
+      procedure(W: TSyntaxWorld)
+      begin
+        W.BuildTails;
+      end)
+    .When('the invocation passes a value for the argument and behind it --verbose and -x',
+      procedure(W: TSyntaxWorld)
+      begin
+        W.Parsed := W.Tail.Parse(['app', '--verbose', '-x']);
+        W.ReadTail := W.TailArg.ValueIn(W.Parsed);
+      end)
+    .&Then('the argument takes the three tokens, and --verbose is not taken as given',
+      procedure(W: TSyntaxWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('');
+        Expect(string.Join(' ', W.ReadTail)).ToEqual('app --verbose -x');
+        Expect(W.Parsed.WasProvided(W.TailVerboseOpt)).ToBeFalse;
+      end)
+
+  .Scenario('Without declaring it, an option is still an option')
+    .Given('a command with an argument of variable arity and an option --verbose',
+      procedure(W: TSyntaxWorld)
+      begin
+        W.BuildTails;
+      end)
+    .When('the invocation passes a value for the argument and behind it --verbose',
+      procedure(W: TSyntaxWorld)
+      begin
+        W.Parsed := W.Loose.Parse(['app', '--verbose']);
+        W.ReadTail := W.LooseArg.ValueIn(W.Parsed);
+      end)
+    .&Then('--verbose is taken as given, and the argument takes only the value',
+      procedure(W: TSyntaxWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('');
+        Expect(W.Parsed.WasProvided(W.LooseVerboseOpt)).ToBeTrue;
+        Expect(string.Join(' ', W.ReadTail)).ToEqual('app');
       end)
 
 .Rule('what a new form takes away, the end of options gives back')

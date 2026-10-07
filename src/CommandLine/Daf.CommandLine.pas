@@ -89,6 +89,29 @@ type
   /// <summary>An action with no code of its own: the invocation answers <c>TCommandLineExit.Ok</c> for it.</summary>
   TCommandActionProc = reference to procedure(const Parsed: IParseResult);
 
+  /// <summary>A validation of a command's invocation as a whole. It refuses with <c>Result.AddError</c>.</summary>
+  /// <remarks>
+  ///   It runs only on the innermost command the invocation reached, and before its options and arguments are
+  ///   validated: an error it adds keeps them from being validated at all.
+  /// </remarks>
+  TCommandValidator = reference to procedure(const Result: ICommandResult);
+  /// <summary>A validation of an option's result. It runs after the arity is checked and before the value is converted.</summary>
+  TOptionValidator = reference to procedure(const Result: IOptionResult);
+  /// <summary>A validation of an argument's result. It runs after the arity is checked and before the value is converted.</summary>
+  TArgumentValidator = reference to procedure(const Result: IArgumentResult);
+  /// <summary>A conversion of the whole result of a symbol: it receives every token, and answers the value whole.</summary>
+  /// <remarks>
+  ///   It refuses with <c>ArgumentResult.AddError</c>. For a collection it answers the whole array, the only
+  ///   conversion of its own a collection takes. It may keep part of the tokens of an argument and leave the
+  ///   rest for the next one with <c>OnlyTake</c>. An exception it raises leaves the parse as it is.
+  /// </remarks>
+  TCustomParser<T> = reference to function(const ArgumentResult: IArgumentResult): T;
+  /// <summary>A default calculated from the result of the symbol: it reads the rest of the invocation through it.</summary>
+  /// <remarks>It refuses with <c>ArgumentResult.AddError</c>, which fails the value as a conversion would.</remarks>
+  TDefaultValueFactory<T> = reference to function(const ArgumentResult: IArgumentResult): T;
+  /// <summary>The type-erased shape of <c>TCustomParser&lt;T&gt;</c>, which a symbol keeps.</summary>
+  TUntypedWholeParser = reference to function(const ArgumentResult: IArgumentResult): TValue;
+
   /// <summary>What an invocation runs: the action of a command, of an option, or the one it picks for a parse error.</summary>
   ICommandLineAction = interface
     ['{7C4B1A20-000D-4F31-9C10-4B0E2D5A000D}']
@@ -342,6 +365,8 @@ type
     ///   option that takes one value may be obligatory or not, and arity cannot say.
     /// </summary>
     function IsRequired: Boolean;
+    /// <summary>The validations of its result. <c>Validators.Add</c> declares one; <c>Freeze</c> closes them.</summary>
+    function Validators: TCommandLineCollection<TOptionValidator>;
     /// <summary>What naming it in the invocation runs; <c>nil</c> when it runs nothing.</summary>
     /// <remarks>
     ///   A terminating action runs instead of the action of the command reached; one that is not runs
@@ -370,6 +395,13 @@ type
 
   IArgument = interface(IValued)
     ['{7C4B1A20-0004-4F31-9C10-4B0E2D5A0004}']
+    /// <summary>The validations of its result. <c>Validators.Add</c> declares one; <c>Freeze</c> closes them.</summary>
+    function Validators: TCommandLineCollection<TArgumentValidator>;
+    /// <summary>
+    ///   True when it keeps every token that follows its place, whatever it looks like: an option of the command
+    ///   behind it is one more value.
+    /// </summary>
+    function CapturesRemainingTokens: Boolean;
   end;
 
   ICommand = interface(ISymbol)
@@ -389,6 +421,11 @@ type
     function Subcommands: TArray<ICommand>;
     /// <summary>Everything declared on it: its subcommands, then its options, then its arguments.</summary>
     function Children: TArray<ISymbol>;
+    /// <summary>
+    ///   The validations of its invocation as a whole. <c>Validators.Add</c> declares one; <c>Freeze</c> closes
+    ///   them.
+    /// </summary>
+    function Validators: TCommandLineCollection<TCommandValidator>;
     /// <summary>How this command is invoked, e.g. <c>mytool build</c>.</summary>
     function FullPath: string;
     /// <summary>True when a token matching nothing is a parse error, which is the default.</summary>
@@ -551,6 +588,15 @@ type
   IArgumentResult = interface(ISymbolResult)
     ['{7C4B1A20-000C-4F31-9C10-4B0E2D5A000C}']
     function Argument: IArgument;
+    /// <summary>
+    ///   Keeps the first <c>NumberOfTokens</c> tokens and hands the rest to the arguments that follow, each up to
+    ///   the most its arity admits; what none of them takes is a token nothing claimed.
+    /// </summary>
+    /// <remarks>
+    ///   Called from a conversion of its own, once. It raises <c>ECommandLine</c> on the argument an option carries
+    ///   its value in, which has no argument behind it.
+    /// </remarks>
+    procedure OnlyTake(NumberOfTokens: Integer);
     /// <summary>True when it took its default because the invocation carried no value for it.</summary>
     /// <remarks>
     ///   A required argument that is missing also has a result, with that error, and it is NOT
@@ -577,7 +623,8 @@ type
     /// <remarks>
     ///   A missing subcommand comes first, ahead of the errors of reading the invocation. The rest
     ///   follow the three steps: reading, then the tokens no symbol claimed, then the validation of
-    ///   each command -- its options in the order they were declared, then its arguments.
+    ///   each command -- its own validations on the innermost one, then its options in the order they
+    ///   were declared, then its arguments.
     ///
     ///   An action that wins and clears the parse errors, as the help and the version do, leaves only
     ///   the ones of its own option.
@@ -688,6 +735,15 @@ type
     ///   line. With no text, no default is shown.
     /// </remarks>
     function DefaultValueFactory(const Factory: TFunc<T>; const Text: string = ''): IOption<T>; overload;
+    /// <summary>
+    ///   The same, receiving the result of the option, so the calculation can read the rest of the invocation
+    ///   through it.
+    /// </summary>
+    function DefaultValueFactory(const Factory: TDefaultValueFactory<T>; const Text: string = ''): IOption<T>; overload;
+    /// <summary>The conversion of its own over the whole result; <c>nil</c> when there is none.</summary>
+    function CustomParser: TCustomParser<T>; overload;
+    /// <summary>Declares a conversion of its own that receives every token and answers the value whole.</summary>
+    function CustomParser(const Parser: TCustomParser<T>): IOption<T>; overload;
     function Arity(const Value: TArgumentArity): IOption<T>; overload;
     function Description(const Text: string): IOption<T>; overload;
     /// <summary>Makes it available to every descendant of the declaring command.</summary>
@@ -743,6 +799,9 @@ type
     function DefaultValue(const Value: T): IArgument<T>;
     function DefaultValueFactory: TFunc<T>; overload;
     function DefaultValueFactory(const Factory: TFunc<T>; const Text: string = ''): IArgument<T>; overload;
+    function DefaultValueFactory(const Factory: TDefaultValueFactory<T>; const Text: string = ''): IArgument<T>; overload;
+    function CustomParser: TCustomParser<T>; overload;
+    function CustomParser(const Parser: TCustomParser<T>): IArgument<T>; overload;
     function Arity(const Value: TArgumentArity): IArgument<T>; overload;
     function Description(const Text: string): IArgument<T>; overload;
     function AcceptOnlyFromAmong(const Values: array of string): IArgument<T>;
@@ -750,6 +809,13 @@ type
     function AcceptExistingOnly: IArgument<T>;
     function AcceptLegalFileNamesOnly: IArgument<T>;
     function Hidden: IArgument<T>;
+    /// <summary>Makes it keep every token that follows its place, options included.</summary>
+    /// <remarks>
+    ///   What a command that hands its tail to another program needs -- <c>exec app --verbose</c> -- without
+    ///   asking whoever invokes it to write <c>--</c>. Taking starts at its place: an option before the first
+    ///   value is still an option.
+    /// </remarks>
+    function CaptureRemainingTokens: IArgument<T>;
   end;
 
   // The classes below are declared here rather than in the implementation section on
@@ -806,7 +872,7 @@ type
     FHasDefault: Boolean;
     FDefaultText: string;
     FParser: TUntypedParser;
-    FValidators: TArray<TUntypedValidator>;
+    FWholeParser: TUntypedWholeParser;
     /// <summary>True when the declared type takes many values rather than one.</summary>
     function IsCollection: Boolean;
     /// <summary>Refuses at DECLARATION a path validation on something that is not one.</summary>
@@ -816,24 +882,57 @@ type
     ///   <c>FromDefault</c> says the one value is the whole default. Raises the error of a result
     ///   the parse refused.
     /// </summary>
-    function TryReadIn(const Found: ISymbolResult; out Values: TArray<TValue>; out FromDefault: Boolean): Boolean;
+    /// <remarks><c>Whole</c> says the one value is the whole value: the default, or what a conversion of its own answered.</remarks>
+    function TryReadIn(const Found: ISymbolResult; out Values: TArray<TValue>; out FromDefault, Whole: Boolean): Boolean;
     /// <summary>The same, raising when there is no result and the default of the type is null in .NET.</summary>
     function TryReadRequiredIn(const Found: ISymbolResult; MissingRaises: Boolean; out Values: TArray<TValue>;
-      out FromDefault: Boolean): Boolean;
+      out FromDefault, Whole: Boolean): Boolean;
     /// <summary>True for the types whose default is null in .NET: a string, a class, an interface.</summary>
     function DefaultIsNull: Boolean;
+    /// <summary>
+    ///   A new argument to carry the value of this symbol, for an option. Here and not in the generic class,
+    ///   which may not name a type of the implementation section (E2506).
+    /// </summary>
+    function NewValueArgument: IArgument;
+    class procedure FreezeValueArgument(const Argument: IArgument); static;
   public
     constructor Create(const AName: string; ATypeInfo: PTypeInfo; const AParser: TUntypedParser);
     /// <summary>Converts one token, through the declared conversion when there is one.</summary>
-    /// <remarks>It does not look at the accepted values nor run the validations: see <c>TryAcceptValue</c>.</remarks>
+    /// <remarks>It does not look at the accepted values: see <c>TryAcceptValue</c>.</remarks>
     function Convert(const Raw: string; out Value: TValue; out Error: string): Boolean;
     /// <summary>
-    ///   What the parse does with one token: the accepted values, then the conversion, then the
-    ///   validations. The first refusal is the error.
+    ///   What the parse does with one token when it converts it: the accepted values, then the
+    ///   conversion. The first refusal is the error.
     /// </summary>
+    /// <remarks>The validations run before, on the whole result: see <c>ValueValidators</c>.</remarks>
     function TryAcceptValue(const Raw: string; out Value: TValue; out Error: string): Boolean;
-    /// <summary>The declared default, calculated now when it is a calculation.</summary>
-    function BoxedDefault: TValue; virtual; abstract;
+    /// <summary>
+    ///   Where the validations of its value go -- the typed <c>Validate</c> and the ones of serie: the
+    ///   validations of the argument the value is carried in.
+    /// </summary>
+    /// <remarks>
+    ///   An argument carries its own value; an option carries it in an argument of its own, as in .NET. Either
+    ///   way an error they add fails the conversion, so reading the value raises it.
+    /// </remarks>
+    function ValueValidators: TCommandLineCollection<TArgumentValidator>; virtual; abstract;
+    /// <summary>The argument the value is carried in: the argument itself, or the one of an option.</summary>
+    function ValueArgument: IArgument; virtual; abstract;
+    /// <summary>The conversion of its own over the whole result, type-erased; <c>nil</c> when there is none.</summary>
+    function WholeParser: TUntypedWholeParser;
+    /// <summary>
+    ///   Refuses, naming the symbol and the type, a type the engine does not convert when no conversion of its own
+    ///   was declared for it.
+    /// </summary>
+    /// <remarks>
+    ///   Adding the symbol to a command is where it is asked: a conversion of its own can be declared after the
+    ///   symbol is, so its declaration cannot know yet, and every symbol the parse reads was added to a command.
+    /// </remarks>
+    procedure DemandConvertible;
+    /// <summary>
+    ///   The declared default, calculated now when it is a calculation. <c>Found</c> is the result the value is
+    ///   carried in, which a calculation that receives it reads.
+    /// </summary>
+    function BoxedDefault(const Found: IArgumentResult): TValue; virtual; abstract;
     function TryAccept(const Raw: string; out Error: string): Boolean;
     function IsFlag: Boolean;
     function TypeName: string;
@@ -861,19 +960,24 @@ type
   protected
     FDefaultValue: T;
     FDefaultFactory: TFunc<T>;
-    function DefaultOf: T;
-    function Unbox(const Values: TArray<TValue>; FromDefault: Boolean): T;
+    FDefaultResultFactory: TDefaultValueFactory<T>;
+    FCustomParser: TCustomParser<T>;
+    function DefaultOf(const Found: IArgumentResult): T;
+    function Unbox(const Values: TArray<TValue>; Whole: Boolean): T;
     /// <summary><c>Found</c> is this symbol's result, or <c>nil</c> when it has none.</summary>
     function ValueOf(const Found: ISymbolResult): T;
     function RequiredValueOf(const Found: ISymbolResult; MissingRaises: Boolean): T;
     function ValuesOf(const Found: ISymbolResult): TArray<T>;
     procedure SetDefaultValue(const Value: T);
     procedure SetDefaultFactory(const Factory: TFunc<T>; const Text: string);
+    procedure SetDefaultResultFactory(const Factory: TDefaultValueFactory<T>; const Text: string);
     procedure AddTypedValidator(const Validation: TCommandLineValidator<T>);
+    procedure SetCustomParser(const Parser: TCustomParser<T>);
   public
     constructor Create(const AName: string; const AParser: TCommandLineParser<T>);
     function DefaultValueFactory: TFunc<T>; overload;
-    function BoxedDefault: TValue; override;
+    function CustomParser: TCustomParser<T>; overload;
+    function BoxedDefault(const Found: IArgumentResult): TValue; override;
   end;
 
   TOption<T> = class(TValuedSymbol<T>, IOption, IOption<T>)
@@ -882,8 +986,16 @@ type
     FRequiredFlag: Boolean;
     FMultiplePerToken: Boolean;
     FAction: ICommandLineAction;
+    FResultValidators: TCommandLineCollection<TOptionValidator>;
+    FValueArgument: IArgument;
     function Found(const Where: ISymbolResult): ISymbolResult;
   public
+    constructor Create(const AName: string; const AParser: TCommandLineParser<T>);
+    destructor Destroy; override;
+    procedure Freeze; override;
+    function Validators: TCommandLineCollection<TOptionValidator>;
+    function ValueValidators: TCommandLineCollection<TArgumentValidator>; override;
+    function ValueArgument: IArgument; override;
     function IsRecursive: Boolean;
     function IsRequired: Boolean;
     function AllowsMultipleArgumentsPerToken: Boolean;
@@ -897,6 +1009,8 @@ type
     function ValuesIn(const Parsed: IParseResult): TArray<T>;
     function DefaultValue(const Value: T): IOption<T>;
     function DefaultValueFactory(const Factory: TFunc<T>; const Text: string = ''): IOption<T>; overload;
+    function DefaultValueFactory(const Factory: TDefaultValueFactory<T>; const Text: string = ''): IOption<T>; overload;
+    function CustomParser(const Parser: TCustomParser<T>): IOption<T>; overload;
     function Arity(const Value: TArgumentArity): IOption<T>; overload;
     function Description(const Text: string): IOption<T>; overload;
     function Recursive: IOption<T>;
@@ -910,8 +1024,18 @@ type
 
   TArgument<T> = class(TValuedSymbol<T>, IArgument, IArgument<T>)
   private
+    FResultValidators: TCommandLineCollection<TArgumentValidator>;
+    FCapturesRemainingTokens: Boolean;
     function Found(const Where: ISymbolResult): ISymbolResult;
   public
+    constructor Create(const AName: string; const AParser: TCommandLineParser<T>);
+    destructor Destroy; override;
+    procedure Freeze; override;
+    function Validators: TCommandLineCollection<TArgumentValidator>;
+    function ValueValidators: TCommandLineCollection<TArgumentValidator>; override;
+    function ValueArgument: IArgument; override;
+    function CapturesRemainingTokens: Boolean;
+    function CaptureRemainingTokens: IArgument<T>;
     function ValueIn(const Parsed: IParseResult): T; overload;
     function ValueIn(const SymbolResult: ISymbolResult): T; overload;
     function RequiredValueIn(const Parsed: IParseResult): T; overload;
@@ -919,6 +1043,8 @@ type
     function ValuesIn(const Parsed: IParseResult): TArray<T>;
     function DefaultValue(const Value: T): IArgument<T>;
     function DefaultValueFactory(const Factory: TFunc<T>; const Text: string = ''): IArgument<T>; overload;
+    function DefaultValueFactory(const Factory: TDefaultValueFactory<T>; const Text: string = ''): IArgument<T>; overload;
+    function CustomParser(const Parser: TCustomParser<T>): IArgument<T>; overload;
     function Arity(const Value: TArgumentArity): IArgument<T>; overload;
     function Description(const Text: string): IArgument<T>; overload;
     function AcceptOnlyFromAmong(const Values: array of string): IArgument<T>;
@@ -940,12 +1066,10 @@ type
   public
     class function Option<T>(const Name: string): IOption<T>; overload; static;
     class function Option<T>(const Name: string; const Aliases: array of string): IOption<T>; overload; static;
-    /// <summary>Declares an option together with the conversion that reads its type.</summary>
+    /// <summary>Declares an option together with a conversion of one token that reads its type.</summary>
     /// <remarks>
-    ///   The conversion is taken HERE, at declaration, and not set afterwards: a symbol
-    ///   that always knows how to convert its type is a symbol whose declaration can be
-    ///   refused on the spot when it does not. It also serves a type the
-    ///   engine already knows, for reading it some other way.
+    ///   It converts each token on its own, so a collection refuses it: <c>CustomParser</c> converts the whole
+    ///   result instead. It also serves a type the engine already knows, for reading it some other way.
     /// </remarks>
     class function Option<T>(const Name: string; const Parser: TCommandLineParser<T>): IOption<T>; overload; static;
     class function Option<T>(const Name: string; const Parser: TCommandLineParser<T>;
@@ -994,6 +1118,42 @@ const
   IllegalInFileName: TSysCharSet = ['<', '>', ':', '"', '/', '\', '|', '?', '*'];
 
 type
+  /// <summary>
+  ///   The argument an option carries its value in, as .NET's <c>Option.Argument</c>: the result its
+  ///   conversion and its default receive is this argument's.
+  /// </summary>
+  /// <remarks>
+  ///   It answers with the option's name, arity and type, and keeps the validations of the value. It
+  ///   lives as long as its option, which holds it.
+  /// </remarks>
+  TOptionArgument = class(TInterfacedObject, ISymbol, IValued, IArgument)
+  private
+    FOwner: TValuedSymbol;
+    FAliases: TCommandLineCollection<string>;
+    FValidators: TCommandLineCollection<TArgumentValidator>;
+  public
+    constructor Create(AOwner: TValuedSymbol);
+    destructor Destroy; override;
+    function Owner: TValuedSymbol;
+    procedure Freeze;
+    function AsObject: TObject;
+    function Name: string;
+    function Aliases: TCommandLineCollection<string>;
+    function Description: string;
+    function Matches(const Token: string): Boolean;
+    function IsHidden: Boolean;
+    function Parents: TArray<ISymbol>;
+    function TryAccept(const Raw: string; out Error: string): Boolean;
+    function IsFlag: Boolean;
+    function TypeName: string;
+    function Arity: TArgumentArity;
+    function AcceptedValues: TArray<string>;
+    function HasDefaultValue: Boolean;
+    function DefaultText: string;
+    function Validators: TCommandLineCollection<TArgumentValidator>;
+    function CapturesRemainingTokens: Boolean;
+  end;
+
   TCommand = class(TSymbol, ICommand)
   private
     FOptions: TArray<IOption>;
@@ -1001,16 +1161,20 @@ type
     FSubcommands: TArray<ICommand>;
     FAllowUnmatched: Boolean;
     FAction: ICommandLineAction;
+    FValidators: TCommandLineCollection<TCommandValidator>;
     // The path is kept as text, set by the parent when the child is added, so it is there
     // for the help and the errors without walking the parents, which are held weakly.
     FPathPrefix: string;
     procedure AddSymbol(const Symbol: ISymbol);
   public
+    constructor Create(const AName: string);
+    destructor Destroy; override;
     function Add(const Option: IOption): ICommand; overload;
     function Add(const Argument: IArgument): ICommand; overload;
     function Add(const Subcommand: ICommand): ICommand; overload;
     function Add(const Symbols: array of ISymbol): ICommand; overload;
     function Description(const Text: string): ICommand; overload;
+    function Validators: TCommandLineCollection<TCommandValidator>;
     function Options: TArray<IOption>;
     function Arguments: TArray<IArgument>;
     function Subcommands: TArray<ICommand>;
@@ -1349,6 +1513,45 @@ end;
 
 { TValuedSymbol }
 
+// The symbol whose value an argument carries: the argument itself, or the option of an argument of its own.
+function ValuedOf(const Argument: IArgument): TValuedSymbol;
+begin
+  if Argument.AsObject is TOptionArgument then
+    Result := TOptionArgument(Argument.AsObject).Owner
+  else
+    Result := Argument.AsObject as TValuedSymbol;
+end;
+
+// A check of one value, run as a validation of the result: each token is converted and checked, in order,
+// and the first refusal is the error. A token that does not convert is left to the conversion, which says so.
+// Outside the classes, so the closure captures the check and nothing else.
+function ValueValidator(const Check: TUntypedValidator): TArgumentValidator;
+begin
+  Result :=
+    procedure(const Found: IArgumentResult)
+    var
+      Valued: TValuedSymbol;
+      Token: TToken;
+      Value: TValue;
+      Error: string;
+    begin
+      Valued := ValuedOf(Found.Argument);
+      for Token in Found.Tokens do
+      begin
+        if not Valued.Convert(Token.Value, Value, Error) then
+          Continue;
+        Error := '';
+        if not Check(Value, Error) then
+        begin
+          if Error = '' then
+            Error := Format(SValueRefused, [Token.Value, Valued.Name]);
+          Found.AddError(Error);
+          Exit;
+        end;
+      end;
+    end;
+end;
+
 constructor TValuedSymbol.Create(const AName: string; ATypeInfo: PTypeInfo; const AParser: TUntypedParser);
 begin
   inherited Create(AName);
@@ -1361,13 +1564,6 @@ begin
     // of T" in an interface. Refused here rather than never run.
     raise ECommandLine.CreateFmt('Symbol "%s" is a collection, and a conversion of its own converts one ' +
       'value: declare it on the element type instead', [AName]);
-  // The check stays at DECLARATION, which is where it is worth something, and that is
-  // why the conversion is taken at declaration too: a symbol either knows how to convert
-  // its type or it is refused on the spot. "the engine does not know
-  // this type" is no longer the end of the conversation.
-  if not Assigned(FParser) and not TCommandLineValue.Handles(FTypeInfo) then
-    raise ECommandLine.CreateFmt('Symbol "%s" is declared with a type the command line cannot convert: %s. ' +
-      'Declare a conversion of its own for it', [AName, TCommandLineValue.TypeName(FTypeInfo)]);
   // Derived from the type, so the ordinary case is never written by hand.
   // A collection says "many" by being one, which is how .NET derives it too.
   if IsCollection then
@@ -1376,6 +1572,13 @@ begin
     FArity := TArgumentArity.ZeroOrOne
   else
     FArity := TArgumentArity.ExactlyOne;
+end;
+
+procedure TValuedSymbol.DemandConvertible;
+begin
+  if not Assigned(FParser) and not Assigned(FWholeParser) and not TCommandLineValue.Handles(FTypeInfo) then
+    raise ECommandLine.CreateFmt('Symbol "%s" is declared with a type the command line cannot convert: %s. ' +
+      'Declare a conversion of its own for it', [Name, TCommandLineValue.TypeName(FTypeInfo)]);
 end;
 
 function TValuedSymbol.IsCollection: Boolean;
@@ -1394,7 +1597,6 @@ function TValuedSymbol.TryAcceptValue(const Raw: string; out Value: TValue; out 
 var
   Allowed: TArray<string>;
   Candidate: string;
-  Check: TUntypedValidator;
 begin
   Error := '';
   Value := TValue.Empty;
@@ -1417,38 +1619,24 @@ begin
     end;
   end;
 
-  if not Convert(Raw, Value, Error) then
-    Exit(False);
-
-  // Validation runs HERE, inside the parse, and its refusal goes out through the same
-  // Errors as everything else. Validating afterwards would move the failure to where it
-  // is no longer an invocation error, and whoever invoked the tool would get two lists
-  // instead of one.
-  for Check in FValidators do
-    if not Check(Value, Error) then
-    begin
-      if Error = '' then
-        Error := Format(SValueRefused, [Raw, Name]);
-      Exit(False);
-    end;
-
-  Result := True;
+  Result := Convert(Raw, Value, Error);
 end;
 
 function TValuedSymbol.TryReadIn(const Found: ISymbolResult; out Values: TArray<TValue>;
-  out FromDefault: Boolean): Boolean;
+  out FromDefault, Whole: Boolean): Boolean;
 begin
   Values := nil;
   FromDefault := False;
+  Whole := False;
   Result := Found <> nil;
   if Result then
-    Values := ResultValues(Found, FromDefault);
+    Values := ResultValues(Found, FromDefault, Whole);
 end;
 
 function TValuedSymbol.TryReadRequiredIn(const Found: ISymbolResult; MissingRaises: Boolean;
-  out Values: TArray<TValue>; out FromDefault: Boolean): Boolean;
+  out Values: TArray<TValue>; out FromDefault, Whole: Boolean): Boolean;
 begin
-  Result := TryReadIn(Found, Values, FromDefault);
+  Result := TryReadIn(Found, Values, FromDefault, Whole);
   if not Result and (MissingRaises or DefaultIsNull) then
     raise ECommandLine.CreateFmt(SValueNotProvided, [Name]);
 end;
@@ -1537,6 +1725,21 @@ begin
   FDefaultText := Text;
 end;
 
+function TValuedSymbol.WholeParser: TUntypedWholeParser;
+begin
+  Result := FWholeParser;
+end;
+
+function TValuedSymbol.NewValueArgument: IArgument;
+begin
+  Result := TOptionArgument.Create(Self);
+end;
+
+class procedure TValuedSymbol.FreezeValueArgument(const Argument: IArgument);
+begin
+  (Argument.AsObject as TOptionArgument).Freeze;
+end;
+
 procedure TValuedSymbol.AddValidator(const Validator: TUntypedValidator);
 begin
   CheckOpen;
@@ -1544,11 +1747,7 @@ begin
     // A validation that was declared and is not there would never run and never say so,
     // which is the shape of defect this whole module exists to remove.
     raise ECommandLine.CreateFmt('A validation declared on "%s" is not assigned', [Name]);
-  // Appended by index and not as [Validator]: inside an array literal Delphi reads a
-  // reference-to-function as a CALL of it, and answers E2035 about parameters nobody
-  // was passing.
-  SetLength(FValidators, Length(FValidators) + 1);
-  FValidators[High(FValidators)] := Validator;
+  ValueValidators.Add(ValueValidator(Validator));
 end;
 
 procedure TValuedSymbol.DemandPathType(const What: string);
@@ -1638,23 +1837,25 @@ begin
   Result := FDefaultFactory;
 end;
 
-function TValuedSymbol<T>.DefaultOf: T;
+function TValuedSymbol<T>.DefaultOf(const Found: IArgumentResult): T;
 begin
-  if Assigned(FDefaultFactory) then
+  if Assigned(FDefaultResultFactory) then
+    Result := FDefaultResultFactory(Found)
+  else if Assigned(FDefaultFactory) then
     Result := FDefaultFactory()
   else
     Result := FDefaultValue;
 end;
 
-function TValuedSymbol<T>.BoxedDefault: TValue;
+function TValuedSymbol<T>.BoxedDefault(const Found: IArgumentResult): TValue;
 begin
-  Result := TValue.From<T>(DefaultOf);
+  Result := TValue.From<T>(DefaultOf(Found));
 end;
 
-function TValuedSymbol<T>.Unbox(const Values: TArray<TValue>; FromDefault: Boolean): T;
+function TValuedSymbol<T>.Unbox(const Values: TArray<TValue>; Whole: Boolean): T;
 begin
-  // A default is held whole, collection or not.
-  if FromDefault then
+  // A default, or what a conversion of its own answered, is held whole, collection or not.
+  if Whole then
     Exit(Values[0].AsType<T>);
   // A collection holds ONE value, and that value is every token it was given. The array is built
   // through RTTI because T is the array type and the element type is only known to the engine:
@@ -1669,39 +1870,39 @@ end;
 function TValuedSymbol<T>.ValueOf(const Found: ISymbolResult): T;
 var
   Values: TArray<TValue>;
-  FromDefault: Boolean;
+  FromDefault, Whole: Boolean;
 begin
   // No result is a command the invocation did not reach, and it reads as the default of the type,
   // the CreateDefaultValue of .NET: nothing in this invocation gave the symbol a value.
-  if not TryReadIn(Found, Values, FromDefault) then
+  if not TryReadIn(Found, Values, FromDefault, Whole) then
     Exit(Default (T));
-  Result := Unbox(Values, FromDefault);
+  Result := Unbox(Values, Whole);
 end;
 
 function TValuedSymbol<T>.RequiredValueOf(const Found: ISymbolResult; MissingRaises: Boolean): T;
 var
   Values: TArray<TValue>;
-  FromDefault: Boolean;
+  FromDefault, Whole: Boolean;
 begin
-  if not TryReadRequiredIn(Found, MissingRaises, Values, FromDefault) then
+  if not TryReadRequiredIn(Found, MissingRaises, Values, FromDefault, Whole) then
     Exit(Default (T));
-  Result := Unbox(Values, FromDefault);
+  Result := Unbox(Values, Whole);
 end;
 
 function TValuedSymbol<T>.ValuesOf(const Found: ISymbolResult): TArray<T>;
 var
   Values: TArray<TValue>;
-  FromDefault: Boolean;
+  FromDefault, Whole: Boolean;
   I: Integer;
 begin
   Result := nil;
   // What the invocation carried, and only that: a default is not a value it carried.
-  if not TryReadIn(Found, Values, FromDefault) or FromDefault then
+  if not TryReadIn(Found, Values, FromDefault, Whole) or FromDefault then
     Exit;
   // One value of the declared type, and for a collection that one value is the array.
-  if IsCollection then
+  if IsCollection or Whole then
   begin
-    Result := [Unbox(Values, False)];
+    Result := [Unbox(Values, Whole)];
     Exit;
   end;
   SetLength(Result, Length(Values));
@@ -1714,6 +1915,7 @@ begin
   CheckOpen;
   FDefaultValue := Value;
   FDefaultFactory := nil;
+  FDefaultResultFactory := nil;
   SetDefaultText(TValue.From<T>(Value).ToString);
 end;
 
@@ -1723,10 +1925,41 @@ begin
   if not Assigned(Factory) then
     raise ECommandLine.CreateFmt('The computed default of "%s" is not assigned', [Name]);
   FDefaultFactory := Factory;
+  FDefaultResultFactory := nil;
   // HasDefaultValue is what satisfies "required", and it is set even with no text to show:
   // the value exists, it is just not known yet. SetDefaultText('') leaves the help
   // showing no default rather than a false one.
   SetDefaultText(Text);
+end;
+
+procedure TValuedSymbol<T>.SetDefaultResultFactory(const Factory: TDefaultValueFactory<T>; const Text: string);
+begin
+  CheckOpen;
+  if not Assigned(Factory) then
+    raise ECommandLine.CreateFmt('The computed default of "%s" is not assigned', [Name]);
+  FDefaultResultFactory := Factory;
+  FDefaultFactory := nil;
+  SetDefaultText(Text);
+end;
+
+function TValuedSymbol<T>.CustomParser: TCustomParser<T>;
+begin
+  Result := FCustomParser;
+end;
+
+procedure TValuedSymbol<T>.SetCustomParser(const Parser: TCustomParser<T>);
+begin
+  CheckOpen;
+  FCustomParser := Parser;
+  if not Assigned(Parser) then
+    FWholeParser := nil
+  else
+    // Boxed once, here, as the conversion of one token is: everything below the symbol works on TValue.
+    FWholeParser :=
+      function(const ArgumentResult: IArgumentResult): TValue
+      begin
+        Result := TValue.From<T>(Parser(ArgumentResult));
+      end;
 end;
 
 procedure TValuedSymbol<T>.AddTypedValidator(const Validation: TCommandLineValidator<T>);
@@ -1750,6 +1983,41 @@ begin
 end;
 
 { TOption<T> }
+
+constructor TOption<T>.Create(const AName: string; const AParser: TCommandLineParser<T>);
+begin
+  inherited Create(AName, AParser);
+  FResultValidators := TCommandLineCollection<TOptionValidator>.Create(AName);
+  FValueArgument := NewValueArgument;
+end;
+
+destructor TOption<T>.Destroy;
+begin
+  FResultValidators.Free;
+  inherited;
+end;
+
+procedure TOption<T>.Freeze;
+begin
+  inherited;
+  FResultValidators.Freeze;
+  FreezeValueArgument(FValueArgument);
+end;
+
+function TOption<T>.Validators: TCommandLineCollection<TOptionValidator>;
+begin
+  Result := FResultValidators;
+end;
+
+function TOption<T>.ValueValidators: TCommandLineCollection<TArgumentValidator>;
+begin
+  Result := FValueArgument.Validators;
+end;
+
+function TOption<T>.ValueArgument: IArgument;
+begin
+  Result := FValueArgument;
+end;
 
 function TOption<T>.IsRecursive: Boolean;
 begin
@@ -1840,6 +2108,18 @@ begin
   Result := Self;
 end;
 
+function TOption<T>.DefaultValueFactory(const Factory: TDefaultValueFactory<T>; const Text: string): IOption<T>;
+begin
+  SetDefaultResultFactory(Factory, Text);
+  Result := Self;
+end;
+
+function TOption<T>.CustomParser(const Parser: TCustomParser<T>): IOption<T>;
+begin
+  SetCustomParser(Parser);
+  Result := Self;
+end;
+
 function TOption<T>.Arity(const Value: TArgumentArity): IOption<T>;
 begin
   SetArity(Value);
@@ -1898,6 +2178,51 @@ end;
 
 { TArgument<T> }
 
+constructor TArgument<T>.Create(const AName: string; const AParser: TCommandLineParser<T>);
+begin
+  inherited Create(AName, AParser);
+  FResultValidators := TCommandLineCollection<TArgumentValidator>.Create(AName);
+end;
+
+destructor TArgument<T>.Destroy;
+begin
+  FResultValidators.Free;
+  inherited;
+end;
+
+procedure TArgument<T>.Freeze;
+begin
+  inherited;
+  FResultValidators.Freeze;
+end;
+
+function TArgument<T>.Validators: TCommandLineCollection<TArgumentValidator>;
+begin
+  Result := FResultValidators;
+end;
+
+function TArgument<T>.ValueValidators: TCommandLineCollection<TArgumentValidator>;
+begin
+  Result := FResultValidators;
+end;
+
+function TArgument<T>.ValueArgument: IArgument;
+begin
+  Result := Self;
+end;
+
+function TArgument<T>.CapturesRemainingTokens: Boolean;
+begin
+  Result := FCapturesRemainingTokens;
+end;
+
+function TArgument<T>.CaptureRemainingTokens: IArgument<T>;
+begin
+  CheckOpen;
+  FCapturesRemainingTokens := True;
+  Result := Self;
+end;
+
 function TArgument<T>.Found(const Where: ISymbolResult): ISymbolResult;
 var
   Me: IArgument;
@@ -1954,6 +2279,18 @@ begin
   Result := Self;
 end;
 
+function TArgument<T>.DefaultValueFactory(const Factory: TDefaultValueFactory<T>; const Text: string): IArgument<T>;
+begin
+  SetDefaultResultFactory(Factory, Text);
+  Result := Self;
+end;
+
+function TArgument<T>.CustomParser(const Parser: TCustomParser<T>): IArgument<T>;
+begin
+  SetCustomParser(Parser);
+  Result := Self;
+end;
+
 function TArgument<T>.Arity(const Value: TArgumentArity): IArgument<T>;
 begin
   SetArity(Value);
@@ -1996,11 +2333,138 @@ begin
   Result := Self;
 end;
 
+{ TOptionArgument }
+
+constructor TOptionArgument.Create(AOwner: TValuedSymbol);
+begin
+  inherited Create;
+  FOwner := AOwner;
+  FAliases := TCommandLineCollection<string>.Create(AOwner.Name);
+  FValidators := TCommandLineCollection<TArgumentValidator>.Create(AOwner.Name);
+end;
+
+destructor TOptionArgument.Destroy;
+begin
+  FValidators.Free;
+  FAliases.Free;
+  inherited;
+end;
+
+function TOptionArgument.Owner: TValuedSymbol;
+begin
+  Result := FOwner;
+end;
+
+procedure TOptionArgument.Freeze;
+begin
+  FAliases.Freeze;
+  FValidators.Freeze;
+end;
+
+function TOptionArgument.AsObject: TObject;
+begin
+  Result := Self;
+end;
+
+function TOptionArgument.Name: string;
+begin
+  Result := FOwner.Name;
+end;
+
+function TOptionArgument.Aliases: TCommandLineCollection<string>;
+begin
+  Result := FAliases;
+end;
+
+function TOptionArgument.Description: string;
+begin
+  Result := FOwner.Description;
+end;
+
+function TOptionArgument.Matches(const Token: string): Boolean;
+begin
+  // No token names it: it is reached through its option.
+  Result := False;
+end;
+
+function TOptionArgument.IsHidden: Boolean;
+begin
+  Result := FOwner.IsHidden;
+end;
+
+function TOptionArgument.Parents: TArray<ISymbol>;
+begin
+  Result := [FOwner as ISymbol];
+end;
+
+function TOptionArgument.TryAccept(const Raw: string; out Error: string): Boolean;
+begin
+  Result := FOwner.TryAccept(Raw, Error);
+end;
+
+function TOptionArgument.IsFlag: Boolean;
+begin
+  Result := FOwner.IsFlag;
+end;
+
+function TOptionArgument.TypeName: string;
+begin
+  Result := FOwner.TypeName;
+end;
+
+function TOptionArgument.Arity: TArgumentArity;
+begin
+  Result := FOwner.Arity;
+end;
+
+function TOptionArgument.AcceptedValues: TArray<string>;
+begin
+  Result := FOwner.AcceptedValues;
+end;
+
+function TOptionArgument.HasDefaultValue: Boolean;
+begin
+  Result := FOwner.HasDefaultValue;
+end;
+
+function TOptionArgument.DefaultText: string;
+begin
+  Result := FOwner.DefaultText;
+end;
+
+function TOptionArgument.Validators: TCommandLineCollection<TArgumentValidator>;
+begin
+  Result := FValidators;
+end;
+
+function TOptionArgument.CapturesRemainingTokens: Boolean;
+begin
+  Result := False;
+end;
+
 { TCommand }
+
+constructor TCommand.Create(const AName: string);
+begin
+  inherited Create(AName);
+  FValidators := TCommandLineCollection<TCommandValidator>.Create(AName);
+end;
+
+destructor TCommand.Destroy;
+begin
+  FValidators.Free;
+  inherited;
+end;
+
+function TCommand.Validators: TCommandLineCollection<TCommandValidator>;
+begin
+  Result := FValidators;
+end;
 
 function TCommand.Add(const Option: IOption): ICommand;
 begin
   CheckOpen;
+  (Option.AsObject as TValuedSymbol).DemandConvertible;
   FOptions := FOptions + [Option];
   (Option.AsObject as TSymbol).AddParent(Self);
   Result := Self;
@@ -2009,6 +2473,7 @@ end;
 function TCommand.Add(const Argument: IArgument): ICommand;
 begin
   CheckOpen;
+  (Argument.AsObject as TValuedSymbol).DemandConvertible;
   FArguments := FArguments + [Argument];
   (Argument.AsObject as TSymbol).AddParent(Self);
   Result := Self;
@@ -2171,6 +2636,7 @@ end;
 procedure TCommand.Freeze;
 begin
   inherited;
+  FValidators.Freeze;
   for var Option in FOptions do
     (Option.AsObject as TSymbol).Freeze;
   for var Argument in FArguments do
@@ -2205,6 +2671,31 @@ end;
 
 { TVersionOption }
 
+// The validation of every version option: the version is the only thing an invocation asking for it carries.
+// A token that matches nothing does not count -- it has no result among the children of the command, and
+// its own error is somebody else's. Outside the class, so the option does not hold a closure that holds it.
+procedure ValidateVersionAlone(const Result: IOptionResult);
+var
+  Command: ICommandResult;
+  Child: ISymbolResult;
+  AsOption: IOptionResult;
+  Named: string;
+begin
+  if not Supports(Result.Parent, ICommandResult, Command) then
+    Exit;
+  for Child in Command.Children do
+  begin
+    if Supports(Child, IOptionResult, AsOption) and (Supports(AsOption.Option, IVersionOption) or AsOption.IsImplicit) then
+      Continue;
+    if Result.IdentifierToken.HasValue then
+      Named := Result.IdentifierToken.Value.Value
+    else
+      Named := Result.Option.Name;
+    Result.AddError(Format(SVersionOptionNotCombined, [Named]));
+    Exit;
+  end;
+end;
+
 constructor TVersionOption.Create(const AName: string; const AAliases: array of string);
 var
   Alias: string;
@@ -2215,6 +2706,7 @@ begin
   SetDescription(SVersionOptionDescription);
   SetArity(TArgumentArity.Zero);
   FAction := NewVersionAction;
+  Validators.Add(ValidateVersionAlone);
 end;
 
 { TRootCommand }

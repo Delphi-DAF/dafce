@@ -16,7 +16,8 @@ uses
   HelpActions.Feat in 'HelpActions.Feat.pas',
   ParseRules.Feat in 'ParseRules.Feat.pas',
   Results.Feat in 'Results.Feat.pas',
-  Actions.Feat in 'Actions.Feat.pas';
+  Actions.Feat in 'Actions.Feat.pas',
+  Validators.Feat in 'Validators.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

@@ -159,8 +159,8 @@ Los errores salen en este orden:
 1. un subcomando que falta;
 2. los errores de leer la invocación;
 3. los tokens que nadie reclamó, en el orden en que se escribieron;
-4. la validación, del comando más interno al raíz: las opciones de cada comando en el orden en que se
-   declararon, y después sus argumentos.
+4. la validación, del comando más interno al raíz: las validaciones propias del más interno, después
+   las opciones de cada comando en el orden en que se declararon, y después sus argumentos.
 
 La aridad de una opción se comprueba antes de convertir su valor, y si falla es lo único que esa
 opción informa: repetida con dos valores, falla por la repetición sean cuales sean los valores. Una
@@ -247,8 +247,7 @@ Dos ganchos, los dos declarados **en el símbolo** y en ningún otro sitio.
 
 ### Una conversión propia
 
-Se pasa donde se declara el símbolo, porque un símbolo o sabe convertir su tipo o su declaración se
-rechaza ahí mismo:
+Tiene dos formas. La primera convierte **un token**, y se pasa donde se declara el símbolo:
 
 ```pascal
 MinOpt := CommandLine.Option<TSemVer>('--min',
@@ -266,15 +265,36 @@ El rechazo sale por `ParseResult.Errors` como cualquier otro, así que un tipo q
 falla igual de bien que uno de serie. Sirve también para un tipo que el motor ya conoce, para leerlo de
 otra forma — hexadecimal en un `Integer`, por ejemplo.
 
+La segunda convierte **el resultado entero**. `CustomParser` recibe el resultado del símbolo —todos sus
+tokens, `AddError` para rechazar, el resto de la invocación por `GetResult`— y devuelve el valor
+entero. En una colección devuelve el array entero:
+
+```pascal
+var SortedOpt := CommandLine.Option<TArray<string>>('--sorted').AllowMultipleArgumentsPerToken
+  .CustomParser(
+  function(const Found: IArgumentResult): TArray<string>
+  var
+    I: Integer;
+  begin
+    SetLength(Result, Length(Found.Tokens));
+    for I := 0 to High(Result) do
+      Result[I] := Found.Tokens[I].Value;
+    TArray.Sort<string>(Result);
+  end);
+```
+
+En un argumento puede quedarse con parte de los tokens: `Found.OnlyTake(1)` se queda con el primero y
+pasa el resto a los argumentos que siguen. Una excepción suya sale del parseo tal cual.
+
 **En el símbolo y no en un registro de tipos.** El alcance es exactamente donde se escribió.
 
 El límite **se movió pero no desapareció**: un tipo que el motor no cubre y para el que no se declara
-conversión se sigue rechazando **al declararlo**, que es donde quien escribe la gramática puede hacer
-algo al respecto.
+conversión se rechaza **al añadir el símbolo a un comando**, antes de leer ninguna invocación. Un
+`CustomParser` se declara antes de ese `Add`.
 
 ### Validaciones
 
-Una validación recibe el valor **ya convertido** y puede rechazarlo. Corre **dentro** del parseo:
+`Validate` recibe el valor **ya convertido** y puede rechazarlo. Corre **dentro** del parseo:
 
 ```pascal
 CountOpt := CommandLine.Option<Integer>('--count').Description('Cuántos hacer')
@@ -300,9 +320,30 @@ Dos vienen de serie, escritas sobre ese mismo gancho:
 Las dos aplican a una ruta, que aquí es un `string` — incluido un `TArray<string>`, donde corren por
 elemento. Declarar cualquiera de las dos sobre algo que no es una ruta se rechaza al declararlo.
 
-⚠️ **Una conversión o una validación propias no se pueden declarar sobre una colección.** Las dos
+Una validación del **resultado** recibe el resultado de su símbolo y rechaza con `AddError`.
+`Validators.Add` la declara en un comando, una opción o un argumento:
+
+```pascal
+Root.Validators.Add(
+  procedure(const Result: ICommandResult)
+  begin
+    if (Result.GetResult(JsonOpt) <> nil) and (Result.GetResult(XmlOpt) <> nil) then
+      Result.AddError('--json y --xml no se pueden usar juntas');
+  end);
+```
+
+- Las validaciones de un comando corren solo cuando es el comando más interno que alcanzó la invocación,
+  y antes que sus opciones y argumentos: un error suyo hace que estos no se validen.
+- Las de una opción o un argumento corren después de comprobar su aridad y antes de convertir su
+  valor: un error suyo hace que no se convierta.
+- Un error que añade una validación de una opción queda entre los errores, y leer la opción sigue
+  dando su valor. `Validate` y las dos de serie hacen fallar el valor mismo, y leerlo lanza.
+
+⚠️ **Una conversión de un token, o un `Validate`, no se pueden declarar sobre una colección.** Los dos
 reciben el valor de **un** token, y en una colección ese valor es un elemento — que `T` no puede
-nombrar, porque Delphi no tiene forma de decir «el elemento de `T`» en una interfaz. Se rechaza donde se declara. Declárala sobre el tipo del elemento, en un símbolo aparte.
+nombrar, porque Delphi no tiene forma de decir «el elemento de `T`» en una interfaz. Se rechaza donde
+se declara. `CustomParser`, que recibe el resultado entero, se declara en una colección como en
+cualquier otro símbolo.
 
 ---
 
@@ -327,6 +368,17 @@ ayuda muestra un default que el programa no usa.
 
 Cada parse lo ejecuta una vez, se lea después el valor o no, y **la ayuda no lo ejecuta**: muestra el
 texto que se declare junto a él, y ningún default cuando no hay ninguno.
+
+El cálculo también puede recibir el resultado del símbolo, y leer por él el resto de la invocación:
+
+```pascal
+FileOpt := CommandLine.Option<string>('--file').Description('Dónde escribir')
+  .DefaultValueFactory(
+  function(const Found: IArgumentResult): string
+  begin
+    Result := WhoOpt.ValueIn(Found) + '.txt';
+  end, '<who>.txt');
+```
 
 ---
 
@@ -424,6 +476,19 @@ var Resto  := Parsed.UnmatchedTokens;   // ['apt', 'update']
 
 Sin eso —y sigue siendo el defecto— un token que no casa con nada es un error de parseo, y
 `UnmatchedTokens` lo trae igual. Una raíz que recoge manda sobre un subcomando que no.
+
+### Un argumento que se queda con la cola
+
+Un argumento declarado con `CaptureRemainingTokens` se queda con todos los tokens que siguen a su sitio,
+opciones incluidas, así que un comando pasa su cola a otro programa sin pedir `--`:
+
+```pascal
+var Exec := CommandLine.Root('exec', 'Ejecuta un comando');
+Exec.Add([VerboseOpt, CommandLine.Argument<TArray<string>>('command').CaptureRemainingTokens]);
+// exec app --verbose -x   ->   command = ['app', '--verbose', '-x'], y --verbose no se da por pasada
+```
+
+Una opción antes del primer valor sigue siendo una opción: `exec --verbose app` da `--verbose`.
 
 ---
 
