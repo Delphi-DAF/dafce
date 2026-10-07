@@ -62,6 +62,7 @@ type
     CardinalOpt: IOption<Cardinal>;
     UInt64Opt: IOption<UInt64>;
     SingleOpt: IOption<Single>;
+    DoubleOpt: IOption<Double>;
     // The columns of the outlines over them.
     Kind: string;
     Text: string;
@@ -88,7 +89,6 @@ type
     ReadDay: TDate;
     ReadAt: TTime;
     ReadWait: TTimeSpan;
-    ReadSingle: Single;
     ReadLimit: TNullable<Integer>;
     ReadDry: TNullable<Boolean>;
     ReadSource: TFilePath;
@@ -149,8 +149,9 @@ begin
   CardinalOpt := CommandLine.Option<Cardinal>('--cardinal').Description('An unsigned number');
   UInt64Opt := CommandLine.Option<UInt64>('--uint64').Description('A wide unsigned number');
   SingleOpt := CommandLine.Option<Single>('--single').Description('A simple real');
+  DoubleOpt := CommandLine.Option<Double>('--double').Description('A double real');
   Numbers := CommandLine.Root('tool', 'A tool');
-  Numbers.Add([ShortIntOpt, ByteOpt, SmallIntOpt, WordOpt, CardinalOpt, UInt64Opt, SingleOpt]);
+  Numbers.Add([ShortIntOpt, ByteOpt, SmallIntOpt, WordOpt, CardinalOpt, UInt64Opt, SingleOpt, DoubleOpt]);
 end;
 
 function TTypesWorld.ReadNumber: string;
@@ -169,6 +170,8 @@ begin
     Result := UIntToStr(UInt64Opt.ValueIn(Parsed))
   else if Kind = 'single' then
     Result := FloatToStr(SingleOpt.ValueIn(Parsed), TFormatSettings.Invariant)
+  else if Kind = 'double' then
+    Result := FloatToStr(DoubleOpt.ValueIn(Parsed), TFormatSettings.Invariant)
   else
     Result := 'unknown kind ' + Kind;
 end;
@@ -682,7 +685,8 @@ Feature Command line types @commandline @types
        ['word',     '65535'],
        ['cardinal', '4294967295'],
        ['uint64',   '18446744073709551615'],
-       ['single',   '1.5']])
+       ['single',   '1.5'],
+       ['double',   '0.25']])
 
   .Scenario('A negative for an unsigned integer')
     .Given('an option declared as an unsigned integer',
@@ -727,26 +731,35 @@ Feature Command line types @commandline @types
        ['word',     '65536',                '"65536" is not a valid unsigned integer for --word'],
        ['cardinal', '4294967296',           '"4294967296" is not a valid unsigned integer for --cardinal'],
        ['uint64',   '18446744073709551616', '"18446744073709551616" is not a valid unsigned integer for --uint64'],
-       ['uint64',   '-1',                   '"-1" is not a valid unsigned integer for --uint64']])
+       ['uint64',   '-1',                   '"-1" is not a valid unsigned integer for --uint64'],
+       ['double',   '1e',                   '"1e" is not a valid number for --double']])
 
-  .Scenario('A simple real too large for its type')
-    .Given('an option declared as a simple real',
+  .ScenarioOutline('<Text> is too large for the <Kind> type, and reads <Expected>')
+    .Given('an option declared with each real type',
       procedure(W: TTypesWorld)
       begin
         W.BuildNumbers;
       end)
-    .When('the invocation passes it a magnitude only a double real holds',
+    .When('the invocation passes <Text> to the <Kind> one',
       procedure(W: TTypesWorld)
       begin
-        W.Parsed := W.Numbers.Parse(['--single', '1e39']);
-        W.ReadSingle := W.SingleOpt.ValueIn(W.Parsed);
+        W.Parsed := W.Numbers.Parse(['--' + W.Kind, W.Text]);
+        W.Report := W.ReadNumber;
       end)
-    .&Then('it is read as infinity, as .NET reads it',
+    .&Then('it is read as an infinity with its sign, as .NET reads it',
       procedure(W: TTypesWorld)
       begin
         Expect(W.Parsed.ErrorText).ToEqual('');
-        Expect(FloatToStr(W.ReadSingle, TFormatSettings.Invariant)).ToEqual('INF');
+        Expect(W.Report).ToEqual(W.Expected);
       end)
+    .Examples(
+      [['Kind',   'Text',    'Expected'],
+       ['single', '1e39',    'INF'],
+       ['single', '-1e39',   '-INF'],
+       ['single', '1e400',   'INF'],
+       ['double', '1e400',   'INF'],
+       ['double', '-1e400',  '-INF'],
+       ['double', '1e5000',  'INF']])
 
 .Rule('a date without time and a time are read in ISO 8601, and a time span in .NET''s format')
 

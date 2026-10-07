@@ -443,14 +443,76 @@ begin
   Result := True;
 end;
 
+// True for a real written in full: digits with an optional fraction and an optional exponent, and nothing else.
+function IsWrittenReal(const Raw: string): Boolean;
+
+  function SkipDigits(var At: Integer): Boolean;
+  var
+    From: Integer;
+  begin
+    From := At;
+    while (At <= Length(Raw)) and CharInSet(Raw[At], ['0' .. '9']) do
+      Inc(At);
+    Result := At > From;
+  end;
+
+var
+  At: Integer;
+  Mantissa: Boolean;
+begin
+  At := 1;
+  if (At <= Length(Raw)) and CharInSet(Raw[At], ['+', '-']) then
+    Inc(At);
+  Mantissa := SkipDigits(At);
+  if (At <= Length(Raw)) and (Raw[At] = '.') then
+  begin
+    Inc(At);
+    Mantissa := SkipDigits(At) or Mantissa;
+  end;
+  if not Mantissa then
+    Exit(False);
+  if (At <= Length(Raw)) and CharInSet(Raw[At], ['e', 'E']) then
+  begin
+    Inc(At);
+    if (At <= Length(Raw)) and CharInSet(Raw[At], ['+', '-']) then
+      Inc(At);
+    if not SkipDigits(At) then
+      Exit(False);
+  end;
+  Result := At > Length(Raw);
+end;
+
+// A real as .NET reads one: a magnitude past Limit is an infinity with its sign, not a refusal. The RTL refuses
+// a magnitude it cannot hold, and where Extended is Double that is every one past Double, so a text written as
+// a real that the RTL refuses was refused for its size.
+function TryParseReal(const Raw: string; Limit: Extended; out Real: Extended): Boolean;
+begin
+  Result := True;
+  if TryStrToFloat(Raw, Real, InvariantSettings) then
+  begin
+    if Real > Limit then
+      Real := Infinity
+    else if Real < -Limit then
+      Real := NegInfinity;
+  end
+  else if IsWrittenReal(Raw) then
+  begin
+    if Raw.StartsWith('-') then
+      Real := NegInfinity
+    else
+      Real := Infinity;
+  end
+  else
+    Result := False;
+end;
+
 class function TCommandLineValue.TryParse(TypeInf: PTypeInfo; const Raw: string; out Value: TValue): Boolean;
 var
   IntValue: Integer;
   BigValue: Int64;
   UnsignedValue: UInt64;
   Min, Max: Int64;
-  FloatValue: Double;
-  SingleValue: Extended;
+  RealValue: Extended;
   CurrValue: Currency;
   DateValue: TDateTime;
   TimeValue: TTime;
@@ -551,24 +613,17 @@ begin
 
   if TypeInf = System.TypeInfo(Double) then
   begin
-    if not TryStrToFloat(Raw, FloatValue, InvariantSettings) then
+    if not TryParseReal(Raw, MaxDouble, RealValue) then
       Exit(False);
-    Value := TValue.From<Double>(FloatValue);
+    Value := TValue.From<Double>(RealValue);
     Exit(True);
   end;
 
   if TypeInf = System.TypeInfo(Single) then
   begin
-    // Read wider and narrowed here, so a magnitude Single cannot hold becomes an infinity, as .NET's
-    // float.Parse does, instead of a refusal or an overflow raised by the assignment.
-    if not TryStrToFloat(Raw, SingleValue, InvariantSettings) then
+    if not TryParseReal(Raw, MaxSingle, RealValue) then
       Exit(False);
-    if SingleValue > MaxSingle then
-      Value := TValue.From<Single>(Infinity)
-    else if SingleValue < -MaxSingle then
-      Value := TValue.From<Single>(NegInfinity)
-    else
-      Value := TValue.From<Single>(SingleValue);
+    Value := TValue.From<Single>(RealValue);
     Exit(True);
   end;
 

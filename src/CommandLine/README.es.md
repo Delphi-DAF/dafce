@@ -208,7 +208,7 @@ Cada tipo de serie de .NET tiene su tipo de Delphi, salvo `DateTimeOffset` — d
 |---|---|---|
 | `int`, `long` | `Integer`, `Int64` | |
 | `sbyte`, `byte`, `short`, `ushort`, `uint`, `ulong` | `ShortInt`, `Byte`, `SmallInt`, `Word`, `Cardinal`, `UInt64` | un valor fuera del rango del tipo se rechaza: `-1` no es un `Cardinal`, y `300` no es un `Byte` |
-| `float`, `double` | `Single`, `Double` | un `Single` lee como infinito una magnitud que no le cabe, como .NET |
+| `float`, `double` | `Single`, `Double` | una magnitud que no cabe en el tipo se lee como infinito, con su signo, como en .NET |
 | `decimal` | `Currency` | el decimal exacto: un importe escrito con hasta cuatro decimales vuelve con esos cuatro, y no redondea por su cuenta |
 | `bool` | `Boolean` | es el flag: basta con nombrarlo |
 | enums | tipos enumerados | el tipo nombra sus valores, y se comparan sin distinguir mayúsculas |
