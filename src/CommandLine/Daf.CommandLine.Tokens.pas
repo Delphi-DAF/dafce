@@ -6,7 +6,7 @@
   Deciding WHAT A TOKEN IS and deciding WHICH COMMAND OR OPTION IT REACHES are two
   jobs. Every extra way of writing an
   invocation -- the : delimiter, an alias glued to its value, a bundle of short
-  options, the Windows / prefix -- takes a reading away from another, and doing that
+  options -- takes a reading away from another, and doing that
   inside the parse loop would make the order of its ifs the semantics without anybody
   having written the semantics down.
 
@@ -27,32 +27,36 @@ const
   LongPrefix = '--';
   /// <summary>The short prefix, one dash and one letter.</summary>
   ShortPrefix = '-';
-  /// <summary>The Windows prefix, the other convention .NET admits.</summary>
-  WindowsPrefix = '/';
   /// <summary>The delimiter every rewriting produces, because the parser already reads it.</summary>
   CanonicalDelimiter = '=';
   /// <summary>The other delimiter an invocation may be written with.</summary>
   ColonDelimiter = ':';
 
 type
+  /// <summary>Replaces a token with other tokens before the parse reads any of them, as .NET's <c>TryReplaceToken</c>.</summary>
+  /// <remarks>
+  ///   It receives the token without its <c>@</c>. True replaces it with <c>ReplacementTokens</c>, which are read
+  ///   in its place, a token starting with <c>@</c> among them included. False with an <c>ErrorMessage</c> drops
+  ///   it and fails the parse with that message; False with none leaves it as it was written.
+  /// </remarks>
+  TTryReplaceToken = reference to function(const TokenToReplace: string; out ReplacementTokens: TArray<string>;
+    out ErrorMessage: string): Boolean;
+
   /// <summary>
   ///   What the rewriting is allowed to ask about the grammar in scope, and nothing
   ///   more.
   /// </summary>
   /// <remarks>
-  ///   Bundling and the <c>/</c> prefix are NOT purely lexical:
-  ///   <c>-fdx</c> can only be split knowing that f, d and x are declared, and
-  ///   <c>/x</c> is an option only when x is. This is the whole of what that costs --
-  ///   three questions, answerable by a test double, so the rewriting can be specified
-  ///   without a command in sight.
+  ///   Bundling is NOT purely lexical: <c>-fdx</c> can only be split knowing that f, d
+  ///   and x are declared, and <c>-fobin</c> knowing that o takes a value. This is the
+  ///   whole of what that costs -- two questions, answerable by a test double, so the
+  ///   rewriting can be specified without a command in sight.
   /// </remarks>
   IKnownTokens = interface
     ['{7C4B1A20-0008-4F31-9C10-4B0E2D5A0008}']
     /// <summary>True when the token, exactly as written, names something declared here.</summary>
     function Knows(const Token: string): Boolean;
-    /// <summary>True when a one-character option by that letter is declared here.</summary>
-    function KnowsShort(const Letter: Char): Boolean;
-    /// <summary>True when that one-character option takes a value, i.e. is not a flag.</summary>
+    /// <summary>True when the one-character option by that letter takes a value, i.e. is not a flag.</summary>
     function ShortTakesValue(const Letter: Char): Boolean;
   end;
 
@@ -79,7 +83,12 @@ type
     class procedure SplitToken(const Token: string; out OptionName, InlineValue: string;
       out HasInline: Boolean); static;
     /// <summary>Turns one token into the canonical form, or leaves it exactly as written.</summary>
-    class function Rewrite(const Token: string; const Known: IKnownTokens): TTokenRewrite; static;
+    /// <remarks>
+    ///   With <c>EnablePosixBundling</c> off, a single-dash token is neither a group nor an alias with a value
+    ///   glued to it, as in .NET; a value after a delimiter is still read.
+    /// </remarks>
+    class function Rewrite(const Token: string; const Known: IKnownTokens;
+      EnablePosixBundling: Boolean = True): TTokenRewrite; static;
     /// <summary>
     ///   The whole invocation rewritten in one scope. This is the shape the rewriting
     ///   is specified in -- tokens in, tokens out -- and the parser applies the same
@@ -87,7 +96,7 @@ type
     ///   command reached, and that is only known while walking.
     /// </summary>
     class function Normalize(const Tokens: TArray<string>; const Known: IKnownTokens;
-      out Errors: TArray<string>): TArray<string>; static;
+      out Errors: TArray<string>; EnablePosixBundling: Boolean = True): TArray<string>; static;
     /// <summary>Puts <c>Replacement</c> where <c>At</c> was, which is how a rewriting lands.</summary>
     class function Splice(const Tokens: TArray<string>; At: Integer;
       const Replacement: TArray<string>): TArray<string>; static;
@@ -98,8 +107,8 @@ type
   ///   It exists for two concrete reasons -- a command line that does not fit in the
   ///   console's limit, and a long invocation that repeats -- and it does nothing beyond
   ///   that: no variables are expanded and no path is resolved against anything. A line
-  ///   is a token, a <c>#</c> starts a comment, and the less it does the less there is to
-  ///   explain about where a token came from.
+  ///   is split as a command line is, a <c>#</c> starts a comment, and the less it does
+  ///   the less there is to explain about where a token came from.
   /// </remarks>
   TResponseFiles = record
   public
@@ -113,15 +122,35 @@ type
       ///   not the point: it is there because a file that names itself would loop
       ///   forever, and a process that hangs does not read as a failure -- it reads as a
       ///   suite still running. Far above any real nesting, so nobody has cause to tune it.
+      ///   A declared divergence from .NET, which has no limit.
       /// </summary>
       MaxDepth = 10;
-    /// <summary>Replaces every <c>@file</c> with the tokens its lines carry.</summary>
-    class function Expand(const Tokens: TArray<string>; out Errors: TArray<string>): TArray<string>; static;
+    /// <summary>
+    ///   Replaces every <c>@token</c> before <c>--</c> through <c>Replacer</c>. With no replacer, the tokens
+    ///   are left as they were written.
+    /// </summary>
+    class function Expand(const Tokens: TArray<string>; const Replacer: TTryReplaceToken;
+      out Errors: TArray<string>): TArray<string>; static;
   end;
+
+/// <summary>
+///   Splits a line into tokens as the command line does: white space separates, and double quotes group
+///   and are not part of the token. A port of .NET's <c>CommandLineParser.SplitCommandLine</c>.
+/// </summary>
+/// <remarks>What follows a double quote that is never closed is dropped, as in .NET.</remarks>
+function SplitCommandLine(const CommandLine: string): TArray<string>;
+
+/// <summary>Reads the response file at <c>FilePath</c>: the replacer the parse uses unless it is told otherwise.</summary>
+/// <remarks>
+///   Each line is split with <c>SplitCommandLine</c>, and a token of it starting with <c>@</c> names another
+///   file, read in its place up to <c>TResponseFiles.MaxDepth</c> deep.
+/// </remarks>
+function TryReadResponseFile(const FilePath: string; out Tokens: TArray<string>; out Error: string): Boolean;
 
 implementation
 
 uses
+  System.Character,
   System.IOUtils,
   Daf.CommandLine.Resources;
 
@@ -170,13 +199,68 @@ begin
   end;
 end;
 
-class function TTokenNormalizer.Rewrite(const Token: string; const Known: IKnownTokens): TTokenRewrite;
+// The POSIX short forms of one token: a group of one-character options, and a value glued to the one that
+// takes it. As .NET's TryUnbundle: the token is a group only when its FIRST letter is known, and an option
+// that takes a value keeps the rest of the token -- `-fdobin` is `-f -d -o bin`, and `-vquiet` is one value
+// and not five flags on a grammar that happens to declare q, u, i, e and t.
+function Unbundle(const Token: string; const Known: IKnownTokens): TTokenRewrite;
 var
-  Cut: Integer;
-  Name, Value, Body: string;
+  Body: string;
+  Index, Rest: Integer;
   Letter: Char;
   Parts: TArray<string>;
-  AnyKnown, HasValue: Boolean;
+begin
+  Result.Changed := False;
+  Result.Tokens := [Token];
+  Result.Error := '';
+  Body := Token.Substring(1);
+  Parts := nil;
+  for Index := 0 to Body.Length - 1 do
+  begin
+    Letter := Body.Chars[Index];
+    // A delimiter inside the group gives the rest to the option before it.
+    if CharInSet(Letter, [CanonicalDelimiter, ColonDelimiter]) then
+    begin
+      if Parts = nil then
+        Exit;
+      Parts[High(Parts)] := Parts[High(Parts)] + CanonicalDelimiter + Body.Substring(Index + 1);
+      Break;
+    end;
+    // The help letter is known, so `-fh` asks for help.
+    if not Known.Knows(ShortPrefix + Letter) then
+    begin
+      // An unknown first letter is no group: the token stays the unknown one it is, and the parser
+      // names it whole.
+      if Parts = nil then
+        Exit;
+      // Refused WHOLE, naming the letter. Taking the letters that exist and keeping
+      // quiet about the one that does not would leave whoever invoked believing they
+      // asked for something they did not. A declared divergence from .NET, which takes
+      // the rest as a value.
+      Result.Tokens := nil;
+      Result.Changed := True;
+      Result.Error := Format(SUnknownOptionInGroup, [ShortPrefix + Letter, Token]);
+      Exit;
+    end;
+    Parts := Parts + [ShortPrefix + Letter];
+    if (Index < Body.Length - 1) and Known.ShortTakesValue(Letter) then
+    begin
+      Rest := Index + 1;
+      if CharInSet(Body.Chars[Rest], [CanonicalDelimiter, ColonDelimiter]) then
+        Inc(Rest);
+      Parts[High(Parts)] := ShortPrefix + Letter + CanonicalDelimiter + Body.Substring(Rest);
+      Break;
+    end;
+  end;
+  Result.Tokens := Parts;
+  Result.Changed := True;
+end;
+
+class function TTokenNormalizer.Rewrite(const Token: string; const Known: IKnownTokens;
+  EnablePosixBundling: Boolean): TTokenRewrite;
+var
+  Cut: Integer;
+  Name, Value: string;
 begin
   Result.Changed := False;
   Result.Tokens := [Token];
@@ -190,36 +274,19 @@ begin
   if Known.Knows(Token) then
     Exit;
 
-  // The Windows prefix, the other convention .NET admits on purpose. It is bounded
-  // exactly like bundling: `/x` names an option only when x was declared, so a
-  // positional whose value starts with a slash -- which on Windows is a POSIX absolute
-  // path, or somebody else's argument -- stays the value it was.
-  if Token.StartsWith(WindowsPrefix) then
+  // A delimiter after a declared name delimits whatever the name looks like: an alias declared as `/p`
+  // takes `/p:value` too.
+  Cut := DelimiterAt(Token);
+  if (Cut > 0) and Known.Knows(Token.Substring(0, Cut)) then
   begin
-    Cut := DelimiterAt(Token);
-    HasValue := Cut > 0;
-    if HasValue then
-    begin
-      Name := Token.Substring(1, Cut - 1);
-      Value := Token.Substring(Cut + 1);
-    end
-    else
-    begin
-      Name := Token.Substring(1);
-      Value := '';
-    end;
-    if Name = '' then
+    Name := Token.Substring(0, Cut);
+    Value := Token.Substring(Cut + 1);
+    // Already the form the parser reads. Saying so here is also what stops the loop
+    // from rewriting the result of its own rewriting, since every rewriting
+    // produces exactly this form.
+    if Token.Substring(Cut, 1) = CanonicalDelimiter then
       Exit;
-    if Known.Knows(LongPrefix + Name) then
-      Name := LongPrefix + Name
-    else if Known.Knows(ShortPrefix + Name) then
-      Name := ShortPrefix + Name
-    else
-      Exit;
-    if HasValue then
-      Result.Tokens := [Name + CanonicalDelimiter + Value]
-    else
-      Result.Tokens := [Name];
+    Result.Tokens := [Name + CanonicalDelimiter + Value];
     Result.Changed := True;
     Exit;
   end;
@@ -227,86 +294,19 @@ begin
   if not LooksLikeOption(Token) then
     Exit;
 
-  Cut := DelimiterAt(Token);
-  if Cut > 0 then
-  begin
-    Name := Token.Substring(0, Cut);
-    Value := Token.Substring(Cut + 1);
-    // Already the form the parser reads. Saying so here is also what stops the loop
-    // from rewriting the result of its own rewriting, since every rewriting below
-    // produces exactly this form.
-    if Token.Substring(Cut, 1) = CanonicalDelimiter then
-      Exit;
-    if Known.Knows(Name) then
-    begin
-      Result.Tokens := [Name + CanonicalDelimiter + Value];
-      Result.Changed := True;
-    end;
-    // A name nobody declared keeps its colon: there is nothing on the left of it for a
-    // delimiter to delimit, and `--Logging:LogLevel=Debug` has to stay the one unknown
-    // option it is rather than become a half-understood one.
-    Exit;
-  end;
-
-  // What follows are the POSIX SHORT forms: one dash and then letters. `--something` is
-  // neither of them, whatever its letters happen to be.
-  if (Length(Token) < 3) or Token.StartsWith(LongPrefix) then
+  // A long name nobody declared keeps its colon: there is nothing on the left of it for a
+  // delimiter to delimit, and `--Logging:LogLevel=Debug` has to stay the one unknown
+  // option it is rather than become a half-understood one.
+  if Token.StartsWith(LongPrefix) then
     Exit;
 
-  Body := Token.Substring(1);
-  Letter := Body.Chars[0];
-
-  // The glued value is tried BEFORE bundling, and that order is fixed here by a spec
-  // rather than by the order of these ifs. An option that
-  // takes a value swallows the rest of its own token, exactly as getopt does with
-  // `-ovalue`; trying to bundle first would read `-vquiet` as five flags on any grammar
-  // that happened to declare q, u, i, e and t.
-  if Known.KnowsShort(Letter) and Known.ShortTakesValue(Letter) then
-  begin
-    Result.Tokens := [ShortPrefix + Letter + CanonicalDelimiter + Body.Substring(1)];
-    Result.Changed := True;
+  if (not EnablePosixBundling) or (Length(Token) < 3) then
     Exit;
-  end;
-
-  // Bundling, which is where the grammar is really needed: `-fdx` can only be split
-  // knowing that f, d and x were declared. It is a group only when at least ONE of its
-  // letters is -- with none of them declared there is nothing to split, and `-abc`
-  // stays the unknown option it has always been so that the parser can name the token
-  // rather than blame one of its letters.
-  AnyKnown := False;
-  for Letter in Body do
-    if Known.KnowsShort(Letter) then
-    begin
-      AnyKnown := True;
-      Break;
-    end;
-  if not AnyKnown then
-    Exit;
-
-  Parts := nil;
-  for Letter in Body do
-  begin
-    // Inside a group a letter only has to be known, and the help letter is: `-fh` asks for help.
-    // Whether the token is a group at all was decided above by declared letters alone.
-    if not (Known.KnowsShort(Letter) or Known.Knows(ShortPrefix + Letter)) then
-    begin
-      // Refused WHOLE, naming the letter. Taking the letters that exist and keeping
-      // quiet about the one that does not would leave whoever invoked believing they
-      // asked for something they did not -- the silent failure this module has spent
-      // three changes removing.
-      Result.Tokens := nil;
-      Result.Changed := True;
-      Result.Error := Format(SUnknownOptionInGroup, [ShortPrefix + Letter, Token]);
-      Exit;
-    end;
-    Parts := Parts + [ShortPrefix + Letter];
-  end;
-  Result.Tokens := Parts;
-  Result.Changed := True;
+  Result := Unbundle(Token, Known);
 end;
 
 class function TTokenNormalizer.Normalize(const Tokens: TArray<string>; const Known: IKnownTokens;
-  out Errors: TArray<string>): TArray<string>;
+  out Errors: TArray<string>; EnablePosixBundling: Boolean): TArray<string>;
 var
   Index: Integer;
   Ended: Boolean;
@@ -329,7 +329,7 @@ begin
       Inc(Index);
       Continue;
     end;
-    Step := Rewrite(Pending[Index], Known);
+    Step := Rewrite(Pending[Index], Known, EnablePosixBundling);
     if Step.Error <> '' then
     begin
       Errors := Errors + [Step.Error];
@@ -359,34 +359,109 @@ begin
     Result := Result + [Tokens[I]];
 end;
 
-{ TResponseFiles }
+{ SplitCommandLine }
 
-function ExpandResponseFile(const Path: string; Depth: Integer; var Errors: TArray<string>): TArray<string>;
+type
+  {$SCOPEDENUMS ON}
+  TBoundary = (TokenStart, WordEnd, QuoteStart, QuoteEnd);
+  {$SCOPEDENUMS OFF}
+
+// The state machine of .NET's SplitCommandLine, transition for transition: a quote that opens a token
+// starts a token of its own, and one inside a word only switches whether white space separates.
+function SplitCommandLine(const CommandLine: string): TArray<string>;
 var
-  Lines: TArray<string>;
-  Line, Trimmed: string;
+  StartTokenIndex, Position: Integer;
+  Seeking, SeekingQuote: TBoundary;
+  C: Char;
+
+  function CurrentToken: string;
+  begin
+    Result := CommandLine.Substring(StartTokenIndex, Position - StartTokenIndex).Replace('"', '');
+  end;
+
 begin
   Result := nil;
+  StartTokenIndex := 0;
+  Position := 0;
+  Seeking := TBoundary.TokenStart;
+  SeekingQuote := TBoundary.QuoteStart;
+  while Position < CommandLine.Length do
+  begin
+    C := CommandLine.Chars[Position];
+    if C.IsWhiteSpace then
+    begin
+      if SeekingQuote = TBoundary.QuoteStart then
+        case Seeking of
+          TBoundary.WordEnd:
+            begin
+              Result := Result + [CurrentToken];
+              StartTokenIndex := Position;
+              Seeking := TBoundary.TokenStart;
+            end;
+          TBoundary.TokenStart:
+            StartTokenIndex := Position;
+        end;
+    end
+    else if C = '"' then
+    begin
+      if Seeking = TBoundary.TokenStart then
+        case SeekingQuote of
+          TBoundary.QuoteEnd:
+            begin
+              Result := Result + [CurrentToken];
+              StartTokenIndex := Position;
+              SeekingQuote := TBoundary.QuoteStart;
+            end;
+          TBoundary.QuoteStart:
+            begin
+              StartTokenIndex := Position + 1;
+              SeekingQuote := TBoundary.QuoteEnd;
+            end;
+        end
+      else if SeekingQuote = TBoundary.QuoteEnd then
+        SeekingQuote := TBoundary.QuoteStart
+      else
+        SeekingQuote := TBoundary.QuoteEnd;
+    end
+    else if (Seeking = TBoundary.TokenStart) and (SeekingQuote = TBoundary.QuoteStart) then
+    begin
+      Seeking := TBoundary.WordEnd;
+      StartTokenIndex := Position;
+    end;
+
+    Inc(Position);
+    if (Position = CommandLine.Length) and (Seeking <> TBoundary.TokenStart) then
+      Result := Result + [CurrentToken];
+  end;
+end;
+
+{ TResponseFiles }
+
+function ReadResponseFile(const Path: string; Depth: Integer; var Tokens: TArray<string>; out Error: string): Boolean;
+var
+  Lines: TArray<string>;
+  Line, Trimmed, Word: string;
+begin
   if Depth > TResponseFiles.MaxDepth then
   begin
-    Errors := Errors + [Format(SResponseFileTooDeep, [Path, TResponseFiles.MaxDepth])];
-    Exit;
+    Error := Format(SResponseFileTooDeep, [Path, TResponseFiles.MaxDepth]);
+    Exit(False);
   end;
   if not TFile.Exists(Path) then
   begin
     // A file that is not there is an invalid invocation and not a literal token:
     // letting it through turns a typo into an argument with an at sign in front of it,
     // travelling all the way to wherever it ends up used.
-    Errors := Errors + [Format(SResponseFileMissing, [Path])];
-    Exit;
+    Error := Format(SResponseFileMissing, [Path]);
+    Exit(False);
   end;
   try
     Lines := TFile.ReadAllLines(Path);
   except
     on E: Exception do
     begin
-      Errors := Errors + [Format(SResponseFileUnreadable, [Path, E.Message])];
-      Exit;
+      Error := Format(SResponseFileUnreadable, [Path, E.Message]);
+      Exit(False);
     end;
   end;
   for Line in Lines do
@@ -394,31 +469,63 @@ begin
     Trimmed := Line.Trim;
     if (Trimmed = '') or Trimmed.StartsWith(TResponseFiles.CommentMarker) then
       Continue;
-    if Trimmed.StartsWith(TResponseFiles.Marker) and (Length(Trimmed) > 1) then
-      Result := Result + ExpandResponseFile(Trimmed.Substring(1), Depth + 1, Errors)
-    else
-      Result := Result + [Trimmed];
+    for Word in SplitCommandLine(Trimmed) do
+      if Word.StartsWith(TResponseFiles.Marker) and (Length(Word) > 1) then
+      begin
+        if not ReadResponseFile(Word.Substring(1), Depth + 1, Tokens, Error) then
+          Exit(False);
+      end
+      else
+        Tokens := Tokens + [Word];
   end;
+  Result := True;
 end;
 
-class function TResponseFiles.Expand(const Tokens: TArray<string>; out Errors: TArray<string>): TArray<string>;
+function TryReadResponseFile(const FilePath: string; out Tokens: TArray<string>; out Error: string): Boolean;
+begin
+  Tokens := nil;
+  Error := '';
+  Result := ReadResponseFile(FilePath, 1, Tokens, Error);
+  if not Result then
+    Tokens := nil;
+end;
+
+class function TResponseFiles.Expand(const Tokens: TArray<string>; const Replacer: TTryReplaceToken;
+  out Errors: TArray<string>): TArray<string>;
 var
-  Token: string;
+  Pending, Replacement: TArray<string>;
+  Index: Integer;
+  Token, Error: string;
   Ended: Boolean;
 begin
-  Result := nil;
   Errors := nil;
+  if not Assigned(Replacer) then
+    Exit(Tokens);
+  Result := nil;
+  Pending := Tokens;
+  Index := 0;
   Ended := False;
-  for Token in Tokens do
+  while Index < Length(Pending) do
   begin
+    Token := Pending[Index];
+    Inc(Index);
     // `--` protects a value here exactly as it protects one everywhere else. Without
     // that, a positional whose value happens to start with an at sign could not be
-    // passed at all -- and the published requirement already says everything behind
-    // `--` is a value.
+    // passed at all.
     if Token = EndOfOptions then
       Ended := True;
-    if (not Ended) and Token.StartsWith(Marker) and (Length(Token) > 1) then
-      Result := Result + ExpandResponseFile(Token.Substring(1), 1, Errors)
+    if Ended or not Token.StartsWith(Marker) or (Length(Token) < 2) then
+    begin
+      Result := Result + [Token];
+      Continue;
+    end;
+    if Replacer(Token.Substring(1), Replacement, Error) then
+    begin
+      Pending := Replacement + Copy(Pending, Index, MaxInt);
+      Index := 0;
+    end
+    else if Error.Trim <> '' then
+      Errors := Errors + [Error]
     else
       Result := Result + [Token];
   end;

@@ -36,8 +36,8 @@ run time.
 
 | Concept | Description |
 |---------|-------------|
-| `ICommand` | A command: its options, its positional arguments and its subcommands |
-| `IRootCommand` | Where a grammar starts; the only one that can `Parse`, and the one that carries the version |
+| `ICommand` | A command: its options, its positional arguments and its subcommands. Any command can `Parse` an invocation, as the root of the parse |
+| `IRootCommand` | Where a grammar starts: it carries the version, and its `Parse` with no arguments reads the process command line |
 | `IOption<T>` | A named, dashed value — `--file main.pas`. Also the key it is read with |
 | `IArgument<T>` | A **positional** value, identified by its place: `mytool build main.pas` |
 | `TArgumentArity` | How many values a symbol admits, minimum and maximum |
@@ -51,7 +51,8 @@ run time.
 | `IParseErrorAction` | What `Invoke` runs for a parse error: what was meant, the errors and the help |
 | `TInvocationConfiguration` | Where `Invoke` writes, and whether a default handler catches what the action lets escape |
 | `TCommandLineExit` | The codes `Invoke` answers when the action is not the one deciding |
-| `CommandLine` | The entry point: `Option<T>`, `Argument<T>`, `Command`, `Root`, `HelpOption`, `VersionOption` |
+| `TParserConfiguration` | How the parse reads an invocation: grouping, response files, and whether names tell cases apart |
+| `CommandLine` | The entry point: `Option<T>`, `Argument<T>`, `Command`, `Root`, `HelpOption`, `VersionOption`, and `SplitCommandLine` |
 
 ---
 
@@ -417,48 +418,69 @@ says anything the others do not.
 | One-character alias glued to its value | `-obin\app.exe` | `-o bin\app.exe` |
 | Bundled one-character options | `-fdx` | `-f -d -x` |
 | Bundle followed by a value | `-fdo bin\app.exe` | `-f -d -o bin\app.exe` |
-| Windows prefix | `/out bin\app.exe` | `--out bin\app.exe` |
+| Bundle whose last option takes the rest | `-fdobin` | `-f -d -o bin` |
 | Response file | `@build.rsp` | the tokens its lines carry |
 
 Every one of them is bounded the same way: **each fires only when the token does not already name
 something declared**. `-fdx` becomes three because `f`, `d` and `x` are declared aliases; were there
-an option called `-fdx`, that is what the token would stay. And a group with a letter nobody declared
-is refused **whole**, naming the letter. The help letter fits inside a group — `-fh` asks for help —
-but does not make one: a token none of whose letters the command declares stays the token it was.
+an option called `-fdx`, that is what the token would stay. A token is a group only when its **first**
+letter names an option, the help letter included — `-fh` and `-hf` ask for help —, and otherwise it
+stays the token it was. Inside a group, an option that takes a value keeps the rest of the token,
+after a `:` or a `=` when there is one: `-fdobin` and `-fdo=bin` are both `-f -d -o bin`. A letter
+nobody declared, before an option has taken the rest, refuses the group **whole**, naming the letter.
+
+A slash is not a prefix: `/out` is a value even when `--out` is declared. An option that has to answer
+to it declares it as an alias, as the help declares `/h` and `/?`, and then `/p:value` and `/p=value`
+work as with dashes.
 
 ### ⚠️ What admitting them takes away
 
-A form admitted is a token that used to mean one thing and now means another. Three, concretely:
+A form admitted is a token that used to mean one thing and now means another. Two, concretely:
 
 - **`-abc` may stop being an option called `-abc`.** Where `a`, `b` and `c` are declared
   one-character aliases, it is now three options.
-- **A positional value starting with `/` may be read as an option** — but only when what follows the
-  slash names a declared one. `/tmp/app.dpr` is still a value; `/out` is not, if `--out` exists.
 - **A positional value starting with `@` is read as a response file**, and one naming a file that is
   not there is a parse error rather than a token.
 
-`--` gives all three back: everything behind it is a value, at signs, slashes and dashes included.
-There is no switch to turn a form off, and none is needed — a grammar that has to take one of those
-values as written has `--`.
+`--` gives both back: everything behind it is a value, at signs and dashes included. And the
+configuration of the parse turns either off for the whole invocation — see below.
 
 ### Response files
 
-`@file.rsp` puts the file's lines in as tokens, where the `@` was. It exists for two concrete
-reasons: a command line that does not fit the console's limit, and a long invocation that repeats.
+`@file.rsp` puts the file's tokens in where the `@` was. It exists for two concrete reasons: a command
+line that does not fit the console's limit, and a long invocation that repeats.
 
 ```
 # what this invocation is for -- a line starting with # contributes nothing
-build
-native
-app.dpr
---out
-bin\app.exe
+build native app.dpr
+--out "bin\my app.exe"
 @common.rsp
 ```
 
-One line, one token: nothing is split on spaces, no variable is expanded and no path is resolved
-against anything. A file may name another; the nesting is bounded, and one that names itself fails
-saying so instead of hanging.
+Each line is split the way a command line is — white space separates, double quotes group — so the
+second line is two tokens. No variable is expanded and no path is resolved against anything. A file
+may name another; the nesting is bounded, and one that names itself fails saying so instead of
+hanging.
+
+`TParserConfiguration.ResponseFileTokenReplacer` is what reads them: the reader above by default,
+`nil` to read none — and then `@value` is a value —, or one of the application's own, which receives
+the token without its `@`:
+
+```pascal
+var Config: TParserConfiguration;   // a variable never assigned holds the defaults
+Config.ResponseFileTokenReplacer :=
+  function(const TokenToReplace: string; out ReplacementTokens: TArray<string>;
+    out ErrorMessage: string): Boolean
+  begin
+    ReplacementTokens := TFile.ReadAllLines(TokenToReplace);   // one line, one token
+    Result := True;
+  end;
+var Parsed := Root.Parse(Args, Config);
+```
+
+`True` puts its tokens in where the `@` token was, and they are read again: an `@other` among them goes
+through it too. `False` with an `ErrorMessage` fails the parse with it; `False` with none leaves the
+token as it was written.
 
 ### Several values behind one name
 
@@ -495,6 +517,37 @@ Exec.Add([VerboseOpt, CommandLine.Argument<TArray<string>>('command').CaptureRem
 ```
 
 An option before the first value is still an option: `exec --verbose app` gives `--verbose`.
+
+### An invocation written as one line
+
+```pascal
+var Parsed := Root.Parse('build --out "bin\my app.exe" app.dpr');
+```
+
+`Parse` also takes the whole invocation as one string, split with `CommandLine.SplitCommandLine`: the
+same rules as a line of a response file. What follows a double quote that is never closed is dropped,
+as in .NET.
+
+A first token that is the name of the command being parsed, one of its aliases, or a path whose file
+name is one of those — `tools/mytool` — is taken for that command and not for a value, in a list of
+tokens as in a line. In a line, so is `CommandLine.ExecutablePath`. A first token whose part before its
+first `:` or `=` is one of the command's options stays that option: `/p:Key=x/mytool` is `/p` with
+its value. `CommandLine.ExecutableName` is the file name of the executable, without its extension.
+
+Any command can `Parse`, not only a root: it is then the root of the result, and the options its
+ancestors declared recursive answer too.
+
+### The configuration of the parse
+
+`TParserConfiguration` says how the parse reads an invocation. A variable never assigned holds the
+defaults, which are .NET's; `Parse` takes it as its second argument, and `IParseResult.Configuration`
+gives back the one a result was read with.
+
+| Field | Default | What it does |
+|-------|---------|--------------|
+| `EnablePosixBundling` | `True` | One-character options group, and one that takes a value takes it glued: `-fdx`, `-obin`. Off, both stay the tokens they were; `-o:bin` still delimits |
+| `EnableCaseInsensitiveNames` | `False` | On, the names and aliases of options and commands are compared without regard to case — see divergence 2 |
+| `ResponseFileTokenReplacer` | the reader of response files | What replaces a token starting with `@`; `nil` reads none |
 
 ---
 
@@ -722,10 +775,12 @@ you write `fileOption.ValueIn(parsed)`: the object asks the result:
 
 `ValueIn` needs no inference, because `T` is already fixed by the receiver.
 
-**2 · Names are matched without regard to case.** .NET is case-**sensitive** by POSIX convention;
-here `--OUT` and `--out` are the same option. The accepted cost: two aliases differing only in case
-are the same alias, and a CLI where the case *is* the meaning — `git clean -x` against `-X` — cannot
-be expressed. Declare two options for that.
+**2 · Whether names tell cases apart is the application's to say.** .NET always tells them apart, and
+so does the default here: `-v` and `-V` are two options, and `--OUT` reaches nothing when `--out` is
+declared. With `TParserConfiguration.EnableCaseInsensitiveNames` they are compared without regard to
+case, and a command that answers to two names differing only in case is refused when parsing, with an
+`ECommandLine` naming both. Values are not touched: the names of an enumerated type never tell cases
+apart, and `AcceptOnlyFromAmong` compares with its own comparer.
 
 **3 · A date and a time are read as ISO 8601, and in no other way.** .NET's `DateTime`, `DateOnly` and
 `TimeOnly` also take the local convention. Here `--since 2026-08-25` works and `--since 25/08/2026` is
@@ -758,6 +813,13 @@ written with a zone — `2026-08-25T23:30+02:00` — is converted to local time.
 
 **10 · An empty file name or path is refused.** .NET's `AcceptLegalFileNamesOnly` and
 `AcceptLegalFilePathsOnly` accept an empty value; here both refuse it.
+
+**11 · A response file nests at most 10 deep.** .NET has no limit. Here a file that names itself fails
+naming it.
+
+**12 · A letter of a group that nobody declared refuses the group.** .NET leaves the rest of the token
+as one more token: there `-fdz` passes `-f` and `-d`, and `z` goes on as a value. Here it fails naming
+`-z`, and none of the other letters is taken.
 
 ---
 

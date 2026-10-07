@@ -6,7 +6,7 @@ uses
   Daf.CommandLine.Tokens;
 
 type
-  /// <summary>A grammar reduced to the three questions the rewriting is allowed to ask.</summary>
+  /// <summary>A grammar reduced to the two questions the rewriting is allowed to ask.</summary>
   /// <remarks>
   ///   That the whole of it fits in twenty lines IS the point: the
   ///   rewriting can be told what it needs to know without a command, an option or a
@@ -21,13 +21,13 @@ type
   public
     constructor Create(const Flags, Valued: array of string);
     function Knows(const Token: string): Boolean;
-    function KnowsShort(const Letter: Char): Boolean;
     function ShortTakesValue(const Letter: Char): Boolean;
   end;
 
   TTokensWorld = class
   public
     Known: IKnownTokens;
+    BundlingOff: Boolean;
     Output: TArray<string>;
     Errors: TArray<string>;
     procedure Declare(const Flags, Valued: array of string);
@@ -67,7 +67,7 @@ var
   Candidate: string;
 begin
   for Candidate in List do
-    if SameText(Candidate, Token) then
+    if Candidate = Token then
       Exit(True);
   Result := False;
 end;
@@ -75,11 +75,6 @@ end;
 function TDeclaredTokens.Knows(const Token: string): Boolean;
 begin
   Result := Holds(FFlags, Token) or Holds(FValued, Token);
-end;
-
-function TDeclaredTokens.KnowsShort(const Letter: Char): Boolean;
-begin
-  Result := Knows(ShortPrefix + Letter);
 end;
 
 function TDeclaredTokens.ShortTakesValue(const Letter: Char): Boolean;
@@ -102,7 +97,7 @@ begin
   SetLength(Given, Length(Tokens));
   for I := Low(Tokens) to High(Tokens) do
     Given[I - Low(Tokens)] := Tokens[I];
-  Output := TTokenNormalizer.Normalize(Given, Known, Errors);
+  Output := TTokenNormalizer.Normalize(Given, Known, Errors, not BundlingOff);
 end;
 
 function TTokensWorld.Report: string;
@@ -239,6 +234,23 @@ Feature Command line tokenizing @commandline @tokens
         Expect(W.Report).ToEqual('[--url=http://example.org:8080]');
       end)
 
+  .Scenario('A colon after a declared alias that starts with a slash')
+    .Given('an option that takes a value, declared with the alias /p',
+      procedure(W: TTokensWorld)
+      begin
+        W.Declare([], ['--property', '/p']);
+      end)
+    .When('the token writes the alias, a colon and a value that carries an equals sign',
+      procedure(W: TTokensWorld)
+      begin
+        W.Normalize(['/p:Key=value']);
+      end)
+    .&Then('the colon delimits, and the value arrives whole',
+      procedure(W: TTokensWorld)
+      begin
+        Expect(W.Report).ToEqual('[/p=Key=value]');
+      end)
+
   .Scenario('A colon in a token nobody declared is not a delimiter')
     .Given('a grammar that declares no such option',
       procedure(W: TTokensWorld)
@@ -330,6 +342,59 @@ Feature Command line tokenizing @commandline @tokens
         Expect(W.Report).ToEqual('[-f -d -o out.exe]');
       end)
 
+  .Scenario('An option that takes a value keeps the rest of the group')
+    .Given('two flags and a one-character option that takes a value',
+      procedure(W: TTokensWorld)
+      begin
+        W.Declare(['-f', '-d'], ['-o']);
+      end)
+    .When('the group carries more letters behind the one that takes a value',
+      procedure(W: TTokensWorld)
+      begin
+        W.Normalize(['-fdobin']);
+      end)
+    .&Then('those letters are its value, not more options',
+      procedure(W: TTokensWorld)
+      begin
+        Expect(W.Report).ToEqual('[-f -d -o=bin]');
+        Expect(W.ErrorReport).ToEqual('[]');
+      end)
+
+  .Scenario('A delimiter inside a group gives the rest to the option before it')
+    .Given('two declared flags',
+      procedure(W: TTokensWorld)
+      begin
+        W.Declare(['-a', '-b'], []);
+      end)
+    .When('the group carries a delimiter and a value',
+      procedure(W: TTokensWorld)
+      begin
+        W.Normalize(['-ab=1']);
+      end)
+    .&Then('the group is split, and the value is the last option''s',
+      procedure(W: TTokensWorld)
+      begin
+        Expect(W.Report).ToEqual('[-a -b=1]');
+      end)
+
+  .Scenario('A token whose first letter nobody declared')
+    .Given('a grammar declaring every letter of the token but the first',
+      procedure(W: TTokensWorld)
+      begin
+        W.Declare(['-f', '-d'], []);
+      end)
+    .When('the token is rewritten',
+      procedure(W: TTokensWorld)
+      begin
+        W.Normalize(['-zfd']);
+      end)
+    .&Then('it is not a group and stays whole',
+      procedure(W: TTokensWorld)
+      begin
+        Expect(W.Report).ToEqual('[-zfd]');
+        Expect(W.ErrorReport).ToEqual('[]');
+      end)
+
   .Scenario('A letter of the group that nobody declared')
     .Given('a group in which one letter is not a declared option',
       procedure(W: TTokensWorld)
@@ -376,41 +441,46 @@ Feature Command line tokenizing @commandline @tokens
         Expect(W.ErrorReport).ToEqual('[]');
       end)
 
-.Rule('the Windows prefix names an option too')
+.Rule('one-character options can be read without grouping')
 
-  .Scenario('A long name written with a slash')
-    .Given('a declared option that takes a value',
+  .Scenario('With grouping off a group stays whole')
+    .Given('three declared one-character flags, and grouping turned off',
       procedure(W: TTokensWorld)
       begin
-        W.Declare([], ['--verbosity']);
+        W.Declare(['-f', '-d', '-x'], []);
+        W.BundlingOff := True;
       end)
-    .When('the token names it with a slash and a colon',
+    .When('the token writes them together behind one dash',
       procedure(W: TTokensWorld)
       begin
-        W.Normalize(['/verbosity:quiet']);
+        W.Normalize(['-fdx']);
       end)
-    .&Then('it comes out as the declared name in canonical form',
+    .&Then('it comes out as the single token it was written as',
       procedure(W: TTokensWorld)
       begin
-        Expect(W.Report).ToEqual('[--verbosity=quiet]');
+        Expect(W.Report).ToEqual('[-fdx]');
+        Expect(W.ErrorReport).ToEqual('[]');
       end)
 
-  .Scenario('A one-character alias written with a slash')
-    .Given('a declared one-character flag',
+  .Scenario('With grouping off nothing is glued to an option, and a delimiter still delimits')
+    .Given('a one-character option that takes a value, and grouping turned off',
       procedure(W: TTokensWorld)
       begin
-        W.Declare(['-f'], []);
+        W.Declare([], ['-v']);
+        W.BundlingOff := True;
       end)
-    .When('the token names it with a slash',
+    .When('one token glues the value and another writes it after a colon',
       procedure(W: TTokensWorld)
       begin
-        W.Normalize(['/f']);
+        W.Normalize(['-vquiet', '-v:quiet']);
       end)
-    .&Then('it comes out as the alias that was declared',
+    .&Then('the glued one stays whole, and the other comes out in canonical form',
       procedure(W: TTokensWorld)
       begin
-        Expect(W.Report).ToEqual('[-f]');
+        Expect(W.Report).ToEqual('[-vquiet -v=quiet]');
       end)
+
+.Rule('a slash starts a value, never an option')
 
   .Scenario('A value that starts with a slash and is nobody option')
     .Given('a grammar declaring no option by that name',
@@ -426,10 +496,26 @@ Feature Command line tokenizing @commandline @tokens
     .&Then('it stays exactly what it was',
       procedure(W: TTokensWorld)
       begin
-        // This is the cost of admitting the slash, and the whole of what bounds it: a
-        // slash names an option only when what follows it was declared.
         Expect(W.Report).ToEqual('[/tmp/app.dpr]');
         Expect(W.ErrorReport).ToEqual('[]');
+      end)
+
+  .Scenario('A slash before a declared name')
+    .Given('a declared option that takes a value',
+      procedure(W: TTokensWorld)
+      begin
+        W.Declare([], ['--verbosity']);
+      end)
+    .When('the token writes its name with a slash and a colon',
+      procedure(W: TTokensWorld)
+      begin
+        W.Normalize(['/verbosity:quiet']);
+      end)
+    .&Then('it stays exactly what it was, and does not name the option',
+      procedure(W: TTokensWorld)
+      begin
+        // On POSIX a slash starts an absolute path, and `/verbosity` may well be one.
+        Expect(W.Report).ToEqual('[/verbosity:quiet]');
       end)
 
 .Rule('where two readings of a token compete, which one wins is written down here')
@@ -490,25 +576,6 @@ Feature Command line tokenizing @commandline @tokens
         // This is the guard the whole change rests on: a form added here can only ever
         // claim a token that meant nothing before.
         Expect(W.Report).ToEqual('[-fd]');
-      end)
-
-  .Scenario('A token already carrying the canonical delimiter is not read again')
-    .Given('two declared flags whose letters spell the name part',
-      procedure(W: TTokensWorld)
-      begin
-        W.Declare(['-a', '-b'], []);
-      end)
-    .When('the token already has a value on it',
-      procedure(W: TTokensWorld)
-      begin
-        W.Normalize(['-ab=1']);
-      end)
-    .&Then('it is left alone rather than split into flags',
-      procedure(W: TTokensWorld)
-      begin
-        // It is also what stops the rewriting from re-reading its own output: every
-        // rewriting above produces this form, so this form is where it stops.
-        Expect(W.Report).ToEqual('[-ab=1]');
       end);
 
 end.

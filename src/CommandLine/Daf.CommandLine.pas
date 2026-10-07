@@ -217,6 +217,39 @@ type
     procedure WriteOutput(const Text: string);
   end;
 
+  /// <summary>Replaces a token with other tokens before the parse reads it. See <c>TParserConfiguration</c>.</summary>
+  TTryReplaceToken = Daf.CommandLine.Tokens.TTryReplaceToken;
+
+  /// <summary>How the parse reads an invocation.</summary>
+  /// <remarks>
+  ///   A variable declared and never assigned already holds the defaults, which are .NET's: one-character options
+  ///   group, response files are read, and names tell cases apart.
+  /// </remarks>
+  TParserConfiguration = record
+  public
+    /// <summary>
+    ///   On, one-character options can be written together behind one dash, <c>-fdx</c>, and an option that takes
+    ///   a value can carry it glued, <c>-ovalue</c>. On by default.
+    /// </summary>
+    EnablePosixBundling: Boolean;
+    /// <summary>
+    ///   On, the names and aliases of options and commands are compared without regard to case, and a grammar in
+    ///   which one command answers to two names that differ only in case makes the parse raise <c>ECommandLine</c>.
+    ///   Off by default.
+    /// </summary>
+    /// <remarks>
+    ///   Not in .NET, where names always tell cases apart. It reaches no value: the names of an enumerated type
+    ///   never tell cases apart, and a set of accepted values compares with its own comparer.
+    /// </remarks>
+    EnableCaseInsensitiveNames: Boolean;
+    /// <summary>
+    ///   What replaces a token starting with <c>@</c>: by default, the tokens of the response file it names.
+    ///   <c>nil</c> leaves such a token as a value.
+    /// </summary>
+    ResponseFileTokenReplacer: TTryReplaceToken;
+    class operator Initialize(out Dest: TParserConfiguration);
+  end;
+
   /// <summary>How many values a symbol admits: a minimum and a maximum.</summary>
   /// <remarks>
   ///   The five named values are .NET's. It is rarely written by hand because it is
@@ -295,9 +328,9 @@ type
     function Aliases: TCommandLineCollection<string>;
     function Description: string; overload;
     /// <summary>
-    ///   True when <c>Token</c> is this symbol's name or one of its aliases.
-    ///   Compared WITHOUT regard to case -- a declared divergence from .NET, which is
-    ///   case-sensitive by POSIX convention.
+    ///   True when <c>Token</c> is this symbol's name or one of its aliases, compared as
+    ///   written, case included, as in .NET. The parse compares without regard to case
+    ///   when its configuration asks it to: see <c>TParserConfiguration</c>.
     /// </summary>
     function Matches(const Token: string): Boolean;
     /// <summary>True when the help does not list it. It changes NOTHING else.</summary>
@@ -482,11 +515,22 @@ type
     function SetAction(const Action: TCommandActionProc): ICommand; overload;
     /// <summary>The declared action, or <c>nil</c> when there is none.</summary>
     function Action: ICommandLineAction;
+    /// <summary>Parses an invocation against the grammar of this command, as the root of the parse.</summary>
+    /// <remarks>
+    ///   The options its ancestors declared recursive answer too. A first token that is its name or one of its
+    ///   aliases, or a path whose file name is, is taken for the command and not for a value, as in .NET -- unless
+    ///   what precedes its first <c>:</c> or <c>=</c> is one of its options.
+    /// </remarks>
+    function Parse(const Args: TArray<string>): IParseResult; overload;
+    function Parse(const Args: TArray<string>; const Configuration: TParserConfiguration): IParseResult; overload;
+    /// <summary>The same, for an invocation written as one line, split with <c>CommandLine.SplitCommandLine</c>.</summary>
+    /// <remarks>A first token that is <c>CommandLine.ExecutablePath</c> is taken for the command too.</remarks>
+    function Parse(const CommandLine: string): IParseResult; overload;
+    function Parse(const CommandLine: string; const Configuration: TParserConfiguration): IParseResult; overload;
   end;
 
   IRootCommand = interface(ICommand)
     ['{7C4B1A20-0006-4F31-9C10-4B0E2D5A0006}']
-    function Parse(const Args: TArray<string>): IParseResult; overload;
     /// <summary>Parses the process command line, <c>ParamStr(1)</c> onwards.</summary>
     function Parse: IParseResult; overload;
     /// <summary>
@@ -583,7 +627,10 @@ type
   ICommandResult = interface(ISymbolResult)
     ['{7C4B1A20-000A-4F31-9C10-4B0E2D5A000A}']
     function Command: ICommand;
-    /// <summary>The token that named the command. The root's carries its name.</summary>
+    /// <summary>
+    ///   The token that named the command. The root's carries its name, or the first token as written when the
+    ///   invocation began with it.
+    /// </summary>
     function IdentifierToken: TToken;
     /// <summary>The results that hang from it, in the order the parse created them.</summary>
     function Children: TArray<ISymbolResult>;
@@ -681,6 +728,8 @@ type
     ///   one written for parse errors, or else the action of the command reached.
     /// </summary>
     function Action: ICommandLineAction;
+    /// <summary>The configuration the invocation was read with.</summary>
+    function Configuration: TParserConfiguration;
     /// <summary>
     ///   The configuration of the invocation settling this result, so an action writes where the
     ///   invocation writes. Before any invocation, the default one: the console.
@@ -1141,6 +1190,15 @@ type
     /// <summary>A version option answering to <c>VersionToken</c>.</summary>
     class function VersionOption: IVersionOption; overload; static;
     class function VersionOption(const Name: string; const Aliases: array of string): IVersionOption; overload; static;
+    /// <summary>
+    ///   Splits a line into tokens as the command line does: white space separates, and double quotes group and are
+    ///   not part of the token. What follows a double quote that is never closed is dropped, as in .NET.
+    /// </summary>
+    class function SplitCommandLine(const Text: string): TArray<string>; static;
+    /// <summary>The path of the running executable, <c>ParamStr(0)</c>.</summary>
+    class function ExecutablePath: string; static;
+    /// <summary>The file name of the running executable, without its extension.</summary>
+    class function ExecutableName: string; static;
   end;
 
 const
@@ -1238,6 +1296,10 @@ type
     function SetAction(const Action: TCommandAction): ICommand; overload;
     function SetAction(const Action: TCommandActionProc): ICommand; overload;
     function Action: ICommandLineAction;
+    function Parse(const Args: TArray<string>): IParseResult; overload;
+    function Parse(const Args: TArray<string>; const Configuration: TParserConfiguration): IParseResult; overload;
+    function Parse(const CommandLine: string): IParseResult; overload;
+    function Parse(const CommandLine: string; const Configuration: TParserConfiguration): IParseResult; overload;
     procedure SetPathPrefix(const Value: string);
     procedure Freeze; override;
   end;
@@ -1267,7 +1329,6 @@ type
     procedure SetHelpAction(const Value: TCommandAction);
     function GetVersionAction: TCommandAction;
     procedure SetVersionAction(const Value: TCommandAction);
-    function Parse(const Args: TArray<string>): IParseResult; overload;
     function Parse: IParseResult; overload;
     function WithVersion(const Version: string): IRootCommand; overload;
     function WithVersion(const Version, AppName, Company: string): IRootCommand; overload;
@@ -1297,6 +1358,15 @@ end;
 procedure TInvocationConfiguration.WriteOutput(const Text: string);
 begin
   WriteTo(Output, System.Output, Text);
+end;
+
+{ TParserConfiguration }
+
+class operator TParserConfiguration.Initialize(out Dest: TParserConfiguration);
+begin
+  Dest.EnablePosixBundling := True;
+  Dest.EnableCaseInsensitiveNames := False;
+  Dest.ResponseFileTokenReplacer := TryReadResponseFile;
 end;
 
 { TSynchronousCommandLineAction }
@@ -1500,10 +1570,10 @@ function TSymbol.Matches(const Token: string): Boolean;
 var
   Alias: string;
 begin
-  if SameText(Token, FName) then
+  if Token = FName then
     Exit(True);
   for Alias in FAliases do
-    if SameText(Token, Alias) then
+    if Token = Alias then
       Exit(True);
   Result := False;
 end;
@@ -2794,6 +2864,30 @@ begin
   Result := FAction;
 end;
 
+function TCommand.Parse(const Args: TArray<string>): IParseResult;
+var
+  Configuration: TParserConfiguration;
+begin
+  Result := Parse(Args, Configuration);
+end;
+
+function TCommand.Parse(const Args: TArray<string>; const Configuration: TParserConfiguration): IParseResult;
+begin
+  Result := ParseInvocation(Self, Args, Configuration, False);
+end;
+
+function TCommand.Parse(const CommandLine: string): IParseResult;
+var
+  Configuration: TParserConfiguration;
+begin
+  Result := Parse(CommandLine, Configuration);
+end;
+
+function TCommand.Parse(const CommandLine: string; const Configuration: TParserConfiguration): IParseResult;
+begin
+  Result := ParseInvocation(Self, Daf.CommandLine.Tokens.SplitCommandLine(CommandLine), Configuration, True);
+end;
+
 procedure TCommand.SetPathPrefix(const Value: string);
 var
   Child: ICommand;
@@ -2978,11 +3072,6 @@ begin
   Result := Parse(Args);
 end;
 
-function TRootCommand.Parse(const Args: TArray<string>): IParseResult;
-begin
-  Result := ParseInvocation(Self, Args);
-end;
-
 { CommandLine }
 
 class function CommandLine.Option<T>(const Name: string): IOption<T>;
@@ -3056,6 +3145,21 @@ end;
 class function CommandLine.VersionOption(const Name: string; const Aliases: array of string): IVersionOption;
 begin
   Result := TVersionOption.Create(Name, Aliases);
+end;
+
+class function CommandLine.SplitCommandLine(const Text: string): TArray<string>;
+begin
+  Result := Daf.CommandLine.Tokens.SplitCommandLine(Text);
+end;
+
+class function CommandLine.ExecutablePath: string;
+begin
+  Result := ParamStr(0);
+end;
+
+class function CommandLine.ExecutableName: string;
+begin
+  Result := TPath.GetFileNameWithoutExtension(ParamStr(0));
 end;
 
 end.

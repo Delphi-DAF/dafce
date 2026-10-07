@@ -42,6 +42,7 @@ type
     LooseArg: IArgument<TArray<string>>;
     LooseVerboseOpt: IOption<Boolean>;
     ReadTail: TArray<string>;
+    Configuration: TParserConfiguration;
     Parsed: IParseResult;
     ReadVerbosity: string;
     ReadOut: string;
@@ -266,6 +267,27 @@ Feature Command line syntax @commandline @syntax
         Expect(W.TargetArg.ValueIn(W.Parsed)).ToEqual('app.dpr');
       end)
 
+  .Scenario('An option that takes a value keeps the rest of the group')
+    .Given('the boolean options -f and -d, and the option -o, which takes a value',
+      procedure(W: TSyntaxWorld)
+      begin
+        W.BuildGrammar;
+      end)
+    .When('the invocation writes -fdobin',
+      procedure(W: TSyntaxWorld)
+      begin
+        W.Parsed := W.Root.Parse(['build', 'app.dpr', '-fdobin']);
+        W.ReadOut := W.OutOpt.ValueIn(W.Parsed);
+      end)
+    .&Then('-f and -d are passed, and -o is bin',
+      procedure(W: TSyntaxWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('');
+        Expect(W.ForceOpt.ValueIn(W.Parsed)).ToBeTrue;
+        Expect(W.DryOpt.ValueIn(W.Parsed)).ToBeTrue;
+        Expect(W.ReadOut).ToEqual('bin');
+      end)
+
   .Scenario('A letter of the group that does not exist')
     .Given('a group in which one letter matches no declared option',
       procedure(W: TSyntaxWorld)
@@ -290,6 +312,27 @@ Feature Command line syntax @commandline @syntax
         Expect(W.Parsed.WasProvided(W.DryOpt)).ToBeFalse;
       end)
 
+  .Scenario('Grouping turned off')
+    .Given('three boolean options with one-character aliases, and the parser configured not to group',
+      procedure(W: TSyntaxWorld)
+      begin
+        W.BuildGrammar;
+        W.Configuration.EnablePosixBundling := False;
+      end)
+    .When('the invocation writes them together behind a single dash',
+      procedure(W: TSyntaxWorld)
+      begin
+        W.Parsed := W.Root.Parse(['build', 'app.dpr', '-fdx'], W.Configuration);
+      end)
+    .&Then('the group is not read as those three options',
+      procedure(W: TSyntaxWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToContain('"-fdx"');
+        Expect(W.Parsed.WasProvided(W.ForceOpt)).ToBeFalse;
+        Expect(W.Parsed.WasProvided(W.DryOpt)).ToBeFalse;
+        Expect(W.Parsed.WasProvided(W.CrossOpt)).ToBeFalse;
+      end)
+
 .Scenario('The built-in help still answers inside a group')
     .Given('declared one-character aliases',
       procedure(W: TSyntaxWorld)
@@ -307,25 +350,26 @@ Feature Command line syntax @commandline @syntax
         Expect(W.Parsed.IsHelpRequested).ToBeTrue;
       end)
 
-.Rule('the Windows prefix is admitted alongside the POSIX one')
+.Rule('a slash starts a value, not an option')
 
-  .Scenario('An option named with a slash')
-    .Given('a declared option',
+  .Scenario('A declared name written with a slash')
+    .Given('a command with a positional argument and an option --out',
       procedure(W: TSyntaxWorld)
       begin
         W.BuildGrammar;
       end)
-    .When('the invocation names it with a slash instead of with dashes',
+    .When('the invocation writes /out',
       procedure(W: TSyntaxWorld)
       begin
-        W.Parsed := W.Root.Parse(['build', 'app.dpr', '/out', 'out.exe']);
-        W.ReadOut := W.OutOpt.ValueIn(W.Parsed);
+        W.Parsed := W.Root.Parse(['build', '/out']);
+        W.ReadTarget := W.TargetArg.ValueIn(W.Parsed);
       end)
-    .&Then('the same option is reached',
+    .&Then('it is the positional value, and the option is not given',
       procedure(W: TSyntaxWorld)
       begin
         Expect(W.Parsed.ErrorText).ToEqual('');
-        Expect(W.ReadOut).ToEqual('out.exe');
+        Expect(W.ReadTarget).ToEqual('/out');
+        Expect(W.Parsed.WasProvided(W.OutOpt)).ToBeFalse;
       end)
 
   .Scenario('A positional value that starts with a slash')
@@ -413,6 +457,26 @@ Feature Command line syntax @commandline @syntax
         Expect(W.Parsed.Command.FullPath).ToEqual('mytool build');
         Expect(W.ReadVerbosity).ToEqual('quiet');
         Expect(W.TargetArg.ValueIn(W.Parsed)).ToEqual('app.dpr');
+      end)
+
+  .Scenario('A line with several tokens')
+    .Given('a response file with the line --out "bin\my app.exe"',
+      procedure(W: TSyntaxWorld)
+      begin
+        W.BuildGrammar;
+      end)
+    .When('the invocation names it behind an at sign',
+      procedure(W: TSyntaxWorld)
+      begin
+        W.Parsed := W.Root.Parse(['build', 'app.dpr',
+          '@' + W.WriteResponseFile('daf-cl-quoted.rsp', ['--out "bin\my app.exe"'])]);
+        W.ReadOut := W.OutOpt.ValueIn(W.Parsed);
+      end)
+    .&Then('--out is bin\my app.exe',
+      procedure(W: TSyntaxWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('');
+        Expect(W.ReadOut).ToEqual('bin\my app.exe');
       end)
 
   .Scenario('A file mixed with tokens written by hand')
@@ -530,6 +594,26 @@ Feature Command line syntax @commandline @syntax
         Expect(W.Parsed.ErrorText).ToContain('daf-cl-cycle.rsp');
       end)
 
+  .Scenario('Response files turned off')
+    .Given('a command with a positional argument, and the parser configured to read no response file',
+      procedure(W: TSyntaxWorld)
+      begin
+        W.BuildGrammar;
+        W.Configuration.ResponseFileTokenReplacer := nil;
+      end)
+    .When('the invocation passes @value',
+      procedure(W: TSyntaxWorld)
+      begin
+        W.Parsed := W.Root.Parse(['build', '@value'], W.Configuration);
+        W.ReadTarget := W.TargetArg.ValueIn(W.Parsed);
+      end)
+    .&Then('the argument receives @value',
+      procedure(W: TSyntaxWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('');
+        Expect(W.ReadTarget).ToEqual('@value');
+      end)
+
 .Rule('a command can collect what it does not recognise instead of failing')
 
   .Scenario('A wrapper command collects what is not its own')
@@ -621,7 +705,7 @@ Feature Command line syntax @commandline @syntax
       procedure(W: TSyntaxWorld)
       begin
         // "-Fecha" carries an h, and the help letter counts as known: it is what lets -fh
-        // reach the help. Known is not declared, and only declared letters make a group.
+        // reach the help. A group starts with a known letter, and F is not one.
         W.Parsed := W.Wrapper.Parse(['-u', 'admin', '-Fecha', '2026-09-26']);
       end)
     .&Then('the parse succeeds and the token goes on whole, value and all',

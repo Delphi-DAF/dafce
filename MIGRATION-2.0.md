@@ -139,9 +139,14 @@ The mechanical part, term by term:
 **What does not carry over unchanged.** Naming it because a migration that only shows the easy half
 leaves you thinking you are done:
 
-- **`Parse` no longer takes a whole command-line string.** `Parse` reads `ParamStr`, and
-  `Parse(Args)` takes a `TArray<string>`. Code that handed it a string it had built — typically a
-  test — passes the array instead.
+- **`Parse(string)` is not `Parser.Parse(GetCommandLine)`.** For the command line of the process,
+  `Parse` with no arguments reads `ParamStr`. `Parse(string)` splits a line with
+  `CommandLine.SplitCommandLine`, and takes its first token for the root only when it is the root's
+  name or the path of the running executable: a line from `GetCommandLine` that starts with `app.exe`,
+  for a root called `app`, reads `app.exe` as a value.
+- **Names tell cases apart.** `Daf.CmdLn` took `--Verbose` for `--verbose`; `Daf.CommandLine` does
+  not, as in .NET. A parse configured with `TParserConfiguration.EnableCaseInsensitiveNames` compares
+  them as before.
 - **Order stopped mattering, so some invocations that used to fail now work.** In `Daf.CmdLn` a
   command's arguments were consumed *before* its subcommand, so `app build -o dir --flag` did not
   parse. A `Recursive` option is read from the leaf, and that invocation now parses. Nothing that

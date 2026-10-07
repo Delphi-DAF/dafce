@@ -7,7 +7,7 @@
   with a default and in the version. Building and validating the tree is also where the action the
   invocation runs is picked, and the errors it clears are dropped.
 
-  Reading follows the rules of DAF: the Windows prefix, a group of one-letter options, a value glued to
+  Reading follows the rules of DAF: a group of one-letter options, a value glued to
   its option, and an option that takes the next token whatever it is.
 
   Only two routines are published here. The contract the results answer to lives in Daf.CommandLine,
@@ -20,8 +20,10 @@ uses
   System.Rtti,
   Daf.CommandLine;
 
-/// <summary>Parses an invocation against the grammar of <c>Root</c>.</summary>
-function ParseInvocation(const Root: IRootCommand; const Args: TArray<string>): IParseResult;
+/// <summary>Parses an invocation against the grammar of <c>Root</c>, the command the parse starts from.</summary>
+/// <remarks><c>FromCommandLine</c> says the invocation was one line, where the path of the executable also names the root.</remarks>
+function ParseInvocation(const Root: ICommand; const Args: TArray<string>; const Configuration: TParserConfiguration;
+  FromCommandLine: Boolean): IParseResult;
 
 /// <summary>The values of an option's or an argument's result.</summary>
 /// <remarks>
@@ -40,6 +42,7 @@ implementation
 uses
   System.SysUtils,
   System.Classes,
+  System.Generics.Defaults,
   Daf.Nullable,
   Daf.Application.Version,
   Daf.CommandLine.Tokens,
@@ -222,7 +225,8 @@ type
 
   TParseResult = class(TInterfacedObject, IParseResult)
   private
-    FRoot: IRootCommand;
+    FRoot: ICommand;
+    FConfiguration: TParserConfiguration;
     FTree: ISymbolResultTree;
     FRootResult: ICommandResult;
     FCommandResult: ICommandResult;
@@ -234,7 +238,8 @@ type
     FInvocationConfiguration: TInvocationConfiguration;
     function ResultOf(const Symbol: ISymbol): ISymbolResult;
   public
-    constructor Create(const ARoot: IRootCommand; const ATree: ISymbolResultTree; const ARootResult: ICommandResult);
+    constructor Create(const ARoot: ICommand; const AConfiguration: TParserConfiguration;
+      const ATree: ISymbolResultTree; const ARootResult: ICommandResult);
     procedure Close(const Innermost: ICommandResult; const Tokens: TArray<TToken>; const Action: ICommandLineAction;
       const ActionOwner: IOption; const PreActions: TArray<ICommandLineAction>);
     function Command: ICommand;
@@ -256,12 +261,13 @@ type
     function RawValuesOf(const Symbol: ISymbol): TArray<string>;
     function UnmatchedTokens: TArray<string>;
     function Action: ICommandLineAction;
+    function Configuration: TParserConfiguration;
     function InvocationConfiguration: TInvocationConfiguration;
     function Invoke: Integer; overload;
     function Invoke(const Configuration: TInvocationConfiguration): Integer; overload;
   end;
 
-  /// <summary>The grammar in scope, answering the three questions the rewriting asks.</summary>
+  /// <summary>The grammar in scope, answering the two questions the rewriting asks.</summary>
   /// <remarks>
   ///   It is mutable and reused as the reading descends, because which options are
   ///   declared depends on the command reached: `mytool build native -fdx` can only be
@@ -271,10 +277,11 @@ type
   private
     FCurrent: ICommand;
     FAvailable: TArray<IOption>;
+    FIgnoreCase: Boolean;
   public
+    constructor Create(IgnoreCase: Boolean);
     procedure Enter(const Command: ICommand; const Available: TArray<IOption>);
     function Knows(const Token: string): Boolean;
-    function KnowsShort(const Letter: Char): Boolean;
     function ShortTakesValue(const Letter: Char): Boolean;
   end;
 
@@ -294,7 +301,8 @@ type
 
   TParseOperation = class
   private
-    FRoot: IRootCommand;
+    FRoot: ICommand;
+    FConfiguration: TParserConfiguration;
     FItems: TArray<TItem>;
     FIndex: Integer;
     FTree: ISymbolResultTree;
@@ -317,7 +325,8 @@ type
     procedure DropErrorsOf(const Node: ICommandResult);
     procedure AddPreActionsForImplicitOptions;
   public
-    constructor Create(const Root: IRootCommand; const Items: TArray<TItem>; const ReadErrors: TArray<string>);
+    constructor Create(const Root: ICommand; const Configuration: TParserConfiguration; const RootTokenValue: string;
+      const Items: TArray<TItem>; const ReadErrors: TArray<string>);
     function Run: IParseResult;
   end;
 
@@ -327,33 +336,57 @@ begin
   Result := Supports(Option, IHelpOption) or Supports(Option, IVersionOption);
 end;
 
+function SameNameIgnoringCase(const A, B: string): Boolean;
+var
+  Comparer: IEqualityComparer<string>;
+begin
+  Comparer := TIStringComparer.Ordinal;
+  Result := Comparer.Equals(A, B);
+end;
+
+// True when the token is the name or an alias of the symbol, with or without regard to case as the
+// configuration of the parse says.
+function NameMatches(const Symbol: ISymbol; const Token: string; IgnoreCase: Boolean): Boolean;
+var
+  Alias: string;
+begin
+  if not IgnoreCase then
+    Exit(Symbol.Matches(Token));
+  if SameNameIgnoringCase(Token, Symbol.Name) then
+    Exit(True);
+  for Alias in Symbol.Aliases do
+    if SameNameIgnoringCase(Token, Alias) then
+      Exit(True);
+  Result := False;
+end;
+
 // Finds an option by token among the command's own and those inherited from ancestors that declared
 // them recursive. What the application declared comes before the help and the version, which answer
 // only when nothing declared does: an application that declares its own --help knows its case.
 function FindOption(const Current: ICommand; const Inherited_: TArray<IOption>; const Token: string;
-  IncludeStandard: Boolean = True): IOption;
+  IgnoreCase: Boolean): IOption;
 var
   Candidate: IOption;
   Standard: Boolean;
 begin
-  for Standard := False to IncludeStandard do
+  for Standard := False to True do
   begin
     for Candidate in Current.Options do
-      if (IsStandardOption(Candidate) = Standard) and Candidate.Matches(Token) then
+      if (IsStandardOption(Candidate) = Standard) and NameMatches(Candidate, Token, IgnoreCase) then
         Exit(Candidate);
     for Candidate in Inherited_ do
-      if (IsStandardOption(Candidate) = Standard) and Candidate.Matches(Token) then
+      if (IsStandardOption(Candidate) = Standard) and NameMatches(Candidate, Token, IgnoreCase) then
         Exit(Candidate);
   end;
   Result := nil;
 end;
 
-function FindSubcommand(const Current: ICommand; const Token: string): ICommand;
+function FindSubcommand(const Current: ICommand; const Token: string; IgnoreCase: Boolean): ICommand;
 var
   Candidate: ICommand;
 begin
   for Candidate in Current.Subcommands do
-    if Candidate.Matches(Token) then
+    if NameMatches(Candidate, Token, IgnoreCase) then
       Exit(Candidate);
   Result := nil;
 end;
@@ -366,6 +399,91 @@ begin
   for Candidate in Current.Options do
     if Candidate.IsRecursive then
       Result := Result + [Candidate];
+end;
+
+// The options the ancestors of a command declared recursive, the farthest first, as they are in scope
+// when the parse descends to it from the root. Each ancestor is the first command the one below was
+// added to, as in .NET.
+function InheritedOptionsOf(const Command: ICommand): TArray<IOption>;
+var
+  Parents: TArray<ISymbol>;
+  Parent: ICommand;
+begin
+  Parents := Command.Parents;
+  if (Length(Parents) = 0) or not Supports(Parents[0], ICommand, Parent) then
+    Exit(nil);
+  Result := InheritedOptionsOf(Parent) + RecursiveOptionsOf(Parent);
+end;
+
+// The last segment of a path, as .NET's Path.GetFileName: on Windows both slashes separate.
+function FileNameOf(const Path: string): string;
+const
+  Separators = {$IFDEF MSWINDOWS}'\/'{$ELSE}'/'{$ENDIF};
+begin
+  Result := Copy(Path, LastDelimiter(Separators, Path) + 1, MaxInt);
+end;
+
+// As .NET's FirstArgumentIsRootCommand: the first token is the root when it is its name or an alias, or a
+// path whose file name is -- unless what precedes its first `:` or `=` is one of its options, which makes it
+// that option with a value. In a line, the path of the executable is the root too.
+function FirstTokenIsRoot(const Root: ICommand; const Available: TArray<IOption>; const Args: TArray<string>;
+  FromCommandLine, IgnoreCase: Boolean): Boolean;
+var
+  First: string;
+  Cut: Integer;
+begin
+  if Length(Args) = 0 then
+    Exit(False);
+  First := Args[0];
+  if FromCommandLine and (First = CommandLine.ExecutablePath) then
+    Exit(True);
+  Cut := First.IndexOfAny([CanonicalDelimiter, ColonDelimiter]);
+  if (Cut >= 0) and (FindOption(Root, Available, First.Substring(0, Cut), IgnoreCase) <> nil) then
+    Exit(False);
+  Result := NameMatches(Root, FileNameOf(First), IgnoreCase);
+end;
+
+// With names compared without regard to case, two names one command answers to that differ only in case
+// would reach the same symbol whichever was written: the grammar is refused, as an error of whoever wrote it.
+// A name repeated exactly is not refused, because an application may declare its own --help over the one
+// every root brings.
+procedure DemandNamesDistinctIgnoringCase(const Command: ICommand; const Inherited_: TArray<IOption>);
+var
+  Names: TArray<string>;
+  Owners: TArray<TObject>;
+  Option: IOption;
+  Subcommand: ICommand;
+  I, J: Integer;
+
+  procedure Collect(const Symbol: ISymbol);
+  var
+    Alias: string;
+  begin
+    Names := Names + [Symbol.Name];
+    Owners := Owners + [Symbol.AsObject];
+    for Alias in Symbol.Aliases do
+    begin
+      Names := Names + [Alias];
+      Owners := Owners + [Symbol.AsObject];
+    end;
+  end;
+
+begin
+  Names := nil;
+  Owners := nil;
+  for Option in Command.Options do
+    Collect(Option);
+  for Option in Inherited_ do
+    Collect(Option);
+  for Subcommand in Command.Subcommands do
+    Collect(Subcommand);
+  for I := 0 to High(Names) do
+    for J := I + 1 to High(Names) do
+      if (Owners[I] <> Owners[J]) and (Names[I] <> Names[J]) and SameNameIgnoringCase(Names[I], Names[J]) then
+        raise ECommandLine.CreateFmt('Command "%s" answers to "%s" and to "%s", which differ only in case, ' +
+          'and the parse was configured not to tell cases apart', [Command.FullPath, Names[I], Names[J]]);
+  for Subcommand in Command.Subcommands do
+    DemandNamesDistinctIgnoringCase(Subcommand, Inherited_ + RecursiveOptionsOf(Command));
 end;
 
 function NamesOf(const Commands: TArray<ICommand>): string;
@@ -933,11 +1051,12 @@ end;
 
 { TParseResult }
 
-constructor TParseResult.Create(const ARoot: IRootCommand; const ATree: ISymbolResultTree;
-  const ARootResult: ICommandResult);
+constructor TParseResult.Create(const ARoot: ICommand; const AConfiguration: TParserConfiguration;
+  const ATree: ISymbolResultTree; const ARootResult: ICommandResult);
 begin
   inherited Create;
   FRoot := ARoot;
+  FConfiguration := AConfiguration;
   FTree := ATree;
   FRootResult := ARootResult;
   FCommandResult := ARootResult;
@@ -1107,6 +1226,11 @@ begin
     Result := FCommandResult.Command.Action;
 end;
 
+function TParseResult.Configuration: TParserConfiguration;
+begin
+  Result := FConfiguration;
+end;
+
 function TParseResult.InvocationConfiguration: TInvocationConfiguration;
 begin
   Result := FInvocationConfiguration;
@@ -1127,6 +1251,12 @@ end;
 
 { TScopeKnowledge }
 
+constructor TScopeKnowledge.Create(IgnoreCase: Boolean);
+begin
+  inherited Create;
+  FIgnoreCase := IgnoreCase;
+end;
+
 procedure TScopeKnowledge.Enter(const Command: ICommand; const Available: TArray<IOption>);
 begin
   FCurrent := Command;
@@ -1135,23 +1265,15 @@ end;
 
 function TScopeKnowledge.Knows(const Token: string): Boolean;
 begin
-  // The help and the version count as known. Otherwise `/help` would not reach the help and `-h`
-  // could be swallowed into a bundle.
-  Result := FindOption(FCurrent, FAvailable, Token) <> nil;
-end;
-
-function TScopeKnowledge.KnowsShort(const Letter: Char): Boolean;
-begin
-  // Declared only, the help and the version out: this is what decides whether a token is a group,
-  // and a help letter the application never declared does not make `-Fecha` one.
-  Result := FindOption(FCurrent, FAvailable, ShortPrefix + Letter, False) <> nil;
+  // The help and the version count as known. Otherwise `-h` could be swallowed into a bundle.
+  Result := FindOption(FCurrent, FAvailable, Token, FIgnoreCase) <> nil;
 end;
 
 function TScopeKnowledge.ShortTakesValue(const Letter: Char): Boolean;
 var
   Option: IOption;
 begin
-  Option := FindOption(FCurrent, FAvailable, ShortPrefix + Letter);
+  Option := FindOption(FCurrent, FAvailable, ShortPrefix + Letter, FIgnoreCase);
   // A built-in answers nil and is a flag: asking for help takes no value.
   Result := (Option <> nil) and not Option.IsFlag;
 end;
@@ -1161,7 +1283,8 @@ end;
 // The first step: every token typed, in the scope of the command reached when it is read. Which
 // tokens an option takes is decided here, because it depends on the token and not on the tree: a
 // value glued to it, a boolean literal behind a flag, and anything at all behind any other option.
-function Tokenize(const Root: IRootCommand; const Args: TArray<string>; out ReadErrors: TArray<string>): TArray<TItem>;
+function Tokenize(const Root: ICommand; const Args: TArray<string>; const Configuration: TParserConfiguration;
+  FromCommandLine: Boolean; out RootTokenValue: string; out ReadErrors: TArray<string>): TArray<TItem>;
 var
   Items: TArray<TItem>;
   Tokens: TArray<string>;
@@ -1171,7 +1294,7 @@ var
   Known: IKnownTokens;
   Index: Integer;
   Token, OptionName, InlineValue, Next: string;
-  HasInline, Ended, Took: Boolean;
+  HasInline, Ended, Took, IgnoreCase: Boolean;
   Step: TTokenRewrite;
   Option: IOption;
   Subcommand: ICommand;
@@ -1222,12 +1345,20 @@ begin
   Items := nil;
   TakenOwners := nil;
   TakenCounts := nil;
+  IgnoreCase := Configuration.EnableCaseInsensitiveNames;
+  Current := Root;
+  Available := InheritedOptionsOf(Current) + RecursiveOptionsOf(Current);
+  Tokens := Args;
+  RootTokenValue := Root.Name;
+  if FirstTokenIsRoot(Root, Available, Args, FromCommandLine, IgnoreCase) then
+  begin
+    RootTokenValue := Args[0];
+    Tokens := Copy(Args, 1, MaxInt);
+  end;
   // Response files are resolved before anything else is decided about any token,
   // because all they do is contribute tokens and nothing else.
-  Tokens := TResponseFiles.Expand(Args, ReadErrors);
-  Current := Root;
-  Available := RecursiveOptionsOf(Current);
-  Scope := TScopeKnowledge.Create;
+  Tokens := TResponseFiles.Expand(Tokens, Configuration.ResponseFileTokenReplacer, ReadErrors);
+  Scope := TScopeKnowledge.Create(IgnoreCase);
   Known := Scope;
   Scope.Enter(Current, Available);
   Ended := False;
@@ -1257,7 +1388,7 @@ begin
     // the rest of this loop already understands. The rewriting is asked here, and not once
     // over the whole array, because it needs to know what is declared, and that depends on
     // the command reached.
-    Step := TTokenNormalizer.Rewrite(Token, Known);
+    Step := TTokenNormalizer.Rewrite(Token, Known, Configuration.EnablePosixBundling);
     if Step.Error <> '' then
     begin
       Emit(Token, TTokenType.Option, nil, TItemKind.BadGroup, '', Step.Error);
@@ -1273,7 +1404,7 @@ begin
     TTokenNormalizer.SplitToken(Token, OptionName, InlineValue, HasInline);
 
     // A declared name is an option whatever it looks like: the help answers to `/h` and `/?`.
-    Option := FindOption(Current, Available, OptionName);
+    Option := FindOption(Current, Available, OptionName, IgnoreCase);
     if TTokenNormalizer.LooksLikeOption(Token) or (Option <> nil) then
     begin
       if Option = nil then
@@ -1330,7 +1461,7 @@ begin
       Continue;
     end;
 
-    Subcommand := FindSubcommand(Current, Token);
+    Subcommand := FindSubcommand(Current, Token, IgnoreCase);
     if Subcommand <> nil then
     begin
       Emit(Token, TTokenType.Command, Subcommand, TItemKind.CommandName);
@@ -1349,20 +1480,21 @@ end;
 
 { TParseOperation }
 
-constructor TParseOperation.Create(const Root: IRootCommand; const Items: TArray<TItem>;
-  const ReadErrors: TArray<string>);
+constructor TParseOperation.Create(const Root: ICommand; const Configuration: TParserConfiguration;
+  const RootTokenValue: string; const Items: TArray<TItem>; const ReadErrors: TArray<string>);
 var
   RootToken: TToken;
   Error: string;
 begin
   inherited Create;
   FRoot := Root;
+  FConfiguration := Configuration;
   FItems := Items;
   FTree := TSymbolResultTree.Create;
   // An error of reading the invocation belongs to no symbol: none had been reached.
   for Error in ReadErrors do
     FTree.AddError(Error, nil);
-  RootToken.Value := Root.Name;
+  RootToken.Value := RootTokenValue;
   RootToken.TokenType := TTokenType.Command;
   RootToken.Symbol := Root;
   FRootResult := TCommandResult.Create(FTree, nil, Root, RootToken);
@@ -1665,7 +1797,7 @@ var
   Tokens: TArray<TToken>;
   Item: TItem;
 begin
-  Outcome := TParseResult.Create(FRoot, FTree, FRootResult);
+  Outcome := TParseResult.Create(FRoot, FConfiguration, FTree, FRootResult);
   Result := Outcome;
   while FIndex < Length(FItems) do
   begin
@@ -1708,14 +1840,18 @@ begin
   Outcome.Close(FInnermost, Tokens, FAction, FActionOwner, FPreActions);
 end;
 
-function ParseInvocation(const Root: IRootCommand; const Args: TArray<string>): IParseResult;
+function ParseInvocation(const Root: ICommand; const Args: TArray<string>; const Configuration: TParserConfiguration;
+  FromCommandLine: Boolean): IParseResult;
 var
   Items: TArray<TItem>;
   ReadErrors: TArray<string>;
+  RootTokenValue: string;
   Operation: TParseOperation;
 begin
-  Items := Tokenize(Root, Args, ReadErrors);
-  Operation := TParseOperation.Create(Root, Items, ReadErrors);
+  if Configuration.EnableCaseInsensitiveNames then
+    DemandNamesDistinctIgnoringCase(Root, InheritedOptionsOf(Root));
+  Items := Tokenize(Root, Args, Configuration, FromCommandLine, RootTokenValue, ReadErrors);
+  Operation := TParseOperation.Create(Root, Configuration, RootTokenValue, Items, ReadErrors);
   try
     Result := Operation.Run;
   finally

@@ -17,7 +17,9 @@ uses
   ParseRules.Feat in 'ParseRules.Feat.pas',
   Results.Feat in 'Results.Feat.pas',
   Actions.Feat in 'Actions.Feat.pas',
-  Validators.Feat in 'Validators.Feat.pas';
+  Validators.Feat in 'Validators.Feat.pas',
+  CommandLineText.Feat in 'CommandLineText.Feat.pas',
+  NameCase.Feat in 'NameCase.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

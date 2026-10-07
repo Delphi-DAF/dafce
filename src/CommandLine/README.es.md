@@ -36,8 +36,8 @@ en ejecución.
 
 | Concepto | Descripción |
 |----------|-------------|
-| `ICommand` | Un comando: sus opciones, sus argumentos posicionales y sus subcomandos |
-| `IRootCommand` | Donde empieza una gramática; el único que hace `Parse`, y el que lleva la versión |
+| `ICommand` | Un comando: sus opciones, sus argumentos posicionales y sus subcomandos. Cualquier comando puede hacer `Parse` de una invocación, como raíz del parse |
+| `IRootCommand` | Donde empieza una gramática: lleva la versión, y su `Parse` sin argumentos lee la línea de comandos del proceso |
 | `IOption<T>` | Un valor con nombre y guiones —`--file main.pas`—. Y la llave con la que se lee |
 | `IArgument<T>` | Un valor **posicional**, identificado por su sitio: `mitool build main.pas` |
 | `TArgumentArity` | Cuántos valores admite un símbolo, mínimo y máximo |
@@ -51,7 +51,8 @@ en ejecución.
 | `IParseErrorAction` | Lo que ejecuta `Invoke` ante un error de parse: lo que se quiso escribir, los errores y la ayuda |
 | `TInvocationConfiguration` | Dónde escribe `Invoke`, y si un manejador por defecto captura lo que la acción deja escapar |
 | `TCommandLineExit` | Los códigos que devuelve `Invoke` cuando no es la acción quien decide |
-| `CommandLine` | El punto de entrada: `Option<T>`, `Argument<T>`, `Command`, `Root`, `HelpOption`, `VersionOption` |
+| `TParserConfiguration` | Cómo lee el parse una invocación: el agrupado, los ficheros de respuesta, y si los nombres distinguen mayúsculas |
+| `CommandLine` | El punto de entrada: `Option<T>`, `Argument<T>`, `Command`, `Root`, `HelpOption`, `VersionOption`, y `SplitCommandLine` |
 
 ---
 
@@ -420,50 +421,69 @@ que no digan las otras.
 | Alias de un carácter pegado a su valor | `-obin\app.exe` | `-o bin\app.exe` |
 | Opciones de un carácter agrupadas | `-fdx` | `-f -d -x` |
 | Grupo seguido de un valor | `-fdo bin\app.exe` | `-f -d -o bin\app.exe` |
-| Prefijo de Windows | `/out bin\app.exe` | `--out bin\app.exe` |
+| Grupo cuya última opción se queda el resto | `-fdobin` | `-f -d -o bin` |
 | Fichero de respuesta | `@build.rsp` | los tokens que traen sus líneas |
 
 Todas están acotadas igual: **cada una actúa solo cuando el token no nombra ya algo declarado**.
 `-fdx` se parte en tres porque `f`, `d` y `x` son alias declarados; si existiera una opción llamada
-`-fdx`, eso es lo que el token seguiría siendo. Y un grupo con una letra que nadie declaró se rechaza
-**entero**, nombrando la letra. La letra de la ayuda cabe dentro de un grupo —`-fh` pide ayuda—, pero
-no lo forma: un token ninguna de cuyas letras declara el comando sigue siendo el token que era.
+`-fdx`, eso es lo que el token seguiría siendo. Un token es un grupo solo cuando su **primera** letra
+nombra una opción, la de la ayuda incluida —`-fh` y `-hf` piden ayuda—, y si no, sigue siendo el token
+que era. Dentro de un grupo, una opción que toma un valor se queda con el resto del token, tras un `:`
+o un `=` cuando lo hay: `-fdobin` y `-fdo=bin` son los dos `-f -d -o bin`. Una letra que nadie declaró,
+antes de que una opción se haya quedado el resto, rechaza el grupo **entero**, nombrando la letra.
+
+Una barra no es un prefijo: `/out` es un valor aunque `--out` esté declarada. Una opción que tenga que
+responder a ella la declara como alias, igual que la ayuda declara `/h` y `/?`, y entonces `/p:valor`
+y `/p=valor` funcionan como con guiones.
 
 ### ⚠️ Qué quita admitirlas
 
-Una forma admitida es un token que significaba una cosa y pasa a significar otra. Tres, concretas:
+Una forma admitida es un token que significaba una cosa y pasa a significar otra. Dos, concretas:
 
 - **`-abc` puede dejar de ser una opción llamada `-abc`.** Donde `a`, `b` y `c` sean alias declarados
   de un carácter, ahora son tres opciones.
-- **Un valor posicional que empiece por `/` puede leerse como opción** — pero solo cuando lo que
-  sigue a la barra nombra una declarada. `/tmp/app.dpr` sigue siendo un valor; `/out` no, si existe
-  `--out`.
 - **Un valor posicional que empiece por `@` se lee como fichero de respuesta**, y si nombra un
   fichero que no está es un error de parseo y no un token.
 
-`--` devuelve las tres: todo lo que venga detrás es valor, arrobas, barras y guiones incluidos. No
-hay interruptor para apagar una forma, ni hace falta — una gramática que tenga que recibir uno de
-esos valores tal cual tiene `--`.
+`--` devuelve las dos: todo lo que venga detrás es valor, arrobas y guiones incluidos. Y la
+configuración del parse apaga cualquiera de las dos para la invocación entera —ver más abajo—.
 
 ### Ficheros de respuesta
 
-`@fichero.rsp` mete las líneas del fichero como tokens, donde estaba el `@`. Existe por dos razones
-concretas: una línea de comandos que no cabe en el límite de la consola, y una invocación larga que
-se repite.
+`@fichero.rsp` mete los tokens del fichero donde estaba el `@`. Existe por dos razones concretas: una
+línea de comandos que no cabe en el límite de la consola, y una invocación larga que se repite.
 
 ```
 # para qué es esta invocación -- una línea que empieza por # no aporta nada
-build
-native
-app.dpr
---out
-bin\app.exe
+build native app.dpr
+--out "bin\mi app.exe"
 @common.rsp
 ```
 
-Una línea, un token: no se parte por espacios, no se expande ninguna variable y no se resuelve
+Cada línea se parte como se parte una línea de comandos —el espacio separa, las comillas dobles
+agrupan—, así que la segunda línea son dos tokens. No se expande ninguna variable y no se resuelve
 ninguna ruta contra nada. Un fichero puede nombrar a otro; el anidamiento está acotado, y uno que se
 nombra a sí mismo falla diciéndolo en vez de colgarse.
+
+Quien los lee es `TParserConfiguration.ResponseFileTokenReplacer`: el lector de arriba por defecto,
+`nil` para no leer ninguno —y entonces `@valor` es un valor—, o uno propio de la aplicación, que
+recibe el token sin su `@`:
+
+```pascal
+var Config: TParserConfiguration;   // una variable sin asignar ya lleva los valores por defecto
+Config.ResponseFileTokenReplacer :=
+  function(const TokenToReplace: string; out ReplacementTokens: TArray<string>;
+    out ErrorMessage: string): Boolean
+  begin
+    ReplacementTokens := TFile.ReadAllLines(TokenToReplace);   // una línea, un token
+    Result := True;
+  end;
+var Parsed := Root.Parse(Args, Config);
+```
+
+`True` pone sus tokens donde estaba el token con `@`, y se vuelven a leer: un `@otro` entre ellos pasa
+también por él. `False` con un `ErrorMessage` hace fallar el parse con él; `False` sin ninguno deja el
+token como se escribió.
 
 ### Varios valores tras un solo nombre
 
@@ -500,6 +520,38 @@ Exec.Add([VerboseOpt, CommandLine.Argument<TArray<string>>('command').CaptureRem
 ```
 
 Una opción antes del primer valor sigue siendo una opción: `exec --verbose app` da `--verbose`.
+
+### Una invocación escrita en una línea
+
+```pascal
+var Parsed := Root.Parse('build --out "bin\mi app.exe" app.dpr');
+```
+
+`Parse` acepta también la invocación entera en una cadena, partida con `CommandLine.SplitCommandLine`:
+las mismas reglas que una línea de un fichero de respuesta. Lo que sigue a unas comillas dobles que no
+se cierran se descarta, como en .NET.
+
+Un primer token que es el nombre del comando que parsea, uno de sus alias, o una ruta cuyo nombre de
+fichero es uno de ellos —`tools/mytool`— se toma por ese comando y no por un valor, en una lista de
+tokens igual que en una línea. En una línea, también `CommandLine.ExecutablePath`. Un primer token
+cuya parte anterior a su primer `:` o `=` es una opción del comando sigue siendo esa opción:
+`/p:Key=x/mytool` es `/p` con su valor. `CommandLine.ExecutableName` es el nombre de fichero del
+ejecutable, sin la extensión.
+
+Cualquier comando puede hacer `Parse`, no solo una raíz: entonces es la raíz del resultado, y
+responden también las opciones que sus ancestros declararon recursivas.
+
+### La configuración del parse
+
+`TParserConfiguration` dice cómo lee el parse una invocación. Una variable sin asignar ya lleva los
+valores por defecto, que son los de .NET; `Parse` la recibe como segundo argumento, e
+`IParseResult.Configuration` devuelve la que leyó un resultado.
+
+| Campo | Por defecto | Qué hace |
+|-------|-------------|----------|
+| `EnablePosixBundling` | `True` | Las opciones de un carácter se agrupan, y una que toma valor lo toma pegado: `-fdx`, `-obin`. Apagado, los dos siguen siendo los tokens que eran; `-o:bin` sigue delimitando |
+| `EnableCaseInsensitiveNames` | `False` | Encendido, los nombres y alias de opciones y comandos se comparan sin distinguir mayúsculas —ver la divergencia 2— |
+| `ResponseFileTokenReplacer` | el lector de ficheros de respuesta | Lo que sustituye a un token que empieza por `@`; `nil` no lee ninguno |
 
 ---
 
@@ -726,10 +778,12 @@ que se parseó. `System.CommandLine` no tiene equivalente.
 
 `ValueIn` no necesita inferencia porque `T` ya viene fijada por el receptor.
 
-**2 · Los nombres se comparan sin distinguir mayúsculas.** .NET es **sensible** por convención POSIX;
-aquí `--OUT` y `--out` son la misma opción. El coste aceptado: dos alias que solo difieran en
-mayúsculas son el mismo alias, y una CLI donde el caso **es** el significado —`git clean -x` frente a
-`-X`— no se puede expresar. Para eso, dos opciones.
+**2 · Si los nombres distinguen mayúsculas lo dice la aplicación.** .NET las distingue siempre, y aquí
+también por defecto: `-v` y `-V` son dos opciones, y `--OUT` no alcanza nada cuando la declarada es
+`--out`. Con `TParserConfiguration.EnableCaseInsensitiveNames` se comparan sin distinguirlas, y un
+comando que responde a dos nombres que solo difieren en mayúsculas se rechaza al parsear, con una
+`ECommandLine` que nombra los dos. A los valores no les alcanza: los nombres de un enumerado no
+distinguen mayúsculas nunca, y `AcceptOnlyFromAmong` compara con su propio comparador.
 
 **3 · Una fecha y una hora se leen en ISO 8601 y de ninguna otra forma.** El `DateTime`, el
 `DateOnly` y el `TimeOnly` de .NET admiten además la convención local. Aquí `--since 2026-08-25` vale
@@ -762,6 +816,13 @@ uno de sus nombres.
 
 **10 · Un nombre de fichero o una ruta vacíos se rechazan.** `AcceptLegalFileNamesOnly` y
 `AcceptLegalFilePathsOnly` de .NET aceptan un valor vacío; aquí los dos lo rechazan.
+
+**11 · Un fichero de respuesta anida como mucho 10 niveles.** .NET no tiene tope. Aquí un fichero que
+se nombra a sí mismo falla nombrándolo.
+
+**12 · Una letra de un grupo que nadie declaró rechaza el grupo.** .NET deja el resto del token como
+un token más: allí `-fdz` da `-f` y `-d`, y `z` sigue como un valor. Aquí falla nombrando `-z`, y no
+se toma ninguna de las demás letras.
 
 ---
 

@@ -139,9 +139,14 @@ La parte mecánica, término a término:
 **Lo que no pasa igual.** Se dice porque una migración que solo enseña la mitad fácil deja al lector
 creyendo que ya está:
 
-- **`Parse` ya no toma la línea de comandos como cadena.** `Parse` lee `ParamStr`, y `Parse(Args)`
-  toma un `TArray<string>`. Quien le pasaba una cadena construida a mano —normalmente un test— pasa
-  el array.
+- **`Parse(string)` no es `Parser.Parse(GetCommandLine)`.** Para la línea de comandos del proceso,
+  `Parse` sin argumentos lee `ParamStr`. `Parse(string)` parte una línea con
+  `CommandLine.SplitCommandLine`, y toma su primer token por la raíz solo cuando es el nombre de la
+  raíz o la ruta del ejecutable en marcha: una línea de `GetCommandLine` que empieza por `app.exe`, para
+  una raíz llamada `app`, lee `app.exe` como un valor.
+- **Los nombres distinguen mayúsculas.** `Daf.CmdLn` tomaba `--Verbose` por `--verbose`;
+  `Daf.CommandLine` no, como .NET. Un parse configurado con
+  `TParserConfiguration.EnableCaseInsensitiveNames` los compara como antes.
 - **El orden dejó de importar, así que hay invocaciones que antes fallaban y ahora valen.** En
   `Daf.CmdLn` los argumentos de un comando se consumían *antes* de su subcomando, y
   `app build -o dir --flag` no parseaba. Una opción `Recursive` se lee desde la hoja, y esa
