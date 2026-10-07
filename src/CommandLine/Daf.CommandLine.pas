@@ -24,12 +24,23 @@ uses
   System.Classes,
   System.TypInfo,
   System.Rtti,
+  System.Generics.Defaults,
   Daf.CommandLine.Tokens,
+  Daf.CommandLine.Values,
   Daf.Nullable,
   Daf.Application.Version;
 
 type
   ECommandLine = class(Exception);
+
+  /// <summary>The path of a file, as .NET's <c>FileInfo</c>: a string the engine knows to be one.</summary>
+  /// <remarks>
+  ///   It is a <c>type string</c>, so it is assigned to and from a string with no conversion. What it adds is
+  ///   what <c>AcceptExistingOnly</c> asks for, and the name the help gives the value.
+  /// </remarks>
+  TFilePath = Daf.CommandLine.Values.TFilePath;
+  /// <summary>The path of a directory, as .NET's <c>DirectoryInfo</c>. See <c>TFilePath</c>.</summary>
+  TDirectoryPath = Daf.CommandLine.Values.TDirectoryPath;
 
   /// <summary>
   ///   A conversion declared by whoever uses the module: turns the raw text of one
@@ -338,6 +349,10 @@ type
     /// <summary>True when the token is the whole statement: <c>--verbose</c>.</summary>
     function IsFlag: Boolean;
     function TypeName: string;
+    /// <summary>The type its tokens are converted to: the one it was declared with.</summary>
+    function ValueType: PTypeInfo;
+    /// <summary>The name the help gives its value; empty when none was declared.</summary>
+    function HelpName: string; overload;
     function Arity: TArgumentArity; overload;
     /// <summary>
     ///   The values this symbol accepts, or empty when it does not restrict them. An
@@ -488,6 +503,9 @@ type
     function WithVersion(const AClass: TClass): IRootCommand; overload;
     /// <summary>What the tool answers with. Empty when no version was declared.</summary>
     function VersionInfo: TVersionInfo;
+    /// <summary>The name the help gives the tool; empty when none was declared, and then it is the root's name.</summary>
+    function HelpName: string; overload;
+    function HelpName(const Value: string): IRootCommand; overload;
     /// <summary>
     ///   Closes the grammar: from here on, changing it raises <c>ECommandLine</c>. It reaches every
     ///   command, option and argument already declared below the root.
@@ -746,12 +764,24 @@ type
     function CustomParser(const Parser: TCustomParser<T>): IOption<T>; overload;
     function Arity(const Value: TArgumentArity): IOption<T>; overload;
     function Description(const Text: string): IOption<T>; overload;
+    /// <summary>Declares the name the help gives its value.</summary>
+    function HelpName(const Value: string): IOption<T>; overload;
     /// <summary>Makes it available to every descendant of the declaring command.</summary>
     function Recursive: IOption<T>;
     /// <summary>Makes the invocation have to carry it, unless it has a default.</summary>
     function Required: IOption<T>;
     /// <summary>Restricts it to a declared set of values, listed when one is refused.</summary>
-    function AcceptOnlyFromAmong(const Values: array of string): IOption<T>;
+    /// <remarks>
+    ///   The values are compared as they are written, case included, as in .NET: the names of the grammar
+    ///   and the values it receives are different things. The overload with a comparer says otherwise.
+    ///
+    ///   It is a validation of the result, so it runs before any conversion, a conversion of its own
+    ///   included. Declaring it again replaces the set.
+    /// </remarks>
+    function AcceptOnlyFromAmong(const Values: array of string): IOption<T>; overload;
+    /// <summary>The same, comparing with <c>Comparer</c>: <c>TIStringComparer.Ordinal</c> does not tell cases apart.</summary>
+    function AcceptOnlyFromAmong(const Comparer: IEqualityComparer<string>; const Values: array of string): IOption<T>;
+      overload;
     /// <summary>Keeps it out of the help. See <c>ISymbol.IsHidden</c>.</summary>
     function Hidden: IOption<T>;
     /// <summary>Adds a validation of its own, which runs inside the parse.</summary>
@@ -760,16 +790,24 @@ type
     ///   first refusal is the error reported for that value.
     /// </remarks>
     function Validate(const Validation: TCommandLineValidator<T>): IOption<T>;
-    /// <summary>Accepts only a path that exists, file or directory.</summary>
+    /// <summary>Accepts only a path that exists.</summary>
     /// <remarks>
+    ///   A <c>TDirectoryPath</c> has to be a directory. A <c>TFilePath</c> and a <c>string</c> take a file or a
+    ///   directory, as .NET's <c>FileInfo</c> does.
+    ///
     ///   It is written over <c>Validate</c>'s own hook and not over a mechanism of its
     ///   own -- if the validations of serie needed one, the hook would not be doing its
     ///   job. It ASKS THE FILE SYSTEM, which is the conscious exception to a validation
     ///   being a pure question about the value.
     /// </remarks>
     function AcceptExistingOnly: IOption<T>;
-    /// <summary>Accepts only a legal file name, separators included in what is refused.</summary>
+    /// <summary>
+    ///   Accepts only a legal file name: none of the characters the platform refuses in one, separators
+    ///   included. The error names the character.
+    /// </summary>
     function AcceptLegalFileNamesOnly: IOption<T>;
+    /// <summary>Accepts only a legal path: none of the characters the platform refuses in one. The error names the character.</summary>
+    function AcceptLegalFilePathsOnly: IOption<T>;
     /// <summary>Lets one mention of the name be followed by several values.</summary>
     /// <remarks>
     ///   Opt-in, and it could not be anything else: were every option with
@@ -804,10 +842,14 @@ type
     function CustomParser(const Parser: TCustomParser<T>): IArgument<T>; overload;
     function Arity(const Value: TArgumentArity): IArgument<T>; overload;
     function Description(const Text: string): IArgument<T>; overload;
-    function AcceptOnlyFromAmong(const Values: array of string): IArgument<T>;
+    function HelpName(const Value: string): IArgument<T>; overload;
+    function AcceptOnlyFromAmong(const Values: array of string): IArgument<T>; overload;
+    function AcceptOnlyFromAmong(const Comparer: IEqualityComparer<string>; const Values: array of string): IArgument<T>;
+      overload;
     function Validate(const Validation: TCommandLineValidator<T>): IArgument<T>;
     function AcceptExistingOnly: IArgument<T>;
     function AcceptLegalFileNamesOnly: IArgument<T>;
+    function AcceptLegalFilePathsOnly: IArgument<T>;
     function Hidden: IArgument<T>;
     /// <summary>Makes it keep every token that follows its place, options included.</summary>
     /// <remarks>
@@ -869,6 +911,8 @@ type
     FElementTypeInfo: PTypeInfo;
     FArity: TArgumentArity;
     FAccepted: TArray<string>;
+    FAcceptedComparer: IEqualityComparer<string>;
+    FHelpName: string;
     FHasDefault: Boolean;
     FDefaultText: string;
     FParser: TUntypedParser;
@@ -898,14 +942,14 @@ type
   public
     constructor Create(const AName: string; ATypeInfo: PTypeInfo; const AParser: TUntypedParser);
     /// <summary>Converts one token, through the declared conversion when there is one.</summary>
-    /// <remarks>It does not look at the accepted values: see <c>TryAcceptValue</c>.</remarks>
+    /// <remarks>
+    ///   The names of an enumerated type are checked here, as part of converting to it. The declared set of
+    ///   accepted values is not: it is a validation, and the validations run before, on the whole result --
+    ///   see <c>ValueValidators</c>.
+    /// </remarks>
     function Convert(const Raw: string; out Value: TValue; out Error: string): Boolean;
-    /// <summary>
-    ///   What the parse does with one token when it converts it: the accepted values, then the
-    ///   conversion. The first refusal is the error.
-    /// </summary>
-    /// <remarks>The validations run before, on the whole result: see <c>ValueValidators</c>.</remarks>
-    function TryAcceptValue(const Raw: string; out Value: TValue; out Error: string): Boolean;
+    /// <summary>True when the declared set of accepted values holds <c>Raw</c>, by its comparer.</summary>
+    function IsAccepted(const Raw: string): Boolean;
     /// <summary>
     ///   Where the validations of its value go -- the typed <c>Validate</c> and the ones of serie: the
     ///   validations of the argument the value is carried in.
@@ -936,17 +980,21 @@ type
     function TryAccept(const Raw: string; out Error: string): Boolean;
     function IsFlag: Boolean;
     function TypeName: string;
+    function ValueType: PTypeInfo;
+    function HelpName: string; overload;
     function Arity: TArgumentArity; overload;
     function AcceptedValues: TArray<string>;
     function HasDefaultValue: Boolean;
     function DefaultText: string;
     procedure SetArity(const Value: TArgumentArity);
-    procedure SetAccepted(const Values: array of string);
+    procedure SetHelpName(const Value: string);
+    procedure SetAccepted(const Comparer: IEqualityComparer<string>; const Values: array of string);
     procedure SetDefaultText(const Text: string);
     procedure AddValidator(const Validator: TUntypedValidator);
-    // The two validations of serie, written over the hook above and nothing else.
+    // The validations of serie on a path, written over the hook above and nothing else.
     procedure DemandExistingPath;
     procedure DemandLegalFileName;
+    procedure DemandLegalFilePath;
   end;
 
   /// <summary>What an option and an argument share once <c>T</c> is known.</summary>
@@ -1013,12 +1061,16 @@ type
     function CustomParser(const Parser: TCustomParser<T>): IOption<T>; overload;
     function Arity(const Value: TArgumentArity): IOption<T>; overload;
     function Description(const Text: string): IOption<T>; overload;
+    function HelpName(const Value: string): IOption<T>; overload;
     function Recursive: IOption<T>;
     function Required: IOption<T>;
-    function AcceptOnlyFromAmong(const Values: array of string): IOption<T>;
+    function AcceptOnlyFromAmong(const Values: array of string): IOption<T>; overload;
+    function AcceptOnlyFromAmong(const Comparer: IEqualityComparer<string>; const Values: array of string): IOption<T>;
+      overload;
     function Validate(const Validation: TCommandLineValidator<T>): IOption<T>;
     function AcceptExistingOnly: IOption<T>;
     function AcceptLegalFileNamesOnly: IOption<T>;
+    function AcceptLegalFilePathsOnly: IOption<T>;
     function Hidden: IOption<T>;
   end;
 
@@ -1047,10 +1099,14 @@ type
     function CustomParser(const Parser: TCustomParser<T>): IArgument<T>; overload;
     function Arity(const Value: TArgumentArity): IArgument<T>; overload;
     function Description(const Text: string): IArgument<T>; overload;
-    function AcceptOnlyFromAmong(const Values: array of string): IArgument<T>;
+    function HelpName(const Value: string): IArgument<T>; overload;
+    function AcceptOnlyFromAmong(const Values: array of string): IArgument<T>; overload;
+    function AcceptOnlyFromAmong(const Comparer: IEqualityComparer<string>; const Values: array of string): IArgument<T>;
+      overload;
     function Validate(const Validation: TCommandLineValidator<T>): IArgument<T>;
     function AcceptExistingOnly: IArgument<T>;
     function AcceptLegalFileNamesOnly: IArgument<T>;
+    function AcceptLegalFilePathsOnly: IArgument<T>;
     function Hidden: IArgument<T>;
   end;
 
@@ -1103,19 +1159,11 @@ const
 implementation
 
 uses
-  Daf.CommandLine.Values,
+  System.IOUtils,
   Daf.CommandLine.Help,
   Daf.CommandLine.Parsing,
   Daf.CommandLine.Invocation,
   Daf.CommandLine.Resources;
-
-const
-  /// <summary>
-  ///   What Windows does not admit in a file NAME. The separators are in the list on
-  ///   purpose: this validates a name and not a path, which is the same split .NET makes
-  ///   between the characters a name cannot carry and the ones a whole path cannot.
-  /// </summary>
-  IllegalInFileName: TSysCharSet = ['<', '>', ':', '"', '/', '\', '|', '?', '*'];
 
 type
   /// <summary>
@@ -1146,6 +1194,8 @@ type
     function TryAccept(const Raw: string; out Error: string): Boolean;
     function IsFlag: Boolean;
     function TypeName: string;
+    function ValueType: PTypeInfo;
+    function HelpName: string;
     function Arity: TArgumentArity;
     function AcceptedValues: TArray<string>;
     function HasDefaultValue: Boolean;
@@ -1207,6 +1257,7 @@ type
   TRootCommand = class(TCommand, IRootCommand)
   private
     FVersionInfo: TVersionInfo;
+    FHelpName: string;
     // Also among its options, which hold them; these are for its two shortcuts to their actions.
     FHelpOption: THelpOption;
     FVersionOption: TVersionOption;
@@ -1222,6 +1273,8 @@ type
     function WithVersion(const Version, AppName, Company: string): IRootCommand; overload;
     function WithVersion(const AClass: TClass): IRootCommand; overload;
     function VersionInfo: TVersionInfo;
+    function HelpName: string; overload;
+    function HelpName(const Value: string): IRootCommand; overload;
   end;
 
 { TInvocationConfiguration }
@@ -1552,6 +1605,39 @@ begin
     end;
 end;
 
+// The declared set of accepted values, checked as .NET checks it: a validation of the result that compares
+// each token as it was written, before any conversion -- a conversion of its own included. It reads the set
+// from the symbol when it runs, so declaring the set again replaces it. Outside the classes, so the closure
+// captures nothing.
+function AcceptedValuesValidator: TArgumentValidator;
+begin
+  Result :=
+    procedure(const Found: IArgumentResult)
+    var
+      Valued: TValuedSymbol;
+      Token: TToken;
+    begin
+      Valued := ValuedOf(Found.Argument);
+      for Token in Found.Tokens do
+        if not Valued.IsAccepted(Token.Value) then
+        begin
+          // Refusing without saying what was expected forces the caller to read the
+          // tool's source in order to use the tool.
+          Found.AddError(Format(SValueNotAccepted, [Token.Value, Valued.Name, string.Join(', ', Valued.FAccepted)]));
+          Exit;
+        end;
+    end;
+end;
+
+// A character as an error names it: one with no glyph is named by its code.
+function CharText(Ch: Char): string;
+begin
+  if Ch < ' ' then
+    Result := Format('#%d', [Ord(Ch)])
+  else
+    Result := '"' + Ch + '"';
+end;
+
 constructor TValuedSymbol.Create(const AName: string; ATypeInfo: PTypeInfo; const AParser: TUntypedParser);
 begin
   inherited Create(AName);
@@ -1590,36 +1676,17 @@ function TValuedSymbol.TryAccept(const Raw: string; out Error: string): Boolean;
 var
   Parsed: TValue;
 begin
-  Result := TryAcceptValue(Raw, Parsed, Error);
+  Result := Convert(Raw, Parsed, Error);
 end;
 
-function TValuedSymbol.TryAcceptValue(const Raw: string; out Value: TValue; out Error: string): Boolean;
+function TValuedSymbol.IsAccepted(const Raw: string): Boolean;
 var
-  Allowed: TArray<string>;
   Candidate: string;
 begin
-  Error := '';
-  Value := TValue.Empty;
-  Allowed := AcceptedValues;
-  if Length(Allowed) > 0 then
-  begin
-    Result := False;
-    for Candidate in Allowed do
-      if SameText(Raw, Candidate) then
-      begin
-        Result := True;
-        Break;
-      end;
-    if not Result then
-    begin
-      // Refusing without saying what was expected forces the caller to read the
-      // tool's source in order to use the tool.
-      Error := Format(SValueNotAccepted, [Raw, Name, string.Join(', ', Allowed)]);
-      Exit;
-    end;
-  end;
-
-  Result := Convert(Raw, Value, Error);
+  for Candidate in FAccepted do
+    if FAcceptedComparer.Equals(Raw, Candidate) then
+      Exit(True);
+  Result := False;
 end;
 
 function TValuedSymbol.TryReadIn(const Found: ISymbolResult; out Values: TArray<TValue>;
@@ -1643,12 +1710,15 @@ end;
 
 function TValuedSymbol.DefaultIsNull: Boolean;
 begin
-  // C#'s null, mapped by kind: a Delphi string has no null of its own, but a .NET string does.
-  Result := FTypeInfo.Kind in [tkString, tkLString, tkWString, tkUString, tkClass, tkClassRef, tkInterface,
-    tkPointer, tkProcedure];
+  // C#'s null, mapped by kind: a Delphi string has no null of its own, but a .NET string does. And a value
+  // that may be missing is .NET's Nullable<T>, whose default is null.
+  Result := (FTypeInfo.Kind in [tkString, tkLString, tkWString, tkUString, tkClass, tkClassRef, tkInterface,
+    tkPointer, tkProcedure]) or (TCommandLineValue.NullableValueTypeOf(FTypeInfo) <> nil);
 end;
 
 function TValuedSymbol.Convert(const Raw: string; out Value: TValue; out Error: string): Boolean;
+var
+  Allowed: TArray<string>;
 begin
   Error := '';
   Value := TValue.Empty;
@@ -1662,7 +1732,14 @@ begin
     Exit;
   end;
   Result := TCommandLineValue.TryParse(FElementTypeInfo, Raw, Value);
-  if not Result then
+  if Result then
+    Exit;
+  // An enumerated type names its own values, so its refusal lists them. Matched without
+  // regard to case, as .NET matches them: only a declared set compares as written.
+  Allowed := TCommandLineValue.AcceptedValuesOf(FTypeInfo);
+  if Length(Allowed) > 0 then
+    Error := Format(SValueNotAccepted, [Raw, Name, string.Join(', ', Allowed)])
+  else
     // Names both the symbol and the text received: "80xyz" is not a valid integer
     // for --port. Refusing without saying what was refused is barely better than
     // inventing a value out of it.
@@ -1677,6 +1754,22 @@ end;
 function TValuedSymbol.TypeName: string;
 begin
   Result := TCommandLineValue.TypeName(FTypeInfo);
+end;
+
+function TValuedSymbol.ValueType: PTypeInfo;
+begin
+  Result := FTypeInfo;
+end;
+
+function TValuedSymbol.HelpName: string;
+begin
+  Result := FHelpName;
+end;
+
+procedure TValuedSymbol.SetHelpName(const Value: string);
+begin
+  CheckOpen;
+  FHelpName := Value;
 end;
 
 function TValuedSymbol.Arity: TArgumentArity;
@@ -1708,11 +1801,18 @@ begin
   FArity := Value;
 end;
 
-procedure TValuedSymbol.SetAccepted(const Values: array of string);
+procedure TValuedSymbol.SetAccepted(const Comparer: IEqualityComparer<string>; const Values: array of string);
 var
   I: Integer;
 begin
   CheckOpen;
+  if Comparer = nil then
+    raise ECommandLine.CreateFmt('The comparer of the accepted values of "%s" is not assigned', [Name]);
+  // The validation is added once, the first time: it reads the set when it runs, so it checks
+  // whatever the last declaration left.
+  if FAcceptedComparer = nil then
+    ValueValidators.Add(AcceptedValuesValidator());
+  FAcceptedComparer := Comparer;
   SetLength(FAccepted, Length(Values));
   for I := Low(Values) to High(Values) do
     FAccepted[I - Low(Values)] := Values[I];
@@ -1752,16 +1852,16 @@ end;
 
 procedure TValuedSymbol.DemandPathType(const What: string);
 begin
-  // Here a path is a string: what FileInfo and DirectoryInfo contributed in .NET was the
-  // validation, and the validation is what gets ported.
+  // A path is a string, or one of the two types that say which kind of path it is.
   // Through the element, so a collection of paths validates each one of them.
-  if FElementTypeInfo <> System.TypeInfo(string) then
+  if not TCommandLineValue.IsPath(FElementTypeInfo) then
     raise ECommandLine.CreateFmt('%s applies to a path, and "%s" is declared as %s', [What, Name, TypeName]);
 end;
 
 procedure TValuedSymbol.DemandExistingPath;
 var
-  Who: string;
+  Who, Message: string;
+  DirectoryOnly: Boolean;
 begin
   CheckOpen;
   DemandPathType('AcceptExistingOnly');
@@ -1769,42 +1869,65 @@ begin
   // object is a cycle, and a cycle between counted references is a leak the compiler
   // never mentions.
   Who := Name;
+  // A directory path has to be a directory. A file path takes a directory too, as .NET's FileInfo does:
+  // its check is the one of a path that may be either.
+  DirectoryOnly := FElementTypeInfo = System.TypeInfo(TDirectoryPath);
+  if DirectoryOnly then
+    Message := SDirectoryMissing
+  else if FElementTypeInfo = System.TypeInfo(TFilePath) then
+    Message := SFileMissing
+  else
+    Message := SPathMissing;
   AddValidator(
     function(const Value: TValue; out Error: string): Boolean
     begin
       Error := '';
-      Result := FileExists(Value.AsString) or DirectoryExists(Value.AsString);
+      Result := DirectoryExists(Value.AsString) or (not DirectoryOnly and FileExists(Value.AsString));
       if not Result then
-        Error := Format(SPathMissing, [Value.AsString, Who]);
+        Error := Format(Message, [Value.AsString, Who]);
     end);
 end;
 
-procedure TValuedSymbol.DemandLegalFileName;
-var
-  Who: string;
+// A validation that refuses a path or a name carrying a character of Illegal, naming the first one, and
+// an empty one, which is neither. Outside the classes, so the closure captures what it is handed.
+function LegalCharactersValidator(const Who: string; const Illegal: TArray<Char>; const Refused, RefusedChar: string)
+  : TUntypedValidator;
 begin
-  CheckOpen;
-  DemandPathType('AcceptLegalFileNamesOnly');
-  Who := Name;
-  AddValidator(
+  Result :=
     function(const Value: TValue; out Error: string): Boolean
     var
       Raw: string;
-      Ch: Char;
+      At: Integer;
     begin
       Error := '';
       Raw := Value.AsString;
-      // Empty is not a file name either, and the loop below would let it through.
-      Result := Raw <> '';
-      for Ch in Raw do
-        if CharInSet(Ch, IllegalInFileName) or (Ch < ' ') then
-        begin
-          Result := False;
-          Break;
-        end;
+      if Raw = '' then
+      begin
+        Error := Format(Refused, [Raw, Who]);
+        Exit(False);
+      end;
+      At := Raw.IndexOfAny(Illegal);
+      Result := At < 0;
       if not Result then
-        Error := Format(SFileNameIllegal, [Raw, Who]);
-    end);
+        Error := Format(RefusedChar, [Raw, Who, CharText(Raw.Chars[At])]);
+    end;
+end;
+
+procedure TValuedSymbol.DemandLegalFileName;
+begin
+  CheckOpen;
+  DemandPathType('AcceptLegalFileNamesOnly');
+  // What the platform refuses in a file NAME, which includes the separators: this validates a name and
+  // not a path, the same split .NET makes.
+  AddValidator(LegalCharactersValidator(Name, TPath.GetInvalidFileNameChars, SFileNameIllegal,
+    SFileNameIllegalChar));
+end;
+
+procedure TValuedSymbol.DemandLegalFilePath;
+begin
+  CheckOpen;
+  DemandPathType('AcceptLegalFilePathsOnly');
+  AddValidator(LegalCharactersValidator(Name, TPath.GetInvalidPathChars, SFilePathIllegal, SFilePathIllegalChar));
 end;
 
 { TValuedSymbol<T> }
@@ -1916,7 +2039,7 @@ begin
   FDefaultValue := Value;
   FDefaultFactory := nil;
   FDefaultResultFactory := nil;
-  SetDefaultText(TValue.From<T>(Value).ToString);
+  SetDefaultText(TCommandLineValue.ToText(TValue.From<T>(Value)));
 end;
 
 procedure TValuedSymbol<T>.SetDefaultFactory(const Factory: TFunc<T>; const Text: string);
@@ -2132,6 +2255,12 @@ begin
   Result := Self;
 end;
 
+function TOption<T>.HelpName(const Value: string): IOption<T>;
+begin
+  SetHelpName(Value);
+  Result := Self;
+end;
+
 function TOption<T>.Recursive: IOption<T>;
 begin
   CheckOpen;
@@ -2148,7 +2277,14 @@ end;
 
 function TOption<T>.AcceptOnlyFromAmong(const Values: array of string): IOption<T>;
 begin
-  SetAccepted(Values);
+  SetAccepted(TStringComparer.Ordinal, Values);
+  Result := Self;
+end;
+
+function TOption<T>.AcceptOnlyFromAmong(const Comparer: IEqualityComparer<string>; const Values: array of string)
+  : IOption<T>;
+begin
+  SetAccepted(Comparer, Values);
   Result := Self;
 end;
 
@@ -2167,6 +2303,12 @@ end;
 function TOption<T>.AcceptLegalFileNamesOnly: IOption<T>;
 begin
   DemandLegalFileName;
+  Result := Self;
+end;
+
+function TOption<T>.AcceptLegalFilePathsOnly: IOption<T>;
+begin
+  DemandLegalFilePath;
   Result := Self;
 end;
 
@@ -2303,9 +2445,22 @@ begin
   Result := Self;
 end;
 
+function TArgument<T>.HelpName(const Value: string): IArgument<T>;
+begin
+  SetHelpName(Value);
+  Result := Self;
+end;
+
 function TArgument<T>.AcceptOnlyFromAmong(const Values: array of string): IArgument<T>;
 begin
-  SetAccepted(Values);
+  SetAccepted(TStringComparer.Ordinal, Values);
+  Result := Self;
+end;
+
+function TArgument<T>.AcceptOnlyFromAmong(const Comparer: IEqualityComparer<string>; const Values: array of string)
+  : IArgument<T>;
+begin
+  SetAccepted(Comparer, Values);
   Result := Self;
 end;
 
@@ -2324,6 +2479,12 @@ end;
 function TArgument<T>.AcceptLegalFileNamesOnly: IArgument<T>;
 begin
   DemandLegalFileName;
+  Result := Self;
+end;
+
+function TArgument<T>.AcceptLegalFilePathsOnly: IArgument<T>;
+begin
+  DemandLegalFilePath;
   Result := Self;
 end;
 
@@ -2410,6 +2571,16 @@ end;
 function TOptionArgument.TypeName: string;
 begin
   Result := FOwner.TypeName;
+end;
+
+function TOptionArgument.ValueType: PTypeInfo;
+begin
+  Result := FOwner.ValueType;
+end;
+
+function TOptionArgument.HelpName: string;
+begin
+  Result := FOwner.HelpName;
 end;
 
 function TOptionArgument.Arity: TArgumentArity;
@@ -2742,6 +2913,18 @@ end;
 function TRootCommand.VersionInfo: TVersionInfo;
 begin
   Result := FVersionInfo;
+end;
+
+function TRootCommand.HelpName: string;
+begin
+  Result := FHelpName;
+end;
+
+function TRootCommand.HelpName(const Value: string): IRootCommand;
+begin
+  CheckOpen;
+  FHelpName := Value;
+  Result := Self;
 end;
 
 // Outside the classes, so the closure captures the action it is handed and nothing else: a function

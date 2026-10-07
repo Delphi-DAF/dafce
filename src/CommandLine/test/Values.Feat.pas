@@ -30,11 +30,14 @@ type
     Bounded: IRootCommand;
     LevelOpt: IOption<TVerbosity>;
     ModeOpt: IOption<string>;
+    SpeedOpt: IOption<string>;
+    StyleOpt: IOption<string>;
 
     Checked: IRootCommand;
     CountOpt: IOption<Integer>;
     InputOpt: IOption<string>;
     NameOpt: IOption<string>;
+    PathOpt: IOption<string>;
 
     Computed: IRootCommand;
     OutOpt: IOption<string>;
@@ -58,6 +61,7 @@ type
     ReadFlag: Boolean;
     ReadFallback: string;
     ReadLevel: TVerbosity;
+    ReadMode: string;
     ReadMsg: string;
     ReadCount: Integer;
     ReadInput: string;
@@ -80,6 +84,7 @@ implementation
 
 uses
   System.SysUtils,
+  System.Generics.Defaults,
   Daf.MiniSpec;
 
 var
@@ -120,8 +125,18 @@ procedure TValuesWorld.BuildBounded;
 begin
   LevelOpt := CommandLine.Option<TVerbosity>('--level').Description('How much to say');
   ModeOpt := CommandLine.Option<string>('--mode').Description('How to run').AcceptOnlyFromAmong(['fast', 'safe']);
+  SpeedOpt := CommandLine.Option<string>('--speed').Description('How fast')
+    .AcceptOnlyFromAmong(TIStringComparer.Ordinal, ['fast', 'safe']);
+  // A conversion of its own that writes the value in capitals: what the set is checked against is the
+  // token as it came, before any conversion.
+  StyleOpt := CommandLine.Option<string>('--style').Description('How it looks')
+    .CustomParser(
+    function(const Found: IArgumentResult): string
+    begin
+      Result := Found.Tokens[0].Value.ToUpper;
+    end).AcceptOnlyFromAmong(['fast', 'safe']);
   Bounded := CommandLine.Root('tool', 'A tool');
-  Bounded.Add([LevelOpt, ModeOpt]);
+  Bounded.Add([LevelOpt, ModeOpt, SpeedOpt, StyleOpt]);
 end;
 
 procedure TValuesWorld.BuildChecked;
@@ -142,8 +157,10 @@ begin
   // A NAME and not a path: the separators are refused too, which is what tells this
   // validation from the one above it.
   NameOpt := CommandLine.Option<string>('--name').Description('What to call the report').AcceptLegalFileNamesOnly;
+  // A PATH and not a name: the separators are what a path is made of.
+  PathOpt := CommandLine.Option<string>('--path').Description('Where to put the report').AcceptLegalFilePathsOnly;
   Checked := CommandLine.Root('tool', 'A tool');
-  Checked.Add([CountOpt, InputOpt, NameOpt]);
+  Checked.Add([CountOpt, InputOpt, NameOpt, PathOpt]);
 end;
 
 procedure TValuesWorld.BuildComputed;
@@ -426,6 +443,79 @@ Feature Command line values @commandline @values
         Expect(W.Parsed.ErrorText).ToContain('safe');
       end)
 
+  .Scenario('The explicit set tells cases apart')
+    .Given('an option bounded to the set fast, safe, with no comparer',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildBounded;
+      end)
+    .When('the invocation passes FAST',
+      procedure(W: TValuesWorld)
+      begin
+        W.Parsed := W.Bounded.Parse(['--mode', 'FAST']);
+      end)
+    .&Then('the parse fails listing the values of the set',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('"FAST" is not a valid value for --mode. Accepted: fast, safe');
+      end)
+
+  .Scenario('An explicit set with a comparer that does not tell cases apart')
+    .Given('an option bounded to the set fast, safe, with a comparer that does not tell cases apart',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildBounded;
+      end)
+    .When('the invocation passes FAST',
+      procedure(W: TValuesWorld)
+      begin
+        W.Parsed := W.Bounded.Parse(['--speed', 'FAST']);
+        W.ReadMode := W.SpeedOpt.ValueIn(W.Parsed);
+      end)
+    .&Then('the value is read as it came',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('');
+        Expect(W.ReadMode).ToEqual('FAST');
+      end)
+
+  .Scenario('An explicit set over a conversion of its own')
+    .Given('an option bounded to the set fast, safe, whose conversion of its own writes the value in capitals',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildBounded;
+      end)
+    .When('the invocation passes a value outside the set',
+      procedure(W: TValuesWorld)
+      begin
+        W.Parsed := W.Bounded.Parse(['--style', 'turbo']);
+      end)
+    .&Then('the parse fails listing the values of the set, as if there were no conversion',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('"turbo" is not a valid value for --style. Accepted: fast, safe');
+      end)
+
+  .Scenario('A value of the set reaches the conversion of its own')
+    .Given('an option bounded to the set fast, safe, whose conversion of its own writes the value in capitals',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildBounded;
+      end)
+    .When('the invocation passes a value of the set',
+      procedure(W: TValuesWorld)
+      begin
+        // The control the refusing scenario needs: a set that refused everything would leave it green.
+        W.Parsed := W.Bounded.Parse(['--style', 'fast']);
+        W.ReadMode := W.StyleOpt.ValueIn(W.Parsed);
+      end)
+    .&Then('the set accepts it and the conversion runs on it',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('');
+        Expect(W.ReadMode).ToEqual('FAST');
+      end)
+
   .Scenario('A validation of its own that the type does not express')
     .Given('an integer option with a validation demanding a value above zero',
       procedure(W: TValuesWorld)
@@ -572,6 +662,64 @@ Feature Command line values @commandline @values
         Expect(W.Parsed.Succeeded).ToBeFalse;
         Expect(W.Parsed.ErrorText).ToContain('is not a legal file name');
         Expect(W.Parsed.ErrorText).ToContain('--name');
+      end)
+
+  .Scenario('A file name with a character the platform does not admit')
+    .Given('an option declared to accept only a legal file name',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildChecked;
+      end)
+    .When('the invocation passes a name with a slash in it',
+      procedure(W: TValuesWorld)
+      begin
+        // The slash, because no platform admits it in a file name: the list is the platform's.
+        W.Parsed := W.Checked.Parse(['--name', 'march/report.txt']);
+      end)
+    .&Then('the parse fails naming that character',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual(
+          '"march/report.txt" is not a legal file name for --name: it carries "/", which a file name cannot');
+      end)
+
+  .Scenario('A path with a character the platform does not admit')
+    .Given('an option declared to accept only a legal path',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildChecked;
+      end)
+    .When('the invocation passes a path with a tab in it',
+      procedure(W: TValuesWorld)
+      begin
+        // A control character, because no platform admits one in a path.
+        W.Parsed := W.Checked.Parse(['--path', 'reports'#9'march.txt']);
+      end)
+    .&Then('the parse fails naming that character by its code',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual(
+          '"reports'#9'march.txt" is not a legal path for --path: it carries #9, which a path cannot');
+      end)
+
+  .Scenario('A path with separators in it')
+    .Given('an option declared to accept only a legal path',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildChecked;
+      end)
+    .When('the invocation passes a path with separators',
+      procedure(W: TValuesWorld)
+      begin
+        W.Parsed := W.Checked.Parse(['--path', 'reports/march.txt']);
+        W.ReadName := W.PathOpt.ValueIn(W.Parsed);
+      end)
+    .&Then('the parse succeeds, because a separator is what a path is made of',
+      procedure(W: TValuesWorld)
+      begin
+        // The control the refusing scenario needs, and what tells a path from a name.
+        Expect(W.Parsed.ErrorText).ToEqual('');
+        Expect(W.ReadName).ToEqual('reports/march.txt');
       end)
 
 .Rule('a validation that only fits a path is refused where it is declared')

@@ -36,7 +36,12 @@ resourcestring
   SValueNotConverted = '"%s" is not a valid %s for %s';
   SValueRefused = '"%s" is not a valid value for %s';
   SPathMissing = '"%s" does not exist, and %s only accepts a path that does';
+  SFileMissing = '"%s" does not exist, and %s only accepts a file that does';
+  SDirectoryMissing = '"%s" is not a directory that exists, and %s only accepts one';
   SFileNameIllegal = '"%s" is not a legal file name, and %s accepts only one that is';
+  SFileNameIllegalChar = '"%s" is not a legal file name for %s: it carries %s, which a file name cannot';
+  SFilePathIllegal = '"%s" is not a legal path, and %s accepts only one that is';
+  SFilePathIllegalChar = '"%s" is not a legal path for %s: it carries %s, which a path cannot';
 
   SValueNotProvided = '%s is required but was not provided';
 

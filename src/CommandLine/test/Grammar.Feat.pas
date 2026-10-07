@@ -22,6 +22,10 @@ type
     Calc: IRootCommand;
     AmountOpt: IOption<Integer>;
     CountArg: IArgument<Integer>;
+    // The names the help gives a value and the tool, declared on each.
+    Named: IRootCommand;
+    OutputOpt: IOption<string>;
+    SourceArg: IArgument<string>;
     Parsed: IParseResult;
     ReadFile: string;
     ReadPort: Integer;
@@ -32,6 +36,7 @@ type
     Report: string;
     procedure BuildGrammar;
     procedure BuildCalc;
+    procedure BuildNamed;
   end;
 
 implementation
@@ -62,6 +67,14 @@ begin
   CountArg := CommandLine.Argument<Integer>('count').Description('How many');
   Calc := CommandLine.Root('calc', 'Does sums');
   Calc.Add([AmountOpt, CountArg]);
+end;
+
+procedure TGrammarWorld.BuildNamed;
+begin
+  OutputOpt := CommandLine.Option<string>('--output').Description('Where it goes').HelpName('FILE');
+  SourceArg := CommandLine.Argument<string>('source').Description('What it reads').HelpName('PATH');
+  Named := CommandLine.Root('mytool-cli', 'A tool').HelpName('mytool');
+  Named.Add([OutputOpt, SourceArg]);
 end;
 
 initialization
@@ -325,6 +338,26 @@ Feature Command line grammar @commandline @grammar
       begin
         Expect(W.Report).ToEqual('ECommandLine: "80xyz" is not a valid integer for --amount');
         Expect(W.Parsed.WasProvided(W.AmountOpt)).ToBeTrue;
+      end)
+
+.Rule('a value and the tool can declare the name the help gives them')
+
+  .Scenario('The names the help gives a value and the tool')
+    .Given('an option, an argument and a root, each declared with a help name',
+      procedure(W: TGrammarWorld)
+      begin
+        W.BuildNamed;
+      end)
+    .When('the three help names are read',
+      procedure(W: TGrammarWorld)
+      begin
+        W.Report := Format('option=%s argument=%s root=%s', [W.OutputOpt.HelpName, W.SourceArg.HelpName,
+          W.Named.HelpName]);
+      end)
+    .&Then('each one is the name declared, not the name of the symbol',
+      procedure(W: TGrammarWorld)
+      begin
+        Expect(W.Report).ToEqual('option=FILE argument=PATH root=mytool');
       end);
 
 end.

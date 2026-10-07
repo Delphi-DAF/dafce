@@ -202,24 +202,31 @@ el texto recibido, en vez de valer `80`; y `-5` es un valor, no una opción desc
 
 ### Los tipos de serie, y qué traduce cada uno
 
-La lista está **traducida** de la de .NET, no copiada. Lo que necesita una línea de comandos son
-números de los anchos que la gente usa, fechas, identificadores y rutas.
+Cada tipo de serie de .NET tiene su tipo de Delphi, salvo `DateTimeOffset` — divergencia 9, más abajo.
 
-| `System.CommandLine` | Aquí | Por qué |
+| `System.CommandLine` | Aquí | Cómo se lee |
 |---|---|---|
-| `int`, `long`, `short`, `byte` y sin signo | `Integer`, `Int64` | los dos que cubren el uso real |
-| `float`, `double` | `Double` | un flotante binario, que es lo que son una proporción o un umbral |
+| `int`, `long` | `Integer`, `Int64` | |
+| `sbyte`, `byte`, `short`, `ushort`, `uint`, `ulong` | `ShortInt`, `Byte`, `SmallInt`, `Word`, `Cardinal`, `UInt64` | un valor fuera del rango del tipo se rechaza: `-1` no es un `Cardinal`, y `300` no es un `Byte` |
+| `float`, `double` | `Single`, `Double` | un `Single` lee como infinito una magnitud que no le cabe, como .NET |
 | `decimal` | `Currency` | el decimal exacto: un importe escrito con hasta cuatro decimales vuelve con esos cuatro, y no redondea por su cuenta |
 | `bool` | `Boolean` | es el flag: basta con nombrarlo |
 | enums | tipos enumerados | el tipo nombra sus valores, y se comparan sin distinguir mayúsculas |
-| `DateTime`, `DateTimeOffset`, `DateOnly`, `TimeOnly` | `TDateTime` | Delphi tiene **uno**, así que «solo fecha» y «solo hora» no son declarables. Se lee en ISO 8601 y en nada más — divergencia 3, más abajo |
-| `Guid` | `TGUID` | directo, y las llaves son opcionales |
-| `FileInfo`, `DirectoryInfo`, `FileSystemInfo` | `string` + `AcceptExistingOnly` | aquí una ruta es texto; lo que aportaban esos tipos era la validación, y la validación es lo que se porta |
+| enums `[Flags]` | `set of` un enumerado | sus nombres separados por comas: `--letters A,C` |
+| `DateTime` | `TDateTime` | ISO 8601 y nada más — divergencia 3, más abajo. Escrita sin zona, es la hora escrita |
+| `DateOnly`, `TimeOnly` | `TDate`, `TTime` | ISO 8601: `2026-10-05`; `10:30`, `10:30:15` o `10:30:15.5` |
+| `TimeSpan` | `TTimeSpan` | el formato de .NET, `d.hh:mm:ss.f`: `1.02:03:04` es un día, dos horas, tres minutos y cuatro segundos |
+| `Guid` | `TGUID` | las llaves son opcionales |
+| `FileInfo`, `DirectoryInfo`, `FileSystemInfo` | `TFilePath`, `TDirectoryPath`, `string` | los dos primeros son un `type string` declarado en `Daf.CommandLine`, y `AcceptExistingOnly` lee qué clase de ruta son |
+| `T?` de cualquiera de ellos | `TNullable<T>`, de `Daf.Nullable` | vacío cuando la invocación no lo trae, no el valor por defecto de `T`. `TNullable<Boolean>` es un flag, como `bool?` |
 | arrays y listas | `TArray<T>` | una colección declarada deriva `ZeroOrMore`, como en .NET |
 
 Un enumerado nombra sus propios valores aceptados, así que salen en la ayuda y en el error sin que
 nadie los escriba dos veces — y se comparan sin distinguir mayúsculas, como en .NET.
-`.AcceptOnlyFromAmong([...])` es el mismo cierre para un tipo que no lo expresa.
+`.AcceptOnlyFromAmong([...])` es el mismo cierre para un tipo que no lo expresa. Sus valores se
+comparan tal como se escriben, mayúsculas incluidas, como en .NET;
+`.AcceptOnlyFromAmong(TIStringComparer.Ordinal, [...])` no distingue mayúsculas. Comprueba cada token
+tal como llegó, antes de ninguna conversión, una propia incluida.
 
 Una opción `Boolean` es un flag: basta con nombrarla, y valen `--flag false`, `--flag=false` y
 `--flag true`. Solo `true` y `false`, en cualquier caja, son booleanos: `--flag 0` nombra el flag, y
@@ -310,15 +317,17 @@ CountOpt := CommandLine.Option<Integer>('--count').Description('Cuántos hacer')
 Se pueden declarar varias; el primer rechazo es el error de ese valor. Una validación debería ser una
 pregunta pura sobre el valor.
 
-Dos vienen de serie, escritas sobre ese mismo gancho:
+Tres vienen de serie, escritas sobre ese mismo gancho:
 
 | | Qué pregunta |
 |---|---|
-| `.AcceptExistingOnly` | la ruta existe, fichero o directorio. ⚠️ **Consulta el disco** — la excepción consciente a que una validación sea pura, así que parsear deja de ser gratis |
-| `.AcceptLegalFileNamesOnly` | es un nombre de fichero legal; los separadores también se rechazan, porque un nombre no es una ruta |
+| `.AcceptExistingOnly` | la ruta existe. Un `TDirectoryPath` tiene que ser un directorio; un `TFilePath` y un `string` pueden ser un fichero o un directorio, como el `FileInfo` de .NET. ⚠️ **Consulta el disco** — la excepción consciente a que una validación sea pura, así que parsear deja de ser gratis |
+| `.AcceptLegalFileNamesOnly` | es un nombre de fichero legal en la plataforma donde corre; los separadores también se rechazan, porque un nombre no es una ruta. El error nombra el carácter |
+| `.AcceptLegalFilePathsOnly` | es una ruta legal en la plataforma donde corre. El error nombra el carácter |
 
-Las dos aplican a una ruta, que aquí es un `string` — incluido un `TArray<string>`, donde corren por
-elemento. Declarar cualquiera de las dos sobre algo que no es una ruta se rechaza al declararlo.
+Aplican a una ruta —un `string`, un `TFilePath` o un `TDirectoryPath`, y un `TArray` de cualquiera de
+ellos, donde corren por elemento—. Declarar una sobre algo que no es una ruta se rechaza al
+declararla. Un valor vacío no es ni un nombre ni una ruta legales — divergencia 10, más abajo.
 
 Una validación del **resultado** recibe el resultado de su símbolo y rechaza con `AddError`.
 `Validators.Add` la declara en un comando, una opción o un argumento:
@@ -720,11 +729,10 @@ aquí `--OUT` y `--out` son la misma opción. El coste aceptado: dos alias que s
 mayúsculas son el mismo alias, y una CLI donde el caso **es** el significado —`git clean -x` frente a
 `-X`— no se puede expresar. Para eso, dos opciones.
 
-**3 · Una fecha se lee en ISO 8601 y de ninguna otra forma.** El `DateTime` de .NET admite además la
-convención local. Aquí `--since 2026-08-25` vale y `--since 25/08/2026` se rechaza, nombrando la
-opción y el texto. El coste aceptado: quien teclee a mano tiene que escribir la fecha como la lee la
-máquina. Y como Delphi tiene un solo tipo de fecha, «solo fecha» y «solo hora» no son declarables;
-quien lo necesite lo acota con una validación.
+**3 · Una fecha y una hora se leen en ISO 8601 y de ninguna otra forma.** El `DateTime`, el
+`DateOnly` y el `TimeOnly` de .NET admiten además la convención local. Aquí `--since 2026-08-25` vale
+y `--since 25/08/2026` se rechaza, nombrando la opción y el texto; y una hora es `22:30`, no
+`10:30 PM`. El coste aceptado: quien teclee a mano tiene que escribir la fecha como la lee la máquina.
 
 **4 · Un error de parse devuelve 2, no 1.** .NET devuelve 1 tanto a un error de parse como a una
 excepción que nadie capturó. Aquí `Invoke` devuelve `TCommandLineExit.InvocationError` (2) a una
@@ -747,14 +755,15 @@ hay instalado un proveedor de pilas.
 responden antes las opciones de ayuda y de versión que trae la raíz; aquí, una opción declarada con
 uno de sus nombres.
 
+**9 · No hay `DateTimeOffset`.** Delphi no tiene un tipo para una fecha con su desfase. Un
+`TDateTime` escrito con zona —`2026-08-25T23:30+02:00`— se convierte a la hora local.
+
+**10 · Un nombre de fichero o una ruta vacíos se rechazan.** `AcceptLegalFileNamesOnly` y
+`AcceptLegalFilePathsOnly` de .NET aceptan un valor vacío; aquí los dos lo rechazan.
+
 ---
 
 ## Lo que todavía no está
-
-Nada de lo de abajo cambia la forma del API, así que todo es aditivo:
-
-- **Los anchos que nadie ha pedido todavía** — `short`, `byte` y los sin signo. Un tipo entra cuando
-  alguien lo pide; hasta entonces una conversión propia lo cubre en una línea.
 
 Las directivas `[diagram]` y `[suggest]` y el autocompletado no se portan.
 

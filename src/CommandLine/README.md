@@ -200,24 +200,31 @@ the text received, rather than becoming `80`; and `-5` is a value, not an unknow
 
 ### The types of serie, and what each one translates
 
-The list is **translated** from .NET's rather than copied. What a command line needs is numbers of
-the widths people use, dates, identifiers and paths.
+Each type of serie of .NET has its Delphi type, except `DateTimeOffset` — divergence 9 below.
 
-| `System.CommandLine` | Here | Why |
+| `System.CommandLine` | Here | How it is read |
 |---|---|---|
-| `int`, `long`, `short`, `byte` and unsigned | `Integer`, `Int64` | the two that cover the real use |
-| `float`, `double` | `Double` | a binary float, which is what a ratio or a threshold is |
+| `int`, `long` | `Integer`, `Int64` | |
+| `sbyte`, `byte`, `short`, `ushort`, `uint`, `ulong` | `ShortInt`, `Byte`, `SmallInt`, `Word`, `Cardinal`, `UInt64` | a value outside the range of the type is refused: `-1` is not a `Cardinal`, and `300` is not a `Byte` |
+| `float`, `double` | `Single`, `Double` | a `Single` reads a magnitude it cannot hold as infinity, as .NET does |
 | `decimal` | `Currency` | the exact decimal: an amount written with up to four decimals comes back with those four, and does not round on its own |
 | `bool` | `Boolean` | it is the flag: naming it is enough |
 | enums | enumerated types | the type names its own values, matched without regard to case |
-| `DateTime`, `DateTimeOffset`, `DateOnly`, `TimeOnly` | `TDateTime` | Delphi has **one**, so "date only" and "time only" are not declarable. Read as ISO 8601 and nothing else — divergence 3 below |
-| `Guid` | `TGUID` | direct, and the braces are optional |
-| `FileInfo`, `DirectoryInfo`, `FileSystemInfo` | `string` + `AcceptExistingOnly` | here a path is text; what those types contributed was the validation, and the validation is what gets ported |
+| `[Flags]` enums | `set of` an enumerated type | its names separated by commas: `--letters A,C` |
+| `DateTime` | `TDateTime` | ISO 8601 and nothing else — divergence 3 below. Written with no zone, it is the time written |
+| `DateOnly`, `TimeOnly` | `TDate`, `TTime` | ISO 8601: `2026-10-05`; `10:30`, `10:30:15` or `10:30:15.5` |
+| `TimeSpan` | `TTimeSpan` | .NET's format, `d.hh:mm:ss.f`: `1.02:03:04` is a day, two hours, three minutes and four seconds |
+| `Guid` | `TGUID` | the braces are optional |
+| `FileInfo`, `DirectoryInfo`, `FileSystemInfo` | `TFilePath`, `TDirectoryPath`, `string` | the first two are a `type string` declared in `Daf.CommandLine`, and `AcceptExistingOnly` reads which kind of path they are |
+| `T?` of any of them | `TNullable<T>`, from `Daf.Nullable` | empty when the invocation does not bring it, not the default of `T`. `TNullable<Boolean>` is a flag, as `bool?` is |
 | arrays and lists | `TArray<T>` | a declared collection derives `ZeroOrMore`, as in .NET |
 
 An enumerated type names its own accepted values, so they appear in the help and in the error without
 anybody writing them twice — and they are matched without regard to case, as in .NET.
-`.AcceptOnlyFromAmong([...])` is the same closure for a type that does not express it.
+`.AcceptOnlyFromAmong([...])` is the same closure for a type that does not express it. Its values are
+compared as they are written, case included, as in .NET; `.AcceptOnlyFromAmong(TIStringComparer.Ordinal,
+[...])` does not tell cases apart. It checks each token as it came, before any conversion — a conversion
+of its own included.
 
 A `Boolean` option is a flag: naming it is enough, and `--flag false`, `--flag=false` and
 `--flag true` all work. Only `true` and `false`, in any casing, are booleans: `--flag 0` names the
@@ -307,15 +314,17 @@ CountOpt := CommandLine.Option<Integer>('--count').Description('How many to make
 Several can be declared; the first refusal is the error for that value. A validation should be a pure
 question about the value.
 
-Two come as standard, written over that same hook:
+Three come as standard, written over that same hook:
 
 | | What it asks |
 |---|---|
-| `.AcceptExistingOnly` | the path exists, file or directory. ⚠️ **It asks the file system** — the conscious exception to a validation being pure, so parsing stops being free |
-| `.AcceptLegalFileNamesOnly` | it is a legal file name; the separators are refused too, because a name is not a path |
+| `.AcceptExistingOnly` | the path exists. A `TDirectoryPath` has to be a directory; a `TFilePath` and a `string` may be a file or a directory, as .NET's `FileInfo`. ⚠️ **It asks the file system** — the conscious exception to a validation being pure, so parsing stops being free |
+| `.AcceptLegalFileNamesOnly` | it is a legal file name on the platform it runs on; the separators are refused too, because a name is not a path. The error names the character |
+| `.AcceptLegalFilePathsOnly` | it is a legal path on the platform it runs on. The error names the character |
 
-Both apply to a path, which here is a `string` — including a `TArray<string>`, where they run per
-element. Declaring either on something that is not a path is refused at the declaration.
+They apply to a path — a `string`, a `TFilePath` or a `TDirectoryPath`, and a `TArray` of any of them,
+where they run per element. Declaring one on something that is not a path is refused at the
+declaration. An empty value is neither a legal name nor a legal path — divergence 10 below.
 
 A validation of the **result** receives the result of its symbol and refuses with `AddError`.
 `Validators.Add` declares one on a command, an option or an argument:
@@ -716,11 +725,10 @@ here `--OUT` and `--out` are the same option. The accepted cost: two aliases dif
 are the same alias, and a CLI where the case *is* the meaning — `git clean -x` against `-X` — cannot
 be expressed. Declare two options for that.
 
-**3 · A date is read as ISO 8601, and in no other way.** .NET's `DateTime` also takes the local
-convention. Here `--since 2026-08-25` works and `--since 25/08/2026` is refused, naming the option
-and the text. The accepted cost: somebody typing by hand has to write the date the way the machine
-reads it. And since Delphi has a single date type, "only a date" and "only a time" are not
-declarable; whoever needs that bounds it with a validation.
+**3 · A date and a time are read as ISO 8601, and in no other way.** .NET's `DateTime`, `DateOnly` and
+`TimeOnly` also take the local convention. Here `--since 2026-08-25` works and `--since 25/08/2026` is
+refused, naming the option and the text; and a time is `22:30`, not `10:30 PM`. The accepted cost:
+somebody typing by hand has to write the date the way the machine reads it.
 
 **4 · A parse error answers 2, not 1.** .NET answers 1 both to a parse error and to an exception
 nobody caught. Here `Invoke` answers `TCommandLineExit.InvocationError` (2) to an invocation that
@@ -743,14 +751,15 @@ stack traces is installed.
 the help and version options a root brings answer first; here an option declared with one of their
 names does.
 
+**9 · There is no `DateTimeOffset`.** Delphi has no type for a date with its offset. A `TDateTime`
+written with a zone — `2026-08-25T23:30+02:00` — is converted to local time.
+
+**10 · An empty file name or path is refused.** .NET's `AcceptLegalFileNamesOnly` and
+`AcceptLegalFilePathsOnly` accept an empty value; here both refuse it.
+
 ---
 
 ## What is not here (yet)
-
-Nothing below changes the shape of the API, so all of it is additive:
-
-- **The widths nobody has asked for yet** — `short`, `byte` and the unsigned ones. A type enters when
-  somebody asks for it; until then a conversion of its own covers it in one line.
 
 The `[diagram]` and `[suggest]` directives and shell completion are not ported.
 

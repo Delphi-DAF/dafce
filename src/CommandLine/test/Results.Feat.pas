@@ -4,6 +4,7 @@ interface
 
 uses
   System.SysUtils,
+  Daf.Nullable,
   Daf.CommandLine;
 
 type
@@ -28,10 +29,11 @@ type
     Run: ICommand;
     Serve: ICommand;
     WorkersOpt: IOption<Integer>;
-    // tool [<name>] [<count>] [<items>...], none of them demanded.
+    // tool [<name>] [<count>] [<limit>] [<items>...], none of them demanded.
     Loose: IRootCommand;
     NameArg: IArgument<string>;
     CountArg: IArgument<Integer>;
+    LimitArg: IArgument<TNullable<Integer>>;
     ItemsArg: IArgument<TArray<string>>;
 
     Parsed: IParseResult;
@@ -118,9 +120,10 @@ procedure TResultsWorld.BuildLoose;
 begin
   NameArg := CommandLine.Argument<string>('name').Description('What it is called').Arity(TArgumentArity.ZeroOrOne);
   CountArg := CommandLine.Argument<Integer>('count').Description('How many').Arity(TArgumentArity.ZeroOrOne);
+  LimitArg := CommandLine.Argument<TNullable<Integer>>('limit').Description('How far').Arity(TArgumentArity.ZeroOrOne);
   ItemsArg := CommandLine.Argument<TArray<string>>('items').Description('What else');
   Loose := CommandLine.Root('tool', 'A tool');
-  Loose.Add([NameArg, CountArg, ItemsArg]);
+  Loose.Add([NameArg, CountArg, LimitArg, ItemsArg]);
 end;
 
 function TResultsWorld.MissingResponseFile: string;
@@ -494,7 +497,7 @@ Feature Command line parse results @commandline @results
       end)
 
   .ScenarioOutline('A <Kind> argument with no result answers <Expected>')
-    .Given('a command with three arguments that do not demand a value',
+    .Given('a command with four arguments that do not demand a value',
       procedure(W: TResultsWorld)
       begin
         W.BuildLoose;
@@ -510,6 +513,8 @@ Feature Command line parse results @commandline @results
               Result := '"' + W.NameArg.RequiredValueIn(W.Parsed) + '"'
             else if W.Kind = 'integer' then
               Result := IntToStr(W.CountArg.RequiredValueIn(W.Parsed))
+            else if W.Kind = 'nullable' then
+              Result := IntToStr(W.LimitArg.RequiredValueIn(W.Parsed).Value)
             else if W.Kind = 'array' then
               Result := Format('%d items', [Length(W.ItemsArg.RequiredValueIn(W.Parsed))])
             else
@@ -523,8 +528,9 @@ Feature Command line parse results @commandline @results
       end)
     .Examples(
       [['Kind',    'Expected'],
-       ['string',  'ECommandLine: name is required but was not provided'],
-       ['integer', '0'],
-       ['array',   '0 items']]);
+       ['string',   'ECommandLine: name is required but was not provided'],
+       ['integer',  '0'],
+       ['nullable', 'ECommandLine: limit is required but was not provided'],
+       ['array',    '0 items']]);
 
 end.

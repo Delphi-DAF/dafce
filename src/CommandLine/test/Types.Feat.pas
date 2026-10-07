@@ -3,6 +3,8 @@
 interface
 
 uses
+  System.TimeSpan,
+  Daf.Nullable,
   Daf.CommandLine;
 
 type
@@ -16,6 +18,17 @@ type
     Minor: Integer;
     Patch: Integer;
   end;
+
+  /// <summary>A record with the two fields of <c>TNullable</c> and another name: not a value that may be missing.</summary>
+  TMaybe<T> = record
+    FValue: T;
+    FHasValue: Boolean;
+  end;
+
+  {$SCOPEDENUMS ON}
+  TLetter = (A, B, C);
+  {$SCOPEDENUMS OFF}
+  TLetters = set of TLetter;
 
   TTypesWorld = class
   public
@@ -40,8 +53,46 @@ type
     ReadFirst: string;
     ReadRest: TArray<string>;
 
+    // The integers of every width and the simple real, one option each, named after its type.
+    Numbers: IRootCommand;
+    ShortIntOpt: IOption<ShortInt>;
+    ByteOpt: IOption<Byte>;
+    SmallIntOpt: IOption<SmallInt>;
+    WordOpt: IOption<Word>;
+    CardinalOpt: IOption<Cardinal>;
+    UInt64Opt: IOption<UInt64>;
+    SingleOpt: IOption<Single>;
+    // The columns of the outlines over them.
+    Kind: string;
+    Text: string;
+    Expected: string;
+
+    Times: IRootCommand;
+    DayOpt: IOption<TDate>;
+    AtOpt: IOption<TTime>;
+    WaitOpt: IOption<TTimeSpan>;
+
+    Missing: IRootCommand;
+    LimitOpt: IOption<TNullable<Integer>>;
+    DryOpt: IOption<TNullable<Boolean>>;
+
+    Paths: IRootCommand;
+    SourceOpt: IOption<TFilePath>;
+    TargetOpt: IOption<TDirectoryPath>;
+
+    Sets: IRootCommand;
+    LettersOpt: IOption<TLetters>;
+
     Parsed: IParseResult;
     Report: string;
+    ReadDay: TDate;
+    ReadAt: TTime;
+    ReadWait: TTimeSpan;
+    ReadSingle: Single;
+    ReadLimit: TNullable<Integer>;
+    ReadDry: TNullable<Boolean>;
+    ReadSource: TFilePath;
+    ReadLetters: TLetters;
     ReadArityMin: Integer;
     ReadArityMax: Integer;
     ReadAllowsMany: Boolean;
@@ -55,16 +106,104 @@ type
     procedure BuildWideTypes;
     procedure BuildCollection;
     procedure BuildWholeConversions;
+    procedure BuildNumbers;
+    procedure BuildTimes;
+    procedure BuildMissing;
+    procedure BuildPaths;
+    procedure BuildSets;
+    /// <summary>The value of the option named after <c>Kind</c>, rendered.</summary>
+    function ReadNumber: string;
   end;
 
 implementation
 
 uses
   System.SysUtils,
+  System.DateUtils,
   System.Generics.Collections,
   Daf.MiniSpec;
 
+// A set rendered as the names of its members, in order, so a failed assertion says which are there.
+function LettersText(const Letters: TLetters): string;
+const
+  Names: array [TLetter] of string = ('A', 'B', 'C');
+var
+  Letter: TLetter;
+begin
+  Result := '';
+  for Letter in Letters do
+    if Result = '' then
+      Result := Names[Letter]
+    else
+      Result := Result + ',' + Names[Letter];
+end;
+
 { TTypesWorld }
+
+procedure TTypesWorld.BuildNumbers;
+begin
+  ShortIntOpt := CommandLine.Option<ShortInt>('--shortint').Description('A small signed number');
+  ByteOpt := CommandLine.Option<Byte>('--byte').Description('A byte');
+  SmallIntOpt := CommandLine.Option<SmallInt>('--smallint').Description('A short signed number');
+  WordOpt := CommandLine.Option<Word>('--word').Description('A short unsigned number');
+  CardinalOpt := CommandLine.Option<Cardinal>('--cardinal').Description('An unsigned number');
+  UInt64Opt := CommandLine.Option<UInt64>('--uint64').Description('A wide unsigned number');
+  SingleOpt := CommandLine.Option<Single>('--single').Description('A simple real');
+  Numbers := CommandLine.Root('tool', 'A tool');
+  Numbers.Add([ShortIntOpt, ByteOpt, SmallIntOpt, WordOpt, CardinalOpt, UInt64Opt, SingleOpt]);
+end;
+
+function TTypesWorld.ReadNumber: string;
+begin
+  if Kind = 'shortint' then
+    Result := IntToStr(ShortIntOpt.ValueIn(Parsed))
+  else if Kind = 'byte' then
+    Result := IntToStr(ByteOpt.ValueIn(Parsed))
+  else if Kind = 'smallint' then
+    Result := IntToStr(SmallIntOpt.ValueIn(Parsed))
+  else if Kind = 'word' then
+    Result := IntToStr(WordOpt.ValueIn(Parsed))
+  else if Kind = 'cardinal' then
+    Result := UIntToStr(CardinalOpt.ValueIn(Parsed))
+  else if Kind = 'uint64' then
+    Result := UIntToStr(UInt64Opt.ValueIn(Parsed))
+  else if Kind = 'single' then
+    Result := FloatToStr(SingleOpt.ValueIn(Parsed), TFormatSettings.Invariant)
+  else
+    Result := 'unknown kind ' + Kind;
+end;
+
+procedure TTypesWorld.BuildTimes;
+begin
+  DayOpt := CommandLine.Option<TDate>('--day').Description('Which day');
+  AtOpt := CommandLine.Option<TTime>('--at').Description('At what time');
+  WaitOpt := CommandLine.Option<TTimeSpan>('--wait').Description('How long');
+  Times := CommandLine.Root('tool', 'A tool');
+  Times.Add([DayOpt, AtOpt, WaitOpt]);
+end;
+
+procedure TTypesWorld.BuildMissing;
+begin
+  LimitOpt := CommandLine.Option<TNullable<Integer>>('--limit').Description('How many at most');
+  DryOpt := CommandLine.Option<TNullable<Boolean>>('--dry').Description('Change nothing');
+  Missing := CommandLine.Root('tool', 'A tool');
+  Missing.Add([LimitOpt, DryOpt]);
+end;
+
+procedure TTypesWorld.BuildPaths;
+begin
+  SourceOpt := CommandLine.Option<TFilePath>('--source').Description('What to read').AcceptExistingOnly;
+  TargetOpt := CommandLine.Option<TDirectoryPath>('--target').Description('Where to write').AcceptExistingOnly;
+  Paths := CommandLine.Root('tool', 'A tool');
+  Paths.Add([SourceOpt, TargetOpt]);
+end;
+
+procedure TTypesWorld.BuildSets;
+begin
+  LettersOpt := CommandLine.Option<TLetters>('--letters').Description('Which letters');
+  Sets := CommandLine.Root('tool', 'A tool');
+  Sets.Add(LettersOpt);
+end;
 
 procedure TTypesWorld.BuildWideTypes;
 begin
@@ -261,6 +400,46 @@ Feature Command line types @commandline @types
       end)
 
 .Rule('the engine covers the types a command line really uses')
+
+  .Scenario('A date with a time and no zone')
+    .Given('an option declared with a date type',
+      procedure(W: TTypesWorld)
+      begin
+        W.BuildWideTypes;
+      end)
+    .When('the invocation passes a time late in the day, with no zone',
+      procedure(W: TTypesWorld)
+      begin
+        W.Parsed := W.Wide.Parse(['--since', '2026-08-25T23:30']);
+        W.ReadSince := W.SinceOpt.ValueIn(W.Parsed);
+      end)
+    .&Then('the date and the time read are the ones written, not shifted by the zone of the machine',
+      procedure(W: TTypesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('');
+        Expect(FormatDateTime('yyyy-mm-dd hh:nn', W.ReadSince, TFormatSettings.Invariant)).ToEqual('2026-08-25 23:30');
+      end)
+
+  .Scenario('A date with a time and a zone')
+    .Given('an option declared with a date type',
+      procedure(W: TTypesWorld)
+      begin
+        W.BuildWideTypes;
+      end)
+    .When('the invocation passes a time in UTC',
+      procedure(W: TTypesWorld)
+      begin
+        W.Parsed := W.Wide.Parse(['--since', '2026-08-25T23:30Z']);
+        W.ReadSince := W.SinceOpt.ValueIn(W.Parsed);
+      end)
+    .&Then('it is read converted to the local time of the machine',
+      procedure(W: TTypesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('');
+        Expect(FormatDateTime('yyyy-mm-dd hh:nn', W.ReadSince, TFormatSettings.Invariant)).ToEqual(
+          FormatDateTime('yyyy-mm-dd hh:nn', TTimeZone.Local.ToLocalTime(EncodeDateTime(2026, 8, 25, 23, 30, 0, 0)),
+          TFormatSettings.Invariant));
+      end)
 
   .Scenario('A date')
     .Given('an option declared with a date type',
@@ -473,6 +652,393 @@ Feature Command line types @commandline @types
         Expect(Length(W.ReadFiles)).ToEqual(2);
         Expect(W.ReadFiles[0]).ToEqual('a.pas');
         Expect(W.ReadFiles[1]).ToEqual('b.pas');
+      end)
+
+.Rule('an integer of any width is read whole and within its range')
+
+  .ScenarioOutline('The <Kind> type reads <Text>')
+    .Given('an option declared with each integer width and with the simple real',
+      procedure(W: TTypesWorld)
+      begin
+        W.BuildNumbers;
+      end)
+    .When('the invocation passes <Text> to the <Kind> one',
+      procedure(W: TTypesWorld)
+      begin
+        W.Parsed := W.Numbers.Parse(['--' + W.Kind, W.Text]);
+        W.Report := W.ReadNumber;
+      end)
+    .&Then('it is read with its type, whole',
+      procedure(W: TTypesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('');
+        Expect(W.Report).ToEqual(W.Text);
+      end)
+    .Examples(
+      [['Kind',     'Text'],
+       ['shortint', '-128'],
+       ['byte',     '255'],
+       ['smallint', '-32768'],
+       ['word',     '65535'],
+       ['cardinal', '4294967295'],
+       ['uint64',   '18446744073709551615'],
+       ['single',   '1.5']])
+
+  .Scenario('A negative for an unsigned integer')
+    .Given('an option declared as an unsigned integer',
+      procedure(W: TTypesWorld)
+      begin
+        W.BuildNumbers;
+      end)
+    .When('the invocation passes it -1',
+      procedure(W: TTypesWorld)
+      begin
+        W.Parsed := W.Numbers.Parse(['--cardinal', '-1']);
+      end)
+    .&Then('the parse fails naming the option and the value',
+      procedure(W: TTypesWorld)
+      begin
+        Expect(W.Parsed.Succeeded).ToBeFalse;
+        Expect(W.Parsed.ErrorText).ToContain('--cardinal');
+        Expect(W.Parsed.ErrorText).ToContain('-1');
+      end)
+
+  .ScenarioOutline('<Text> is past the range of the <Kind> type')
+    .Given('an option declared with each integer width',
+      procedure(W: TTypesWorld)
+      begin
+        W.BuildNumbers;
+      end)
+    .When('the invocation passes <Text> to the <Kind> one',
+      procedure(W: TTypesWorld)
+      begin
+        W.Parsed := W.Numbers.Parse(['--' + W.Kind, W.Text]);
+      end)
+    .&Then('the parse fails as a value that does not convert: <Expected>',
+      procedure(W: TTypesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual(W.Expected);
+      end)
+    .Examples(
+      [['Kind',     'Text',                 'Expected'],
+       ['shortint', '128',                  '"128" is not a valid integer for --shortint'],
+       ['byte',     '256',                  '"256" is not a valid unsigned integer for --byte'],
+       ['smallint', '-32769',               '"-32769" is not a valid integer for --smallint'],
+       ['word',     '65536',                '"65536" is not a valid unsigned integer for --word'],
+       ['cardinal', '4294967296',           '"4294967296" is not a valid unsigned integer for --cardinal'],
+       ['uint64',   '18446744073709551616', '"18446744073709551616" is not a valid unsigned integer for --uint64'],
+       ['uint64',   '-1',                   '"-1" is not a valid unsigned integer for --uint64']])
+
+  .Scenario('A simple real too large for its type')
+    .Given('an option declared as a simple real',
+      procedure(W: TTypesWorld)
+      begin
+        W.BuildNumbers;
+      end)
+    .When('the invocation passes it a magnitude only a double real holds',
+      procedure(W: TTypesWorld)
+      begin
+        W.Parsed := W.Numbers.Parse(['--single', '1e39']);
+        W.ReadSingle := W.SingleOpt.ValueIn(W.Parsed);
+      end)
+    .&Then('it is read as infinity, as .NET reads it',
+      procedure(W: TTypesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('');
+        Expect(FloatToStr(W.ReadSingle, TFormatSettings.Invariant)).ToEqual('INF');
+      end)
+
+.Rule('a date without time and a time are read in ISO 8601, and a time span in .NET''s format')
+
+  .Scenario('A date without time')
+    .Given('an option declared as a date without time',
+      procedure(W: TTypesWorld)
+      begin
+        W.BuildTimes;
+      end)
+    .When('the invocation passes 2026-10-05',
+      procedure(W: TTypesWorld)
+      begin
+        W.Parsed := W.Times.Parse(['--day', '2026-10-05']);
+        W.ReadDay := W.DayOpt.ValueIn(W.Parsed);
+      end)
+    .&Then('that date is read, with no time part',
+      procedure(W: TTypesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('');
+        Expect(FormatDateTime('yyyy-mm-dd hh:nn:ss.zzz', W.ReadDay, TFormatSettings.Invariant)).ToEqual('2026-10-05 00:00:00.000');
+      end)
+
+  .Scenario('A date without time that carries one')
+    .Given('an option declared as a date without time',
+      procedure(W: TTypesWorld)
+      begin
+        W.BuildTimes;
+      end)
+    .When('the invocation passes a date with a time behind it',
+      procedure(W: TTypesWorld)
+      begin
+        W.Parsed := W.Times.Parse(['--day', '2026-10-05T10:00']);
+      end)
+    .&Then('the parse fails, rather than dropping the time',
+      procedure(W: TTypesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('"2026-10-05T10:00" is not a valid date for --day');
+      end)
+
+  .Scenario('A time in ISO 8601')
+    .Given('an option declared as a time',
+      procedure(W: TTypesWorld)
+      begin
+        W.BuildTimes;
+      end)
+    .When('the invocation passes 10:30:15.5',
+      procedure(W: TTypesWorld)
+      begin
+        W.Parsed := W.Times.Parse(['--at', '10:30:15.5']);
+        W.ReadAt := W.AtOpt.ValueIn(W.Parsed);
+      end)
+    .&Then('that time is read, to the millisecond',
+      procedure(W: TTypesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('');
+        Expect(FormatDateTime('hh:nn:ss.zzz', W.ReadAt, TFormatSettings.Invariant)).ToEqual('10:30:15.500');
+      end)
+
+  .Scenario('A time written some other way')
+    .Given('an option declared as a time',
+      procedure(W: TTypesWorld)
+      begin
+        W.BuildTimes;
+      end)
+    .When('the invocation writes it in a local convention instead of ISO 8601',
+      procedure(W: TTypesWorld)
+      begin
+        W.Parsed := W.Times.Parse(['--at', '10:30 PM']);
+      end)
+    .&Then('the parse fails naming the option and the text received',
+      procedure(W: TTypesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('"10:30 PM" is not a valid time for --at');
+      end)
+
+  .Scenario('A time span')
+    .Given('an option declared as a time span',
+      procedure(W: TTypesWorld)
+      begin
+        W.BuildTimes;
+      end)
+    .When('the invocation passes 1.02:03:04',
+      procedure(W: TTypesWorld)
+      begin
+        W.Parsed := W.Times.Parse(['--wait', '1.02:03:04']);
+        W.ReadWait := W.WaitOpt.ValueIn(W.Parsed);
+      end)
+    .&Then('it reads one day, two hours, three minutes and four seconds',
+      procedure(W: TTypesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('');
+        Expect(Format('%d d %d h %d m %d s', [W.ReadWait.Days, W.ReadWait.Hours, W.ReadWait.Minutes,
+          W.ReadWait.Seconds])).ToEqual('1 d 2 h 3 m 4 s');
+      end)
+
+.Rule('a value that may be missing stays empty when the invocation does not bring it')
+
+  .Scenario('A value that may be missing and does not come')
+    .Given('an option declared as an integer that may be missing',
+      procedure(W: TTypesWorld)
+      begin
+        W.BuildMissing;
+      end)
+    .When('an invocation that does not name it is parsed',
+      procedure(W: TTypesWorld)
+      begin
+        W.Parsed := W.Missing.Parse([]);
+        W.ReadLimit := W.LimitOpt.ValueIn(W.Parsed);
+      end)
+    .&Then('its value is empty, and not 0',
+      procedure(W: TTypesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('');
+        Expect(W.ReadLimit.HasValue).ToBeFalse;
+      end)
+
+  .Scenario('A value that may be missing and comes')
+    .Given('an option declared as an integer that may be missing',
+      procedure(W: TTypesWorld)
+      begin
+        W.BuildMissing;
+      end)
+    .When('the invocation passes it 5',
+      procedure(W: TTypesWorld)
+      begin
+        W.Parsed := W.Missing.Parse(['--limit', '5']);
+        W.ReadLimit := W.LimitOpt.ValueIn(W.Parsed);
+      end)
+    .&Then('it holds 5',
+      procedure(W: TTypesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('');
+        Expect(Format('has value=%s, value=%d', [BoolToStr(W.ReadLimit.HasValue, True), W.ReadLimit.Value]))
+          .ToEqual('has value=True, value=5');
+      end)
+
+  .Scenario('A boolean that may be missing, named alone')
+    .Given('an option declared as a boolean that may be missing',
+      procedure(W: TTypesWorld)
+      begin
+        W.BuildMissing;
+      end)
+    .When('the invocation names it with no value',
+      procedure(W: TTypesWorld)
+      begin
+        W.Parsed := W.Missing.Parse(['--dry']);
+        W.ReadDry := W.DryOpt.ValueIn(W.Parsed);
+      end)
+    .&Then('it is a flag, as .NET''s bool? is, and holds true',
+      procedure(W: TTypesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('');
+        Expect(Format('has value=%s, value=%s', [BoolToStr(W.ReadDry.HasValue, True), BoolToStr(W.ReadDry.Value,
+          True)])).ToEqual('has value=True, value=True');
+      end)
+
+  .Scenario('A record shaped like a value that may be missing, with another name')
+    .Given('a record of the application with the two fields of a value that may be missing').NoAction
+    .When('an option is declared with it, with no conversion, and added to a command',
+      procedure(W: TTypesWorld)
+      begin
+        try
+          var Maybe := CommandLine.Option<TMaybe<Integer>>('--maybe').Description('Perhaps');
+          W.Report := 'declared';
+          var Root := CommandLine.Root('tool', 'A tool');
+          Root.Add(Maybe);
+          W.Report := W.Report + ', <added>';
+        except
+          on E: Exception do
+            W.Report := W.Report + ', ' + E.ClassName + ': ' + E.Message;
+        end;
+      end)
+    .&Then('the engine does not take it for one, and refuses it naming the type',
+      procedure(W: TTypesWorld)
+      begin
+        Expect(W.Report).ToStartWith('declared, ECommandLine: ');
+        Expect(W.Report).ToContain('TMaybe');
+      end)
+
+.Rule('a path type says what has to exist')
+
+  .Scenario('A directory path that has to exist')
+    .Given('an option declared as a directory path, to accept only what exists',
+      procedure(W: TTypesWorld)
+      begin
+        W.BuildPaths;
+      end)
+    .When('the invocation passes the path of a file that exists',
+      procedure(W: TTypesWorld)
+      begin
+        // The running executable, which exists by definition.
+        W.Parsed := W.Paths.Parse(['--target', ParamStr(0)]);
+      end)
+    .&Then('the parse fails, because what exists is not a directory',
+      procedure(W: TTypesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual(Format('"%s" is not a directory that exists, and --target only accepts one',
+          [ParamStr(0)]));
+      end)
+
+  .Scenario('A file path that has to exist takes a directory too')
+    .Given('an option declared as a file path, to accept only what exists',
+      procedure(W: TTypesWorld)
+      begin
+        W.BuildPaths;
+      end)
+    .When('the invocation passes the path of a directory that exists',
+      procedure(W: TTypesWorld)
+      begin
+        W.Parsed := W.Paths.Parse(['--source', ExtractFileDir(ParamStr(0))]);
+        W.ReadSource := W.SourceOpt.ValueIn(W.Parsed);
+      end)
+    .&Then('it is read, as .NET''s file type reads it',
+      procedure(W: TTypesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('');
+        Expect(string(W.ReadSource)).ToEqual(ExtractFileDir(ParamStr(0)));
+      end)
+
+  .Scenario('A file path that does not exist')
+    .Given('an option declared as a file path, to accept only what exists',
+      procedure(W: TTypesWorld)
+      begin
+        W.BuildPaths;
+      end)
+    .When('the invocation passes a path that does not exist',
+      procedure(W: TTypesWorld)
+      begin
+        W.Parsed := W.Paths.Parse(['--source', 'no-such-file-anywhere.txt']);
+      end)
+    .&Then('the parse fails naming the path, the option and that it wanted a file',
+      procedure(W: TTypesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual(
+          '"no-such-file-anywhere.txt" does not exist, and --source only accepts a file that does');
+      end)
+
+.Rule('a set of an enumerated type is written with the names of its members')
+
+  .Scenario('A set of an enumerated type')
+    .Given('an option declared as a set of an enumerated type with the values A, B and C',
+      procedure(W: TTypesWorld)
+      begin
+        W.BuildSets;
+      end)
+    .When('the invocation passes A,C',
+      procedure(W: TTypesWorld)
+      begin
+        W.Parsed := W.Sets.Parse(['--letters', 'A,C']);
+        W.ReadLetters := W.LettersOpt.ValueIn(W.Parsed);
+      end)
+    .&Then('the set with A and C is read',
+      procedure(W: TTypesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('');
+        Expect(LettersText(W.ReadLetters)).ToEqual('A,C');
+      end)
+
+  .Scenario('A set with a name its type does not have')
+    .Given('an option declared as a set of an enumerated type with the values A, B and C',
+      procedure(W: TTypesWorld)
+      begin
+        W.BuildSets;
+      end)
+    .When('the invocation passes A,X',
+      procedure(W: TTypesWorld)
+      begin
+        W.Parsed := W.Sets.Parse(['--letters', 'A,X']);
+      end)
+    .&Then('the parse fails listing the names it accepts',
+      procedure(W: TTypesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('"A,X" is not a valid value for --letters. Accepted: A, B, C');
+      end)
+
+.Rule('a symbol says the type its tokens are converted to')
+
+  .Scenario('The type a symbol converts to')
+    .Given('an option declared as a set of an enumerated type',
+      procedure(W: TTypesWorld)
+      begin
+        W.BuildSets;
+      end)
+    .When('its value type is read',
+      procedure(W: TTypesWorld)
+      begin
+        W.Report := string(W.LettersOpt.ValueType.Name);
+      end)
+    .&Then('it is the declared type',
+      procedure(W: TTypesWorld)
+      begin
+        Expect(W.Report).ToEqual('TLetters');
       end);
 
 end.

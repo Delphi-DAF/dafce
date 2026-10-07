@@ -28,8 +28,8 @@ function ParseInvocation(const Root: IRootCommand; const Args: TArray<string>): 
 ///   The ones the validation converted, or the default it took: then <c>FromDefault</c> is True and the
 ///   one value is the whole default. <c>Whole</c> is True for that one value, and for the one a conversion of
 ///   its own answered. A result the validation never reached -- an option of a parent
-///   that is neither recursive nor defaulted -- is converted now, once, without the accepted values or
-///   the validations, and its error joins the tree as the validation's would.
+///   that is neither recursive nor defaulted -- is converted now, once, without the validations, and its
+///   error joins the tree as the validation's would.
 ///
 ///   Raises <c>ECommandLine</c> with the error of a result that has one.
 /// </remarks>
@@ -128,7 +128,7 @@ type
     FState: TConversionState;
     FFailure: string;
     FValidated: Boolean;
-    procedure ConvertTokens(Accept: Boolean);
+    procedure ConvertTokens;
   protected
     /// <summary>Why its tokens are not the number it admits; empty when they are.</summary>
     function ArityError: string; virtual; abstract;
@@ -600,13 +600,12 @@ begin
     Fail(Error);
 end;
 
-procedure TValuedResult.ConvertTokens(Accept: Boolean);
+procedure TValuedResult.ConvertTokens;
 var
   Error: string;
   Token: TToken;
   Value: TValue;
   Values: TArray<TValue>;
-  Converted: Boolean;
   Parser: TUntypedWholeParser;
   Owner: ISymbolResultTree;
   ErrorsBefore: Integer;
@@ -646,11 +645,7 @@ begin
   Values := nil;
   for Token in FTokens do
   begin
-    if Accept then
-      Converted := FValued.TryAcceptValue(Token.Value, Value, Error)
-    else
-      Converted := FValued.Convert(Token.Value, Value, Error);
-    if not Converted then
+    if not FValued.Convert(Token.Value, Value, Error) then
     begin
       Fail(Error);
       Exit;
@@ -659,10 +654,7 @@ begin
   end;
   // A flag named with no value is the whole statement: --verbose says true.
   if (Length(Values) = 0) and FValued.IsFlag then
-  begin
-    Value := TValue.From<Boolean>(True);
-    Values := [Value];
-  end;
+    Values := [TCommandLineValue.FlagValue(FValued.ValueType)];
   FValues := Values;
   FFromDefault := False;
   FState := TConversionState.Converted;
@@ -689,7 +681,7 @@ begin
     FState := TConversionState.Converted;
     Exit;
   end;
-  ConvertTokens(True);
+  ConvertTokens;
 end;
 
 function TValuedResult.ReadValues(out FromDefault, Whole: Boolean): TArray<TValue>;
@@ -699,9 +691,9 @@ begin
     if IsImplicitResult then
       Validate
     else
-      // Read without the accepted values or the validations, which are the validation's to run:
-      // the useValidators: false of .NET.
-      ConvertTokens(False);
+      // Read without the validations, the declared set of accepted values among them, which are the
+      // validation's to run: the useValidators: false of .NET.
+      ConvertTokens;
   end;
   if FState = TConversionState.Failed then
     raise ECommandLine.Create(FFailure);
