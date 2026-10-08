@@ -52,6 +52,9 @@ type
     function RanText: string;
     /// <summary>The token a directive was written with and its values, or <c>&lt;not written&gt;</c>.</summary>
     function Written(const Directive: IDirective): string;
+    /// <summary>The same, asked of a node of the tree instead of the parse result.</summary>
+    function WrittenFrom(const Node: ISymbolResult; const Directive: IDirective): string;
+    function Describe(const Found: IDirectiveResult): string;
     /// <summary>
     ///   A root mitool with an optional positional, a --trace option and an action, and a subcommand build with a
     ///   positional file and an action. It declares no directive: each scenario adds the ones it needs.
@@ -137,10 +140,17 @@ begin
 end;
 
 function TDirectivesWorld.Written(const Directive: IDirective): string;
-var
-  Found: IDirectiveResult;
 begin
-  Found := Parsed.GetResult(Directive);
+  Result := Describe(Parsed.GetResult(Directive));
+end;
+
+function TDirectivesWorld.WrittenFrom(const Node: ISymbolResult; const Directive: IDirective): string;
+begin
+  Result := Describe(Node.GetResult(Directive));
+end;
+
+function TDirectivesWorld.Describe(const Found: IDirectiveResult): string;
+begin
   if Found = nil then
     Exit('<not written>');
   Result := Found.Token.Value + ' values=' + string.Join(',', Found.Values);
@@ -256,6 +266,32 @@ Feature Directives @commandline @directives
       procedure(W: TDirectivesWorld)
       begin
         Expect(W.Written(W.Trace)).ToEqual('[trace:all] values=all');
+      end)
+
+  .Scenario('The result of a directive is found from any node of the tree')
+    .Given('a root that declares the directive trace, with a subcommand build',
+      procedure(W: TDirectivesWorld)
+      begin
+        W.BuildGrammar;
+        W.Root.Add(W.Trace);
+      end)
+    .When('an invocation starting with [trace:all] and reaching build is parsed',
+      procedure(W: TDirectivesWorld)
+      begin
+        W.Parsed := W.Root.Parse(['[trace:all]', 'build', 'fichero.txt']);
+      end)
+    .&Then('the result of build finds the directive, the same result the parse result finds',
+      procedure(W: TDirectivesWorld)
+      begin
+        Expect(W.Parsed.Command.Name).ToEqual('build');
+        Expect(W.WrittenFrom(W.Parsed.CommandResult, W.Trace)).ToEqual('[trace:all] values=all');
+        Expect((W.Parsed.CommandResult.GetResult(W.Trace) as TObject) =
+          (W.Parsed.GetResult(W.Trace) as TObject)).ToBeTrue;
+      end)
+    .&And('so does the result of the argument of build',
+      procedure(W: TDirectivesWorld)
+      begin
+        Expect(W.WrittenFrom(W.Parsed.GetResult(W.FileArg), W.Trace)).ToEqual('[trace:all] values=all');
       end)
 
   .Scenario('A directive behind the name of the root')

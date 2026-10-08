@@ -133,8 +133,9 @@ same answer as no `--file` at all, and `--port 80xyz` was provided although read
 
 Every command the invocation reached has a result, from the root to the innermost one, and so does
 every option and argument it carried or that took its default. `Parsed.RootCommandResult` is where
-the tree starts and `Parsed.CommandResult` is the innermost command. `GetResult` finds the result of
-a declared symbol, on the parse result or on any of its nodes, and answers `nil` when there is none.
+the tree starts and `Parsed.CommandResult` is the innermost command. A directive the invocation wrote
+has a result too, which hangs from no command. `GetResult` finds the result of a declared symbol, on
+the parse result or on any of its nodes, and answers `nil` when there is none.
 
 ```pascal
 var Port := Parsed.GetResult(PortOpt);         // an IOptionResult, or nil

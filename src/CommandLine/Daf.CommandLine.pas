@@ -678,6 +678,7 @@ type
     function GetResult(const Option: IOption): IOptionResult; overload;
     function GetResult(const Argument: IArgument): IArgumentResult; overload;
     function GetResult(const Command: ICommand): ICommandResult; overload;
+    function GetResult(const Directive: IDirective): IDirectiveResult; overload;
   end;
 
   ICommandResult = interface(ISymbolResult)

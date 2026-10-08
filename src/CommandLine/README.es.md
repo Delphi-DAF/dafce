@@ -133,7 +133,8 @@ respuesta que no pasar `--file`, y `--port 80xyz` cuenta como pasada aunque leer
 
 Cada comando que alcanzó la invocación tiene un resultado, del raíz al más interno, y también cada
 opción y argumento que trajo o que tomó su default. `Parsed.RootCommandResult` es donde empieza el
-árbol y `Parsed.CommandResult` es el comando más interno. `GetResult` encuentra el resultado de un
+árbol y `Parsed.CommandResult` es el comando más interno. Una directiva que escribió la invocación
+tiene también su resultado, que no cuelga de ningún comando. `GetResult` encuentra el resultado de un
 símbolo declarado, sobre el resultado del parse o sobre cualquiera de sus nodos, y devuelve `nil`
 cuando no lo hay.
 

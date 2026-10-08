@@ -102,6 +102,7 @@ type
     function GetResult(const Option: IOption): IOptionResult; overload;
     function GetResult(const Argument: IArgument): IArgumentResult; overload;
     function GetResult(const Command: ICommand): ICommandResult; overload;
+    function GetResult(const Directive: IDirective): IDirectiveResult; overload;
     procedure AddToken(const Token: TToken);
   end;
 
@@ -228,6 +229,7 @@ type
     function GetResult(const Option: IOption): IOptionResult; overload;
     function GetResult(const Argument: IArgument): IArgumentResult; overload;
     function GetResult(const Command: ICommand): ICommandResult; overload;
+    function GetResult(const Directive: IDirective): IDirectiveResult; overload;
     function Argument: IArgument;
     function IsImplicit: Boolean;
     procedure OnlyTake(NumberOfTokens: Integer);
@@ -690,6 +692,20 @@ begin
     Supports(Found, ICommandResult, Result);
 end;
 
+function TSymbolResult.GetResult(const Directive: IDirective): IDirectiveResult;
+var
+  Owner: ISymbolResultTree;
+  Found: ISymbolResult;
+begin
+  Result := nil;
+  Owner := FTree;
+  if (Owner = nil) or (Directive = nil) then
+    Exit;
+  Found := Owner.Find(Directive.AsObject);
+  if Found <> nil then
+    Supports(Found, IDirectiveResult, Result);
+end;
+
 { TCommandResult }
 
 constructor TCommandResult.Create(const ATree: ISymbolResultTree; const AParent: ISymbolResult;
@@ -1103,6 +1119,11 @@ begin
   Result := FOption.GetResult(Command);
 end;
 
+function TOptionArgumentResult.GetResult(const Directive: IDirective): IDirectiveResult;
+begin
+  Result := FOption.GetResult(Directive);
+end;
+
 function TOptionArgumentResult.Argument: IArgument;
 begin
   Result := FOption.FValued.ValueArgument;
@@ -1282,8 +1303,7 @@ end;
 
 function TParseResult.GetResult(const Directive: IDirective): IDirectiveResult;
 begin
-  Result := nil;
-  Supports(ResultOf(Directive), IDirectiveResult, Result);
+  Result := FRootResult.GetResult(Directive);
 end;
 
 function TParseResult.Succeeded: Boolean;
