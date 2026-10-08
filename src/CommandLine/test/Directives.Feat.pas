@@ -34,6 +34,10 @@ type
     CopyCommand: ICommand;
     Diagram: IDiagramDirective;
     Trace: IDirective;
+    /// <summary>A directive named Diagram, which differs from diagram only in case.</summary>
+    UpperDiagram: IDirective;
+    /// <summary>The message of the exception the When caught, or <c>&lt;no exception&gt;</c>.</summary>
+    Report: string;
     Configuration: TParserConfiguration;
     Parsed: IParseResult;
     Output: TStringWriter;
@@ -498,6 +502,84 @@ Feature Directives @commandline @directives
       begin
         Expect(W.Written(W.Diagram)).ToEqual('[Diagram] values=');
         Expect(string.Join(',', W.Parsed.UnmatchedTokens)).ToEqual('');
+      end)
+
+  .Scenario('Two directives that differ only in case')
+    .Given('a root that declares the directives diagram and Diagram, and the parser configured not to tell cases apart',
+      procedure(W: TDirectivesWorld)
+      begin
+        W.BuildGrammar;
+        W.UpperDiagram := CommandLine.Directive('Diagram');
+        W.Root.Add(W.Diagram);
+        W.Root.Add(W.UpperDiagram);
+        W.Configuration.EnableCaseInsensitiveNames := True;
+      end)
+    .When('any invocation is parsed',
+      procedure(W: TDirectivesWorld)
+      begin
+        W.Report := '<no exception>';
+        try
+          W.Parsed := W.Root.Parse(['build', 'fichero.txt'], W.Configuration);
+        except
+          on E: ECommandLine do
+            W.Report := E.Message;
+        end;
+      end)
+    .&Then('the grammar is refused, naming the two',
+      procedure(W: TDirectivesWorld)
+      begin
+        Expect(W.Report).ToContain('"[diagram]"');
+        Expect(W.Report).ToContain('"[Diagram]"');
+      end)
+
+  .Scenario('Two directives that differ only in case, told apart')
+    .Given('a root that declares the directives diagram and Diagram, and the parser left to tell cases apart',
+      procedure(W: TDirectivesWorld)
+      begin
+        W.BuildGrammar;
+        W.UpperDiagram := CommandLine.Directive('Diagram');
+        W.Root.Add(W.Diagram);
+        W.Root.Add(W.UpperDiagram);
+      end)
+    .When('an invocation starting with [Diagram] is parsed',
+      procedure(W: TDirectivesWorld)
+      begin
+        W.Parsed := W.Root.Parse(['[Diagram]', 'build', 'fichero.txt']);
+      end)
+    .&Then('Diagram is written, and diagram is not',
+      procedure(W: TDirectivesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('');
+        Expect(W.Written(W.UpperDiagram)).ToEqual('[Diagram] values=');
+        Expect(W.Written(W.Diagram)).ToEqual('<not written>');
+      end)
+
+  .Scenario('A directive and a subcommand that differ only in case')
+    .Given('a root with the directive diagram and a subcommand Diagram, and the parser configured not to tell cases apart',
+      procedure(W: TDirectivesWorld)
+      begin
+        W.BuildGrammar;
+        W.Root.Add(W.Diagram);
+        W.Root.Add(CommandLine.Command('Diagram', 'Draw things'));
+        W.Configuration.EnableCaseInsensitiveNames := True;
+      end)
+    .When('an invocation passing [diagram] and then diagram is parsed',
+      procedure(W: TDirectivesWorld)
+      begin
+        W.Report := '<no exception>';
+        try
+          W.Parsed := W.Root.Parse(['[diagram]', 'diagram'], W.Configuration);
+        except
+          on E: ECommandLine do
+            W.Report := E.Message;
+        end;
+      end)
+    .&Then('the grammar is not refused: the brackets are the directive, and the bare name the subcommand',
+      procedure(W: TDirectivesWorld)
+      begin
+        Expect(W.Report).ToEqual('<no exception>');
+        Expect(W.Written(W.Diagram)).ToEqual('[diagram] values=');
+        Expect(W.Parsed.Command.Name).ToEqual('Diagram');
       end)
 
 .Rule('[diagram] writes how the invocation was understood instead of running it')

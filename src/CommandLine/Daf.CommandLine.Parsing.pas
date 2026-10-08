@@ -493,7 +493,9 @@ var
   Owners: TArray<TObject>;
   Option: IOption;
   Subcommand: ICommand;
-  I, J: Integer;
+  Root: IRootCommand;
+  Directive: IDirective;
+  First, Second: string;
 
   procedure Collect(const Symbol: ISymbol);
   var
@@ -508,6 +510,22 @@ var
     end;
   end;
 
+  // The first two names collected, of two different symbols, that differ only in case.
+  function FindClash: Boolean;
+  var
+    I, J: Integer;
+  begin
+    for I := 0 to High(Names) do
+      for J := I + 1 to High(Names) do
+        if (Owners[I] <> Owners[J]) and (Names[I] <> Names[J]) and SameNameIgnoringCase(Names[I], Names[J]) then
+        begin
+          First := Names[I];
+          Second := Names[J];
+          Exit(True);
+        end;
+    Result := False;
+  end;
+
 begin
   Names := nil;
   Owners := nil;
@@ -517,11 +535,21 @@ begin
     Collect(Option);
   for Subcommand in Command.Subcommands do
     Collect(Subcommand);
-  for I := 0 to High(Names) do
-    for J := I + 1 to High(Names) do
-      if (Owners[I] <> Owners[J]) and (Names[I] <> Names[J]) and SameNameIgnoringCase(Names[I], Names[J]) then
-        raise ECommandLine.CreateFmt('Command "%s" answers to "%s" and to "%s", which differ only in case, ' +
-          'and the parse was configured not to tell cases apart', [Command.FullPath, Names[I], Names[J]]);
+  if FindClash then
+    raise ECommandLine.CreateFmt('Command "%s" answers to "%s" and to "%s", which differ only in case, ' +
+      'and the parse was configured not to tell cases apart', [Command.FullPath, First, Second]);
+  // The directives of a root are compared among themselves: written between brackets, a directive never
+  // meets the name of an option or a command.
+  if Supports(Command, IRootCommand, Root) then
+  begin
+    Names := nil;
+    Owners := nil;
+    for Directive in Root.Directives do
+      Collect(Directive);
+    if FindClash then
+      raise ECommandLine.CreateFmt('Command "%s" answers to "[%s]" and to "[%s]", which differ only in case, ' +
+        'and the parse was configured not to tell cases apart', [Command.FullPath, First, Second]);
+  end;
   for Subcommand in Command.Subcommands do
     DemandNamesDistinctIgnoringCase(Subcommand, Inherited_ + RecursiveOptionsOf(Command));
 end;
