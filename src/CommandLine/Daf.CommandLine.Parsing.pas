@@ -152,7 +152,17 @@ type
     ///   token through the accepted values, the conversion and the validations. Runs once.
     /// </summary>
     procedure Validate;
+    /// <summary>
+    ///   Converts it now when nothing has yet: the default when it is implicit, else its tokens without the
+    ///   validations. A failure joins the tree as an error, and nothing is raised.
+    /// </summary>
+    procedure EnsureConverted;
     function ReadValues(out FromDefault, Whole: Boolean): TArray<TValue>;
+    /// <summary>
+    ///   Its values as the diagram writes them, each between <c>&lt;</c> and <c>&gt;</c>: the tokens as written
+    ///   when the conversion failed, and nothing for a symbol of one value that received none.
+    /// </summary>
+    function DiagramValues: string;
   end;
 
   TOptionResult = class(TValuedResult, IOptionResult)
@@ -223,6 +233,19 @@ type
     procedure OnlyTake(NumberOfTokens: Integer);
   end;
 
+  TDirectiveResult = class(TSymbolResult, IDirectiveResult)
+  private
+    FDirective: IDirective;
+    FToken: TToken;
+    FValues: TArray<string>;
+  public
+    constructor Create(const ATree: ISymbolResultTree; const ADirective: IDirective; const AToken: TToken);
+    procedure AddValue(const Value: string);
+    function Directive: IDirective;
+    function Token: TToken;
+    function Values: TArray<string>;
+  end;
+
   TParseResult = class(TInterfacedObject, IParseResult)
   private
     FRoot: ICommand;
@@ -249,6 +272,7 @@ type
     function GetResult(const Option: IOption): IOptionResult; overload;
     function GetResult(const Argument: IArgument): IArgumentResult; overload;
     function GetResult(const Command: ICommand): ICommandResult; overload;
+    function GetResult(const Directive: IDirective): IDirectiveResult; overload;
     function Succeeded: Boolean;
     function Errors: TArray<TParseError>;
     function ErrorText: string;
@@ -261,6 +285,7 @@ type
     function RawValuesOf(const Symbol: ISymbol): TArray<string>;
     function UnmatchedTokens: TArray<string>;
     function Action: ICommandLineAction;
+    function Diagram: string;
     function Configuration: TParserConfiguration;
     function InvocationConfiguration: TInvocationConfiguration;
     function Invoke: Integer; overload;
@@ -287,7 +312,7 @@ type
 
   {$SCOPEDENUMS ON}
   /// <summary>What reading made of a token, finer than its token type.</summary>
-  TItemKind = (Positional, CommandName, OptionName, OptionValue, DoubleDash, UnknownOption, BadGroup);
+  TItemKind = (Positional, CommandName, OptionName, OptionValue, DoubleDash, UnknownOption, BadGroup, Directive);
   {$SCOPEDENUMS OFF}
 
   TItem = record
@@ -314,8 +339,11 @@ type
     FActionOwner: IOption;
     FPreActions: TArray<ICommandLineAction>;
     FCapturing: Boolean;
+    /// <summary>A directive with a terminating action was written: no option's action joins the invocation.</summary>
+    FDirectiveWins: Boolean;
     procedure Unmatched(const Token, Message: string);
     function IsCapturingRemainingTokens(Kind: TItemKind): Boolean;
+    procedure ParseDirective;
     procedure ParseSubcommand;
     procedure ParseOption;
     procedure ParseArgument;
@@ -387,6 +415,16 @@ var
 begin
   for Candidate in Current.Subcommands do
     if NameMatches(Candidate, Token, IgnoreCase) then
+      Exit(Candidate);
+  Result := nil;
+end;
+
+function FindDirective(const Root: IRootCommand; const Name: string; IgnoreCase: Boolean): IDirective;
+var
+  Candidate: IDirective;
+begin
+  for Candidate in Root.Directives do
+    if NameMatches(Candidate, Name, IgnoreCase) then
       Exit(Candidate);
   Result := nil;
 end;
@@ -802,22 +840,54 @@ begin
   ConvertTokens;
 end;
 
+procedure TValuedResult.EnsureConverted;
+begin
+  if FState <> TConversionState.Pending then
+    Exit;
+  if IsImplicitResult then
+    Validate
+  else
+    // Read without the validations, the declared set of accepted values among them, which are the
+    // validation's to run: the useValidators: false of .NET.
+    ConvertTokens;
+end;
+
 function TValuedResult.ReadValues(out FromDefault, Whole: Boolean): TArray<TValue>;
 begin
-  if FState = TConversionState.Pending then
-  begin
-    if IsImplicitResult then
-      Validate
-    else
-      // Read without the validations, the declared set of accepted values among them, which are the
-      // validation's to run: the useValidators: false of .NET.
-      ConvertTokens;
-  end;
+  EnsureConverted;
   if FState = TConversionState.Failed then
     raise ECommandLine.Create(FFailure);
   FromDefault := FFromDefault;
   Whole := FWhole or FFromDefault;
   Result := FValues;
+end;
+
+function TValuedResult.DiagramValues: string;
+var
+  Texts: TArray<string>;
+  Token: TToken;
+  Value: TValue;
+  I: Integer;
+begin
+  EnsureConverted;
+  Texts := nil;
+  if FState = TConversionState.Failed then
+  begin
+    for Token in Tokens do
+      Texts := Texts + [Token.Value];
+    Exit('<' + string.Join('> <', Texts) + '>');
+  end;
+  // One value that is the whole value -- a default, or what a conversion of its own answered -- shows each
+  // element when it is a collection.
+  if (FWhole or FFromDefault) and FValues[0].IsArray then
+    for I := 0 to FValues[0].GetArrayLength - 1 do
+      Texts := Texts + [TCommandLineValue.ToText(FValues[0].GetArrayElement(I))]
+  else
+    for Value in FValues do
+      Texts := Texts + [TCommandLineValue.ToText(Value)];
+  if (Length(Texts) = 0) and (FValued.Arity.MaximumNumberOfValues <= 1) then
+    Exit('');
+  Result := '<' + string.Join('> <', Texts) + '>';
 end;
 
 { TOptionResult }
@@ -1049,6 +1119,101 @@ begin
     [FOption.Option.Name]);
 end;
 
+{ TDirectiveResult }
+
+constructor TDirectiveResult.Create(const ATree: ISymbolResultTree; const ADirective: IDirective;
+  const AToken: TToken);
+begin
+  inherited Create(ATree, nil);
+  FDirective := ADirective;
+  FToken := AToken;
+end;
+
+procedure TDirectiveResult.AddValue(const Value: string);
+begin
+  FValues := FValues + [Value];
+end;
+
+function TDirectiveResult.Directive: IDirective;
+begin
+  Result := FDirective;
+end;
+
+function TDirectiveResult.Token: TToken;
+begin
+  Result := FToken;
+end;
+
+function TDirectiveResult.Values: TArray<string>;
+begin
+  Result := FValues;
+end;
+
+{ Diagram }
+
+// A boolean value, or a symbol that takes none, is not shown: naming it already says it.
+function ShowsValue(const Valued: IValued): Boolean;
+begin
+  Result := (Valued.ValueType <> TypeInfo(Boolean)) and (Valued.Arity.MaximumNumberOfValues > 0);
+end;
+
+// One result and what hangs from it, as .NET's ParseDiagramAction writes them.
+procedure WriteDiagram(const Builder: TStringBuilder; const Parsed: IParseResult; const Node: ISymbolResult);
+var
+  Error: TParseError;
+  AsCommand: ICommandResult;
+  AsOption: IOptionResult;
+  AsArgument: IArgumentResult;
+  Child: ISymbolResult;
+  WithName: Boolean;
+begin
+  for Error in Parsed.Errors do
+    if (Error.SymbolResult <> nil) and ((Error.SymbolResult as TObject) = (Node as TObject)) then
+    begin
+      Builder.Append('!');
+      Break;
+    end;
+
+  if Supports(Node, IArgumentResult, AsArgument) then
+  begin
+    // Its name only when its command has more than one argument: otherwise the place says which.
+    WithName := Supports(Node.Parent, ICommandResult, AsCommand) and (Length(AsCommand.Command.Arguments) > 1);
+    if WithName then
+      Builder.Append('[ ').Append(AsArgument.Argument.Name).Append(' ');
+    if AsArgument.Argument.Arity.MaximumNumberOfValues > 0 then
+      Builder.Append(((Node as TObject) as TValuedResult).DiagramValues);
+    if WithName then
+      Builder.Append(' ]');
+    Exit;
+  end;
+
+  if Supports(Node, IOptionResult, AsOption) then
+  begin
+    if AsOption.IsImplicit then
+      Builder.Append('*');
+    Builder.Append('[ ');
+    if AsOption.IdentifierToken.HasValue then
+      Builder.Append(AsOption.IdentifierToken.Value.Value)
+    else
+      Builder.Append(AsOption.Option.Name);
+    // The value is the one of the argument it is carried in, which .NET writes as a child of the option.
+    if ShowsValue(AsOption.Option) then
+      Builder.Append(' ').Append(((Node as TObject) as TValuedResult).DiagramValues);
+    Builder.Append(' ]');
+    Exit;
+  end;
+
+  AsCommand := Node as ICommandResult;
+  Builder.Append('[ ').Append(AsCommand.IdentifierToken.Value);
+  for Child in AsCommand.Children do
+    if not Supports(Child, IArgumentResult, AsArgument) or ShowsValue(AsArgument.Argument) then
+    begin
+      Builder.Append(' ');
+      WriteDiagram(Builder, Parsed, Child);
+    end;
+  Builder.Append(' ]');
+end;
+
 { TParseResult }
 
 constructor TParseResult.Create(const ARoot: ICommand; const AConfiguration: TParserConfiguration;
@@ -1113,6 +1278,12 @@ end;
 function TParseResult.GetResult(const Command: ICommand): ICommandResult;
 begin
   Result := FRootResult.GetResult(Command);
+end;
+
+function TParseResult.GetResult(const Directive: IDirective): IDirectiveResult;
+begin
+  Result := nil;
+  Supports(ResultOf(Directive), IDirectiveResult, Result);
 end;
 
 function TParseResult.Succeeded: Boolean;
@@ -1226,6 +1397,28 @@ begin
     Result := FCommandResult.Command.Action;
 end;
 
+function TParseResult.Diagram: string;
+var
+  Builder: TStringBuilder;
+  Token: string;
+  Unmatched: TArray<string>;
+begin
+  Builder := TStringBuilder.Create;
+  try
+    WriteDiagram(Builder, Self, FRootResult);
+    Unmatched := FTree.Unmatched;
+    if Length(Unmatched) > 0 then
+    begin
+      Builder.Append('   ???-->');
+      for Token in Unmatched do
+        Builder.Append(' ').Append(Token);
+    end;
+    Result := Builder.ToString;
+  finally
+    Builder.Free;
+  end;
+end;
+
 function TParseResult.Configuration: TParserConfiguration;
 begin
   Result := FConfiguration;
@@ -1293,11 +1486,13 @@ var
   Scope: TScopeKnowledge;
   Known: IKnownTokens;
   Index: Integer;
-  Token, OptionName, InlineValue, Next: string;
-  HasInline, Ended, Took, IgnoreCase: Boolean;
+  Token, OptionName, InlineValue, Next, DirectiveName, DirectiveValue: string;
+  HasInline, Ended, Took, IgnoreCase, HasDirectiveValue: Boolean;
   Step: TTokenRewrite;
   Option: IOption;
   Subcommand: ICommand;
+  AsRoot: IRootCommand;
+  RootNameTokens: TArray<string>;
   TakenOwners: TArray<TObject>;
   TakenCounts: TArray<Integer>;
 
@@ -1354,6 +1549,28 @@ begin
   begin
     RootTokenValue := Args[0];
     Tokens := Copy(Args, 1, MaxInt);
+  end;
+  // The directives, only when the root declares any, and only among the tokens written ahead of every other
+  // but the root's own name. They are read before the response files are, so none comes out of one.
+  if Supports(Root, IRootCommand, AsRoot) and (Length(AsRoot.Directives) > 0) then
+  begin
+    RootNameTokens := nil;
+    Index := 0;
+    while Index < Length(Tokens) do
+    begin
+      Token := Tokens[Index];
+      if TTokenNormalizer.LooksLikeDirective(Token) then
+      begin
+        TTokenNormalizer.SplitDirective(Token, DirectiveName, DirectiveValue, HasDirectiveValue);
+        Emit(Token, TTokenType.Directive, FindDirective(AsRoot, DirectiveName, IgnoreCase), TItemKind.Directive);
+      end
+      else if NameMatches(Root, Token, IgnoreCase) then
+        RootNameTokens := RootNameTokens + [Token]
+      else
+        Break;
+      Inc(Index);
+    end;
+    Tokens := RootNameTokens + Copy(Tokens, Index, MaxInt);
   end;
   // Response files are resolved before anything else is decided about any token,
   // because all they do is contribute tokens and nothing else.
@@ -1515,6 +1732,48 @@ begin
   FInnermost.AddError(Message);
 end;
 
+procedure TParseOperation.ParseDirective;
+var
+  Item: TItem;
+  Directive: IDirective;
+  Found: ISymbolResult;
+  Node: TDirectiveResult;
+  Name, Value: string;
+  HasValue: Boolean;
+  Action: ICommandLineAction;
+begin
+  Item := FItems[FIndex];
+  Inc(FIndex);
+  if not Supports(Item.Token.Symbol, IDirective, Directive) then
+  begin
+    Unmatched(Item.Token.Value, Format(SUnexpectedArgument, [Item.Token.Value, FInnermost.Command.FullPath]));
+    Exit;
+  end;
+  Found := FTree.Find(Directive.AsObject);
+  if Found = nil then
+  begin
+    Found := TDirectiveResult.Create(FTree, Directive, Item.Token);
+    FTree.Add(Directive.AsObject, Found);
+  end;
+  Node := (Found as TObject) as TDirectiveResult;
+  Node.AddToken(Item.Token);
+  TTokenNormalizer.SplitDirective(Item.Token.Value, Name, Value, HasValue);
+  if HasValue then
+    Node.AddValue(Value);
+  // Every time it is written, as in .NET: a terminating action wins the invocation, and one that is not runs
+  // before the winner.
+  Action := Directive.Action;
+  if Action <> nil then
+    if Action.IsTerminating then
+    begin
+      FAction := Action;
+      FActionOwner := nil;
+      FDirectiveWins := True;
+    end
+    else
+      FPreActions := FPreActions + [Action];
+end;
+
 procedure TParseOperation.ParseSubcommand;
 var
   Command: ICommand;
@@ -1541,9 +1800,10 @@ begin
   if Found = nil then
   begin
     // The first time it is named is when its action joins the invocation: a terminating one wins it,
-    // the last one named if there are several, and one that is not runs before the winner.
+    // the last one named if there are several, and one that is not runs before the winner. Unless a
+    // directive already won: then no option's action joins, the help and the version included.
     Action := Option.Action;
-    if Action <> nil then
+    if (Action <> nil) and not FDirectiveWins then
       if Action.IsTerminating then
       begin
         FAction := Action;
@@ -1799,6 +2059,9 @@ var
 begin
   Outcome := TParseResult.Create(FRoot, FConfiguration, FTree, FRootResult);
   Result := Outcome;
+  // The directives first, all of them: the action one of them wins has to be known before any option is read.
+  while (FIndex < Length(FItems)) and (FItems[FIndex].Kind = TItemKind.Directive) do
+    ParseDirective;
   while FIndex < Length(FItems) do
   begin
     // An argument that keeps the tail takes every token as one more value; `--` too, once it has started.

@@ -112,6 +112,7 @@
         <DCCReference Include="Validators.Feat.pas"/>
         <DCCReference Include="CommandLineText.Feat.pas"/>
         <DCCReference Include="NameCase.Feat.pas"/>
+        <DCCReference Include="Directives.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>

@@ -43,16 +43,18 @@ en ejecución.
 | `TArgumentArity` | Cuántos valores admite un símbolo, mínimo y máximo |
 | `IParseResult` | Lo que produjo una invocación: el árbol de resultados, la hoja alcanzada, los errores, la ayuda, la versión. `Invoke` la ejecuta |
 | `ICommandResult`, `IOptionResult`, `IArgumentResult` | El resultado de un símbolo que la invocación alcanzó: sus tokens, sus errores, su padre |
+| `IDirective`, `IDiagramDirective` | Una instrucción para el parser, escrita `[nombre]` antes del resto de la invocación. `[diagram]` escribe cómo se entendió la invocación |
+| `IDirectiveResult` | Lo que la invocación escribió de una directiva: su token y los valores tras su `:` |
 | `TParseError` | Un error del parse, y el resultado del símbolo al que pertenece |
 | `TToken` | Un token de la invocación, tal como lo leyó el parse |
-| `ICommandLineAction` | Lo que ejecuta una invocación: la acción de un comando o de una opción. `TSynchronousCommandLineAction` es la base de una escrita como clase |
+| `ICommandLineAction` | Lo que ejecuta una invocación: la acción de un comando, de una opción o de una directiva. `TSynchronousCommandLineAction` es la base de una escrita como clase |
 | `TCommandAction` | La acción de un comando escrita como función: recibe el resultado del parse y devuelve el código de salida |
 | `IHelpOption`, `IVersionOption` | La ayuda y la versión: dos opciones que tiene toda raíz, cada una con una acción que las escribe |
 | `IParseErrorAction` | Lo que ejecuta `Invoke` ante un error de parse: lo que se quiso escribir, los errores y la ayuda |
 | `TInvocationConfiguration` | Dónde escribe `Invoke`, y si un manejador por defecto captura lo que la acción deja escapar |
 | `TCommandLineExit` | Los códigos que devuelve `Invoke` cuando no es la acción quien decide |
 | `TParserConfiguration` | Cómo lee el parse una invocación: el agrupado, los ficheros de respuesta, y si los nombres distinguen mayúsculas |
-| `CommandLine` | El punto de entrada: `Option<T>`, `Argument<T>`, `Command`, `Root`, `HelpOption`, `VersionOption`, y `SplitCommandLine` |
+| `CommandLine` | El punto de entrada: `Option<T>`, `Argument<T>`, `Command`, `Root`, `HelpOption`, `VersionOption`, `Directive`, `DiagramDirective`, y `SplitCommandLine` |
 
 ---
 
@@ -550,7 +552,7 @@ valores por defecto, que son los de .NET; `Parse` la recibe como segundo argumen
 | Campo | Por defecto | Qué hace |
 |-------|-------------|----------|
 | `EnablePosixBundling` | `True` | Las opciones de un carácter se agrupan, y una que toma valor lo toma pegado: `-fdx`, `-obin`. Apagado, los dos siguen siendo los tokens que eran; `-o:bin` sigue delimitando |
-| `EnableCaseInsensitiveNames` | `False` | Encendido, los nombres y alias de opciones y comandos se comparan sin distinguir mayúsculas —ver la divergencia 2— |
+| `EnableCaseInsensitiveNames` | `False` | Encendido, los nombres y alias de opciones, comandos y directivas se comparan sin distinguir mayúsculas —ver la divergencia 2— |
 | `ResponseFileTokenReplacer` | el lector de ficheros de respuesta | Lo que sustituye a un token que empieza por `@`; `nil` no lee ninguno |
 
 ---
@@ -618,12 +620,13 @@ resuelve la invocación y devuelve el código con el que termina el proceso:
 
 | El resultado del parse | Qué hace `Invoke` | Qué devuelve |
 |---|---|---|
+| escribió una directiva con acción terminal —`[diagram]`— | la ejecuta, pida lo que pida además la invocación —ver *Directivas*— | el código de la acción |
 | nombró una opción con acción terminal —`--help` y `--version` entre ellas— | la ejecuta: las de serie escriben en la salida la ayuda del comando alcanzado, o la versión | el código de la acción: `TCommandLineExit.Ok` (0) la de serie |
 | trae errores | escribe en la salida lo que probablemente se quiso escribir y la ayuda del comando alcanzado, y en el error los errores —ver *Lo que escribe un error de parse*— | `InvocationError` (2) |
 | alcanzó un comando con acción | la ejecuta | el código que devuelve la acción |
 | alcanzó un comando sin ella | nada | `Ok` (0) |
 
-En las dos primeras filas no corre la acción de ningún comando.
+En las tres primeras filas no corre la acción de ningún comando.
 
 - Una acción sin código propio es un `procedure(const Parsed: IParseResult)`, y la
   invocación devuelve `Ok` por ella.
@@ -665,8 +668,8 @@ end;
 var TraceOpt := CommandLine.Option<Boolean>('--trace').SetAction(TTraceAction.Create);
 ```
 
-`IParseResult.Action` es la acción que `Invoke` ejecuta la última: la terminal de una opción nombrada,
-la de un error de parse, o si no la acción del comando alcanzado.
+`IParseResult.Action` es la acción que `Invoke` ejecuta la última: la terminal de una directiva, si no
+la terminal de una opción nombrada, la de un error de parse, o si no la acción del comando alcanzado.
 
 ### Lo que escribe un error de parse
 
@@ -747,11 +750,80 @@ instalada forma con ella un ciclo de referencias, y ninguna de las dos se libera
 
 ---
 
+## Directivas
+
+Una directiva es una instrucción para el parser, no para la aplicación: un token entre corchetes,
+`[nombre]` o `[nombre:valor]`, escrito antes que el resto de la invocación. Una raíz no declara
+ninguna de serie. `[diagram]` es la que trae el módulo:
+
+```pascal
+var LevelOpt := CommandLine.Option<Integer>('--level', ['-l']).DefaultValue(3);
+var ForceOpt := CommandLine.Option<Boolean>('--force', ['-f']);
+var Build := CommandLine.Command('build', 'Build a file');
+Build.Add([CommandLine.Argument<string>('file'), LevelOpt, ForceOpt]);
+
+var Root := CommandLine.Root('mitool', 'A tool');
+Root.Add(Build);
+Root.Add(CommandLine.DiagramDirective);
+```
+
+`[diagram]` no ejecuta la invocación: escribe cómo se entendió.
+
+```
+$ mitool [diagram] build fichero.txt -fl5
+[ mitool [ build <fichero.txt> [ -f ] [ -l <5> ] ] ]
+
+$ mitool [diagram] build fichero.txt
+[ mitool [ build <fichero.txt> *[ --level <3> ] ] ]
+
+$ mitool [diagram] build fichero.txt --level abc
+[ mitool [ build <fichero.txt> ![ --level <abc> ] ] ]
+```
+
+- Cada comando va entre `[ ` y ` ]`, con lo que el parse puso dentro: sus opciones, con el nombre con
+  que se escribieron, sus argumentos, y el subcomando alcanzado. Un valor va entre `<` y `>`, y uno
+  booleano no se muestra. Un argumento enseña también su nombre cuando su comando declara más de uno.
+- `*` marca una opción que tomó su valor por defecto, `!` lo que lleva un error, y `???-->` cierra el
+  diagrama con los tokens que no casaron con nada.
+- Enseña la invocación tal como la reescribió el parse: un grupo partido en sus opciones, un valor
+  separado de su `:`, un fichero de respuesta sustituido por los tokens que lleva.
+- Gana a la ayuda, a la versión y al comando: `mitool [diagram] --help` escribe el diagrama de una
+  invocación que pide ayuda, y una opción nombrada con acción no la ejecuta.
+- `Invoke` devuelve `Ok` (0) cuando el parse no tiene errores e `InvocationError` (2) cuando los tiene.
+  `ParseErrorReturnValue` cambia el segundo.
+- `IParseResult.Diagram` da el mismo texto sin invocar nada.
+
+Una directiva solo se lee antes de cualquier otro token que no sea el nombre de la propia raíz: en
+`mitool [diagram] build` lo es, y en `mitool build [diagram]` y `mitool -- [diagram]` es un valor. Con
+al menos una declarada, un token entre corchetes en ese sitio que no nombra ninguna no casa con nada
+—`Unexpected argument "[1,2]" for mitool`—. Sin ninguna declarada, es un valor como cualquier otro. Su
+nombre distingue mayúsculas como el de una opción.
+
+Una directiva propia se declara con su nombre, y se lee del resultado del parse:
+
+```pascal
+var Trace := CommandLine.Directive('trace');
+Root.Add(Trace);
+
+var Parsed := Root.Parse;
+var Written := Parsed.GetResult(Trace);    // nil cuando la invocación no la escribió
+if Written <> nil then
+  for var Value in Written.Values do       // 'all' para [trace:all]
+    Writeln(Value);
+```
+
+`SetAction` le da una acción, terminal o no, como a una opción.
+
+`[env:CLAVE=valor]` no está: fija una variable de entorno, y este módulo no llama al sistema
+operativo. Tampoco `[suggest]`, que es del autocompletado.
+
+---
+
 ## Una gramática congelada
 
-`Freeze` cierra una gramática. A partir de ahí, añadir un comando, una opción o un argumento, o
-cambiar uno ya declarado —un alias, la aridad, los valores admitidos, el valor por defecto, una
-validación, la versión— lanza `ECommandLine` nombrando el símbolo. Alcanza a todo lo ya declarado
+`Freeze` cierra una gramática. A partir de ahí, añadir un comando, una opción, un argumento o una
+directiva, o cambiar uno ya declarado —un alias, la aridad, los valores admitidos, el valor por
+defecto, una validación, la versión— lanza `ECommandLine` nombrando el símbolo. Alcanza a todo lo ya declarado
 bajo la raíz. Las acciones siguen abiertas, también las de ayuda y versión, porque se leen al invocar
 el resultado:
 
@@ -792,7 +864,8 @@ y `--since 25/08/2026` se rechaza, nombrando la opción y el texto; y una hora e
 
 **4 · Un error de parse devuelve 2, no 1.** .NET devuelve 1 tanto a un error de parse como a una
 excepción que nadie capturó. Aquí `Invoke` devuelve `TCommandLineExit.InvocationError` (2) a una
-invocación que no encaja con la gramática, y el 1 queda para una acción que falló.
+invocación que no encaja con la gramática, y el 1 queda para una acción que falló. `[diagram]`
+devuelve el mismo 2 para el diagrama de una invocación así, donde el de .NET devuelve 1.
 
 **5 · La invocación es síncrona.** No hay acción asíncrona, ni cancelación, ni manejo de la
 terminación del proceso —ni Ctrl+C, ni tiempo de gracia antes de terminar—.
@@ -824,11 +897,16 @@ se nombra a sí mismo falla nombrándolo.
 un token más: allí `-fdz` da `-f` y `-d`, y `z` sigue como un valor. Aquí falla nombrando `-z`, y no
 se toma ninguna de las demás letras.
 
+**13 · Unos corchetes son un valor cuando la raíz no declara ninguna directiva.** .NET descarta un
+primer token entre corchetes cuando no hay directiva que lo lea. Aquí sigue siendo un valor:
+`mitool [1,2]` pasa `[1,2]` al argumento. Con una directiva declarada los dos coinciden, y un token así
+no casa con nada.
+
 ---
 
 ## Lo que todavía no está
 
-Las directivas `[diagram]` y `[suggest]` y el autocompletado no se portan.
+Las directivas `[env]` y `[suggest]` y el autocompletado no se portan.
 
 ---
 

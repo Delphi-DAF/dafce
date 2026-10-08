@@ -34,6 +34,13 @@ function NewVersionAction: ICommandLineAction;
 function NewParseErrorAction: IParseErrorAction;
 
 /// <summary>
+///   The action of serie of a diagram directive: it writes the diagram of the parse, and answers <c>Ok</c>, or the
+///   <c>ParseErrorReturnValue</c> of <c>Directive</c> when the parse has errors.
+/// </summary>
+/// <remarks>It holds the directive weakly, because the directive holds it.</remarks>
+function NewDiagramAction(const Directive: IDiagramDirective): ICommandLineAction;
+
+/// <summary>
 ///   Runs <c>PreActions</c> and then the action of <c>Parsed</c>, and answers the code of the invocation.
 /// </summary>
 /// <remarks>
@@ -91,6 +98,14 @@ type
     procedure SetShowHelp(Value: Boolean);
     function GetShowTypoCorrections: Boolean;
     procedure SetShowTypoCorrections(Value: Boolean);
+    function Invoke(const Parsed: IParseResult): Integer; override;
+  end;
+
+  TDiagramAction = class(TSynchronousCommandLineAction)
+  private
+    [weak] FDirective: IDiagramDirective;
+  public
+    constructor Create(const Directive: IDiagramDirective);
     function Invoke(const Parsed: IParseResult): Integer; override;
   end;
 
@@ -374,6 +389,28 @@ begin
   Result := TCommandLineExit.InvocationError;
 end;
 
+{ TDiagramAction }
+
+constructor TDiagramAction.Create(const Directive: IDiagramDirective);
+begin
+  inherited Create;
+  FDirective := Directive;
+end;
+
+function TDiagramAction.Invoke(const Parsed: IParseResult): Integer;
+var
+  Directive: IDiagramDirective;
+begin
+  Parsed.InvocationConfiguration.WriteOutput(Parsed.Diagram);
+  if Length(Parsed.Errors) = 0 then
+    Exit(TCommandLineExit.Ok);
+  Directive := FDirective;
+  if Directive <> nil then
+    Result := Directive.ParseErrorReturnValue
+  else
+    Result := TCommandLineExit.InvocationError;
+end;
+
 function FunctionAction(const Action: TCommandAction; ClearsParseErrors: Boolean): ICommandLineAction;
 begin
   if not Assigned(Action) then
@@ -394,6 +431,11 @@ end;
 function NewParseErrorAction: IParseErrorAction;
 begin
   Result := TParseErrorAction.Create;
+end;
+
+function NewDiagramAction(const Directive: IDiagramDirective): ICommandLineAction;
+begin
+  Result := TDiagramAction.Create(Directive);
 end;
 
 function RunActions(const Parsed: IParseResult; const PreActions: TArray<ICommandLineAction>): Integer;

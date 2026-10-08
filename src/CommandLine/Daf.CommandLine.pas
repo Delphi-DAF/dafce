@@ -91,6 +91,7 @@ type
   ICommandResult = interface;
   IOptionResult = interface;
   IArgumentResult = interface;
+  IDirectiveResult = interface;
 
   /// <summary>
   ///   What a command does when an invocation reaches it. It receives the parse result, reads the
@@ -233,7 +234,7 @@ type
     /// </summary>
     EnablePosixBundling: Boolean;
     /// <summary>
-    ///   On, the names and aliases of options and commands are compared without regard to case, and a grammar in
+    ///   On, the names and aliases of options, commands and directives are compared without regard to case, and a grammar in
     ///   which one command answers to two names that differ only in case makes the parse raise <c>ECommandLine</c>.
     ///   Off by default.
     /// </summary>
@@ -529,6 +530,56 @@ type
     function Parse(const CommandLine: string; const Configuration: TParserConfiguration): IParseResult; overload;
   end;
 
+  /// <summary>An instruction to the parser and not to the application, written <c>[name]</c> or <c>[name:value]</c>.</summary>
+  /// <remarks>
+  ///   Only a root declares them, and an invocation writes them before any other token but the root's own name:
+  ///   from the first token that is neither, and behind <c>--</c>, nothing is a directive. Square brackets are
+  ///   what no option is written with, so a directive is never taken for the grammar of the application.
+  ///
+  ///   With at least one declared, a token of that shape in that place that names none of them matches nothing.
+  ///   With none declared, it is a value like any other -- a declared divergence from .NET, which drops it in
+  ///   silence.
+  ///
+  ///   Its name tells cases apart as the names of options and commands do: see <c>TParserConfiguration</c>.
+  /// </remarks>
+  IDirective = interface(ISymbol)
+    ['{7C4B1A20-0013-4F31-9C10-4B0E2D5A0013}']
+    /// <summary>What writing it runs; <c>nil</c> when it runs nothing.</summary>
+    /// <remarks>
+    ///   A terminating action runs instead of the action of the command reached, and instead of the help and the
+    ///   version too: a directive speaks about the parse, not about the program. One that is not terminating runs
+    ///   before the action that wins.
+    /// </remarks>
+    function Action: ICommandLineAction;
+    /// <summary>Declares what writing it runs. Declaring it again replaces it.</summary>
+    /// <remarks>Like the action of an option, it stays open after <c>Freeze</c>.</remarks>
+    function SetAction(const Action: ICommandLineAction): IDirective;
+  end;
+
+  /// <summary>The <c>[diagram]</c> directive: it writes how the invocation was understood instead of running it.</summary>
+  /// <remarks>
+  ///   What it writes is <c>IParseResult.Diagram</c>, to the output of the invocation, and the invocation answers
+  ///   <c>Ok</c> when the parse has no errors and <c>ParseErrorReturnValue</c> when it has.
+  ///
+  ///   Its action is terminating, so it wins over the help and the version. Declaring <c>nil</c> as its action
+  ///   brings that one back, because a <c>[diagram]</c> that ran the command would run the work it was written
+  ///   to inspect.
+  /// </remarks>
+  IDiagramDirective = interface(IDirective)
+    ['{7C4B1A20-0014-4F31-9C10-4B0E2D5A0014}']
+    function GetParseErrorReturnValue: Integer;
+    procedure SetParseErrorReturnValue(Value: Integer);
+    /// <summary>
+    ///   What the invocation answers when the parse has errors. <c>TCommandLineExit.InvocationError</c> by default.
+    /// </summary>
+    /// <remarks>
+    ///   A declared divergence from .NET, which answers 1: here 2 is what any parse error answers, and a diagram of
+    ///   an invocation that does not fit the grammar says the same. Like the action, it stays open after
+    ///   <c>Freeze</c>.
+    /// </remarks>
+    property ParseErrorReturnValue: Integer read GetParseErrorReturnValue write SetParseErrorReturnValue;
+  end;
+
   IRootCommand = interface(ICommand)
     ['{7C4B1A20-0006-4F31-9C10-4B0E2D5A0006}']
     /// <summary>Parses the process command line, <c>ParamStr(1)</c> onwards.</summary>
@@ -550,9 +601,14 @@ type
     /// <summary>The name the help gives the tool; empty when none was declared, and then it is the root's name.</summary>
     function HelpName: string; overload;
     function HelpName(const Value: string): IRootCommand; overload;
+    /// <summary>The directives it declares, in the order they were added. A root declares none of serie.</summary>
+    function Directives: TArray<IDirective>;
+    /// <summary>Declares a directive.</summary>
+    /// <remarks>Only a root takes one: <c>Add</c> with an array raises <c>ECommandLine</c> on any other command.</remarks>
+    function Add(const Directive: IDirective): IRootCommand; overload;
     /// <summary>
     ///   Closes the grammar: from here on, changing it raises <c>ECommandLine</c>. It reaches every
-    ///   command, option and argument already declared below the root.
+    ///   command, option, argument and directive already declared below the root.
     /// </summary>
     /// <remarks>
     ///   What it closes is what the parse judges by -- symbols, aliases, arities, accepted values,
@@ -670,6 +726,20 @@ type
     function IsImplicit: Boolean;
   end;
 
+  /// <summary>What the parse made of a directive the invocation wrote.</summary>
+  /// <remarks>
+  ///   It hangs from no command, because a directive belongs to the parser and not to the grammar: its
+  ///   <c>Parent</c> is <c>nil</c>, and no <c>Children</c> lists it.
+  /// </remarks>
+  IDirectiveResult = interface(ISymbolResult)
+    ['{7C4B1A20-0015-4F31-9C10-4B0E2D5A0015}']
+    function Directive: IDirective;
+    /// <summary>The token that wrote it first. <c>Tokens</c> holds every one, when it was written more than once.</summary>
+    function Token: TToken;
+    /// <summary>What follows the first <c>:</c> of each <c>[name:value]</c> written, in order. Empty for <c>[name]</c>.</summary>
+    function Values: TArray<string>;
+  end;
+
   IParseResult = interface
     ['{7C4B1A20-0007-4F31-9C10-4B0E2D5A0007}']
     /// <summary>The leaf command the invocation reached.</summary>
@@ -683,6 +753,8 @@ type
     function GetResult(const Option: IOption): IOptionResult; overload;
     function GetResult(const Argument: IArgument): IArgumentResult; overload;
     function GetResult(const Command: ICommand): ICommandResult; overload;
+    /// <summary>The result of a directive the invocation wrote; <c>nil</c> when it wrote none by that name.</summary>
+    function GetResult(const Directive: IDirective): IDirectiveResult; overload;
     function Succeeded: Boolean;
     /// <summary>The errors of the parse, in the order they were found.</summary>
     /// <remarks>
@@ -724,10 +796,23 @@ type
     /// </remarks>
     function UnmatchedTokens: TArray<string>;
     /// <summary>
-    ///   The action invoking runs: the terminating action of an option the invocation named, the
-    ///   one written for parse errors, or else the action of the command reached.
+    ///   The action invoking runs: the terminating action of a directive the invocation wrote, else
+    ///   the terminating action of an option it named, the one written for parse errors, or else the
+    ///   action of the command reached.
     /// </summary>
     function Action: ICommandLineAction;
+    /// <summary>How the invocation was understood, as the <c>[diagram]</c> directive writes it.</summary>
+    /// <remarks>
+    ///   Each command between <c>[ </c> and <c> ]</c>, with its options, its arguments and the subcommand reached
+    ///   inside it, in the order the parse met them. An option shows the name it was written with and its value;
+    ///   an argument, its value, and its name too when its command declares more than one. A value reads
+    ///   <c>&lt;value&gt;</c>, one per value; a boolean one is not shown. <c>*</c> goes before an option that took
+    ///   its default, <c>!</c> before whatever carries an error, and <c>???--&gt;</c> before the tokens that
+    ///   matched nothing, at the end.
+    ///
+    ///   It is what .NET's parse result answers to <c>ToString</c>, which an interface cannot declare.
+    /// </remarks>
+    function Diagram: string;
     /// <summary>The configuration the invocation was read with.</summary>
     function Configuration: TParserConfiguration;
     /// <summary>
@@ -1191,6 +1276,12 @@ type
     class function VersionOption: IVersionOption; overload; static;
     class function VersionOption(const Name: string; const Aliases: array of string): IVersionOption; overload; static;
     /// <summary>
+    ///   A directive written <c>[Name]</c>, with no action: what the invocation wrote is read with <c>GetResult</c>.
+    /// </summary>
+    class function Directive(const Name: string): IDirective; static;
+    /// <summary>The <c>[diagram]</c> directive.</summary>
+    class function DiagramDirective: IDiagramDirective; static;
+    /// <summary>
     ///   Splits a line into tokens as the command line does: white space separates, and double quotes group and are
     ///   not part of the token. What follows a double quote that is never closed is dropped, as in .NET.
     /// </summary>
@@ -1316,6 +1407,24 @@ type
     constructor Create(const AName: string; const AAliases: array of string);
   end;
 
+  TDirective = class(TSymbol, IDirective)
+  protected
+    FAction: ICommandLineAction;
+  public
+    function Action: ICommandLineAction;
+    function SetAction(const Action: ICommandLineAction): IDirective; virtual;
+  end;
+
+  TDiagramDirective = class(TDirective, IDiagramDirective)
+  private
+    FParseErrorReturnValue: Integer;
+  public
+    constructor Create;
+    function SetAction(const Action: ICommandLineAction): IDirective; override;
+    function GetParseErrorReturnValue: Integer;
+    procedure SetParseErrorReturnValue(Value: Integer);
+  end;
+
   TRootCommand = class(TCommand, IRootCommand)
   private
     FVersionInfo: TVersionInfo;
@@ -1323,8 +1432,12 @@ type
     // Also among its options, which hold them; these are for its two shortcuts to their actions.
     FHelpOption: THelpOption;
     FVersionOption: TVersionOption;
+    FDirectives: TArray<IDirective>;
   public
     constructor Create(const AName: string);
+    function Directives: TArray<IDirective>;
+    function Add(const Directive: IDirective): IRootCommand; overload;
+    procedure Freeze; override;
     function GetHelpAction: TCommandAction;
     procedure SetHelpAction(const Value: TCommandAction);
     function GetVersionAction: TCommandAction;
@@ -2743,6 +2856,7 @@ var
   AsOption: IOption;
   AsArgument: IArgument;
   AsCommand: ICommand;
+  AsDirective: IDirective;
 begin
   if Supports(Symbol, IOption, AsOption) then
     Add(AsOption)
@@ -2750,6 +2864,13 @@ begin
     Add(AsArgument)
   else if Supports(Symbol, ICommand, AsCommand) then
     Add(AsCommand)
+  else if Supports(Symbol, IDirective, AsDirective) then
+  begin
+    if not (Self is TRootCommand) then
+      raise ECommandLine.CreateFmt('Directive "%s" can only be added to a root, and "%s" is not one',
+        [AsDirective.Name, FullPath]);
+    TRootCommand(Self).Add(AsDirective);
+  end
   else
     raise ECommandLine.Create('Only options, arguments and subcommands can be added to a command');
 end;
@@ -2974,6 +3095,46 @@ begin
   Validators.Add(ValidateVersionAlone);
 end;
 
+{ TDirective }
+
+function TDirective.Action: ICommandLineAction;
+begin
+  Result := FAction;
+end;
+
+function TDirective.SetAction(const Action: ICommandLineAction): IDirective;
+begin
+  FAction := Action;
+  Result := Self;
+end;
+
+{ TDiagramDirective }
+
+constructor TDiagramDirective.Create;
+begin
+  inherited Create('diagram');
+  FParseErrorReturnValue := TCommandLineExit.InvocationError;
+  FAction := NewDiagramAction(Self);
+end;
+
+function TDiagramDirective.SetAction(const Action: ICommandLineAction): IDirective;
+begin
+  if Action = nil then
+    Result := inherited SetAction(NewDiagramAction(Self))
+  else
+    Result := inherited SetAction(Action);
+end;
+
+function TDiagramDirective.GetParseErrorReturnValue: Integer;
+begin
+  Result := FParseErrorReturnValue;
+end;
+
+procedure TDiagramDirective.SetParseErrorReturnValue(Value: Integer);
+begin
+  FParseErrorReturnValue := Value;
+end;
+
 { TRootCommand }
 
 constructor TRootCommand.Create(const AName: string);
@@ -3019,6 +3180,26 @@ begin
   CheckOpen;
   FHelpName := Value;
   Result := Self;
+end;
+
+function TRootCommand.Directives: TArray<IDirective>;
+begin
+  Result := FDirectives;
+end;
+
+function TRootCommand.Add(const Directive: IDirective): IRootCommand;
+begin
+  CheckOpen;
+  FDirectives := FDirectives + [Directive];
+  (Directive.AsObject as TSymbol).AddParent(Self);
+  Result := Self;
+end;
+
+procedure TRootCommand.Freeze;
+begin
+  inherited;
+  for var Directive in FDirectives do
+    (Directive.AsObject as TSymbol).Freeze;
 end;
 
 // Outside the classes, so the closure captures the action it is handed and nothing else: a function
@@ -3145,6 +3326,16 @@ end;
 class function CommandLine.VersionOption(const Name: string; const Aliases: array of string): IVersionOption;
 begin
   Result := TVersionOption.Create(Name, Aliases);
+end;
+
+class function CommandLine.Directive(const Name: string): IDirective;
+begin
+  Result := TDirective.Create(Name);
+end;
+
+class function CommandLine.DiagramDirective: IDiagramDirective;
+begin
+  Result := TDiagramDirective.Create;
 end;
 
 class function CommandLine.SplitCommandLine(const Text: string): TArray<string>;

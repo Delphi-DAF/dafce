@@ -43,16 +43,18 @@ run time.
 | `TArgumentArity` | How many values a symbol admits, minimum and maximum |
 | `IParseResult` | What an invocation produced: the tree of results, the leaf reached, the errors, the help, the version. `Invoke` runs it |
 | `ICommandResult`, `IOptionResult`, `IArgumentResult` | The result of one symbol the invocation reached: its tokens, its errors, its parent |
+| `IDirective`, `IDiagramDirective` | An instruction to the parser, written `[name]` before the rest of the invocation. `[diagram]` writes how the invocation was understood |
+| `IDirectiveResult` | What the invocation wrote of a directive: its token and the values behind its `:` |
 | `TParseError` | One error of the parse, and the result of the symbol it belongs to |
 | `TToken` | One token of the invocation, as the parse read it |
-| `ICommandLineAction` | What an invocation runs: the action of a command or of an option. `TSynchronousCommandLineAction` is the base of one written as a class |
+| `ICommandLineAction` | What an invocation runs: the action of a command, of an option or of a directive. `TSynchronousCommandLineAction` is the base of one written as a class |
 | `TCommandAction` | The action of a command written as a function: receives the parse result, answers the exit code |
 | `IHelpOption`, `IVersionOption` | The help and the version: two options every root has, each with an action that writes them |
 | `IParseErrorAction` | What `Invoke` runs for a parse error: what was meant, the errors and the help |
 | `TInvocationConfiguration` | Where `Invoke` writes, and whether a default handler catches what the action lets escape |
 | `TCommandLineExit` | The codes `Invoke` answers when the action is not the one deciding |
 | `TParserConfiguration` | How the parse reads an invocation: grouping, response files, and whether names tell cases apart |
-| `CommandLine` | The entry point: `Option<T>`, `Argument<T>`, `Command`, `Root`, `HelpOption`, `VersionOption`, and `SplitCommandLine` |
+| `CommandLine` | The entry point: `Option<T>`, `Argument<T>`, `Command`, `Root`, `HelpOption`, `VersionOption`, `Directive`, `DiagramDirective`, and `SplitCommandLine` |
 
 ---
 
@@ -546,7 +548,7 @@ gives back the one a result was read with.
 | Field | Default | What it does |
 |-------|---------|--------------|
 | `EnablePosixBundling` | `True` | One-character options group, and one that takes a value takes it glued: `-fdx`, `-obin`. Off, both stay the tokens they were; `-o:bin` still delimits |
-| `EnableCaseInsensitiveNames` | `False` | On, the names and aliases of options and commands are compared without regard to case — see divergence 2 |
+| `EnableCaseInsensitiveNames` | `False` | On, the names and aliases of options, commands and directives are compared without regard to case — see divergence 2 |
 | `ResponseFileTokenReplacer` | the reader of response files | What replaces a token starting with `@`; `nil` reads none |
 
 ---
@@ -615,12 +617,13 @@ settles the invocation and answers the code the process ends with:
 
 | The parse result | What `Invoke` does | What it answers |
 |---|---|---|
+| wrote a directive with a terminating action — `[diagram]` — | runs it, whatever else the invocation asks for — see *Directives* | the code of the action |
 | named an option with a terminating action — `--help` and `--version` among them | runs it: the default ones write the help of the command reached, or the version, to the output | the code of the action: `TCommandLineExit.Ok` (0) by default |
 | carries errors | writes what was probably meant and the help of the command reached to the output, and the errors to the error — see *What a parse error writes* | `InvocationError` (2) |
 | reached a command with an action | runs it | the code the action answers |
 | reached a command without one | nothing | `Ok` (0) |
 
-No command's action runs in the first two rows.
+No command's action runs in the first three rows.
 
 - An action with no code of its own is a `procedure(const Parsed: IParseResult)`, and the
   invocation answers `Ok` for it.
@@ -662,8 +665,9 @@ end;
 var TraceOpt := CommandLine.Option<Boolean>('--trace').SetAction(TTraceAction.Create);
 ```
 
-`IParseResult.Action` is the action `Invoke` runs last: the terminating one of a named option, the one
-for a parse error, or else the action of the command reached.
+`IParseResult.Action` is the action `Invoke` runs last: the terminating one of a directive, else the
+terminating one of a named option, the one for a parse error, or else the action of the command
+reached.
 
 ### What a parse error writes
 
@@ -744,11 +748,81 @@ forms a reference cycle with it, and neither is ever released.
 
 ---
 
+## Directives
+
+A directive is an instruction to the parser, not to the application: a token in square brackets,
+`[name]` or `[name:value]`, written before the rest of the invocation. A root declares none of serie.
+`[diagram]` is the one the module brings:
+
+```pascal
+var LevelOpt := CommandLine.Option<Integer>('--level', ['-l']).DefaultValue(3);
+var ForceOpt := CommandLine.Option<Boolean>('--force', ['-f']);
+var Build := CommandLine.Command('build', 'Build a file');
+Build.Add([CommandLine.Argument<string>('file'), LevelOpt, ForceOpt]);
+
+var Root := CommandLine.Root('mytool', 'A tool');
+Root.Add(Build);
+Root.Add(CommandLine.DiagramDirective);
+```
+
+`[diagram]` does not run the invocation: it writes how it was understood.
+
+```
+$ mytool [diagram] build file.txt -fl5
+[ mytool [ build <file.txt> [ -f ] [ -l <5> ] ] ]
+
+$ mytool [diagram] build file.txt
+[ mytool [ build <file.txt> *[ --level <3> ] ] ]
+
+$ mytool [diagram] build file.txt --level abc
+[ mytool [ build <file.txt> ![ --level <abc> ] ] ]
+```
+
+- Each command goes between `[ ` and ` ]`, with what the parse put in it: its options, under the name
+  they were written with, its arguments, and the subcommand reached. A value goes between `<` and `>`,
+  and a boolean one is not shown. An argument shows its name too when its command declares more than
+  one.
+- `*` marks an option that took its default, `!` whatever carries an error, and `???-->` closes the
+  diagram with the tokens that matched nothing.
+- It shows the invocation as the parse rewrote it: a group split into its options, a value apart from
+  its `:`, a response file replaced by the tokens it holds.
+- It wins over the help, the version and the command: `mytool [diagram] --help` writes the diagram of
+  an invocation that asks for help, and an option named with an action does not run it.
+- `Invoke` answers `Ok` (0) when the parse has no errors and `InvocationError` (2) when it has.
+  `ParseErrorReturnValue` changes the second.
+- `IParseResult.Diagram` gives the same text without invoking anything.
+
+A directive is read only before every other token but the root's own name: in `mytool [diagram] build`
+it is one, and in `mytool build [diagram]` and `mytool -- [diagram]` it is a value. With at least one
+declared, a token in square brackets in that place that names none matches nothing —
+`Unexpected argument "[1,2]" for mytool`. With none declared, it is a value like any other. Its name
+tells cases apart as the name of an option does.
+
+A directive of your own is declared with its name, and read from the parse result:
+
+```pascal
+var Trace := CommandLine.Directive('trace');
+Root.Add(Trace);
+
+var Parsed := Root.Parse;
+var Written := Parsed.GetResult(Trace);    // nil when the invocation did not write it
+if Written <> nil then
+  for var Value in Written.Values do       // 'all' for [trace:all]
+    Writeln(Value);
+```
+
+`SetAction` gives it an action, terminating or not, as an option's.
+
+`[env:KEY=value]` is not here: it sets an environment variable, and this module does not call the
+operating system. Neither is `[suggest]`, which belongs to shell completion.
+
+---
+
 ## A frozen grammar
 
-`Freeze` closes a grammar. From then on, adding a command, an option or an argument, or changing one
-already declared — an alias, the arity, the accepted values, the default, a validation, the version —
-raises `ECommandLine` naming the symbol. It reaches everything already declared below the root. The
+`Freeze` closes a grammar. From then on, adding a command, an option, an argument or a directive, or
+changing one already declared — an alias, the arity, the accepted values, the default, a validation,
+the version — raises `ECommandLine` naming the symbol. It reaches everything already declared below the root. The
 actions stay open, the help and the version ones included, because they are read when the result is
 invoked:
 
@@ -789,7 +863,8 @@ somebody typing by hand has to write the date the way the machine reads it.
 
 **4 · A parse error answers 2, not 1.** .NET answers 1 both to a parse error and to an exception
 nobody caught. Here `Invoke` answers `TCommandLineExit.InvocationError` (2) to an invocation that
-does not fit the grammar, and 1 stays for an action that failed.
+does not fit the grammar, and 1 stays for an action that failed. `[diagram]` answers the same 2 for
+the diagram of such an invocation, where .NET's answers 1.
 
 **5 · The invocation is synchronous.** There is no asynchronous action, no cancellation and no
 handling of the process termination — no Ctrl+C, no grace period before terminating.
@@ -821,11 +896,15 @@ naming it.
 as one more token: there `-fdz` passes `-f` and `-d`, and `z` goes on as a value. Here it fails naming
 `-z`, and none of the other letters is taken.
 
+**13 · Square brackets are a value when the root declares no directive.** .NET drops a first token in
+square brackets when there is no directive to read it. Here it stays a value: `mytool [1,2]` passes
+`[1,2]` to the argument. With a directive declared the two agree, and such a token matches nothing.
+
 ---
 
 ## What is not here (yet)
 
-The `[diagram]` and `[suggest]` directives and shell completion are not ported.
+The `[env]` and `[suggest]` directives and shell completion are not ported.
 
 ---
 

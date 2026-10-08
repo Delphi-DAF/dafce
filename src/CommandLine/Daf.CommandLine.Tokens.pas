@@ -31,6 +31,10 @@ const
   CanonicalDelimiter = '=';
   /// <summary>The other delimiter an invocation may be written with.</summary>
   ColonDelimiter = ':';
+  /// <summary>What a directive opens with.</summary>
+  DirectiveOpen = '[';
+  /// <summary>What a directive closes with.</summary>
+  DirectiveClose = ']';
 
 type
   /// <summary>Replaces a token with other tokens before the parse reads any of them, as .NET's <c>TryReplaceToken</c>.</summary>
@@ -82,6 +86,13 @@ type
     /// <summary>Splits <c>--name=value</c>, the only inline form the parser reads.</summary>
     class procedure SplitToken(const Token: string; out OptionName, InlineValue: string;
       out HasInline: Boolean); static;
+    /// <summary>
+    ///   True for a token with the shape of a directive: <c>[name]</c> or <c>[name:value]</c>, with a name that is
+    ///   not empty. Whether it IS one depends on where it was written and on what the root declares.
+    /// </summary>
+    class function LooksLikeDirective(const Token: string): Boolean; static;
+    /// <summary>Splits a token with the shape of a directive into its name and what follows its first <c>:</c>.</summary>
+    class procedure SplitDirective(const Token: string; out Name, Value: string; out HasValue: Boolean); static;
     /// <summary>Turns one token into the canonical form, or leaves it exactly as written.</summary>
     /// <remarks>
     ///   With <c>EnablePosixBundling</c> off, a single-dash token is neither a group nor an alias with a value
@@ -196,6 +207,32 @@ begin
   begin
     OptionName := Token;
     InlineValue := '';
+  end;
+end;
+
+class function TTokenNormalizer.LooksLikeDirective(const Token: string): Boolean;
+begin
+  Result := (Length(Token) > 2) and (Token[1] = DirectiveOpen) and (Token[Length(Token)] = DirectiveClose) and
+    (Token[2] <> DirectiveClose) and (Token[2] <> ColonDelimiter);
+end;
+
+class procedure TTokenNormalizer.SplitDirective(const Token: string; out Name, Value: string; out HasValue: Boolean);
+var
+  Inner: string;
+  Colon: Integer;
+begin
+  Inner := Token.Substring(1, Token.Length - 2);
+  Colon := Inner.IndexOf(ColonDelimiter);
+  HasValue := Colon > 0;
+  if HasValue then
+  begin
+    Name := Inner.Substring(0, Colon);
+    Value := Inner.Substring(Colon + 1);
+  end
+  else
+  begin
+    Name := Inner;
+    Value := '';
   end;
 end;
 

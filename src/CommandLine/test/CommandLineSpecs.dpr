@@ -19,7 +19,8 @@ uses
   Actions.Feat in 'Actions.Feat.pas',
   Validators.Feat in 'Validators.Feat.pas',
   CommandLineText.Feat in 'CommandLineText.Feat.pas',
-  NameCase.Feat in 'NameCase.Feat.pas';
+  NameCase.Feat in 'NameCase.Feat.pas',
+  Directives.Feat in 'Directives.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;
