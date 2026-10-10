@@ -13,6 +13,7 @@ uses
   System.SysUtils,
   System.Variants,
   Daf.SQLCute,
+  Daf.SQLCute.Core,                 // registers the IQuery factory TQuery.New uses
   Daf.SQLCute.Compiler;
 
 // ---------------------------------------------------------------------------
