@@ -327,12 +327,12 @@ begin
   if not IsBlank(Value) then
     Result.First := Result.First + ' ' + Value;
   if Option.IsRequired then
-    Result.First := Result.First + ' ' + SHelpOptionsRequiredLabel;
+    Result.First := Result.First + ' ' + TextOf(TCommandLineText.HelpOptionsRequiredLabel);
   Shown := DefaultShown(Option);
   if IsBlank(Shown) then
     Shown := ''
   else
-    Shown := '[' + SHelpArgumentDefaultValueLabel + ': ' + Shown + ']';
+    Shown := '[' + TextOf(TCommandLineText.HelpArgumentDefaultValueLabel) + ': ' + Shown + ']';
   Result.Second := Trim(Option.Description + ' ' + Shown);
 end;
 
@@ -345,7 +345,7 @@ begin
   if IsBlank(Shown) then
     Shown := ''
   else
-    Shown := '[' + SHelpArgumentDefaultValueLabel + ': ' + Shown + ']';
+    Shown := '[' + TextOf(TCommandLineText.HelpArgumentDefaultValueLabel) + ': ' + Shown + ']';
   Result.Second := Trim(Argument.Description + ' ' + Shown);
 end;
 
@@ -373,7 +373,7 @@ begin
     if IsBlank(Shown) then
       Continue;
     if Length(Defaulted) = 1 then
-      Named := SHelpArgumentDefaultValueLabel
+      Named := TextOf(TCommandLineText.HelpArgumentDefaultValueLabel)
     else
       Named := Argument.Name;
     if Listed <> '' then
@@ -475,14 +475,14 @@ begin
     if not Subcommand.IsHidden then
       ShowsCommand := True;
   if ShowsCommand then
-    Parts := Parts + [SHelpUsageCommand];
+    Parts := Parts + [TextOf(TCommandLineText.HelpUsageCommand)];
   for Option in Command.Options do
     if not Option.IsHidden then
       ShowsOptions := True;
   if ShowsOptions then
-    Parts := Parts + [SHelpUsageOptions];
+    Parts := Parts + [TextOf(TCommandLineText.HelpUsageOptions)];
   if not Command.TreatsUnmatchedTokensAsErrors then
-    Parts := Parts + [SHelpUsageAdditionalArguments];
+    Parts := Parts + [TextOf(TCommandLineText.HelpUsageAdditionalArguments)];
   Result := '';
   for Part in Parts do
     if not IsBlank(Part) then
@@ -589,16 +589,17 @@ begin
     // Each section is followed by a blank line, the last one too. The description and the usage are
     // always written, even a description with nothing under its heading; the others only when they have
     // something to list.
-    WriteHeading(Lines, SHelpDescriptionTitle, Command.Description, MaxWidth);
+    WriteHeading(Lines, TextOf(TCommandLineText.HelpDescriptionTitle), Command.Description, MaxWidth);
     Lines.Add('');
-    WriteHeading(Lines, SHelpUsageTitle, UsageOf(Chain), MaxWidth);
+    WriteHeading(Lines, TextOf(TCommandLineText.HelpUsageTitle), UsageOf(Chain), MaxWidth);
     Lines.Add('');
-    WriteSection(SHelpArgumentsTitle, ArgumentRows(Chain));
-    WriteSection(SHelpOptionsTitle, OptionRows(Chain));
-    WriteSection(SHelpCommandsTitle, SubcommandRows(Command));
+    WriteSection(TextOf(TCommandLineText.HelpArgumentsTitle), ArgumentRows(Chain));
+    WriteSection(TextOf(TCommandLineText.HelpOptionsTitle), OptionRows(Chain));
+    WriteSection(TextOf(TCommandLineText.HelpCommandsTitle), SubcommandRows(Command));
     if not Command.TreatsUnmatchedTokensAsErrors then
     begin
-      WriteHeading(Lines, SHelpAdditionalArgumentsTitle, SHelpAdditionalArgumentsDescription, MaxWidth);
+      WriteHeading(Lines, TextOf(TCommandLineText.HelpAdditionalArgumentsTitle),
+        TextOf(TCommandLineText.HelpAdditionalArgumentsDescription), MaxWidth);
       Lines.Add('');
     end;
     Result := string.Join(sLineBreak, Lines.ToStringArray);

@@ -20,7 +20,8 @@ uses
   Validators.Feat in 'Validators.Feat.pas',
   CommandLineText.Feat in 'CommandLineText.Feat.pas',
   NameCase.Feat in 'NameCase.Feat.pas',
-  Directives.Feat in 'Directives.Feat.pas';
+  Directives.Feat in 'Directives.Feat.pas',
+  Texts.Feat in 'Texts.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

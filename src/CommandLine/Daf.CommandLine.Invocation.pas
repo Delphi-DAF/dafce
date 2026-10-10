@@ -380,7 +380,7 @@ begin
     begin
       if First then
       begin
-        Parsed.InvocationConfiguration.WriteOutput(Format(STokenNotMatched, [Token]));
+        Parsed.InvocationConfiguration.WriteOutput(FormatText(TCommandLineText.SuggestionsTokenNotMatched, [Token]));
         First := False;
       end;
       Parsed.InvocationConfiguration.WriteOutput(Suggestion);
@@ -528,7 +528,7 @@ begin
     begin
       // The class and the message, and the stack when a provider of stack traces gives one: the
       // nearest Delphi has to the text .NET writes, which always carries it.
-      Text := SUnhandledException + E.ClassName + ': ' + E.Message;
+      Text := TextOf(TCommandLineText.ExceptionHandlerHeader) + E.ClassName + ': ' + E.Message;
       if E.StackTrace <> '' then
         Text := Text + sLineBreak + TrimRight(E.StackTrace);
       WriteError(Configuration, Text);

@@ -27,11 +27,17 @@ uses
   System.Generics.Defaults,
   Daf.CommandLine.Tokens,
   Daf.CommandLine.Values,
+  Daf.CommandLine.Resources,
   Daf.Nullable,
   Daf.Application.Version;
 
 type
   ECommandLine = class(Exception);
+
+  /// <summary>The key of each text the command line writes, with the name .NET gives it.</summary>
+  TCommandLineText = Daf.CommandLine.Resources.TCommandLineText;
+  /// <summary>The texts an application writes instead of the English ones. See <c>CommandLine.Texts</c>.</summary>
+  TCommandLineTexts = Daf.CommandLine.Resources.TCommandLineTexts;
 
   /// <summary>The path of a file, as .NET's <c>FileInfo</c>: a string the engine knows to be one.</summary>
   /// <remarks>
@@ -298,8 +304,6 @@ type
     function AllowsMany: Boolean;
     /// <summary>True when at least one value has to be there.</summary>
     function DemandsValue: Boolean;
-    /// <summary>Says the arity in words, for an error message that has to name it.</summary>
-    function Describe: string;
     class operator Equal(const A, B: TArgumentArity): Boolean;
     class operator NotEqual(const A, B: TArgumentArity): Boolean;
   end;
@@ -1100,6 +1104,8 @@ type
       out FromDefault, Whole: Boolean): Boolean;
     /// <summary>True for the types whose default is null in .NET: a string, a class, an interface.</summary>
     function DefaultIsNull: Boolean;
+    /// <summary>The error of a value that does not convert. See <c>Convert</c>.</summary>
+    function ConversionError(const Raw, CommandName: string): string;
     /// <summary>
     ///   A new argument to carry the value of this symbol, for an option. Here and not in the generic class,
     ///   which may not name a type of the implementation section (E2506).
@@ -1114,7 +1120,11 @@ type
     ///   accepted values is not: it is a validation, and the validations run before, on the whole result --
     ///   see <c>ValueValidators</c>.
     /// </remarks>
-    function Convert(const Raw: string; out Value: TValue; out Error: string): Boolean;
+    /// <remarks>
+    ///   <c>CommandName</c> is the command the value was given to: a refused value of an argument names it, and one
+    ///   of an option names the option. Empty, the value was given to none, and the refusal names only the type.
+    /// </remarks>
+    function Convert(const Raw, CommandName: string; out Value: TValue; out Error: string): Boolean;
     /// <summary>True when the declared set of accepted values holds <c>Raw</c>, by its comparer.</summary>
     function IsAccepted(const Raw: string): Boolean;
     /// <summary>
@@ -1286,6 +1296,9 @@ type
   ///   <c>ICommand</c> and a root would stop being an <c>IRootCommand</c>.
   /// </remarks>
   CommandLine = record
+  private
+    class function GetTexts: TCommandLineTexts; static;
+    class procedure SetTexts(const Value: TCommandLineTexts); static;
   public
     class function Option<T>(const Name: string): IOption<T>; overload; static;
     class function Option<T>(const Name: string; const Aliases: array of string): IOption<T>; overload; static;
@@ -1323,6 +1336,23 @@ type
     class function ExecutablePath: string; static;
     /// <summary>The file name of the running executable, without its extension.</summary>
     class function ExecutableName: string; static;
+    /// <summary>
+    ///   The texts the application writes instead of the English ones: the parse errors and what the help writes. A
+    ///   key it leaves empty is written in English.
+    /// </summary>
+    /// <remarks>
+    ///   <para>
+    ///     Assigning checks every text against the arguments its key receives, and raises <c>ECommandLine</c> naming
+    ///     the first one that asks for an argument more, so a template that cannot be written fails here rather than
+    ///     while reporting an error.
+    ///   </para>
+    ///   <para>
+    ///     It is a setting of the process, assigned at start-up before declaring the grammar: the help and version
+    ///     options take their description when they are created. It is not synchronized between threads, and an
+    ///     error already reported keeps the text it was written with.
+    ///   </para>
+    /// </remarks>
+    class property Texts: TCommandLineTexts read GetTexts write SetTexts;
   end;
 
 const
@@ -1342,10 +1372,10 @@ implementation
 
 uses
   System.IOUtils,
+  System.Generics.Collections,
   Daf.CommandLine.Help,
   Daf.CommandLine.Parsing,
-  Daf.CommandLine.Invocation,
-  Daf.CommandLine.Resources;
+  Daf.CommandLine.Invocation;
 
 type
   /// <summary>
@@ -1584,19 +1614,6 @@ begin
   Result := FMin >= 1;
 end;
 
-function TArgumentArity.Describe: string;
-begin
-  if (FMin = 0) and (FMax = 0) then
-    Exit(SArityNone);
-  if (FMin = 0) and (FMax = 1) then
-    Exit(SArityAtMostOne);
-  if (FMin = 1) and (FMax = 1) then
-    Exit(SArityExactlyOne);
-  if FMin = 0 then
-    Exit(SArityAny);
-  Result := SArityAtLeastOne;
-end;
-
 class operator TArgumentArity.Equal(const A, B: TArgumentArity): Boolean;
 begin
   Result := (A.FMin = B.FMin) and (A.FMax = B.FMax);
@@ -1807,18 +1824,28 @@ begin
       Valued := ValuedOf(Found.Argument);
       for Token in Found.Tokens do
       begin
-        if not Valued.Convert(Token.Value, Value, Error) then
+        if not Valued.Convert(Token.Value, '', Value, Error) then
           Continue;
         Error := '';
         if not Check(Value, Error) then
         begin
           if Error = '' then
-            Error := Format(SValueRefused, [Token.Value, Valued.Name]);
+            Error := FormatText(TCommandLineText.InvalidValue, [Token.Value, Valued.Name]);
           Found.AddError(Error);
           Exit;
         end;
       end;
     end;
+end;
+
+// Values as an error lists them: each on a line of its own, between Before and After.
+function ValuesOnLines(const Values: TArray<string>; const Before, After: string): string;
+var
+  Value: string;
+begin
+  Result := '';
+  for Value in Values do
+    Result := Result + sLineBreak + Before + Value + After;
 end;
 
 // The declared set of accepted values, checked as .NET checks it: a validation of the result that compares
@@ -1837,9 +1864,8 @@ begin
       for Token in Found.Tokens do
         if not Valued.IsAccepted(Token.Value) then
         begin
-          // Refusing without saying what was expected forces the caller to read the
-          // tool's source in order to use the tool.
-          Found.AddError(Format(SValueNotAccepted, [Token.Value, Valued.Name, string.Join(', ', Valued.FAccepted)]));
+          Found.AddError(FormatText(TCommandLineText.UnrecognizedArgument,
+            [Token.Value, ValuesOnLines(Valued.FAccepted, #9'''', '''')]));
           Exit;
         end;
     end;
@@ -1851,7 +1877,7 @@ begin
   if Ch < ' ' then
     Result := Format('#%d', [Ord(Ch)])
   else
-    Result := '"' + Ch + '"';
+    Result := Ch;
 end;
 
 constructor TValuedSymbol.Create(const AName: string; ATypeInfo: PTypeInfo; const AParser: TUntypedParser);
@@ -1892,7 +1918,7 @@ function TValuedSymbol.TryAccept(const Raw: string; out Error: string): Boolean;
 var
   Parsed: TValue;
 begin
-  Result := Convert(Raw, Parsed, Error);
+  Result := Convert(Raw, '', Parsed, Error);
 end;
 
 function TValuedSymbol.IsAccepted(const Raw: string): Boolean;
@@ -1932,9 +1958,7 @@ begin
     tkPointer, tkProcedure]) or (TCommandLineValue.NullableValueTypeOf(FTypeInfo) <> nil);
 end;
 
-function TValuedSymbol.Convert(const Raw: string; out Value: TValue; out Error: string): Boolean;
-var
-  Allowed: TArray<string>;
+function TValuedSymbol.Convert(const Raw, CommandName: string; out Value: TValue; out Error: string): Boolean;
 begin
   Error := '';
   Value := TValue.Empty;
@@ -1944,22 +1968,39 @@ begin
     if not Result and (Error = '') then
       // A conversion of its own that refuses without saying why leaves the caller with
       // nothing to act on, so the engine supplies the message.
-      Error := Format(SValueNotConverted, [Raw, TypeName, Name]);
+      Error := ConversionError(Raw, CommandName);
     Exit;
   end;
   Result := TCommandLineValue.TryParse(FElementTypeInfo, Raw, Value);
-  if Result then
-    Exit;
-  // An enumerated type names its own values, so its refusal lists them. Matched without
-  // regard to case, as .NET matches them: only a declared set compares as written.
+  if not Result then
+    Error := ConversionError(Raw, CommandName);
+end;
+
+function TValuedSymbol.ConversionError(const Raw, CommandName: string): string;
+var
+  Allowed: TArray<string>;
+  IsOption: Boolean;
+begin
+  // An enumerated type names its own values, so its refusal lists them, sorted.
   Allowed := TCommandLineValue.AcceptedValuesOf(FTypeInfo);
-  if Length(Allowed) > 0 then
-    Error := Format(SValueNotAccepted, [Raw, Name, string.Join(', ', Allowed)])
+  TArray.Sort<string>(Allowed, TComparer<string>.Construct(
+    function(const A, B: string): Integer
+    begin
+      Result := CompareText(A, B);
+    end));
+  IsOption := GetInterfaceEntry(IOption) <> nil;
+  if IsOption and (Length(Allowed) > 0) then
+    Result := FormatText(TCommandLineText.ArgumentConversionCannotParseForOption_Completions,
+      [Raw, Name, TypeName, ValuesOnLines(Allowed, '', '')])
+  else if IsOption then
+    Result := FormatText(TCommandLineText.ArgumentConversionCannotParseForOption, [Raw, Name, TypeName])
+  else if CommandName = '' then
+    Result := FormatText(TCommandLineText.ArgumentConversionCannotParse, [Raw, TypeName])
+  else if Length(Allowed) > 0 then
+    Result := FormatText(TCommandLineText.ArgumentConversionCannotParseForCommand_Completions,
+      [Raw, CommandName, TypeName, ValuesOnLines(Allowed, '', '')])
   else
-    // Names both the symbol and the text received: "80xyz" is not a valid integer
-    // for --port. Refusing without saying what was refused is barely better than
-    // inventing a value out of it.
-    Error := Format(SValueNotConverted, [Raw, TypeName, Name]);
+    Result := FormatText(TCommandLineText.ArgumentConversionCannotParseForCommand, [Raw, CommandName, TypeName]);
 end;
 
 function TValuedSymbol.IsFlag: Boolean;
@@ -2076,38 +2117,36 @@ end;
 
 procedure TValuedSymbol.DemandExistingPath;
 var
-  Who, Message: string;
+  Key: TCommandLineText;
   DirectoryOnly: Boolean;
 begin
   CheckOpen;
   DemandPathType('AcceptExistingOnly');
-  // The NAME is captured, not Self. A closure kept on the object that captures the
-  // object is a cycle, and a cycle between counted references is a leak the compiler
-  // never mentions.
-  Who := Name;
   // A directory path has to be a directory. A file path takes a directory too, as .NET's FileInfo does:
   // its check is the one of a path that may be either.
   DirectoryOnly := FElementTypeInfo = System.TypeInfo(TDirectoryPath);
   if DirectoryOnly then
-    Message := SDirectoryMissing
+    Key := TCommandLineText.DirectoryDoesNotExist
   else if FElementTypeInfo = System.TypeInfo(TFilePath) then
-    Message := SFileMissing
+    Key := TCommandLineText.FileDoesNotExist
   else
-    Message := SPathMissing;
+    Key := TCommandLineText.FileOrDirectoryDoesNotExist;
+  // Nothing of Self is captured: a closure kept on the object that captures the object is a cycle, and a cycle
+  // between counted references is a leak the compiler never mentions.
   AddValidator(
     function(const Value: TValue; out Error: string): Boolean
     begin
       Error := '';
       Result := DirectoryExists(Value.AsString) or (not DirectoryOnly and FileExists(Value.AsString));
       if not Result then
-        Error := Format(Message, [Value.AsString, Who]);
+        Error := FormatText(Key, [Value.AsString]);
     end);
 end;
 
 // A validation that refuses a path or a name carrying a character of Illegal, naming the first one, and
-// an empty one, which is neither. Outside the classes, so the closure captures what it is handed.
-function LegalCharactersValidator(const Who: string; const Illegal: TArray<Char>; const Refused, RefusedChar: string)
-  : TUntypedValidator;
+// an empty one, which is neither -- a declared divergence: .NET takes it. Outside the classes, so the closure
+// captures what it is handed.
+function LegalCharactersValidator(const Illegal: TArray<Char>; Empty, Refused: TCommandLineText): TUntypedValidator;
 begin
   Result :=
     function(const Value: TValue; out Error: string): Boolean
@@ -2119,13 +2158,13 @@ begin
       Raw := Value.AsString;
       if Raw = '' then
       begin
-        Error := Format(Refused, [Raw, Who]);
+        Error := FormatText(Empty, []);
         Exit(False);
       end;
       At := Raw.IndexOfAny(Illegal);
       Result := At < 0;
       if not Result then
-        Error := Format(RefusedChar, [Raw, Who, CharText(Raw.Chars[At])]);
+        Error := FormatText(Refused, [CharText(Raw.Chars[At])]);
     end;
 end;
 
@@ -2135,15 +2174,16 @@ begin
   DemandPathType('AcceptLegalFileNamesOnly');
   // What the platform refuses in a file NAME, which includes the separators: this validates a name and
   // not a path, the same split .NET makes.
-  AddValidator(LegalCharactersValidator(Name, TPath.GetInvalidFileNameChars, SFileNameIllegal,
-    SFileNameIllegalChar));
+  AddValidator(LegalCharactersValidator(TPath.GetInvalidFileNameChars, TCommandLineText.EmptyFileName,
+    TCommandLineText.InvalidCharactersInFileName));
 end;
 
 procedure TValuedSymbol.DemandLegalFilePath;
 begin
   CheckOpen;
   DemandPathType('AcceptLegalFilePathsOnly');
-  AddValidator(LegalCharactersValidator(Name, TPath.GetInvalidPathChars, SFilePathIllegal, SFilePathIllegalChar));
+  AddValidator(LegalCharactersValidator(TPath.GetInvalidPathChars, TCommandLineText.EmptyPath,
+    TCommandLineText.InvalidCharactersInPath));
 end;
 
 { TValuedSymbol<T> }
@@ -3075,7 +3115,7 @@ begin
   inherited Create(AName, nil);
   for Alias in AAliases do
     Aliases.Add(Alias);
-  SetDescription(SHelpOptionDescription);
+  SetDescription(TextOf(TCommandLineText.HelpOptionDescription));
   SetArity(TArgumentArity.Zero);
   FRecursive := True;
   FAction := NewHelpAction;
@@ -3112,7 +3152,7 @@ begin
       Named := Result.IdentifierToken.Value.Value
     else
       Named := Result.Option.Name;
-    Result.AddError(Format(SVersionOptionNotCombined, [Named]));
+    Result.AddError(FormatText(TCommandLineText.VersionOptionCannotBeCombinedWithOtherArguments, [Named]));
     Exit;
   end;
 end;
@@ -3124,7 +3164,7 @@ begin
   inherited Create(AName, nil);
   for Alias in AAliases do
     Aliases.Add(Alias);
-  SetDescription(SVersionOptionDescription);
+  SetDescription(TextOf(TCommandLineText.VersionOptionDescription));
   SetArity(TArgumentArity.Zero);
   FAction := NewVersionAction;
   Validators.Add(ValidateVersionAlone);
@@ -3393,6 +3433,22 @@ end;
 class function CommandLine.ExecutableName: string;
 begin
   Result := TPath.GetFileNameWithoutExtension(ParamStr(0));
+end;
+
+class function CommandLine.GetTexts: TCommandLineTexts;
+begin
+  Result := TextsInForce;
+end;
+
+class procedure CommandLine.SetTexts(const Value: TCommandLineTexts);
+var
+  Key: TCommandLineText;
+  Reason: string;
+begin
+  if not TryValidateTexts(Value, Key, Reason) then
+    raise ECommandLine.CreateFmt('The text for %s is not a template of the %d string argument(s) it receives: %s',
+      [TextKeyName(Key), TextArgumentCount(Key), Reason]);
+  PutTextsInForce(Value);
 end;
 
 end.

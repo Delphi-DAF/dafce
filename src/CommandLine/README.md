@@ -54,7 +54,8 @@ run time.
 | `TInvocationConfiguration` | Where `Invoke` writes, and whether a default handler catches what the action lets escape |
 | `TCommandLineExit` | The codes `Invoke` answers when the action is not the one deciding |
 | `TParserConfiguration` | How the parse reads an invocation: grouping, response files, and whether names tell cases apart |
-| `CommandLine` | The entry point: `Option<T>`, `Argument<T>`, `Command`, `Root`, `HelpOption`, `VersionOption`, `Directive`, `DiagramDirective`, and `SplitCommandLine` |
+| `TCommandLineText`, `TCommandLineTexts` | The key of each text the parse and the help write, and the texts an application writes instead |
+| `CommandLine` | The entry point: `Option<T>`, `Argument<T>`, `Command`, `Root`, `HelpOption`, `VersionOption`, `Directive`, `DiagramDirective`, and `SplitCommandLine`; and `Texts`, the texts in force |
 
 ---
 
@@ -116,7 +117,7 @@ What `ValueIn` answers depends on what the parse made of the symbol:
 The parse validates the command reached whole, and the commands above it only in their recursive
 options and in the ones with a default. An option of a parent that is neither, written before the
 subcommand, is taken but not validated: `tool --port x run` parses, and reading `--port` raises
-`"x" is not a valid integer for --port`.
+`Cannot parse argument 'x' for option '--port' as expected type 'integer'.`
 
 `ValueIn` also takes the result of a symbol — `PortOpt.ValueIn(Parsed.CommandResult)` — and answers
 the same: the tree is one, whichever node asks. `RequiredValueIn` reads the same way and raises when
@@ -680,7 +681,7 @@ No command's action runs in the first three rows.
 - Declaring the action again replaces it.
 - A command with subcommands **and** an action is an invocation of its own: `mytool` alone runs
   `mytool`'s action. Without one it only groups, and `mytool` alone fails with
-  `Command "mytool" requires a subcommand: …`.
+  `Required command was not provided.`
 - `SetAction` answers `ICommand`, so on a root it is a statement, like `Description(Text)`.
 - `SetAction` also takes an `ICommandLineAction`: an action written as a class, on
   `TSynchronousCommandLineAction`. `Command.Action` gives it back.
@@ -726,7 +727,7 @@ $ mytool --verbse
 '--verbse' was not matched. Did you mean one of the following?
 --verbose
 
-Unknown option "--verbse" for mytool
+Unrecognized command or argument '--verbse'.
 
 <the help of mytool>
 ```
@@ -845,7 +846,7 @@ $ mytool [diagram] build file.txt --level abc
 A directive is read only before every other token but the root's own name: in `mytool [diagram] build`
 it is one, and in `mytool build [diagram]` and `mytool -- [diagram]` it is a value. With at least one
 declared, a token in square brackets in that place that names none matches nothing —
-`Unexpected argument "[1,2]" for mytool`. With none declared, it is a value like any other. Its name
+`Unrecognized command or argument '[1,2]'.` With none declared, it is a value like any other. Its name
 tells cases apart as the name of an option does.
 
 A directive of your own is declared with its name, and read from the parse result:
@@ -884,6 +885,35 @@ Root.Add(CommandLine.Option<Boolean>('--loud'));   // ECommandLine
 
 Code that decides with a parse result can rely on the grammar staying the one it was parsed with.
 `System.CommandLine` has no counterpart.
+
+## The texts it writes
+
+The parse errors and the help are written with the texts of `System.CommandLine`, in English:
+`Option '--name' is required.`, `Unrecognized command or argument 'bogus'.`, `Usage:`, `Options:`.
+An application writes its own through `CommandLine.Texts`, indexed by `TCommandLineText`:
+
+```pascal
+var Texts: TCommandLineTexts;
+Texts[TCommandLineText.HelpUsageTitle] := 'Uso:';
+Texts[TCommandLineText.RequiredOptionWasNotProvided] := 'La opción ''%0:s'' es obligatoria.';
+CommandLine.Texts := Texts;
+```
+
+- A key left empty is written in English.
+- The keys carry the names .NET gives the texts in its resources. Five are DAF's own:
+  `UnrecognizedOptionInBundle`, `ResponseFileNestedTooDeep`, `InvalidValue`, `EmptyFileName` and
+  `EmptyPath`.
+- A text that receives arguments is a template of `Format` whose arguments are all strings, named by
+  their index — `%0:s`, `%1:s` — and they can go in any order. A text that receives none is written
+  as it is.
+- Assigning checks every template against the arguments its key receives, and raises `ECommandLine`
+  naming the first key whose template asks for one more.
+- `Texts.Missing` lists the keys left empty.
+- It is a setting of the process. Assign it at start-up, before declaring the grammar: the help and
+  version options take their description when they are created. An error already reported keeps the
+  text it was written with.
+- The `ECommandLine` raised for a grammar declared wrong, or for reading a value nobody provided,
+  carries a text of its own, in English and outside the dictionary.
 
 ## Divergences from `System.CommandLine`
 
@@ -959,6 +989,15 @@ there is none by default — what .NET does when the output is redirected.
 **15 · `--version` writes the version the root declares.** .NET writes the informational version of
 the assembly. A root that declares none writes an empty version, and its help does not list
 `--version`.
+
+**16 · The usage closes the brackets it opens.** .NET's usage for the additional arguments is
+`[[--] <additional arguments>...]]`, with one bracket too many. Here it is
+`[[--] <additional arguments>...]`.
+
+**17 · An error names a type and a character as Delphi reads them.** .NET names the type of the CLR:
+`as expected type 'System.Int32'`. Here it is a name in words — `'integer'`, `'unsigned integer'`,
+`'date'`, `'file'` — and, for an enumerated type, the name it was declared with. And a
+character with no glyph is named by its code: `Character not allowed in a path: '#9'.`
 
 ---
 

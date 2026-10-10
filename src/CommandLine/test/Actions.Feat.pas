@@ -255,7 +255,7 @@ Feature Actions of options @commandline @actions
           '''--verbse'' was not matched. Did you mean one of the following?' + sLineBreak +
           '--verbose' + sLineBreak +
           sLineBreak +
-          'Unknown option "--verbse" for tool' + sLineBreak +
+          'Unrecognized command or argument ''--verbse''.' + sLineBreak +
           sLineBreak +
           W.Root.HelpText + sLineBreak);
       end)
@@ -281,7 +281,7 @@ Feature Actions of options @commandline @actions
       procedure(W: TActionsWorld)
       begin
         Expect(Pos('was not matched', W.Output.ToString)).ToEqual(0);
-        Expect(W.Error.ToString).ToEqual('Unknown option "--zzzzzz" for tool' + sLineBreak + sLineBreak);
+        Expect(W.Error.ToString).ToEqual('Unrecognized command or argument ''--zzzzzz''.' + sLineBreak + sLineBreak);
       end)
 
   .Scenario('Only the closest')

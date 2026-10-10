@@ -200,8 +200,7 @@ Feature Command line grammar @commandline @grammar
       procedure(W: TGrammarWorld)
       begin
         Expect(W.Parsed.Succeeded).ToBeFalse;
-        Expect(W.Parsed.ErrorText).ToContain('requires a subcommand');
-        Expect(W.Parsed.ErrorText).ToContain('native');
+        Expect(W.Parsed.ErrorText).ToEqual('Required command was not provided.');
       end)
 
   .Scenario('A command with subcommands and an action is invocable')
@@ -336,7 +335,8 @@ Feature Command line grammar @commandline @grammar
     .&And('80 is not accepted: reading the option raises the error, although the invocation named it',
       procedure(W: TGrammarWorld)
       begin
-        Expect(W.Report).ToEqual('ECommandLine: "80xyz" is not a valid integer for --amount');
+        Expect(W.Report).ToEqual(
+          'ECommandLine: Cannot parse argument ''80xyz'' for option ''--amount'' as expected type ''integer''.');
         Expect(W.Parsed.WasProvided(W.AmountOpt)).ToBeTrue;
       end)
 

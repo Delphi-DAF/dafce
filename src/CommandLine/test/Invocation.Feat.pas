@@ -314,7 +314,8 @@ Feature Invoking a parse result @commandline @invocation
     .&Then('the error is written to the error, the help of the command to the output, and the action does not run',
       procedure(W: TInvocationWorld)
       begin
-        Expect(W.Error.ToString).ToEqual('"abc" is not a valid integer for --count' + sLineBreak + sLineBreak);
+        Expect(W.Error.ToString).ToEqual(
+          'Cannot parse argument ''abc'' for option ''--count'' as expected type ''integer''.' + sLineBreak + sLineBreak);
         Expect(W.Output.ToString).ToEqual(W.Root.HelpText + sLineBreak);
         Expect(W.RanText).ToEqual('<nothing>');
       end)

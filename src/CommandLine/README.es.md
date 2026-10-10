@@ -54,7 +54,8 @@ en ejecución.
 | `TInvocationConfiguration` | Dónde escribe `Invoke`, y si un manejador por defecto captura lo que la acción deja escapar |
 | `TCommandLineExit` | Los códigos que devuelve `Invoke` cuando no es la acción quien decide |
 | `TParserConfiguration` | Cómo lee el parse una invocación: el agrupado, los ficheros de respuesta, y si los nombres distinguen mayúsculas |
-| `CommandLine` | El punto de entrada: `Option<T>`, `Argument<T>`, `Command`, `Root`, `HelpOption`, `VersionOption`, `Directive`, `DiagramDirective`, y `SplitCommandLine` |
+| `TCommandLineText`, `TCommandLineTexts` | La clave de cada texto que escriben el parse y la ayuda, y los textos que una aplicación escribe en su lugar |
+| `CommandLine` | El punto de entrada: `Option<T>`, `Argument<T>`, `Command`, `Root`, `HelpOption`, `VersionOption`, `Directive`, `DiagramDirective`, y `SplitCommandLine`; y `Texts`, los textos en vigor |
 
 ---
 
@@ -116,7 +117,7 @@ Lo que devuelve `ValueIn` depende de lo que el parse hizo con el símbolo:
 El parse valida entero el comando alcanzado, y los que tiene por encima solo en sus opciones
 recursivas y en las que tienen default. Una opción de un padre que no es ninguna de las dos, escrita
 antes del subcomando, se toma pero no se valida: `tool --port x run` parsea, y leer `--port` lanza
-`"x" is not a valid integer for --port`.
+`Cannot parse argument 'x' for option '--port' as expected type 'integer'.`
 
 `ValueIn` acepta también el resultado de un símbolo —`PortOpt.ValueIn(Parsed.CommandResult)`— y
 devuelve lo mismo: el árbol es uno, pregunte el nodo que pregunte. `RequiredValueIn` lee igual y lanza
@@ -684,7 +685,7 @@ En las tres primeras filas no corre la acción de ningún comando.
 - Declarar la acción otra vez la sustituye.
 - Un comando con subcomandos **y** acción es una invocación por sí mismo: `mitool` a secas ejecuta la
   acción de `mitool`. Sin ella solo agrupa, y `mitool` a secas falla con
-  `Command "mitool" requires a subcommand: …`.
+  `Required command was not provided.`
 - `SetAction` devuelve `ICommand`, así que en una raíz es una sentencia, como `Description(Texto)`.
 - `SetAction` también recibe una `ICommandLineAction`: una acción escrita como clase, sobre
   `TSynchronousCommandLineAction`. `Command.Action` la devuelve.
@@ -729,7 +730,7 @@ $ mitool --verbse
 '--verbse' was not matched. Did you mean one of the following?
 --verbose
 
-Unknown option "--verbse" for mitool
+Unrecognized command or argument '--verbse'.
 
 <la ayuda de mitool>
 ```
@@ -847,7 +848,7 @@ $ mitool [diagram] build fichero.txt --level abc
 Una directiva solo se lee antes de cualquier otro token que no sea el nombre de la propia raíz: en
 `mitool [diagram] build` lo es, y en `mitool build [diagram]` y `mitool -- [diagram]` es un valor. Con
 al menos una declarada, un token entre corchetes en ese sitio que no nombra ninguna no casa con nada
-—`Unexpected argument "[1,2]" for mitool`—. Sin ninguna declarada, es un valor como cualquier otro. Su
+—`Unrecognized command or argument '[1,2]'.`—. Sin ninguna declarada, es un valor como cualquier otro. Su
 nombre distingue mayúsculas como el de una opción.
 
 Una directiva propia se declara con su nombre, y se lee del resultado del parse:
@@ -886,6 +887,35 @@ Root.Add(CommandLine.Option<Boolean>('--loud'));   // ECommandLine
 
 El código que decide con un resultado del parse puede contar con que la gramática sigue siendo con la
 que se parseó. `System.CommandLine` no tiene equivalente.
+
+## Los textos que escribe
+
+Los errores del parse y la ayuda se escriben con los textos de `System.CommandLine`, en inglés:
+`Option '--name' is required.`, `Unrecognized command or argument 'bogus'.`, `Usage:`, `Options:`.
+Una aplicación escribe los suyos con `CommandLine.Texts`, indexado por `TCommandLineText`:
+
+```pascal
+var Texts: TCommandLineTexts;
+Texts[TCommandLineText.HelpUsageTitle] := 'Uso:';
+Texts[TCommandLineText.RequiredOptionWasNotProvided] := 'La opción ''%0:s'' es obligatoria.';
+CommandLine.Texts := Texts;
+```
+
+- Una clave que se deja vacía se escribe en inglés.
+- Las claves llevan los nombres que .NET da a los textos en sus recursos. Cinco son propias de DAF:
+  `UnrecognizedOptionInBundle`, `ResponseFileNestedTooDeep`, `InvalidValue`, `EmptyFileName` y
+  `EmptyPath`.
+- Un texto que recibe argumentos es una plantilla de `Format` cuyos argumentos son todos cadenas,
+  nombradas por su índice —`%0:s`, `%1:s`—, y pueden ir en cualquier orden. Un texto que no recibe
+  ninguno se escribe tal cual.
+- Asignarlo comprueba cada plantilla contra los argumentos que recibe su clave, y lanza
+  `ECommandLine` nombrando la primera clave cuya plantilla pide uno de más.
+- `Texts.Missing` enumera las claves que se dejaron vacías.
+- Es un ajuste del proceso. Se asigna al arrancar, antes de declarar la gramática: las opciones de la
+  ayuda y de la versión toman su descripción al crearse. Un error ya informado conserva el texto con
+  el que se escribió.
+- El `ECommandLine` que se lanza por una gramática mal declarada, o por leer un valor que nadie dio,
+  lleva un texto propio, en inglés y fuera del diccionario.
 
 ## Divergencias con `System.CommandLine`
 
@@ -962,6 +992,15 @@ no hay ninguno — lo que hace .NET con la salida redirigida.
 **15 · `--version` escribe la versión que declara la raíz.** .NET escribe la versión informativa del
 ensamblado. Una raíz que no declara ninguna escribe una versión vacía, y su ayuda no lista
 `--version`.
+
+**16 · El uso cierra los corchetes que abre.** El uso de .NET para los argumentos adicionales es
+`[[--] <additional arguments>...]]`, con un corchete de más. Aquí es
+`[[--] <additional arguments>...]`.
+
+**17 · Un error nombra un tipo y un carácter como los lee Delphi.** .NET nombra el tipo del CLR:
+`as expected type 'System.Int32'`. Aquí es un nombre en palabras —`'integer'`, `'unsigned integer'`,
+`'date'`, `'file'`— y, para un enumerado, el nombre con el que se declaró. Y un carácter sin
+glifo se nombra por su código: `Character not allowed in a path: '#9'.`
 
 ---
 

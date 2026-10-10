@@ -276,13 +276,13 @@ const
     'Commands:' + sLineBreak +
     '  serve  Serve things' + sLineBreak;
 
-  // The closing bracket too many is System.CommandLine's text.
+  // A declared divergence: System.CommandLine's text closes one bracket more than it opens.
   WrapperHelp =
     'Description:' + sLineBreak +
     '  Run another program' + sLineBreak +
     sLineBreak +
     'Usage:' + sLineBreak +
-    '  mytool exec [options] [[--] <additional arguments>...]]' + sLineBreak +
+    '  mytool exec [options] [[--] <additional arguments>...]' + sLineBreak +
     sLineBreak +
     'Options:' + sLineBreak +
     '  -?, -h, --help  Show help and usage information' + sLineBreak +
@@ -1283,7 +1283,7 @@ Feature Command line help @commandline @help
         // that '--diag' appears would also be satisfied by "unknown option --diag",
         // which is what a hidden option would produce if hiding reached the parser --
         // a green that coincides with the failure it is meant to catch.
-        Expect(W.Parsed.ErrorText).ToContain('not a valid integer');
+        Expect(W.Parsed.ErrorText).ToEqual('Cannot parse argument ''loud'' for option ''--diag'' as expected type ''integer''.');
         Expect(W.Parsed.ErrorText).ToContain('--diag');
         Expect(W.Parsed.ErrorText).ToContain('loud');
       end);

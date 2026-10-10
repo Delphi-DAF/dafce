@@ -262,12 +262,12 @@ Feature Command line values @commandline @values
       begin
         Expect(W.Parsed.Succeeded).ToBeFalse;
         Expect(W.Parsed.ErrorText).ToContain('--port');
-        Expect(W.Parsed.ErrorText).ToContain('more than once');
+        Expect(W.Parsed.ErrorText).ToEqual('Option ''--port'' expects a single argument but 2 were provided.');
       end)
     .&And('it does not quietly settle on either of the two values: reading it raises the error',
       procedure(W: TValuesWorld)
       begin
-        Expect(W.Report).ToEqual('ECommandLine: Option "--port" was given more than once, and it takes exactly one value');
+        Expect(W.Report).ToEqual('ECommandLine: Option ''--port'' expects a single argument but 2 were provided.');
       end)
 
   .Scenario('An option that admits several values')
@@ -469,7 +469,8 @@ Feature Command line values @commandline @values
     .&Then('the parse fails listing the values of the set',
       procedure(W: TValuesWorld)
       begin
-        Expect(W.Parsed.ErrorText).ToEqual('"FAST" is not a valid value for --mode. Accepted: fast, safe');
+        Expect(W.Parsed.ErrorText).ToEqual('Argument ''FAST'' not recognized. Must be one of:' + sLineBreak +
+          #9'''fast''' + sLineBreak + #9'''safe''');
       end)
 
   .Scenario('An explicit set with a comparer that does not tell cases apart')
@@ -505,7 +506,8 @@ Feature Command line values @commandline @values
     .&Then('the parse fails listing the values of the set, as if there were no conversion',
       procedure(W: TValuesWorld)
       begin
-        Expect(W.Parsed.ErrorText).ToEqual('"turbo" is not a valid value for --style. Accepted: fast, safe');
+        Expect(W.Parsed.ErrorText).ToEqual('Argument ''turbo'' not recognized. Must be one of:' + sLineBreak +
+          #9'''fast''' + sLineBreak + #9'''safe''');
       end)
 
   .Scenario('A value of the set reaches the conversion of its own')
@@ -586,12 +588,10 @@ Feature Command line values @commandline @values
       begin
         W.Parsed := W.Checked.Parse(['--in', 'no-such-file-anywhere.txt']);
       end)
-    .&Then('the parse fails naming the option and the path',
+    .&Then('the parse fails naming the path',
       procedure(W: TValuesWorld)
       begin
-        Expect(W.Parsed.Succeeded).ToBeFalse;
-        Expect(W.Parsed.ErrorText).ToContain('--in');
-        Expect(W.Parsed.ErrorText).ToContain('no-such-file-anywhere.txt');
+        Expect(W.Parsed.ErrorText).ToEqual('File or directory does not exist: ''no-such-file-anywhere.txt''.');
       end)
 
   .Scenario('A path that does exist')
@@ -625,15 +625,12 @@ Feature Command line values @commandline @values
       begin
         W.Parsed := W.Checked.Parse(['--name', 'reports\march.txt']);
       end)
-    .&Then('the parse fails naming the option and the value',
+    .&Then('the parse fails naming the separator',
       procedure(W: TValuesWorld)
       begin
         // The message is asserted and not only the failure: an option that expects a
         // value and did not get one fails here too, and would leave this green.
-        Expect(W.Parsed.Succeeded).ToBeFalse;
-        Expect(W.Parsed.ErrorText).ToContain('is not a legal file name');
-        Expect(W.Parsed.ErrorText).ToContain('--name');
-        Expect(W.Parsed.ErrorText).ToContain('reports\march.txt');
+        Expect(W.Parsed.ErrorText).ToEqual('Character not allowed in a file name: ''\''.');
       end)
 
   .Scenario('A file name with nothing illegal in it')
@@ -671,9 +668,7 @@ Feature Command line values @commandline @values
     .&Then('the parse fails, because nothing is not a name either',
       procedure(W: TValuesWorld)
       begin
-        Expect(W.Parsed.Succeeded).ToBeFalse;
-        Expect(W.Parsed.ErrorText).ToContain('is not a legal file name');
-        Expect(W.Parsed.ErrorText).ToContain('--name');
+        Expect(W.Parsed.ErrorText).ToEqual('A file name cannot be empty.');
       end)
 
   .Scenario('A file name with a character the platform does not admit')
@@ -692,7 +687,7 @@ Feature Command line values @commandline @values
       procedure(W: TValuesWorld)
       begin
         Expect(W.Parsed.ErrorText).ToEqual(
-          '"march/report.txt" is not a legal file name for --name: it carries "/", which a file name cannot');
+          'Character not allowed in a file name: ''/''.');
       end)
 
   .Scenario('A path with a character the platform does not admit')
@@ -711,7 +706,7 @@ Feature Command line values @commandline @values
       procedure(W: TValuesWorld)
       begin
         Expect(W.Parsed.ErrorText).ToEqual(
-          '"reports'#9'march.txt" is not a legal path for --path: it carries #9, which a path cannot');
+          'Character not allowed in a path: ''#9''.');
       end)
 
   .Scenario('A path with separators in it')
@@ -767,7 +762,7 @@ Feature Command line values @commandline @values
     .&Then('the parse fails as it does with no default: what is validated is what the invocation wrote',
       procedure(W: TValuesWorld)
       begin
-        Expect(W.Parsed.ErrorText).ToEqual('"" is not a legal file name, and --report accepts only one that is');
+        Expect(W.Parsed.ErrorText).ToEqual('A file name cannot be empty.');
       end)
 
 .Rule('a validation that only fits a path is refused where it is declared')

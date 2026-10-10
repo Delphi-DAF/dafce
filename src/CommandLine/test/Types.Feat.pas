@@ -718,21 +718,22 @@ Feature Command line types @commandline @types
       begin
         W.Parsed := W.Numbers.Parse(['--' + W.Kind, W.Text]);
       end)
-    .&Then('the parse fails as a value that does not convert: <Expected>',
+    .&Then('the parse fails as a value that does not convert to <Expected>',
       procedure(W: TTypesWorld)
       begin
-        Expect(W.Parsed.ErrorText).ToEqual(W.Expected);
+        Expect(W.Parsed.ErrorText).ToEqual(
+          Format('Cannot parse argument ''%s'' for option ''--%s'' as expected type ''%s''.', [W.Text, W.Kind, W.Expected]));
       end)
     .Examples(
       [['Kind',     'Text',                 'Expected'],
-       ['shortint', '128',                  '"128" is not a valid integer for --shortint'],
-       ['byte',     '256',                  '"256" is not a valid unsigned integer for --byte'],
-       ['smallint', '-32769',               '"-32769" is not a valid integer for --smallint'],
-       ['word',     '65536',                '"65536" is not a valid unsigned integer for --word'],
-       ['cardinal', '4294967296',           '"4294967296" is not a valid unsigned integer for --cardinal'],
-       ['uint64',   '18446744073709551616', '"18446744073709551616" is not a valid unsigned integer for --uint64'],
-       ['uint64',   '-1',                   '"-1" is not a valid unsigned integer for --uint64'],
-       ['double',   '1e',                   '"1e" is not a valid number for --double']])
+       ['shortint', '128',                  'integer'],
+       ['byte',     '256',                  'unsigned integer'],
+       ['smallint', '-32769',               'integer'],
+       ['word',     '65536',                'unsigned integer'],
+       ['cardinal', '4294967296',           'unsigned integer'],
+       ['uint64',   '18446744073709551616', 'unsigned integer'],
+       ['uint64',   '-1',                   'unsigned integer'],
+       ['double',   '1e',                   'number']])
 
   .ScenarioOutline('<Text> is too large for the <Kind> type, and reads <Expected>')
     .Given('an option declared with each real type',
@@ -796,7 +797,8 @@ Feature Command line types @commandline @types
     .&Then('the parse fails, rather than dropping the time',
       procedure(W: TTypesWorld)
       begin
-        Expect(W.Parsed.ErrorText).ToEqual('"2026-10-05T10:00" is not a valid date for --day');
+        Expect(W.Parsed.ErrorText).ToEqual(
+          'Cannot parse argument ''2026-10-05T10:00'' for option ''--day'' as expected type ''date''.');
       end)
 
   .Scenario('A time in ISO 8601')
@@ -832,7 +834,7 @@ Feature Command line types @commandline @types
     .&Then('the parse fails naming the option and the text received',
       procedure(W: TTypesWorld)
       begin
-        Expect(W.Parsed.ErrorText).ToEqual('"10:30 PM" is not a valid time for --at');
+        Expect(W.Parsed.ErrorText).ToEqual('Cannot parse argument ''10:30 PM'' for option ''--at'' as expected type ''time''.');
       end)
 
   .Scenario('A time span')
@@ -956,7 +958,7 @@ Feature Command line types @commandline @types
     .&Then('the parse fails, because what exists is not a directory',
       procedure(W: TTypesWorld)
       begin
-        Expect(W.Parsed.ErrorText).ToEqual(Format('"%s" is not a directory that exists, and --target only accepts one',
+        Expect(W.Parsed.ErrorText).ToEqual(Format('Directory does not exist: ''%s''.',
           [ParamStr(0)]));
       end)
 
@@ -990,11 +992,10 @@ Feature Command line types @commandline @types
       begin
         W.Parsed := W.Paths.Parse(['--source', 'no-such-file-anywhere.txt']);
       end)
-    .&Then('the parse fails naming the path, the option and that it wanted a file',
+    .&Then('the parse fails naming the path and that it wanted a file',
       procedure(W: TTypesWorld)
       begin
-        Expect(W.Parsed.ErrorText).ToEqual(
-          '"no-such-file-anywhere.txt" does not exist, and --source only accepts a file that does');
+        Expect(W.Parsed.ErrorText).ToEqual('File does not exist: ''no-such-file-anywhere.txt''.');
       end)
 
 .Rule('a set of an enumerated type is written with the names of its members')
@@ -1032,7 +1033,8 @@ Feature Command line types @commandline @types
     .&Then('the parse fails listing the names it accepts',
       procedure(W: TTypesWorld)
       begin
-        Expect(W.Parsed.ErrorText).ToEqual('"A,X" is not a valid value for --letters. Accepted: A, B, C');
+        Expect(W.Parsed.ErrorText).ToEqual('Cannot parse argument ''A,X'' for option ''--letters'' as expected type ' +
+          '''TLetters''. Did you mean one of the following?' + sLineBreak + 'A' + sLineBreak + 'B' + sLineBreak + 'C');
       end)
 
 .Rule('a symbol says the type its tokens are converted to')

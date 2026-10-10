@@ -73,7 +73,7 @@ Feature Whether names tell cases apart @commandline @case
       procedure(W: TNameCaseWorld)
       begin
         Expect(W.Parsed.Succeeded).ToBeFalse;
-        Expect(W.Parsed.ErrorText).ToContain('"-V"');
+        Expect(W.Parsed.ErrorText).ToContain('''-V''');
         Expect(W.Parsed.WasProvided(W.LowerOpt)).ToBeFalse;
       end)
 

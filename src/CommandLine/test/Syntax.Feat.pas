@@ -327,7 +327,7 @@ Feature Command line syntax @commandline @syntax
     .&Then('the group is not read as those three options',
       procedure(W: TSyntaxWorld)
       begin
-        Expect(W.Parsed.ErrorText).ToContain('"-fdx"');
+        Expect(W.Parsed.ErrorText).ToContain('''-fdx''');
         Expect(W.Parsed.WasProvided(W.ForceOpt)).ToBeFalse;
         Expect(W.Parsed.WasProvided(W.DryOpt)).ToBeFalse;
         Expect(W.Parsed.WasProvided(W.CrossOpt)).ToBeFalse;
@@ -540,10 +540,10 @@ Feature Command line syntax @commandline @syntax
         // Passing it through as a literal token would turn a typo into an argument
         // with an at sign on it, travelling all the way to wherever it gets used.
         //
-        // The failure has to be the NAMED one. Before response files existed this same
-        // token failed too -- as "Unexpected argument" -- and its text carried the path,
-        // so an assertion on the path alone was already green while nothing had been
-        // built. A spec whose green coincides with its own failure mode is not a spec.
+        // The failure has to be the NAMED one: as a token nothing matches, the same one
+        // fails too and its text carries the path, so an assertion on the path alone is
+        // green with no file read. A spec whose green coincides with its own failure mode
+        // is not a spec.
         Expect(W.Parsed.Succeeded).ToBeFalse;
         Expect(W.Parsed.ErrorText).ToContain('Response file');
         Expect(W.Parsed.ErrorText).ToContain('daf-commandline-nothing-here.rsp');
@@ -590,7 +590,7 @@ Feature Command line syntax @commandline @syntax
       procedure(W: TSyntaxWorld)
       begin
         Expect(W.Parsed.Succeeded).ToBeFalse;
-        Expect(W.Parsed.ErrorText).ToContain('nested deeper than');
+        Expect(W.Parsed.ErrorText).ToContain('is nested more than 10 levels deep');
         Expect(W.Parsed.ErrorText).ToContain('daf-cl-cycle.rsp');
       end)
 
@@ -730,7 +730,7 @@ Feature Command line syntax @commandline @syntax
       procedure(W: TSyntaxWorld)
       begin
         Expect(W.Parsed.Succeeded).ToBeFalse;
-        Expect(W.Parsed.ErrorText).ToContain('"-Fecha"');
+        Expect(W.Parsed.ErrorText).ToContain('''-Fecha''');
         Expect(Pos('inside the group', W.Parsed.ErrorText)).ToEqual(0);
       end)
 

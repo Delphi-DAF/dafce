@@ -229,7 +229,7 @@ Feature Command line parse results @commandline @results
     .&Then('the option has a result the invocation did not name, and the missing error is that result''s',
       procedure(W: TResultsWorld)
       begin
-        Expect(W.Report).ToEqual('implicit=True errors=1 message=Option "--seed" is required owner=True');
+        Expect(W.Report).ToEqual('implicit=True errors=1 message=Option ''--seed'' is required. owner=True');
       end)
 
   .Scenario('The tokens of a repeated option')
@@ -274,7 +274,7 @@ Feature Command line parse results @commandline @results
       procedure(W: TResultsWorld)
       begin
         Expect(W.Report).ToEqual('errors=1 owner=True');
-        Expect(W.Parsed.ErrorText).ToEqual('"x" is not a valid integer for --port');
+        Expect(W.Parsed.ErrorText).ToEqual('Cannot parse argument ''x'' for option ''--port'' as expected type ''integer''.');
       end)
 
   .Scenario('A token that matches nothing is an error of the command reached')
@@ -293,7 +293,7 @@ Feature Command line parse results @commandline @results
     .&Then('the error is the result of that subcommand''s',
       procedure(W: TResultsWorld)
       begin
-        Expect(W.Parsed.ErrorText).ToEqual('Unexpected argument "stray" for tool run');
+        Expect(W.Parsed.ErrorText).ToEqual('Unrecognized command or argument ''stray''.');
         Expect(W.Report).ToEqual('owner=True');
       end)
 
@@ -396,7 +396,7 @@ Feature Command line parse results @commandline @results
     .&Then('the read raises the error of the conversion',
       procedure(W: TResultsWorld)
       begin
-        Expect(W.Report).ToEqual('ECommandLine: "x" is not a valid integer for --port');
+        Expect(W.Report).ToEqual('ECommandLine: Cannot parse argument ''x'' for option ''--port'' as expected type ''integer''.');
       end)
 
   .Scenario('Reading a repeated option')
@@ -418,7 +418,7 @@ Feature Command line parse results @commandline @results
     .&Then('the read raises the error of the repetition, and picks neither value',
       procedure(W: TResultsWorld)
       begin
-        Expect(W.Report).ToEqual('ECommandLine: Option "--port" was given more than once, and it takes exactly one value');
+        Expect(W.Report).ToEqual('ECommandLine: Option ''--port'' expects a single argument but 2 were provided.');
       end)
 
   .Scenario('Reading a required option that is missing')
@@ -440,7 +440,7 @@ Feature Command line parse results @commandline @results
     .&Then('the read raises the error that it is missing',
       procedure(W: TResultsWorld)
       begin
-        Expect(W.Report).ToEqual('ECommandLine: Option "--seed" is required');
+        Expect(W.Report).ToEqual('ECommandLine: Option ''--seed'' is required.');
       end)
 
   .Scenario('Reading an option of a parent that the subcommand does not validate')
@@ -463,7 +463,7 @@ Feature Command line parse results @commandline @results
       procedure(W: TResultsWorld)
       begin
         Expect(W.Parsed.ErrorText).ToEqual('');
-        Expect(W.Report).ToEqual('ECommandLine: "x" is not a valid integer for --port');
+        Expect(W.Report).ToEqual('ECommandLine: Cannot parse argument ''x'' for option ''--port'' as expected type ''integer''.');
       end)
     .&And('the error joins the result of the option, and the parse result stays clean',
       procedure(W: TResultsWorld)

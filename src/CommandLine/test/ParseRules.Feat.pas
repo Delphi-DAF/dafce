@@ -238,10 +238,10 @@ Feature Command line parse rules @commandline @parserules
       procedure(W: TParseRulesWorld)
       begin
         Expect(W.Parsed.ErrorText).ToEqual(Lines([
-          'Unknown option "--bogus" for tool',
-          'Unexpected argument "extra" for tool',
-          'Option "--seed" is required',
-          '"x" is not a valid integer for --port']));
+          'Unrecognized command or argument ''--bogus''.',
+          'Unrecognized command or argument ''extra''.',
+          'Option ''--seed'' is required.',
+          'Cannot parse argument ''x'' for option ''--port'' as expected type ''integer''.']));
       end)
 
   .Scenario('A missing subcommand comes first, ahead of the errors of the tokens')
@@ -259,9 +259,9 @@ Feature Command line parse rules @commandline @parserules
       procedure(W: TParseRulesWorld)
       begin
         Expect(W.Parsed.ErrorText).ToEqual(Lines([
-          'Command "tool" requires a subcommand: build, serve',
-          'Unknown option "--bogus" for tool',
-          'Option "--seed" is required']));
+          'Required command was not provided.',
+          'Unrecognized command or argument ''--bogus''.',
+          'Option ''--seed'' is required.']));
       end)
 
   .Scenario('A response file that fails comes first, wherever it is named')
@@ -282,8 +282,8 @@ Feature Command line parse rules @commandline @parserules
       procedure(W: TParseRulesWorld)
       begin
         Expect(W.Parsed.ErrorText).ToEqual(Lines([
-          Format('Response file "%s" does not exist', [W.MissingResponseFile]),
-          'Unknown option "--bogus" for tool']));
+          Format('Response file not found ''%s''.', [W.MissingResponseFile]),
+          'Unrecognized command or argument ''--bogus''.']));
       end)
 
 .Rule('a value is checked against its accepted set, converted and validated, and stops at the first refusal')
@@ -302,7 +302,8 @@ Feature Command line parse rules @commandline @parserules
     .&Then('the error is the one of the set, not the one of the conversion',
       procedure(W: TParseRulesWorld)
       begin
-        Expect(W.Parsed.ErrorText).ToEqual('"x" is not a valid value for --level. Accepted: 1, 2, 3');
+        Expect(W.Parsed.ErrorText).ToEqual('Argument ''x'' not recognized. Must be one of:' + sLineBreak +
+          #9'''1''' + sLineBreak + #9'''2''' + sLineBreak + #9'''3''');
       end)
 
   .Scenario('A value that does not convert is not validated')
@@ -320,7 +321,7 @@ Feature Command line parse rules @commandline @parserules
     .&Then('the only error is the one of the conversion, and the validation never ran',
       procedure(W: TParseRulesWorld)
       begin
-        Expect(W.Parsed.ErrorText).ToEqual('"abc" is not a valid integer for --count');
+        Expect(W.Parsed.ErrorText).ToEqual('Cannot parse argument ''abc'' for option ''--count'' as expected type ''integer''.');
         Expect(W.Report).ToEqual('runs=0');
       end)
 
@@ -341,8 +342,8 @@ Feature Command line parse rules @commandline @parserules
     .&Then('the only error is the repetition, and reading the option raises it',
       procedure(W: TParseRulesWorld)
       begin
-        Expect(W.Parsed.ErrorText).ToEqual('Option "--port" was given more than once, and it takes exactly one value');
-        Expect(W.Report).ToEqual('ECommandLine: Option "--port" was given more than once, and it takes exactly one value');
+        Expect(W.Parsed.ErrorText).ToEqual('Option ''--port'' expects a single argument but 2 were provided.');
+        Expect(W.Report).ToEqual('ECommandLine: Option ''--port'' expects a single argument but 2 were provided.');
       end)
 
   .Scenario('A repeated option whose first value is invalid fails for the repetition too')
@@ -360,8 +361,8 @@ Feature Command line parse rules @commandline @parserules
     .&Then('the arity is checked before the conversion: the only error is the repetition, and reading raises it',
       procedure(W: TParseRulesWorld)
       begin
-        Expect(W.Parsed.ErrorText).ToEqual('Option "--port" was given more than once, and it takes exactly one value');
-        Expect(W.Report).ToEqual('ECommandLine: Option "--port" was given more than once, and it takes exactly one value');
+        Expect(W.Parsed.ErrorText).ToEqual('Option ''--port'' expects a single argument but 2 were provided.');
+        Expect(W.Report).ToEqual('ECommandLine: Option ''--port'' expects a single argument but 2 were provided.');
       end)
 
 .Rule('a required symbol whose value does not convert has a result, so it is not reported as missing')
@@ -380,7 +381,7 @@ Feature Command line parse rules @commandline @parserules
     .&Then('the only error is the conversion',
       procedure(W: TParseRulesWorld)
       begin
-        Expect(W.Parsed.ErrorText).ToEqual('"x" is not a valid integer for --seed');
+        Expect(W.Parsed.ErrorText).ToEqual('Cannot parse argument ''x'' for option ''--seed'' as expected type ''integer''.');
       end)
 
   .Scenario('A required argument whose value does not convert fails once')
@@ -397,7 +398,7 @@ Feature Command line parse rules @commandline @parserules
     .&Then('the only error is the conversion',
       procedure(W: TParseRulesWorld)
       begin
-        Expect(W.Parsed.ErrorText).ToEqual('"abc" is not a valid integer for count');
+        Expect(W.Parsed.ErrorText).ToEqual('Cannot parse argument ''abc'' for command ''calc'' as expected type ''integer''.');
       end)
 
 .Rule('the parse reads the whole invocation, and asking for the help clears what else went wrong')
@@ -524,7 +525,7 @@ Feature Command line parse rules @commandline @parserules
     .&Then('the parse fails saying the option needs a value',
       procedure(W: TParseRulesWorld)
       begin
-        Expect(W.Parsed.ErrorText).ToEqual('Option "--port" requires a integer value');
+        Expect(W.Parsed.ErrorText).ToEqual('Required argument missing for option: ''--port''.');
       end)
 
 .Rule('a flag takes the next token only when it is a boolean literal')
@@ -565,7 +566,7 @@ Feature Command line parse rules @commandline @parserules
     .&Then('the flag is on, 0 goes to the positional, and the file name behind it is unexpected',
       procedure(W: TParseRulesWorld)
       begin
-        Expect(W.Parsed.ErrorText).ToEqual('Unexpected argument "a.txt" for copy');
+        Expect(W.Parsed.ErrorText).ToEqual('Unrecognized command or argument ''a.txt''.');
         Expect(W.Report).ToEqual('force=True source=0');
       end)
 
@@ -586,7 +587,7 @@ Feature Command line parse rules @commandline @parserules
     .&Then('the collection takes the three, and the single one is reported as missing',
       procedure(W: TParseRulesWorld)
       begin
-        Expect(W.Parsed.ErrorText).ToEqual('Argument "dest" is required');
+        Expect(W.Parsed.ErrorText).ToEqual('Required argument ''dest'' missing for command: ''cp''.');
         Expect(W.Report).ToEqual('sources=a b c');
       end)
 
@@ -646,8 +647,8 @@ Feature Command line parse rules @commandline @parserules
       procedure(W: TParseRulesWorld)
       begin
         Expect(W.Parsed.ErrorText).ToEqual(Lines([
-          'Unknown option "--port" for tool run',
-          'Unexpected argument "1" for tool run']));
+          'Unrecognized command or argument ''--port''.',
+          'Unrecognized command or argument ''1''.']));
         Expect(W.Report).ToEqual('command=tool run');
       end)
 
@@ -665,7 +666,7 @@ Feature Command line parse rules @commandline @parserules
     .&Then('only the recursive one is reported as missing',
       procedure(W: TParseRulesWorld)
       begin
-        Expect(W.Parsed.ErrorText).ToEqual('Option "--profile" is required');
+        Expect(W.Parsed.ErrorText).ToEqual('Option ''--profile'' is required.');
       end)
 
   .Scenario('The default of a parent option that is not recursive is read from a subcommand')

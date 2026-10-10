@@ -276,7 +276,7 @@ begin
       // the rest as a value.
       Result.Tokens := nil;
       Result.Changed := True;
-      Result.Error := Format(SUnknownOptionInGroup, [ShortPrefix + Letter, Token]);
+      Result.Error := FormatText(TCommandLineText.UnrecognizedOptionInBundle, [ShortPrefix + Letter, Token]);
       Exit;
     end;
     Parts := Parts + [ShortPrefix + Letter];
@@ -481,7 +481,7 @@ var
 begin
   if Depth > TResponseFiles.MaxDepth then
   begin
-    Error := Format(SResponseFileTooDeep, [Path, TResponseFiles.MaxDepth]);
+    Error := FormatText(TCommandLineText.ResponseFileNestedTooDeep, [Path, IntToStr(TResponseFiles.MaxDepth)]);
     Exit(False);
   end;
   if not TFile.Exists(Path) then
@@ -489,7 +489,7 @@ begin
     // A file that is not there is an invalid invocation and not a literal token:
     // letting it through turns a typo into an argument with an at sign in front of it,
     // travelling all the way to wherever it ends up used.
-    Error := Format(SResponseFileMissing, [Path]);
+    Error := FormatText(TCommandLineText.ResponseFileNotFound, [Path]);
     Exit(False);
   end;
   try
@@ -497,7 +497,7 @@ begin
   except
     on E: Exception do
     begin
-      Error := Format(SResponseFileUnreadable, [Path, E.Message]);
+      Error := FormatText(TCommandLineText.ErrorReadingResponseFile, [Path, E.Message]);
       Exit(False);
     end;
   end;

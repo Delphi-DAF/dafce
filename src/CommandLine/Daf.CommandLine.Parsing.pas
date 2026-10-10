@@ -59,6 +59,7 @@ implementation
 uses
   System.SysUtils,
   System.Classes,
+  System.Math,
   System.Generics.Defaults,
   Daf.Nullable,
   Daf.Application.Version,
@@ -631,17 +632,6 @@ begin
   DemandFreeBelow(Subcommand, InheritedOptionsOf(Command) + RecursiveOptionsOf(Command), False);
 end;
 
-function NamesOf(const Commands: TArray<ICommand>): string;
-var
-  Names: TArray<string>;
-  Candidate: ICommand;
-begin
-  Names := nil;
-  for Candidate in Commands do
-    Names := Names + [Candidate.Name];
-  Result := string.Join(', ', Names);
-end;
-
 { TSymbolResultTree }
 
 function TSymbolResultTree.Find(const Symbol: TObject): ISymbolResult;
@@ -886,6 +876,8 @@ var
   Parser: TUntypedWholeParser;
   Owner: ISymbolResultTree;
   ErrorsBefore: Integer;
+  Command: ICommandResult;
+  CommandName: string;
 begin
   // When the arity fails nothing else is reported for it, as in .NET.
   Error := ArityError;
@@ -919,10 +911,14 @@ begin
     FState := TConversionState.Converted;
     Exit;
   end;
+  if Supports(FParent, ICommandResult, Command) then
+    CommandName := Command.Command.Name
+  else
+    CommandName := '';
   Values := nil;
   for Token in FTokens do
   begin
-    if not FValued.Convert(Token.Value, Value, Error) then
+    if not FValued.Convert(Token.Value, CommandName, Value, Error) then
     begin
       Fail(Error);
       Exit;
@@ -1033,14 +1029,22 @@ begin
 end;
 
 function TOptionResult.ArityError: string;
+var
+  Written: string;
 begin
+  // Named as the invocation first wrote it, as .NET names it.
+  if FIdentifierToken.HasValue then
+    Written := FIdentifierToken.Value.Value
+  else
+    Written := FOption.Name;
   // Repeating an option that admits one value is an ambiguous invocation, and an ambiguous
   // invocation has to fail. Quietly keeping one of them is the same sin as reading 80xyz as 80:
   // a value the parser chose on its own.
   if not FOption.Arity.AllowsMany and (FIdentifierTokenCount > 1) then
-    Exit(Format(SOptionRepeated, [FOption.Name, FOption.Arity.Describe]));
+    Exit(FormatText(TCommandLineText.OptionExpectsOneArgument,
+      [Written, IntToStr(Max(Length(FTokens), FIdentifierTokenCount))]));
   if not FOption.IsFlag and (Length(FTokens) = 0) then
-    Exit(Format(SOptionRequiresValue, [FOption.Name, FOption.TypeName]));
+    Exit(FormatText(TCommandLineText.OptionRequiredArgumentMissing, [Written]));
   Result := '';
 end;
 
@@ -1143,7 +1147,7 @@ begin
     Delete(FTokens, NumberOfTokens, 1);
     Owner.AddUnmatched(Token.Value);
     if Command.Command.TreatsUnmatchedTokensAsErrors then
-      Command.AddError(Format(SUnexpectedArgument, [Token.Value, Command.Command.FullPath]));
+      Command.AddError(FormatText(TCommandLineText.UnrecognizedCommandOrArgument, [Token.Value]));
     Dec(ToPass);
   end;
 end;
@@ -1161,7 +1165,8 @@ end;
 function TArgumentResult.ArityError: string;
 begin
   if Length(FTokens) < FArgument.Arity.MinimumNumberOfValues then
-    Exit(Format(SArgumentRequired, [FArgument.Name]));
+    Exit(FormatText(TCommandLineText.CommandRequiredArgumentMissing,
+      [FArgument.Name, (FParent as ICommandResult).Command.Name]));
   Result := '';
 end;
 
@@ -1871,7 +1876,7 @@ begin
   Inc(FIndex);
   if not Supports(Item.Token.Symbol, IDirective, Directive) then
   begin
-    Unmatched(Item.Token.Value, Format(SUnexpectedArgument, [Item.Token.Value, FInnermost.Command.FullPath]));
+    Unmatched(Item.Token.Value, FormatText(TCommandLineText.UnrecognizedCommandOrArgument, [Item.Token.Value]));
     Exit;
   end;
   Found := FTree.Find(Directive.AsObject);
@@ -1981,8 +1986,8 @@ begin
     Inc(FArgumentIndex);
   end;
   if not Placed then
-    Unmatched(FItems[FIndex].Token.Value, Format(SUnexpectedArgument,
-      [FItems[FIndex].Token.Value, FInnermost.Command.FullPath]));
+    Unmatched(FItems[FIndex].Token.Value, FormatText(TCommandLineText.UnrecognizedCommandOrArgument,
+      [FItems[FIndex].Token.Value]));
   Inc(FIndex);
 end;
 
@@ -2025,7 +2030,7 @@ begin
       FTree.Add(Option.AsObject, Found);
       if not Option.HasDefaultValue then
       begin
-        (Found as TValuedResult).Fail(Format(SOptionRequired, [Option.Name]));
+        (Found as TValuedResult).Fail(FormatText(TCommandLineText.RequiredOptionWasNotProvided, [Option.Name]));
         Continue;
       end;
     end;
@@ -2058,7 +2063,8 @@ begin
       FTree.Add(Argument.AsObject, Found);
       if not Argument.HasDefaultValue then
       begin
-        (Found as TValuedResult).Fail(Format(SArgumentRequired, [Argument.Name]));
+        (Found as TValuedResult).Fail(FormatText(TCommandLineText.CommandRequiredArgumentMissing,
+          [Argument.Name, Node.Command.Name]));
         Continue;
       end;
       (Found as TArgumentResult).TakeDefault;
@@ -2138,8 +2144,7 @@ begin
     Command := FInnermost.Command;
     CommandAction := Command.Action;
     if (CommandAction = nil) and (Length(Command.Subcommands) > 0) then
-      FTree.InsertFirstError(Format(SCommandRequiresSubcommand, [Command.FullPath, NamesOf(Command.Subcommands)]),
-        FInnermost);
+      FTree.InsertFirstError(FormatText(TCommandLineText.RequiredCommandWasNotProvided, []), FInnermost);
     if (CommandAction <> nil) and CommandAction.ClearsParseErrors then
       DropErrorsOf(FInnermost)
     else if FTree.ErrorCount > 0 then
@@ -2206,8 +2211,8 @@ begin
         end;
       TItemKind.UnknownOption:
         begin
-          Unmatched(FItems[FIndex].Token.Value, Format(SUnknownOption,
-            [FItems[FIndex].Name, FInnermost.Command.FullPath]));
+          Unmatched(FItems[FIndex].Token.Value, FormatText(TCommandLineText.UnrecognizedCommandOrArgument,
+            [FItems[FIndex].Token.Value]));
           Inc(FIndex);
         end;
       TItemKind.CommandName:
