@@ -55,7 +55,7 @@ en ejecución.
 | `TCommandLineExit` | Los códigos que devuelve `Invoke` cuando no es la acción quien decide |
 | `TParserConfiguration` | Cómo lee el parse una invocación: el agrupado, los ficheros de respuesta, y si los nombres distinguen mayúsculas |
 | `TCommandLineText`, `TCommandLineTexts` | La clave de cada texto que escriben el parse y la ayuda, y los textos que una aplicación escribe en su lugar |
-| `CommandLine` | El punto de entrada: `Option<T>`, `Argument<T>`, `Command`, `Root`, `HelpOption`, `VersionOption`, `Directive`, `DiagramDirective`, y `SplitCommandLine`; y `Texts`, los textos en vigor |
+| `CommandLine` | El punto de entrada: `Option<T>`, `Argument<T>`, `Command`, `Root`, `HelpOption`, `VersionOption`, `Directive`, `DiagramDirective`, `SplitCommandLine`, `ExecutablePath` y `ExecutableName`; y `Texts`, los textos en vigor |
 
 ---
 
@@ -207,7 +207,7 @@ el texto recibido, en vez de valer `80`; y `-5` es un valor, no una opción desc
 
 ### Los tipos de serie, y qué traduce cada uno
 
-Cada tipo de serie de .NET tiene su tipo de Delphi, salvo `DateTimeOffset` — divergencia 9, más abajo.
+Cada tipo de serie de .NET tiene su tipo de Delphi, salvo `DateTimeOffset` — divergencia 11, más abajo.
 
 | `System.CommandLine` | Aquí | Cómo se lee |
 |---|---|---|
@@ -218,7 +218,7 @@ Cada tipo de serie de .NET tiene su tipo de Delphi, salvo `DateTimeOffset` — d
 | `bool` | `Boolean` | es el flag: basta con nombrarlo |
 | enums | tipos enumerados | el tipo nombra sus valores, y se comparan sin distinguir mayúsculas |
 | enums `[Flags]` | `set of` un enumerado | sus nombres separados por comas: `--letters A,C` |
-| `DateTime` | `TDateTime` | ISO 8601 y nada más — divergencia 3, más abajo. Escrita sin zona, es la hora escrita |
+| `DateTime` | `TDateTime` | ISO 8601 y nada más — divergencia 10, más abajo. Escrita sin zona, es la hora escrita |
 | `DateOnly`, `TimeOnly` | `TDate`, `TTime` | ISO 8601: `2026-10-05`; `10:30`, `10:30:15` o `10:30:15.5` |
 | `TimeSpan` | `TTimeSpan` | el formato de .NET, `d.hh:mm:ss.f`: `1.02:03:04` es un día, dos horas, tres minutos y cuatro segundos |
 | `Guid` | `TGUID` | las llaves son opcionales |
@@ -269,8 +269,7 @@ MinOpt := CommandLine.Option<TSemVer>('--min',
     Result := TSemVer.TryParse(Raw, Value);
     if not Result then
       Error := Format('"%s" no es una versión: escríbela como mayor.menor.parche', [Raw]);
-  end,
-  'Versión mínima aceptada');
+  end).Description('Versión mínima aceptada');
 ```
 
 El rechazo sale por `ParseResult.Errors` como cualquier otro, así que un tipo que añade un tercero
@@ -300,9 +299,8 @@ pasa el resto a los argumentos que siguen. Una excepción suya sale del parseo t
 
 **En el símbolo y no en un registro de tipos.** El alcance es exactamente donde se escribió.
 
-El límite **se movió pero no desapareció**: un tipo que el motor no cubre y para el que no se declara
-conversión se rechaza **al añadir el símbolo a un comando**, antes de leer ninguna invocación. Un
-`CustomParser` se declara antes de ese `Add`.
+Un tipo que el motor no cubre y para el que no se declara conversión se rechaza **al añadir el símbolo
+a un comando**, antes de leer ninguna invocación. Un `CustomParser` se declara antes de ese `Add`.
 
 ### Validaciones
 
@@ -332,7 +330,7 @@ Tres vienen de serie, escritas sobre ese mismo gancho:
 
 Aplican a una ruta —un `string`, un `TFilePath` o un `TDirectoryPath`, y un `TArray` de cualquiera de
 ellos, donde corren por elemento—. Declarar una sobre algo que no es una ruta se rechaza al
-declararla. Un valor vacío no es ni un nombre ni una ruta legales — divergencia 10, más abajo.
+declararla. Un valor vacío no es ni un nombre ni una ruta legales — divergencia 13, más abajo.
 Las validaciones miran lo que escribió la invocación, así que un valor por defecto no se valida:
 `.AcceptLegalFileNamesOnly.DefaultValue('')` lee el vacío por defecto, y rechaza `--report ""`.
 
@@ -430,8 +428,8 @@ que no digan las otras.
 | Fichero de respuesta | `@build.rsp` | los tokens que traen sus líneas |
 
 Todas están acotadas igual: **cada una actúa solo cuando el token no nombra ya algo declarado**.
-`-fdx` se parte en tres porque `f`, `d` y `x` son alias declarados; si existiera una opción llamada
-`-fdx`, eso es lo que el token seguiría siendo. Un token es un grupo solo cuando su **primera** letra
+`-fdx` se parte en tres porque `f`, `d` y `x` son alias declarados; con una opción llamada
+`-fdx` declarada, el token es esa opción. Un token es un grupo solo cuando su **primera** letra
 nombra una opción, la de la ayuda incluida —`-fh` y `-hf` piden ayuda—, y si no, sigue siendo el token
 que era. Dentro de un grupo, una opción que toma un valor se queda con el resto del token, tras un `:`
 o un `=` cuando lo hay: `-fdobin` y `-fdo=bin` son los dos `-f -d -o bin`. Una letra que nadie declaró,
@@ -467,8 +465,8 @@ build native app.dpr
 
 Cada línea se parte como se parte una línea de comandos —el espacio separa, las comillas dobles
 agrupan—, así que la segunda línea son dos tokens. No se expande ninguna variable y no se resuelve
-ninguna ruta contra nada. Un fichero puede nombrar a otro; el anidamiento está acotado, y uno que se
-nombra a sí mismo falla diciéndolo en vez de colgarse.
+ninguna ruta contra nada. Un fichero puede nombrar a otro, hasta 10 niveles —
+divergencia 8, más abajo.
 
 Quien los lee es `TParserConfiguration.ResponseFileTokenReplacer`: el lector de arriba por defecto,
 `nil` para no leer ninguno —y entonces `@valor` es un valor—, o uno propio de la aplicación, que
@@ -555,7 +553,7 @@ valores por defecto, que son los de .NET; `Parse` la recibe como segundo argumen
 | Campo | Por defecto | Qué hace |
 |-------|-------------|----------|
 | `EnablePosixBundling` | `True` | Las opciones de un carácter se agrupan, y una que toma valor lo toma pegado: `-fdx`, `-obin`. Apagado, los dos siguen siendo los tokens que eran; `-o:bin` sigue delimitando |
-| `EnableCaseInsensitiveNames` | `False` | Encendido, los nombres y alias de opciones, comandos y directivas se comparan sin distinguir mayúsculas —ver la divergencia 2— |
+| `EnableCaseInsensitiveNames` | `False` | Encendido, los nombres y alias de opciones, comandos y directivas se comparan sin distinguir mayúsculas —ver la divergencia 4— |
 | `ResponseFileTokenReplacer` | el lector de ficheros de respuesta | Lo que sustituye a un token que empieza por `@`; `nil` no lee ninguno |
 
 ---
@@ -572,7 +570,7 @@ $ buildtool --help
 Description:
   A small tool that builds and serves things
 
-Usage:
+Synopsis:
   buildtool [command] [options]
 
 Options:
@@ -585,6 +583,9 @@ Commands:
   serve     Serve what was built
 ```
 
+Donde `System.CommandLine` escribe `Usage:`, `buildtool` escribe `Synopsis:`, un texto que asigna con
+`CommandLine.Texts` —ver *Los textos que escribe*—.
+
 La ayuda de un subcomando enseña además las opciones recursivas de sus ancestros, y sus argumentos
 antes que los propios:
 
@@ -593,7 +594,7 @@ $ buildtool build native --help
 Description:
   Build a native binary
 
-Usage:
+Synopsis:
   buildtool build native <target> [options]
 
 Arguments:
@@ -866,8 +867,7 @@ if Written <> nil then
 
 `SetAction` le da una acción, terminal o no, como a una opción.
 
-`[env:CLAVE=valor]` no está: fija una variable de entorno, y este módulo no llama al sistema
-operativo. Tampoco `[suggest]`, que es del autocompletado.
+No hay directiva `[env]`, ni `[suggest]` — divergencias 25 y 24, más abajo.
 
 ---
 
@@ -919,94 +919,131 @@ CommandLine.Texts := Texts;
 
 ## Divergencias con `System.CommandLine`
 
-**1 · El valor se lee al revés.** En .NET se escribe `result.GetValue(fileOption)`. Aquí,
-`fileOption.ValueIn(parsed)`: el objeto le pregunta al resultado:
+**1 · Un símbolo se declara con una fábrica, y se configura encadenando llamadas.** .NET escribe
+`new Option<string>("--file", "-f") { Description = "File to compile", Required = true }`. Aquí es
+`CommandLine.Option<string>('--file', ['-f']).Description('File to compile').Required`. Un nombre que
+toma un valor es el de .NET: con argumento lo fija, sin él lo lee —`Description('…')` y
+`Description`—. Un booleano se fija con el nombre de .NET y se lee como una pregunta —`Required` e
+`IsRequired`, `Hidden` e `IsHidden`, `AllowMultipleArgumentsPerToken` y
+`AllowsMultipleArgumentsPerToken`—, y `TreatUnmatchedTokensAsErrors`, encendido por defecto, se apaga
+con `AllowUnmatchedTokens` y se lee con `TreatsUnmatchedTokensAsErrors`. `Options`, `Arguments` y
+`Subcommands` son de solo lectura, y un símbolo se añade con `Add`. Una raíz recibe su nombre al
+declararla: el `new RootCommand("A tool")` de .NET es
+`CommandLine.Root(CommandLine.ExecutableName, 'A tool')`. Y cambian dos nombres: lo que el resultado
+del parse de .NET devuelve a `ToString()` es `IParseResult.Diagram`, y `Token.Type` es
+`TToken.TokenType`.
 
-- Una interfaz **no puede declarar un método genérico**, punto — `E2535 Interface methods must not
-  have parameterized methods`. Así que `IParseResult.GetValue<T>` no puede existir, fuera
-  cierto lo demás o no.
-- Y ni siquiera en una clase infiere Delphi la `T` a través de un parámetro `IOption<T>` — `E2010
-  Incompatible types: 'IOption<T>' and 'IOption<string>'`. La inferencia funciona cuando el parámetro
-  **es** `T`, no cuando `T` va anidada dentro de otro genérico.
+**2 · Un valor se lee con el objeto que lo declaró.** .NET escribe `result.GetValue(fileOption)`.
+Aquí es `FileOption.ValueIn(Parsed)`, y `RequiredValueIn` por `GetRequiredValue`. Los dos toman
+también el resultado de un símbolo, donde .NET llama a `GetValue` sobre un `SymbolResult` o a
+`GetValueOrDefault` sobre el resultado de una opción o de un argumento. La forma de .NET no se puede
+escribir en Delphi: una interfaz no puede declarar un método genérico
+—`E2535 Interface methods must not have parameterized methods`— y Delphi no infiere la `T` a través
+de un parámetro `IOption<T>` —`E2010 Incompatible types`—.
 
-`ValueIn` no necesita inferencia porque `T` ya viene fijada por el receptor.
+**3 · Un valor no se lee nunca por su nombre.** `GetValue<T>("--file")`,
+`GetRequiredValue<T>("--file")` y `GetResult("--file")` no tienen equivalente, ni en el resultado del
+parse ni en el de un símbolo. La llave es el objeto declarado —ver *Por qué el objeto declarado es la
+llave*—.
 
-**2 · Si los nombres distinguen mayúsculas lo dice la aplicación.** .NET las distingue siempre, y aquí
+**4 · Si los nombres distinguen mayúsculas lo dice la aplicación.** .NET las distingue siempre, y aquí
 también por defecto: `-v` y `-V` son dos opciones, y `--OUT` no alcanza nada cuando la declarada es
 `--out`. Con `TParserConfiguration.EnableCaseInsensitiveNames` se comparan sin distinguirlas, y un
 comando que responde a dos nombres que solo difieren en mayúsculas se rechaza al parsear, con una
 `ECommandLine` que nombra los dos. A los valores no les alcanza: los nombres de un enumerado no
 distinguen mayúsculas nunca, y `AcceptOnlyFromAmong` compara con su propio comparador.
 
-**3 · Una fecha y una hora se leen en ISO 8601 y de ninguna otra forma.** El `DateTime`, el
-`DateOnly` y el `TimeOnly` de .NET admiten además la convención local. Aquí `--since 2026-08-25` vale
-y `--since 25/08/2026` se rechaza, nombrando la opción y el texto; y una hora es `22:30`, no
-`10:30 PM`. El coste aceptado: quien teclee a mano tiene que escribir la fecha como la lee la máquina.
+**5 · Una opción que nadie declaró no es un valor.** .NET toma como valor un token que empieza por
+guion y no casa con ninguna opción cuando un argumento tiene sitio para él: con `<name>` libre,
+`tool --verbsoe` pasa `--verbsoe` a `<name>`. Aquí es un token que nada reclamó: salvo que el comando
+recoja esos tokens con `AllowUnmatchedTokens`, el parse falla con
+`Unrecognized command or argument '--verbsoe'.` Un guion seguido de un dígito o de un punto es un
+valor —`-5`, `-.5`—, y cualquier otro valor que empiece por guion se escribe detrás de `--`.
 
-**4 · Un error de parse devuelve 2, no 1.** .NET devuelve 1 tanto a un error de parse como a una
-excepción que nadie capturó. Aquí `Invoke` devuelve `TCommandLineExit.InvocationError` (2) a una
-invocación que no encaja con la gramática, y el 1 queda para una acción que falló. `[diagram]`
-devuelve el mismo 2 para el diagrama de una invocación así, donde el de .NET devuelve 1.
+**6 · Una letra de un grupo que nadie declaró rechaza el grupo.** .NET deja el resto del token como
+un token más: allí `-fdz` da `-f` y `-d`, y `z` sigue como un valor. Aquí falla nombrando `-z`, y no
+se toma ninguna de las demás letras.
 
-**5 · La invocación es síncrona.** No hay acción asíncrona, ni cancelación, ni manejo de la
-terminación del proceso —ni Ctrl+C, ni tiempo de gracia antes de terminar—.
-`TInvocationConfiguration` lleva la salida, el error y el manejador de excepciones por defecto, y
-nada más.
+**7 · Unos corchetes son un valor cuando la raíz no declara ninguna directiva.** .NET descarta un
+primer token entre corchetes cuando no hay directiva que lo lea. Aquí sigue siendo un valor:
+`mitool [1,2]` pasa `[1,2]` al argumento. Con una directiva declarada los dos coinciden, y un token así
+no casa con nada.
 
-**6 · Leer un valor rechazado lanza `ECommandLine`.** .NET lanza `InvalidOperationException`. Aquí es
-la excepción propia del módulo, la que lanza ante una gramática mal declarada o cambiada después de
-congelarla.
+**8 · Un fichero de respuesta anida como mucho 10 niveles.** .NET no tiene tope. Aquí un fichero que
+se nombra a sí mismo falla nombrándolo.
 
-**7 · Nada se escribe en color.** .NET escribe en rojo los errores de parse y una excepción que se
-escapa, en una consola. Aquí son texto plano, y una excepción que se escapa lleva su pila solo cuando
-hay instalado un proveedor de pilas.
-
-**8 · Una opción que toma un nombre de la ayuda o de la versión se rechaza.** .NET la acepta. En la
+**9 · Una opción que toma un nombre de la ayuda o de la versión se rechaza.** .NET la acepta. En la
 raíz no responde nunca, porque antes responden la ayuda y la versión; en un subcomando responde en
 lugar de la ayuda que el subcomando hereda, así que `build -h` y `build --help` hacen cosas distintas.
 Aquí añadirla lanza `ECommandLine`, y también el parse, para un nombre que tomó después un alias:
 `--help`, `-h` y `-?` piden siempre la ayuda.
 
-**9 · No hay `DateTimeOffset`.** Delphi no tiene un tipo para una fecha con su desfase. Un
+**10 · Una fecha y una hora se leen en ISO 8601 y de ninguna otra forma.** El `DateTime`, el
+`DateOnly` y el `TimeOnly` de .NET admiten además la convención local. Aquí `--since 2026-08-25` vale
+y `--since 25/08/2026` se rechaza, nombrando la opción y el texto; y una hora es `22:30`, no
+`10:30 PM`.
+
+**11 · No hay `DateTimeOffset`.** Delphi no tiene un tipo para una fecha con su desfase. Un
 `TDateTime` escrito con zona —`2026-08-25T23:30+02:00`— se convierte a la hora local.
 
-**10 · Un nombre de fichero o una ruta vacíos se rechazan.** `AcceptLegalFileNamesOnly` y
+**12 · Un valor de un enumerado se escribe por su nombre.** .NET admite además un número, tenga o no
+el tipo un valor con él: `--level 1`, `--level 42`. Aquí solo se admiten los nombres, sin distinguir
+mayúsculas.
+
+**13 · Un nombre de fichero o una ruta vacíos se rechazan.** `AcceptLegalFileNamesOnly` y
 `AcceptLegalFilePathsOnly` de .NET aceptan un valor vacío; aquí los dos lo rechazan.
 
-**11 · Un fichero de respuesta anida como mucho 10 niveles.** .NET no tiene tope. Aquí un fichero que
-se nombra a sí mismo falla nombrándolo.
-
-**12 · Una letra de un grupo que nadie declaró rechaza el grupo.** .NET deja el resto del token como
-un token más: allí `-fdz` da `-f` y `-d`, y `z` sigue como un valor. Aquí falla nombrando `-z`, y no
-se toma ninguna de las demás letras.
-
-**13 · Unos corchetes son un valor cuando la raíz no declara ninguna directiva.** .NET descarta un
-primer token entre corchetes cuando no hay directiva que lo lea. Aquí sigue siendo un valor:
-`mitool [1,2]` pasa `[1,2]` al argumento. Con una directiva declarada los dos coinciden, y un token así
-no casa con nada.
-
-**14 · La ayuda no se ajusta a la consola.** .NET la ajusta al ancho de la consola cuando la salida no
-está redirigida. Aquí sus líneas solo se ajustan al `MaxWidth` de la acción de la ayuda, y por defecto
-no hay ninguno — lo que hace .NET con la salida redirigida.
-
-**15 · `--version` escribe la versión que declara la raíz.** .NET escribe la versión informativa del
-ensamblado. Una raíz que no declara ninguna escribe una versión vacía, y su ayuda no lista
-`--version`.
-
-**16 · El uso cierra los corchetes que abre.** El uso de .NET para los argumentos adicionales es
-`[[--] <additional arguments>...]]`, con un corchete de más. Aquí es
-`[[--] <additional arguments>...]`.
-
-**17 · Un error nombra un tipo y un carácter como los lee Delphi.** .NET nombra el tipo del CLR:
+**14 · Un error nombra un tipo y un carácter como los lee Delphi.** .NET nombra el tipo del CLR:
 `as expected type 'System.Int32'`. Aquí es un nombre en palabras —`'integer'`, `'unsigned integer'`,
 `'date'`, `'file'`— y, para un enumerado, el nombre con el que se declaró. Y un carácter sin
 glifo se nombra por su código: `Character not allowed in a path: '#9'.`
 
----
+**15 · Leer un valor rechazado lanza `ECommandLine`.** .NET lanza `InvalidOperationException`. Aquí es
+la excepción propia del módulo, la que lanza ante una gramática mal declarada o cambiada después de
+congelarla.
 
-## Lo que todavía no está
+**16 · La ayuda enseña un default calculado con el texto con que se declaró.** La ayuda de .NET
+ejecuta la factoría del default para enseñar su valor. Aquí enseña el texto que se pasó a
+`DefaultValueFactory(Factory, Text)`, o ningún default si no se pasó ninguno, y el cálculo solo corre
+al parsear.
 
-Las directivas `[env]` y `[suggest]` y el autocompletado no se portan.
+**17 · Un error de parse devuelve 2, no 1.** .NET devuelve 1 tanto a un error de parse como a una
+excepción que nadie capturó. Aquí `Invoke` devuelve `TCommandLineExit.InvocationError` (2) a una
+invocación que no encaja con la gramática, y el 1 queda para una acción que falló. `[diagram]`
+devuelve el mismo 2 para el diagrama de una invocación así, donde el de .NET devuelve 1.
+
+**18 · La invocación es síncrona.** No hay acción asíncrona, ni cancelación, ni manejo de la
+terminación del proceso —ni Ctrl+C, ni tiempo de gracia antes de terminar—.
+`TInvocationConfiguration` lleva la salida, el error y el manejador de excepciones por defecto, y
+nada más.
+
+**19 · Nada se escribe en color.** .NET escribe en rojo los errores de parse y una excepción que se
+escapa, en una consola. Aquí son texto plano, y una excepción que se escapa lleva su pila solo cuando
+hay instalado un proveedor de pilas.
+
+**20 · La ayuda no se ajusta a la consola.** .NET la ajusta al ancho de la consola cuando la salida no
+está redirigida. Aquí sus líneas solo se ajustan al `MaxWidth` de la acción de la ayuda, y por defecto
+no hay ninguno — lo que hace .NET con la salida redirigida.
+
+**21 · `--version` escribe la versión que declara la raíz.** .NET escribe la versión informativa del
+ensamblado. Una raíz que no declara ninguna escribe una versión vacía, y su ayuda no lista
+`--version`.
+
+**22 · El uso cierra los corchetes que abre.** El uso de .NET para los argumentos adicionales es
+`[[--] <additional arguments>...]]`, con un corchete de más. Aquí es
+`[[--] <additional arguments>...]`.
+
+**23 · Los textos se escriben en inglés.** .NET distribuye sus textos traducidos, y los escribe en el
+idioma de la cultura de la interfaz en curso. Aquí son los textos en inglés de .NET, y una aplicación
+que quiera otros los asigna a `CommandLine.Texts` —ver *Los textos que escribe*—.
+
+**24 · No hay autocompletado.** .NET contesta qué puede completar una invocación a medias
+—`GetCompletions`, y la directiva `[suggest]` a la que llama el intérprete al pulsar Tab—. Aquí no hay
+ninguna de las dos cosas: el completado lo pide el intérprete, y `cmd.exe` no tiene completado
+programable.
+
+**25 · No hay directiva `[env]`.** La `[env:NOMBRE=valor]` de .NET fija una variable de entorno antes
+de que corra la acción.
 
 ---
 
@@ -1026,5 +1063,6 @@ declaraciones enfrentadas.
 ## Sample
 
 [`samples/BuildTool`](samples/BuildTool) declara una gramática de dos niveles, da a cada hoja su acción
-e invoca lo que parsea. Ejecútalo sin argumentos y recorre un conjunto de invocaciones, incluidas las
-seis que fallan, con el código de salida de cada una.
+e invoca lo que parsea. Declara además una validación de un comando entero, la directiva `[diagram]`
+y un texto propio para la ayuda. Ejecútalo sin argumentos y recorre un conjunto de invocaciones,
+incluidas las siete que fallan, con el código de salida de cada una.

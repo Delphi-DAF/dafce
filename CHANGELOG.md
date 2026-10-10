@@ -55,7 +55,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
   - `TNullable<T>` in `Daf.Nullable`
   - `TDeferredEnumerable<T>` and `TGeneratorEnumerator<T>` in `Daf.Enumerable`
   - `Daf.Comparers` — NULL-aware comparers for `TValue` and `TNullable<T>`
-- **Daf.CommandLine**: New module — a port of .NET's `System.CommandLine`, with its types of serie (`TFilePath` and `TDirectoryPath` among them), `--version`, a `--help` that `TCommandLineHelp` renders from the grammar, and invocation: each command declares its action with `SetAction`, and `Invoke` runs the one of the command reached. The `[diagram]` directive writes how an invocation was understood, without running it. The root's `HelpAction` and `VersionAction` can be replaced, to write something above the help and the version, and `Freeze` closes a grammar so that it can no longer change. `Parse` also reads an invocation written as one line, and `TParserConfiguration` decides grouping, response files and whether names tell cases apart. Its errors and its help write .NET's texts, and `CommandLine.Texts` replaces them with the application's. A parse error answers 2, not 1
+- **Daf.CommandLine**: New module — a port of .NET's `System.CommandLine`: a grammar declared once and read back with the objects that declared it, an action per command, declared with `SetAction` and run by `Invoke`, and .NET's help, parse rules and texts, which `CommandLine.Texts` replaces with the application's. A parse error answers 2, not 1; the other divergences, in its README
 - **Daf.Linq**: New module — the LINQ-to-Objects equivalent: lazy sequences over `System.IEnumerable<T>`, with `TQuery<T>` and `Linq.From<T>`
 - **Daf.Specification**: New module — the Specification pattern: `TSpecification<T>` gathers filter, order and paging into a reusable rule that can be asserted without a database, with `IRepository<T>` as the port
 - **SQLCute.InMemory**: New module — a second back-end: `TInMemory` runs an `IQuery` over loaded collections —JOINs, GROUP BY, subqueries, set operations— with ANSI NULL semantics
@@ -67,7 +67,6 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - **Commons**: `TVersionInfo.IsEmpty` and `IsSemVer` — «no version was set», «the tag was not understood» and «the version is this one» stop sharing a single representation that looked like a valid version
 - **Commons**: `VersionTag` takes a template of `${...}` markers, with `VersionTemplate` and `VersionTemplateWithBuild` as its two defaults. The marker list, in the GUIDE
 - **Commons**: `TMacrosList.MissingMacroPolicy` and `OnMissingMacro` decide what a reference to a macro that is not registered becomes: kept as written, a fallback value, or `EMacroNotFound`. With nothing configured it still resolves to empty
-- **CommandLine**: `WithVersion` also takes the application name and its company, or a class carrying a `[Version]` annotation to read the three from
 - **SystemProcess**: `TProcessResult.TStatus.Killed` — an explicit `Kill` and an expired deadline stop sharing the `Timeout` value, so a result says which of the two cut the run short
 
 ### Changed

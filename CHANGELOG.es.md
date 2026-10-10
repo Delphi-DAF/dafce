@@ -54,7 +54,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
   - `TNullable<T>` en `Daf.Nullable`
   - `TDeferredEnumerable<T>` y `TGeneratorEnumerator<T>` en `Daf.Enumerable`
   - `Daf.Comparers` — comparadores conscientes de NULL para `TValue` y `TNullable<T>`
-- **Daf.CommandLine**: Módulo nuevo — porting de `System.CommandLine` de .NET, con sus tipos de serie (entre ellos `TFilePath` y `TDirectoryPath`), `--version`, un `--help` que `TCommandLineHelp` compone desde la gramática, y la invocación: cada comando declara su acción con `SetAction`, e `Invoke` ejecuta la del comando alcanzado. La directiva `[diagram]` escribe cómo se entendió una invocación, sin ejecutarla. La `HelpAction` y la `VersionAction` de la raíz se pueden sustituir, para escribir algo encima de la ayuda y de la versión, y `Freeze` cierra una gramática para que ya no cambie. `Parse` lee también una invocación escrita en una línea, y `TParserConfiguration` decide el agrupado, los ficheros de respuesta y si los nombres distinguen mayúsculas. Sus errores y su ayuda escriben los textos de .NET, y `CommandLine.Texts` los sustituye por los de la aplicación. Un error de parse sale con 2, no con 1
+- **Daf.CommandLine**: Módulo nuevo — porting de `System.CommandLine` de .NET: una gramática que se declara una vez y se lee con los objetos que la declararon, una acción por comando, que se declara con `SetAction` y ejecuta `Invoke`, y la ayuda, las reglas del parse y los textos de .NET, que `CommandLine.Texts` sustituye por los de la aplicación. Un error de parse sale con 2, no con 1; las demás divergencias, en su README
 - **Daf.Linq**: Módulo nuevo — el equivalente de LINQ-to-Objects: secuencias perezosas sobre `System.IEnumerable<T>`, con `TQuery<T>` y `Linq.From<T>`
 - **Daf.Specification**: Módulo nuevo — el patrón Specification: `TSpecification<T>` reúne filtro, orden y paginación en una regla reutilizable y afirmable sin base de datos, con `IRepository<T>` como puerto
 - **SQLCute.InMemory**: Módulo nuevo — segundo back-end: `TInMemory` ejecuta un `IQuery` sobre colecciones cargadas —JOINs, GROUP BY, subconsultas, operaciones de conjunto— con semántica ANSI de NULL
@@ -66,7 +66,6 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - **Commons**: `TVersionInfo.IsEmpty` e `IsSemVer` — «no se fijó versión», «el tag no se entendió» y «la versión es esta» dejan de compartir una sola representación que parecía una versión válida
 - **Commons**: `VersionTag` toma una plantilla de marcadores `${...}`, con `VersionTemplate` y `VersionTemplateWithBuild` como sus dos plantillas por defecto. La lista de marcadores, en el GUIDE
 - **Commons**: `TMacrosList.MissingMacroPolicy` y `OnMissingMacro` deciden en qué se convierte una referencia a una macro que no está registrada: se queda como está escrita, toma un valor de reserva o lanza `EMacroNotFound`. Sin configurar nada sigue resolviéndose como vacía
-- **CommandLine**: `WithVersion` acepta también el nombre de la aplicación y su compañía, o una clase con una anotación `[Version]` de la que leer los tres
 - **SystemProcess**: `TProcessResult.TStatus.Killed` — un `Kill` explícito y un plazo vencido dejan de compartir el valor `Timeout`, así que un resultado dice cuál de los dos cortó la ejecución
 
 ### Changed

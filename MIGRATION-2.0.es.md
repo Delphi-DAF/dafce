@@ -103,10 +103,10 @@ var Root := CommandLine.Root('mytool', 'Una herramienta');
 Root.Add([FileOpt, PortOpt, VerboseOpt]);
 
 var Parsed := Root.Parse;                     // sin argumento: lee ParamStr
-if not Parsed.Succeeded then
+if Parsed.IsHelpRequested or Parsed.IsVersionRequested or not Parsed.Succeeded then
 begin
-  Writeln(Parsed.ErrorText);                  // nombra la opción y el texto que recibió
-  Exit;
+  ExitCode := Parsed.Invoke;                  // la ayuda, la versión, o cada error nombrando la
+  Exit;                                       // opción y el texto que recibió
 end;
 
 var FilePath  := FileOpt.ValueIn(Parsed);     // un string, estáticamente

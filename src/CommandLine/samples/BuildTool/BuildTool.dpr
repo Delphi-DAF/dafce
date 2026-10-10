@@ -7,11 +7,12 @@
   The grammar this builds:
 
       buildtool                        --verbose    recursive: every leaf inherits it
-      |
+      |                                [diagram]    writes how an invocation was understood
       +-- build   (alias: b)                        only groups: not invocable itself
       |   +-- native <target>          --out        default bin\out.exe
       |   |                            --min-sdk    a type of this program's own
-      |   +-- web    <target>          --minify
+      |   +-- web    <target>          --minify     never together with --pretty
+      |                                --pretty
       |
       +-- serve                        --port       default 8080, from 1 to 65535
                                        --level      Quiet|Normal|Detailed
@@ -21,6 +22,9 @@
 
   Each leaf declares its action, and Invoke runs the one of the leaf reached and answers
   the code the process ends with. Nothing in this program asks which command it got.
+
+  The help writes Synopsis: where System.CommandLine writes Usage:, a text this program
+  assigns as its own.
 
   <target> is REQUIRED without anybody saying so: a string argument gets an arity of
   exactly one, and exactly one is what "required" means at the argument end.
@@ -32,6 +36,7 @@
       BuildTool build native app.dpr --out bin\app.exe --verbose
       BuildTool b web site.dpr --minify
       BuildTool serve --port 8080
+      BuildTool [diagram] b native app.dpr -v
 }
 
 {$APPTYPE CONSOLE}
@@ -73,12 +78,14 @@ type
     FVerbose: IOption<Boolean>;
     FOut: IOption<string>;
     FMinify: IOption<Boolean>;
+    FPretty: IOption<Boolean>;
     FPort: IOption<Integer>;
     FLevel: IOption<TVerbosity>;
     FMinSdk: IOption<TSemVer>;
     FTarget: IArgument<string>;
     procedure DeclareGrammar;
     procedure DeclareActions;
+    procedure RefuseMinifyWithPretty(const Result: ICommandResult);
     procedure ShowCommon(const Parsed: IParseResult);
     procedure ReportNative(const Parsed: IParseResult);
     procedure ReportWeb(const Parsed: IParseResult);
@@ -118,12 +125,13 @@ procedure TBuildTool.DeclareGrammar;
 begin
   // Each symbol carries its description here, and nowhere else: the help is rendered
   // from these, so there is no second place that could disagree with them.
-  // The one-character aliases are what make `-vm` a bundle: a group is only split when
-  // every letter of it names a declared option, so declaring them is what admits the
-  // form. Nothing else changes -- `--verbose` still works spelled out.
+  // The one-character aliases are what make `-vm` a bundle: each letter of it names a
+  // declared option, so it reads as `-v -m`. Nothing else changes -- `--verbose` still
+  // works spelled out.
   FVerbose := CommandLine.Option<Boolean>('--verbose', ['-v']).Description('Say more about what is happening').Recursive;
   FOut := CommandLine.Option<string>('--out').Description('Where the binary goes').DefaultValue('bin\out.exe');
   FMinify := CommandLine.Option<Boolean>('--minify', ['-m']).Description('Shrink the produced assets');
+  FPretty := CommandLine.Option<Boolean>('--pretty').Description('Keep the produced assets readable');
   // A range is a validation and not a mechanism of its own, which is also how
   // System.CommandLine answers one. It receives the value already converted.
   FPort := CommandLine.Option<Integer>('--port').Description('Port to listen on').DefaultValue(8080)
@@ -138,9 +146,8 @@ begin
   // Nothing here lists the accepted values: the enumerated type does it, both in the
   // help and in the error when one is refused.
   FLevel := CommandLine.Option<TVerbosity>('--level').Description('How much to say').DefaultValue(TVerbosity.Normal);
-  // A type the engine does not know, made usable in ONE place. The conversion is passed
-  // where the option is declared, because a symbol either knows how to convert its type
-  // or its declaration is refused there and then.
+  // A type the engine does not know, made usable in ONE place: the conversion is passed
+  // where the option is declared. Without one, adding the option to a command is refused.
   FMinSdk := CommandLine.Option<TSemVer>('--min-sdk',
     function(const Raw: string; out Value: TSemVer; out Error: string): Boolean
     begin
@@ -158,7 +165,10 @@ begin
   // A LEAF: a positional argument plus its own options. The same FTarget object
   // serves both leaves -- only the leaf actually reached ever binds a value to it.
   FNative := CommandLine.Command('native', 'Build a native binary').Add([FTarget, FOut, FMinSdk]);
-  FWeb := CommandLine.Command('web', 'Build for the browser').Add([FTarget, FMinify]);
+  FWeb := CommandLine.Command('web', 'Build for the browser').Add([FTarget, FMinify, FPretty]);
+  // A rule about the invocation as a whole, which no option states on its own. It runs
+  // when `web` is the command reached, before its options are validated.
+  FWeb.Validators.Add(RefuseMinifyWithPretty);
   FServe := CommandLine.Command('serve', 'Serve what was built').Add([FPort, FLevel]);
 
   // A GROUP: here Add takes SUBCOMMANDS, and that is what makes `build` a group.
@@ -171,6 +181,9 @@ begin
   // The version lives on the ROOT, as in .NET: it is the tool's, not each order's.
   FRoot := CommandLine.Root('buildtool', 'A small tool that builds and serves things').WithVersion('1.0.0');
   FRoot.Add([FVerbose, FBuild, FServe]);
+  // [diagram] writes how an invocation was understood, and runs nothing. Only a root
+  // declares directives.
+  FRoot.Add(CommandLine.DiagramDirective);
 end;
 
 // Each action is a method of this class, with no code of its own: the invocation answers 0
@@ -180,6 +193,12 @@ begin
   FNative.SetAction(ReportNative);
   FWeb.SetAction(ReportWeb);
   FServe.SetAction(ReportServe);
+end;
+
+procedure TBuildTool.RefuseMinifyWithPretty(const Result: ICommandResult);
+begin
+  if (Result.GetResult(FMinify) <> nil) and (Result.GetResult(FPretty) <> nil) then
+    Result.AddError('--minify and --pretty cannot be used together');
 end;
 
 // What every leaf has in common, including the option nobody declared on it.
@@ -282,15 +301,30 @@ begin
   // And refused by that same conversion, with the message the conversion wrote. The
   // refusal comes out through Errors, like every other invalid invocation.
   Walk(['build', 'native', 'app.dpr', '--min-sdk', '11.4']);
-  // The same invocation, written the three other ways the grammar admits. None of them
-  // says anything the forms above do not: that is the point of admitting them.
+  // Each option is valid on its own, and the validation of the command refuses the two.
+  Walk(['b', 'web', 'site.dpr', '--minify', '--pretty']);
+  // The same invocations, written the other ways the grammar admits. None of them says
+  // anything the forms above do not.
   Walk(['serve', '--port:9090']);
-  Walk(['serve', '/port', '80']);
+  Walk(['serve', '--port=9090']);
   // A bundle: -v and -m are declared one-character aliases, so this is `-v -m`.
   Walk(['b', 'web', 'site.dpr', '-vm']);
+  // How an invocation was understood, and no action runs: the alias, the recursive option
+  // and the default --out took, marked with *.
+  Walk(['[diagram]', 'b', 'native', 'app.dpr', '-v']);
   // Neither --help nor --version was declared anywhere. Both answer.
   Walk(['--version']);
   Walk(['--help']);
+end;
+
+// The texts are a setting of the process, assigned before the grammar is declared. This
+// program writes its own title for the usage; every other text stays .NET's.
+procedure UseOwnTexts;
+var
+  Texts: TCommandLineTexts;
+begin
+  Texts[TCommandLineText.HelpUsageTitle] := 'Synopsis:';
+  CommandLine.Texts := Texts;
 end;
 
 function ArgsFromCommandLine: TArray<string>;
@@ -308,6 +342,7 @@ var
 begin
   ReportMemoryLeaksOnShutdown := True;
   try
+    UseOwnTexts;
     Tool := TBuildTool.Create;
     try
       if ParamCount = 0 then

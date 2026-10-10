@@ -55,7 +55,7 @@ run time.
 | `TCommandLineExit` | The codes `Invoke` answers when the action is not the one deciding |
 | `TParserConfiguration` | How the parse reads an invocation: grouping, response files, and whether names tell cases apart |
 | `TCommandLineText`, `TCommandLineTexts` | The key of each text the parse and the help write, and the texts an application writes instead |
-| `CommandLine` | The entry point: `Option<T>`, `Argument<T>`, `Command`, `Root`, `HelpOption`, `VersionOption`, `Directive`, `DiagramDirective`, and `SplitCommandLine`; and `Texts`, the texts in force |
+| `CommandLine` | The entry point: `Option<T>`, `Argument<T>`, `Command`, `Root`, `HelpOption`, `VersionOption`, `Directive`, `DiagramDirective`, `SplitCommandLine`, `ExecutablePath` and `ExecutableName`; and `Texts`, the texts in force |
 
 ---
 
@@ -205,7 +205,7 @@ the text received, rather than becoming `80`; and `-5` is a value, not an unknow
 
 ### The types of serie, and what each one translates
 
-Each type of serie of .NET has its Delphi type, except `DateTimeOffset` — divergence 9 below.
+Each type of serie of .NET has its Delphi type, except `DateTimeOffset` — divergence 11 below.
 
 | `System.CommandLine` | Here | How it is read |
 |---|---|---|
@@ -216,7 +216,7 @@ Each type of serie of .NET has its Delphi type, except `DateTimeOffset` — dive
 | `bool` | `Boolean` | it is the flag: naming it is enough |
 | enums | enumerated types | the type names its own values, matched without regard to case |
 | `[Flags]` enums | `set of` an enumerated type | its names separated by commas: `--letters A,C` |
-| `DateTime` | `TDateTime` | ISO 8601 and nothing else — divergence 3 below. Written with no zone, it is the time written |
+| `DateTime` | `TDateTime` | ISO 8601 and nothing else — divergence 10 below. Written with no zone, it is the time written |
 | `DateOnly`, `TimeOnly` | `TDate`, `TTime` | ISO 8601: `2026-10-05`; `10:30`, `10:30:15` or `10:30:15.5` |
 | `TimeSpan` | `TTimeSpan` | .NET's format, `d.hh:mm:ss.f`: `1.02:03:04` is a day, two hours, three minutes and four seconds |
 | `Guid` | `TGUID` | the braces are optional |
@@ -266,8 +266,7 @@ MinOpt := CommandLine.Option<TSemVer>('--min',
     Result := TSemVer.TryParse(Raw, Value);
     if not Result then
       Error := Format('"%s" is not a version: write it as major.minor.patch', [Raw]);
-  end,
-  'Lowest version accepted');
+  end).Description('Lowest version accepted');
 ```
 
 The refusal comes out through `ParseResult.Errors` like any other, so a type a third party added fails
@@ -297,9 +296,8 @@ rest to the arguments that follow. An exception it raises leaves the parse as it
 
 **On the symbol and not in a registry of types.** Its reach is exactly where it was written.
 
-The limit **moved but did not disappear**: a type the engine does not cover and for which no
-conversion is declared is refused **when the symbol is added to a command**, before any invocation is
-read. A `CustomParser` is declared before that `Add`.
+A type the engine does not cover and for which no conversion is declared is refused **when the symbol
+is added to a command**, before any invocation is read. A `CustomParser` is declared before that `Add`.
 
 ### Validations
 
@@ -329,7 +327,7 @@ Three come as standard, written over that same hook:
 
 They apply to a path — a `string`, a `TFilePath` or a `TDirectoryPath`, and a `TArray` of any of them,
 where they run per element. Declaring one on something that is not a path is refused at the
-declaration. An empty value is neither a legal name nor a legal path — divergence 10 below.
+declaration. An empty value is neither a legal name nor a legal path — divergence 13 below.
 The validations look at what the invocation wrote, so a default is not validated:
 `.AcceptLegalFileNamesOnly.DefaultValue('')` reads the empty default, and refuses `--report ""`.
 
@@ -427,8 +425,8 @@ says anything the others do not.
 | Response file | `@build.rsp` | the tokens its lines carry |
 
 Every one of them is bounded the same way: **each fires only when the token does not already name
-something declared**. `-fdx` becomes three because `f`, `d` and `x` are declared aliases; were there
-an option called `-fdx`, that is what the token would stay. A token is a group only when its **first**
+something declared**. `-fdx` becomes three because `f`, `d` and `x` are declared aliases; with an
+option called `-fdx` declared, the token is that option. A token is a group only when its **first**
 letter names an option, the help letter included — `-fh` and `-hf` ask for help —, and otherwise it
 stays the token it was. Inside a group, an option that takes a value keeps the rest of the token,
 after a `:` or a `=` when there is one: `-fdobin` and `-fdo=bin` are both `-f -d -o bin`. A letter
@@ -464,8 +462,7 @@ build native app.dpr
 
 Each line is split the way a command line is — white space separates, double quotes group — so the
 second line is two tokens. No variable is expanded and no path is resolved against anything. A file
-may name another; the nesting is bounded, and one that names itself fails saying so instead of
-hanging.
+may name another, up to 10 deep — divergence 8 below.
 
 `TParserConfiguration.ResponseFileTokenReplacer` is what reads them: the reader above by default,
 `nil` to read none — and then `@value` is a value —, or one of the application's own, which receives
@@ -551,7 +548,7 @@ gives back the one a result was read with.
 | Field | Default | What it does |
 |-------|---------|--------------|
 | `EnablePosixBundling` | `True` | One-character options group, and one that takes a value takes it glued: `-fdx`, `-obin`. Off, both stay the tokens they were; `-o:bin` still delimits |
-| `EnableCaseInsensitiveNames` | `False` | On, the names and aliases of options, commands and directives are compared without regard to case — see divergence 2 |
+| `EnableCaseInsensitiveNames` | `False` | On, the names and aliases of options, commands and directives are compared without regard to case — see divergence 4 |
 | `ResponseFileTokenReplacer` | the reader of response files | What replaces a token starting with `@`; `nil` reads none |
 
 ---
@@ -568,7 +565,7 @@ $ buildtool --help
 Description:
   A small tool that builds and serves things
 
-Usage:
+Synopsis:
   buildtool [command] [options]
 
 Options:
@@ -581,6 +578,9 @@ Commands:
   serve     Serve what was built
 ```
 
+Where `System.CommandLine` writes `Usage:`, `buildtool` writes `Synopsis:`, a text it assigns through
+`CommandLine.Texts` — see *The texts it writes*.
+
 The help of a subcommand also lists the recursive options of its ancestors, and their arguments
 before its own:
 
@@ -589,7 +589,7 @@ $ buildtool build native --help
 Description:
   Build a native binary
 
-Usage:
+Synopsis:
   buildtool build native <target> [options]
 
 Arguments:
@@ -864,8 +864,7 @@ if Written <> nil then
 
 `SetAction` gives it an action, terminating or not, as an option's.
 
-`[env:KEY=value]` is not here: it sets an environment variable, and this module does not call the
-operating system. Neither is `[suggest]`, which belongs to shell completion.
+There is no `[env]` directive, nor `[suggest]` — divergences 25 and 24 below.
 
 ---
 
@@ -917,93 +916,125 @@ CommandLine.Texts := Texts;
 
 ## Divergences from `System.CommandLine`
 
-**1 · The value is read the other way round.** In .NET you write `result.GetValue(fileOption)`. Here
-you write `fileOption.ValueIn(parsed)`: the object asks the result:
+**1 · A symbol is declared with a factory, and configured by chaining calls.** .NET writes
+`new Option<string>("--file", "-f") { Description = "File to compile", Required = true }`. Here it is
+`CommandLine.Option<string>('--file', ['-f']).Description('File to compile').Required`. A name that
+takes a value is .NET's: with an argument it sets, without one it reads — `Description('…')` and
+`Description`. A boolean is set by .NET's name and read as a question — `Required` and `IsRequired`,
+`Hidden` and `IsHidden`, `AllowMultipleArgumentsPerToken` and `AllowsMultipleArgumentsPerToken` — and
+`TreatUnmatchedTokensAsErrors`, on by default, is turned off with `AllowUnmatchedTokens` and read with
+`TreatsUnmatchedTokensAsErrors`. `Options`, `Arguments` and `Subcommands` are read-only, and a symbol
+is added with `Add`. A root takes its name when declared: .NET's `new RootCommand("A tool")` is
+`CommandLine.Root(CommandLine.ExecutableName, 'A tool')`. And two names change: what .NET's parse
+result answers to `ToString()` is `IParseResult.Diagram`, and `Token.Type` is `TToken.TokenType`.
 
-- An interface **cannot declare a generic method at all** — `E2535 Interface methods must not have
-  parameterized methods`. So `IParseResult.GetValue<T>` cannot exist, whatever else were
-  true.
-- Even on a class, Delphi does not infer `T` through an `IOption<T>` parameter — `E2010 Incompatible
-  types: 'IOption<T>' and 'IOption<string>'`. Inference works when the parameter *is* `T`, not when
-  `T` is nested inside another generic.
+**2 · A value is read with the object that declared it.** .NET writes `result.GetValue(fileOption)`.
+Here it is `FileOption.ValueIn(Parsed)`, and `RequiredValueIn` for `GetRequiredValue`. Both also take
+the result of a symbol, where .NET calls `GetValue` on a `SymbolResult` or `GetValueOrDefault` on the
+result of an option or an argument. The .NET form cannot be written in Delphi: an interface cannot
+declare a generic method — `E2535 Interface methods must not have parameterized methods` — and Delphi
+does not infer `T` through an `IOption<T>` parameter — `E2010 Incompatible types`.
 
-`ValueIn` needs no inference, because `T` is already fixed by the receiver.
+**3 · A value is never read by name.** `GetValue<T>("--file")`, `GetRequiredValue<T>("--file")` and
+`GetResult("--file")` have no counterpart, on the parse result or on the result of a symbol. The key is
+the declared object — see *Why the declared object is the key*.
 
-**2 · Whether names tell cases apart is the application's to say.** .NET always tells them apart, and
+**4 · Whether names tell cases apart is the application's to say.** .NET always tells them apart, and
 so does the default here: `-v` and `-V` are two options, and `--OUT` reaches nothing when `--out` is
 declared. With `TParserConfiguration.EnableCaseInsensitiveNames` they are compared without regard to
 case, and a command that answers to two names differing only in case is refused when parsing, with an
 `ECommandLine` naming both. Values are not touched: the names of an enumerated type never tell cases
 apart, and `AcceptOnlyFromAmong` compares with its own comparer.
 
-**3 · A date and a time are read as ISO 8601, and in no other way.** .NET's `DateTime`, `DateOnly` and
-`TimeOnly` also take the local convention. Here `--since 2026-08-25` works and `--since 25/08/2026` is
-refused, naming the option and the text; and a time is `22:30`, not `10:30 PM`. The accepted cost:
-somebody typing by hand has to write the date the way the machine reads it.
+**5 · An option nobody declared is not a value.** .NET takes a token that starts with a dash and
+matches no option as a value when an argument has room for one: with `<name>` free, `tool --verbsoe`
+hands `--verbsoe` to `<name>`. Here it is a token nothing claimed: unless the command collects such
+tokens with `AllowUnmatchedTokens`, the parse fails with
+`Unrecognized command or argument '--verbsoe'.` A dash followed by a digit or a dot is a value —
+`-5`, `-.5` — and any other value that starts with a dash is written behind `--`.
 
-**4 · A parse error answers 2, not 1.** .NET answers 1 both to a parse error and to an exception
-nobody caught. Here `Invoke` answers `TCommandLineExit.InvocationError` (2) to an invocation that
-does not fit the grammar, and 1 stays for an action that failed. `[diagram]` answers the same 2 for
-the diagram of such an invocation, where .NET's answers 1.
+**6 · A letter of a group that nobody declared refuses the group.** .NET leaves the rest of the token
+as one more token: there `-fdz` passes `-f` and `-d`, and `z` goes on as a value. Here it fails naming
+`-z`, and none of the other letters is taken.
 
-**5 · The invocation is synchronous.** There is no asynchronous action, no cancellation and no
-handling of the process termination — no Ctrl+C, no grace period before terminating.
-`TInvocationConfiguration` carries the output, the error and the default exception handler, and
-nothing else.
+**7 · Square brackets are a value when the root declares no directive.** .NET drops a first token in
+square brackets when there is no directive to read it. Here it stays a value: `mytool [1,2]` passes
+`[1,2]` to the argument. With a directive declared the two agree, and such a token matches nothing.
 
-**6 · Reading a refused value raises `ECommandLine`.** .NET raises `InvalidOperationException`. Here
-it is the module's own exception, the one it raises for a grammar declared wrong or changed once
-frozen.
+**8 · A response file nests at most 10 deep.** .NET has no limit. Here a file that names itself fails
+naming it.
 
-**7 · Nothing is written in color.** .NET writes parse errors and an escaped exception in red on a
-console. Here they are plain text, and an escaped exception carries its stack only when a provider of
-stack traces is installed.
-
-**8 · An option that takes a name of the help or of the version is refused.** .NET accepts it. On
+**9 · An option that takes a name of the help or of the version is refused.** .NET accepts it. On
 the root it never answers, because the help and the version answer first; on a subcommand it answers
 instead of the help the subcommand inherits, so `build -h` and `build --help` do different things.
 Here adding it raises `ECommandLine`, and so does a parse, for a name an alias took afterwards:
 `--help`, `-h` and `-?` always ask for the help.
 
-**9 · There is no `DateTimeOffset`.** Delphi has no type for a date with its offset. A `TDateTime`
+**10 · A date and a time are read as ISO 8601, and in no other way.** .NET's `DateTime`, `DateOnly`
+and `TimeOnly` also take the local convention. Here `--since 2026-08-25` works and
+`--since 25/08/2026` is refused, naming the option and the text; and a time is `22:30`, not
+`10:30 PM`.
+
+**11 · There is no `DateTimeOffset`.** Delphi has no type for a date with its offset. A `TDateTime`
 written with a zone — `2026-08-25T23:30+02:00` — is converted to local time.
 
-**10 · An empty file name or path is refused.** .NET's `AcceptLegalFileNamesOnly` and
+**12 · An enumerated value is written by its name.** .NET also takes a number, whether or not the type
+has a value with it: `--level 1`, `--level 42`. Here only the names are accepted, without regard to
+case.
+
+**13 · An empty file name or path is refused.** .NET's `AcceptLegalFileNamesOnly` and
 `AcceptLegalFilePathsOnly` accept an empty value; here both refuse it.
 
-**11 · A response file nests at most 10 deep.** .NET has no limit. Here a file that names itself fails
-naming it.
-
-**12 · A letter of a group that nobody declared refuses the group.** .NET leaves the rest of the token
-as one more token: there `-fdz` passes `-f` and `-d`, and `z` goes on as a value. Here it fails naming
-`-z`, and none of the other letters is taken.
-
-**13 · Square brackets are a value when the root declares no directive.** .NET drops a first token in
-square brackets when there is no directive to read it. Here it stays a value: `mytool [1,2]` passes
-`[1,2]` to the argument. With a directive declared the two agree, and such a token matches nothing.
-
-**14 · The help is not wrapped to the console.** .NET wraps it at the width of the console when the
-output is not redirected. Here its lines are wrapped only at the `MaxWidth` of the help action, and
-there is none by default — what .NET does when the output is redirected.
-
-**15 · `--version` writes the version the root declares.** .NET writes the informational version of
-the assembly. A root that declares none writes an empty version, and its help does not list
-`--version`.
-
-**16 · The usage closes the brackets it opens.** .NET's usage for the additional arguments is
-`[[--] <additional arguments>...]]`, with one bracket too many. Here it is
-`[[--] <additional arguments>...]`.
-
-**17 · An error names a type and a character as Delphi reads them.** .NET names the type of the CLR:
+**14 · An error names a type and a character as Delphi reads them.** .NET names the type of the CLR:
 `as expected type 'System.Int32'`. Here it is a name in words — `'integer'`, `'unsigned integer'`,
 `'date'`, `'file'` — and, for an enumerated type, the name it was declared with. And a
 character with no glyph is named by its code: `Character not allowed in a path: '#9'.`
 
----
+**15 · Reading a refused value raises `ECommandLine`.** .NET raises `InvalidOperationException`. Here
+it is the module's own exception, the one it raises for a grammar declared wrong or changed once
+frozen.
 
-## What is not here (yet)
+**16 · The help shows a calculated default by the text it was declared with.** .NET's help runs the
+default value factory to show its value. Here it shows the text given to
+`DefaultValueFactory(Factory, Text)`, or no default when no text was given, and the calculation runs
+only when parsing.
 
-The `[env]` and `[suggest]` directives and shell completion are not ported.
+**17 · A parse error answers 2, not 1.** .NET answers 1 both to a parse error and to an exception
+nobody caught. Here `Invoke` answers `TCommandLineExit.InvocationError` (2) to an invocation that
+does not fit the grammar, and 1 stays for an action that failed. `[diagram]` answers the same 2 for
+the diagram of such an invocation, where .NET's answers 1.
+
+**18 · The invocation is synchronous.** There is no asynchronous action, no cancellation and no
+handling of the process termination — no Ctrl+C, no grace period before terminating.
+`TInvocationConfiguration` carries the output, the error and the default exception handler, and
+nothing else.
+
+**19 · Nothing is written in color.** .NET writes parse errors and an escaped exception in red on a
+console. Here they are plain text, and an escaped exception carries its stack only when a provider of
+stack traces is installed.
+
+**20 · The help is not wrapped to the console.** .NET wraps it at the width of the console when the
+output is not redirected. Here its lines are wrapped only at the `MaxWidth` of the help action, and
+there is none by default — what .NET does when the output is redirected.
+
+**21 · `--version` writes the version the root declares.** .NET writes the informational version of
+the assembly. A root that declares none writes an empty version, and its help does not list
+`--version`.
+
+**22 · The usage closes the brackets it opens.** .NET's usage for the additional arguments is
+`[[--] <additional arguments>...]]`, with one bracket too many. Here it is
+`[[--] <additional arguments>...]`.
+
+**23 · The texts are written in English.** .NET ships its texts translated, and writes them in the
+language of the current UI culture. Here they are .NET's English texts, and an application that wants
+others assigns them to `CommandLine.Texts` — see *The texts it writes*.
+
+**24 · There is no shell completion.** .NET answers what can complete a partial invocation —
+`GetCompletions`, and the `[suggest]` directive a shell calls on Tab. Here there is neither:
+completion is asked for by the shell, and `cmd.exe` has no programmable completion.
+
+**25 · There is no `[env]` directive.** .NET's `[env:NAME=value]` sets an environment variable before
+the action runs.
 
 ---
 
@@ -1022,5 +1053,6 @@ no unit alias: they are different APIs. `MIGRATION-2.0.md` has the two declarati
 ## Sample
 
 [`samples/BuildTool`](samples/BuildTool) declares a two-level grammar, gives each leaf its action and
-invokes what it parses. Run it with no arguments and it walks a set of invocations, including the six
-that fail, with the exit code of each.
+invokes what it parses. It also declares a validation of a whole command, the `[diagram]` directive
+and a text of its own for the help. Run it with no arguments and it walks a set of invocations,
+including the seven that fail, with the exit code of each.

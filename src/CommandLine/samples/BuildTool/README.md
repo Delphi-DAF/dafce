@@ -4,17 +4,20 @@ Declares a command tree two levels deep and reads its values back through the ob
 it. It is the smallest thing that shows every piece of [`Daf.CommandLine`](../../README.md) at once:
 subcommands, a command alias, a positional argument, a recursive option, defaults, generated help,
 a value the engine refuses rather than guesses, a type of its own with the conversion that reads it,
-and the several ways the same invocation may be written.
+a validation of a whole command, the `[diagram]` directive, a text of its own in the help, and the
+several ways the same invocation may be written.
 
 ```
 buildtool                        --verbose, -v   recursive: every leaf inherits it
-|
+|                                [diagram]       writes how an invocation was understood
 +-- build   (alias: b)                           only groups: not invocable itself
 |   +-- native <target>          --out           default bin\out.exe
 |   |                            --min-sdk       a type of this program's own
-|   +-- web    <target>          --minify, -m
+|   +-- web    <target>          --minify, -m    never together with --pretty
+|                                --pretty
 |
 +-- serve                        --port          default 8080, from 1 to 65535
+                                 --level         Quiet|Normal|Detailed
 ```
 
 `native`, `web` and `serve` are the leaves. `build` only groups, so `buildtool build` is an
@@ -22,8 +25,8 @@ buildtool                        --verbose, -v   recursive: every leaf inherits 
 
 ## Running it
 
-With no arguments it walks a set of invocations, including the six that fail, and prints the exit code
-of each:
+With no arguments it walks a set of invocations, including the seven that fail, and prints the exit
+code of each:
 
 ```
 out\Win32\samples\bin\BuildTool.exe
@@ -36,11 +39,12 @@ BuildTool.exe --help
 BuildTool.exe build native app.dpr --out bin\app.exe --verbose
 BuildTool.exe b web site.dpr --minify
 BuildTool.exe serve --port 8080
+BuildTool.exe [diagram] b native app.dpr -v
 ```
 
-The last three of the walkthrough are the **same** invocations written differently — `serve
---port:9090`, `serve /port 80` and `b web site.dpr -vm`. The one-character aliases in the grammar are
-what admit the bundle: a group is only split when every letter of it names a declared option.
+Three of the walkthrough are invocations from above, written differently: `serve --port:9090`,
+`serve --port=9090` and `b web site.dpr -vm`. The last is a bundle of the one-character aliases `-v`
+and `-m`, and reads as `-v -m`.
 
 ## What to look at
 
@@ -70,6 +74,19 @@ Everything lives in one class, `TBuildTool`, and each part answers a different q
   changed. Its refusal comes out through `Errors` like any other invalid invocation, with the message
   the conversion itself wrote — a type a third party adds fails as well as one of serie.
 
+- **`web` refuses `--minify` together with `--pretty`, and neither option can say so.** The rule is
+  about the invocation of the command as a whole, so it is a validation of the command:
+  `FWeb.Validators.Add(RefuseMinifyWithPretty)`. It receives the result of the command, asks it for
+  the result of each option, and refuses with `AddError`.
+
+- **`[diagram]` is declared on the root, and writes how an invocation was understood.**
+  `buildtool [diagram] b native app.dpr -v` runs no action and writes
+  `[ buildtool [ b [ native <app.dpr> [ -v ] *[ --out <bin\out.exe> ] ] ] ]`: the alias as it was
+  written, the recursive option on the leaf, and `*` on the default `--out` took.
+
+- **The help writes `Synopsis:` where .NET writes `Usage:`.** `UseOwnTexts` assigns that one text to
+  `CommandLine.Texts` before the grammar is declared; every other text stays .NET's.
+
 - **`Run` is `Parse(Args).Invoke`, and what it answers is the exit code.** Help and version are
   written and answer 0. A parse error writes what was probably meant, then the errors to the error
   output, then the help of the command reached, and answers 2. Asking for help clears the errors of
@@ -84,11 +101,12 @@ Everything lives in one class, `TBuildTool`, and each part answers a different q
 
 | Invocation | What it shows |
 |---|---|
-| `buildtool build` | A command that only groups is not an invocation of its own — the error names the subcommands it expected |
+| `buildtool build` | A command that only groups is not an invocation of its own: `Required command was not provided.` |
 | `buildtool build native` | `<target>` is required by its arity: a string argument admits exactly one value, and nobody wrote "required" |
 | `buildtool serve --port 80xyz` | The engine refuses the whole token, naming the option and the text, instead of quietly meaning `80` |
 | `buildtool serve --level shouting` | The enumerated type refuses what is not one of its values, and lists the ones it has |
 | `buildtool build native app.dpr --min-sdk 11.4` | The conversion declared with the option refuses it, with its own message |
 | `buildtool serve --port 70000` | A validation of the application's own: the type admits the number and the range does not, and a range is written over that same hook |
+| `buildtool b web site.dpr --minify --pretty` | Each option is valid on its own, and the validation of `web` refuses the two |
 
 And `--help` is never declared anywhere, yet answers.
