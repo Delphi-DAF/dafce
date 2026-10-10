@@ -404,7 +404,8 @@ It is what a diagnostic option, one in transition, or one only an internal scrip
 without being put in front of everybody who asks how the tool works.
 
 Hiding is the **help's** business and nothing else. A hidden symbol is declared, parsed and read the
-same, and when it gets an invalid value the error **names it**.
+same, and when it gets an invalid value the error **names it**. A hidden command has no help of its
+own either: asking for it writes nothing.
 
 ---
 
@@ -559,24 +560,49 @@ gives back the one a result was read with.
 Help is rendered by walking the grammar, every time it is asked for. No composed text is stored
 anywhere, so it cannot drift from what the program actually accepts — add an option and it appears.
 The only text you declare is each description; the accepted values, the defaults and which symbols
-are required come from the grammar itself.
+are required come from the grammar itself. The layout is `System.CommandLine`'s:
 
 ```
 $ buildtool --help
-A small tool that builds and serves things
+Description:
+  A small tool that builds and serves things
 
 Usage:
-  buildtool <command> [options]
-
-Commands:
-  build, b              Build things
-  serve                 Serve what was built
+  buildtool [command] [options]
 
 Options:
-  --verbose, -v         Say more about what is happening
-  --help, -h            Show help and usage information
-  --version             Show version information
+  -v, --verbose   Say more about what is happening
+  -?, -h, --help  Show help and usage information
+  --version       Show version information
+
+Commands:
+  b, build  Build things
+  serve     Serve what was built
 ```
+
+The help of a subcommand also lists the recursive options of its ancestors, and their arguments
+before its own:
+
+```
+$ buildtool build native --help
+Description:
+  Build a native binary
+
+Usage:
+  buildtool build native <target> [options]
+
+Arguments:
+  <target>  The project to build
+
+Options:
+  --out <out>          Where the binary goes [default: bin\out.exe]
+  --min-sdk <min-sdk>  Lowest SDK this build targets
+  -?, -h, --help       Show help and usage information
+  -v, --verbose        Say more about what is happening
+```
+
+The value of an option is shown by its help name, by the values it accepts — `<fast|safe>` — or by
+its name. A boolean default that is false is not shown.
 
 Every **root** has a help option and a version option among its options, without declaring anything:
 the help answers to `--help`, `-h`, `/h`, `-?` and `/?` on every command, and the version to
@@ -585,11 +611,34 @@ the help answers to `--help`, `-h`, `/h`, `-?` and `/?` on every command, and th
 errors of the rest of it: `mytool --port abc --help` writes the help and answers 0. `--version` with
 another option, argument or subcommand is an error of its own,
 `--version option cannot be combined with other arguments.`, which stays in `Errors` while the version
-is written all the same. An application that declares its own `--help` or `--version` wins — it is
-the one that knows its case.
+is written all the same. Their names are reserved on every command where the help or the version
+answers: adding an option that takes one raises `ECommandLine`, naming the option and the name.
 `--version` sits on the root and not on each subcommand, as in .NET: a version belongs to the tool.
-What they write can be wrapped with something of your own: see *A banner above the help and the
-version*.
+What they write can be replaced, or wrapped with something of your own: see *A banner above the help
+and the version*.
+
+### The width of the help, and the build data of the version
+
+The help is wrapped at no width: each line is as long as what it says. The action of the help option,
+an `IHelpAction`, wraps it at its `MaxWidth` when one is set. The action of the version option, an
+`IVersionAction`, writes the version the root declares — `1.0.0` — and with `IncludeBuildData` on it
+adds the platform it was compiled for and whether it is a debug build: `1.0.0+Win64`. Both actions
+are reached through the options of the root:
+
+```pascal
+var HelpAction: IHelpAction;
+var VersionAction: IVersionAction;
+for var Option in Root.Options do
+begin
+  if Supports(Option.Action, IHelpAction, HelpAction) then
+    HelpAction.MaxWidth := 100;
+  if Supports(Option.Action, IVersionAction, VersionAction) then
+    VersionAction.IncludeBuildData := True;
+end;
+```
+
+An action replaced through `HelpAction` or `VersionAction` is not one of these: set them before
+replacing it, and the default it wraps keeps them.
 
 ---
 
@@ -880,9 +929,11 @@ frozen.
 console. Here they are plain text, and an escaped exception carries its stack only when a provider of
 stack traces is installed.
 
-**8 · An option the application declares wins over the help and the version of the root.** In .NET
-the help and version options a root brings answer first; here an option declared with one of their
-names does.
+**8 · An option that takes a name of the help or of the version is refused.** .NET accepts it. On
+the root it never answers, because the help and the version answer first; on a subcommand it answers
+instead of the help the subcommand inherits, so `build -h` and `build --help` do different things.
+Here adding it raises `ECommandLine`, and so does a parse, for a name an alias took afterwards:
+`--help`, `-h` and `-?` always ask for the help.
 
 **9 · There is no `DateTimeOffset`.** Delphi has no type for a date with its offset. A `TDateTime`
 written with a zone — `2026-08-25T23:30+02:00` — is converted to local time.
@@ -900,6 +951,14 @@ as one more token: there `-fdz` passes `-f` and `-d`, and `z` goes on as a value
 **13 · Square brackets are a value when the root declares no directive.** .NET drops a first token in
 square brackets when there is no directive to read it. Here it stays a value: `mytool [1,2]` passes
 `[1,2]` to the argument. With a directive declared the two agree, and such a token matches nothing.
+
+**14 · The help is not wrapped to the console.** .NET wraps it at the width of the console when the
+output is not redirected. Here its lines are wrapped only at the `MaxWidth` of the help action, and
+there is none by default — what .NET does when the output is redirected.
+
+**15 · `--version` writes the version the root declares.** .NET writes the informational version of
+the assembly. A root that declares none writes an empty version, and its help does not list
+`--version`.
 
 ---
 

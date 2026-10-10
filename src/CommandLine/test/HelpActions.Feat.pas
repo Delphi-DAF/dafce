@@ -48,41 +48,37 @@ uses
   Daf.MiniSpec;
 
 const
-  {$IFDEF WIN64}
-  CompiledPlatform = 'Win64';
-  {$ELSE}
-  CompiledPlatform = 'Win32';
-  {$ENDIF}
-
   // The default help and version of BuildGrammar, written out as text: a reference computed by
   // the code under test would move with it.
   RootHelpReference =
-    'A tool with a version' + sLineBreak +
+    'Description:' + sLineBreak +
+    '  A tool with a version' + sLineBreak +
     sLineBreak +
     'Usage:' + sLineBreak +
-    '  tool <command> [options]' + sLineBreak +
-    sLineBreak +
-    'Commands:' + sLineBreak +
-    '  build                 Build things' + sLineBreak +
+    '  tool [command] [options]' + sLineBreak +
     sLineBreak +
     'Options:' + sLineBreak +
-    '  --name <string>       What to call it' + sLineBreak +
-    '  --help, -h            Show help and usage information' + sLineBreak +
-    '  --version             Show version information' + sLineBreak +
+    '  --name <name>   What to call it' + sLineBreak +
+    '  -?, -h, --help  Show help and usage information' + sLineBreak +
+    '  --version       Show version information' + sLineBreak +
+    sLineBreak +
+    'Commands:' + sLineBreak +
+    '  build  Build things' + sLineBreak +
     sLineBreak;
 
   BuildHelpReference =
-    'Build things' + sLineBreak +
+    'Description:' + sLineBreak +
+    '  Build things' + sLineBreak +
     sLineBreak +
     'Usage:' + sLineBreak +
     '  tool build [options]' + sLineBreak +
     sLineBreak +
     'Options:' + sLineBreak +
-    '  --out <string>        Where it goes' + sLineBreak +
-    '  --help, -h            Show help and usage information' + sLineBreak +
+    '  --out <out>     Where it goes' + sLineBreak +
+    '  -?, -h, --help  Show help and usage information' + sLineBreak +
     sLineBreak;
 
-  VersionReference = '3.1.4+' + CompiledPlatform + sLineBreak;
+  VersionReference = '3.1.4' + sLineBreak;
 
   Banner = 'ACME tool -- (c) ACME';
 

@@ -24,11 +24,8 @@ function FunctionAction(const Action: TCommandAction; ClearsParseErrors: Boolean
 /// <summary>The action of serie of a help option: it writes the help of the command reached, and answers 0.</summary>
 function NewHelpAction: IHelpAction;
 
-/// <summary>
-///   The action of serie of a version option: it writes the version the root declared, with the platform
-///   it was compiled for, and answers 0.
-/// </summary>
-function NewVersionAction: ICommandLineAction;
+/// <summary>The action of serie of a version option: it writes the version the root declared, and answers 0.</summary>
+function NewVersionAction: IVersionAction;
 
 /// <summary>What the parse picks when it ends with errors and no action takes them.</summary>
 function NewParseErrorAction: IParseErrorAction;
@@ -56,6 +53,7 @@ uses
   System.Classes,
   System.Math,
   Daf.Application.Version,
+  Daf.CommandLine.Help,
   Daf.CommandLine.Resources;
 
 const
@@ -74,13 +72,22 @@ type
   end;
 
   THelpAction = class(TSynchronousCommandLineAction, IHelpAction)
+  private
+    FMaxWidth: Integer;
   public
+    constructor Create;
+    function GetMaxWidth: Integer;
+    procedure SetMaxWidth(Value: Integer);
     function ClearsParseErrors: Boolean; override;
     function Invoke(const Parsed: IParseResult): Integer; override;
   end;
 
-  TVersionAction = class(TSynchronousCommandLineAction)
+  TVersionAction = class(TSynchronousCommandLineAction, IVersionAction)
+  private
+    FIncludeBuildData: Boolean;
   public
+    function GetIncludeBuildData: Boolean;
+    procedure SetIncludeBuildData(Value: Boolean);
     function ClearsParseErrors: Boolean; override;
     function Invoke(const Parsed: IParseResult): Integer; override;
   end;
@@ -138,18 +145,51 @@ end;
 
 { THelpAction }
 
+constructor THelpAction.Create;
+begin
+  inherited Create;
+  FMaxWidth := MaxInt;
+end;
+
+function THelpAction.GetMaxWidth: Integer;
+begin
+  Result := FMaxWidth;
+end;
+
+procedure THelpAction.SetMaxWidth(Value: Integer);
+begin
+  if Value < 1 then
+    raise ECommandLine.CreateFmt('The width the help is wrapped at has to be at least 1, and was given %d', [Value]);
+  FMaxWidth := Value;
+end;
+
 function THelpAction.ClearsParseErrors: Boolean;
 begin
   Result := True;
 end;
 
 function THelpAction.Invoke(const Parsed: IParseResult): Integer;
+var
+  Text: string;
 begin
-  Parsed.InvocationConfiguration.WriteOutput(Parsed.CommandResult.Command.HelpText);
+  Text := TCommandLineHelp.Render(Parsed.CommandResult.Command, FMaxWidth);
+  // A hidden command has no help: not even an empty line is written for it.
+  if Text <> '' then
+    Parsed.InvocationConfiguration.WriteOutput(Text);
   Result := TCommandLineExit.Ok;
 end;
 
 { TVersionAction }
+
+function TVersionAction.GetIncludeBuildData: Boolean;
+begin
+  Result := FIncludeBuildData;
+end;
+
+procedure TVersionAction.SetIncludeBuildData(Value: Boolean);
+begin
+  FIncludeBuildData := Value;
+end;
 
 function TVersionAction.ClearsParseErrors: Boolean;
 begin
@@ -166,7 +206,10 @@ begin
     Version := Root.VersionInfo
   else
     Version := Default(TVersionInfo);
-  Parsed.InvocationConfiguration.WriteOutput(Version.VersionTag(VersionTemplateWithBuild));
+  if FIncludeBuildData then
+    Parsed.InvocationConfiguration.WriteOutput(Version.VersionTag(VersionTemplateWithBuild))
+  else
+    Parsed.InvocationConfiguration.WriteOutput(Version.VersionTag(VersionTemplate));
   Result := TCommandLineExit.Ok;
 end;
 
@@ -423,7 +466,7 @@ begin
   Result := THelpAction.Create;
 end;
 
-function NewVersionAction: ICommandLineAction;
+function NewVersionAction: IVersionAction;
 begin
   Result := TVersionAction.Create;
 end;

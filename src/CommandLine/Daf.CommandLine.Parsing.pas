@@ -10,8 +10,9 @@
   Reading follows the rules of DAF: a group of one-letter options, a value glued to
   its option, and an option that takes the next token whatever it is.
 
-  Only two routines are published here. The contract the results answer to lives in Daf.CommandLine,
-  because interfaces that name each other have to share one interface section.
+  Published here are the parse, the reading of values, and the refusal of a name that the help or the
+  version keeps. The contract the results answer to lives in Daf.CommandLine, because interfaces that
+  name each other have to share one interface section.
 }
 
 interface
@@ -36,6 +37,22 @@ function ParseInvocation(const Root: ICommand; const Args: TArray<string>; const
 ///   Raises <c>ECommandLine</c> with the error of a result that has one.
 /// </remarks>
 function ResultValues(const Found: ISymbolResult; out FromDefault, Whole: Boolean): TArray<TValue>;
+
+/// <summary>
+///   Raises <c>ECommandLine</c> when an option of the application takes a name of the help or of the version on
+///   a command where they answer, from <c>Root</c> down.
+/// </summary>
+/// <remarks>
+///   Those names always reach the help or the version, so such an option could never answer. With
+///   <c>IgnoreCase</c>, a name that differs from theirs only in case takes it too.
+/// </remarks>
+procedure DemandReservedNamesFree(const Root: ICommand; IgnoreCase: Boolean);
+
+/// <summary>The same refusal, for <c>Option</c> before it is added to <c>Command</c>.</summary>
+procedure DemandOptionAddable(const Command: ICommand; const Option: IOption);
+
+/// <summary>The same refusal, for <c>Subcommand</c> and what hangs from it before it is added to <c>Command</c>.</summary>
+procedure DemandSubcommandAddable(const Command, Subcommand: ICommand);
 
 implementation
 
@@ -391,23 +408,18 @@ begin
 end;
 
 // Finds an option by token among the command's own and those inherited from ancestors that declared
-// them recursive. What the application declared comes before the help and the version, which answer
-// only when nothing declared does: an application that declares its own --help knows its case.
+// them recursive.
 function FindOption(const Current: ICommand; const Inherited_: TArray<IOption>; const Token: string;
   IgnoreCase: Boolean): IOption;
 var
   Candidate: IOption;
-  Standard: Boolean;
 begin
-  for Standard := False to True do
-  begin
-    for Candidate in Current.Options do
-      if (IsStandardOption(Candidate) = Standard) and NameMatches(Candidate, Token, IgnoreCase) then
-        Exit(Candidate);
-    for Candidate in Inherited_ do
-      if (IsStandardOption(Candidate) = Standard) and NameMatches(Candidate, Token, IgnoreCase) then
-        Exit(Candidate);
-  end;
+  for Candidate in Current.Options do
+    if NameMatches(Candidate, Token, IgnoreCase) then
+      Exit(Candidate);
+  for Candidate in Inherited_ do
+    if NameMatches(Candidate, Token, IgnoreCase) then
+      Exit(Candidate);
   Result := nil;
 end;
 
@@ -485,8 +497,8 @@ end;
 
 // With names compared without regard to case, two names one command answers to that differ only in case
 // would reach the same symbol whichever was written: the grammar is refused, as an error of whoever wrote it.
-// A name repeated exactly is not refused, because an application may declare its own --help over the one
-// every root brings.
+// A name repeated exactly is not refused here: one that the help or the version answers to is refused by
+// DemandReservedNamesFree.
 procedure DemandNamesDistinctIgnoringCase(const Command: ICommand; const Inherited_: TArray<IOption>);
 var
   Names: TArray<string>;
@@ -552,6 +564,71 @@ begin
   end;
   for Subcommand in Command.Subcommands do
     DemandNamesDistinctIgnoringCase(Subcommand, Inherited_ + RecursiveOptionsOf(Command));
+end;
+
+{ Reserved names }
+
+function AllNamesOf(const Symbol: ISymbol): TArray<string>;
+var
+  Alias: string;
+begin
+  Result := [Symbol.Name];
+  for Alias in Symbol.Aliases do
+    Result := Result + [Alias];
+end;
+
+procedure RefuseTakenName(const Command: ICommand; const Option, Standard: IOption; IgnoreCase: Boolean);
+var
+  Name: string;
+begin
+  for Name in AllNamesOf(Option) do
+    if NameMatches(Standard, Name, IgnoreCase) then
+      raise ECommandLine.CreateFmt('Option "%s" of "%s" takes "%s", which is reserved to "%s": that name always ' +
+        'reaches it, so the option could never answer', [Option.Name, Command.FullPath, Name, Standard.Name]);
+end;
+
+// Every option of the application against every help and version option, among the ones answering on Command.
+procedure DemandFreeOn(const Command: ICommand; const Answering: TArray<IOption>; IgnoreCase: Boolean);
+var
+  Option, Standard: IOption;
+begin
+  for Option in Answering do
+    if not IsStandardOption(Option) then
+      for Standard in Answering do
+        if IsStandardOption(Standard) then
+          RefuseTakenName(Command, Option, Standard, IgnoreCase);
+end;
+
+procedure DemandFreeBelow(const Command: ICommand; const Inherited_: TArray<IOption>; IgnoreCase: Boolean);
+var
+  Subcommand: ICommand;
+begin
+  DemandFreeOn(Command, Command.Options + Inherited_, IgnoreCase);
+  for Subcommand in Command.Subcommands do
+    DemandFreeBelow(Subcommand, Inherited_ + RecursiveOptionsOf(Command), IgnoreCase);
+end;
+
+procedure DemandReservedNamesFree(const Root: ICommand; IgnoreCase: Boolean);
+begin
+  DemandFreeBelow(Root, InheritedOptionsOf(Root), IgnoreCase);
+end;
+
+procedure DemandOptionAddable(const Command: ICommand; const Option: IOption);
+var
+  Inherited_: TArray<IOption>;
+  Subcommand: ICommand;
+begin
+  Inherited_ := InheritedOptionsOf(Command);
+  DemandFreeOn(Command, Command.Options + Inherited_ + [Option], False);
+  // A recursive option answers on every command below too.
+  if Option.IsRecursive then
+    for Subcommand in Command.Subcommands do
+      DemandFreeBelow(Subcommand, Inherited_ + RecursiveOptionsOf(Command) + [Option], False);
+end;
+
+procedure DemandSubcommandAddable(const Command, Subcommand: ICommand);
+begin
+  DemandFreeBelow(Subcommand, InheritedOptionsOf(Command) + RecursiveOptionsOf(Command), False);
 end;
 
 function NamesOf(const Commands: TArray<ICommand>): string;
@@ -2159,6 +2236,9 @@ var
   RootTokenValue: string;
   Operation: TParseOperation;
 begin
+  // At every parse, because a grammar is only whole here: an alias can be added to an option after the option
+  // was added to its command.
+  DemandReservedNamesFree(Root, Configuration.EnableCaseInsensitiveNames);
   if Configuration.EnableCaseInsensitiveNames then
     DemandNamesDistinctIgnoringCase(Root, InheritedOptionsOf(Root));
   Items := Tokenize(Root, Args, Configuration, FromCommandLine, RootTokenValue, ReadErrors);

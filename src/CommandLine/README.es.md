@@ -407,7 +407,8 @@ Es lo que necesita una opción de diagnóstico, una en transición o una que sol
 existir sin ponerse delante de todo el que pregunta cómo se usa la herramienta.
 
 Ocultar es cosa de **la ayuda** y de nada más. Un símbolo oculto se declara, se parsea y se lee igual,
-y cuando recibe un valor inválido el error **lo nombra**.
+y cuando recibe un valor inválido el error **lo nombra**. Un comando oculto tampoco tiene ayuda
+propia: pedirla no escribe nada.
 
 ---
 
@@ -563,24 +564,49 @@ valores por defecto, que son los de .NET; `Parse` la recibe como segundo argumen
 La ayuda se genera recorriendo la gramática cada vez que se pide. No se guarda texto compuesto en
 ningún sitio, así que no puede desajustarse de lo que el programa acepta: añade una opción y aparece.
 Lo único que declaras es cada descripción; los valores aceptados, los defaults y qué símbolos son
-obligatorios salen de la propia gramática.
+obligatorios salen de la propia gramática. La disposición es la de `System.CommandLine`:
 
 ```
 $ buildtool --help
-A small tool that builds and serves things
+Description:
+  A small tool that builds and serves things
 
 Usage:
-  buildtool <command> [options]
-
-Commands:
-  build, b              Build things
-  serve                 Serve what was built
+  buildtool [command] [options]
 
 Options:
-  --verbose, -v         Say more about what is happening
-  --help, -h            Show help and usage information
-  --version             Show version information
+  -v, --verbose   Say more about what is happening
+  -?, -h, --help  Show help and usage information
+  --version       Show version information
+
+Commands:
+  b, build  Build things
+  serve     Serve what was built
 ```
+
+La ayuda de un subcomando enseña además las opciones recursivas de sus ancestros, y sus argumentos
+antes que los propios:
+
+```
+$ buildtool build native --help
+Description:
+  Build a native binary
+
+Usage:
+  buildtool build native <target> [options]
+
+Arguments:
+  <target>  The project to build
+
+Options:
+  --out <out>          Where the binary goes [default: bin\out.exe]
+  --min-sdk <min-sdk>  Lowest SDK this build targets
+  -?, -h, --help       Show help and usage information
+  -v, --verbose        Say more about what is happening
+```
+
+El valor de una opción se enseña con su nombre de ayuda, con los valores que acepta —`<fast|safe>`— o
+con su nombre. Un default booleano que vale falso no se enseña.
 
 Toda **raíz** tiene entre sus opciones una de ayuda y otra de versión, sin declarar nada: la ayuda
 responde a `--help`, `-h`, `/h`, `-?` y `/?` en cualquier comando, y la versión a `--version`. Pedir
@@ -589,10 +615,34 @@ cualquiera de las dos es un **resultado válido**, no un fallo: `IsHelpRequested
 errores del resto: `mitool --port abc --help` escribe la ayuda y devuelve 0. `--version` con otra
 opción, otro argumento o un subcomando es un error suyo,
 `--version option cannot be combined with other arguments.`, que queda en `Errors` mientras la versión
-se escribe igual. Una aplicación que declare su propio `--help` o `--version` gana: es la que conoce
-su caso. Y `--version` va en la raíz y no en cada subcomando, como en .NET: la versión es de la
-herramienta. Lo que escriben se puede envolver con algo propio: ver *Un banner encima de la ayuda y
-de la versión*.
+se escribe igual. Sus nombres están reservados en cualquier comando donde responden la ayuda o la
+versión: añadir una opción que tome uno lanza `ECommandLine`, nombrando la opción y el nombre. Y
+`--version` va en la raíz y no en cada subcomando, como en .NET: la versión es de la herramienta. Lo
+que escriben se puede sustituir, o envolver con algo propio: ver *Un banner encima de la ayuda y de
+la versión*.
+
+### El ancho de la ayuda, y los datos de compilación de la versión
+
+La ayuda no se ajusta a ningún ancho: cada línea mide lo que dice. La acción de la opción de ayuda, un
+`IHelpAction`, la ajusta a su `MaxWidth` cuando se fija uno. La acción de la opción de versión, un
+`IVersionAction`, escribe la versión que declara la raíz —`1.0.0`— y con `IncludeBuildData` activo le
+añade la plataforma para la que se compiló y si es una build de depuración: `1.0.0+Win64`. Las dos
+acciones se alcanzan por las opciones de la raíz:
+
+```pascal
+var HelpAction: IHelpAction;
+var VersionAction: IVersionAction;
+for var Option in Root.Options do
+begin
+  if Supports(Option.Action, IHelpAction, HelpAction) then
+    HelpAction.MaxWidth := 100;
+  if Supports(Option.Action, IVersionAction, VersionAction) then
+    VersionAction.IncludeBuildData := True;
+end;
+```
+
+Una acción sustituida con `HelpAction` o `VersionAction` no es ninguna de las dos: se fijan antes de
+sustituirla, y la de serie que envuelve los conserva.
 
 ---
 
@@ -881,9 +931,11 @@ congelarla.
 escapa, en una consola. Aquí son texto plano, y una excepción que se escapa lleva su pila solo cuando
 hay instalado un proveedor de pilas.
 
-**8 · Una opción que declara la aplicación gana a la ayuda y a la versión de la raíz.** En .NET
-responden antes las opciones de ayuda y de versión que trae la raíz; aquí, una opción declarada con
-uno de sus nombres.
+**8 · Una opción que toma un nombre de la ayuda o de la versión se rechaza.** .NET la acepta. En la
+raíz no responde nunca, porque antes responden la ayuda y la versión; en un subcomando responde en
+lugar de la ayuda que el subcomando hereda, así que `build -h` y `build --help` hacen cosas distintas.
+Aquí añadirla lanza `ECommandLine`, y también el parse, para un nombre que tomó después un alias:
+`--help`, `-h` y `-?` piden siempre la ayuda.
 
 **9 · No hay `DateTimeOffset`.** Delphi no tiene un tipo para una fecha con su desfase. Un
 `TDateTime` escrito con zona —`2026-08-25T23:30+02:00`— se convierte a la hora local.
@@ -902,6 +954,14 @@ se toma ninguna de las demás letras.
 primer token entre corchetes cuando no hay directiva que lo lea. Aquí sigue siendo un valor:
 `mitool [1,2]` pasa `[1,2]` al argumento. Con una directiva declarada los dos coinciden, y un token así
 no casa con nada.
+
+**14 · La ayuda no se ajusta a la consola.** .NET la ajusta al ancho de la consola cuando la salida no
+está redirigida. Aquí sus líneas solo se ajustan al `MaxWidth` de la acción de la ayuda, y por defecto
+no hay ninguno — lo que hace .NET con la salida redirigida.
+
+**15 · `--version` escribe la versión que declara la raíz.** .NET escribe la versión informativa del
+ensamblado. Una raíz que no declara ninguna escribe una versión vacía, y su ayuda no lista
+`--version`.
 
 ---
 

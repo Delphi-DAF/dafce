@@ -282,7 +282,7 @@ Feature Invoking a parse result @commandline @invocation
     .&Then('the version is written to the output, and the action does not run',
       procedure(W: TInvocationWorld)
       begin
-        Expect(W.Output.ToString).ToStartWith('2.0.0+');
+        Expect(W.Output.ToString).ToEqual('2.0.0' + sLineBreak);
         Expect(W.RanText).ToEqual('<nothing>');
       end)
     .&And('the invocation answers 0',
@@ -380,7 +380,7 @@ Feature Invoking a parse result @commandline @invocation
     .&Then('the version is written to the output, and the result carries the error that says it does not combine',
       procedure(W: TInvocationWorld)
       begin
-        Expect(W.Output.ToString).ToStartWith('2.0.0+');
+        Expect(W.Output.ToString).ToEqual('2.0.0' + sLineBreak);
         Expect(W.Error.ToString).ToEqual('');
         Expect(W.Parsed.ErrorText).ToEqual('--version option cannot be combined with other arguments.');
         Expect(W.RanText).ToEqual('<nothing>');

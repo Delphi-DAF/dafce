@@ -158,8 +158,30 @@ type
   end;
 
   /// <summary>The action of serie of a help option: it writes the help of the command reached.</summary>
+  /// <remarks>A hidden command has no help, and for it the action writes nothing.</remarks>
   IHelpAction = interface(ICommandLineAction)
     ['{7C4B1A20-000F-4F31-9C10-4B0E2D5A000F}']
+    function GetMaxWidth: Integer;
+    procedure SetMaxWidth(Value: Integer);
+    /// <summary>The width the lines of the help are wrapped at. <c>MaxInt</c> by default, which wraps none.</summary>
+    /// <remarks>
+    ///   The width of the console is never asked: a tool that wants its help to fit one sets it. Setting it below 1
+    ///   raises <c>ECommandLine</c>.
+    /// </remarks>
+    property MaxWidth: Integer read GetMaxWidth write SetMaxWidth;
+  end;
+
+  /// <summary>The action of serie of a version option: it writes the version the root declared.</summary>
+  /// <remarks>A root that declares no version writes an empty one.</remarks>
+  IVersionAction = interface(ICommandLineAction)
+    ['{7C4B1A20-0016-4F31-9C10-4B0E2D5A0016}']
+    function GetIncludeBuildData: Boolean;
+    procedure SetIncludeBuildData(Value: Boolean);
+    /// <summary>
+    ///   On, the version carries in its build metadata the platform it was compiled for, and whether it is a debug
+    ///   build: <c>1.2.3+Win64</c>. Off by default.
+    /// </summary>
+    property IncludeBuildData: Boolean read GetIncludeBuildData write SetIncludeBuildData;
   end;
 
   /// <summary>The base of an action written as a class: terminating, and clearing no errors.</summary>
@@ -428,6 +450,9 @@ type
   /// <remarks>
   ///   Every root has one, answering to the five names of <c>HelpTokens</c>. Its action clears the parse
   ///   errors, because whoever asks how the tool works is not told what else they got wrong.
+  ///
+  ///   Its names are reserved on every command where it answers: adding an option that takes one raises
+  ///   <c>ECommandLine</c>, and the parse raises it for one that an alias added afterwards takes.
   /// </remarks>
   IHelpOption = interface(IOption)
     ['{7C4B1A20-0011-4F31-9C10-4B0E2D5A0011}']
@@ -437,6 +462,8 @@ type
   /// <remarks>
   ///   Every root has one, and only the root: a version belongs to the tool. Its action clears every parse
   ///   error but its own, and its own is to be combined with another symbol of the grammar.
+  ///
+  ///   Its name is reserved on the root, as the names of the help are.
   /// </remarks>
   IVersionOption = interface(IOption)
     ['{7C4B1A20-0012-4F31-9C10-4B0E2D5A0012}']
@@ -491,12 +518,16 @@ type
     ///   chained -- the same caveat as <c>Description</c>.
     /// </remarks>
     function AllowUnmatchedTokens: ICommand;
-    /// <summary>Keeps it out of the help of its parent. See <c>ISymbol.IsHidden</c>.</summary>
+    /// <summary>
+    ///   Keeps it out of the help of its parent, and leaves it with no help of its own. See
+    ///   <c>ISymbol.IsHidden</c>.
+    /// </summary>
     function Hidden: ICommand;
     /// <summary>
     ///   The help text, rendered from the grammar every time it is asked for. Nothing
     ///   composed is stored anywhere, so it cannot drift from what the program accepts.
     /// </summary>
+    /// <remarks>Its lines are not wrapped, and a hidden command has none.</remarks>
     function HelpText: string;
     /// <summary>Declares what this command does when an invocation reaches it.</summary>
     /// <remarks>
@@ -629,9 +660,10 @@ type
     ///   replaces it there, and the function replacing it clears the parse errors as the help does.
     ///
     ///   The default one writes the help of the command reached to the output of the invocation and
-    ///   answers <c>Ok</c>. An action that writes something of its own and then calls the default one
-    ///   puts it above the help, and the help is still the one derived from the grammar. Assigning
-    ///   <c>nil</c> brings the default one back.
+    ///   answers <c>Ok</c>. It is an <c>IHelpAction</c>, which the option hands over, and the width the
+    ///   help is wrapped at is set there. An action that writes something of its own and then calls
+    ///   the default one puts it above the help, and the help is still the one derived from the
+    ///   grammar. Assigning <c>nil</c> brings the default one back.
     ///
     ///   The replacement captures the default action, never the root: an action holding the root it
     ///   is installed on is a cycle between counted references, and neither is ever freed.
@@ -639,8 +671,8 @@ type
     property HelpAction: TCommandAction read GetHelpAction write SetHelpAction;
     /// <summary>What settles an invocation that asks for the version. See <c>HelpAction</c>.</summary>
     /// <remarks>
-    ///   The action of the root's version option. The default one writes the declared version, with
-    ///   the platform it was compiled for, and answers <c>Ok</c>.
+    ///   The action of the root's version option. The default one writes the declared version and
+    ///   answers <c>Ok</c>. It is an <c>IVersionAction</c>, which the option hands over.
     /// </remarks>
     property VersionAction: TCommandAction read GetVersionAction write SetVersionAction;
   end;
@@ -2820,6 +2852,7 @@ function TCommand.Add(const Option: IOption): ICommand;
 begin
   CheckOpen;
   (Option.AsObject as TValuedSymbol).DemandConvertible;
+  DemandOptionAddable(Self, Option);
   FOptions := FOptions + [Option];
   (Option.AsObject as TSymbol).AddParent(Self);
   Result := Self;
@@ -2837,6 +2870,7 @@ end;
 function TCommand.Add(const Subcommand: ICommand): ICommand;
 begin
   CheckOpen;
+  DemandSubcommandAddable(Self, Subcommand);
   FSubcommands := FSubcommands + [Subcommand];
   (Subcommand.AsObject as TCommand).SetPathPrefix(FullPath);
   (Subcommand.AsObject as TSymbol).AddParent(Self);
@@ -3139,12 +3173,19 @@ end;
 { TRootCommand }
 
 constructor TRootCommand.Create(const AName: string);
+var
+  Help: IHelpOption;
+  Version: IVersionOption;
 begin
   inherited Create(AName);
+  // Through interface variables, which count them: a cast of the object would hand Add a reference that
+  // nobody counts, and the first that does would free the option when it lets it go.
   FHelpOption := THelpOption.CreateDefault;
-  Add(IHelpOption(FHelpOption));
+  Help := FHelpOption;
+  Add(Help);
   FVersionOption := TVersionOption.Create(VersionToken, []);
-  Add(IVersionOption(FVersionOption));
+  Version := FVersionOption;
+  Add(Version);
 end;
 
 function TRootCommand.WithVersion(const Version: string): IRootCommand;
