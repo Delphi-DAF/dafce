@@ -65,9 +65,11 @@ uses
   Daf.Cli;
 
 // El ejemplo de entrada de una herramienta de linea de comandos: el builder, la accion de la raiz
-// escrita en el sitio, y el codigo de salida que devuelve esa accion.
+// escrita en el sitio, los argumentos que recibe la gramatica, y el codigo de salida que devuelve
+// esa accion.
 //
-//   QuickStart  -> 0, saluda
+//   QuickStart         -> 0, saluda
+//   QuickStart --help  -> 0, la ayuda
 //
 // Como se anade un servicio esta en el sample ServiceWiring, que es el nivel siguiente.
 begin
@@ -80,15 +82,19 @@ begin
       Result := TCliExit.Ok;
     end);
 
+  B.ParseArgs(CommandLineConfig.ProcessArgs);
   ExitCode := B.Build.Run;
 end.
 ```
 
-Two things about the shape, both of them easy to get wrong:
+Three things about the shape, all of them easy to get wrong:
 
 - The builder is held in a variable, not chained, and registration happens where it is written:
   there is no deferred `ConfigureServices` callback. `TCliApplication.CreateBuilder` returns an
   `ICliApplicationBuilder`, whose `Build` returns the `ICliApplication` whose `Run` is the exit code.
+- The arguments go to two calls, and each one feeds one reader: `CreateBuilder` adds them to the
+  configuration, and `ParseArgs` hands them to the grammar, which answers `--help` with no option
+  declared. Without `ParseArgs`, the grammar parses an empty invocation.
 - `Daf.Extensions.DependencyInjection` is in the `uses` although nothing is registered: the
   signature of the action names `IServiceProvider`, and Delphi needs the type visible to write it.
 
@@ -128,6 +134,7 @@ begin
       Result := TCliExit.Ok;
     end);
 
+  B.ParseArgs(CommandLineConfig.ProcessArgs);
   ExitCode := B.Build.Run;
 end.
 ```

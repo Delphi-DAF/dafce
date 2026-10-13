@@ -28,6 +28,7 @@ begin
         Result := TCliExit.Ok;
       end);
 
+    B.ParseArgs(CommandLineConfig.ProcessArgs);
     ExitCode := B.Build.Run;
   except
     on E: Exception do

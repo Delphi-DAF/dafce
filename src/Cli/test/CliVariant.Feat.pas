@@ -132,6 +132,10 @@ type
     ConfigFile: string;
     /// Lo que llego al canal de arranque durante Invoke.
     Reported: string;
+    /// Lo que la accion leyo de su configuracion.
+    ConfigRead: string;
+    /// Un fichero de respuesta con un solo token, desde-el-fichero. El destructor lo borra.
+    ResponseFile: string;
     ActionRan: Boolean;
     /// El codigo de la segunda instancia, la que arranca mientras corre la primera.
     SecondExit: Integer;
@@ -141,6 +145,7 @@ type
     /// DAF_CONTENTROOT y no por argumento: un argumento que la gramatica no declara es una
     /// invocacion que no encaja.
     procedure WriteBrokenHostConfig;
+    procedure WriteResponseFile;
     /// Compone con una accion, construye y ejecuta, como lo haria el .dpr, con el canal de
     /// arranque recogido en Reported. Devuelve el mensaje de lo que se escapo, o NoEscape.
     function Invoke(const Args: TArray<string>; const ReadsConfiguration: Boolean): string;
@@ -306,7 +311,15 @@ begin
       Winapi.Windows.SetEnvironmentVariable(PChar(VarName), nil);
     TDirectory.Delete(FContentRoot, True);
   end;
+  if ResponseFile <> '' then
+    TFile.Delete(ResponseFile);
   inherited;
+end;
+
+procedure TCliWorld.WriteResponseFile;
+begin
+  ResponseFile := TPath.Combine(TPath.GetTempPath, 'daf-cli-args-' + TGuid.NewGuid.ToString + '.rsp');
+  TFile.WriteAllText(ResponseFile, 'desde-el-fichero');
 end;
 
 procedure TCliWorld.WriteBrokenHostConfig;
@@ -411,6 +424,7 @@ begin
           ActionRan := True;
           Result := TCliExit.Ok;
         end);
+      Builder.ParseArgs(Args);
       App := Builder.Build;
       ExitCode := App.Run;
       Result := NoEscape;
@@ -454,16 +468,16 @@ end;
 initialization
 
 Feature('''
-Feature La variante CLI de la familia @cli @application-family
+Feature Las entradas de la variante CLI @cli @application-family
 
   Como quien escribe una herramienta de linea de comandos
-  Quiero que el arranque cubra el borde del Run
-  Para no repetir en cada .dpr la instancia unica, la version y el codigo de salida
+  Quiero darle a la gramatica y a la configuracion cada una su entrada
+  Para que la gramatica conteste sin que los argumentos fijen la configuracion
 ''')
 
 .UseWorld<TCliWorld>
 
-.Rule('Los argumentos llegan a la gramatica y, como en .NET, tambien a la configuracion')
+.Rule('Los argumentos del builder llegan a la configuracion')
 
   .Scenario('Un argumento clave=valor llega a la configuracion')
     .When('se crea el builder de consola con un argumento clave=valor',
@@ -480,7 +494,7 @@ Feature La variante CLI de la familia @cli @application-family
   // La configuracion no conoce la gramatica: no sabe que --verbose no lleva valor, y lo empareja
   // con el token que le sigue.
   .Scenario('La configuracion lee una bandera seguida de un posicional como clave y valor')
-    .Given('una gramatica con una bandera y un argumento posicional',
+    .Given('una gramatica con una bandera y un argumento posicional, y la misma invocacion al crearse y al parsear',
       procedure(W: TCliWorld)
       begin
         W.Verbose := CommandLine.Option<Boolean>('--verbose').Description('Cuenta lo que hace');
@@ -492,7 +506,7 @@ Feature La variante CLI de la familia @cli @application-family
     .When('se invoca con la bandera y el posicional detras',
       procedure(W: TCliWorld)
       begin
-        W.Parsed := W.Builder.RootCommand.Parse(['--verbose', 'informe.txt']);
+        W.Parsed := W.Builder.ParseArgs(['--verbose', 'informe.txt']);
       end)
     .&Then('la gramatica liga los dos simbolos, y la configuracion lee verbose con el posicional',
       procedure(W: TCliWorld)
@@ -519,6 +533,7 @@ Feature La variante CLI de la familia @cli @application-family
     .When('se construye y se ejecuta',
       procedure(W: TCliWorld)
       begin
+        W.Builder.ParseArgs(['--Db:Server=localhost']);
         W.App := W.Builder.Build;
         W.ExitCode := W.App.Run;
       end)
@@ -544,6 +559,7 @@ Feature La variante CLI de la familia @cli @application-family
     .When('se construye y se ejecuta',
       procedure(W: TCliWorld)
       begin
+        W.Builder.ParseArgs(['--Db:Server=localhost']);
         W.App := W.Builder.Build;
         W.ExitCode := W.App.Run;
       end)
@@ -552,6 +568,261 @@ Feature La variante CLI de la familia @cli @application-family
       begin
         Expect(Format('exit=%d Db:Server=%s', [W.ExitCode, W.Report])).ToEqual('exit=0 Db:Server=localhost');
       end)
+
+.Rule('La gramatica recibe su entrada aparte de la del host')
+
+  .Scenario('La gramatica ve los argumentos y la configuracion no')
+    .Given('una aplicacion CLI creada sin argumentos, cuya raiz admite lo que no declara',
+      procedure(W: TCliWorld)
+      begin
+        W.Builder := TCliApplication.CreateBuilder;
+        W.Builder.RootCommand.AllowUnmatchedTokens;
+        W.Builder.SetAction(
+          function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
+          begin
+            var Config := Services.GetRequiredService<IConfiguration>;
+            W.Report := string.Join(' ', Parsed.UnmatchedTokens);
+            W.ConfigRead := IfThen(Config.Exists('Db:Server'), Config['Db:Server'], '<ausente>');
+            Result := TCliExit.Ok;
+          end);
+      end)
+    .When('la composicion parsea una clave de configuracion como argumento, y se construye y se ejecuta',
+      procedure(W: TCliWorld)
+      begin
+        W.Builder.ParseArgs(['--Db:Server=localhost']);
+        W.App := W.Builder.Build;
+        W.ExitCode := W.App.Run;
+      end)
+    .&Then('la clave llega al resultado del parse',
+      procedure(W: TCliWorld)
+      begin
+        Expect(W.Report).ToEqual('--Db:Server=localhost');
+      end)
+    .&And('la configuracion no la tiene',
+      procedure(W: TCliWorld)
+      begin
+        Expect(W.ConfigRead).ToEqual('<ausente>');
+      end)
+
+  .Scenario('La configuracion ve los argumentos y la gramatica no')
+    .Given('una aplicacion CLI creada con una clave de configuracion como argumento, cuya raiz no admite lo que no declara',
+      procedure(W: TCliWorld)
+      begin
+        W.Builder := TCliApplication.CreateBuilder(['--Db:Server=localhost']);
+        W.Builder.SetAction(
+          function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
+          begin
+            W.ActionRan := True;
+            W.ConfigRead := Services.GetRequiredService<IConfiguration>['Db:Server'];
+            Result := TCliExit.Ok;
+          end);
+      end)
+    .When('se construye y se ejecuta sin que la composicion parsee',
+      procedure(W: TCliWorld)
+      begin
+        W.App := W.Builder.Build;
+        W.ExitCode := W.App.Run;
+      end)
+    .&Then('corre la accion de la raiz',
+      procedure(W: TCliWorld)
+      begin
+        Expect(Format('exit=%d corrio=%s', [W.ExitCode, BoolToStr(W.ActionRan, True)]))
+          .ToEqual('exit=0 corrio=True');
+      end)
+    .&And('la accion lee la clave de su configuracion',
+      procedure(W: TCliWorld)
+      begin
+        Expect(W.ConfigRead).ToEqual('localhost');
+      end)
+
+.Rule('Sin entrada, la gramatica parsea una invocacion vacia')
+
+  .Scenario('Los argumentos del builder no llegan a la gramatica')
+    .Given('una aplicacion CLI creada con el argumento que pide la ayuda, y con una accion en la raiz',
+      procedure(W: TCliWorld)
+      begin
+        W.Builder := TCliApplication.CreateBuilder(['--help']);
+        W.Builder.SetAction(
+          function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
+          begin
+            W.ActionRan := True;
+            Result := 5;
+          end);
+      end)
+    .When('se construye y se ejecuta sin que la composicion parsee',
+      procedure(W: TCliWorld)
+      begin
+        W.App := W.Builder.Build;
+        W.ExitCode := W.App.Run;
+      end)
+    .&Then('corre la accion de la raiz, y no la ayuda',
+      procedure(W: TCliWorld)
+      begin
+        Expect(Format('exit=%d corrio=%s', [W.ExitCode, BoolToStr(W.ActionRan, True)]))
+          .ToEqual('exit=5 corrio=True');
+      end)
+
+  .Scenario('Sin argumentos en ningun sitio, la aplicacion arranca')
+    .Given('una aplicacion CLI creada sin argumentos, con una accion en la raiz',
+      procedure(W: TCliWorld)
+      begin
+        W.Builder := TCliApplication.CreateBuilder;
+        W.Builder.SetAction(
+          function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
+          begin
+            W.ActionRan := True;
+            Result := 5;
+          end);
+      end)
+    .When('se construye y se ejecuta sin que la composicion parsee',
+      procedure(W: TCliWorld)
+      begin
+        W.App := W.Builder.Build;
+        W.ExitCode := W.App.Run;
+      end)
+    .&Then('corre la accion de la raiz, y el proceso termina con el codigo que ella devuelve',
+      procedure(W: TCliWorld)
+      begin
+        Expect(Format('exit=%d corrio=%s', [W.ExitCode, BoolToStr(W.ActionRan, True)]))
+          .ToEqual('exit=5 corrio=True');
+      end)
+
+.Rule('La gramatica parsea con la configuracion que le de la composicion')
+
+  .Scenario('Con los ficheros de respuesta apagados, un token con @ llega como valor')
+    .Given('una aplicacion CLI cuya raiz admite lo que no declara, y un fichero de respuesta que existe',
+      procedure(W: TCliWorld)
+      begin
+        W.WriteResponseFile;
+        W.Builder := TCliApplication.CreateBuilder;
+        W.Builder.RootCommand.AllowUnmatchedTokens;
+      end)
+    .When('la composicion parsea su nombre precedido de @, con los ficheros de respuesta apagados',
+      procedure(W: TCliWorld)
+      begin
+        var Configuration: TParserConfiguration;
+        Configuration.ResponseFileTokenReplacer := nil;
+        W.Parsed := W.Builder.ParseArgs(['@' + W.ResponseFile], Configuration);
+        W.Report := string.Join(' ', W.Parsed.UnmatchedTokens);
+      end)
+    .&Then('el token llega al resultado del parse tal como se escribio',
+      procedure(W: TCliWorld)
+      begin
+        Expect(W.Report).ToEqual('@' + W.ResponseFile);
+      end)
+
+  .Scenario('Sin configuracion, el fichero de respuesta se expande')
+    .Given('una aplicacion CLI cuya raiz admite lo que no declara, y un fichero de respuesta que existe',
+      procedure(W: TCliWorld)
+      begin
+        W.WriteResponseFile;
+        W.Builder := TCliApplication.CreateBuilder;
+        W.Builder.RootCommand.AllowUnmatchedTokens;
+      end)
+    .When('la composicion parsea su nombre precedido de @, sin darle configuracion',
+      procedure(W: TCliWorld)
+      begin
+        W.Parsed := W.Builder.ParseArgs(['@' + W.ResponseFile]);
+        W.Report := string.Join(' ', W.Parsed.UnmatchedTokens);
+      end)
+    .&Then('llega al resultado del parse el contenido del fichero',
+      procedure(W: TCliWorld)
+      begin
+        Expect(W.Report).ToEqual('desde-el-fichero');
+      end)
+
+.Rule('La gramatica recibe su entrada una sola vez')
+
+  .Scenario('Parsear dos veces lo mismo devuelve el mismo resultado')
+    .Given('una aplicacion CLI cuya composicion ya parseo unos argumentos',
+      procedure(W: TCliWorld)
+      begin
+        W.Loud := CommandLine.Option<Boolean>('--loud');
+        W.Builder := TCliApplication.CreateBuilder;
+        W.Builder.RootCommand.Add(W.Loud);
+        W.Parsed := W.Builder.ParseArgs(['--loud']);
+      end)
+    .When('la composicion vuelve a parsear los mismos argumentos',
+      procedure(W: TCliWorld)
+      begin
+        try
+          var Again := W.Builder.ParseArgs(['--loud']);
+          W.Report := IfThen((Again as IInterface) = (W.Parsed as IInterface), 'el mismo', 'otro');
+        except
+          on E: Exception do
+            W.Report := E.ClassName + ': ' + E.Message;
+        end;
+      end)
+    .&Then('recibe el mismo resultado que la primera vez',
+      procedure(W: TCliWorld)
+      begin
+        Expect(W.Report).ToEqual('el mismo');
+      end)
+
+  // Misma longitud y solo cambia la caja: se compara cada elemento, distinguiendo mayusculas.
+  .Scenario('Parsear otros argumentos es un error de composicion')
+    .Given('una aplicacion CLI cuya composicion ya parseo unos argumentos',
+      procedure(W: TCliWorld)
+      begin
+        W.Loud := CommandLine.Option<Boolean>('--loud');
+        W.Builder := TCliApplication.CreateBuilder;
+        W.Builder.RootCommand.Add(W.Loud);
+        W.Parsed := W.Builder.ParseArgs(['--loud']);
+      end)
+    .When('la composicion parsea otros argumentos',
+      procedure(W: TCliWorld)
+      begin
+        try
+          W.Builder.ParseArgs(['--LOUD']);
+          W.Report := '<parseo sin protestar>';
+        except
+          on E: Exception do
+            W.Report := E.ClassName + ': ' + E.Message;
+        end;
+      end)
+    .&Then('falla con un error de composicion',
+      procedure(W: TCliWorld)
+      begin
+        Expect(W.Report).ToStartWith('ECliCompositionError: ');
+      end)
+
+  .Scenario('Parsear lo mismo con otra configuracion es un error de composicion')
+    .Given('una aplicacion CLI cuya composicion ya parseo unos argumentos con la configuracion por defecto',
+      procedure(W: TCliWorld)
+      begin
+        W.Loud := CommandLine.Option<Boolean>('--loud');
+        W.Builder := TCliApplication.CreateBuilder;
+        W.Builder.RootCommand.Add(W.Loud);
+        W.Parsed := W.Builder.ParseArgs(['--loud']);
+      end)
+    .When('la composicion vuelve a parsearlos con los ficheros de respuesta apagados',
+      procedure(W: TCliWorld)
+      begin
+        var Configuration: TParserConfiguration;
+        Configuration.ResponseFileTokenReplacer := nil;
+        try
+          W.Builder.ParseArgs(['--loud'], Configuration);
+          W.Report := '<parseo sin protestar>';
+        except
+          on E: Exception do
+            W.Report := E.ClassName + ': ' + E.Message;
+        end;
+      end)
+    .&Then('falla con un error de composicion',
+      procedure(W: TCliWorld)
+      begin
+        Expect(W.Report).ToStartWith('ECliCompositionError: ');
+      end);
+
+Feature('''
+Feature La variante CLI de la familia @cli @application-family
+
+  Como quien escribe una herramienta de linea de comandos
+  Quiero que el arranque cubra el borde del Run
+  Para no repetir en cada .dpr la instancia unica, la version y el codigo de salida
+''')
+
+.UseWorld<TCliWorld>
 
 .Rule('La variante CLI ejecuta la accion del comando alcanzado')
 
@@ -580,6 +851,7 @@ Feature La variante CLI de la familia @cli @application-family
     .When('se ejecuta con una invocacion que nombra uno de ellos',
       procedure(W: TCliWorld)
       begin
+        W.Builder.ParseArgs(['greet']);
         W.App := W.Builder.Build;
         W.ExitCode := W.App.Run;
       end)
@@ -848,6 +1120,7 @@ Feature La variante CLI de la familia @cli @application-family
       begin
         W.Builder := TCliApplication.CreateBuilder(['--version']);
         W.Builder.RootCommand.WithVersion('2.0.0');
+        W.Builder.ParseArgs(['--version']);
         W.App := W.Builder.Build;
       end)
     .When('se ejecuta',
@@ -881,6 +1154,7 @@ Feature La variante CLI de la familia @cli @application-family
           begin
             raise Exception.Create('sin banner');
           end;
+        W.Builder.ParseArgs(['--help']);
         W.App := W.Builder.Build;
       end)
     .When('se ejecuta',
@@ -913,6 +1187,7 @@ Feature La variante CLI de la familia @cli @application-family
         W.Builder := TCliApplication.CreateBuilder(['--version']);
         W.Builder.SingleInstance('daf-cli-spec');
         W.Builder.RootCommand.WithVersion('2.0.0');
+        W.Builder.ParseArgs(['--version']);
         W.App := W.Builder.Build;
       end)
     .When('se ejecuta la segunda',
@@ -939,6 +1214,7 @@ Feature La variante CLI de la familia @cli @application-family
 
         W.Builder := TCliApplication.CreateBuilder(['--help']);
         W.Builder.SingleInstance('daf-cli-spec');
+        W.Builder.ParseArgs(['--help']);
         W.App := W.Builder.Build;
       end)
     .When('se ejecuta la segunda',
@@ -1043,6 +1319,7 @@ Feature La variante CLI de la familia @cli @application-family
       procedure(W: TCliWorld)
       begin
         W.Builder := TCliApplication.CreateBuilder(['--que-no-existe']);
+        W.Builder.ParseArgs(['--que-no-existe']);
         W.App := W.Builder.Build;
       end)
     .When('se ejecuta',
@@ -1194,6 +1471,7 @@ Feature La variante CLI de la familia @cli @application-family
     .When('se invoca con esa opcion',
       procedure(W: TCliWorld)
       begin
+        W.Builder.ParseArgs(['--loud']);
         W.App := W.Builder.Build;
         W.ExitCode := W.App.Run;
       end)
@@ -1225,6 +1503,7 @@ Feature La variante CLI de la familia @cli @application-family
     .When('se construye y se invoca ese comando',
       procedure(W: TCliWorld)
       begin
+        W.Builder.ParseArgs(['init']);
         W.App := W.Builder.Build;
         W.Container := IfThen(W.App.Services = nil, 'no', 'si');
         W.ExitCode := W.App.Run;
@@ -1260,6 +1539,7 @@ Feature La variante CLI de la familia @cli @application-family
             W.ActionRan := True;
             Result := TCliExit.Ok;
           end);
+        W.Builder.ParseArgs(['init']);
         W.App := W.Builder.Build;
       end)
     .When('arranca la segunda',
@@ -1293,6 +1573,7 @@ Feature La variante CLI de la familia @cli @application-family
               W.ActionRan := True;
               Result := TCliExit.Ok;
             end);
+          W.Builder.ParseArgs(['init']);
           W.App := W.Builder.Build;
           W.ExitCode := W.App.Run;
           W.Report := NoEscape;
@@ -1394,6 +1675,7 @@ Feature La variante CLI de la familia @cli @application-family
     .When('se construye y se invoca ese comando',
       procedure(W: TCliWorld)
       begin
+        W.Builder.ParseArgs(['init']);
         W.App := W.Builder.Build;
         W.Container := IfThen(W.App.Services = nil, 'no', 'si');
         W.ExitCode := W.App.Run;
@@ -1425,6 +1707,7 @@ Feature La variante CLI de la familia @cli @application-family
             W.Report := Services.GetRequiredService<IGreeter>.Greet;
             Result := TCliExit.Ok;
           end);
+        W.Builder.ParseArgs(['greet']);
         W.App := W.Builder.Build;
       end)
     .When('se invoca el comando con servicios',
@@ -1463,7 +1746,7 @@ Feature La variante CLI de la familia @cli @application-family
     .When('la composicion lee el parse, registra segun la opcion, y se ejecuta',
       procedure(W: TCliWorld)
       begin
-        var Parsed := W.Builder.ParseArgs;
+        var Parsed := W.Builder.ParseArgs(['--loud']);
         if W.Loud.ValueIn(Parsed) then
           W.Builder.Services.AddSingleton<IGreeter, TLoudGreeter>
         else
@@ -1492,7 +1775,7 @@ Feature La variante CLI de la familia @cli @application-family
     .When('la composicion parsea, y despues se construye y se ejecuta',
       procedure(W: TCliWorld)
       begin
-        W.Parsed := W.Builder.ParseArgs;
+        W.Parsed := W.Builder.ParseArgs([]);
         W.App := W.Builder.Build;
         W.ExitCode := W.App.Run;
       end)
@@ -1507,7 +1790,7 @@ Feature La variante CLI de la familia @cli @application-family
       procedure(W: TCliWorld)
       begin
         W.Builder := TCliApplication.CreateBuilder;
-        W.Builder.ParseArgs;
+        W.Builder.ParseArgs([]);
       end)
     .When('se le anade una opcion a la gramatica',
       procedure(W: TCliWorld)
@@ -1543,7 +1826,7 @@ Feature La variante CLI de la familia @cli @application-family
       procedure(W: TCliWorld)
       begin
         try
-          var Parsed := W.Builder.ParseArgs;
+          var Parsed := W.Builder.ParseArgs(['--help']);
           if Parsed.Succeeded and not Parsed.IsHelpRequested and not Parsed.IsVersionRequested then
             JsonConfig.AddFile(W.Builder.Configuration, W.ConfigFile);
           W.ExitCode := W.Builder.Build.Run;

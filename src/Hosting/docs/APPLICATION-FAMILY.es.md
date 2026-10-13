@@ -25,7 +25,7 @@ escribiendo — no de cuál de dos capas usar. Una VCL entera, con sus propias s
 
 | Tu aplicación | Punto de entrada | Vive en | `Build` devuelve |
 |---|---|---|---|
-| Consola / herramienta CLI | `TCliApplication.CreateBuilder(Args)` | `Daf.Cli` | `ICliApplication` |
+| Consola / herramienta CLI | `TCliApplication.CreateBuilder(Args)` + `B.ParseArgs(Args)` | `Daf.Cli` | `ICliApplication` |
 | Web | `TWebApplication.CreateBuilder(Args)` | `Daf.Web` | `IWebApplication` |
 | Escritorio, VCL | `TVclApplication.CreateBuilder` | `Daf.VCL` | `IVclApplication` |
 | Escritorio, FireMonkey | `TFmxApplication.CreateBuilder` | `Daf.FMX` | `IFmxApplication` |
@@ -71,7 +71,7 @@ Encima de eso, las variantes añaden **el borde alrededor del `Run`** — que es
 | La política de lo que se escapa, y el código de salida | `OnException(Policy)` | CLI, Web |
 | Pasarle a esa política lo que se escapa antes del `Run` | `HandleException(E)`, en el `except` del `.dpr` | CLI, Web |
 | La acción del comando alcanzado, y su código de salida | `SetAction(Action)` / `SetAction(Command, Action)` | CLI |
-| `--version`, `--help`, invocación inválida | `RootCommand`, contestado por el parse | CLI |
+| `--version`, `--help`, invocación inválida | `RootCommand`, contestado por el parse de lo que recibe `B.ParseArgs(Args)` | CLI |
 | El servidor HTTP, cableado a DI y al host | `WebApp.AddHttpServer` + `MapControllers` | Web |
 | Crear el formulario principal y entregar el bucle | `Run(TFormClass)` | VCL, FMX |
 | Un global para el código que la plataforma construye sola | `DafApp` | VCL, FMX |

@@ -18,7 +18,8 @@ uses
 
 type
   /// <summary>
-  /// Componer mal la variante: declarar en el builder la accion de un comando que ya tiene una.
+  /// Componer mal la variante: declarar en el builder la accion de un comando que ya tiene una, o
+  /// darle a la gramatica otra entrada despues de parsear.
   /// </summary>
   ECliCompositionError = class(Exception);
 
@@ -69,14 +70,15 @@ type
     ['{71536E8D-49F8-45D8-AB43-C5F726B2F25A}']
     function GetRootCommand: IRootCommand;
     /// <summary>
-    /// La gramatica de esta herramienta, que parsea los argumentos en <c>ParseArgs</c>, o en
-    /// <c>Build</c> antes que nada mas si la composicion no lo pidio. Una invocacion que llega a una
-    /// accion tiene el resultado del parse tambien en el contenedor, como
+    /// La gramatica de esta herramienta, que parsea los argumentos que recibe <c>ParseArgs</c>. Si
+    /// la composicion no lo llama, <c>Build</c> parsea una invocacion vacia. Una invocacion que llega
+    /// a una accion tiene el resultado del parse tambien en el contenedor, como
     /// <c>IParseResult</c>, y un servicio lo pide por constructor.
     ///
-    /// Los mismos argumentos estan tambien en la configuracion, como en .NET, y alli se leen sin la
-    /// gramatica: una bandera seguida de un posicional queda como clave con el posicional por
-    /// valor. Lo que la gramatica declara se lee del resultado del parseo.
+    /// Los argumentos del builder van a la configuracion, no a la gramatica. Cuando las dos reciben
+    /// los mismos, la configuracion los lee sin la gramatica: una bandera seguida de un posicional
+    /// queda como clave con el posicional por valor. Lo que la gramatica declara se lee del
+    /// resultado del parse.
     /// </summary>
     property RootCommand: IRootCommand read GetRootCommand;
 
@@ -143,23 +145,33 @@ type
     /// </remarks>
     function SetStandaloneAction(const Command: ICommand; const Action: TCommandAction): ICliApplicationBuilder; overload;
 
+    /// <summary>Parsea con la configuracion por defecto. Ver la sobrecarga.</summary>
+    function ParseArgs(const Args: TArray<string>): IParseResult; overload;
     /// <summary>
-    /// Parsea los argumentos con la gramatica y la congela. Es para la composicion que decide con
-    /// lo parseado: que fuente anadir, que implementacion registrar.
+    /// Parsea con la gramatica los argumentos que recibe, leidos con esa configuracion, y la congela.
+    /// Es la entrada de la gramatica, y tambien lo que usa la composicion que decide con lo
+    /// parseado: que fuente anadir, que implementacion registrar.
     /// </summary>
     /// <remarks>
-    ///   Parsea una sola vez: llamarlo de nuevo, o el Build despues, devuelve el mismo resultado. A
-    ///   partir de aqui, cambiar la gramatica lanza ECommandLine; las acciones siguen abiertas.
+    ///   Con <c>ResponseFileTokenReplacer</c> a nil, un token que empieza por @ llega como valor y no
+    ///   se lee ningun fichero: es la configuracion para unos argumentos que no son de fiar.
+    ///
+    ///   Parsea una sola vez. Llamarlo de nuevo con los mismos argumentos --la misma longitud y cada
+    ///   elemento igual, distinguiendo mayusculas-- y la misma configuracion --sus dos interruptores,
+    ///   y si lee ficheros de respuesta o no-- devuelve el mismo resultado, y el Build despues
+    ///   tambien; con otros, lanza <see cref="ECliCompositionError"/> sin tocar nada. A partir del
+    ///   primer parse, cambiar la gramatica lanza ECommandLine; las acciones siguen abiertas.
     ///
     ///   Una composicion que corta cuando el parse se contesta solo --ayuda, version o una
     ///   invocacion que no encaja-- y va directa al Build deja contestar a la gramatica aunque lo
     ///   que iba a anadir despues no se pueda leer.
     /// </remarks>
-    function ParseArgs: IParseResult;
+    function ParseArgs(const Args: TArray<string>; const Configuration: TParserConfiguration): IParseResult; overload;
 
     /// <summary>
-    /// Parsea, si no lo hizo ya ParseArgs; registra el resultado del parse; toma el cerrojo, si se declaro instancia unica; y
-    /// construye el host, que carga la configuracion que la composicion no leyo.
+    /// Parsea una invocacion vacia, si la composicion no llamo a ParseArgs; registra el resultado
+    /// del parse; toma el cerrojo, si se declaro instancia unica; y construye el host, que carga la
+    /// configuracion que la composicion no leyo.
     /// </summary>
     /// <remarks>
     ///   La version, la ayuda, una invocacion que no encaja y un comando standalone terminan en el
@@ -255,7 +267,10 @@ type
     /// <summary>El gancho del RTL mientras corre el Run.</summary>
     procedure HandleRtlException(Sender: TObject);
   public
-    /// <summary>El punto de entrada de una aplicacion CLI de la familia.</summary>
+    /// <summary>
+    /// El punto de entrada de una aplicacion CLI de la familia. Los argumentos son una fuente de
+    /// configuracion; la gramatica recibe los suyos en <c>ParseArgs</c>.
+    /// </summary>
     class function CreateBuilder(const Args: TArray<string> = nil): ICliApplicationBuilder; static;
     constructor Create(const Host: IHost; const RootCommand: IRootCommand;
       const Parsed: IParseResult; const Failures: IAppFailures;
@@ -272,12 +287,13 @@ type
     // Build se le llama por la clase, porque el tipo que devuelve es de ESTA variante.
     FImpl: THostBuilder;
     FOwned: IHostApplicationBuilder;
-    FArgs: TArray<string>;
     FRootCommand: IRootCommand;
     FSingleInstanceId: string;
     FFailures: IAppFailures;
     FSlot: TCliApplication.IServicesSlot;
     FParsed: IParseResult;
+    FParsedArgs: TArray<string>;
+    FParsedConfiguration: TParserConfiguration;
     FStandalone: TArray<ICommand>;
     function GetRootCommand: IRootCommand;
     procedure CheckNoAction(const Command: ICommand);
@@ -299,7 +315,8 @@ type
     function SetAction(const Command: ICommand; const Action: TCliAction): ICliApplicationBuilder; overload;
     function SetStandaloneAction(const Action: TCommandAction): ICliApplicationBuilder; overload;
     function SetStandaloneAction(const Command: ICommand; const Action: TCommandAction): ICliApplicationBuilder; overload;
-    function ParseArgs: IParseResult;
+    function ParseArgs(const Args: TArray<string>): IParseResult; overload;
+    function ParseArgs(const Args: TArray<string>; const Configuration: TParserConfiguration): IParseResult; overload;
     function Build: ICliApplication;
     property RootCommand: IRootCommand read GetRootCommand;
     property Services: IServiceCollection read GetServices;
@@ -350,9 +367,9 @@ end;
 constructor TCliApplicationBuilder.Create(const Args: TArray<string>);
 begin
   inherited Create;
-  FArgs := Args;
 
-  // Como en .NET: los argumentos van a la gramatica y tambien, como fuente, a la configuracion.
+  // Como en .NET, los argumentos del builder son solo de la configuracion: la gramatica recibe los
+  // suyos en ParseArgs.
   FImpl := THostBuilder.Create(Args);
   FOwned := FImpl;
 
@@ -467,14 +484,49 @@ begin
   Result := False;
 end;
 
-function TCliApplicationBuilder.ParseArgs: IParseResult;
+function SameArgs(const A, B: TArray<string>): Boolean;
 begin
-  if not Assigned(FParsed) then
+  Result := Length(A) = Length(B);
+  if Result then
+    for var I := 0 to High(A) do
+      if A[I] <> B[I] then
+        Exit(False);
+end;
+
+function SameConfiguration(const A, B: TParserConfiguration): Boolean;
+begin
+  // El reemplazador cuenta por si esta asignado: cada configuracion por defecto lo envuelve en una
+  // referencia nueva, asi que dos iguales no comparten puntero.
+  Result := (A.EnablePosixBundling = B.EnablePosixBundling) and
+    (A.EnableCaseInsensitiveNames = B.EnableCaseInsensitiveNames) and
+    (Assigned(A.ResponseFileTokenReplacer) = Assigned(B.ResponseFileTokenReplacer));
+end;
+
+function TCliApplicationBuilder.ParseArgs(const Args: TArray<string>): IParseResult;
+var
+  Configuration: TParserConfiguration;
+begin
+  Result := ParseArgs(Args, Configuration);
+end;
+
+function TCliApplicationBuilder.ParseArgs(const Args: TArray<string>;
+  const Configuration: TParserConfiguration): IParseResult;
+begin
+  if Assigned(FParsed) then
   begin
-    // Antes de parsear: lo que se parsea es lo que ya no puede cambiar.
-    FRootCommand.Freeze;
-    FParsed := FRootCommand.Parse(FArgs);
+    if not SameArgs(Args, FParsedArgs) or not SameConfiguration(Configuration, FParsedConfiguration) then
+      raise ECliCompositionError.Create('The grammar was already parsed with other arguments or another ' +
+        'configuration. It has one input -- call ParseArgs once, or again with the same arguments and ' +
+        'configuration.');
+    Exit(FParsed);
   end;
+
+  // Antes de parsear: lo que se parsea es lo que ya no puede cambiar.
+  FRootCommand.Freeze;
+  FParsed := FRootCommand.Parse(Args, Configuration);
+  // Una copia: un array dinamico se comparte al asignarlo, y quien lo paso puede cambiarlo despues.
+  FParsedArgs := Copy(Args);
+  FParsedConfiguration := Configuration;
   Result := FParsed;
 end;
 
@@ -482,8 +534,11 @@ function TCliApplicationBuilder.Build: ICliApplication;
 begin
   // El parse va primero: la version, la ayuda, una invocacion que no encaja y un comando
   // standalone se resuelven sin el cerrojo de instancia unica, sin contenedor y sin cargar la
-  // configuracion que la composicion no leyo.
-  var Parsed := ParseArgs;
+  // configuracion que la composicion no leyo. Sin ParseArgs, la gramatica parsea una invocacion
+  // vacia: ni los argumentos del builder ni los del proceso.
+  var Parsed := FParsed;
+  if not Assigned(Parsed) then
+    Parsed := ParseArgs([]);
   if Parsed.IsVersionRequested or Parsed.IsHelpRequested or not Parsed.Succeeded or
     IsStandalone(Parsed.Command) then
     Exit(TCliApplication.Create(nil, FRootCommand, Parsed, FFailures, FSlot, 0));

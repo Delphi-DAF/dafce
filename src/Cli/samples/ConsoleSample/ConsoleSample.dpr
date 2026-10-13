@@ -61,5 +61,6 @@ begin
       Result := TCliExit.Ok;
     end);
 
+  B.ParseArgs(CommandLineConfig.ProcessArgs);
   ExitCode := B.Build.Run;
 end.

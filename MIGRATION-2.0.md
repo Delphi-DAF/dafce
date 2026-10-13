@@ -272,6 +272,7 @@ This is the largest front of 2.0 for anything that had a `.dpr`.
   // Now
   var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
   B.Services.AddSingleton<IMyService, TMyService>;
+  B.ParseArgs(CommandLineConfig.ProcessArgs);
   ExitCode := B.Build.Run;
   ```
 

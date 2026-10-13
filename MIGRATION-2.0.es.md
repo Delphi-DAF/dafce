@@ -274,6 +274,7 @@ Es el frente más grande de 2.0 para cualquier cosa que tuviera un `.dpr`.
   // Ahora
   var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
   B.Services.AddSingleton<IMyService, TMyService>;
+  B.ParseArgs(CommandLineConfig.ProcessArgs);
   ExitCode := B.Build.Run;
   ```
 

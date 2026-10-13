@@ -75,6 +75,7 @@ begin
         Result := TCliExit.Ok;
       end);
 
+    B.ParseArgs(CommandLineConfig.ProcessArgs);
     ExitCode := B.Build.Run;
   except
     // Lo que se escapa antes del Run --de la composicion o del Build-- va a la misma politica.
@@ -140,7 +141,8 @@ Esto es lo que la capa añade sobre el host, y lo que cada herramienta de consol
 | `SetAction(Action)` | Lo que hace la raíz | Dentro del `Run` |
 | `SetAction(Command, Action)` | Lo que hace un comando cuando la invocación lo alcanza | Dentro del `Run` |
 | `SetStandaloneAction(Command, Action)` | Lo que hace un comando sin host: sin cerrojo, sin tareas de arranque, sin servicios alojados, sin configuración y sin contenedor | Dentro del `Run` |
-| `RootCommand` | La gramática, que parsea `argv` | En el `Build`, antes que nada más |
+| `RootCommand` | La gramática | Se congela en el primer parse |
+| `ParseArgs(Args)` | Lo que parsea la gramática. Sin llamarlo, el `Build` parsea una invocación vacía | En la composición, antes del `Build` |
 
 `RootCommand` es una raíz de `Daf.CommandLine`: un banner encima de `--help` y de `--version` va en
 su `HelpAction` y su `VersionAction`, como enseña el [README de Daf.CommandLine](../CommandLine/README.es.md).
@@ -149,8 +151,8 @@ Corren sin host: lo que se escapa de ellas va a la política de `OnException`, c
 
 ### El parse va primero
 
-`Build` parsea —salvo que ya lo hiciera `ParseArgs`— antes de tomar el cerrojo de instancia única, de
-cargar la configuración y de construir el contenedor. `--version`, `--help` y una invocación que no encaja con la gramática se contestan
+`Build` parsea —una invocación vacía, salvo que ya lo hiciera `ParseArgs`— antes de tomar el cerrojo
+de instancia única, de cargar la configuración y de construir el contenedor. `--version`, `--help` y una invocación que no encaja con la gramática se contestan
 desde el parse, así que ni otra instancia en marcha ni un fichero de configuración del host que no se
 puede leer les impiden contestar.
 
@@ -314,12 +316,16 @@ B.Services.AddSingleton<IWriter>(
 
 ### La composición decide con el parse
 
-`B.ParseArgs` parsea los argumentos con la gramática y la congela, así que la composición puede
-decidir con lo parseado: qué fuente añadir, qué implementación registrar. Parsea una sola vez: el
-`Build` usa el mismo resultado.
+`B.ParseArgs(Args)` parsea `Args` con la gramática y la congela, así que la composición puede
+decidir con lo parseado: qué fuente añadir, qué implementación registrar.
+`B.ParseArgs(Args, Configuration)` los parsea con una `TParserConfiguration`, como
+`rootCommand.Parse(args, configuration)`. Parsea una sola vez: llamado otra vez con los mismos
+argumentos —elemento a elemento, distinguiendo mayúsculas— y la misma configuración —sus dos
+interruptores, y si lee ficheros de respuesta— devuelve el mismo resultado, y el `Build` también; con
+otros argumentos u otra configuración, lanza `ECliCompositionError`.
 
 ```pascal
-var Parsed := B.ParseArgs;
+var Parsed := B.ParseArgs(Args);
 if Loud.ValueIn(Parsed) then
   B.Services.AddSingleton<IGreeter, TLoudGreeter>
 else
@@ -334,7 +340,7 @@ invocación que no encaja— y va directa al `Build` deja contestar a la gramát
 añadir después no se pueda leer:
 
 ```pascal
-var Parsed := B.ParseArgs;
+var Parsed := B.ParseArgs(Args);
 if Parsed.Succeeded and not Parsed.IsHelpRequested and not Parsed.IsVersionRequested then
   JsonConfig.AddFile(B.Configuration, 'web.json');
 ExitCode := B.Build.Run;
@@ -346,9 +352,34 @@ Una validación que lee la configuración solo ve las fuentes añadidas antes de
 
 ## Los argumentos, en la gramática y en la configuración
 
-`CreateBuilder(Args)` pasa los argumentos a la gramática (`RootCommand`) y, como en .NET, también los carga en `Configuration`.
+`CreateBuilder(Args)` carga los argumentos en `Configuration`, como hace
+`Host.CreateApplicationBuilder(args)` en .NET. La gramática (`RootCommand`) parsea lo que recibe
+`ParseArgs(Args)`, como `rootCommand.Parse(args)`: los argumentos del builder no le llegan, y sin
+`ParseArgs` parsea una invocación vacía.
 
-La configuración los lee sin la gramática. Admite `--clave=valor` y `--clave valor`, ignora las
+Una herramienta de consola les da los argumentos del proceso a los dos, y llama a `ParseArgs` una vez
+declarada la gramática:
+
+```pascal
+var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
+// ...la gramática, los servicios y las acciones
+B.ParseArgs(CommandLineConfig.ProcessArgs);
+ExitCode := B.Build.Run;
+```
+
+Un proceso cuyos argumentos no son de fiar, como un CGI —que recibe como argumentos la consulta de
+una URL sin `=`—, crea el builder sin ellos, y se los da solo a la gramática con los ficheros de
+respuesta apagados: `--help` y `--version` contestan, la configuración no los ve, y un token que
+empieza por `@` llega como valor, así que no se lee ningún fichero.
+
+```pascal
+var B := TCliApplication.CreateBuilder;
+var Untrusted: TParserConfiguration;
+Untrusted.ResponseFileTokenReplacer := nil;
+B.ParseArgs(CommandLineConfig.ProcessArgs, Untrusted);
+```
+
+Cuando los dos reciben los mismos argumentos, la configuración los lee sin la gramática. Admite `--clave=valor` y `--clave valor`, ignora las
 banderas sueltas y los posicionales, y una bandera seguida de un posicional la lee como clave y valor.
 Sobre `mytool --verbose informe.txt`:
 
@@ -357,8 +388,8 @@ Sobre `mytool --verbose informe.txt`:
 
 Lo que la gramática declara se lee del resultado del parseo, no de `Configuration`.
 
-Una clave de configuración que la gramática no declara —`--Db:Server=localhost`— no deja arrancar la
-aplicación: la gramática rechaza por defecto lo que no reconoce, y `Run` devuelve
+Pasada a los dos, una clave de configuración que la gramática no declara —`--Db:Server=localhost`— no
+deja arrancar la aplicación: la gramática rechaza por defecto lo que no reconoce, y `Run` devuelve
 `TCliExit.InvocationError`. Para admitirla, la raíz lo declara:
 
 ```pascal

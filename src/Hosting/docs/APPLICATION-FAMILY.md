@@ -25,7 +25,7 @@ are writing — not which of two layers to use. A VCL one, whole and with its ow
 
 | Your application | Entry point | Lives in | `Build` returns |
 |---|---|---|---|
-| Console / CLI tool | `TCliApplication.CreateBuilder(Args)` | `Daf.Cli` | `ICliApplication` |
+| Console / CLI tool | `TCliApplication.CreateBuilder(Args)` + `B.ParseArgs(Args)` | `Daf.Cli` | `ICliApplication` |
 | Web | `TWebApplication.CreateBuilder(Args)` | `Daf.Web` | `IWebApplication` |
 | Desktop, VCL | `TVclApplication.CreateBuilder` | `Daf.VCL` | `IVclApplication` |
 | Desktop, FireMonkey | `TFmxApplication.CreateBuilder` | `Daf.FMX` | `IFmxApplication` |
@@ -71,7 +71,7 @@ write by hand:
 | The policy for what escapes, and the exit code | `OnException(Policy)` | CLI, Web |
 | Handing that policy what escapes before `Run` | `HandleException(E)`, in the `.dpr`'s `except` | CLI, Web |
 | The action of the command reached, and its exit code | `SetAction(Action)` / `SetAction(Command, Action)` | CLI |
-| `--version`, `--help`, invalid invocation | `RootCommand`, answered by the parse | CLI |
+| `--version`, `--help`, invalid invocation | `RootCommand`, answered by the parse of what `B.ParseArgs(Args)` receives | CLI |
 | The HTTP server, wired to DI and the host | `WebApp.AddHttpServer` + `MapControllers` | Web |
 | Creating the main form and handing over the loop | `Run(TFormClass)` | VCL, FMX |
 | A global for the code the platform builds itself | `DafApp` | VCL, FMX |

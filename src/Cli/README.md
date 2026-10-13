@@ -75,6 +75,7 @@ begin
         Result := TCliExit.Ok;
       end);
 
+    B.ParseArgs(CommandLineConfig.ProcessArgs);
     ExitCode := B.Build.Run;
   except
     // Lo que se escapa antes del Run --de la composicion o del Build-- va a la misma politica.
@@ -139,7 +140,8 @@ This is what the layer adds over the host, and what every console tool used to r
 | `SetAction(Action)` | What the root does | Inside `Run` |
 | `SetAction(Command, Action)` | What a command does when the invocation reaches it | Inside `Run` |
 | `SetStandaloneAction(Command, Action)` | What a command does without a host: no lock, no startup tasks, no hosted services, no configuration, no container | Inside `Run` |
-| `RootCommand` | The grammar that parses `argv` | At `Build`, before anything else |
+| `RootCommand` | The grammar | Frozen at the first parse |
+| `ParseArgs(Args)` | What the grammar parses. Without it, `Build` parses an empty invocation | In the composition, before `Build` |
 
 `RootCommand` is a `Daf.CommandLine` root: a banner above `--help` and `--version` goes on its
 `HelpAction` and `VersionAction`, as the [Daf.CommandLine README](../CommandLine/README.md) shows.
@@ -148,8 +150,8 @@ They run without a host: what escapes them goes to the `OnException` policy, wit
 
 ### The parse comes first
 
-`Build` parses — unless `ParseArgs` already did — before it takes the single-instance lock, loads
-the configuration or builds the container. `--version`, `--help` and an invocation that does not fit the grammar are answered from
+`Build` parses — an empty invocation, unless `ParseArgs` already parsed — before it takes the
+single-instance lock, loads the configuration or builds the container. `--version`, `--help` and an invocation that does not fit the grammar are answered from
 the parse, so neither another running instance nor a host configuration file that cannot be read
 keeps them from answering.
 
@@ -313,12 +315,16 @@ B.Services.AddSingleton<IWriter>(
 
 ### The composition decides with the parse
 
-`B.ParseArgs` parses the arguments with the grammar and freezes it, so the composition can decide
-with what was parsed — which source to add, which implementation to register. It parses once:
-`Build` uses the same result.
+`B.ParseArgs(Args)` parses `Args` with the grammar and freezes it, so the composition can decide
+with what was parsed — which source to add, which implementation to register.
+`B.ParseArgs(Args, Configuration)` parses them with a `TParserConfiguration`, as
+`rootCommand.Parse(args, configuration)` does. It parses once: called again with the same arguments
+— element by element, case-sensitive — and the same configuration — its two switches, and whether it
+reads response files — it returns the same result, and so does `Build`; called with other arguments
+or another configuration, it raises `ECliCompositionError`.
 
 ```pascal
-var Parsed := B.ParseArgs;
+var Parsed := B.ParseArgs(Args);
 if Loud.ValueIn(Parsed) then
   B.Services.AddSingleton<IGreeter, TLoudGreeter>
 else
@@ -332,7 +338,7 @@ invocation that does not fit — and goes straight to `Build` lets the grammar a
 would add next cannot be read:
 
 ```pascal
-var Parsed := B.ParseArgs;
+var Parsed := B.ParseArgs(Args);
 if Parsed.Succeeded and not Parsed.IsHelpRequested and not Parsed.IsVersionRequested then
   JsonConfig.AddFile(B.Configuration, 'web.json');
 ExitCode := B.Build.Run;
@@ -344,10 +350,34 @@ A validation that reads the configuration sees only the sources added before `Pa
 
 ## The arguments, in the grammar and in the configuration
 
-`CreateBuilder(Args)` hands the arguments to the grammar (`RootCommand`) and, as in .NET, also loads
-them into `Configuration`.
+`CreateBuilder(Args)` loads the arguments into `Configuration`, as .NET's
+`Host.CreateApplicationBuilder(args)` does. The grammar (`RootCommand`) parses what `ParseArgs(Args)`
+receives, as `rootCommand.Parse(args)` does: the builder's arguments do not reach it, and without
+`ParseArgs` it parses an empty invocation.
 
-The configuration reads them without the grammar. It takes `--key=value` and `--key value`, ignores
+A console tool hands the process arguments to both, and calls `ParseArgs` once the grammar is
+declared:
+
+```pascal
+var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
+// ...the grammar, the services and the actions
+B.ParseArgs(CommandLineConfig.ProcessArgs);
+ExitCode := B.Build.Run;
+```
+
+A process whose arguments are not to be trusted, such as a CGI — which receives the query of a URL
+without `=` as arguments — creates the builder without them, and hands them only to the grammar with
+response files turned off: `--help` and `--version` answer, the configuration does not see them, and
+a token starting with `@` arrives as a value, so no file is read.
+
+```pascal
+var B := TCliApplication.CreateBuilder;
+var Untrusted: TParserConfiguration;
+Untrusted.ResponseFileTokenReplacer := nil;
+B.ParseArgs(CommandLineConfig.ProcessArgs, Untrusted);
+```
+
+When both receive the same arguments, the configuration reads them without the grammar. It takes `--key=value` and `--key value`, ignores
 bare flags and positionals, and reads a flag followed by a positional as a key and its value. On
 `mytool --verbose report.txt`:
 
@@ -356,8 +386,8 @@ bare flags and positionals, and reads a flag followed by a positional as a key a
 
 What the grammar declares is read from the parse result, not from `Configuration`.
 
-A configuration key the grammar does not declare —`--Db:Server=localhost`— keeps the application from
-starting: the grammar rejects what it does not recognise by default, and `Run` returns
+Handed to both, a configuration key the grammar does not declare —`--Db:Server=localhost`— keeps the
+application from starting: the grammar rejects what it does not recognise by default, and `Run` returns
 `TCliExit.InvocationError`. To accept it, the root says so:
 
 ```pascal

@@ -56,6 +56,7 @@ begin
         Result := TCliExit.Ok;
       end);
 
+    B.ParseArgs(CommandLineConfig.ProcessArgs);
     ExitCode := B.Build.Run;
   except
     // Lo que se escapa antes del Run --de la composicion o del Build-- va a la misma politica.
