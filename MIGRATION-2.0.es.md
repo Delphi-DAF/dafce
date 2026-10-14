@@ -128,7 +128,7 @@ La parte mecánica, término a término:
 | `.Arg<T>('name')` | `CommandLine.Option<T>('--name')`, añadida con `Root.Add` — los guiones se escriben ahora |
 | `.Arg<string>('output\|o')` | `CommandLine.Option<string>('--output', ['-o'])` |
 | `A.Default(V)` | `.DefaultValue(V)`, y `.DefaultValueFactory(…)` para el que haya que averiguar |
-| `A.Required(True)` | `.Required` |
+| `A.Required(True)` | `.Required` — en un `Boolean` no falla nunca: un `Boolean` tiene `false` por defecto |
 | `A.Help('…')` | `.Description('…')` — y esta sí **se ve**: la ayuda se genera |
 | `.Command('build')` … `.EndCommand` | `CommandLine.Command('build', descripción)`, colgada con `Parent.Add(Child)` |
 | `Params['x'].AsString` / `.AsInteger` / `.AsBoolean` | `XOpt.ValueIn(Parsed)`, tipado por la propia opción |
@@ -156,6 +156,10 @@ creyendo que ya está:
   pasar un número negativo, y `--port 80xyz` se aceptaba como `80`. Ahora `-5` es un valor, y
   `80xyz` se rechaza nombrando la opción, y leer la opción lanza ese error. Si algo se apoyaba en
   ese truncado, recibe un error donde antes recibía un número.
+- **Dos valores para una opción que toma uno son un error.** `Daf.CmdLn` se quedaba con el último:
+  `--port 1 --port 2` leía 2. Ahora el parse falla con
+  `Option '--port' expects a single argument but 2 were provided.`, y leer la opción lo lanza.
+  Nombrarla otra vez sin valor funciona como antes: `--port 1 --port` lee 1.
 - **El despacho puede pasar a la gramática.** `Daf.CmdLn` devolvía los valores y dejaba el despacho a
   la aplicación. En `Daf.CommandLine` cada comando puede declarar su acción con `SetAction`, e
   `Invoke` sobre el resultado del parse ejecuta la del comando alcanzado y devuelve el código de

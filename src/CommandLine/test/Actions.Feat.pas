@@ -28,6 +28,8 @@ type
   public
     Root: IRootCommand;
     TraceOpt: IOption<Boolean>;
+    LevelOpt: IOption<Integer>;
+    CountOpt: IOption<Integer>;
     VerboseOpt: IOption<Boolean>;
     VerbOpt: IOption<Boolean>;
     SecretOpt: IOption<Boolean>;
@@ -50,6 +52,8 @@ type
     procedure Track(const Name: string);
     /// <summary>A root with an action that answers <c>RootCode</c>, and a <c>--trace</c> option.</summary>
     procedure BuildGrammar(RootCode: Integer);
+    /// <summary>The same, adding <c>--level</c> with the default 3 and <c>--count</c> with none, both integers.</summary>
+    procedure BuildDefaultedGrammar;
     /// <summary>A root with an action and <c>--verbose</c>, <c>--verb</c> and a hidden <c>--secret</c>.</summary>
     procedure BuildTypoGrammar;
   end;
@@ -138,6 +142,14 @@ begin
     end);
 end;
 
+procedure TActionsWorld.BuildDefaultedGrammar;
+begin
+  BuildGrammar(5);
+  LevelOpt := CommandLine.Option<Integer>('--level').DefaultValue(3);
+  CountOpt := CommandLine.Option<Integer>('--count');
+  Root.Add([LevelOpt, CountOpt]);
+end;
+
 procedure TActionsWorld.BuildTypoGrammar;
 begin
   VerboseOpt := CommandLine.Option<Boolean>('--verbose');
@@ -172,7 +184,7 @@ Feature Actions of options @commandline @actions
       procedure(W: TActionsWorld)
       begin
         W.BuildGrammar(5);
-        W.TraceOpt.SetAction(TTrackedAction.Create(W, 'option', 7, True));
+        W.TraceOpt.Action(TTrackedAction.Create(W, 'option', 7, True));
       end)
     .When('the result of parsing an invocation that names the command and the option is invoked',
       procedure(W: TActionsWorld)
@@ -196,7 +208,7 @@ Feature Actions of options @commandline @actions
       procedure(W: TActionsWorld)
       begin
         W.BuildGrammar(5);
-        W.TraceOpt.SetAction(TTrackedAction.Create(W, 'option', 0, False));
+        W.TraceOpt.Action(TTrackedAction.Create(W, 'option', 0, False));
       end)
     .When('the result of parsing an invocation that names the command and the option is invoked',
       procedure(W: TActionsWorld)
@@ -215,7 +227,7 @@ Feature Actions of options @commandline @actions
       procedure(W: TActionsWorld)
       begin
         W.BuildGrammar(0);
-        W.TraceOpt.SetAction(TTrackedAction.Create(W, 'option', 3, False));
+        W.TraceOpt.Action(TTrackedAction.Create(W, 'option', 3, False));
       end)
     .When('the result of parsing an invocation that names the command and the option is invoked',
       procedure(W: TActionsWorld)
@@ -232,6 +244,65 @@ Feature Actions of options @commandline @actions
       procedure(W: TActionsWorld)
       begin
         Expect(W.ExitCode).ToEqual(3);
+      end)
+
+.Rule('the action that is not terminating of an option that takes its default runs too')
+
+  .Scenario('An option with a default value that is not named')
+    .Given('a command with an action, and an integer option with a default value and an action that is not terminating',
+      procedure(W: TActionsWorld)
+      begin
+        W.BuildDefaultedGrammar;
+        W.LevelOpt.Action(TTrackedAction.Create(W, 'option', 0, False));
+      end)
+    .When('the result of parsing an invocation that names the command and not the option is invoked',
+      procedure(W: TActionsWorld)
+      begin
+        W.Parsed := W.Root.Parse([]);
+        W.ExitCode := W.Parsed.Invoke(W.Configuration);
+      end)
+    .&Then('the action of the option runs, and after it the one of the command',
+      procedure(W: TActionsWorld)
+      begin
+        Expect(Format('ran=%s exit=%d', [W.RanText, W.ExitCode])).ToEqual('ran=option,command exit=5');
+      end)
+
+  .Scenario('A boolean option that is not named')
+    .Given('a command with an action, and a boolean option with no declared default and an action that is not terminating',
+      procedure(W: TActionsWorld)
+      begin
+        W.BuildDefaultedGrammar;
+        W.TraceOpt.Action(TTrackedAction.Create(W, 'option', 0, False));
+      end)
+    .When('the result of parsing an invocation that names the command and not the option is invoked',
+      procedure(W: TActionsWorld)
+      begin
+        W.Parsed := W.Root.Parse([]);
+        W.ExitCode := W.Parsed.Invoke(W.Configuration);
+      end)
+    .&Then('the action of the option runs, and after it the one of the command',
+      procedure(W: TActionsWorld)
+      begin
+        Expect(Format('ran=%s exit=%d', [W.RanText, W.ExitCode])).ToEqual('ran=option,command exit=5');
+      end)
+
+  .Scenario('An option with no default value that is not named')
+    .Given('a command with an action, and an integer option with no default value and an action that is not terminating',
+      procedure(W: TActionsWorld)
+      begin
+        W.BuildDefaultedGrammar;
+        W.CountOpt.Action(TTrackedAction.Create(W, 'option', 0, False));
+      end)
+    .When('the result of parsing an invocation that names the command and not the option is invoked',
+      procedure(W: TActionsWorld)
+      begin
+        W.Parsed := W.Root.Parse([]);
+        W.ExitCode := W.Parsed.Invoke(W.Configuration);
+      end)
+    .&Then('only the action of the command runs',
+      procedure(W: TActionsWorld)
+      begin
+        Expect(Format('ran=%s exit=%d', [W.RanText, W.ExitCode])).ToEqual('ran=command exit=5');
       end)
 
 .Rule('a parse error suggests what was meant')

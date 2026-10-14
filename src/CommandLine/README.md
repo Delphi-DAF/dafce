@@ -110,9 +110,9 @@ What `ValueIn` answers depends on what the parse made of the symbol:
 | The symbol | `ValueIn` answers |
 |---|---|
 | carried by the invocation | its value |
-| not carried, with a declared default, on a command the invocation went through | the declared default |
+| not carried, with a default, on a command the invocation went through | its default |
 | not carried, in any other case | the default of its **type**: `0`, `''`, an empty array |
-| refused by the parse: a value that does not convert, a repetition, a required option that is missing | nothing: it raises `ECommandLine` with that error |
+| refused by the parse: a value that does not convert, more values than it admits, a required option that is missing | nothing: it raises `ECommandLine` with that error |
 
 The parse validates the command reached whole, and the commands above it only in their recursive
 options and in the ones with a default. An option of a parent that is neither, written before the
@@ -143,6 +143,9 @@ var Port := Parsed.GetResult(PortOpt);         // an IOptionResult, or nil
 if (Port <> nil) and not Port.IsImplicit then
   Writeln('named ', Port.IdentifierTokenCount, ' time(s), with ', Length(Port.Tokens), ' value(s)');
 ```
+
+On the parse result, `GetResult` also takes an `ISymbol`, and answers the result of any symbol without
+saying what kind it is: the same one the query of its kind answers.
 
 | A result | answers |
 |---|---|
@@ -191,7 +194,8 @@ It buys three things that look unrelated:
 - **Several values.** A maximum above one is what lets `--file a.pas --file b.pas` mean both — and,
   with `.AllowMultipleArgumentsPerToken`, `--file a.pas b.pas` as well.
 - **Required, at the argument end.** A minimum of one *is* required; there is no second concept.
-- **No silent last-wins.** With a maximum of one, repeating the option is an **error**.
+- **No silent last-wins.** With a maximum of one, a second value is an **error**. Naming the option
+  again with no value is not: `--port 80 --port` reads 80, and `--verbose --verbose` reads true.
 
 On **options**, `Required` is a mark of its own, as in .NET: an option that takes one value may be
 obligatory or not, and arity cannot say which.
@@ -234,6 +238,10 @@ of its own included.
 A `Boolean` option is a flag: naming it is enough, and `--flag false`, `--flag=false` and
 `--flag true` all work. Only `true` and `false`, in any casing, are booleans: `--flag 0` names the
 flag, and the `0` goes to the next positional.
+
+A `Boolean` option or argument has `false` for its default without declaring one, as in .NET:
+required, it never fails, and a parse that does not name it still gives it a result, which
+`IsImplicit` marks. A declared default replaces it.
 
 A **collection** is one value made of the tokens it was given, so reading it answers the whole array:
 
@@ -390,6 +398,14 @@ FileOpt := CommandLine.Option<string>('--file').Description('Where to write')
     Result := WhoOpt.ValueIn(Found) + '.txt';
   end, '<who>.txt');
 ```
+
+`GetDefaultValue` answers the default outside any parse, as a `TValue`, and runs a calculation on every
+call. Outside a parse there is no rest of the invocation: what a calculation reads through the result
+is the default of each type. On a symbol with no default it raises `ECommandLine`:
+`Argument "--retries" does not have a default value`.
+
+`DefaultValueFactory`, with no argument, answers the calculation as one that receives the result of
+the symbol: the very one declared, when it was declared that way, and `nil` when there is no default.
 
 ---
 
@@ -683,24 +699,36 @@ No command's action runs in the first three rows.
   `mytool`'s action. Without one it only groups, and `mytool` alone fails with
   `Required command was not provided.`
 - `SetAction` answers `ICommand`, so on a root it is a statement, like `Description(Text)`.
-- `SetAction` also takes an `ICommandLineAction`: an action written as a class, on
-  `TSynchronousCommandLineAction`. `Command.Action` gives it back.
+- An action written as a class, on `TSynchronousCommandLineAction`, is assigned with
+  `Command.Action(Value)`, and `Command.Action` gives it back.
 
 ### An option with an action
 
-An option carries an action too: `Option.SetAction(Action)`, with an `ICommandLineAction`. One whose
+An option carries an action too: `Option.Action(Value)`, with an `ICommandLineAction`. One whose
 `IsTerminating` is true runs instead of the action of the command reached, as the help and the version
 do. Every one whose `IsTerminating` is false runs before it, in the order they were named, and so does
 the one of an option that took its default. When one of those answers a code other than 0, that code
 is what `Invoke` answers.
 
+A `Boolean` always has a default, so its action runs on every invocation that reaches its command,
+named or not. An action that depends on the option being named asks the result, as this one does:
+
 ```pascal
 type
   TTraceAction = class(TSynchronousCommandLineAction)
+  private
+    [weak] FOption: IOption;
   public
+    constructor Create(const Option: IOption);
     function IsTerminating: Boolean; override;
     function Invoke(const Parsed: IParseResult): Integer; override;
   end;
+
+constructor TTraceAction.Create(const Option: IOption);
+begin
+  inherited Create;
+  FOption := Option;
+end;
 
 function TTraceAction.IsTerminating: Boolean;
 begin
@@ -709,12 +737,17 @@ end;
 
 function TTraceAction.Invoke(const Parsed: IParseResult): Integer;
 begin
-  Parsed.InvocationConfiguration.WriteOutput('tracing on');
+  if Parsed.WasProvided(FOption) then
+    Parsed.InvocationConfiguration.WriteOutput('tracing on');
   Result := TCommandLineExit.Ok;
 end;
 
-var TraceOpt := CommandLine.Option<Boolean>('--trace').SetAction(TTraceAction.Create);
+var TraceOpt := CommandLine.Option<Boolean>('--trace');
+TraceOpt.Action(TTraceAction.Create(TraceOpt));
 ```
+
+The action holds its option `[weak]`: the option holds the action, and two references that hold each
+other are never released.
 
 `IParseResult.Action` is the action `Invoke` runs last: the terminating one of a directive, else the
 terminating one of a named option, the one for a parse error, or else the action of the command
@@ -793,6 +826,9 @@ Root.VersionAction := WithBanner(Root.VersionAction);
 - Assigning `nil` brings the default action back.
 - Replacing them on the root replaces the action of its help or version option, which is where
   `System.CommandLine` keeps them. The replacement clears the parse errors, as the help does.
+- A help or version option, the root's or one declared with `CommandLine.HelpOption` or
+  `CommandLine.VersionOption`, takes an action of its own with `Action(Value)`, and refuses `nil` with
+  `ECommandLine`. An action of its own that does not clear the parse errors runs with them.
 
 ⚠️ Capture the default action, never the root. An action that holds the root it is installed on
 forms a reference cycle with it, and neither is ever released.
@@ -823,18 +859,18 @@ $ mytool [diagram] build file.txt -fl5
 [ mytool [ build <file.txt> [ -f ] [ -l <5> ] ] ]
 
 $ mytool [diagram] build file.txt
-[ mytool [ build <file.txt> *[ --level <3> ] ] ]
+[ mytool [ build <file.txt> *[ --level <3> ] *[ --force ] ] ]
 
 $ mytool [diagram] build file.txt --level abc
-[ mytool [ build <file.txt> ![ --level <abc> ] ] ]
+[ mytool [ build <file.txt> ![ --level <abc> ] *[ --force ] ] ]
 ```
 
 - Each command goes between `[ ` and ` ]`, with what the parse put in it: its options, under the name
   they were written with, its arguments, and the subcommand reached. A value goes between `<` and `>`,
   and a boolean one is not shown. An argument shows its name too when its command declares more than
   one.
-- `*` marks an option that took its default, `!` whatever carries an error, and `???-->` closes the
-  diagram with the tokens that matched nothing.
+- `*` marks an option that took its default, a `Boolean` that was not named among them; `!` whatever
+  carries an error; and `???-->` closes the diagram with the tokens that matched nothing.
 - It shows the invocation as the parse rewrote it: a group split into its options, a value apart from
   its `:`, a response file replaced by the tokens it holds.
 - It wins over the help, the version and the command: `mytool [diagram] --help` writes the diagram of
@@ -862,7 +898,8 @@ if Written <> nil then
     Writeln(Value);
 ```
 
-`SetAction` gives it an action, terminating or not, as an option's.
+`Action(Value)` gives it an action, terminating or not, as an option's. `[diagram]` takes one of its
+own too, and then the diagram is not written; it refuses `nil` with `ECommandLine`.
 
 There is no `[env]` directive, nor `[suggest]` — divergences 25 and 24 below.
 
@@ -990,9 +1027,11 @@ case.
 `'date'`, `'file'` — and, for an enumerated type, the name it was declared with. And a
 character with no glyph is named by its code: `Character not allowed in a path: '#9'.`
 
-**15 · Reading a refused value raises `ECommandLine`.** .NET raises `InvalidOperationException`. Here
-it is the module's own exception, the one it raises for a grammar declared wrong or changed once
-frozen.
+**15 · What .NET refuses with an exception of its own raises `ECommandLine`.** Reading a refused value
+and asking a symbol with no default for its default raise `InvalidOperationException` in .NET, and
+assigning `null` to the action of a help or version option or of the diagram directive raises
+`ArgumentNullException`. Here all of them raise the module's own exception, the one it raises for a
+grammar declared wrong or changed once frozen.
 
 **16 · The help shows a calculated default by the text it was declared with.** .NET's help runs the
 default value factory to show its value. Here it shows the text given to
@@ -1035,6 +1074,10 @@ completion is asked for by the shell, and `cmd.exe` has no programmable completi
 
 **25 · There is no `[env]` directive.** .NET's `[env:NAME=value]` sets an environment variable before
 the action runs.
+
+**26 · Two values for an option that admits one are one error.** .NET reports
+`Option '-c' expects a single argument but 2 were provided.` twice for `-c 1 -c 2`. Here it is
+reported once.
 
 ---
 

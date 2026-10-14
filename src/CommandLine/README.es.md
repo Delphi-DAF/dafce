@@ -110,9 +110,9 @@ Lo que devuelve `ValueIn` depende de lo que el parse hizo con el símbolo:
 | El símbolo | `ValueIn` devuelve |
 |---|---|
 | lo trajo la invocación | su valor |
-| no lo trajo, tiene default declarado y está en un comando por el que pasó la invocación | el default declarado |
+| no lo trajo, tiene default y está en un comando por el que pasó la invocación | su default |
 | no lo trajo, en cualquier otro caso | el default de su **tipo**: `0`, `''`, un array vacío |
-| el parse lo rechazó: un valor que no convierte, una repetición, una opción requerida que falta | nada: lanza `ECommandLine` con ese error |
+| el parse lo rechazó: un valor que no convierte, más valores de los que admite, una opción requerida que falta | nada: lanza `ECommandLine` con ese error |
 
 El parse valida entero el comando alcanzado, y los que tiene por encima solo en sus opciones
 recursivas y en las que tienen default. Una opción de un padre que no es ninguna de las dos, escrita
@@ -144,6 +144,9 @@ var Port := Parsed.GetResult(PortOpt);         // un IOptionResult, o nil
 if (Port <> nil) and not Port.IsImplicit then
   Writeln('nombrada ', Port.IdentifierTokenCount, ' vez/veces, con ', Length(Port.Tokens), ' valor(es)');
 ```
+
+Sobre el resultado del parse, `GetResult` acepta también un `ISymbol`, y devuelve el resultado de
+cualquier símbolo sin decir de qué clase es: el mismo que devuelve la consulta de su clase.
 
 | Un resultado | devuelve |
 |---|---|
@@ -193,7 +196,8 @@ Compra tres cosas que parecían independientes:
   por los dos — y, con `.AllowMultipleArgumentsPerToken`, también `--file a.pas b.pas`.
 - **Requerido, en los argumentos.** Un mínimo de uno **es** requerido; no hace falta un segundo
   concepto.
-- **Se acaba el último-gana silencioso.** Con máximo uno, repetir la opción es un **error**.
+- **Se acaba el último-gana silencioso.** Con máximo uno, un segundo valor es un **error**. Nombrar
+  otra vez la opción sin valor no lo es: `--port 80 --port` lee 80, y `--verbose --verbose` lee true.
 
 En las **opciones**, `Required` es una marca aparte, como en .NET: una opción de un valor puede ser
 obligatoria o no, y la aridad no lo dice.
@@ -236,6 +240,10 @@ tal como llegó, antes de ninguna conversión, una propia incluida.
 Una opción `Boolean` es un flag: basta con nombrarla, y valen `--flag false`, `--flag=false` y
 `--flag true`. Solo `true` y `false`, en cualquier caja, son booleanos: `--flag 0` nombra el flag, y
 el `0` va al siguiente posicional.
+
+Una opción o un argumento `Boolean` tienen `false` por defecto sin declararlo, como en .NET:
+requeridos, nunca fallan, y un parse que no los nombra les da igualmente un resultado, que
+`IsImplicit` marca. Un default declarado lo sustituye.
 
 Una **colección** es un valor hecho con los tokens que le dieron, así que leerla devuelve el array
 entero:
@@ -393,6 +401,14 @@ FileOpt := CommandLine.Option<string>('--file').Description('Dónde escribir')
     Result := WhoOpt.ValueIn(Found) + '.txt';
   end, '<who>.txt');
 ```
+
+`GetDefaultValue` devuelve el default fuera de cualquier parse, como un `TValue`, y ejecuta el cálculo
+en cada llamada. Fuera de un parse no hay resto de la invocación: lo que un cálculo lee por el
+resultado es el default de cada tipo. Sobre un símbolo sin default lanza `ECommandLine`:
+`Argument "--retries" does not have a default value`.
+
+`DefaultValueFactory`, sin argumento, devuelve el cálculo como uno que recibe el resultado del
+símbolo: el mismo que se declaró, si se declaró así, y `nil` cuando no hay default.
 
 ---
 
@@ -688,24 +704,37 @@ En las tres primeras filas no corre la acción de ningún comando.
   acción de `mitool`. Sin ella solo agrupa, y `mitool` a secas falla con
   `Required command was not provided.`
 - `SetAction` devuelve `ICommand`, así que en una raíz es una sentencia, como `Description(Texto)`.
-- `SetAction` también recibe una `ICommandLineAction`: una acción escrita como clase, sobre
-  `TSynchronousCommandLineAction`. `Command.Action` la devuelve.
+- Una acción escrita como clase, sobre `TSynchronousCommandLineAction`, se asigna con
+  `Command.Action(Valor)`, y `Command.Action` la devuelve.
 
 ### Una opción con acción
 
-Una opción también lleva acción: `Opcion.SetAction(Accion)`, con una `ICommandLineAction`. Una cuyo
+Una opción también lleva acción: `Opcion.Action(Valor)`, con una `ICommandLineAction`. Una cuyo
 `IsTerminating` es cierto se ejecuta en lugar de la acción del comando alcanzado, como la ayuda y la
 versión. Las que tienen `IsTerminating` falso se ejecutan antes que ella, en el orden en que se
 nombraron, y también la de una opción que tomó su valor por defecto. Cuando una de ellas devuelve un
 código distinto de 0, ese código es el que devuelve `Invoke`.
 
+Un `Boolean` siempre tiene default, así que su acción corre en cada invocación que alcanza su comando,
+se nombre o no. Una acción que depende de que la opción se nombre se lo pregunta al resultado, como
+esta:
+
 ```pascal
 type
   TTraceAction = class(TSynchronousCommandLineAction)
+  private
+    [weak] FOption: IOption;
   public
+    constructor Create(const Option: IOption);
     function IsTerminating: Boolean; override;
     function Invoke(const Parsed: IParseResult): Integer; override;
   end;
+
+constructor TTraceAction.Create(const Option: IOption);
+begin
+  inherited Create;
+  FOption := Option;
+end;
 
 function TTraceAction.IsTerminating: Boolean;
 begin
@@ -714,12 +743,17 @@ end;
 
 function TTraceAction.Invoke(const Parsed: IParseResult): Integer;
 begin
-  Parsed.InvocationConfiguration.WriteOutput('tracing on');
+  if Parsed.WasProvided(FOption) then
+    Parsed.InvocationConfiguration.WriteOutput('tracing on');
   Result := TCommandLineExit.Ok;
 end;
 
-var TraceOpt := CommandLine.Option<Boolean>('--trace').SetAction(TTraceAction.Create);
+var TraceOpt := CommandLine.Option<Boolean>('--trace');
+TraceOpt.Action(TTraceAction.Create(TraceOpt));
 ```
+
+La acción guarda su opción `[weak]`: la opción guarda la acción, y dos referencias que se guardan la
+una a la otra no se liberan nunca.
 
 `IParseResult.Action` es la acción que `Invoke` ejecuta la última: la terminal de una directiva, si no
 la terminal de una opción nombrada, la de un error de parse, o si no la acción del comando alcanzado.
@@ -797,6 +831,9 @@ Root.VersionAction := WithBanner(Root.VersionAction);
 - Asignar `nil` devuelve la acción de serie.
 - Sustituirlas en la raíz sustituye la acción de su opción de ayuda o de versión, que es donde las
   tiene `System.CommandLine`. La sustituta borra los errores de parse, como la ayuda.
+- Una opción de ayuda o de versión, la de la raíz o una declarada con `CommandLine.HelpOption` o
+  `CommandLine.VersionOption`, toma una acción propia con `Action(Valor)`, y rechaza `nil` con
+  `ECommandLine`. Una acción propia que no borra los errores de parse corre con ellos.
 
 ⚠️ Captura la acción de serie, nunca la raíz. Una acción que sostiene la raíz en la que está
 instalada forma con ella un ciclo de referencias, y ninguna de las dos se libera nunca.
@@ -827,17 +864,17 @@ $ mitool [diagram] build fichero.txt -fl5
 [ mitool [ build <fichero.txt> [ -f ] [ -l <5> ] ] ]
 
 $ mitool [diagram] build fichero.txt
-[ mitool [ build <fichero.txt> *[ --level <3> ] ] ]
+[ mitool [ build <fichero.txt> *[ --level <3> ] *[ --force ] ] ]
 
 $ mitool [diagram] build fichero.txt --level abc
-[ mitool [ build <fichero.txt> ![ --level <abc> ] ] ]
+[ mitool [ build <fichero.txt> ![ --level <abc> ] *[ --force ] ] ]
 ```
 
 - Cada comando va entre `[ ` y ` ]`, con lo que el parse puso dentro: sus opciones, con el nombre con
   que se escribieron, sus argumentos, y el subcomando alcanzado. Un valor va entre `<` y `>`, y uno
   booleano no se muestra. Un argumento enseña también su nombre cuando su comando declara más de uno.
-- `*` marca una opción que tomó su valor por defecto, `!` lo que lleva un error, y `???-->` cierra el
-  diagrama con los tokens que no casaron con nada.
+- `*` marca una opción que tomó su valor por defecto, entre ellas un `Boolean` que no se nombró; `!` lo
+  que lleva un error; y `???-->` cierra el diagrama con los tokens que no casaron con nada.
 - Enseña la invocación tal como la reescribió el parse: un grupo partido en sus opciones, un valor
   separado de su `:`, un fichero de respuesta sustituido por los tokens que lleva.
 - Gana a la ayuda, a la versión y al comando: `mitool [diagram] --help` escribe el diagrama de una
@@ -865,7 +902,8 @@ if Written <> nil then
     Writeln(Value);
 ```
 
-`SetAction` le da una acción, terminal o no, como a una opción.
+`Action(Valor)` le da una acción, terminal o no, como a una opción. `[diagram]` también toma una
+propia, y entonces no se escribe el diagrama; rechaza `nil` con `ECommandLine`.
 
 No hay directiva `[env]`, ni `[suggest]` — divergencias 25 y 24, más abajo.
 
@@ -998,9 +1036,11 @@ mayúsculas.
 `'date'`, `'file'`— y, para un enumerado, el nombre con el que se declaró. Y un carácter sin
 glifo se nombra por su código: `Character not allowed in a path: '#9'.`
 
-**15 · Leer un valor rechazado lanza `ECommandLine`.** .NET lanza `InvalidOperationException`. Aquí es
-la excepción propia del módulo, la que lanza ante una gramática mal declarada o cambiada después de
-congelarla.
+**15 · Lo que .NET rechaza con una excepción suya lanza `ECommandLine`.** Leer un valor rechazado y
+pedirle su default a un símbolo que no lo tiene lanzan `InvalidOperationException` en .NET, y asignar
+`null` a la acción de una opción de ayuda o de versión o de la directiva de diagrama lanza
+`ArgumentNullException`. Aquí todas lanzan la excepción propia del módulo, la que lanza ante una
+gramática mal declarada o cambiada después de congelarla.
 
 **16 · La ayuda enseña un default calculado con el texto con que se declaró.** La ayuda de .NET
 ejecuta la factoría del default para enseñar su valor. Aquí enseña el texto que se pasó a
@@ -1044,6 +1084,10 @@ programable.
 
 **25 · No hay directiva `[env]`.** La `[env:NOMBRE=valor]` de .NET fija una variable de entorno antes
 de que corra la acción.
+
+**26 · Dos valores para una opción que admite uno son un error.** .NET informa
+`Option '-c' expects a single argument but 2 were provided.` dos veces para `-c 1 -c 2`. Aquí se
+informa una vez.
 
 ---
 

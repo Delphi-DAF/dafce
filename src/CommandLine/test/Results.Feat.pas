@@ -29,6 +29,9 @@ type
     Run: ICommand;
     Serve: ICommand;
     WorkersOpt: IOption<Integer>;
+    // A directive of the runner, and an option that belongs to no grammar.
+    ProbeDirective: IDirective;
+    StrangerOpt: IOption<Integer>;
     // tool [<name>] [<count>] [<limit>] [<items>...], none of them demanded.
     Loose: IRootCommand;
     NameArg: IArgument<string>;
@@ -45,7 +48,11 @@ type
     procedure BuildFlat;
     procedure BuildNeedy;
     procedure BuildRunner;
+    /// <summary>The runner, with the directive probe, and an option added to nothing.</summary>
+    procedure BuildDirectedRunner;
     procedure BuildLoose;
+    /// <summary>The result of <c>Symbol</c>, asked as a symbol and not as its kind.</summary>
+    function ResultAsSymbol(const Symbol: ISymbol): ISymbolResult;
     function MissingResponseFile: string;
     /// <summary>What a read answers, or the exception it raises, as text.</summary>
     function Attempt(const Read: TFunc<string>): string;
@@ -116,6 +123,19 @@ begin
   Runner.Add(Serve);
 end;
 
+procedure TResultsWorld.BuildDirectedRunner;
+begin
+  BuildRunner;
+  ProbeDirective := CommandLine.Directive('probe');
+  Runner.Add(ProbeDirective);
+  StrangerOpt := CommandLine.Option<Integer>('--stranger').Description('Belongs to nothing');
+end;
+
+function TResultsWorld.ResultAsSymbol(const Symbol: ISymbol): ISymbolResult;
+begin
+  Result := Parsed.GetResult(Symbol);
+end;
+
 procedure TResultsWorld.BuildLoose;
 begin
   NameArg := CommandLine.Argument<string>('name').Description('What it is called').Arity(TArgumentArity.ZeroOrOne);
@@ -181,7 +201,7 @@ Feature Command line parse results @commandline @results
       procedure(W: TResultsWorld)
       begin
         Expect(W.Parsed.ErrorText).ToEqual('');
-        Expect(W.Report).ToEqual('root=mytool children=1 leaf=native parent=build same=True');
+        Expect(W.Report).ToEqual('root=mytool children=2 leaf=native parent=build same=True');
       end)
 
   .Scenario('A default creates a result the invocation did not name')
@@ -334,6 +354,85 @@ Feature Command line parse results @commandline @results
       procedure(W: TResultsWorld)
       begin
         Expect(W.Report).ToEqual('serve=False workers=False');
+      end)
+
+.Rule('the result of a symbol is asked for without saying what kind of symbol it is')
+
+  .Scenario('The same result the query of its kind gives')
+    .Given('an option the invocation carries',
+      procedure(W: TResultsWorld)
+      begin
+        W.BuildFlat;
+      end)
+    .When('its result is asked for as a symbol',
+      procedure(W: TResultsWorld)
+      begin
+        W.Parsed := W.Flat.Parse(['--port', '80']);
+        W.Report := 'same=' + BoolToStr(Same(W.ResultAsSymbol(W.PortOpt), W.Parsed.GetResult(W.PortOpt)), True);
+      end)
+    .&Then('it is the one the query of an option gives',
+      procedure(W: TResultsWorld)
+      begin
+        Expect(W.Report).ToEqual('same=True');
+      end)
+
+  .Scenario('A directive the invocation writes')
+    .Given('a root with a directive the invocation writes',
+      procedure(W: TResultsWorld)
+      begin
+        W.BuildDirectedRunner;
+      end)
+    .When('its result is asked for as a symbol',
+      procedure(W: TResultsWorld)
+      var
+        Found: ISymbolResult;
+      begin
+        W.Parsed := W.Runner.Parse(['[probe:x]', 'run']);
+        Found := W.ResultAsSymbol(W.ProbeDirective);
+        W.Report := Format('directive=%s same=%s', [BoolToStr(Supports(Found, IDirectiveResult), True),
+          BoolToStr(Same(Found, W.Parsed.GetResult(W.ProbeDirective)), True)]);
+      end)
+    .&Then('it is the result of the directive',
+      procedure(W: TResultsWorld)
+      begin
+        Expect(W.Report).ToEqual('directive=True same=True');
+      end)
+
+  .Scenario('A command the invocation did not reach')
+    .Given('a root with two subcommands',
+      procedure(W: TResultsWorld)
+      begin
+        W.BuildDirectedRunner;
+      end)
+    .When('an invocation that names one is parsed, and the result of each is asked for as a symbol',
+      procedure(W: TResultsWorld)
+      begin
+        W.Parsed := W.Runner.Parse(['run']);
+        W.Report := Format('run=%s serve=%s', [BoolToStr(W.ResultAsSymbol(W.Run) <> nil, True),
+          BoolToStr(W.ResultAsSymbol(W.Serve) <> nil, True)]);
+      end)
+    .&Then('the one it named has a result, and the other has none',
+      procedure(W: TResultsWorld)
+      begin
+        Expect(W.Report).ToEqual('run=True serve=False');
+      end)
+
+  .Scenario('A symbol foreign to the grammar')
+    .Given('an option that was not added to the grammar parsed',
+      procedure(W: TResultsWorld)
+      begin
+        W.BuildDirectedRunner;
+      end)
+    .When('its result is asked for as a symbol',
+      procedure(W: TResultsWorld)
+      begin
+        W.Parsed := W.Runner.Parse(['run']);
+        W.Report := 'result=' + BoolToStr(W.ResultAsSymbol(W.StrangerOpt) <> nil, True);
+      end)
+    .&Then('there is none',
+      procedure(W: TResultsWorld)
+      begin
+        Expect(W.Report).ToEqual('result=False');
       end)
 
 .Rule('a value is read with the declared object on any result of the tree')

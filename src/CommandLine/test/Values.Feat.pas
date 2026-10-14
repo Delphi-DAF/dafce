@@ -54,6 +54,25 @@ type
     MsgArg: IArgument<string>;
     VerboseOpt: IOption<Boolean>;
 
+    // Defaults asked for outside a parse.
+    Inspected: IRootCommand;
+    ConstantOpt: IOption<Integer>;
+    CountedOpt: IOption<Integer>;
+    FactoryOpt: IOption<Integer>;
+    NoDefaultOpt: IOption<Integer>;
+    FileArg: IArgument<string>;
+    // Declared and never added to a command.
+    LooseOpt: IOption<Integer>;
+    DeclaredFactory: TDefaultValueFactory<Integer>;
+    ReadFactory: TDefaultValueFactory<Integer>;
+
+    // Booleans, with no default declared but one, and a bare root for the help and the version.
+    Flags: IRootCommand;
+    QuietOpt: IOption<Boolean>;
+    StrictOpt: IOption<Boolean>;
+    SafeOpt: IOption<Boolean>;
+    Bare: IRootCommand;
+
     Parsed: IParseResult;
     ReadPortMin: Integer;
     ReadPortMax: Integer;
@@ -82,6 +101,9 @@ type
     procedure BuildComputed;
     procedure BuildComputedFromAnother;
     procedure BuildEscaped;
+    procedure BuildInspected;
+    procedure BuildFlags;
+    procedure BuildBare;
   end;
 
 implementation
@@ -97,6 +119,7 @@ var
   // counter the closure reaches without capturing the world is the plainest way to.
   OutRuns: Integer;
   SeedRuns: Integer;
+  CountedRuns: Integer;
 
 { TValuesWorld }
 
@@ -225,6 +248,46 @@ begin
   Escaped.Add([MsgArg, VerboseOpt]);
 end;
 
+procedure TValuesWorld.BuildInspected;
+begin
+  CountedRuns := 0;
+  ConstantOpt := CommandLine.Option<Integer>('--level').Description('How much to say').DefaultValue(3);
+  CountedOpt := CommandLine.Option<Integer>('--seed').Description('Starting point')
+    .DefaultValueFactory(
+    function: Integer
+    begin
+      Inc(CountedRuns);
+      Result := 11;
+    end);
+  DeclaredFactory :=
+    function(const Found: IArgumentResult): Integer
+    begin
+      Result := 80;
+    end;
+  FactoryOpt := CommandLine.Option<Integer>('--width').Description('Columns').DefaultValueFactory(DeclaredFactory);
+  NoDefaultOpt := CommandLine.Option<Integer>('--retries').Description('How many times to try');
+  FileArg := CommandLine.Argument<string>('file').Description('What to read').DefaultValue('a.txt');
+  Inspected := CommandLine.Root('tool', 'A tool');
+  Inspected.Add([ConstantOpt, CountedOpt, FactoryOpt, NoDefaultOpt, FileArg]);
+  LooseOpt := CommandLine.Option<Integer>('--depth').Description('How deep').DefaultValue(7);
+end;
+
+procedure TValuesWorld.BuildFlags;
+begin
+  QuietOpt := CommandLine.Option<Boolean>('--quiet').Description('Say less');
+  StrictOpt := CommandLine.Option<Boolean>('--strict').Description('Refuse warnings').Required;
+  SafeOpt := CommandLine.Option<Boolean>('--safe').Description('Stay safe').DefaultValue(True);
+  Flags := CommandLine.Root('tool', 'A tool');
+  Flags.Add([QuietOpt, StrictOpt, SafeOpt]);
+end;
+
+procedure TValuesWorld.BuildBare;
+begin
+  // Nothing but what every root brings: the help and the version, which are boolean options too.
+  Bare := CommandLine.Root('tool', 'A tool');
+  Bare.Add(CommandLine.DiagramDirective);
+end;
+
 initialization
 
 Feature('''
@@ -334,6 +397,79 @@ Feature Command line values @commandline @values
         Expect(W.ReadFlagMax).ToEqual(1);
       end)
 
+.Rule('a repeated option is judged by its values, not by its names')
+
+  .Scenario('A flag named twice')
+    .Given('a boolean option',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildArity;
+      end)
+    .When('the invocation names it twice, with no value',
+      procedure(W: TValuesWorld)
+      begin
+        W.Parsed := W.Arity.Parse(['--flag', '--flag']);
+        W.Report := Format('errors=[%s] value=%s', [W.Parsed.ErrorText, BoolToStr(W.FlagOpt.ValueIn(W.Parsed), True)]);
+      end)
+    .&Then('the parse succeeds and true is read',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Report).ToEqual('errors=[] value=True');
+      end)
+
+  .Scenario('A flag on its own and then with its value')
+    .Given('a boolean option',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildArity;
+      end)
+    .When('the invocation names it with no value and then followed by false',
+      procedure(W: TValuesWorld)
+      begin
+        W.Parsed := W.Arity.Parse(['--flag', '--flag', 'false']);
+        W.Report := Format('errors=[%s] value=%s', [W.Parsed.ErrorText, BoolToStr(W.FlagOpt.ValueIn(W.Parsed), True)]);
+      end)
+    .&Then('the parse succeeds and false is read',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Report).ToEqual('errors=[] value=False');
+      end)
+
+  .Scenario('An option with a value named again without it')
+    .Given('an integer option',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildArity;
+      end)
+    .When('the invocation names it with a value and then without it',
+      procedure(W: TValuesWorld)
+      begin
+        W.Parsed := W.Arity.Parse(['--port', '1', '--port']);
+        W.Report := Format('errors=[%s] value=%d', [W.Parsed.ErrorText, W.PortOpt.ValueIn(W.Parsed)]);
+      end)
+    .&Then('the parse succeeds and that value is read',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Report).ToEqual('errors=[] value=1');
+      end)
+
+  .Scenario('Two values are still an error')
+    .Given('an integer option',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildArity;
+      end)
+    .When('the invocation names it twice, with a value each time',
+      procedure(W: TValuesWorld)
+      begin
+        W.Parsed := W.Arity.Parse(['--port', '1', '--port', '2']);
+      end)
+    .&Then('the parse fails naming the option',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('Option ''--port'' expects a single argument but 2 were provided.');
+      end)
+
 .Rule('a required symbol that does not come makes the parse fail')
 
   .Scenario('A required option the invocation does not carry')
@@ -431,6 +567,27 @@ Feature Command line values @commandline @values
         Expect(W.Parsed.Succeeded).ToBeFalse;
         Expect(W.Parsed.ErrorText).ToContain('--level');
         Expect(W.Parsed.ErrorText).ToContain('silent');
+        Expect(W.Parsed.ErrorText).ToContain('Quiet');
+        Expect(W.Parsed.ErrorText).ToContain('Detailed');
+      end)
+
+  .Scenario('An enumerated type is not written with a number')
+    .Given('an option declared with an enumerated type',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildBounded;
+      end)
+    .When('the invocation passes a number that is the ordinal of one of its values',
+      procedure(W: TValuesWorld)
+      begin
+        W.Parsed := W.Bounded.Parse(['--level', '2']);
+      end)
+    .&Then('the parse fails naming the option, the value and what is accepted',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Parsed.Succeeded).ToBeFalse;
+        Expect(W.Parsed.ErrorText).ToContain('''--level''');
+        Expect(W.Parsed.ErrorText).ToContain('''2''');
         Expect(W.Parsed.ErrorText).ToContain('Quiet');
         Expect(W.Parsed.ErrorText).ToContain('Detailed');
       end)
@@ -671,6 +828,23 @@ Feature Command line values @commandline @values
         Expect(W.Parsed.ErrorText).ToEqual('A file name cannot be empty.');
       end)
 
+  .Scenario('An empty file name and an empty path')
+    .Given('an option declared to accept only legal file names, and another only legal paths',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildChecked;
+      end)
+    .When('the invocation passes an empty value to each',
+      procedure(W: TValuesWorld)
+      begin
+        W.Parsed := W.Checked.Parse(['--name', '', '--path', '']);
+      end)
+    .&Then('the parse fails on both',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToEqual('A file name cannot be empty.' + sLineBreak + 'A path cannot be empty.');
+      end)
+
   .Scenario('A file name with a character the platform does not admit')
     .Given('an option declared to accept only a legal file name',
       procedure(W: TValuesWorld)
@@ -909,6 +1083,289 @@ Feature Command line values @commandline @values
         Expect(W.HelpText).ToContain('[default: the current directory]');
         Expect(W.SeedDefault).ToEqual('not shown');
         Expect(OutRuns + SeedRuns).ToEqual(0);
+      end)
+
+.Rule('an option or an argument gives its default value outside a parse')
+
+  .Scenario('A constant default value')
+    .Given('an option with a constant default value',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildInspected;
+      end)
+    .When('its default value is asked for',
+      procedure(W: TValuesWorld)
+      begin
+        W.Report := IntToStr(W.ConstantOpt.GetDefaultValue.AsInteger);
+      end)
+    .&Then('it is that constant',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Report).ToEqual('3');
+      end)
+
+  .Scenario('A computed default value is computed on every request')
+    .Given('an option whose default value is a calculation that counts its runs',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildInspected;
+      end)
+    .When('its default value is asked for twice',
+      procedure(W: TValuesWorld)
+      begin
+        W.CountedOpt.GetDefaultValue;
+        W.Report := IntToStr(W.CountedOpt.GetDefaultValue.AsInteger);
+      end)
+    .&Then('the calculation has run twice',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Report).ToEqual('11');
+        Expect(CountedRuns).ToEqual(2);
+      end)
+
+  .Scenario('The default value of an argument')
+    .Given('an argument with a default value',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildInspected;
+      end)
+    .When('its default value is asked for',
+      procedure(W: TValuesWorld)
+      begin
+        W.Report := W.FileArg.GetDefaultValue.AsString;
+      end)
+    .&Then('it is that value',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Report).ToEqual('a.txt');
+      end)
+
+  .Scenario('An option that is in no command')
+    .Given('an option with a default value that was added to no command',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildInspected;
+      end)
+    .When('its default value is asked for',
+      procedure(W: TValuesWorld)
+      begin
+        W.Report := IntToStr(W.LooseOpt.GetDefaultValue.AsInteger);
+      end)
+    .&Then('it is that value',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Report).ToEqual('7');
+      end)
+
+  .Scenario('No default value')
+    .Given('an integer option with no default value',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildInspected;
+      end)
+    .When('its default value is asked for',
+      procedure(W: TValuesWorld)
+      begin
+        try
+          W.Report := IntToStr(W.NoDefaultOpt.GetDefaultValue.AsInteger);
+        except
+          on E: Exception do
+            W.Report := E.ClassName + ': ' + E.Message;
+        end;
+      end)
+    .&Then('it fails naming the option',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Report).ToEqual('ECommandLine: Argument "--retries" does not have a default value');
+      end)
+
+.Rule('the factory of the default value is the one declared')
+
+  .Scenario('Declared with the result of the symbol')
+    .Given('an option whose default value was declared with a factory that receives its result',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildInspected;
+      end)
+    .When('its factory is read',
+      procedure(W: TValuesWorld)
+      var
+        Other: TDefaultValueFactory<Integer>;
+      begin
+        W.ReadFactory := W.FactoryOpt.DefaultValueFactory;
+        // Compared with another option's too, so a comparison that always held could not pass.
+        Other := W.CountedOpt.DefaultValueFactory;
+        W.Report := Format('same=%s other=%s', [BoolToStr(PPointer(@W.ReadFactory)^ = PPointer(@W.DeclaredFactory)^,
+          True), BoolToStr(PPointer(@W.ReadFactory)^ = PPointer(@Other)^, True)]);
+      end)
+    .&Then('it is the same one that was declared',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Report).ToEqual('same=True other=False');
+      end)
+
+  .Scenario('Declared as a calculation with no arguments')
+    .Given('an option whose default value was declared as a calculation with no arguments',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildInspected;
+      end)
+    .When('its factory is read and run',
+      procedure(W: TValuesWorld)
+      begin
+        W.ReadFactory := W.CountedOpt.DefaultValueFactory;
+        W.Report := Format('assigned=%s', [BoolToStr(Assigned(W.ReadFactory), True)]);
+        if Assigned(W.ReadFactory) then
+          W.Report := W.Report + Format(' value=%d', [W.ReadFactory(nil)]);
+      end)
+    .&Then('there is a factory, and it answers what the calculation answers',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Report).ToEqual('assigned=True value=11');
+      end)
+
+  .Scenario('Declared as a constant')
+    .Given('an option with a constant default value',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildInspected;
+      end)
+    .When('its factory is read and run',
+      procedure(W: TValuesWorld)
+      begin
+        W.ReadFactory := W.ConstantOpt.DefaultValueFactory;
+        W.Report := Format('assigned=%s', [BoolToStr(Assigned(W.ReadFactory), True)]);
+        if Assigned(W.ReadFactory) then
+          W.Report := W.Report + Format(' value=%d', [W.ReadFactory(nil)]);
+      end)
+    .&Then('there is a factory, and it answers the constant',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Report).ToEqual('assigned=True value=3');
+      end)
+
+  .Scenario('No default value, no factory')
+    .Given('an integer option with no default value',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildInspected;
+      end)
+    .When('its factory is read',
+      procedure(W: TValuesWorld)
+      begin
+        W.ReadFactory := W.NoDefaultOpt.DefaultValueFactory;
+        W.Report := Format('assigned=%s', [BoolToStr(Assigned(W.ReadFactory), True)]);
+      end)
+    .&Then('there is none',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Report).ToEqual('assigned=False');
+      end)
+
+.Rule('a boolean option has false for its default even when it declares none')
+
+  .Scenario('A boolean with no declared default')
+    .Given('a boolean option with no declared default',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildFlags;
+      end)
+    .When('its default value is asked for',
+      procedure(W: TValuesWorld)
+      begin
+        W.Report := Format('has=%s factory=%s value=%s', [BoolToStr(W.QuietOpt.HasDefaultValue, True),
+          BoolToStr(Assigned(W.QuietOpt.DefaultValueFactory), True), BoolToStr(W.QuietOpt.GetDefaultValue.AsBoolean,
+          True)]);
+      end)
+    .&Then('it has a default value, and it is false',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Report).ToEqual('has=True factory=True value=False');
+      end)
+
+  .Scenario('A required boolean that does not come')
+    .Given('a required boolean option with no declared default',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildFlags;
+      end)
+    .When('an invocation that does not name it is parsed',
+      procedure(W: TValuesWorld)
+      begin
+        W.Parsed := W.Flags.Parse([]);
+        W.Report := Format('errors=[%s] value=%s', [W.Parsed.ErrorText, BoolToStr(W.StrictOpt.ValueIn(W.Parsed), True)]);
+      end)
+    .&Then('the parse succeeds and false is read',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Report).ToEqual('errors=[] value=False');
+      end)
+
+  .Scenario('An absent boolean has a result')
+    .Given('a boolean option with no declared default',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildFlags;
+      end)
+    .When('an invocation that does not name it is parsed',
+      procedure(W: TValuesWorld)
+      var
+        Found: IOptionResult;
+      begin
+        W.Parsed := W.Flags.Parse([]);
+        Found := W.Parsed.GetResult(W.QuietOpt);
+        W.Report := 'result=' + BoolToStr(Found <> nil, True);
+        if Found <> nil then
+          W.Report := W.Report + ' implicit=' + BoolToStr(Found.IsImplicit, True);
+      end)
+    .&Then('the option has a result, marked as not coming from the invocation',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Report).ToEqual('result=True implicit=True');
+      end)
+
+  .Scenario('A declared default prevails')
+    .Given('a boolean option with true for its default',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildFlags;
+      end)
+    .When('an invocation that does not name it is parsed',
+      procedure(W: TValuesWorld)
+      begin
+        W.Parsed := W.Flags.Parse([]);
+        W.Report := BoolToStr(W.SafeOpt.ValueIn(W.Parsed), True);
+      end)
+    .&Then('true is read',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Report).ToEqual('True');
+      end)
+
+  .Scenario('The help and the version have no default')
+    .Given('a root that declares the diagram directive and nothing else',
+      procedure(W: TValuesWorld)
+      begin
+        W.BuildBare;
+      end)
+    .When('the help and the version are asked whether they have a default, and [diagram] is parsed',
+      procedure(W: TValuesWorld)
+      var
+        Option: IOption;
+        Help, Version: string;
+      begin
+        for Option in W.Bare.Options do
+          if Supports(Option, IHelpOption) then
+            Help := BoolToStr(Option.HasDefaultValue, True)
+          else if Supports(Option, IVersionOption) then
+            Version := BoolToStr(Option.HasDefaultValue, True);
+        W.Parsed := W.Bare.Parse(['[diagram]']);
+        W.Report := Format('help=%s version=%s diagram=%s', [Help, Version, W.Parsed.Diagram]);
+      end)
+    .&Then('neither has one, and the diagram does not show them as having taken it',
+      procedure(W: TValuesWorld)
+      begin
+        Expect(W.Report).ToEqual('help=False version=False diagram=[ tool ]');
       end)
 
 .Rule('-- ends the options')

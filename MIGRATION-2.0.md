@@ -128,7 +128,7 @@ The mechanical part, term by term:
 | `.Arg<T>('name')` | `CommandLine.Option<T>('--name')`, added with `Root.Add` — the dashes are written now |
 | `.Arg<string>('output\|o')` | `CommandLine.Option<string>('--output', ['-o'])` |
 | `A.Default(V)` | `.DefaultValue(V)`, and `.DefaultValueFactory(…)` for a default that has to be worked out |
-| `A.Required(True)` | `.Required` |
+| `A.Required(True)` | `.Required` — on a `Boolean` it never fails: a `Boolean` has `false` for its default |
 | `A.Help('…')` | `.Description('…')` — and this one is **shown**: help is generated |
 | `.Command('build')` … `.EndCommand` | `CommandLine.Command('build', description)`, hung with `Parent.Add(Child)` |
 | `Params['x'].AsString` / `.AsInteger` / `.AsBoolean` | `XOpt.ValueIn(Parsed)`, typed by the option itself |
@@ -155,6 +155,10 @@ leaves you thinking you are done:
   could not be passed at all, and `--port 80xyz` was accepted as `80`. Now `-5` is a value, and
   `80xyz` is refused naming the option, and reading the option raises that error. If anything
   relied on that truncation, it gets an error where it used to get a number.
+- **Two values for an option that takes one are an error.** `Daf.CmdLn` kept the last one:
+  `--port 1 --port 2` read 2. Now the parse fails with
+  `Option '--port' expects a single argument but 2 were provided.`, and reading the option raises it.
+  Naming it again with no value works as before: `--port 1 --port` reads 1.
 - **Dispatching can move into the grammar.** `Daf.CmdLn` handed back values and left dispatching to
   the application. In `Daf.CommandLine` each command can declare its action with `SetAction`, and
   `Invoke` on the parse result runs the one of the command reached and answers the exit code. Code

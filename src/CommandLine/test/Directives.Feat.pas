@@ -22,6 +22,12 @@ type
     function Invoke(const Parsed: IParseResult): Integer; override;
   end;
 
+  /// <summary>The same, terminating: it runs instead of the action that would win.</summary>
+  TTerminatingAction = class(TRecordingAction)
+  public
+    function IsTerminating: Boolean; override;
+  end;
+
   TDirectivesWorld = class
   public
     Root: IRootCommand;
@@ -98,6 +104,13 @@ function TRecordingAction.Invoke(const Parsed: IParseResult): Integer;
 begin
   FWorld.Track(FName);
   Result := 0;
+end;
+
+{ TTerminatingAction }
+
+function TTerminatingAction.IsTerminating: Boolean;
+begin
+  Result := True;
 end;
 
 { TDirectivesWorld }
@@ -413,7 +426,7 @@ Feature Directives @commandline @directives
     .&Then('the diagram is written, and not the help',
       procedure(W: TDirectivesWorld)
       begin
-        Expect(W.Output.ToString).ToEqual('[ mitool [ --help ] ]' + sLineBreak);
+        Expect(W.Output.ToString).ToEqual('[ mitool [ --help ] *[ --trace ] ]' + sLineBreak);
         Expect(W.Parsed.IsHelpRequested).ToBeFalse;
       end)
     .&And('the invocation answers 0',
@@ -439,7 +452,7 @@ Feature Directives @commandline @directives
     .&Then('the diagram is written, and not the version',
       procedure(W: TDirectivesWorld)
       begin
-        Expect(W.Output.ToString).ToEqual('[ mitool [ --version ] ]' + sLineBreak);
+        Expect(W.Output.ToString).ToEqual('[ mitool [ --version ] *[ --trace ] ]' + sLineBreak);
         Expect(W.Parsed.IsVersionRequested).ToBeFalse;
       end)
 
@@ -448,7 +461,7 @@ Feature Directives @commandline @directives
       procedure(W: TDirectivesWorld)
       begin
         W.BuildGrammar;
-        W.TraceOpt.SetAction(TRecordingAction.Create(W, 'trace'));
+        W.TraceOpt.Action(TRecordingAction.Create(W, 'trace'));
         W.Root.Add(W.Diagram);
       end)
     .When('the result of parsing [diagram] --trace is invoked',
@@ -600,7 +613,7 @@ Feature Directives @commandline @directives
     .&Then('a diagram is written in which build goes inside mitool and carries fichero.txt',
       procedure(W: TDirectivesWorld)
       begin
-        Expect(W.Output.ToString).ToEqual('[ mitool [ build <fichero.txt> ] ]' + sLineBreak);
+        Expect(W.Output.ToString).ToEqual('[ mitool [ build <fichero.txt> ] *[ --trace ] ]' + sLineBreak);
       end)
     .&And('no action runs, and the invocation answers 0',
       procedure(W: TDirectivesWorld)
@@ -625,7 +638,7 @@ Feature Directives @commandline @directives
     .&Then('the option is in the diagram, marked with *',
       procedure(W: TDirectivesWorld)
       begin
-        Expect(W.Output.ToString).ToEqual('[ mitool [ build <fichero.txt> *[ --level <3> ] ] ]' + sLineBreak);
+        Expect(W.Output.ToString).ToEqual('[ mitool [ build <fichero.txt> *[ --level <3> ] *[ --force ] ] *[ --trace ] ]' + sLineBreak);
       end)
 
   .Scenario('The diagram of an invocation with errors')
@@ -645,7 +658,7 @@ Feature Directives @commandline @directives
     .&Then('the option is in the diagram, marked with !',
       procedure(W: TDirectivesWorld)
       begin
-        Expect(W.Output.ToString).ToEqual('[ mitool [ build <fichero.txt> ![ --level <abc> ] ] ]' + sLineBreak);
+        Expect(W.Output.ToString).ToEqual('[ mitool [ build <fichero.txt> ![ --level <abc> ] *[ --force ] ] *[ --trace ] ]' + sLineBreak);
       end)
     .&And('the invocation answers 2, and writes no error',
       procedure(W: TDirectivesWorld)
@@ -693,7 +706,7 @@ Feature Directives @commandline @directives
       procedure(W: TDirectivesWorld)
       begin
         Expect(W.Output.ToString).ToEqual(
-          '[ mitool [ copy [ first <one> ] [ second <two> ] [ third <three> <four> <five> ] ] ]' + sLineBreak);
+          '[ mitool [ copy [ first <one> ] [ second <two> ] [ third <three> <four> <five> ] ] *[ --trace ] ]' + sLineBreak);
       end)
 
   .Scenario('What matched nothing goes at the end')
@@ -712,16 +725,42 @@ Feature Directives @commandline @directives
     .&Then('build carries the error, and extra follows the diagram',
       procedure(W: TDirectivesWorld)
       begin
-        Expect(W.Output.ToString).ToEqual('[ mitool ![ build <fichero.txt> ] ]   ???--> extra' + sLineBreak);
+        Expect(W.Output.ToString).ToEqual('[ mitool ![ build <fichero.txt> ] *[ --trace ] ]   ???--> extra' + sLineBreak);
         Expect(W.ExitCode).ToEqual(2);
       end)
 
-  .Scenario('Declaring no action brings the diagram back')
-    .Given('a root that declares the directive diagram, declared again with no action',
+.Rule('the diagram directive is never left with no action')
+
+  .Scenario('No action on the diagram directive')
+    .Given('a root that declares the directive diagram',
       procedure(W: TDirectivesWorld)
       begin
         W.BuildGrammar;
-        W.Diagram.SetAction(nil);
+        W.Root.Add(W.Diagram);
+      end)
+    .When('the directive is given no action',
+      procedure(W: TDirectivesWorld)
+      begin
+        try
+          W.Diagram.Action(nil);
+          W.Report := '<no exception>';
+        except
+          on E: Exception do
+            W.Report := E.ClassName + ': ' + E.Message;
+        end;
+      end)
+    .&Then('it fails',
+      procedure(W: TDirectivesWorld)
+      begin
+        Expect(W.Report).ToEqual('ECommandLine: The action of "diagram" is not assigned');
+      end)
+
+  .Scenario('An action of its own on the diagram directive')
+    .Given('a root that declares the directive diagram, with an action of its own',
+      procedure(W: TDirectivesWorld)
+      begin
+        W.BuildGrammar;
+        W.Diagram.Action(TTerminatingAction.Create(W, 'own diagram'));
         W.Root.Add(W.Diagram);
       end)
     .When('the result of parsing [diagram] build fichero.txt is invoked',
@@ -730,11 +769,10 @@ Feature Directives @commandline @directives
         W.Parsed := W.Root.Parse(['[diagram]', 'build', 'fichero.txt']);
         W.ExitCode := W.Parsed.Invoke(W.Invocation);
       end)
-    .&Then('the diagram is written, and build does not run',
+    .&Then('that action runs, and the diagram is not written',
       procedure(W: TDirectivesWorld)
       begin
-        Expect(W.Output.ToString).ToEqual('[ mitool [ build <fichero.txt> ] ]' + sLineBreak);
-        Expect(W.RanText).ToEqual('<nothing>');
+        Expect(Format('ran=%s output=[%s]', [W.RanText, W.Output.ToString])).ToEqual('ran=own diagram output=[]');
       end)
 
 .Rule('the diagram shows the tokens the way the parse rewrote them')
@@ -756,7 +794,7 @@ Feature Directives @commandline @directives
     .&Then('the group is written as the options it was split into',
       procedure(W: TDirectivesWorld)
       begin
-        Expect(W.Output.ToString).ToEqual('[ mitool [ build <fichero.txt> [ -f ] [ -l <5> ] ] ]' + sLineBreak);
+        Expect(W.Output.ToString).ToEqual('[ mitool [ build <fichero.txt> [ -f ] [ -l <5> ] ] *[ --trace ] ]' + sLineBreak);
       end)
 
   .Scenario('A value behind a colon')
@@ -776,7 +814,7 @@ Feature Directives @commandline @directives
     .&Then('the option is written apart from its value',
       procedure(W: TDirectivesWorld)
       begin
-        Expect(W.Output.ToString).ToEqual('[ mitool [ build <fichero.txt> [ --level <5> ] ] ]' + sLineBreak);
+        Expect(W.Output.ToString).ToEqual('[ mitool [ build <fichero.txt> [ --level <5> ] *[ --force ] ] *[ --trace ] ]' + sLineBreak);
       end)
 
   .Scenario('A response file')
@@ -798,7 +836,7 @@ Feature Directives @commandline @directives
     .&Then('the tokens the file contributed are written in its place',
       procedure(W: TDirectivesWorld)
       begin
-        Expect(W.Output.ToString).ToEqual('[ mitool [ build <fichero.txt> [ --level <5> ] ] ]' + sLineBreak);
+        Expect(W.Output.ToString).ToEqual('[ mitool [ build <fichero.txt> [ --level <5> ] *[ --force ] ] *[ --trace ] ]' + sLineBreak);
       end);
 
 end.

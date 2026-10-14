@@ -610,6 +610,46 @@ Feature Command line parse rules @commandline @parserules
         Expect(W.Report).ToEqual('words=a -- b');
       end)
 
+.Rule('a token with a dash that names no option is not a value')
+
+  .Scenario('A mistyped option with an argument that has room for it')
+    .Given('a command with a positional text argument and the option --force',
+      procedure(W: TParseRulesWorld)
+      begin
+        W.BuildCopier;
+      end)
+    .When('the invocation passes --froce',
+      procedure(W: TParseRulesWorld)
+      begin
+        W.Parsed := W.Copier.Parse(['--froce']);
+        W.Report := Format('unmatched=%s source taken=%s', [string.Join(',', W.Parsed.UnmatchedTokens),
+          BoolToStr(W.Parsed.WasProvided(W.SourceArg), True)]);
+      end)
+    .&Then('the parse fails with that token unclaimed, and the argument does not take it',
+      procedure(W: TParseRulesWorld)
+      begin
+        Expect(W.Parsed.ErrorText).ToContain('Unrecognized command or argument ''--froce''.');
+        Expect(W.Report).ToEqual('unmatched=--froce source taken=False');
+      end)
+
+  .Scenario('A negative number is a value')
+    .Given('a command with a positional integer argument',
+      procedure(W: TParseRulesWorld)
+      begin
+        W.BuildCalc;
+      end)
+    .When('the invocation passes -5',
+      procedure(W: TParseRulesWorld)
+      begin
+        W.Parsed := W.Calc.Parse(['-5']);
+        W.Report := Format('errors=[%s] count=%d', [W.Parsed.ErrorText, W.CountArg.ValueIn(W.Parsed)]);
+      end)
+    .&Then('-5 is read',
+      procedure(W: TParseRulesWorld)
+      begin
+        Expect(W.Report).ToEqual('errors=[] count=-5');
+      end)
+
 .Rule('a subcommand sees the recursive options of its parents, and no other')
 
   .Scenario('An option of the parent written before the subcommand is read')

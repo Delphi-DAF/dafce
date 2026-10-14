@@ -300,7 +300,7 @@ type
     class function OneOrMore: TArgumentArity; static;
     function MinimumNumberOfValues: Integer;
     function MaximumNumberOfValues: Integer;
-    /// <summary>True when more than one value fits, so repeating is not an error.</summary>
+    /// <summary>True when more than one value fits, so a second value is not an error.</summary>
     function AllowsMany: Boolean;
     /// <summary>True when at least one value has to be there.</summary>
     function DemandsValue: Boolean;
@@ -419,10 +419,19 @@ type
     ///   enumerated type fills this in by itself.
     /// </summary>
     function AcceptedValues: TArray<string>;
-    /// <summary>True when a default was declared, which is what satisfies "required".</summary>
+    /// <summary>
+    ///   True when it has a default: one declared, or the false every boolean has without declaring it. It is what
+    ///   satisfies "required".
+    /// </summary>
     function HasDefaultValue: Boolean;
     /// <summary>The declared default rendered as text, for the help.</summary>
     function DefaultText: string;
+    /// <summary>The default, calculated now and outside any parse. Raises <c>ECommandLine</c> when there is none.</summary>
+    /// <remarks>
+    ///   A calculation runs on every call. It receives a result that belongs to no parse, so what it reads of the
+    ///   rest of the invocation is the default of its type, and an error it adds reaches nobody.
+    /// </remarks>
+    function GetDefaultValue: TValue;
   end;
 
   IOption = interface(IValued)
@@ -447,7 +456,7 @@ type
     ///   A terminating action runs instead of the action of the command reached; one that is not runs
     ///   before it. The help and the version are options with a terminating action.
     /// </remarks>
-    function Action: ICommandLineAction;
+    function Action: ICommandLineAction; overload;
   end;
 
   /// <summary>The option that asks for the help: recursive, and with a terminating action that writes it.</summary>
@@ -460,6 +469,12 @@ type
   /// </remarks>
   IHelpOption = interface(IOption)
     ['{7C4B1A20-0011-4F31-9C10-4B0E2D5A0011}']
+    /// <summary>Declares what naming it runs instead of writing the help. Declaring it again replaces it.</summary>
+    /// <remarks>
+    ///   Assigning it <c>nil</c> raises <c>ECommandLine</c>, as in .NET. <c>IRootCommand.HelpAction</c> is another
+    ///   thing: assigning it <c>nil</c> brings the default action back.
+    /// </remarks>
+    function Action(const Value: ICommandLineAction): IHelpOption; overload;
   end;
 
   /// <summary>The option that asks for the version of the tool, with a terminating action that writes it.</summary>
@@ -471,6 +486,8 @@ type
   /// </remarks>
   IVersionOption = interface(IOption)
     ['{7C4B1A20-0012-4F31-9C10-4B0E2D5A0012}']
+    /// <summary>Declares what naming it runs instead of writing the version. See <c>IHelpOption.Action</c>.</summary>
+    function Action(const Value: ICommandLineAction): IVersionOption; overload;
   end;
 
   IArgument = interface(IValued)
@@ -533,7 +550,9 @@ type
     /// </summary>
     /// <remarks>Its lines are not wrapped, and a hidden command has none.</remarks>
     function HelpText: string;
-    /// <summary>Declares what this command does when an invocation reaches it.</summary>
+    /// <summary>The declared action, or <c>nil</c> when there is none.</summary>
+    function Action: ICommandLineAction; overload;
+    /// <summary>Declares what this command does when an invocation reaches it; <c>nil</c> leaves it with none.</summary>
     /// <remarks>
     ///   Declaring it again replaces it, whoever declared the first one, as in .NET, where the
     ///   action is a property of the command.
@@ -544,13 +563,11 @@ type
     ///   It answers <c>ICommand</c>, so on a root it is called as a statement rather than
     ///   chained -- the same caveat as <c>Description</c>.
     /// </remarks>
-    function SetAction(const Action: ICommandLineAction): ICommand; overload;
+    function Action(const Value: ICommandLineAction): ICommand; overload;
     /// <summary>The same, written as a function. The command holds it inside an action.</summary>
-    function SetAction(const Action: TCommandAction): ICommand; overload;
+    function SetAction(const Value: TCommandAction): ICommand; overload;
     /// <summary>The same, for an action with no code of its own: the invocation answers <c>Ok</c>.</summary>
-    function SetAction(const Action: TCommandActionProc): ICommand; overload;
-    /// <summary>The declared action, or <c>nil</c> when there is none.</summary>
-    function Action: ICommandLineAction;
+    function SetAction(const Value: TCommandActionProc): ICommand; overload;
     /// <summary>Parses an invocation against the grammar of this command, as the root of the parse.</summary>
     /// <remarks>
     ///   The options its ancestors declared recursive answer too. A first token that is its name or one of its
@@ -585,10 +602,10 @@ type
     ///   version too: a directive speaks about the parse, not about the program. One that is not terminating runs
     ///   before the action that wins.
     /// </remarks>
-    function Action: ICommandLineAction;
-    /// <summary>Declares what writing it runs. Declaring it again replaces it.</summary>
+    function Action: ICommandLineAction; overload;
+    /// <summary>Declares what writing it runs; <c>nil</c> leaves it with none. Declaring it again replaces it.</summary>
     /// <remarks>Like the action of an option, it stays open after <c>Freeze</c>.</remarks>
-    function SetAction(const Action: ICommandLineAction): IDirective;
+    function Action(const Value: ICommandLineAction): IDirective; overload;
   end;
 
   /// <summary>The <c>[diagram]</c> directive: it writes how the invocation was understood instead of running it.</summary>
@@ -596,9 +613,8 @@ type
   ///   What it writes is <c>IParseResult.Diagram</c>, to the output of the invocation, and the invocation answers
   ///   <c>Ok</c> when the parse has no errors and <c>ParseErrorReturnValue</c> when it has.
   ///
-  ///   Its action is terminating, so it wins over the help and the version. Declaring <c>nil</c> as its action
-  ///   brings that one back, because a <c>[diagram]</c> that ran the command would run the work it was written
-  ///   to inspect.
+  ///   Its action is terminating, so it wins over the help and the version. An action of its own replaces it, and
+  ///   assigning it <c>nil</c> raises <c>ECommandLine</c>, as in .NET.
   /// </remarks>
   IDiagramDirective = interface(IDirective)
     ['{7C4B1A20-0014-4F31-9C10-4B0E2D5A0014}']
@@ -792,6 +808,12 @@ type
     function GetResult(const Command: ICommand): ICommandResult; overload;
     /// <summary>The result of a directive the invocation wrote; <c>nil</c> when it wrote none by that name.</summary>
     function GetResult(const Directive: IDirective): IDirectiveResult; overload;
+    /// <summary>
+    ///   The result of any symbol, without saying what kind it is: the one the query of its kind gives, or <c>nil</c>
+    ///   when it has none.
+    /// </summary>
+    /// <remarks>A variable of any of the kinds above goes to the query of its kind; this one takes an <c>ISymbol</c>.</remarks>
+    function GetResult(const Symbol: ISymbol): ISymbolResult; overload;
     function Succeeded: Boolean;
     /// <summary>The errors of the parse, in the order they were found.</summary>
     /// <remarks>
@@ -887,7 +909,7 @@ type
     ///   to .NET's <c>result.GetValue(fileOption)</c> on purpose -- see the unit header.
     ///
     ///   A value the parse refused raises <c>ECommandLine</c> with that error: one that does not
-    ///   convert, a repetition, a required option that is missing. An option of a command the
+    ///   convert, more values than it admits, a required option that is missing. An option of a command the
     ///   invocation did not reach has no result, and reads as the default of its TYPE, not the
     ///   declared one.
     /// </remarks>
@@ -901,11 +923,12 @@ type
     function ValuesIn(const Parsed: IParseResult): TArray<T>;
     /// <summary>Declares the default as a constant.</summary>
     function DefaultValue(const Value: T): IOption<T>;
-    /// <summary>
-    ///   The calculation declared for the default; <c>nil</c> when the default is a constant
-    ///   or there is none.
-    /// </summary>
-    function DefaultValueFactory: TFunc<T>; overload;
+    /// <summary>The calculation of the default, receiving the result of the option; <c>nil</c> when there is no default.</summary>
+    /// <remarks>
+    ///   Declared with a <c>TDefaultValueFactory</c>, it is that very one. A constant, or a calculation with no
+    ///   argument, comes back inside one that receives the result and does not read it.
+    /// </remarks>
+    function DefaultValueFactory: TDefaultValueFactory<T>; overload;
     /// <summary>Declares the default as a CALCULATION, which the parse runs when the invocation does not carry the symbol.</summary>
     /// <remarks>
     ///   A default that depends on the surroundings -- a temporary directory, today's
@@ -987,9 +1010,9 @@ type
     ///   whoever wrote it knows. .NET calls it the same thing, for the same reason.
     /// </remarks>
     function AllowMultipleArgumentsPerToken: IOption<T>;
-    /// <summary>Declares what naming it runs. Declaring it again replaces it.</summary>
+    /// <summary>Declares what naming it runs; <c>nil</c> leaves it with none. Declaring it again replaces it.</summary>
     /// <remarks>Like the action of a command, it stays open after <c>Freeze</c>.</remarks>
-    function SetAction(const Action: ICommandLineAction): IOption<T>;
+    function Action(const Value: ICommandLineAction): IOption<T>; overload;
   end;
 
   /// <summary>An argument identified by its place, not by a name behind dashes.</summary>
@@ -1006,7 +1029,7 @@ type
     function RequiredValueIn(const SymbolResult: ISymbolResult): T; overload;
     function ValuesIn(const Parsed: IParseResult): TArray<T>;
     function DefaultValue(const Value: T): IArgument<T>;
-    function DefaultValueFactory: TFunc<T>; overload;
+    function DefaultValueFactory: TDefaultValueFactory<T>; overload;
     function DefaultValueFactory(const Factory: TFunc<T>; const Text: string = ''): IArgument<T>; overload;
     function DefaultValueFactory(const Factory: TDefaultValueFactory<T>; const Text: string = ''): IArgument<T>; overload;
     function CustomParser: TCustomParser<T>; overload;
@@ -1055,6 +1078,8 @@ type
   protected
     /// <summary>Raises when the grammar this symbol belongs to was frozen.</summary>
     procedure CheckOpen;
+    /// <summary>Raises when <c>Value</c> is <c>nil</c>: for what cannot be left with no action.</summary>
+    procedure DemandAction(const Value: ICommandLineAction);
   public
     constructor Create(const AName: string);
     destructor Destroy; override;
@@ -1163,6 +1188,7 @@ type
     function AcceptedValues: TArray<string>;
     function HasDefaultValue: Boolean;
     function DefaultText: string;
+    function GetDefaultValue: TValue;
     procedure SetArity(const Value: TArgumentArity);
     procedure SetHelpName(const Value: string);
     procedure SetAccepted(const Comparer: IEqualityComparer<string>; const Values: array of string);
@@ -1182,10 +1208,13 @@ type
   ///   forgotten in.
   /// </remarks>
   TValuedSymbol<T> = class(TValuedSymbol)
+  private
+    // Static, so the closures they build capture what they are handed and never the symbol, which holds them.
+    class function ConstantFactory(const Value: T): TDefaultValueFactory<T>; static;
+    class function CalculationFactory(const Calculation: TFunc<T>): TDefaultValueFactory<T>; static;
   protected
-    FDefaultValue: T;
-    FDefaultFactory: TFunc<T>;
-    FDefaultResultFactory: TDefaultValueFactory<T>;
+    /// <summary>The default however it was declared: a constant or a calculation with no argument comes in here wrapped.</summary>
+    FDefaultFactory: TDefaultValueFactory<T>;
     FCustomParser: TCustomParser<T>;
     function DefaultOf(const Found: IArgumentResult): T;
     function Unbox(const Values: TArray<TValue>; Whole: Boolean): T;
@@ -1196,11 +1225,13 @@ type
     procedure SetDefaultValue(const Value: T);
     procedure SetDefaultFactory(const Factory: TFunc<T>; const Text: string);
     procedure SetDefaultResultFactory(const Factory: TDefaultValueFactory<T>; const Text: string);
+    /// <summary>Leaves it with no default, the false of a boolean included.</summary>
+    procedure ClearDefault;
     procedure AddTypedValidator(const Validation: TCommandLineValidator<T>);
     procedure SetCustomParser(const Parser: TCustomParser<T>);
   public
     constructor Create(const AName: string; const AParser: TCommandLineParser<T>);
-    function DefaultValueFactory: TFunc<T>; overload;
+    function DefaultValueFactory: TDefaultValueFactory<T>; overload;
     function CustomParser: TCustomParser<T>; overload;
     function BoxedDefault(const Found: IArgumentResult): TValue; override;
   end;
@@ -1225,8 +1256,8 @@ type
     function IsRequired: Boolean;
     function AllowsMultipleArgumentsPerToken: Boolean;
     function AllowMultipleArgumentsPerToken: IOption<T>;
-    function Action: ICommandLineAction;
-    function SetAction(const Action: ICommandLineAction): IOption<T>;
+    function Action: ICommandLineAction; overload;
+    function Action(const Value: ICommandLineAction): IOption<T>; overload;
     function ValueIn(const Parsed: IParseResult): T; overload;
     function ValueIn(const SymbolResult: ISymbolResult): T; overload;
     function RequiredValueIn(const Parsed: IParseResult): T; overload;
@@ -1412,6 +1443,7 @@ type
     function AcceptedValues: TArray<string>;
     function HasDefaultValue: Boolean;
     function DefaultText: string;
+    function GetDefaultValue: TValue;
     function Validators: TCommandLineCollection<TArgumentValidator>;
     function CapturesRemainingTokens: Boolean;
   end;
@@ -1446,10 +1478,10 @@ type
     function AllowUnmatchedTokens: ICommand;
     function Hidden: ICommand;
     function HelpText: string;
-    function SetAction(const Action: ICommandLineAction): ICommand; overload;
-    function SetAction(const Action: TCommandAction): ICommand; overload;
-    function SetAction(const Action: TCommandActionProc): ICommand; overload;
-    function Action: ICommandLineAction;
+    function Action: ICommandLineAction; overload;
+    function Action(const Value: ICommandLineAction): ICommand; overload;
+    function SetAction(const Value: TCommandAction): ICommand; overload;
+    function SetAction(const Value: TCommandActionProc): ICommand; overload;
     function Parse(const Args: TArray<string>): IParseResult; overload;
     function Parse(const Args: TArray<string>; const Configuration: TParserConfiguration): IParseResult; overload;
     function Parse(const CommandLine: string): IParseResult; overload;
@@ -1458,24 +1490,28 @@ type
     procedure Freeze; override;
   end;
 
+  // Each declares Action with the parameters of the one it inherits and the type its interface chains with: it
+  // hides that one, so a call on the object, which the root makes, refuses nil too.
   THelpOption = class(TOption<Boolean>, IHelpOption)
   public
     constructor Create(const AName: string; const AAliases: array of string);
     /// <summary>The one every root has: the names of <c>HelpTokens</c>.</summary>
     constructor CreateDefault;
+    function Action(const Value: ICommandLineAction): IHelpOption; overload;
   end;
 
   TVersionOption = class(TOption<Boolean>, IVersionOption)
   public
     constructor Create(const AName: string; const AAliases: array of string);
+    function Action(const Value: ICommandLineAction): IVersionOption; overload;
   end;
 
   TDirective = class(TSymbol, IDirective)
   protected
     FAction: ICommandLineAction;
   public
-    function Action: ICommandLineAction;
-    function SetAction(const Action: ICommandLineAction): IDirective; virtual;
+    function Action: ICommandLineAction; overload;
+    function Action(const Value: ICommandLineAction): IDirective; overload; virtual;
   end;
 
   TDiagramDirective = class(TDirective, IDiagramDirective)
@@ -1483,7 +1519,7 @@ type
     FParseErrorReturnValue: Integer;
   public
     constructor Create;
-    function SetAction(const Action: ICommandLineAction): IDirective; override;
+    function Action(const Value: ICommandLineAction): IDirective; overload; override;
     function GetParseErrorReturnValue: Integer;
     procedure SetParseErrorReturnValue(Value: Integer);
   end;
@@ -1791,6 +1827,12 @@ begin
     RaiseFrozen(Name);
 end;
 
+procedure TSymbol.DemandAction(const Value: ICommandLineAction);
+begin
+  if Value = nil then
+    raise ECommandLine.CreateFmt('The action of "%s" is not assigned', [Name]);
+end;
+
 procedure TSymbol.Freeze;
 begin
   FFrozen := True;
@@ -2052,6 +2094,13 @@ begin
   Result := FDefaultText;
 end;
 
+function TValuedSymbol.GetDefaultValue: TValue;
+begin
+  if not HasDefaultValue then
+    raise ECommandLine.CreateFmt('Argument "%s" does not have a default value', [Name]);
+  Result := BoxedDefault(LooseArgumentResult(ValueArgument));
+end;
+
 procedure TValuedSymbol.SetArity(const Value: TArgumentArity);
 begin
   CheckOpen;
@@ -2208,22 +2257,51 @@ begin
           Value := TValue.From<T>(Converted);
       end;
   inherited Create(AName, TypeInfo(T), Untyped);
-  FDefaultValue := Default (T);
+  // A boolean has false for its default without declaring it, as in .NET: required, it never fails, and absent it
+  // still has a result. No text, because the help shows no default that is false.
+  if TypeInfo(T) = TypeInfo(Boolean) then
+  begin
+    FDefaultFactory := ConstantFactory(Default (T));
+    FHasDefault := True;
+  end;
 end;
 
-function TValuedSymbol<T>.DefaultValueFactory: TFunc<T>;
+procedure TValuedSymbol<T>.ClearDefault;
+begin
+  FDefaultFactory := nil;
+  FHasDefault := False;
+  FDefaultText := '';
+end;
+
+class function TValuedSymbol<T>.ConstantFactory(const Value: T): TDefaultValueFactory<T>;
+begin
+  Result :=
+    function(const ArgumentResult: IArgumentResult): T
+    begin
+      Result := Value;
+    end;
+end;
+
+class function TValuedSymbol<T>.CalculationFactory(const Calculation: TFunc<T>): TDefaultValueFactory<T>;
+begin
+  Result :=
+    function(const ArgumentResult: IArgumentResult): T
+    begin
+      Result := Calculation();
+    end;
+end;
+
+function TValuedSymbol<T>.DefaultValueFactory: TDefaultValueFactory<T>;
 begin
   Result := FDefaultFactory;
 end;
 
 function TValuedSymbol<T>.DefaultOf(const Found: IArgumentResult): T;
 begin
-  if Assigned(FDefaultResultFactory) then
-    Result := FDefaultResultFactory(Found)
-  else if Assigned(FDefaultFactory) then
-    Result := FDefaultFactory()
+  if Assigned(FDefaultFactory) then
+    Result := FDefaultFactory(Found)
   else
-    Result := FDefaultValue;
+    Result := Default (T);
 end;
 
 function TValuedSymbol<T>.BoxedDefault(const Found: IArgumentResult): TValue;
@@ -2292,9 +2370,7 @@ end;
 procedure TValuedSymbol<T>.SetDefaultValue(const Value: T);
 begin
   CheckOpen;
-  FDefaultValue := Value;
-  FDefaultFactory := nil;
-  FDefaultResultFactory := nil;
+  FDefaultFactory := ConstantFactory(Value);
   SetDefaultText(TCommandLineValue.ToText(TValue.From<T>(Value)));
 end;
 
@@ -2303,8 +2379,7 @@ begin
   CheckOpen;
   if not Assigned(Factory) then
     raise ECommandLine.CreateFmt('The computed default of "%s" is not assigned', [Name]);
-  FDefaultFactory := Factory;
-  FDefaultResultFactory := nil;
+  FDefaultFactory := CalculationFactory(Factory);
   // HasDefaultValue is what satisfies "required", and it is set even with no text to show:
   // the value exists, it is just not known yet. SetDefaultText('') leaves the help
   // showing no default rather than a false one.
@@ -2316,8 +2391,7 @@ begin
   CheckOpen;
   if not Assigned(Factory) then
     raise ECommandLine.CreateFmt('The computed default of "%s" is not assigned', [Name]);
-  FDefaultResultFactory := Factory;
-  FDefaultFactory := nil;
+  FDefaultFactory := Factory;
   SetDefaultText(Text);
 end;
 
@@ -2425,9 +2499,9 @@ begin
   Result := FAction;
 end;
 
-function TOption<T>.SetAction(const Action: ICommandLineAction): IOption<T>;
+function TOption<T>.Action(const Value: ICommandLineAction): IOption<T>;
 begin
-  FAction := Action;
+  FAction := Value;
   Result := Self;
 end;
 
@@ -2859,6 +2933,11 @@ begin
   Result := FOwner.DefaultText;
 end;
 
+function TOptionArgument.GetDefaultValue: TValue;
+begin
+  Result := FOwner.GetDefaultValue;
+end;
+
 function TOptionArgument.Validators: TCommandLineCollection<TArgumentValidator>;
 begin
   Result := FValidators;
@@ -3039,20 +3118,20 @@ begin
     end;
 end;
 
-function TCommand.SetAction(const Action: ICommandLineAction): ICommand;
+function TCommand.Action(const Value: ICommandLineAction): ICommand;
 begin
-  FAction := Action;
+  FAction := Value;
   Result := Self;
 end;
 
-function TCommand.SetAction(const Action: TCommandAction): ICommand;
+function TCommand.SetAction(const Value: TCommandAction): ICommand;
 begin
-  Result := SetAction(FunctionAction(Action));
+  Result := Action(FunctionAction(Value));
 end;
 
-function TCommand.SetAction(const Action: TCommandActionProc): ICommand;
+function TCommand.SetAction(const Value: TCommandActionProc): ICommand;
 begin
-  Result := SetAction(AsCommandAction(Action));
+  Result := SetAction(AsCommandAction(Value));
 end;
 
 function TCommand.Action: ICommandLineAction;
@@ -3117,6 +3196,9 @@ begin
     Aliases.Add(Alias);
   SetDescription(TextOf(TCommandLineText.HelpOptionDescription));
   SetArity(TArgumentArity.Zero);
+  // An option that takes no value rather than a boolean, as in .NET: with the false of a boolean, every parse would
+  // give it a result.
+  ClearDefault;
   FRecursive := True;
   FAction := NewHelpAction;
 end;
@@ -3128,6 +3210,13 @@ begin
   Create(HelpTokens[0], []);
   for I := 1 to High(HelpTokens) do
     Aliases.Add(HelpTokens[I]);
+end;
+
+function THelpOption.Action(const Value: ICommandLineAction): IHelpOption;
+begin
+  DemandAction(Value);
+  FAction := Value;
+  Result := Self;
 end;
 
 { TVersionOption }
@@ -3166,8 +3255,17 @@ begin
     Aliases.Add(Alias);
   SetDescription(TextOf(TCommandLineText.VersionOptionDescription));
   SetArity(TArgumentArity.Zero);
+  // See THelpOption.Create.
+  ClearDefault;
   FAction := NewVersionAction;
   Validators.Add(ValidateVersionAlone);
+end;
+
+function TVersionOption.Action(const Value: ICommandLineAction): IVersionOption;
+begin
+  DemandAction(Value);
+  FAction := Value;
+  Result := Self;
 end;
 
 { TDirective }
@@ -3177,9 +3275,9 @@ begin
   Result := FAction;
 end;
 
-function TDirective.SetAction(const Action: ICommandLineAction): IDirective;
+function TDirective.Action(const Value: ICommandLineAction): IDirective;
 begin
-  FAction := Action;
+  FAction := Value;
   Result := Self;
 end;
 
@@ -3192,12 +3290,10 @@ begin
   FAction := NewDiagramAction(Self);
 end;
 
-function TDiagramDirective.SetAction(const Action: ICommandLineAction): IDirective;
+function TDiagramDirective.Action(const Value: ICommandLineAction): IDirective;
 begin
-  if Action = nil then
-    Result := inherited SetAction(NewDiagramAction(Self))
-  else
-    Result := inherited SetAction(Action);
+  DemandAction(Value);
+  Result := inherited Action(Value);
 end;
 
 function TDiagramDirective.GetParseErrorReturnValue: Integer;
@@ -3306,9 +3402,9 @@ procedure TRootCommand.SetHelpAction(const Value: TCommandAction);
 begin
   // A function in the place of the help settles the invocation as the help does.
   if Assigned(Value) then
-    FHelpOption.SetAction(FunctionAction(Value, True))
+    FHelpOption.Action(FunctionAction(Value, True))
   else
-    FHelpOption.SetAction(NewHelpAction);
+    FHelpOption.Action(NewHelpAction);
 end;
 
 function TRootCommand.GetVersionAction: TCommandAction;
@@ -3319,9 +3415,9 @@ end;
 procedure TRootCommand.SetVersionAction(const Value: TCommandAction);
 begin
   if Assigned(Value) then
-    FVersionOption.SetAction(FunctionAction(Value, True))
+    FVersionOption.Action(FunctionAction(Value, True))
   else
-    FVersionOption.SetAction(NewVersionAction);
+    FVersionOption.Action(NewVersionAction);
 end;
 
 function TRootCommand.Parse: IParseResult;

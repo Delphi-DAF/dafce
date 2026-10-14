@@ -27,6 +27,11 @@ type
     SeenOutput: string;
     /// <summary>The configuration the result holds, as text, or empty if it was never read.</summary>
     SeenConfiguration: string;
+    /// <summary>A command with nothing but a help option declared by hand.</summary>
+    Bare: ICommand;
+    /// <summary>The actions of their own that ran, in order.</summary>
+    Ran: string;
+    Report: string;
     /// <summary>
     ///   Starts at -1 and not at 0: "the invocation answered 0" is exactly what a field would
     ///   hold if the When never ran.
@@ -40,6 +45,21 @@ type
     procedure BuildGrammar;
     /// <summary>Parses and invokes with an output of its own, and answers what it wrote.</summary>
     function Captured(const Args: TArray<string>): string;
+    function HelpOfRoot: IHelpOption;
+    function VersionOfRoot: IVersionOption;
+    procedure Track(const Name: string);
+  end;
+
+  /// <summary>An action of its own: terminating, clearing no errors, leaving its name in the world.</summary>
+  TOwnAction = class(TSynchronousCommandLineAction)
+  private
+    // An object reference and not an interface: the world owns the grammar that holds this action.
+    FWorld: THelpActionsWorld;
+    FName: string;
+    FCode: Integer;
+  public
+    constructor Create(World: THelpActionsWorld; const Name: string; Code: Integer);
+    function Invoke(const Parsed: IParseResult): Integer; override;
   end;
 
 implementation
@@ -94,6 +114,22 @@ begin
     end;
 end;
 
+{ TOwnAction }
+
+constructor TOwnAction.Create(World: THelpActionsWorld; const Name: string; Code: Integer);
+begin
+  inherited Create;
+  FWorld := World;
+  FName := Name;
+  FCode := Code;
+end;
+
+function TOwnAction.Invoke(const Parsed: IParseResult): Integer;
+begin
+  FWorld.Track(FName);
+  Result := FCode;
+end;
+
 { THelpActionsWorld }
 
 constructor THelpActionsWorld.Create;
@@ -137,6 +173,33 @@ begin
   Build := CommandLine.Command('build', 'Build things').Add(OutOpt);
   Root := CommandLine.Root('tool', 'A tool with a version').WithVersion('3.1.4');
   Root.Add([DiagOpt, NameOpt, Build]);
+end;
+
+function THelpActionsWorld.HelpOfRoot: IHelpOption;
+var
+  Option: IOption;
+begin
+  Result := nil;
+  for Option in Root.Options do
+    if Supports(Option, IHelpOption, Result) then
+      Exit;
+end;
+
+function THelpActionsWorld.VersionOfRoot: IVersionOption;
+var
+  Option: IOption;
+begin
+  Result := nil;
+  for Option in Root.Options do
+    if Supports(Option, IVersionOption, Result) then
+      Exit;
+end;
+
+procedure THelpActionsWorld.Track(const Name: string);
+begin
+  if Ran <> '' then
+    Ran := Ran + ',';
+  Ran := Ran + Name;
 end;
 
 function THelpActionsWorld.Captured(const Args: TArray<string>): string;
@@ -410,6 +473,115 @@ Feature Replacing the help and the version actions @commandline @helpactions
       begin
         Expect(W.Error.ToString).ToEqual('Unhandled exception: EBannerFailed: no banner today' + sLineBreak);
         Expect(W.ExitCode).ToEqual(TCommandLineExit.Failure);
+      end)
+
+.Rule('a help option or a version option can change its action')
+
+  .Scenario('A help option declared by hand with an action of its own')
+    .Given('a help option declared by hand, with an action of its own that answers 7',
+      procedure(W: THelpActionsWorld)
+      begin
+        W.Bare := CommandLine.Command('tool', 'A tool')
+          .Add(CommandLine.HelpOption('--ayuda', []).Action(TOwnAction.Create(W, 'own help', 7)));
+      end)
+    .When('the result of parsing an invocation that names it is invoked',
+      procedure(W: THelpActionsWorld)
+      begin
+        W.Parsed := W.Bare.Parse(['--ayuda']);
+        W.ExitCode := W.Parsed.Invoke(W.Configuration);
+      end)
+    .&Then('that action runs, and the invocation answers 7',
+      procedure(W: THelpActionsWorld)
+      begin
+        Expect(Format('ran=%s exit=%d output=[%s]', [W.Ran, W.ExitCode, W.Output.ToString]))
+          .ToEqual('ran=own help exit=7 output=[]');
+      end)
+
+  .Scenario('A version option with an action of its own')
+    .Given('the version option of a root, with an action of its own',
+      procedure(W: THelpActionsWorld)
+      begin
+        W.BuildGrammar;
+        W.VersionOfRoot.Action(TOwnAction.Create(W, 'own version', 0));
+      end)
+    .When('the result of parsing an invocation that names it is invoked',
+      procedure(W: THelpActionsWorld)
+      begin
+        W.Parsed := W.Root.Parse(['--version']);
+        W.ExitCode := W.Parsed.Invoke(W.Configuration);
+      end)
+    .&Then('that action runs, and not the default one',
+      procedure(W: THelpActionsWorld)
+      begin
+        Expect(Format('ran=%s output=[%s]', [W.Ran, W.Output.ToString])).ToEqual('ran=own version output=[]');
+      end)
+
+  .Scenario('The action replaced runs even with parse errors')
+    .Given('the help option of a root, with an action of its own',
+      procedure(W: THelpActionsWorld)
+      begin
+        W.BuildGrammar;
+        W.HelpOfRoot.Action(TOwnAction.Create(W, 'own help', 10));
+      end)
+    .When('the result of parsing an invocation that names it next to a token that matches nothing is invoked',
+      procedure(W: THelpActionsWorld)
+      begin
+        W.Parsed := W.Root.Parse(['--help', '--bogus']);
+        W.ExitCode := W.Parsed.Invoke(W.Configuration);
+      end)
+    .&Then('that action runs with its code, and the result still has the error',
+      procedure(W: THelpActionsWorld)
+      begin
+        Expect(Format('ran=%s exit=%d errors=%s', [W.Ran, W.ExitCode, W.Parsed.ErrorText]))
+          .ToEqual('ran=own help exit=10 errors=Unrecognized command or argument ''--bogus''.');
+      end)
+
+.Rule('a help option or a version option is never left with no action')
+
+  .Scenario('No action on a help option')
+    .Given('the help option of a root',
+      procedure(W: THelpActionsWorld)
+      begin
+        W.BuildGrammar;
+      end)
+    .When('it is given no action',
+      procedure(W: THelpActionsWorld)
+      begin
+        try
+          W.HelpOfRoot.Action(nil);
+          W.Report := '<accepted>';
+        except
+          on E: Exception do
+            W.Report := E.ClassName + ': ' + E.Message;
+        end;
+      end)
+    .&Then('it fails',
+      procedure(W: THelpActionsWorld)
+      begin
+        Expect(W.Report).ToEqual('ECommandLine: The action of "--help" is not assigned');
+      end)
+
+  .Scenario('No action on a version option')
+    .Given('the version option of a root',
+      procedure(W: THelpActionsWorld)
+      begin
+        W.BuildGrammar;
+      end)
+    .When('it is given no action',
+      procedure(W: THelpActionsWorld)
+      begin
+        try
+          W.VersionOfRoot.Action(nil);
+          W.Report := '<accepted>';
+        except
+          on E: Exception do
+            W.Report := E.ClassName + ': ' + E.Message;
+        end;
+      end)
+    .&Then('it fails',
+      procedure(W: THelpActionsWorld)
+      begin
+        Expect(W.Report).ToEqual('ECommandLine: The action of "--version" is not assigned');
       end);
 
 end.

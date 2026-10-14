@@ -38,6 +38,13 @@ function ParseInvocation(const Root: ICommand; const Args: TArray<string>; const
 /// </remarks>
 function ResultValues(const Found: ISymbolResult; out FromDefault, Whole: Boolean): TArray<TValue>;
 
+/// <summary>A result of <c>Argument</c> that belongs to no parse: what a default calculated outside one receives.</summary>
+/// <remarks>
+///   It holds no token and has no parent, every <c>GetResult</c> answers <c>nil</c>, and an error added to it is
+///   kept in its own <c>Errors</c> and reaches nothing else.
+/// </remarks>
+function LooseArgumentResult(const Argument: IArgument): IArgumentResult;
+
 /// <summary>
 ///   Raises <c>ECommandLine</c> when an option of the application takes a name of the help or of the version on
 ///   a command where they answer, from <c>Root</c> down.
@@ -59,7 +66,6 @@ implementation
 uses
   System.SysUtils,
   System.Classes,
-  System.Math,
   System.Generics.Defaults,
   Daf.Nullable,
   Daf.Application.Version,
@@ -253,6 +259,28 @@ type
     procedure OnlyTake(NumberOfTokens: Integer);
   end;
 
+  /// <summary>See <c>LooseArgumentResult</c>.</summary>
+  TLooseArgumentResult = class(TInterfacedObject, ISymbolResult, IArgumentResult)
+  private
+    FArgument: IArgument;
+    // The messages and not the errors: an error holds its result, and a result holding itself is never freed.
+    FMessages: TArray<string>;
+    FOnlyTaken: Boolean;
+  public
+    constructor Create(const AArgument: IArgument);
+    function Parent: ISymbolResult;
+    function Tokens: TArray<TToken>;
+    function Errors: TArray<TParseError>;
+    procedure AddError(const Message: string);
+    function GetResult(const Option: IOption): IOptionResult; overload;
+    function GetResult(const Argument: IArgument): IArgumentResult; overload;
+    function GetResult(const Command: ICommand): ICommandResult; overload;
+    function GetResult(const Directive: IDirective): IDirectiveResult; overload;
+    function Argument: IArgument;
+    function IsImplicit: Boolean;
+    procedure OnlyTake(NumberOfTokens: Integer);
+  end;
+
   TDirectiveResult = class(TSymbolResult, IDirectiveResult)
   private
     FDirective: IDirective;
@@ -293,6 +321,7 @@ type
     function GetResult(const Argument: IArgument): IArgumentResult; overload;
     function GetResult(const Command: ICommand): ICommandResult; overload;
     function GetResult(const Directive: IDirective): IDirectiveResult; overload;
+    function GetResult(const Symbol: ISymbol): ISymbolResult; overload;
     function Succeeded: Boolean;
     function Errors: TArray<TParseError>;
     function ErrorText: string;
@@ -1037,12 +1066,9 @@ begin
     Written := FIdentifierToken.Value.Value
   else
     Written := FOption.Name;
-  // Repeating an option that admits one value is an ambiguous invocation, and an ambiguous
-  // invocation has to fail. Quietly keeping one of them is the same sin as reading 80xyz as 80:
-  // a value the parser chose on its own.
-  if not FOption.Arity.AllowsMany and (FIdentifierTokenCount > 1) then
-    Exit(FormatText(TCommandLineText.OptionExpectsOneArgument,
-      [Written, IntToStr(Max(Length(FTokens), FIdentifierTokenCount))]));
+  // Its values are counted, not the times it was named, as in .NET: naming it again with no value adds none.
+  if not FOption.Arity.AllowsMany and (Length(FTokens) > 1) then
+    Exit(FormatText(TCommandLineText.OptionExpectsOneArgument, [Written, IntToStr(Length(FTokens))]));
   if not FOption.IsFlag and (Length(FTokens) = 0) then
     Exit(FormatText(TCommandLineText.OptionRequiredArgumentMissing, [Written]));
   Result := '';
@@ -1250,6 +1276,82 @@ begin
     [FOption.Option.Name]);
 end;
 
+{ TLooseArgumentResult }
+
+constructor TLooseArgumentResult.Create(const AArgument: IArgument);
+begin
+  inherited Create;
+  FArgument := AArgument;
+end;
+
+function TLooseArgumentResult.Parent: ISymbolResult;
+begin
+  Result := nil;
+end;
+
+function TLooseArgumentResult.Tokens: TArray<TToken>;
+begin
+  Result := nil;
+end;
+
+function TLooseArgumentResult.Errors: TArray<TParseError>;
+var
+  I: Integer;
+begin
+  SetLength(Result, Length(FMessages));
+  for I := 0 to High(FMessages) do
+  begin
+    Result[I].Message := FMessages[I];
+    Result[I].SymbolResult := Self;
+  end;
+end;
+
+procedure TLooseArgumentResult.AddError(const Message: string);
+begin
+  FMessages := FMessages + [Message];
+end;
+
+function TLooseArgumentResult.GetResult(const Option: IOption): IOptionResult;
+begin
+  Result := nil;
+end;
+
+function TLooseArgumentResult.GetResult(const Argument: IArgument): IArgumentResult;
+begin
+  Result := nil;
+end;
+
+function TLooseArgumentResult.GetResult(const Command: ICommand): ICommandResult;
+begin
+  Result := nil;
+end;
+
+function TLooseArgumentResult.GetResult(const Directive: IDirective): IDirectiveResult;
+begin
+  Result := nil;
+end;
+
+function TLooseArgumentResult.Argument: IArgument;
+begin
+  Result := FArgument;
+end;
+
+function TLooseArgumentResult.IsImplicit: Boolean;
+begin
+  Result := False;
+end;
+
+procedure TLooseArgumentResult.OnlyTake(NumberOfTokens: Integer);
+begin
+  // The same refusals as the result of an argument in a parse; with no token held, there is nothing to hand on.
+  if NumberOfTokens < 0 then
+    raise ECommandLine.CreateFmt('OnlyTake takes a number of tokens that is not negative, and got %d',
+      [NumberOfTokens]);
+  if FOnlyTaken then
+    raise ECommandLine.Create('OnlyTake can only be called once');
+  FOnlyTaken := True;
+end;
+
 { TDirectiveResult }
 
 constructor TDirectiveResult.Create(const ATree: ISymbolResultTree; const ADirective: IDirective;
@@ -1414,6 +1516,11 @@ end;
 function TParseResult.GetResult(const Directive: IDirective): IDirectiveResult;
 begin
   Result := FRootResult.GetResult(Directive);
+end;
+
+function TParseResult.GetResult(const Symbol: ISymbol): ISymbolResult;
+begin
+  Result := ResultOf(Symbol);
 end;
 
 function TParseResult.Succeeded: Boolean;
@@ -2258,6 +2365,11 @@ end;
 function ResultValues(const Found: ISymbolResult; out FromDefault, Whole: Boolean): TArray<TValue>;
 begin
   Result := ((Found as TObject) as TValuedResult).ReadValues(FromDefault, Whole);
+end;
+
+function LooseArgumentResult(const Argument: IArgument): IArgumentResult;
+begin
+  Result := TLooseArgumentResult.Create(Argument);
 end;
 
 end.
