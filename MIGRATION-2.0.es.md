@@ -63,6 +63,20 @@ paquete propio, y hay que añadirlo a los `requires` del paquete que lo use:
 `KillAfterTimeout` desaparece de `ISystemProcess` y de su builder: el plazo mata siempre el proceso.
 Quita la llamada.
 
+Un flujo sin destino declarado **hereda** ahora el del padre: lo que escribe el hijo sale donde
+escribe tu proceso. Para que calle, como en 1.6.0, descarta los dos:
+
+```pascal
+  .StandardOutput(TProcessOutput.Discard)
+  .StandardError(TProcessOutput.Discard)
+```
+
+Un flujo admite una sola declaración: `OnStdOut` dos veces, u `OnStdOut` y después `StandardOutput`,
+lanza `EInvalidOpException`. Deja una por flujo.
+
+`HideWindow(False)`, el valor por defecto, ya no abre una ventana de consola propia: el hijo corre
+en tu consola. No hay opción que devuelva la ventana aparte.
+
 ### 3. `Daf.CmdLn.Parser` ya no está
 
 La unit que 1.6.0 traía dentro de `Daf.Commons` **ya no se distribuye**. Su sustituto es

@@ -63,6 +63,20 @@ and it must be added to the `requires` of whichever package uses it:
 `KillAfterTimeout` is gone from `ISystemProcess` and from its builder: the deadline always kills the
 process. Drop the call.
 
+A stream with no destination declared now **inherits** the parent's: what the child writes appears
+where your process writes. To keep it quiet, as in 1.6.0, discard both:
+
+```pascal
+  .StandardOutput(TProcessOutput.Discard)
+  .StandardError(TProcessOutput.Discard)
+```
+
+A stream takes one declaration: `OnStdOut` twice, or `OnStdOut` and then `StandardOutput`, raises
+`EInvalidOpException`. Keep one per stream.
+
+`HideWindow(False)`, the default, no longer opens a console window of its own: the child runs in
+your console. There is no option that brings the separate window back.
+
 ### 3. `Daf.CmdLn.Parser` is gone
 
 The unit 1.6.0 shipped inside `Daf.Commons` **is no longer distributed**. Its replacement is

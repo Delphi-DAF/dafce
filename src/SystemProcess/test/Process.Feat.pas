@@ -25,6 +25,8 @@ begin
   Result := TSystemProcess.Builder
     .Command('ping')
     .CmdArgs(['-n', '30', '127.0.0.1'])
+    .StandardOutput(TProcessOutput.Discard)
+    .StandardError(TProcessOutput.Discard)
     .HideWindow(True)
     .Timeout(TimeoutMS)
     .Build;
@@ -96,6 +98,8 @@ Feature El resultado dice por que se corto la ejecucion @systemprocess @process
         W.Proc := TSystemProcess.Builder
           .Command('ping')
           .CmdArgs(['-n', '1', '127.0.0.1'])
+          .StandardOutput(TProcessOutput.Discard)
+          .StandardError(TProcessOutput.Discard)
           .HideWindow(True)
           .Build;
       end)

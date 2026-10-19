@@ -42,16 +42,80 @@ var Future := Proc.ExecuteAsync; // or asynchronous
 the process is killed** and the result comes back as `Timeout`. `Timeout(0)` is a deadline of zero:
 it kills the process on the first poll, 250 ms in.
 
-This is `System.Diagnostics.Process`'s pair in one call. There, the deadline and the kill are two
-steps the caller writes — `WaitForExit(ms)` returns `false` and `Kill()` is up to you — because a
-`Process` is an object you hold. Here `Execute` owns the whole run: it opens the pipes, waits and
-tears them down, so it is what enforces the deadline. To stop the child on your own terms, call
-`Kill` from another thread or from a shutdown hook, and the result says `Killed` rather than
+`System.Diagnostics.Process` writes the same in two steps — `WaitForExit(ms)` returns `false` and
+`Kill()` is up to you —, and .NET 11 joins them in `SafeProcessHandle.WaitForExitOrKillOnTimeout`.
+Here `Execute` owns the whole run and enforces the deadline itself. To stop the child on your own
+terms, call `Kill` from another thread or from a shutdown hook, and the result says `Killed`, not
 `Timeout`.
 
 `OnStdOut` and `OnStdErr` get whatever the pipe read returned — up to 2 KB at a time, **not one
 line**. A line can arrive split across two calls, or several lines in one; split them yourself if
 you need lines.
+
+## Where each stream goes
+
+Standard output and standard error each go to one destination, a `TProcessOutput`:
+
+| Destination | The child writes to |
+|---|---|
+| `TProcessOutput.Inherit` | the standard handle the parent holds when the child starts |
+| `TProcessOutput.Discard` | the null device |
+| `TProcessOutput.Capture(Proc)` | a pipe read for as long as the child runs; `Proc` gets what each read returns |
+| `TProcessOutput.ToFile(Path, Append)` | a file, with `Path` resolved against the parent's current directory; emptied first unless `Append` is `True` |
+
+`StandardOutput` and `StandardError` declare them, and `OnStdOut(Proc)` is short for
+`StandardOutput(TProcessOutput.Capture(Proc))`:
+
+```pascal
+var Proc := TSystemProcess.Builder
+  .Command('git')
+  .CmdArgs(['fetch'])
+  .OnStdOut(procedure(Text: string) begin Write(Text); end)
+  .StandardError(TProcessOutput.Discard)
+  .Build;
+```
+
+- **A stream with no declaration inherits**: the child writes where the calling process writes.
+  Standard input is always the parent's.
+- **Only a captured stream goes through a pipe**, and that pipe is read while the child runs: no
+  amount of output keeps the child from finishing.
+- **A file is opened before the child starts.** One that cannot be opened ends the run as `Failed`,
+  with the path and the reason in `LastError`, and the child never starts.
+- **A stream takes one declaration.** A second one — `OnStdOut` after `StandardOutput`, or the same
+  call twice — raises `EInvalidOpException`:
+  `StandardOutput already has a destination: a stream takes exactly one`.
+
+`System.Diagnostics.Process` in .NET 11 takes a handle per stream, in `StandardOutputHandle` and
+`StandardErrorHandle`. Here the value is a destination, `TProcessOutput`, and the methods are
+`StandardOutput` and `StandardError`.
+
+### Captured text
+
+It is decoded with the code page of the console the child runs in: the output code page of the
+parent's console when the child shares it, and the system's OEM code page when it has one of its own —
+with `HideWindow(True)`, or when the parent has no console. A character whose bytes arrive in two reads
+is delivered whole, and a byte that does not fit the code page arrives replaced.
+
+A child that does not write with its console's code page needs its encoding declared, stream by
+stream, with `StandardOutputEncoding` and `StandardErrorEncoding`. A Delphi program writes in ANSI
+unless it changes the code page of its `Output`:
+
+```pascal
+  .OnStdOut(procedure(Text: string) begin Write(Text); end)
+  .StandardOutputEncoding(TEncoding.ANSI)
+```
+
+The process does not free the encoding: `TEncoding.ANSI`, `TEncoding.UTF8` and the other standard ones
+belong to the RTL, and one made with `TEncoding.GetEncoding` is freed by whoever made it, after
+`Execute`.
+
+`System.Diagnostics.Process` decodes with the output code page of the parent's console in every case.
+
+### The child's console
+
+`HideWindow(False)`, the default, runs the child in the parent's console; `HideWindow(True)` runs it
+with no window, in a console of its own. A parent with no console — a windowed application — gives the
+child a console of its own either way, and the streams it inherits write to that console.
 
 ## TProcessResult
 

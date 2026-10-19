@@ -68,6 +68,8 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - **Commons**: `VersionTag` takes a template of `${...}` markers, with `VersionTemplate` and `VersionTemplateWithBuild` as its two defaults. The marker list, in the GUIDE
 - **Commons**: `TMacrosList.MissingMacroPolicy` and `OnMissingMacro` decide what a reference to a macro that is not registered becomes: kept as written, a fallback value, or `EMacroNotFound`. With nothing configured it still resolves to empty
 - **SystemProcess**: `TProcessResult.TStatus.Killed` — an explicit `Kill` and an expired deadline stop sharing the `Timeout` value, so a result says which of the two cut the run short
+- **SystemProcess**: `StandardOutput` and `StandardError` give each stream of the child its destination, a `TProcessOutput`: captured, inherited from the parent, discarded or written to a file
+- **SystemProcess**: `StandardOutputEncoding` and `StandardErrorEncoding` — the encoding of what is captured
 
 ### Changed
 
@@ -108,6 +110,9 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - ⚠️ **NNLog**: `${message}` no longer carries the scope, and `${scope}` is the only token that writes it. **Breaks, with no compiler error,** a layout with `${message}` and no `${scope}`, the default one included: it stops showing the scopes. One with both stops writing them twice
 - **NNLog**: A layout token with no renderer behind it is left unsubstituted instead of becoming the empty string, so a misspelled `${mesage}` shows up in the line
 - ⚠️ **Commons**: `VersionTag`'s `WithCompiledMeta` flag is now a template parameter, and `TVersionInfo.Debug` is read-only and declared by the binary — a fourth argument to `[Version(...)]` or `TVersionInfo.Create`, `False` when omitted; it used to report how DAF itself was compiled. **Breaks** whoever passed the flag or assigned `Debug`
+- ⚠️ **SystemProcess**: A stream with no declared destination **inherits the parent's**, so a child launched without handlers writes where the calling process writes. `TProcessOutput.Discard` on both streams keeps it quiet
+- ⚠️ **SystemProcess**: A second destination for the same stream —`OnStdOut` twice, or `OnStdOut` and `StandardOutput`— **raises `EInvalidOpException`**; it used to replace the first
+- ⚠️ **SystemProcess**: `HideWindow(False)`, the default, **no longer opens a console of its own**: the child runs in the parent's console
 
 ### Deprecated
 
@@ -171,6 +176,8 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - **Commons**: A version tag that is not SemVer was reported as `0.0.0`; the declared text now survives
 - **Commons**: A tag carrying its own build metadata produced two `+` sections, which SemVer does not admit; what the tag declares and what the compiler saw now share the one section
 - **SystemProcess**: An explicit `Kill` reported `Timeout`, and killed the child twice — once when asked and again when the wait loop noticed. It now reports `Killed` and kills once
+- **SystemProcess**: A child that wrote more than 4 KB to a stream with no handler blocked until its deadline and reported `Timeout`; with no deadline, `Execute` never returned
+- **SystemProcess**: Captured text turned non-ASCII characters into others —`ñ` from `cmd` arrived as `¤`— and broke a character split between two reads; it is decoded with the code page of the console the child runs in
 - **Web**: A literal route segment is tried before a parameter in the same position; the action declared first used to win, so `/items/search` could land on `/items/{Id}`
 - **Web**: A `[FromServices]` parameter receives its service. With the service registered the request failed with `EInvalidCast`, and without it the action received `nil` with no warning; that case now fails the request naming the service
 - **Web**: Destroying a `TDafHttpServer` frees the web modules WebBroker kept for reuse; a later server in the same process was handed the ones built for the previous one

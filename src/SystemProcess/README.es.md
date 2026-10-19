@@ -42,16 +42,79 @@ var Future := Proc.ExecuteAsync; // o asíncrono
 proceso muere** y el resultado vuelve como `Timeout`. `Timeout(0)` es un plazo de cero: mata el
 proceso en el primer sondeo, a los 250 ms.
 
-Es en una sola llamada el par de `System.Diagnostics.Process`. Allí el plazo y la muerte son dos
-pasos que escribe quien llama —`WaitForExit(ms)` devuelve `false` y el `Kill()` es cosa tuya—,
-porque un `Process` es un objeto que retienes. Aquí `Execute` es dueño de la ejecución entera: abre
-las tuberías, espera y las desmonta, así que es él quien hace valer el plazo. Para parar al hijo por
+`System.Diagnostics.Process` lo escribe en dos pasos —`WaitForExit(ms)` devuelve `false` y el
+`Kill()` es cosa tuya—, y .NET 11 los junta en `SafeProcessHandle.WaitForExitOrKillOnTimeout`. Aquí
+`Execute` es dueño de la ejecución entera y es él quien hace valer el plazo. Para parar al hijo por
 tu cuenta, llama a `Kill` desde otro hilo o desde un hook de apagado, y el resultado dice `Killed` y
 no `Timeout`.
 
 `OnStdOut` y `OnStdErr` reciben lo que devolvió cada lectura del canal — hasta 2 KB de golpe, y
 **no una línea**. Una línea puede llegar partida en dos llamadas, o varias en una; si necesitas
 líneas, pártelas tú.
+
+## Adónde va cada flujo
+
+La salida estándar y la de error van cada una a un destino, un `TProcessOutput`:
+
+| Destino | El hijo escribe en |
+|---|---|
+| `TProcessOutput.Inherit` | el handle estándar que tiene el padre cuando arranca el hijo |
+| `TProcessOutput.Discard` | el dispositivo nulo |
+| `TProcessOutput.Capture(Proc)` | una tubería que se lee mientras el hijo vive; `Proc` recibe lo que devuelve cada lectura |
+| `TProcessOutput.ToFile(Path, Append)` | un fichero, con `Path` resuelta contra el directorio actual del padre; se vacía antes salvo que `Append` sea `True` |
+
+`StandardOutput` y `StandardError` los declaran, y `OnStdOut(Proc)` es la forma corta de
+`StandardOutput(TProcessOutput.Capture(Proc))`:
+
+```pascal
+var Proc := TSystemProcess.Builder
+  .Command('git')
+  .CmdArgs(['fetch'])
+  .OnStdOut(procedure(Text: string) begin Write(Text); end)
+  .StandardError(TProcessOutput.Discard)
+  .Build;
+```
+
+- **Un flujo sin declarar hereda**: el hijo escribe donde escribe el proceso que lo lanza. La entrada
+  estándar es siempre la del padre.
+- **Solo un flujo capturado pasa por una tubería**, y esa tubería se lee mientras el hijo vive:
+  escriba lo que escriba, el hijo termina.
+- **Un fichero se abre antes de que arranque el hijo.** Si no se puede abrir, la ejecución acaba como
+  `Failed`, con la ruta y el motivo en `LastError`, y el hijo no llega a arrancar.
+- **Un flujo admite una sola declaración.** La segunda —`OnStdOut` después de `StandardOutput`, o la
+  misma llamada dos veces— lanza `EInvalidOpException`:
+  `StandardOutput already has a destination: a stream takes exactly one`.
+
+`System.Diagnostics.Process` en .NET 11 recibe un handle por flujo, en `StandardOutputHandle` y
+`StandardErrorHandle`. Aquí el valor es un destino, `TProcessOutput`, y los métodos son
+`StandardOutput` y `StandardError`.
+
+### El texto capturado
+
+Se decodifica con la página de la consola en que corre el hijo: la de salida de la consola del padre si
+la comparte, y la OEM del sistema si tiene una propia —con `HideWindow(True)`, o cuando el padre no
+tiene consola—. Un carácter cuyos bytes llegan en dos lecturas se entrega entero, y un byte que no
+encaja en la página llega sustituido.
+
+Un hijo que no escribe con la página de su consola necesita su codificación declarada, flujo a flujo,
+con `StandardOutputEncoding` y `StandardErrorEncoding`. Un programa Delphi escribe en ANSI salvo que
+cambie la página de su `Output`:
+
+```pascal
+  .OnStdOut(procedure(Text: string) begin Write(Text); end)
+  .StandardOutputEncoding(TEncoding.ANSI)
+```
+
+El proceso no libera la codificación: `TEncoding.ANSI`, `TEncoding.UTF8` y las demás estándar son de
+la RTL, y una creada con `TEncoding.GetEncoding` la libera quien la creó, después de `Execute`.
+
+`System.Diagnostics.Process` decodifica siempre con la página de salida de la consola del padre.
+
+### La consola del hijo
+
+`HideWindow(False)`, el valor por defecto, corre el hijo en la consola del padre; `HideWindow(True)` lo
+corre sin ventana, en una consola propia. Un padre sin consola —una aplicación de ventanas— le da al
+hijo una consola propia en los dos casos, y los flujos que hereda escriben en ella.
 
 ## TProcessResult
 
