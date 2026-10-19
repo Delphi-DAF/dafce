@@ -33,9 +33,9 @@ type
   end;
 
   {
-    LO QUE ESTE TRIO DEMUESTRA, que no se ve solo mirandolo:
+    LO QUE ESTE TRIO DEMUESTRA:
 
-    un parametro de constructor puede ser un RECORD que nadie registro en el contenedor, si el
+    un parametro de constructor puede ser un RECORD que nadie registra en el contenedor, si el
     record declara una conversion implicita desde una interfaz que si esta registrada. Aqui
     TWrapperAccessor pide un IWrapper --el record--, nadie registra IWrapper, y el contenedor lo
     construye resolviendo IWrapperImpl y aplicando IWrapper.Implicit.
@@ -54,6 +54,7 @@ type
     function Alive: Boolean;
   end;
 
+  // Prefijamos con I en vez de T porque su propósito es servir como interfaz a todos los efectos
   IWrapper = record
   private
     FImpl: IWrapperImpl;
@@ -65,6 +66,8 @@ type
     function Alive: Boolean;inline;
   end;
 
+  // Una clase que depende de IWrapper en su constructor para demostrar
+  // que el contenedor de dependencias lo resuelve
   TWrapperAccessor = class
   private
     FWrapper: IWrapper;

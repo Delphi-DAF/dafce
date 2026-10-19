@@ -51,8 +51,6 @@ begin
       // campo de interfaz no se finaliza nunca y el refcount no baja a cero.
       var WA := TActivatorUtilities.CreateInstance<TWrapperAccessor>(Services);
       try
-        // Y no un Assert: con las aserciones desactivadas la llamada desaparece y la demostracion
-        // de este sample no demuestra nada, sin que nada lo diga.
         if not WA.ChecWrapperAccess then
           raise Exception.Create('el contenedor no relleno el IWrapper del constructor');
       finally
