@@ -95,6 +95,8 @@ return {
     ["en/modules/cli.qmd"] = {
       ["../../legal/LICENSE.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/legal/LICENSE.md",
       ["../CommandLine/README.md"] = "/en/modules/commandline.qmd",
+      ["../Hosting/samples/StartupReport/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/Hosting/samples/StartupReport/README.md",
+      ["../Logging.Abstractions/README.md#bootstrap-channel"] = "/en/modules/logging.qmd#bootstrap-channel",
       ["README.es.md"] = "/es/modules/cli.qmd",
       ["samples/ConsoleSample/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/Cli/samples/ConsoleSample",
       ["samples/GreetTool/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/Cli/samples/GreetTool",
@@ -446,6 +448,8 @@ return {
     ["es/modules/cli.qmd"] = {
       ["../../legal/LICENSE.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/legal/LICENSE.md",
       ["../CommandLine/README.es.md"] = "/es/modules/commandline.qmd",
+      ["../Hosting/samples/StartupReport/README.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/src/Hosting/samples/StartupReport/README.md",
+      ["../Logging.Abstractions/README.es.md#canal-de-arranque"] = "/es/modules/logging.qmd#canal-de-arranque",
       ["README.md"] = "/en/modules/cli.qmd",
       ["samples/ConsoleSample/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/Cli/samples/ConsoleSample",
       ["samples/GreetTool/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/Cli/samples/GreetTool",

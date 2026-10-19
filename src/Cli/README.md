@@ -267,6 +267,54 @@ from it to group its own.
 `Run` returns an `Integer` and that is not decoration: a CLI application that cannot tell the system
 how it ended is not usable in a script.
 
+### The startup channel
+
+What fails before a logging provider exists goes out through the
+[startup channel](../Logging.Abstractions/README.md#bootstrap-channel): a configuration file that
+cannot be read, a host `Build` that fails, and what `ExitPolicy.LogAndFail` reports. Out of the box
+it writes to stderr and to the system's debug output.
+
+A file destination is added by the application, in the first lines of the `.dpr` and before
+`CreateBuilder`:
+
+```pascal
+var Data := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'data');
+TDirectory.CreateDirectory(Data);
+BootstrapLog.AddSink(TFileBootstrapSink.Create(TPath.Combine(Data, 'startup.log')));
+
+var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
+```
+
+The path cannot come from `Configuration` or `Environment`: reading either one loads the
+configuration, and a file that cannot be read is reported at that read, through whatever
+destinations exist then. The Hosting sample [`StartupReport`](../Hosting/samples/StartupReport/README.md)
+does the same with the generic host.
+
+A grammar error does not go through the channel: the grammar writes the error to stderr, and the
+suggestions and the help to stdout, and `Run` returns `TCliExit.InvocationError`. To have it in the
+file as well, the composition reports it between `ParseArgs` and `Build`:
+
+```pascal
+var Parsed := B.ParseArgs(CommandLineConfig.ProcessArgs);
+if not Parsed.Succeeded then
+begin
+  for var Sink in BootstrapLog.Sinks do
+    if (Sink as TObject) is TStdErrBootstrapSink then
+      BootstrapLog.RemoveSink(Sink);
+  var Log := BootstrapLog.LoggerFor('mytool');
+  for var Error in Parsed.Errors do
+    Log.LogWarning('{Error}', [TValue.From<string>(Error.Message)]);
+end;
+ExitCode := B.Build.Run;
+```
+
+The loop over `Sinks` removes the channel's stderr destination; with it in place, the error shows
+twice on the console. On `mytool --verbsoe`, the file receives:
+
+```
+<date and time> #<process>:<thread> [WARN] mytool | Unrecognized command or argument '--verbsoe'.
+```
+
 ### When there is no container
 
 `Services` is the container, and it answers **between `Build` and `Run`**. It is `nil` in two cases:

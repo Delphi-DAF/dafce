@@ -268,6 +268,54 @@ puede derivar de ella para agrupar las suyas.
 `Run` devuelve un `Integer`, y no es adorno: una aplicación CLI que no puede decirle al sistema cómo
 terminó no sirve en un script.
 
+### El canal de arranque
+
+Lo que falla antes de que exista un proveedor de log sale por el
+[canal de arranque](../Logging.Abstractions/README.es.md#canal-de-arranque): un fichero de
+configuración que no se puede leer, un `Build` del host que falla, y lo que informa
+`ExitPolicy.LogAndFail`. De serie escribe en stderr y en la salida de depuración del sistema.
+
+Un destino en fichero lo añade la aplicación, en las primeras líneas del `.dpr` y antes de
+`CreateBuilder`:
+
+```pascal
+var Data := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'data');
+TDirectory.CreateDirectory(Data);
+BootstrapLog.AddSink(TFileBootstrapSink.Create(TPath.Combine(Data, 'startup.log')));
+
+var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
+```
+
+La ruta no puede salir de `Configuration` ni de `Environment`: leer cualquiera de los dos carga la
+configuración, y un fichero que no se puede leer se informa en esa lectura, por los destinos que haya
+entonces. El sample [`StartupReport`](../Hosting/samples/StartupReport/README.md) de Hosting hace lo
+mismo con el host genérico.
+
+Un error de la gramática no pasa por el canal: la gramática escribe el error en stderr, y las
+sugerencias y la ayuda en stdout, y `Run` devuelve `TCliExit.InvocationError`. Para que quede también
+en el fichero, la composición lo informa entre `ParseArgs` y `Build`:
+
+```pascal
+var Parsed := B.ParseArgs(CommandLineConfig.ProcessArgs);
+if not Parsed.Succeeded then
+begin
+  for var Sink in BootstrapLog.Sinks do
+    if (Sink as TObject) is TStdErrBootstrapSink then
+      BootstrapLog.RemoveSink(Sink);
+  var Log := BootstrapLog.LoggerFor('mytool');
+  for var Error in Parsed.Errors do
+    Log.LogWarning('{Error}', [TValue.From<string>(Error.Message)]);
+end;
+ExitCode := B.Build.Run;
+```
+
+El bucle sobre `Sinks` quita el destino de stderr del canal; con él, el error sale dos veces en la
+consola. Sobre `mytool --verbsoe`, el fichero recibe:
+
+```
+<fecha y hora> #<proceso>:<hilo> [WARN] mytool | Unrecognized command or argument '--verbsoe'.
+```
+
 ### Cuando no hay contenedor
 
 `Services` es el contenedor, y responde **entre el `Build` y el `Run`**. Vale `nil` en dos casos:
