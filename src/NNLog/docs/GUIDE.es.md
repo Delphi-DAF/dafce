@@ -226,8 +226,8 @@ proceso comparten las mismas instancias de destino, así que el destino es donde
 escrituras concurrentes.
 
 El candado es **por instancia de destino**, así que dos destinos nunca se esperan, y es **dentro de
-un proceso**: dos ejecuciones del mismo programa escribiendo en un fichero pueden entrelazarse
-igual, y compartir fichero de log entre procesos no está cubierto.
+un proceso**: no ordena las escrituras de dos procesos. Cómo se comporta `TFileTarget` con varios
+procesos está en [Varios procesos sobre una carpeta](#varios-procesos-sobre-una-carpeta).
 
 ### Cuando un destino no puede escribir
 
@@ -324,6 +324,23 @@ rotan en cada entrada.
 
 Un valor de enumerado que el loader no reconoce se queda en el primer valor del enumerado, así que
 un `rotationPolicy` mal escrito se lee como `None`.
+
+#### Varios procesos sobre una carpeta
+
+Un fichero lo tiene abierto para escribir un solo proceso a la vez. Un segundo proceso cuyo
+`FileName` resuelve al mismo fichero no puede abrirlo: sus entradas se pierden, y se informan como
+se describe en [Cuando un destino no puede escribir](#cuando-un-destino-no-puede-escribir).
+
+Con `${pid}` en el nombre del fichero cada proceso escribe el suyo: `app-${pid}.log` da
+`app-1234.log`, `app-5678.log`. El destino trata como suyos los ficheros que su `FileName` produce
+con otros valores en sus marcadores, en la carpeta a la que resuelve su propio fichero, así que un
+marcador en la parte de carpeta, como `${binPath}`, funciona igual. La primera vez que abre su
+fichero, y cada vez que lo rota, mueve a `history` los que tienen el periodo vencido según su
+`RotationPolicy`, nombrados como cualquier fichero rotado. Un fichero que otro proceso todavía tiene
+abierto se queda donde está, y con `RotationPolicy` en `None` no se mueve ninguno.
+
+El destino no busca esos ficheros cuando el nombre del fichero no tiene texto literal además de su
+extensión — `${pid}.log`, `${date}.log`.
 
 ### TUDPTarget
 

@@ -5,6 +5,7 @@ interface
 uses
   System.Classes,
   System.DateUtils,
+  System.RegularExpressions,
   Daf.Extensions.Logging,
   Daf.NNLog,
   Daf.NNLog.Layout;
@@ -23,12 +24,21 @@ type
     FMaxFileSize: Int64;
     FCompressOnRotate: Boolean;
     FAutoFlush: Boolean;
+    // Los ficheros que FileName produce con otros valores en sus marcadores. Sin marcadores en el
+    // nombre, o sin texto literal fuera de la extension, no se buscan.
+    FOtherRunPattern: TRegEx;
+    FOtherRunsFindable: Boolean;
+    FOtherRunsSwept: Boolean;
     procedure EnsureStreamFor(const Path: string);
     function ResolveFileName(const Entry: TLogEntry): string;
     procedure SetFileName(const Value: string);
+    procedure BuildOwnPatterns;
     procedure CleanupHistory(const HistoryDir: string);
+    procedure CompressIfAsked(const RotatedPath: string);
     procedure MoveToHistory(const Path, RotatedPath: string);
     function RotateCurrentFileIfNeeded(const Path: string): Boolean;
+    procedure ArchiveOtherRuns(const Path: string);
+    function MoveOtherRun(const Candidate, HistoryDir: string; out RotatedPath: string): Boolean;
   protected
     procedure DoWrite(const Entry: TLogEntry); override;
   public
@@ -104,6 +114,20 @@ const
     TRotationMonthly,
     TRotationSize
   );
+
+// Un destino de fichero abre el suyo con fmShareDenyWrite, y mientras lo tenga abierto nadie mas puede
+// abrirlo en exclusiva: en Windows lo impide el modo de comparticion, y fuera el cerrojo con que el
+// RTL lo emula. Es la senal de que el proceso que lo escribe sigue vivo.
+function OpenedByAnother(const Path: string): Boolean;
+begin
+  try
+    TFileStream.Create(Path, fmOpenReadWrite or fmShareExclusive).Free;
+    Result := False;
+  except
+    on EFOpenError do
+      Result := True;
+  end;
+end;
 
 { TRotationStrategy }
 
@@ -215,7 +239,8 @@ end;
 
 procedure TFileTarget.EnsureStreamFor(const Path: string);
 begin
-  if RotateCurrentFileIfNeeded(Path) then
+  var Rotated := RotateCurrentFileIfNeeded(Path);
+  if Rotated then
     FCurrentPath := EmptyStr; // hace falta un stream nuevo
 
   // Las DOS cosas. Con solo la ruta, un destino que quedo sin stream --por una apertura que fallo o
@@ -225,6 +250,19 @@ begin
     Exit;
 
   ForceDirectories(TPath.GetDirectoryName(Path));
+  // Una vez por proceso y otra por rotacion propia; no en cada reintento de una apertura que falla.
+  if Rotated or not FOtherRunsSwept then
+  begin
+    FOtherRunsSwept := True;
+    try
+      ArchiveOtherRuns(Path);
+    except
+      on E: Exception do
+        BootstrapLog.LoggerFor(ClassName).LogError(E,
+          Format('el destino "%s" no pudo revisar los ficheros de otras ejecuciones', [DisplayName]));
+    end;
+  end;
+
   var FileStream: TFileStream;
   if FileExists(Path) then
     FileStream := TFileStream.Create(Path, fmOpenWrite or fmShareDenyWrite)
@@ -286,23 +324,96 @@ begin
   end;
 
   try
-    if CompressOnRotate then
-    begin
-      var Zip := TZipFile.Create;
-      try
-        Zip.Open(RotatedPath + '.zip', zmWrite);
-        Zip.Add(RotatedPath, TPath.GetFileName(RotatedPath));
-        Zip.Close;
-      finally
-        Zip.Free;
-      end;
-      TFile.Delete(RotatedPath);
-    end;
+    CompressIfAsked(RotatedPath);
     CleanupHistory(TPath.GetDirectoryName(RotatedPath));
   except
     on E: Exception do
       BootstrapLog.LoggerFor(ClassName).LogError(E, Format('el destino "%s" no pudo comprimir o limpiar el historico tras rotar su fichero', [DisplayName]));
   end;
+end;
+
+procedure TFileTarget.CompressIfAsked(const RotatedPath: string);
+begin
+  if not CompressOnRotate then
+    Exit;
+  var Zip := TZipFile.Create;
+  try
+    Zip.Open(RotatedPath + '.zip', zmWrite);
+    Zip.Add(RotatedPath, TPath.GetFileName(RotatedPath));
+    Zip.Close;
+  finally
+    Zip.Free;
+  end;
+  TFile.Delete(RotatedPath);
+end;
+
+procedure TFileTarget.ArchiveOtherRuns(const Path: string);
+begin
+  if not FOtherRunsFindable or (RotationPolicy = TRotationPolicy.None) then
+    Exit;
+  var Dir := TPath.GetDirectoryName(TPath.GetFullPath(Path));
+  var OwnName := TPath.GetFileName(Path);
+  var HistoryDir := TPath.Combine(Dir, 'history');
+  var Archived := False;
+  for var Candidate in TDirectory.GetFiles(Dir) do
+  begin
+    var Name := TPath.GetFileName(Candidate);
+    if SameText(Name, OwnName) or not FOtherRunPattern.IsMatch(Name) then
+      Continue;
+    var RotatedPath: string;
+    var Moved := False;
+    try
+      Moved := MoveOtherRun(Candidate, HistoryDir, RotatedPath);
+    except
+      on E: Exception do
+        BootstrapLog.LoggerFor(ClassName).LogError(E, Format('el destino "%s" no pudo archivar "%s"', [DisplayName, Name]));
+    end;
+    if not Moved then
+      Continue;
+    Archived := True;
+    try
+      CompressIfAsked(RotatedPath);
+    except
+      on E: Exception do
+        BootstrapLog.LoggerFor(ClassName).LogError(E,
+          Format('el destino "%s" no pudo comprimir "%s"', [DisplayName, TPath.GetFileName(RotatedPath)]));
+    end;
+  end;
+  if Archived then
+    try
+      CleanupHistory(HistoryDir);
+    except
+      on E: Exception do
+        BootstrapLog.LoggerFor(ClassName).LogError(E, Format('el destino "%s" no pudo limpiar el historico', [DisplayName]));
+    end;
+end;
+
+function TFileTarget.MoveOtherRun(const Candidate, HistoryDir: string; out RotatedPath: string): Boolean;
+begin
+  Result := False;
+  try
+    if not StrategyOf[RotationPolicy].NeedRotate(Self, Candidate, RotatedPath) then
+      Exit;
+  except
+    // Otro proceso lo archivo entre el listado y la pregunta.
+    if not TFile.Exists(Candidate) then
+      Exit;
+    raise;
+  end;
+  if OpenedByAnother(Candidate) then
+    Exit;
+  ForceDirectories(HistoryDir);
+  // El mismo nombre que le da la rotacion de su propio proceso.
+  RotatedPath := TPath.Combine(HistoryDir, TPath.GetFileName(RotatedPath));
+  try
+    TFile.Move(Candidate, RotatedPath);
+  except
+    // Otro proceso lo archivo, o lo abrio, entre la comprobacion y el movimiento.
+    if not TFile.Exists(Candidate) or OpenedByAnother(Candidate) then
+      Exit;
+    raise;
+  end;
+  Result := True;
 end;
 
 procedure TFileTarget.CleanupHistory(const HistoryDir: string);
@@ -340,6 +451,65 @@ end;
 procedure TFileTarget.SetFileName(const Value: string);
 begin
   FFileName := Trim(Value);
+  BuildOwnPatterns;
+end;
+
+const
+  MarkerExpr = '\$\{(.*?)\}';
+
+// El texto literal, escapado; ${pid}, digitos; cualquier otro marcador, lo que sea.
+function MarkersToRegex(const Text: string): string;
+begin
+  Result := EmptyStr;
+  var Done := 0;
+  for var Match in TRegEx.Matches(Text, MarkerExpr) do
+  begin
+    var Start := Match.Index - 1;
+    Result := Result + TRegEx.Escape(Text.Substring(Done, Start - Done));
+    var Marker := Match.Groups[1].Value;
+    if Marker.Contains(':') then
+      Marker := Marker.Substring(0, Marker.IndexOf(':'));
+    if SameText(Marker, 'pid') then
+      Result := Result + '\d+'
+    else
+      Result := Result + '.+?';
+    Done := Start + Match.Length;
+  end;
+  Result := Result + TRegEx.Escape(Text.Substring(Done));
+end;
+
+// El punto de la extension es el ultimo que queda fuera de los marcadores: ${date:yyyy.MM} no tiene.
+function ExtensionDot(const Name: string): Integer;
+begin
+  var Masked := Name;
+  for var Match in TRegEx.Matches(Name, MarkerExpr) do
+    Masked := Masked.Remove(Match.Index - 1, Match.Length).Insert(Match.Index - 1, StringOfChar('_', Match.Length));
+  Result := Masked.LastIndexOf('.');
+end;
+
+procedure TFileTarget.BuildOwnPatterns;
+begin
+  FOtherRunsFindable := False;
+  var Normalized := FFileName.Replace('/', PathDelim);
+  // Solo el nombre: los ficheros se buscan en la carpeta ya resuelta del fichero propio.
+  var Name := Normalized.Substring(Normalized.LastDelimiter(PathDelim) + 1);
+  var Stem := Name;
+  var Ext := EmptyStr;
+  var Dot := ExtensionDot(Name);
+  if Dot >= 0 then
+  begin
+    Stem := Name.Substring(0, Dot);
+    Ext := Name.Substring(Dot);
+  end;
+  var StemExpr := MarkersToRegex(Stem);
+  var ExtExpr := MarkersToRegex(Ext);
+  if not Name.Contains('${') then
+    Exit;
+  // Sin texto literal, el patron cubriria ficheros que no son del destino: ${date}.log, cualquier .log.
+  if TRegEx.Replace(Stem, MarkerExpr, EmptyStr).IsEmpty then
+    Exit;
+  FOtherRunPattern := TRegEx.Create('\A' + StemExpr + ExtExpr + '\z', [roIgnoreCase]);
+  FOtherRunsFindable := True;
 end;
 
 function TFileTarget.ResolveFileName(const Entry: TLogEntry): string;

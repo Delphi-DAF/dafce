@@ -164,6 +164,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - **NNLog**: `TFileTarget` podía quedar en un estado donde toda escritura posterior fallaba el resto del proceso: una apertura fallida dejaba la ruta fijada sin stream, y la guarda ya no volvía a abrir. Ahora reintenta
 - **NNLog**: El nombre del fichero rotado doblaba el punto antes de la extensión (`app_<marca>..log`) y llevaba el instante de rotar en vez de la fecha del contenido que archiva
 - **NNLog**: Comprimir el archivo o limpiar el histórico ya no cuesta la línea que provocó la rotación, ni deja el destino inutilizable cuando falla
+- **NNLog**: Con `${pid}` en su `FileName`, `TFileTarget` dejaba para siempre en la carpeta el fichero de cada ejecución terminada. Ahora esos ficheros pasan a `history` cuando vence su periodo de rotación
 - **NNLog**: Una regla construida en código llegaba desactivada, con su nivel máximo en el más bajo de todos, y reventaba al emparejar una categoría. `TLogRule.Create` fija ahora los mismos valores por defecto que escribe el cargador
 - **MediatR**: Componer dos veces en un mismo proceso da el mismo resultado; la contabilidad de paquetes ya escaneados era estado global de unit
 - **SQLCute**: `WhereIn` con un conjunto de valores **vacío** emitía `col IN ()`, inválido en casi cualquier motor; ahora no casa ninguna fila y `WhereNotIn` las casa todas, igual en los dos back-ends. Afecta también a `OrWhereIn` / `OrWhereNotIn` y a `IsIn([])`

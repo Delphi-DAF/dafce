@@ -222,8 +222,8 @@ A subclass overrides `DoWrite` and calls `RenderEvent` to turn the entry into a 
 in the process shares the same target instances, so the target is where concurrent writes meet.
 
 The lock is **per target instance**, so two targets never wait for each other, and it is **within
-one process**: two runs of the same program writing to one file can still interleave, and sharing a
-log file between processes is not covered.
+one process**: it does not order the writes of two processes. How `TFileTarget` behaves with
+several processes is under [Several processes on one folder](#several-processes-on-one-folder).
 
 ### When a target cannot write
 
@@ -319,6 +319,23 @@ left at `0` they rotate on every entry.
 
 An enumeration value the loader does not recognise becomes the enumeration's first value, so a
 misspelled `rotationPolicy` reads as `None`.
+
+#### Several processes on one folder
+
+A file is open for writing by one process at a time. A second process whose `FileName` resolves to
+the same file cannot open it: its entries are lost, and reported as described in
+[When a target cannot write](#when-a-target-cannot-write).
+
+With `${pid}` in the file name each process writes its own file: `app-${pid}.log` gives
+`app-1234.log`, `app-5678.log`. The target treats as its own the files that its `FileName` produces
+with other values in its markers, in the folder its own file resolves to — so a marker in the
+folder part, such as `${binPath}`, works the same. The first time it opens its file, and each time
+it rotates it, it moves to `history` those whose period has expired under its `RotationPolicy`,
+named like any rotated file. A file that another process still has open stays where it is, and with
+`RotationPolicy` at `None` nothing is moved.
+
+The target does not look for those files when the file name has no literal text besides its
+extension — `${pid}.log`, `${date}.log`.
 
 ### TUDPTarget
 
