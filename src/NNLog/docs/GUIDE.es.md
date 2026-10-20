@@ -322,6 +322,10 @@ Los ficheros rotados van a un directorio `history` junto al actual. Las polític
 comparan contra `MaxFileAge` y `MaxFileSize`, así que cada una necesita su umbral puesto: a `0`
 rotan en cada entrada.
 
+`MaxArchivedFiles` cuenta los ficheros de `history` que proceden del `FileName` del destino,
+comprimidos o no y de cualquiera de sus ejecuciones; los demás ficheros de ahí ni cuentan ni se
+borran. A `0` no se borra nada.
+
 Un valor de enumerado que el loader no reconoce se queda en el primer valor del enumerado, así que
 un `rotationPolicy` mal escrito se lee como `None`.
 

@@ -129,7 +129,9 @@ fallos, y cuando vuelve a escribir informa cuántas líneas perdió.
 Un fichero de log lo tiene abierto para escribir un solo proceso a la vez, así que varios procesos
 que registran en una misma carpeta necesitan cada uno el suyo: `${pid}` en `fileName` se lo da. Los
 ficheros que otras ejecuciones dejaron en la carpeta se mueven a `history` cuando vence su periodo de
-rotación — salvo que el nombre del fichero no tenga texto literal además de su extensión.
+rotación — salvo que el nombre del fichero no tenga texto literal además de su extensión. En
+`history`, `maxArchivedFiles` cuenta los archivos del propio destino, de todas sus ejecuciones, y
+nada más.
 
 El tipo tiene que sobrevivir al enlazado inteligente para que la búsqueda lo encuentre: `{$STRONGLINKTYPES ON}` en el
 `.dpr`, y cada unit de target que configure nombrada en su `uses`. Un `targetType` cuya unit no está

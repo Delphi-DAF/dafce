@@ -67,6 +67,13 @@ type
     function InFolder(const Name: string): Boolean;
     /// El nombre en history/ del archivo que procede de ese fichero, o vacio si no hay.
     function ArchivedNameOf(const Name: string): string;
+    procedure KeepAtMostArchives(const Count: Byte);
+    /// Un archivo ya en history/, escrito por ultima vez hace esos dias.
+    procedure ArchivedDaysAgo(const Name: string; const Days: Integer);
+    function HistoryHas(const Name: string): Boolean;
+    function ArchivesStartingWith(const Prefix: string): Integer;
+    /// El fichero de este proceso cuando escribe uno por proceso.
+    function OwnFileName: string;
   end;
 
 implementation
@@ -98,6 +105,10 @@ procedure TChannelRecorder.Write(const Line: string);
 begin
   FText := FText + Line + sLineBreak;
 end;
+
+const
+  // Archivos del propio destino: la limpieza solo intenta borrar los que proceden de su FileName.
+  HeldArchive = 'app_2026-01-0%d_100000000.log';
 
 function ReadAllTextShared(const Path: string): string;
 begin
@@ -201,7 +212,7 @@ begin
   TDirectory.CreateDirectory(HistoryDir);
   for var I := 1 to 3 do
   begin
-    var P := TPath.Combine(HistoryDir, Format('viejo-%d.log', [I]));
+    var P := TPath.Combine(HistoryDir, Format(HeldArchive, [I]));
     TFile.WriteAllText(P, 'x');
     FHolds := FHolds + [TFileStream.Create(P, fmOpenRead or fmShareExclusive)];
   end;
@@ -211,7 +222,7 @@ function TRotationWorld.HeldArchivesStillThere: Boolean;
 begin
   Result := True;
   for var I := 1 to 3 do
-    if not TFile.Exists(TPath.Combine(HistoryDir, Format('viejo-%d.log', [I]))) then
+    if not TFile.Exists(TPath.Combine(HistoryDir, Format(HeldArchive, [I]))) then
       Exit(False);
 end;
 
@@ -313,6 +324,37 @@ begin
   for var N in ArchivedNames do
     if N.StartsWith(Stem) then
       Exit(N);
+end;
+
+procedure TRotationWorld.KeepAtMostArchives(const Count: Byte);
+begin
+  FTarget.MaxArchivedFiles := Count;
+end;
+
+procedure TRotationWorld.ArchivedDaysAgo(const Name: string; const Days: Integer);
+begin
+  TDirectory.CreateDirectory(HistoryDir);
+  var P := TPath.Combine(HistoryDir, Name);
+  TFile.WriteAllText(P, 'ARCHIVADO');
+  TFile.SetLastWriteTime(P, IncDay(Now, -Days));
+end;
+
+function TRotationWorld.HistoryHas(const Name: string): Boolean;
+begin
+  Result := TFile.Exists(TPath.Combine(HistoryDir, Name));
+end;
+
+function TRotationWorld.ArchivesStartingWith(const Prefix: string): Integer;
+begin
+  Result := 0;
+  for var N in ArchivedNames do
+    if N.StartsWith(Prefix) then
+      Inc(Result);
+end;
+
+function TRotationWorld.OwnFileName: string;
+begin
+  Result := Format('app-%d.log', [Debugger.CurrentProcessId]);
 end;
 
 initialization
@@ -578,6 +620,63 @@ Feature La rotacion de NNLog archiva con un nombre que se puede leer @nnlog @tar
       procedure(W: TRotationWorld)
       begin
         Expect(W.InFolder('app-4343.log')).ToBeTrue;
+      end)
+
+.Rule('La limpieza del historico solo cuenta los archivos de su destino')
+
+  .Scenario('Los archivos de otro destino no cuentan')
+    .Given('un destino que guarda dos archivos y rota por tamano, y en su historico tres archivos de otro destino',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('VIEJA');
+        W.KeepAtMostArchives(2);
+        W.RotateOnEverySize;
+        W.ArchivedDaysAgo('errores_2026-01-01_100000000.log', 3);
+        W.ArchivedDaysAgo('errores_2026-01-02_100000000.log', 2);
+        W.ArchivedDaysAgo('errores_2026-01-03_100000000.log', 1);
+      end)
+    .When('el destino rota',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('NUEVA');
+      end)
+    .&Then('los tres archivos del otro destino siguen en el historico',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.ArchivesStartingWith('errores_')).ToEqual(3);
+      end)
+
+  .Scenario('Las ejecuciones de un destino comparten el cupo')
+    .Given('un destino por proceso que rota por tamano y guarda dos, y en su historico archivos de tres ejecuciones, uno comprimido',
+      procedure(W: TRotationWorld)
+      begin
+        W.OneFilePerProcess;
+        W.KeepAtMostArchives(2);
+        W.RotateOnEverySize;
+        W.WriteLine('VIEJA');
+        W.ArchivedDaysAgo('app-1001_2026-01-01_100000000.log', 3);
+        W.ArchivedDaysAgo('app-1002_2026-01-02_100000000.log.zip', 2);
+        W.ArchivedDaysAgo('app-1003_2026-01-03_100000000.log', 1);
+      end)
+    .When('el destino rota',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('NUEVA');
+      end)
+    .&Then('en el historico quedan dos archivos del destino',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.ArchivesStartingWith('app-')).ToEqual(2);
+      end)
+    .&And('que son los dos mas recientes: el de la tercera ejecucion',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.HistoryHas('app-1003_2026-01-03_100000000.log')).ToBeTrue;
+      end)
+    .&And('y el de la rotacion de ahora',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.ArchivedNameOf(W.OwnFileName)).ToStartWith(TPath.GetFileNameWithoutExtension(W.OwnFileName) + '_');
       end);
 
 end.

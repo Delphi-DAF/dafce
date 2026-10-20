@@ -317,6 +317,10 @@ Rotated files go to a `history` directory beside the current one. The `Days` and
 policies compare against `MaxFileAge` and `MaxFileSize`, so each one needs its threshold set:
 left at `0` they rotate on every entry.
 
+`MaxArchivedFiles` counts the files in `history` that come from the target's `FileName`, compressed
+or not and from any of its runs; other files there are neither counted nor removed. At `0` nothing
+is removed.
+
 An enumeration value the loader does not recognise becomes the enumeration's first value, so a
 misspelled `rotationPolicy` reads as `None`.
 

@@ -166,6 +166,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - **NNLog**: The rotated file's name doubled the dot before the extension (`app_<mark>..log`) and carried the moment of rotation instead of the date of the content it archives
 - **NNLog**: Compressing the archive or cleaning the history no longer costs the line that triggered the rotation, nor leaves the target unusable when it fails
 - **NNLog**: With `${pid}` in its `FileName`, `TFileTarget` left the file of every finished run in the folder for ever. Those files now move to `history` when their rotation period expires
+- **NNLog**: Cleaning the history counted and deleted every file in `history`, so targets sharing a folder removed each other's archives. `MaxArchivedFiles` now counts only the target's own archives, from all its runs
 - **NNLog**: A rule built in code arrived disabled, with its maximum level at the lowest of all, and raised while matching a category. `TLogRule.Create` now sets the same defaults the loader writes
 - **MediatR**: Composing twice in the same process gives the same result; the accounting of already-scanned packages was unit-global state
 - **SQLCute**: `WhereIn` with an **empty** set of values emitted `col IN ()`, invalid on almost any engine; it now matches no row and `WhereNotIn` matches them all, alike on both back-ends. It also affects `OrWhereIn` / `OrWhereNotIn` and `IsIn([])`

@@ -29,6 +29,8 @@ type
     FOtherRunPattern: TRegEx;
     FOtherRunsFindable: Boolean;
     FOtherRunsSwept: Boolean;
+    // Los archivos de history/ que proceden de FileName, de cualquier ejecucion y comprimidos o no.
+    FArchivePattern: TRegEx;
     procedure EnsureStreamFor(const Path: string);
     function ResolveFileName(const Entry: TLogEntry): string;
     procedure SetFileName(const Value: string);
@@ -221,6 +223,7 @@ constructor TFileTarget.Create;
 begin
   inherited Create;
   FAutoFlush := True;
+  BuildOwnPatterns;
 end;
 
 destructor TFileTarget.Destroy;
@@ -426,16 +429,26 @@ begin
   if MaxArchivedFiles <= 0 then Exit;
   if not TDirectory.Exists(HistoryDir) then Exit;
 
-  var Files := TDirectory.GetFiles(HistoryDir);
-  if Length(Files) <= MaxArchivedFiles then Exit;
-
+  // Otro proceso puede archivar o borrar mientras tanto: un fichero que desaparece no es un fallo.
   var FileInfos: TArray<TFileInfo>;
-  SetLength(FileInfos, Length(Files));
-for var I := 0 to High(Files) do
+  for var F in TDirectory.GetFiles(HistoryDir) do
   begin
-    FileInfos[I].Path := Files[I];
-    FileInfos[I].Date := TFile.GetLastWriteTime(Files[I]);
+    if not FArchivePattern.IsMatch(TPath.GetFileName(F)) then
+      Continue;
+    var Info: TFileInfo;
+    Info.Path := F;
+    var Dated := False;
+    try
+      Info.Date := TFile.GetLastWriteTime(F);
+      Dated := True;
+    except
+      if TFile.Exists(F) then
+        raise;
+    end;
+    if Dated then
+      FileInfos := FileInfos + [Info];
   end;
+  if Length(FileInfos) <= MaxArchivedFiles then Exit;
 
   TArray.Sort<TFileInfo>(FileInfos,
     TComparer<TFileInfo>.Construct(
@@ -445,7 +458,12 @@ for var I := 0 to High(Files) do
       end));
 
   for var I := 0 to Length(FileInfos) - MaxArchivedFiles - 1 do
-    TFile.Delete(FileInfos[I].Path);
+    try
+      TFile.Delete(FileInfos[I].Path);
+    except
+      if TFile.Exists(FileInfos[I].Path) then
+        raise;
+    end;
 end;
 
 procedure TFileTarget.SetFileName(const Value: string);
@@ -456,6 +474,8 @@ end;
 
 const
   MarkerExpr = '\$\{(.*?)\}';
+  // La que pone TRotationStrategy.BuildRotatePath entre el nombre y la extension.
+  RotationMarkExpr = '_\d{4}-\d{2}-\d{2}_\d{9}';
 
 // El texto literal, escapado; ${pid}, digitos; cualquier otro marcador, lo que sea.
 function MarkersToRegex(const Text: string): string;
@@ -503,6 +523,8 @@ begin
   end;
   var StemExpr := MarkersToRegex(Stem);
   var ExtExpr := MarkersToRegex(Ext);
+  FArchivePattern := TRegEx.Create('\A' + StemExpr + RotationMarkExpr + ExtExpr + '(\.zip)?\z', [roIgnoreCase]);
+
   if not Name.Contains('${') then
     Exit;
   // Sin texto literal, el patron cubriria ficheros que no son del destino: ${date}.log, cualquier .log.

@@ -127,7 +127,8 @@ and when it writes again it reports how many lines it lost.
 A log file is open for writing by one process at a time, so several processes logging to one
 folder each need their own file: `${pid}` in `fileName` gives it. Files that other runs left in the
 folder are moved to `history` when their rotation period expires — unless the file name has no
-literal text besides its extension.
+literal text besides its extension. In `history`, `maxArchivedFiles` counts the target's own
+archives, from all its runs, and nothing else.
 
 The type has to survive smart linking for the lookup to find it: `{$STRONGLINKTYPES ON}` in the
 `.dpr`, and each target unit it configures named in its `uses`. A `targetType` whose unit is not
