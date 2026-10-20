@@ -96,6 +96,7 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
+        <DCCReference Include="Launch.Feat.pas"/>
         <DCCReference Include="Process.Feat.pas"/>
         <DCCReference Include="StandardStreams.Feat.pas"/>
         <BuildConfiguration Include="Base">

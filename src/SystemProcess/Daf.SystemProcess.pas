@@ -80,6 +80,7 @@ type
 
   ISystemProcess = interface(IInvokable)
   ['{176C16BB-AFB7-4425-811D-051590125272}']
+    function GetId: Cardinal;
     function GetIsRunning: Boolean;
     function GetCommandLine: string;
     function GetWorkingDirectory: string;
@@ -98,8 +99,19 @@ type
     function GetOnCompleted: TProcessNotifyProc;
 
     function Execute(CancellationToken: ICancellationToken = nil): TProcessResult;
+    /// <summary>
+    ///   Lanza al hijo antes de volver, en el hilo de quien llama, y devuelve la tarea que espera a
+    ///   que termine. Si el lanzamiento falla, la tarea ya está resuelta con <c>Failed</c> y
+    ///   <c>OnFailed</c> ha corrido en el hilo de quien llama.
+    /// </summary>
     function ExecuteAsync(const CancellationToken: ICancellationToken = nil): IFuture<TProcessResult>;
     procedure Kill;
+    /// <summary>
+    ///   El identificador que el sistema dio al hijo, desde que se lanza y también después de que
+    ///   termine. Sin un hijo lanzado —antes de ejecutar, o si el lanzamiento falló— lanza
+    ///   <c>EInvalidOpException</c>.
+    /// </summary>
+    property Id: Cardinal read GetId;
     property IsRunning: Boolean read GetIsRunning;
     property CommandLine: string read GetCommandLine;
     property WorkingDirectory: string read GetWorkingDirectory;
@@ -215,6 +227,13 @@ type
     procedure DoProcessIdle(var Result: TProcessResult);
 
     function TryCreateProcess(var ProcessResult: TProcessResult): Boolean;
+    // Deja al hijo corriendo y sus flujos leyéndose. Si no lo consigue, devuelve False con el
+    // resultado en Failed, OnFailed ya llamado y todo lo abierto cerrado.
+    function Launch(var ProcessResult: TProcessResult): Boolean;
+    // Espera al hijo que dejó Launch y cierra lo que quedaba abierto.
+    procedure WaitForChild(CancellationToken: ICancellationToken; var ProcessResult: TProcessResult);
+    procedure Release;
+    function GetId: Cardinal;
     function GetIsRunning: Boolean;
     procedure BuildEnvBuffer(var EnvBuffer: PWideChar);
     function GetCommandLine: string;
@@ -243,6 +262,7 @@ type
     function ExecuteAsync(const CancellationToken: ICancellationToken = nil): IFuture<TProcessResult>;
     procedure Kill;
 
+    property Id: Cardinal read GetId;
     property IsRunning: Boolean read GetIsRunning;
     property CommandLine: string read GetCommandLine;
     property WorkingDirectory: string read GetWorkingDirectory;
@@ -953,15 +973,19 @@ begin
   end;
 end;
 
-function TSystemProcess.Execute(CancellationToken: ICancellationToken = nil): TProcessResult;
+function TSystemProcess.Launch(var ProcessResult: TProcessResult): Boolean;
 begin
   FStopWatch := TStopwatch.Create;
+  // Sin hijo, dwProcessId a cero es lo que hace que Id lance: también cuando falla abrir un flujo,
+  // antes de llegar a CreateProcessW.
+  FillChar(FProcessInfo, SizeOf(FProcessInfo), 0);
+  Result := False;
   try
-    if not OpenStreams(Result) then
+    if not OpenStreams(ProcessResult) then
       Exit;
-    if not TryCreateProcess(Result) then
+    if not TryCreateProcess(ProcessResult) then
     begin
-      DoProcessFailed(Result, FLaunchError);
+      DoProcessFailed(ProcessResult, FLaunchError);
       Exit;
     end;
     FStopWatch := TStopwatch.StartNew;
@@ -972,54 +996,75 @@ begin
     // El hijo ya tiene los suyos; sin cerrar estos, una tubería no llegaría nunca a su fin.
     CloseChildHandles;
     StartReadingPipes;
+    Result := True;
+  finally
+    if not Result then
+      Release;
+  end;
+end;
 
+procedure TSystemProcess.WaitForChild(CancellationToken: ICancellationToken;
+  var ProcessResult: TProcessResult);
+begin
+  try
     var WaitRes: DWord;
     repeat
       WaitRes := WaitForSingleObject(FProcessInfo.hProcess, 250);
 
       if (CancellationToken <> nil) and CancellationToken.IsCancellationRequested then
       begin
-        DoProcessCanceled(Result);
+        DoProcessCanceled(ProcessResult);
         Break;
       end;
 
       if FKillRequested then
       begin
-        DoProcessKilled(Result, TProcessResult.TStatus.Killed);
+        DoProcessKilled(ProcessResult, TProcessResult.TStatus.Killed);
         Break;
       end;
 
       if (FTimeoutMS <> INFINITE) and (FStopWatch.ElapsedMilliseconds >= FTimeoutMS) then
       begin
-        DoProcessKilled(Result, TProcessResult.TStatus.Timeout);
+        DoProcessKilled(ProcessResult, TProcessResult.TStatus.Timeout);
         Break;
       end;
 
-      DoProcessIdle(Result);
+      DoProcessIdle(ProcessResult);
 
     until (WaitRes = WAIT_OBJECT_0);
 
-    if Result.Status = TProcessResult.TStatus.Running then
+    if ProcessResult.Status = TProcessResult.TStatus.Running then
     begin
       if FKillRequested then
-         DoProcessKilled(Result, TProcessResult.TStatus.Killed)
+         DoProcessKilled(ProcessResult, TProcessResult.TStatus.Killed)
       else
       if WaitRes = WAIT_OBJECT_0 then
-        DoProcessCompleted(Result)
+        DoProcessCompleted(ProcessResult)
       else
-        DoProcessFailed(Result, GetLastError);
+        DoProcessFailed(ProcessResult, GetLastError);
     end;
 
   finally
-    FStopWatch.Stop;
-    CleanupHandles;
-    CloseChildHandles;
-    try
-      ClosePipes;
-    finally
-      FreeAndNil(FConsoleEncoding);
-    end;
+    Release;
   end;
+end;
+
+procedure TSystemProcess.Release;
+begin
+  FStopWatch.Stop;
+  CleanupHandles;
+  CloseChildHandles;
+  try
+    ClosePipes;
+  finally
+    FreeAndNil(FConsoleEncoding);
+  end;
+end;
+
+function TSystemProcess.Execute(CancellationToken: ICancellationToken = nil): TProcessResult;
+begin
+  if Launch(Result) then
+    WaitForChild(CancellationToken, Result);
 end;
 
 function TSystemProcess.GetCommandLine: string;
@@ -1030,6 +1075,13 @@ end;
 function TSystemProcess.GetHideWindow: Boolean;
 begin
   Result := FHideWindow;
+end;
+
+function TSystemProcess.GetId: Cardinal;
+begin
+  if FProcessInfo.dwProcessId = 0 then
+    raise EInvalidOpException.Create('No process is associated with this object.');
+  Result := FProcessInfo.dwProcessId;
 end;
 
 function TSystemProcess.GetIsRunning: Boolean;
@@ -1116,11 +1168,25 @@ begin
 end;
 
 function TSystemProcess.ExecuteAsync(const CancellationToken: ICancellationToken = nil): IFuture<TProcessResult>;
+var
+  Launched: TProcessResult;
 begin
+  if not Launch(Launched) then
+  begin
+    // La RTL no tiene una tarea ya resuelta: se resuelve esta antes de devolverla.
+    Result := TTask.Future<TProcessResult>(
+      function: TProcessResult
+      begin
+        Result := Launched;
+      end);
+    Result.Wait;
+    Exit;
+  end;
   Result := TTask.Future<TProcessResult>(
     function: TProcessResult
     begin
-      Result := Execute(CancellationToken);
+      Result := Launched;
+      WaitForChild(CancellationToken, Result);
     end);
 end;
 

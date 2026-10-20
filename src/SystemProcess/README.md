@@ -52,6 +52,25 @@ terms, call `Kill` from another thread or from a shutdown hook, and the result s
 line**. A line can arrive split across two calls, or several lines in one; split them yourself if
 you need lines.
 
+## Once the child is launched
+
+`ExecuteAsync` launches the child before it returns, on the calling thread, and the task it returns
+only waits for the child to end. When it returns, `Id` answers and `IsRunning` is `True` while the
+child runs. A launch that fails returns a task already settled with `Failed`, and `OnFailed` has
+already run on the calling thread.
+
+`Id` is the identifier the system gave the child, from the moment it is launched and also after it
+ends. Read with no child launched — before running, or after a launch that failed — it raises
+`EInvalidOpException`: `No process is associated with this object.`
+
+```pascal
+var Future := Proc.ExecuteAsync;
+WriteLn('Started PID ', Proc.Id);
+```
+
+`Process.Id` in .NET is an `int`. Here `Id` is a `Cardinal`, the type `TProcess.KillById` and
+`TProcess.HasExited` take, so `TProcess.KillById(Proc.Id)` needs no conversion.
+
 ## Where each stream goes
 
 Standard output and standard error each go to one destination, a `TProcessOutput`:
@@ -157,7 +176,8 @@ end;
 
 ## Sample
 
-- [`PingProcess`](samples/PingProcess/) — runs `ping` and streams its output as it arrives.
+- [`PingProcess`](samples/PingProcess/) — runs `ping` in the background, shows the child's `Id` and
+  streams its output as it arrives.
 
 ## Note
 

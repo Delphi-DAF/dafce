@@ -52,6 +52,26 @@ no `Timeout`.
 **no una línea**. Una línea puede llegar partida en dos llamadas, o varias en una; si necesitas
 líneas, pártelas tú.
 
+## Una vez lanzado el hijo
+
+`ExecuteAsync` lanza al hijo antes de volver, en el hilo de quien lo llama, y la tarea que devuelve
+solo espera a que termine. Al volver, `Id` responde e `IsRunning` es `True` mientras el hijo corre.
+Un lanzamiento que falla devuelve una tarea ya resuelta con `Failed`, y `OnFailed` ya ha corrido en
+el hilo de quien llamó.
+
+`Id` es el identificador que el sistema dio al hijo, desde que se lanza y también después de que
+termine. Leído sin un hijo lanzado —antes de ejecutar, o tras un lanzamiento que falló— lanza
+`EInvalidOpException`: `No process is associated with this object.`
+
+```pascal
+var Future := Proc.ExecuteAsync;
+WriteLn('Started PID ', Proc.Id);
+```
+
+`Process.Id` en .NET es un `int`. Aquí `Id` es un `Cardinal`, el tipo que reciben
+`TProcess.KillById` y `TProcess.HasExited`, así que `TProcess.KillById(Proc.Id)` no necesita
+conversión.
+
 ## Adónde va cada flujo
 
 La salida estándar y la de error van cada una a un destino, un `TProcessOutput`:
@@ -156,7 +176,8 @@ end;
 
 ## Sample
 
-- [`PingProcess`](samples/PingProcess/) — lanza `ping` y va mostrando su salida según llega.
+- [`PingProcess`](samples/PingProcess/) — lanza `ping` en segundo plano, muestra el `Id` del hijo y
+  va mostrando su salida según llega.
 
 ## Nota
 

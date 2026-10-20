@@ -77,6 +77,10 @@ lanza `EInvalidOpException`. Deja una por flujo.
 `HideWindow(False)`, el valor por defecto, ya no abre una ventana de consola propia: el hijo corre
 en tu consola. No hay opción que devuelva la ventana aparte.
 
+`ExecuteAsync` lanza ahora al hijo antes de volver, en el hilo que lo llama, y solo la espera corre
+en la tarea. Un lanzamiento que falla llama a `OnFailed` en ese mismo hilo, antes de que
+`ExecuteAsync` vuelva: un manejador que contaba con correr en segundo plano ya no lo hace.
+
 ### 3. `Daf.CmdLn.Parser` ya no está
 
 La unit que 1.6.0 traía dentro de `Daf.Commons` **ya no se distribuye**. Su sustituto es

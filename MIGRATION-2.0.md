@@ -77,6 +77,10 @@ A stream takes one declaration: `OnStdOut` twice, or `OnStdOut` and then `Standa
 `HideWindow(False)`, the default, no longer opens a console window of its own: the child runs in
 your console. There is no option that brings the separate window back.
 
+`ExecuteAsync` now launches the child before it returns, on the thread that calls it, and only the
+wait runs in the task. A launch that fails calls `OnFailed` on that same thread, before
+`ExecuteAsync` returns: a handler that counted on running in the background no longer does.
+
 ### 3. `Daf.CmdLn.Parser` is gone
 
 The unit 1.6.0 shipped inside `Daf.Commons` **is no longer distributed**. Its replacement is

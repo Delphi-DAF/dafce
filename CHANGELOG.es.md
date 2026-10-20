@@ -69,6 +69,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - **SystemProcess**: `TProcessResult.TStatus.Killed` — un `Kill` explícito y un plazo vencido dejan de compartir el valor `Timeout`, así que un resultado dice cuál de los dos cortó la ejecución
 - **SystemProcess**: `StandardOutput` y `StandardError` dan a cada flujo del hijo su destino, un `TProcessOutput`: capturado, heredado del padre, descartado o escrito en un fichero
 - **SystemProcess**: `StandardOutputEncoding` y `StandardErrorEncoding` — la codificación de lo capturado
+- **SystemProcess**: `Id` — el identificador que el sistema dio al hijo, desde que se lanza
 
 ### Changed
 
@@ -112,6 +113,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - ⚠️ **SystemProcess**: Un flujo sin destino declarado **hereda el del padre**, así que un hijo lanzado sin manejadores escribe donde escribe el proceso que lo lanza. `TProcessOutput.Discard` en los dos flujos lo calla
 - ⚠️ **SystemProcess**: Un segundo destino para el mismo flujo —`OnStdOut` dos veces, u `OnStdOut` y `StandardOutput`— **lanza `EInvalidOpException`**; antes sustituía al primero
 - ⚠️ **SystemProcess**: `HideWindow(False)`, el valor por defecto, **ya no abre una consola propia**: el hijo corre en la consola del padre
+- ⚠️ **SystemProcess**: `ExecuteAsync` **lanza al hijo antes de volver**, en el hilo de quien lo llama, y solo la espera va a la tarea. El `OnFailed` de un lanzamiento que falla corre en el hilo de quien llamó, ya no en la tarea
 
 ### Deprecated
 

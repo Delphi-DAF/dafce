@@ -13,7 +13,9 @@ apagado.
   corre; `OnIdle` se dispara en cada sondeo con `Status = Running`; y `OnCompleted`, `OnFailed`,
   `OnCancelled` y `OnKilled` cierran cada uno su desenlace. Aquí los cinco últimos comparten un
   mismo `Report`, que es la forma de ver cuál se dispara de verdad.
-- **Los callbacks no llegan en el hilo principal.** `ExecuteAsync` corre `Execute` en un `TTask`, y
+- **El `Id` del hijo está en cuanto `ExecuteAsync` vuelve**, porque lanza al hijo antes de volver:
+  el sample lo imprime en la línea `Process launched, PID …`.
+- **Los callbacks no llegan en el hilo principal.** `ExecuteAsync` espera al hijo en un `TTask`, y
   la salida del hijo la leen otros dos. Por eso `Report` envuelve su cuerpo en
   `TThread.Synchronize` y la cuenta atrás llama a `CheckSynchronize`: sin eso la cola de
   sincronización no se vacía nunca.

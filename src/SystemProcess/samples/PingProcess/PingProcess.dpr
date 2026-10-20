@@ -61,7 +61,7 @@ begin
   var token := CreateCancellationTokenSource;
   Process.ExecuteAsync(token.token);
 
-  Writeln('Process launched');
+  Writeln('Process launched, PID ', Process.Id);
   Writeln(' it will be killed by Timeout:');
   for var sec := Timeout_secs downto 0 do
   begin
