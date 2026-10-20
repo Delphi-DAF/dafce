@@ -331,6 +331,11 @@ type
     class function HasAvailableSink: Boolean; static;
     // Reparte una linea ya formada a los destinos disponibles. No lanza pase lo que pase.
     class procedure Write(const Line: string); static;
+    // Si esa excepcion ya llego a algun destino del canal. Responde por la ultima que llego, y la
+    // reconoce por su identidad, su clase y su mensaje: otra que solo ocupe la direccion de una ya
+    // liberada no se confunde con ella. Un informe que el umbral descarta, o que no encuentra ningun
+    // destino disponible, no cuenta.
+    class function WasReported(const E: Exception): Boolean; static;
     // El layout del canal, aplicado antes de repartir para que todos los destinos escriban lo mismo.
     class function FormatLine(const Entry: TLogEntry): string; static;
     // Un ILogger de arranque con la categoria de quien llama: la aplicacion informa de su propio
@@ -884,9 +889,18 @@ type
     Failed: Boolean;
   end;
 
+  // La ultima excepcion que llego a algun destino. Instance se compara y nunca se lee: la excepcion
+  // puede estar ya liberada.
+  TBootstrapReported = record
+    Instance: Pointer;
+    ClassType: TClass;
+    Message: string;
+  end;
+
 var
   BootstrapSinkList: TList<TBootstrapSinkEntry> = nil;
   BootstrapSinkLock: TObject = nil;
+  BootstrapReported: TBootstrapReported;
 
 // El registro puede no existir todavia --o ya no existir-- si alguien informa desde la
 // initialization de una unit anterior o desde una finalization posterior. Ni un caso ni el otro
@@ -904,6 +918,48 @@ begin
     Result := Assigned(Sink) and Sink.IsAvailable;
   except
     Result := False;
+  end;
+end;
+
+// El reparto, y a cuantos destinos llego la linea. Un destino que lanza al escribir no cuenta.
+function WriteToSinks(const Line: string): Integer;
+begin
+  Result := 0;
+  if not BootstrapSinksReady then Exit;
+  TMonitor.Enter(BootstrapSinkLock);
+  try
+    for var I := 0 to BootstrapSinkList.Count - 1 do
+    begin
+      var Entry := BootstrapSinkList[I];
+      if Entry.Failed then Continue;
+      try
+        if SinkIsAvailable(Entry.Sink) then
+        begin
+          Entry.Sink.Write(Line);
+          Inc(Result);
+        end;
+      except
+        // Fichero bloqueado, disco lleno, permisos: se traga aqui y ese destino queda fuera. Los
+        // demas siguen escribiendo, que es de lo que se trataba.
+        Entry.Failed := True;
+        BootstrapSinkList[I] := Entry;
+      end;
+    end;
+  finally
+    TMonitor.Exit(BootstrapSinkLock);
+  end;
+end;
+
+procedure RememberReported(const E: Exception);
+begin
+  if not BootstrapSinksReady then Exit;
+  TMonitor.Enter(BootstrapSinkLock);
+  try
+    BootstrapReported.Instance := Pointer(E);
+    BootstrapReported.ClassType := E.ClassType;
+    BootstrapReported.Message := E.Message;
+  finally
+    TMonitor.Exit(BootstrapSinkLock);
   end;
 end;
 
@@ -983,23 +1039,17 @@ end;
 
 class procedure BootstrapLog.Write(const Line: string);
 begin
-  if not BootstrapSinksReady then Exit;
+  WriteToSinks(Line);
+end;
+
+class function BootstrapLog.WasReported(const E: Exception): Boolean;
+begin
+  Result := False;
+  if not Assigned(E) or not BootstrapSinksReady then Exit;
   TMonitor.Enter(BootstrapSinkLock);
   try
-    for var I := 0 to BootstrapSinkList.Count - 1 do
-    begin
-      var Entry := BootstrapSinkList[I];
-      if Entry.Failed then Continue;
-      try
-        if SinkIsAvailable(Entry.Sink) then
-          Entry.Sink.Write(Line);
-      except
-        // Fichero bloqueado, disco lleno, permisos: se traga aqui y ese destino queda fuera. Los
-        // demas siguen escribiendo, que es de lo que se trataba.
-        Entry.Failed := True;
-        BootstrapSinkList[I] := Entry;
-      end;
-    end;
+    Result := (BootstrapReported.Instance = Pointer(E)) and
+      (BootstrapReported.ClassType = E.ClassType) and (BootstrapReported.Message = E.Message);
   finally
     TMonitor.Exit(BootstrapSinkLock);
   end;
@@ -1115,7 +1165,8 @@ begin
   // Filtrar aqui; formatear y repartir, en el canal. El umbral se queda --el arranque no es sitio
   // para charla de depuracion, y un canal que escribe siempre acaba ignorado--
   if not (Entry.Level in [TLogLevel.Warning, TLogLevel.Error, TLogLevel.Critical]) then Exit;
-  BootstrapLog.Write(BootstrapLog.FormatLine(Entry));
+  if (WriteToSinks(BootstrapLog.FormatLine(Entry)) > 0) and Assigned(Entry.Exception) then
+    RememberReported(Entry.Exception);
 end;
 
 procedure TBootstrapLogger.Log(const Level: TLogLevel; const EventId: TEventId; const Ex: Exception; const Msg: string; const Args: TArray<TValue>);

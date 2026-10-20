@@ -251,6 +251,7 @@ BootstrapLog = record
   class function AvailableSinks: TArray<IBootstrapSink>; static;
   class function HasAvailableSink: Boolean; static;
   class procedure Write(const Line: string); static;
+  class function WasReported(const E: Exception): Boolean; static;
   class function FormatLine(const Entry: TLogEntry): string; static;
   class function LoggerFor(const Category: string): ILogger; static;
 end;
@@ -262,6 +263,7 @@ end;
 | `Sinks` | Every registered destination |
 | `AvailableSinks` `HasAvailableSink` | The ones that can write **right now**. Empty is the worst case — nobody is going to learn anything — and it has to be distinguishable from having reported |
 | `Write` | Dispatches a line already formed to the available destinations |
+| `WasReported` | Whether that exception already reached at least one destination. It answers for the last one that did, and recognises it by identity, class and message. A report the threshold discards, or one that finds no available destination, does not count |
 | `FormatLine` | The layout of the channel, applied before dispatching so every destination writes the same thing |
 | `LoggerFor` | A startup `ILogger` under the **caller's** category: an application reports its own startup without disguising itself as DAF. It is the only way in, and DAF's own reports go through it too |
 

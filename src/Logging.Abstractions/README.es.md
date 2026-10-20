@@ -253,6 +253,7 @@ BootstrapLog = record
   class function AvailableSinks: TArray<IBootstrapSink>; static;
   class function HasAvailableSink: Boolean; static;
   class procedure Write(const Line: string); static;
+  class function WasReported(const E: Exception): Boolean; static;
   class function FormatLine(const Entry: TLogEntry): string; static;
   class function LoggerFor(const Category: string): ILogger; static;
 end;
@@ -264,6 +265,7 @@ end;
 | `Sinks` | Todos los destinos registrados |
 | `AvailableSinks` `HasAvailableSink` | Los que pueden escribir **ahora mismo**. Que esté vacío es el caso peor —nadie va a enterarse de nada— y hay que poder distinguirlo de haber informado |
 | `Write` | Reparte una línea ya formada a los destinos disponibles |
+| `WasReported` | Si esa excepción ya llegó al menos a un destino. Responde por la última que llegó, y la reconoce por su identidad, su clase y su mensaje. Un informe que el umbral descarta, o que no encuentra ningún destino disponible, no cuenta |
 | `FormatLine` | El layout del canal, aplicado antes de repartir para que todos los destinos escriban lo mismo |
 | `LoggerFor` | Un `ILogger` de arranque con la categoría **de quien llama**: la aplicación informa de su propio arranque sin disfrazarse de DAF. Es la única vía, y los informes de DAF salen también por ella |
 

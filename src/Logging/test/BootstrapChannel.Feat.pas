@@ -3,6 +3,7 @@
 interface
 
 uses
+  System.SysUtils,
   Daf.Extensions.Logging;
 
 type
@@ -39,6 +40,11 @@ type
     /// modo de fallo. Sin asignar, esto vale '' y no casa con nada.
     ReportBefore: string;
     ReportAfter: string;
+    /// La excepcion que se informa, y otra igual en clase y mensaje. Las dos viven hasta el final
+    /// del escenario: liberada la primera, la segunda podria ocupar su direccion.
+    Raised: Exception;
+    Twin: Exception;
+    Answer: string;
     constructor Create;
     destructor Destroy; override;
     /// Los destinos por defecto, tal y como estaban antes de que este escenario tocara nada.
@@ -52,7 +58,6 @@ function NewThrowingSink: IThrowingSink;
 implementation
 
 uses
-  System.SysUtils,
   Daf.MiniSpec;
 
 type
@@ -158,6 +163,8 @@ begin
   BootstrapLog.ClearSinks;
   for var Sink in FSaved do
     BootstrapLog.AddSink(Sink);
+  Raised.Free;
+  Twin.Free;
   inherited;
 end;
 
@@ -385,6 +392,89 @@ Feature Startup reports reach someone @logging @bootstrap
       procedure(W: TChannelWorld)
       begin
         Expect(W.ReportAfter).ToEqual('has=True count=1');
+      end)
+
+.Rule('The channel tells whether an exception already reached a destination')
+
+  .Scenario('A reported exception is recognised')
+    .Given('a destination of the channel available, and an exception',
+      procedure(W: TChannelWorld)
+      begin
+        W.OnlySinks([W.Recorder]);
+        W.Raised := Exception.Create('cannot open "recognised.json"');
+      end)
+    .When('an error carrying that exception is reported, and the channel is asked about it',
+      procedure(W: TChannelWorld)
+      begin
+        BootstrapLog.LoggerFor('DAF').LogError(W.Raised, 'a configuration source could not be added');
+        W.Answer := Format('lines=%d reported=%s',
+          [W.Recorder.Count, BoolToStr(BootstrapLog.WasReported(W.Raised), True)]);
+      end)
+    .&Then('the channel answers that it was reported',
+      procedure(W: TChannelWorld)
+      begin
+        Expect(W.Answer).ToEqual('lines=1 reported=True');
+      end)
+
+  .Scenario('Another exception with the same message is not taken as reported')
+    .Given('an exception reported through the channel',
+      procedure(W: TChannelWorld)
+      begin
+        W.OnlySinks([W.Recorder]);
+        W.Raised := Exception.Create('cannot open "twin.json"');
+        BootstrapLog.LoggerFor('DAF').LogError(W.Raised, 'a configuration source could not be added');
+      end)
+    .When('the channel is asked about another exception, of the same class and with the same message',
+      procedure(W: TChannelWorld)
+      begin
+        W.Twin := Exception.Create(W.Raised.Message);
+        W.Answer := Format('reported=%s other=%s',
+          [BoolToStr(BootstrapLog.WasReported(W.Raised), True),
+           BoolToStr(BootstrapLog.WasReported(W.Twin), True)]);
+      end)
+    .&Then('the channel answers that the other one was not reported',
+      procedure(W: TChannelWorld)
+      begin
+        Expect(W.Answer).ToEqual('reported=True other=False');
+      end)
+
+  .Scenario('With no destination available, reporting does not count')
+    .Given('no destination of the channel available, and an exception',
+      procedure(W: TChannelWorld)
+      begin
+        W.OnlySinks([W.Unavailable]);
+        W.Raised := Exception.Create('cannot open "nowhere.json"');
+      end)
+    .When('an error carrying that exception is reported, and the channel is asked about it',
+      procedure(W: TChannelWorld)
+      begin
+        BootstrapLog.LoggerFor('DAF').LogError(W.Raised, 'a configuration source could not be added');
+        W.Answer := Format('reported=%s', [BoolToStr(BootstrapLog.WasReported(W.Raised), True)]);
+      end)
+    .&Then('the channel answers that it was not reported',
+      procedure(W: TChannelWorld)
+      begin
+        Expect(W.Answer).ToEqual('reported=False');
+      end)
+
+  .Scenario('A report the threshold discards does not count')
+    .Given('a destination of the channel available, and an exception',
+      procedure(W: TChannelWorld)
+      begin
+        W.OnlySinks([W.Recorder]);
+        W.Raised := Exception.Create('cannot open "below.json"');
+      end)
+    .When('that exception is reported below the threshold of the channel, and the channel is asked about it',
+      procedure(W: TChannelWorld)
+      begin
+        BootstrapLog.LoggerFor('DAF').LogInformation(W.Raised, 'a configuration source could not be added');
+        W.Answer := Format('lines=%d reported=%s',
+          [W.Recorder.Count, BoolToStr(BootstrapLog.WasReported(W.Raised), True)]);
+      end)
+    .&Then('the channel answers that it was not reported',
+      procedure(W: TChannelWorld)
+      begin
+        Expect(W.Answer).ToEqual('lines=0 reported=False');
       end);
 
 end.
