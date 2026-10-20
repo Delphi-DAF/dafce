@@ -370,7 +370,7 @@ cuts the rest off.
 
 ## Creating a custom target
 
-Inherit from `TTarget` and override `Write`:
+Inherit from `TTarget` and override `DoWrite`:
 
 ```pascal
 unit Daf.NNLog.Targets.Slack;

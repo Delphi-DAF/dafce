@@ -375,7 +375,7 @@ El orden importa por dos motivos — las reglas se evalúan en el orden en que l
 
 ## Crear un target propio
 
-Heredar de `TTarget` y sobrescribir `Write`:
+Heredar de `TTarget` y sobrescribir `DoWrite`:
 
 ```pascal
 unit Daf.NNLog.Targets.Slack;
