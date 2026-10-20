@@ -200,9 +200,11 @@ B.SetAction(Greet,
   failure, and the shutdown failure is only reported.
 - What escapes before `Run` — the composition, or `Build` — reaches the same policy when the
   `.dpr`'s `except` hands it to `HandleException`, as the sample above does. It arrives with
-  `Failure.Services` as `nil`, and with `Failure.Reported` as `True` when the host reported it while
-  being built. What the policy already let out of `Run` is raised again without going through it a
-  second time. Before `OnException` is declared, the default policy decides.
+  `Failure.Services` as `nil`, and with `Failure.Reported` as `True` when it has already gone out
+  through the startup channel: a configuration file that cannot be read, a host `Build` that fails,
+  or a report of the application's own that carries the exception, through
+  `BootstrapLog.LoggerFor`. What the policy already let out of `Run` is raised again without going
+  through it a second time. Before `OnException` is declared, the default policy decides.
 - An `EAbort` — what `Abort` raises — does not reach the policy: the process ends with
   `TCliExit.Failure` and nothing is reported.
 - While `Run` is running, the RTL's `ApplicationHandleException` hook points at the policy, as in a
@@ -243,12 +245,13 @@ without a host. What escapes it goes to the `OnException` policy, with `Failure.
 
 `OnException` takes any callback, and the policy is the application family's: the Web variant takes
 the same one. It receives a `TAppFailure` — the exception in `Error`, the
-container in `Services`, `nil` when there is none, and `Reported` when the host has already reported
-it — and returns the exit code. Three are already written:
+container in `Services`, `nil` when there is none, and `Reported` when it has already been reported,
+through the startup channel or by the host while starting or stopping — and returns the exit code.
+Three are already written:
 
 | | What it does |
 |---|---|
-| `ExitPolicy.LogAndFail` | reports through the startup channel and returns `TCliExit.Failure`; what the host already reported (`Failure.Reported`) is not reported again. **This is the one that applies when `OnException` is not called** |
+| `ExitPolicy.LogAndFail` | reports through the startup channel and returns `TCliExit.Failure`; what arrives already reported (`Failure.Reported`) is not reported again. **This is the one that applies when `OnException` is not called** |
 | `ExitPolicy.Rethrow` | lets the exception out of `Run`, for whoever called it. The host is stopped either way — the shutdown is in the `finally` |
 | `ExitPolicy.Silent` | returns `TCliExit.Failure` and says nothing |
 

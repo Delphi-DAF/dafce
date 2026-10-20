@@ -163,6 +163,25 @@ begin
   end;
 end;
 
+type
+  /// Guarda lo que llega al canal de arranque, para contar cuantas veces se informa algo.
+  TLinesSink = class(TInterfacedObject, IBootstrapSink)
+  public
+    Lines: string;
+    function IsAvailable: Boolean;
+    procedure Write(const Line: string);
+  end;
+
+function TLinesSink.IsAvailable: Boolean;
+begin
+  Result := True;
+end;
+
+procedure TLinesSink.Write(const Line: string);
+begin
+  Lines := Lines + Line + sLineBreak;
+end;
+
 destructor TWebVariantWorld.Destroy;
 begin
   Held.Free;
@@ -507,7 +526,8 @@ Feature La variante Web de la familia @web @application-family
         W.WebBuilder.OnException(
           function(const Failure: TAppFailure): Integer
           begin
-            W.PolicySaw := IfThen(Failure.Services = nil, 'sin', 'con') + ' proveedor';
+            W.PolicySaw := IfThen(Failure.Reported, 'informado', 'sin informar') +
+              IfThen(Failure.Services = nil, ' sin', ' con') + ' proveedor';
             W.Report := Failure.Error.Message;
             Result := 42;
           end);
@@ -515,8 +535,13 @@ Feature La variante Web de la familia @web @application-family
     .When('la composicion lo anade como obligatorio, y el except del .dpr lo entrega al builder',
       procedure(W: TWebVariantWorld)
       begin
+        // La carga de la fuente informa por el canal de arranque; se recoge en un destino propio
+        // para que no se confunda con la salida de las specs.
+        var Sink := TLinesSink.Create;
+        var Keep: IBootstrapSink := Sink;
         var Saved := BootstrapLog.Sinks;
         BootstrapLog.ClearSinks;
+        BootstrapLog.AddSink(Keep);
         try
           try
             JsonConfig.AddFile(W.WebBuilder.Configuration, W.ConfigFile);
@@ -527,16 +552,62 @@ Feature La variante Web de la familia @web @application-family
               W.ExitCode := W.WebBuilder.HandleException(E);
           end;
         finally
-          for var Sink in Saved do
-            BootstrapLog.AddSink(Sink);
+          BootstrapLog.ClearSinks;
+          for var Each in Saved do
+            BootstrapLog.AddSink(Each);
         end;
       end)
-    .&Then('la politica la recibe sin proveedor, y el proceso termina con su codigo',
+    .&Then('la politica la recibe ya informada y sin proveedor, y el proceso termina con su codigo',
       procedure(W: TWebVariantWorld)
       begin
         Expect(Format('exit=%d %s nombra=%s', [W.ExitCode, W.PolicySaw,
           BoolToStr(W.Report.Contains(W.ConfigFile), True)]))
-          .ToEqual('exit=42 sin proveedor nombra=True');
+          .ToEqual('exit=42 informado sin proveedor nombra=True');
+      end)
+
+  .Scenario('Con la politica por defecto, un fichero obligatorio que falta se informa una sola vez en Web')
+    .Given('una aplicacion web sin politica declarada, y un fichero de configuracion que no existe',
+      procedure(W: TWebVariantWorld)
+      begin
+        W.ConfigFile := TPath.Combine(TPath.GetTempPath, 'daf-web-missing-' + TGuid.NewGuid.ToString + '.json');
+        W.WebBuilder := TWebApplication.CreateBuilder;
+      end)
+    .When('la composicion lo anade como obligatorio, y el except del .dpr lo entrega al builder',
+      procedure(W: TWebVariantWorld)
+      begin
+        var Sink := TLinesSink.Create;
+        var Keep: IBootstrapSink := Sink;
+        var Saved := BootstrapLog.Sinks;
+        BootstrapLog.ClearSinks;
+        BootstrapLog.AddSink(Keep);
+        try
+          try
+            JsonConfig.AddFile(W.WebBuilder.Configuration, W.ConfigFile);
+            W.App := W.WebBuilder.Build;
+            W.ExitCode := W.App.Run;
+          except
+            on E: Exception do
+              W.ExitCode := W.WebBuilder.HandleException(E);
+          end;
+        finally
+          W.Report := Sink.Lines;
+          BootstrapLog.ClearSinks;
+          for var Each in Saved do
+            BootstrapLog.AddSink(Each);
+        end;
+      end)
+    .&Then('el canal de arranque lo recibe una vez, y el proceso termina con Failure',
+      procedure(W: TWebVariantWorld)
+      begin
+        var Times := 0;
+        var From := Pos(W.ConfigFile, W.Report);
+        while From > 0 do
+        begin
+          Inc(Times);
+          From := PosEx(W.ConfigFile, W.Report, From + 1);
+        end;
+        Expect(Format('%d informe(s), codigo %d', [Times, W.ExitCode]))
+          .ToEqual(Format('1 informe(s), codigo %d', [TAppExit.Failure]));
       end)
 
   .Scenario('Una aplicacion web no toca el gancho del RTL')

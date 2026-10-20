@@ -557,15 +557,10 @@ begin
   try
     Host := FImpl.Build;
   except
-    on E: Exception do
-    begin
-      // Sin aplicacion que lo suelte al destruirse: una construccion que falla no deja el cerrojo
-      // tomado para el resto del proceso.
-      TInstanceLock.Release(Lock);
-      // El host informa por el canal de arranque todo lo que hace fallar su construccion.
-      FFailures.MarkReported(E);
-      raise;
-    end;
+    // Sin aplicacion que lo suelte al destruirse: una construccion que falla no deja el cerrojo
+    // tomado para el resto del proceso.
+    TInstanceLock.Release(Lock);
+    raise;
   end;
   Result := TCliApplication.Create(Host, FRootCommand, Parsed, FFailures, FSlot, Lock);
 end;

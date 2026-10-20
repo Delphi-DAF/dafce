@@ -296,17 +296,7 @@ end;
 
 function TWebApplicationBuilder.Build: IWebApplication;
 begin
-  var Host: IHost;
-  try
-    Host := FImpl.Build;
-  except
-    // El host informa por el canal de arranque todo lo que hace fallar su construccion.
-    on E: Exception do
-    begin
-      FFailures.MarkReported(E);
-      raise;
-    end;
-  end;
+  var Host: IHost := FImpl.Build;
   Result := TWebApplication.Create(Host, FFailures);
 end;
 

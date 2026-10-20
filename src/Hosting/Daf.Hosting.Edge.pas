@@ -20,11 +20,12 @@ type
   IAppFailures = interface
     ['{6B1F0D2A-8C4E-4E77-9A35-2F0B7C1D9E48}']
     procedure SetPolicy(const Policy: TAppExceptionPolicy);
-    /// <summary>Un EAbort termina con Failure; lo demas lo decide la politica.</summary>
+    /// <summary>
+    /// Un EAbort termina con Failure; lo demas lo decide la politica. Le llega informado lo que
+    /// Reported dice, y tambien lo que ya salio por el canal de arranque.
+    /// </summary>
     function Decide(const E: Exception; const Services: IServiceProvider;
       const Reported: Boolean): Integer;
-    /// <summary>La construccion del host ya lo informo.</summary>
-    procedure MarkReported(const E: Exception);
     /// <summary>Lo que se escapa antes del Run, o lo que la politica ya dejo salir de el.</summary>
     function Handle(const E: Exception): Integer;
   end;
@@ -32,11 +33,9 @@ type
   TAppFailures = class(TInterfacedObject, IAppFailures)
   private
     FPolicy: TAppExceptionPolicy;
-    // Los dos se comparan por identidad, y hablan de una excepcion que esta saliendo hacia el
-    // except del .dpr. Lo informado se consume al entregarse; lo que la politica dejo salir no,
-    // porque puede volver mas de una vez: desde el gancho del RTL, a traves del Run y hasta el
-    // except del .dpr.
-    FReported: TObject;
+    // Lo que la politica dejo salir, hacia el except del .dpr. Se compara por identidad y no se
+    // consume: la misma excepcion puede volver mas de una vez, desde el gancho del RTL, a traves
+    // del Run y hasta el except del .dpr.
     FLetOut: TObject;
   public
     /// <summary>Con la politica por defecto, ExitPolicy.LogAndFail.</summary>
@@ -44,7 +43,6 @@ type
     procedure SetPolicy(const Policy: TAppExceptionPolicy);
     function Decide(const E: Exception; const Services: IServiceProvider;
       const Reported: Boolean): Integer;
-    procedure MarkReported(const E: Exception);
     function Handle(const E: Exception): Integer;
   end;
 
@@ -65,10 +63,11 @@ type
 
 implementation
 
-{$IFDEF MSWINDOWS}
 uses
-  Winapi.Windows;
+{$IFDEF MSWINDOWS}
+  Winapi.Windows,
 {$ENDIF}
+  Daf.Extensions.Logging;
 
 { TAppFailures }
 
@@ -98,24 +97,16 @@ begin
   if E is EAbort then
     Exit(TAppExit.Failure);
   try
-    Result := FPolicy(TAppFailure.Create(E, Services, Reported));
+    Result := FPolicy(TAppFailure.Create(E, Services, Reported or BootstrapLog.WasReported(E)));
   except
     FLetOut := ExceptObject;
     raise;
   end;
 end;
 
-procedure TAppFailures.MarkReported(const E: Exception);
-begin
-  FReported := E;
-end;
-
 function TAppFailures.Handle(const E: Exception): Integer;
 begin
-  var Reported := (FReported <> nil) and (FReported = E);
-  if Reported then
-    FReported := nil;
-  Result := Decide(E, nil, Reported);
+  Result := Decide(E, nil, False);
 end;
 
 { TInstanceLock }

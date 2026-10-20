@@ -2141,10 +2141,13 @@ Feature La variante CLI de la familia @cli @application-family
     .When('la composicion lo anade como obligatorio, y el except del .dpr delega en el builder',
       procedure(W: TCliWorld)
       begin
-        // La carga de la fuente tambien informa por el canal de arranque; se aparta para que no se
-        // confunda con la salida de las specs.
+        // La carga de la fuente informa por el canal de arranque; se recoge en un destino propio
+        // para que no se confunda con la salida de las specs.
+        var Sink := TLinesSink.Create;
+        var Keep: IBootstrapSink := Sink;
         var Saved := BootstrapLog.Sinks;
         BootstrapLog.ClearSinks;
+        BootstrapLog.AddSink(Keep);
         try
           try
             JsonConfig.AddFile(W.Builder.Configuration, W.ConfigFile);
@@ -2154,19 +2157,64 @@ Feature La variante CLI de la familia @cli @application-family
               W.ExitCode := W.Builder.HandleException(E);
           end;
         finally
-          for var Sink in Saved do
-            BootstrapLog.AddSink(Sink);
+          BootstrapLog.ClearSinks;
+          for var Each in Saved do
+            BootstrapLog.AddSink(Each);
         end;
       end)
-    .&Then('la politica la recibe sin proveedor, y el proceso termina con su codigo',
+    .&Then('la politica la recibe ya informada y sin proveedor, y el proceso termina con su codigo',
       procedure(W: TCliWorld)
       begin
-        Expect(Format('exit=%d %s', [W.ExitCode, W.PolicySaw])).ToEqual('exit=42 sin informar sin proveedor');
+        Expect(Format('exit=%d %s', [W.ExitCode, W.PolicySaw])).ToEqual('exit=42 informado sin proveedor');
       end)
     .&And('lo que recibe nombra el fichero',
       procedure(W: TCliWorld)
       begin
         Expect(W.Report).ToContain(W.ConfigFile);
+      end)
+
+  .Scenario('Con la politica por defecto, un fichero obligatorio que falta se informa una sola vez')
+    .Given('una aplicacion CLI sin politica declarada, y un fichero de configuracion que no existe',
+      procedure(W: TCliWorld)
+      begin
+        W.ConfigFile := TPath.Combine(TPath.GetTempPath, 'daf-cli-missing-' + TGuid.NewGuid.ToString + '.json');
+        W.Builder := TCliApplication.CreateBuilder;
+      end)
+    .When('la composicion lo anade como obligatorio, y el except del .dpr delega en el builder',
+      procedure(W: TCliWorld)
+      begin
+        var Sink := TLinesSink.Create;
+        var Keep: IBootstrapSink := Sink;
+        var Saved := BootstrapLog.Sinks;
+        BootstrapLog.ClearSinks;
+        BootstrapLog.AddSink(Keep);
+        try
+          try
+            JsonConfig.AddFile(W.Builder.Configuration, W.ConfigFile);
+            W.ExitCode := W.Builder.Build.Run;
+          except
+            on E: Exception do
+              W.ExitCode := W.Builder.HandleException(E);
+          end;
+        finally
+          W.Report := Sink.Lines;
+          BootstrapLog.ClearSinks;
+          for var Each in Saved do
+            BootstrapLog.AddSink(Each);
+        end;
+      end)
+    .&Then('el canal de arranque lo recibe una vez, y el proceso termina con Failure',
+      procedure(W: TCliWorld)
+      begin
+        var Times := 0;
+        var From := Pos(W.ConfigFile, W.Report);
+        while From > 0 do
+        begin
+          Inc(Times);
+          From := PosEx(W.ConfigFile, W.Report, From + 1);
+        end;
+        Expect(Format('%d informe(s), codigo %d', [Times, W.ExitCode]))
+          .ToEqual(Format('1 informe(s), codigo %d', [TCliExit.Failure]));
       end)
 
   .Scenario('Con la politica por defecto, un error de composicion se informa')
@@ -2234,8 +2282,13 @@ Feature La variante CLI de la familia @cli @application-family
     .When('se construye, y el except del .dpr delega en el builder',
       procedure(W: TCliWorld)
       begin
+        // La construccion informa por el canal de arranque; se recoge en un destino propio para
+        // que no se confunda con la salida de las specs.
+        var Sink := TLinesSink.Create;
+        var Keep: IBootstrapSink := Sink;
         var Saved := BootstrapLog.Sinks;
         BootstrapLog.ClearSinks;
+        BootstrapLog.AddSink(Keep);
         try
           try
             W.ExitCode := W.Builder.Build.Run;
@@ -2244,8 +2297,9 @@ Feature La variante CLI de la familia @cli @application-family
               W.ExitCode := W.Builder.HandleException(E);
           end;
         finally
-          for var Sink in Saved do
-            BootstrapLog.AddSink(Sink);
+          BootstrapLog.ClearSinks;
+          for var Each in Saved do
+            BootstrapLog.AddSink(Each);
         end;
       end)
     .&Then('la politica la recibe informada y sin proveedor, y el proceso termina con su codigo',

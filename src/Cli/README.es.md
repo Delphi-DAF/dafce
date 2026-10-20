@@ -201,9 +201,11 @@ B.SetAction(Greet,
   se informa.
 - Lo que se escapa antes del `Run` —la composición, o el `Build`— llega a la misma política cuando el
   `except` del `.dpr` se lo pasa a `HandleException`, como hace el sample de arriba. Llega con
-  `Failure.Services` a `nil`, y con `Failure.Reported` a `True` si el host lo informó al
-  construirse. Lo que la política ya dejó salir del `Run` se relanza sin pasar por ella una segunda
-  vez. Antes de declarar `OnException`, decide la política por defecto.
+  `Failure.Services` a `nil`, y con `Failure.Reported` a `True` si ya salió por el canal de
+  arranque: un fichero de configuración que no se puede leer, un `Build` del host que falla, o un
+  informe de la propia aplicación que lleve la excepción, con `BootstrapLog.LoggerFor`. Lo que la
+  política ya dejó salir del `Run` se relanza sin pasar por ella una segunda vez. Antes de declarar
+  `OnException`, decide la política por defecto.
 - Un `EAbort` —lo que lanza `Abort`— no llega a la política: el proceso termina con
   `TCliExit.Failure` y no se informa nada.
 - Mientras corre el `Run`, el gancho `ApplicationHandleException` del RTL apunta a la política, como
@@ -244,12 +246,13 @@ que se escapa de ella va a la política de `OnException`, con `Failure.Services`
 
 `OnException` acepta cualquier callback, y la política es la de la familia de aplicaciones: la
 variante Web acepta la misma. Recibe un `TAppFailure` —la excepción en `Error`, el
-contenedor en `Services`, `nil` si no lo hay, y `Reported` si el host ya la informó— y devuelve el
-código de salida. Tres están ya escritas:
+contenedor en `Services`, `nil` si no lo hay, y `Reported` si ya se informó, por el canal de
+arranque o por el host al arrancar o al parar— y devuelve el código de salida. Tres están ya
+escritas:
 
 | | Qué hace |
 |---|---|
-| `ExitPolicy.LogAndFail` | informa por el canal de arranque y devuelve `TCliExit.Failure`; lo que el host ya informó (`Failure.Reported`) no lo vuelve a informar. **Es la que se aplica si no se llama a `OnException`** |
+| `ExitPolicy.LogAndFail` | informa por el canal de arranque y devuelve `TCliExit.Failure`; lo que llega ya informado (`Failure.Reported`) no lo vuelve a informar. **Es la que se aplica si no se llama a `OnException`** |
 | `ExitPolicy.Rethrow` | deja salir la excepción del `Run`, para quien lo llamó. El host se para igual — la parada está en el `finally` |
 | `ExitPolicy.Silent` | devuelve `TCliExit.Failure` y no dice nada |
 

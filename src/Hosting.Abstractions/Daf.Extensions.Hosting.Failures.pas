@@ -38,7 +38,9 @@ type
     /// </summary>
     Services: IServiceProvider;
     /// <summary>
-    /// El host ya lo informo al ocurrir: un fallo de su construccion, de su arranque o de su parada.
+    /// Ya se informo: la excepcion salio por el canal de arranque --una fuente de configuracion que
+    /// no se pudo anadir, la construccion del host, un informe de la propia aplicacion--, o es un
+    /// fallo del arranque o de la parada, que el host informa al ocurrir.
     /// </summary>
     Reported: Boolean;
     constructor Create(const AError: Exception; const AServices: IServiceProvider;
@@ -61,7 +63,7 @@ type
   /// </summary>
   ExitPolicy = class
   public
-    /// <summary>Informa por el canal de arranque y devuelve Failure. Lo que el host ya informo no lo
+    /// <summary>Informa por el canal de arranque y devuelve Failure. Lo que llega ya informado no lo
     /// vuelve a informar.</summary>
     class function LogAndFail: TAppExceptionPolicy; virtual;
     /// <summary>Propaga: la excepcion sale del Run y la ve quien invoco.</summary>
