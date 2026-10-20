@@ -38,8 +38,12 @@ type
     /// Deja un fichero con esa antiguedad como log actual, sin pasar por el destino: es la unica
     /// forma de que la fecha del contenido y la del momento de rotar no coincidan.
     procedure ExistingLogCreatedDaysAgo(const Days: Integer; const Line: string);
+    procedure ExistingLogCreatedAt(const When: TDateTime; const Line: string);
     procedure RotateOnEverySize;
     procedure RotateDaily;
+    procedure RotateWhenDaysOld(const Days: Byte);
+    procedure RotateHourly;
+    procedure RotateMonthly;
     procedure KeepAtMostOneArchive;
     /// TODOS los archivos del historico retenidos: la limpieza no puede borrar ninguno, asi que
     /// lanza con seguridad. Retener solo uno dependia de en que orden cayera al ordenar por fecha.
@@ -187,8 +191,29 @@ end;
 
 procedure TRotationWorld.ExistingLogCreatedDaysAgo(const Days: Integer; const Line: string);
 begin
+  ExistingLogCreatedAt(IncDay(Now, -Days), Line);
+end;
+
+procedure TRotationWorld.ExistingLogCreatedAt(const When: TDateTime; const Line: string);
+begin
   TFile.WriteAllText(LogPath, Line + sLineBreak);
-  TFile.SetCreationTime(LogPath, IncDay(Now, -Days));
+  TFile.SetCreationTime(LogPath, When);
+end;
+
+procedure TRotationWorld.RotateWhenDaysOld(const Days: Byte);
+begin
+  FTarget.RotationPolicy := TRotationPolicy.Days;
+  FTarget.MaxFileAge := Days;
+end;
+
+procedure TRotationWorld.RotateHourly;
+begin
+  FTarget.RotationPolicy := TRotationPolicy.hourly;
+end;
+
+procedure TRotationWorld.RotateMonthly;
+begin
+  FTarget.RotationPolicy := TRotationPolicy.Monthly;
 end;
 
 procedure TRotationWorld.RotateOnEverySize;
@@ -677,6 +702,136 @@ Feature La rotacion de NNLog archiva con un nombre que se puede leer @nnlog @tar
       procedure(W: TRotationWorld)
       begin
         Expect(W.ArchivedNameOf(W.OwnFileName)).ToStartWith(TPath.GetFileNameWithoutExtension(W.OwnFileName) + '_');
+      end)
+
+.Rule('La rotacion por dias compara la edad del fichero con MaxFileAge')
+
+  .Scenario('Un fichero con la edad maxima rota')
+    .Given('un destino que rota a los tres dias, y un log actual de hace tres dias y dos horas',
+      procedure(W: TRotationWorld)
+      begin
+        W.RotateWhenDaysOld(3);
+        W.ExistingLogCreatedAt(IncHour(IncDay(Now, -3), -2), 'VIEJA');
+      end)
+    .When('se escribe una linea',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('NUEVA');
+      end)
+    .&Then('el log se archiva',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.OneArchivedName).ToStartWith('app_');
+      end)
+
+  .Scenario('Un fichero mas joven que la edad maxima no rota')
+    .Given('un destino que rota a los tres dias, y un log actual de hace dos dias y dos horas',
+      procedure(W: TRotationWorld)
+      begin
+        W.RotateWhenDaysOld(3);
+        W.ExistingLogCreatedAt(IncHour(IncDay(Now, -2), -2), 'VIEJA');
+      end)
+    .When('se escribe una linea',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('NUEVA');
+      end)
+    .&Then('no se archiva nada',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.OneArchivedName).ToEqual(EmptyStr);
+      end)
+
+  .Scenario('Con MaxFileAge a cero rota en cada entrada')
+    .Given('un destino que rota por dias sin edad maxima, y que ya escribio una linea',
+      procedure(W: TRotationWorld)
+      begin
+        W.RotateWhenDaysOld(0);
+        W.WriteLine('PRIMERA');
+      end)
+    .When('se escribe otra linea',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('SEGUNDA');
+      end)
+    .&Then('la primera esta archivada',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.OneArchivedName).ToStartWith('app_');
+      end)
+
+.Rule('La rotacion por horas y por meses compara el periodo del fichero con el de ahora')
+
+  .Scenario('Un fichero de otra hora rota')
+    .Given('un destino que rota cada hora, y un log actual de hace dos horas',
+      procedure(W: TRotationWorld)
+      begin
+        W.RotateHourly;
+        W.ExistingLogCreatedAt(IncHour(Now, -2), 'VIEJA');
+      end)
+    .When('se escribe una linea',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('NUEVA');
+      end)
+    .&Then('el log se archiva',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.OneArchivedName).ToStartWith('app_');
+      end)
+
+  .Scenario('Un fichero de esta hora no rota')
+    .Given('un destino que rota cada hora, y un log actual creado ahora',
+      procedure(W: TRotationWorld)
+      begin
+        W.RotateHourly;
+        W.ExistingLogCreatedAt(Now, 'VIEJA');
+      end)
+    .When('se escribe una linea',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('NUEVA');
+      end)
+    .&Then('no se archiva nada',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.OneArchivedName).ToEqual(EmptyStr);
+      end)
+
+  .Scenario('Un fichero del mes anterior rota')
+    .Given('un destino que rota cada mes, y un log actual de hace un mes',
+      procedure(W: TRotationWorld)
+      begin
+        W.RotateMonthly;
+        W.ExistingLogCreatedAt(IncMonth(Now, -1), 'VIEJA');
+      end)
+    .When('se escribe una linea',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('NUEVA');
+      end)
+    .&Then('el log se archiva',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.OneArchivedName).ToStartWith('app_');
+      end)
+
+  .Scenario('Un fichero de este mes no rota')
+    .Given('un destino que rota cada mes, y un log actual creado ahora',
+      procedure(W: TRotationWorld)
+      begin
+        W.RotateMonthly;
+        W.ExistingLogCreatedAt(Now, 'VIEJA');
+      end)
+    .When('se escribe una linea',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('NUEVA');
+      end)
+    .&Then('no se archiva nada',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.OneArchivedName).ToEqual(EmptyStr);
       end);
 
 end.
