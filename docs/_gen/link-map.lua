@@ -300,10 +300,12 @@ return {
       ["samples/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/MiniSpec/samples",
     },
     ["en/modules/nnlog-guide.qmd"] = {
+      ["../../Logging.Abstractions/README.md#bootstrap-channel"] = "/en/modules/logging.qmd#bootstrap-channel",
       ["GUIDE.es.md"] = "/es/modules/nnlog-guide.qmd",
     },
     ["en/modules/nnlog.qmd"] = {
       ["../../legal/LICENSE.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/legal/LICENSE.md",
+      ["../Logging.Abstractions/README.md#bootstrap-channel"] = "/en/modules/logging.qmd#bootstrap-channel",
       ["README.es.md"] = "/es/modules/nnlog.qmd",
       ["docs/GUIDE.md"] = "/en/modules/nnlog-guide.qmd",
       ["docs/GUIDE.md#layout-tokens"] = "/en/modules/nnlog-guide.qmd#layout-tokens",
@@ -653,10 +655,12 @@ return {
       ["samples/"] = "https://github.com/Delphi-DAF/dafce/tree/main/src/MiniSpec/samples",
     },
     ["es/modules/nnlog-guide.qmd"] = {
+      ["../../Logging.Abstractions/README.es.md#canal-de-arranque"] = "/es/modules/logging.qmd#canal-de-arranque",
       ["GUIDE.md"] = "/en/modules/nnlog-guide.qmd",
     },
     ["es/modules/nnlog.qmd"] = {
       ["../../legal/LICENSE.md"] = "https://github.com/Delphi-DAF/dafce/blob/main/legal/LICENSE.md",
+      ["../Logging.Abstractions/README.es.md#canal-de-arranque"] = "/es/modules/logging.qmd#canal-de-arranque",
       ["README.md"] = "/en/modules/nnlog.qmd",
       ["docs/GUIDE.es.md"] = "/es/modules/nnlog-guide.qmd",
       ["docs/GUIDE.es.md#tokens-de-layout"] = "/es/modules/nnlog-guide.qmd#tokens-de-layout",

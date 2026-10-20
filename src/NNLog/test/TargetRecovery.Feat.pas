@@ -44,6 +44,8 @@ type
     FSavedSinks: TArray<IBootstrapSink>;
     FChannel: IChannelProbe;
     FSpy: TObject;
+    FFlaky: TObject;
+    function Flaky: TObject;
   public
     Failure: string;
     FailureClass: string;
@@ -54,8 +56,18 @@ type
     /// --o que no llego-- sin que lo tape ninguno de los de serie.
     procedure WatchStartupChannel;
     procedure WriteTo(const Name, Line: string);
+    /// Varias escrituras seguidas; Failure se queda con la primera excepcion que saliera.
+    procedure WriteRepeatedly(const Name, Line: string; const Times: Integer);
     procedure HoldExclusively(const Name: string);
+    /// Retiene el fichero como lo retiene otro proceso que escribe en el con NNLog.
+    procedure HoldForWriting(const Name: string);
     procedure Release;
+    procedure FlakyFails;
+    procedure FlakyRecovers;
+    procedure WriteFlaky(const Times: Integer);
+    function FlakyWritten: Integer;
+    function ChannelLinesWith(const Text: string): Integer;
+    function ChannelLineWith(const Text: string): string;
     procedure Unname;
     /// Lo que una regla hace de verdad: recorrer sus destinos y despachar a cada uno.
     procedure RuleWritesToBoth(const FailingName, GoodName, Line: string);
@@ -92,6 +104,18 @@ type
     property Got: string read FGot;
   end;
 
+  // Un destino que falla a voluntad, sin fichero de por medio: la racha de fallos es de TTarget, asi
+  // que se mide igual en cualquier destino.
+  TFlakyTarget = class(TTarget)
+  strict private
+    FWritten: Integer;
+  protected
+    procedure DoWrite(const Entry: TLogEntry); override;
+  public
+    Failing: Boolean;
+    property Written: Integer read FWritten;
+  end;
+
 { TChannelProbe }
 
 function TChannelProbe.IsAvailable: Boolean;
@@ -119,6 +143,15 @@ end;
 procedure TSpyTarget.DoWrite(const Entry: TLogEntry);
 begin
   FGot := FGot + RenderEvent(Entry);
+end;
+
+{ TFlakyTarget }
+
+procedure TFlakyTarget.DoWrite(const Entry: TLogEntry);
+begin
+  if Failing then
+    raise EInOutError.Create('recurso no disponible');
+  Inc(FWritten);
 end;
 
 { TRecoveryWorld }
@@ -163,6 +196,7 @@ destructor TRecoveryWorld.Destroy;
 begin
   FTarget.Free;
   FSpy.Free;
+  FFlaky.Free;
   Release;
   // El canal es global: cada escenario lo deja como lo encontro.
   BootstrapLog.ClearSinks;
@@ -203,10 +237,97 @@ begin
   end;
 end;
 
+procedure TRecoveryWorld.WriteRepeatedly(const Name, Line: string; const Times: Integer);
+begin
+  var FirstFailure := EmptyStr;
+  var FirstFailureClass := EmptyStr;
+  for var I := 1 to Times do
+  begin
+    WriteTo(Name, Line);
+    if FirstFailureClass.IsEmpty then
+    begin
+      FirstFailure := Failure;
+      FirstFailureClass := FailureClass;
+    end;
+  end;
+  Failure := FirstFailure;
+  FailureClass := FirstFailureClass;
+end;
+
 procedure TRecoveryWorld.HoldExclusively(const Name: string);
 begin
   Release;
   FHold := TFileStream.Create(PathOf(Name), fmCreate or fmShareExclusive);
+end;
+
+procedure TRecoveryWorld.HoldForWriting(const Name: string);
+begin
+  Release;
+  FHold := TFileStream.Create(PathOf(Name), fmCreate or fmShareDenyWrite);
+end;
+
+function TRecoveryWorld.Flaky: TObject;
+begin
+  if FFlaky = nil then
+  begin
+    var Target := TFlakyTarget.Create;
+    Target.Name := 'inestable';
+    Target.Layout := 'linea';
+    FFlaky := Target;
+  end;
+  Result := FFlaky;
+end;
+
+procedure TRecoveryWorld.FlakyFails;
+begin
+  TFlakyTarget(Flaky).Failing := True;
+end;
+
+procedure TRecoveryWorld.FlakyRecovers;
+begin
+  TFlakyTarget(Flaky).Failing := False;
+end;
+
+procedure TRecoveryWorld.WriteFlaky(const Times: Integer);
+begin
+  Failure := EmptyStr;
+  FailureClass := EmptyStr;
+  for var I := 1 to Times do
+    try
+      TFlakyTarget(Flaky).Write(EntryFor('Prueba'));
+    except
+      on E: Exception do
+        if FailureClass.IsEmpty then
+        begin
+          Failure := E.Message;
+          FailureClass := E.ClassName;
+        end;
+    end;
+end;
+
+function TRecoveryWorld.FlakyWritten: Integer;
+begin
+  Result := TFlakyTarget(Flaky).Written;
+end;
+
+function TRecoveryWorld.ChannelLinesWith(const Text: string): Integer;
+begin
+  Result := 0;
+  if FChannel = nil then
+    Exit;
+  for var Line in FChannel.Text.Split([sLineBreak]) do
+    if Line.Contains(Text) then
+      Inc(Result);
+end;
+
+function TRecoveryWorld.ChannelLineWith(const Text: string): string;
+begin
+  Result := EmptyStr;
+  if FChannel = nil then
+    Exit;
+  for var Line in FChannel.Text.Split([sLineBreak]) do
+    if Line.Contains(Text) then
+      Exit(Line);
 end;
 
 procedure TRecoveryWorld.Release;
@@ -425,6 +546,107 @@ Feature Un destino de NNLog que no pudo escribir vuelve a intentarlo @nnlog @tar
       procedure(W: TRecoveryWorld)
       begin
         Expect(W.ProbeGot).ToContain('COMPARTIDA');
+      end)
+
+.Rule('Un destino que sigue fallando no repite el informe')
+
+  .Scenario('Muchas escrituras fallidas, un informe')
+    .Given('un canal de arranque que graba lo que le llega, y un destino que no puede escribir',
+      procedure(W: TRecoveryWorld)
+      begin
+        W.WatchStartupChannel;
+        W.FlakyFails;
+      end)
+    .When('se registran diez lineas por el',
+      procedure(W: TRecoveryWorld)
+      begin
+        W.WriteFlaky(10);
+      end)
+    .&Then('el canal recibe un solo informe de fallo',
+      procedure(W: TRecoveryWorld)
+      begin
+        Expect(W.ChannelLinesWith('no pudo escribir')).ToEqual(1);
+      end)
+    .&And('nombrando el destino',
+      procedure(W: TRecoveryWorld)
+      begin
+        Expect(W.ChannelLineWith('no pudo escribir')).ToContain('"inestable"');
+      end)
+
+  .Scenario('La recuperacion se informa con lo perdido')
+    .Given('un canal de arranque que graba lo que le llega, y un destino que fallo en tres escrituras seguidas',
+      procedure(W: TRecoveryWorld)
+      begin
+        W.WatchStartupChannel;
+        W.FlakyFails;
+        W.WriteFlaky(3);
+      end)
+    .When('su recurso vuelve y se registra otra linea',
+      procedure(W: TRecoveryWorld)
+      begin
+        W.FlakyRecovers;
+        W.WriteFlaky(1);
+      end)
+    .&Then('la linea se escribe',
+      procedure(W: TRecoveryWorld)
+      begin
+        Expect(W.FlakyWritten).ToEqual(1);
+      end)
+    .&And('el canal recibe un informe de recuperacion que nombra el destino',
+      procedure(W: TRecoveryWorld)
+      begin
+        Expect(W.ChannelLineWith('vuelve a escribir')).ToContain('"inestable"');
+      end)
+    .&And('y dice que se perdieron tres lineas',
+      procedure(W: TRecoveryWorld)
+      begin
+        Expect(W.ChannelLineWith('vuelve a escribir')).ToContain('perdio 3 lineas');
+      end)
+
+  .Scenario('Un fallo despues de recuperarse se vuelve a informar')
+    .Given('un destino que fallo, se recupero y lo informo',
+      procedure(W: TRecoveryWorld)
+      begin
+        W.WatchStartupChannel;
+        W.FlakyFails;
+        W.WriteFlaky(1);
+        W.FlakyRecovers;
+        W.WriteFlaky(1);
+        Expect(W.ChannelLinesWith('vuelve a escribir')).ToEqual(1);
+      end)
+    .When('vuelve a fallar',
+      procedure(W: TRecoveryWorld)
+      begin
+        W.FlakyFails;
+        W.WriteFlaky(1);
+      end)
+    .&Then('el canal recibe un informe de fallo nuevo',
+      procedure(W: TRecoveryWorld)
+      begin
+        Expect(W.ChannelLinesWith('no pudo escribir')).ToEqual(2);
+      end)
+
+  .Scenario('Dos procesos sobre el mismo fichero')
+    .Given('un canal de arranque que graba lo que le llega, y un fichero de log que otro tiene abierto para escribir',
+      procedure(W: TRecoveryWorld)
+      begin
+        W.WatchStartupChannel;
+        W.HoldForWriting('m.log');
+      end)
+    .When('se registran varias lineas por un destino de ese fichero',
+      procedure(W: TRecoveryWorld)
+      begin
+        W.WriteRepeatedly('m.log', 'PERDIDA', 5);
+      end)
+    .&Then('el canal recibe un solo informe de fallo',
+      procedure(W: TRecoveryWorld)
+      begin
+        Expect(W.ChannelLinesWith('no pudo escribir')).ToEqual(1);
+      end)
+    .&And('quien registra no recibe ninguna excepcion',
+      procedure(W: TRecoveryWorld)
+      begin
+        Expect(W.FailureClass).ToEqual(EmptyStr);
       end);
 
 end.

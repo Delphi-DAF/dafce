@@ -24,6 +24,8 @@ type
     // Por instancia, no global: dos destinos no comparten estado, y hacerles esperar el uno por el
     // otro cambiaria una corrupcion por un cuello de botella.
     FLock: TCriticalSection;
+    // Mayor que cero mientras dura una racha de fallos: el primero se informa, los demas solo se cuentan.
+    FLostLines: Integer;
   protected
     function RenderEvent(Entry: TLogEntry): string;
     // Lo que implementa cada destino. La escritura publica ya no es virtual: el candado no es cosa
@@ -241,7 +243,21 @@ begin
       // del camino de error. El fallo no se pierde -- sale por el canal de arranque, que es el que
       // existe para cuando el logging es justo lo que no funciona.
       on E: Exception do
-        BootstrapLog.LoggerFor(ClassName).LogError(E, Format('el destino "%s" no pudo escribir', [DisplayName]));
+      begin
+        if FLostLines = 0 then
+          BootstrapLog.LoggerFor(ClassName).LogError(E, Format('el destino "%s" no pudo escribir', [DisplayName]));
+        Inc(FLostLines);
+        Exit;
+      end;
+    end;
+    if FLostLines > 0 then
+    begin
+      var Lost := Format('%d lineas', [FLostLines]);
+      if FLostLines = 1 then
+        Lost := '1 linea';
+      // Warning y no Information: el canal de arranque descarta lo que esta por debajo.
+      BootstrapLog.LoggerFor(ClassName).LogWarning(Format('el destino "%s" vuelve a escribir; perdio %s', [DisplayName, Lost]));
+      FLostLines := 0;
     end;
   finally
     FLock.Leave;

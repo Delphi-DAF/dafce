@@ -122,6 +122,10 @@ de destino y lo llama, así que las escrituras de varios hilos por un mismo dest
 La garantía es dentro de un proceso — dos procesos escribiendo en el mismo fichero de log no están
 cubiertos.
 
+Un target que no puede escribir no lanza hacia quien registra. Lo informa por el
+[canal de arranque](../Logging.Abstractions/README.es.md#canal-de-arranque) una vez por racha de
+fallos, y cuando vuelve a escribir informa cuántas líneas perdió.
+
 El tipo tiene que sobrevivir al enlazado inteligente para que la búsqueda lo encuentre: `{$STRONGLINKTYPES ON}` en el
 `.dpr`, y cada unit de target que configure nombrada en su `uses`. Un `targetType` cuya unit no está
 enlazada da `Unknown target type`.

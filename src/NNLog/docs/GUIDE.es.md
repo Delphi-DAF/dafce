@@ -229,6 +229,19 @@ El candado es **por instancia de destino**, así que dos destinos nunca se esper
 un proceso**: dos ejecuciones del mismo programa escribiendo en un fichero pueden entrelazarse
 igual, y compartir fichero de log entre procesos no está cubierto.
 
+### Cuando un destino no puede escribir
+
+Un destino que no puede escribir no lanza hacia quien registra, y los demás destinos de la regla
+reciben la entrada igual. El fallo sale por el
+[canal de arranque](../../Logging.Abstractions/README.es.md#canal-de-arranque) en `Error`, con la
+excepción, nombrando el destino por su `Name` —o por su clase, si no tiene—:
+`el destino "file" no pudo escribir`.
+
+Se informa una vez por racha de fallos. Mientras el destino sigue fallando, cada entrada se pierde y
+se cuenta, y no se informa nada más. La primera entrada que vuelve a escribir informa, en `Warning`,
+cuántas perdió —`el destino "file" vuelve a escribir; perdio 3 lineas`— y cierra la racha, así que un
+fallo posterior se vuelve a informar.
+
 ---
 
 ## Tokens de layout

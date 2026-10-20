@@ -120,6 +120,10 @@ A custom target overrides `DoWrite`, not `Write`: `TTarget.Write` takes a lock h
 instance and then calls it, so writes from several threads through one target never overlap. The
 guarantee is within one process — two processes writing to the same log file are not covered.
 
+A target that cannot write does not raise towards whoever logged. It reports on the
+[bootstrap channel](../Logging.Abstractions/README.md#bootstrap-channel) once per run of failures,
+and when it writes again it reports how many lines it lost.
+
 The type has to survive smart linking for the lookup to find it: `{$STRONGLINKTYPES ON}` in the
 `.dpr`, and each target unit it configures named in its `uses`. A `targetType` whose unit is not
 linked reports `Unknown target type`.

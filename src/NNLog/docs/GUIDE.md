@@ -225,6 +225,19 @@ The lock is **per target instance**, so two targets never wait for each other, a
 one process**: two runs of the same program writing to one file can still interleave, and sharing a
 log file between processes is not covered.
 
+### When a target cannot write
+
+A target that cannot write does not raise towards whoever logged, and the other targets of the rule
+still receive the entry. The failure goes to the
+[bootstrap channel](../../Logging.Abstractions/README.md#bootstrap-channel) at `Error`, with the
+exception, naming the target by its `Name` — or by its class, if it has none:
+`el destino "file" no pudo escribir`.
+
+It is reported once per run of failures. While the target keeps failing, each entry is lost and
+counted, and nothing more is reported. The first entry it writes again reports, at `Warning`, how
+many it lost — `el destino "file" vuelve a escribir; perdio 3 lineas` — and closes the run, so a
+later failure is reported again.
+
 ---
 
 ## Layout tokens
