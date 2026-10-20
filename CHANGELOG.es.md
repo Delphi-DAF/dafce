@@ -179,6 +179,8 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - **SystemProcess**: un `Kill` explícito se informaba como `Timeout`, y mataba al hijo dos veces —una al pedirlo y otra cuando el bucle de espera se enteraba—. Ahora informa `Killed` y mata una vez
 - **SystemProcess**: un hijo que escribía más de 4 KB en un flujo sin manejador se bloqueaba hasta su plazo y acababa como `Timeout`; sin plazo, `Execute` no volvía nunca
 - **SystemProcess**: el texto capturado cambiaba los caracteres no ASCII por otros —una `ñ` de `cmd` llegaba como `¤`— y rompía un carácter partido entre dos lecturas; se decodifica con la página de la consola en que corre el hijo
+- **SystemProcess**: `ExecuteAsyncAndFree` no llegaba a lanzar al hijo, ni llamaba a `OnCompleted` ni a `OnFailed`. Ahora ejecuta al hijo entero antes de liberarlo
+- **SystemProcess**: `ExecuteAndFree` y `ExecuteAsyncAndFree` perdían su builder en cada llamada
 - **Web**: Un segmento literal de ruta se prueba antes que un parámetro en la misma posición; antes ganaba la acción declarada primero, así que `/items/search` podía caer en `/items/{Id}`
 - **Web**: Un parámetro `[FromServices]` recibe su servicio. Con el servicio registrado la petición fallaba con `EInvalidCast`, y sin él la acción recibía `nil` sin aviso; ese caso hace fallar ahora la petición nombrando el servicio
 - **Web**: Destruir un `TDafHttpServer` libera los módulos web que WebBroker guardaba para reutilizarlos; un servidor posterior en el mismo proceso recibía los que se construyeron para el anterior

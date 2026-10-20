@@ -540,18 +540,22 @@ begin
     FInstance.Execute;
   finally
     FInstance.Free;
+    Free;
   end;
 end;
 
 procedure TBuilder.ExecuteAsyncAndFree(const Token: ICancellationToken = nil);
 begin
+  // Execute y no ExecuteAsync: esta tarea es la que tiene que esperar al hijo, porque libera la
+  // instancia al acabar.
   TTask.Run(
     procedure
     begin
       try
-        FInstance.ExecuteAsync(Token);
+        FInstance.Execute(Token);
       finally
         FInstance.Free;
+        Free;
       end;
     end);
 end;

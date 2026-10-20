@@ -8,6 +8,7 @@ uses
   System.SysUtils,
   System.Classes,
   System.Threading,
+  System.SyncObjs,
   Daf.MiniSpec,
   Daf.Threading,
   Daf.SystemProcess;
@@ -19,6 +20,8 @@ type
   TLaunchWorld = class
   public
     Proc: ISystemProcess;
+    Builder: TBuilder;
+    Done: TEvent;
     Result: TProcessResult;
     Future: IFuture<TProcessResult>;
     Source: ICancellationTokenSource;
@@ -73,7 +76,28 @@ begin
       on Exception do;
     end;
   end;
+  Done.Free;
   inherited;
+end;
+
+/// Un builder con un hijo que tarda Seconds segundos, y un OnCompleted que anota el estado en Report
+/// y avisa por Done.
+function Notifying(W: TLaunchWorld; Seconds: Integer): TBuilder;
+begin
+  W.Done := TEvent.Create(nil, True, False, '');
+  Result := TSystemProcess.Builder
+    .Command('ping')
+    .CmdArgs(['-n', IntToStr(Seconds + 1), '127.0.0.1'])
+    .StandardOutput(TProcessOutput.Discard)
+    .StandardError(TProcessOutput.Discard)
+    .HideWindow(True)
+    .Timeout(60000)
+    .OnCompleted(
+      procedure(R: TProcessResult)
+      begin
+        W.Report := StatusText(R.Status);
+        W.Done.SetEvent;
+      end);
 end;
 
 function TLaunchWorld.Slow(Seconds: Integer): ISystemProcess;
@@ -252,6 +276,50 @@ Feature Lo que se sabe de un hijo desde que se lanza @systemprocess @launch
       procedure(W: TLaunchWorld)
       begin
         Expect(W.Report).ToEqual('Canceled corre=False');
+      end)
+
+.Rule('Lanzar y liberar en segundo plano espera al hijo')
+
+  // Que el runner no informe de fugas es la otra mitad de los dos escenarios que siguen: liberar la
+  // instancia y el builder no se ve desde dentro, y el informe lo dice al apagarse.
+  .Scenario('El hijo termina y la instancia se libera despues')
+    .Given('un builder con un hijo que tarda un momento y un OnCompleted que anota el resultado',
+      procedure(W: TLaunchWorld)
+      begin
+        W.Builder := Notifying(W, 1);
+      end)
+    .When('se lanza con ExecuteAsyncAndFree y se espera a que termine',
+      procedure(W: TLaunchWorld)
+      begin
+        W.Builder.ExecuteAsyncAndFree;
+        W.Builder := nil;
+        if W.Done.WaitFor(15000) <> wrSignaled then
+          W.Report := 'sin OnCompleted';
+      end)
+    .&Then('OnCompleted recibe Completed',
+      procedure(W: TLaunchWorld)
+      begin
+        Expect(W.Report).ToEqual('Completed');
+      end)
+
+.Rule('Ejecutar y liberar no deja el builder vivo')
+
+  .Scenario('Ejecutar y liberar no pierde el builder')
+    .Given('un builder con un hijo corto y un OnCompleted que anota el resultado',
+      procedure(W: TLaunchWorld)
+      begin
+        W.Builder := Notifying(W, 0);
+      end)
+    .When('se lanza con ExecuteAndFree',
+      procedure(W: TLaunchWorld)
+      begin
+        W.Builder.ExecuteAndFree;
+        W.Builder := nil;
+      end)
+    .&Then('OnCompleted recibe Completed',
+      procedure(W: TLaunchWorld)
+      begin
+        Expect(W.Report).ToEqual('Completed');
       end);
 
 end.
