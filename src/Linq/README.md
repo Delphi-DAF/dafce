@@ -16,6 +16,7 @@ A standalone, ref-counted, lazy collection-transformation library — LINQ-to-Ob
 | `TQuery<T>` | The fluent **operator surface**: a value type wrapping a deferred `System.IEnumerable<T>`, converting implicitly to and from it |
 | `IGrouping<TKey, T>` | A group produced by `GroupBy`: a `Key` plus its `Members` |
 | `Linq.From<T>` | Entry point — builds a `TQuery<T>` over an array, a `TEnumerable<T>`, an `IEnumerable<T>` or a `TSmartArray<T>` |
+| `Linq.FromOwned<T>` | Entry point over a temporary list that Linq frees with the query — see [Ownership](#ownership) |
 
 Delphi interfaces cannot declare generic methods, which is why the generic operators (`Select`, `Map`, `Zip`, `GroupBy`) live on the `TQuery<T>` record rather than on the interface. Pass `IEnumerable<T>` around; chain on `TQuery<T>`.
 
@@ -71,6 +72,8 @@ if not Q.IsEmpty then
 
 The flip side is that each terminal call **re-enumerates the source**. With an expensive or single-shot source, materialize once (`ToArray` / `ToList`) and query that.
 
+Over a source Linq owns, an element a terminal hands to the application is not yielded again — see [Ownership](#ownership).
+
 ### `First…` or `Single…`?
 
 `Single` asserts a shape: it raises `ELinqError` when the sequence is empty **or holds more than one element**. `SingleOrDefault` tolerates empty but still raises on more than one. Use them when "more than one" means your data is wrong and you want to hear about it:
@@ -81,6 +84,51 @@ Entries.OrderBy(NewestFirst).FirstOrDefault;  // many entries expected → take 
 ```
 
 `TryFirst` / `TrySingle` are the non-raising forms. `TryFirst` is also the only way to tell an empty sequence from one whose first element happens to equal `Default(T)` — something `FirstOrDefault` cannot express for value types.
+
+---
+
+## Ownership
+
+Linq handles references, never objects: which list frees an object is decided by four rules.
+
+1. **`Linq.From(X)`** — X belongs to the application. Linq never frees it, nor any of its objects.
+2. **`Linq.FromOwned(X)`** — X is a temporary list that nobody else keeps. Linq frees it when the last query built on it is released.
+3. **The operators** (`Where`, `Select`, `Take`…) create nothing: they keep referencing the source.
+4. **What a terminal returns belongs to the application.** The container it creates, always. The objects, with `From`, stay with whoever owned them; with `FromOwned`, they pass to the application. An object a lambda creates belongs to the application in both cases.
+
+### A source Linq owns
+
+`FromOwned` takes a `TObjectList<T>` — or a list derived from it — of a class `T`. It is the entry for a list that a call returns and nobody keeps in a variable:
+
+```pascal
+Orders := TObjectList<TOrder>.Create;          // owns its objects
+Linq.FromOwned<TOrder>(LoadOrders(Customer))    // a temporary list
+  .Where(IsPending)
+  .ToList(Orders);
+// the pending orders now belong to Orders; the temporary list and the
+// other orders are freed with the query
+```
+
+What each terminal does over an owned source:
+
+| Terminal | Over an owned source |
+|----------|----------------------|
+| `ToList(List)` / `ToList` / `ToArray` / `ToSmartArray` | Every element put in the container passes to the application |
+| `FirstOrDefault` / `LastOrDefault` / `TryFirst` / `Single` / `SingleOrDefault` / `TrySingle` | The element returned passes to the application; a fallback value passed in is not the source's and is not touched |
+| `IsEmpty` / `Any` | No element changes owner |
+| `for..in` | Lends the elements while the query lives |
+
+- An element that passed to the application is not yielded again by any later terminal over the same source.
+- When the list does not own its objects (`OwnsObjects = False`), Linq frees only the list, and no element changes owner.
+- When adding an element to the target list raises, the element stays where it ended up — in the target if the target kept it, in the source otherwise — and the exception reaches the caller.
+- To look at an object without taking it, project before the terminal: `Linq.FromOwned<TOrder>(LoadOrders(Customer)).Select<string>(OrderNumber).FirstOrDefault` returns a string, and every order stays with the source.
+- The query's temporaries live until the end of the routine that builds it, or inside a loop until the next iteration, and the source lives with them. To release it earlier, keep the query in a variable and reset it: `Q := Default(TQuery<TOrder>)`.
+
+Limits:
+
+- Converting the query to `IEnumerable<T>` — implicitly or with `AsEnumerable` — and `GroupBy` lend the elements: what is read through them is valid while the query lives, and no terminal reached that way hands anything over.
+- A projection that returns an object owned by an element — a `Select` returning `Order.Customer` — does not change its owner: it lives as long as the element.
+- A list the application still uses is freed with the query: `FromOwned` is only for a list nobody else keeps.
 
 ---
 

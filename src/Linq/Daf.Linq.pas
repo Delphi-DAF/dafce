@@ -66,6 +66,36 @@ type
   end;
 
   /// <summary>
+  ///   The owner of a query's source when Linq owns it. Each object a terminal hands over is
+  ///   released to it, and from then on the source neither yields nor frees that object.
+  /// </summary>
+  IOwnedSource = interface
+    ['{3F6A2D1C-8B4E-4C7A-9E21-5D0B7A64C3E9}']
+    procedure Release(Item: TObject);
+  end;
+
+  /// <summary>
+  ///   The source of a query built with <c>Linq.FromOwned</c>: a sequence over a list it owns,
+  ///   freed with the last query that reaches it.
+  /// </summary>
+  /// <remarks>
+  ///   In the interface section for the same reason as <c>TGrouping&lt;TKey,T&gt;</c>:
+  ///   <c>Linq.FromOwned&lt;T&gt;</c> is a generic method and names it, and Delphi rejects
+  ///   E2506 if it lives in the implementation section. Consumers hold the
+  ///   <c>TQuery&lt;T&gt;</c> it returns.
+  /// </remarks>
+  TOwnedSource<T: class> = class(TDeferredEnumerable<T>, IOwnedSource)
+  private
+    FList: TObjectList<T>;
+    FOwnsItems: Boolean;
+    FDelivered: TDictionary<TObject, Byte>;
+  public
+    constructor Create(const List: TObjectList<T>);
+    destructor Destroy; override;
+    procedure Release(Item: TObject);
+  end;
+
+  /// <summary>
   ///   The fluent operator surface over an <c>IEnumerable&lt;T&gt;</c>. A value type:
   ///   copy-cheap, ref-counted through its inner sequence. Converts implicitly to
   ///   <c>IEnumerable&lt;T&gt;</c> and is for..in-able.
@@ -73,6 +103,10 @@ type
   TQuery<T> = record
   private
     FSeq: IEnumerable<T>;
+    FOwner: IOwnedSource;
+    function TransfersOwnership: Boolean;
+    procedure Handover(const Item: T);
+    procedure AddHandingOver(const List: TList<T>; const Item: T);
   public
     class operator Implicit(const Seq: IEnumerable<T>): TQuery<T>;
     class operator Implicit(const Query: TQuery<T>): IEnumerable<T>;
@@ -114,6 +148,8 @@ type
     // value stays usable afterwards and a terminal may be called again. Note
     // that each call re-enumerates the source, so with an expensive or
     // single-shot source materialize once (ToArray/ToList) and query that.
+    // Over a source Linq owns (FromOwned), what a terminal hands to the caller
+    // is not yielded again.
 
     /// <summary>True when the sequence produces no element (stops at the first).</summary>
     function IsEmpty: Boolean;
@@ -152,7 +188,10 @@ type
     function ToArray: TArray<T>;
     /// <summary>Materializes the sequence into a new (caller-owned) list.</summary>
     function ToList: TList<T>; overload;
-    /// <summary>Appends the sequence to a list the caller owns (ownership is not taken).</summary>
+    /// <summary>
+    ///   Appends the sequence to a list the caller owns, and takes no ownership of the list.
+    ///   Over a source Linq owns, each element appended passes to the caller.
+    /// </summary>
     procedure ToList(const List: TList<T>); overload;
     /// <summary>Materializes into Commons' eager <c>TSmartArray&lt;T&gt;</c> (the lazy→eager bridge).</summary>
     function ToSmartArray: TSmartArray<T>;
@@ -160,8 +199,8 @@ type
 
   /// <summary>
   ///   Entry point into the sequence engine — builds a <c>TQuery&lt;T&gt;</c> over
-  ///   an in-memory source with typed closures. All overloads are non-owning and
-  ///   lazy.
+  ///   an in-memory source with typed closures. Every entry is lazy. The
+  ///   <c>From</c> overloads are non-owning; <c>FromOwned</c> takes its list over.
   /// </summary>
   Linq = record
   public
@@ -170,6 +209,13 @@ type
     class function From<T>(const Source: TArray<T>): TQuery<T>; overload; static;
     /// <summary>Enters the engine over Commons' eager <c>TSmartArray&lt;T&gt;</c> (the eager→lazy bridge).</summary>
     class function From<T>(const Source: TSmartArray<T>): TQuery<T>; overload; static;
+    /// <summary>
+    ///   Enters the engine over a temporary list that Linq takes over and frees with the last
+    ///   query built on it. Each object a terminal returns, or puts in a collection, passes to
+    ///   the caller and is not freed with the list; the rest are. <c>for..in</c>, a conversion to
+    ///   <c>IEnumerable&lt;T&gt;</c> and <c>GroupBy</c> lend the objects without handing them over.
+    /// </summary>
+    class function FromOwned<T: class>(const Source: TObjectList<T>): TQuery<T>; static;
   end;
 
 implementation
@@ -210,10 +256,68 @@ begin
   Result := FMembers;
 end;
 
+{ TOwnedSource<T> }
+
+constructor TOwnedSource<T>.Create(const List: TObjectList<T>);
+begin
+  FList := List;
+  FOwnsItems := List.OwnsObjects;
+  FDelivered := TDictionary<TObject, Byte>.Create;
+  var Src: TEnumerable<T> := List;
+  var Delivered := FDelivered;
+  inherited Create(
+    function: IEnumerator<T>
+    begin
+      var Inner: IEnumerator<T> := TEnumeratorAdapter<T>.Create(Src.GetEnumerator);
+      Result := TGeneratorEnumerator<T>.Create(
+        function(var Current: T): Boolean
+        begin
+          repeat
+            Result := Inner.MoveNext;
+          until not Result or (Delivered.Count = 0) or not Delivered.ContainsKey(TObject(Inner.Current));
+          if Result then
+            Current := Inner.Current;
+        end);
+    end);
+end;
+
+destructor TOwnedSource<T>.Destroy;
+begin
+  if FOwnsItems then
+  begin
+    // The list goes before the elements it keeps: emptying it notifies each removal, and a list
+    // that reads its elements there must not receive a freed one.
+    FList.OwnsObjects := False;
+    var Kept: TArray<T>;
+    SetLength(Kept, FList.Count);
+    var N := 0;
+    for var Item in FList do
+      if not FDelivered.ContainsKey(TObject(Item)) then
+      begin
+        Kept[N] := Item;
+        Inc(N);
+      end;
+    FList.Free;
+    for var I := 0 to N - 1 do
+      Kept[I].Free;
+  end
+  else
+    FList.Free;
+  FDelivered.Free;
+  inherited;
+end;
+
+procedure TOwnedSource<T>.Release(Item: TObject);
+begin
+  if FOwnsItems then
+    FDelivered.AddOrSetValue(Item, 0);
+end;
+
 { TQuery<T> }
 
 class operator TQuery<T>.Implicit(const Seq: IEnumerable<T>): TQuery<T>;
 begin
+  Result.FOwner := nil;
   Result.FSeq := Seq;
 end;
 
@@ -236,6 +340,7 @@ function TQuery<T>.Where(const Spec: TFilterSpec<T>): TQuery<T>;
 begin
   var Src := FSeq;
   var Filter := Spec;   // local copy: a const parameter is not safely captured
+  Result.FOwner := FOwner;
   Result.FSeq := TDeferredEnumerable<T>.Create(
     function: IEnumerator<T>
     var
@@ -264,6 +369,7 @@ end;
 function TQuery<T>.Select<TResult>(const Mapper: TFunc<T, TResult>): TQuery<TResult>;
 begin
   var Src := FSeq;
+  Result.FOwner := FOwner;
   Result.FSeq := TDeferredEnumerable<TResult>.Create(
     function: IEnumerator<TResult>
     var
@@ -289,6 +395,7 @@ function TQuery<T>.Take(Count: Integer): TQuery<T>;
 begin
   var Src := FSeq;
   var Limit := Count;
+  Result.FOwner := FOwner;
   Result.FSeq := TDeferredEnumerable<T>.Create(
     function: IEnumerator<T>
     var
@@ -316,6 +423,7 @@ function TQuery<T>.Skip(Count: Integer): TQuery<T>;
 begin
   var Src := FSeq;
   var Drop := Count;
+  Result.FOwner := FOwner;
   Result.FSeq := TDeferredEnumerable<T>.Create(
     function: IEnumerator<T>
     var
@@ -342,6 +450,7 @@ begin
   var Cmp := Comparer;
   if Cmp = nil then
     Cmp := TEqualityComparer<T>.Default;
+  Result.FOwner := FOwner;
   Result.FSeq := TDeferredEnumerable<T>.Create(
     function: IEnumerator<T>
     var
@@ -380,6 +489,7 @@ function TQuery<T>.OrderBy(const Comparer: IComparer<T>): TQuery<T>;
 begin
   var Src := FSeq;
   var Cmp := Comparer;
+  Result.FOwner := FOwner;
   Result.FSeq := TDeferredEnumerable<T>.Create(
     function: IEnumerator<T>
     var
@@ -417,6 +527,7 @@ function TQuery<T>.Zip<TOther, TResult>(const Other: IEnumerable<TOther>;
 begin
   var Src := FSeq;
   var Oth := Other;
+  Result.FOwner := FOwner;
   Result.FSeq := TDeferredEnumerable<TResult>.Create(
     function: IEnumerator<TResult>
     var
@@ -485,6 +596,36 @@ begin
     end);
 end;
 
+function TQuery<T>.TransfersOwnership: Boolean;
+begin
+  Result := (GetTypeKind(T) = tkClass) and Assigned(FOwner);
+end;
+
+procedure TQuery<T>.Handover(const Item: T);
+begin
+  if TransfersOwnership then
+    FOwner.Release(TObject(PPointer(@Item)^));
+end;
+
+procedure TQuery<T>.AddHandingOver(const List: TList<T>; const Item: T);
+begin
+  if not TransfersOwnership then
+  begin
+    List.Add(Item);
+    Exit;
+  end;
+  try
+    List.Add(Item);
+  except
+    // An Add can raise after the list already holds the item — a Notify that rejects it — or
+    // before, when the list cannot grow. Ownership follows where the item ended up.
+    if List.IndexOf(Item) >= 0 then
+      Handover(Item);
+    raise;
+  end;
+  Handover(Item);
+end;
+
 function TQuery<T>.ToArray: TArray<T>;
 begin
   var Lst := ToList;
@@ -500,14 +641,14 @@ begin
   Result := TList<T>.Create;
   var E := FSeq.GetEnumerator;
   while E.MoveNext do
-    Result.Add(E.Current);
+    AddHandingOver(Result, E.Current);
 end;
 
 procedure TQuery<T>.ToList(const List: TList<T>);
 begin
   var E := FSeq.GetEnumerator;
   while E.MoveNext do
-    List.Add(E.Current);
+    AddHandingOver(List, E.Current);
 end;
 
 function TQuery<T>.IsEmpty: Boolean;
@@ -525,7 +666,10 @@ begin
   var E := FSeq.GetEnumerator;
   Result := E.MoveNext;
   if Result then
-    Value := E.Current
+  begin
+    Value := E.Current;
+    Handover(Value);
+  end
   else
     Value := Default(T);
 end;
@@ -543,10 +687,7 @@ end;
 
 function TQuery<T>.LastOrDefault: T;
 begin
-  Result := Default(T);
-  var E := FSeq.GetEnumerator;
-  while E.MoveNext do
-    Result := E.Current;
+  Result := LastOrDefault(Default(T));
 end;
 
 function TQuery<T>.LastOrDefault(const Fallback: T): T;
@@ -559,7 +700,9 @@ begin
     Result := E.Current;
     Found := True;
   end;
-  if not Found then
+  if Found then
+    Handover(Result)
+  else
     Result := Fallback;
 end;
 
@@ -577,7 +720,9 @@ begin
   begin
     Value := Default(T);
     Result := False;
-  end;
+  end
+  else
+    Handover(Value);
 end;
 
 function TQuery<T>.Single: T;
@@ -590,6 +735,7 @@ begin
     raise ELinqError.Create(
       'Single: the sequence holds more than one element; expected exactly one. '
       + 'Use FirstOrDefault when the first of several is what you mean.');
+  Handover(Result);
 end;
 
 function TQuery<T>.SingleOrDefault: T;
@@ -607,6 +753,7 @@ begin
     raise ELinqError.Create(
       'SingleOrDefault: the sequence holds more than one element; expected at most one. '
       + 'Use FirstOrDefault when the first of several is what you mean.');
+  Handover(Result);
 end;
 
 function TQuery<T>.ToSmartArray: TSmartArray<T>;
@@ -618,6 +765,7 @@ end;
 
 class function Linq.From<T>(const Source: IEnumerable<T>): TQuery<T>;
 begin
+  Result.FOwner := nil;
   Result.FSeq := Source;
 end;
 
@@ -631,6 +779,7 @@ begin
     begin
       Result := TEnumeratorAdapter<T>.Create(Src.GetEnumerator);
     end);
+  Result.FOwner := nil;
   Result.FSeq := Seq;
 end;
 
@@ -652,6 +801,7 @@ begin
             Current := Data[Idx];
         end);
     end);
+  Result.FOwner := nil;
   Result.FSeq := Seq;
 end;
 
@@ -659,6 +809,13 @@ class function Linq.From<T>(const Source: TSmartArray<T>): TQuery<T>;
 begin
   var Data: TArray<T> := Source;
   Result := From<T>(Data);
+end;
+
+class function Linq.FromOwned<T>(const Source: TObjectList<T>): TQuery<T>;
+begin
+  var Owned := TOwnedSource<T>.Create(Source);
+  Result.FSeq := Owned;
+  Result.FOwner := Owned;
 end;
 
 end.

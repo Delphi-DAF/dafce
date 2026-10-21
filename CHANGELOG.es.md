@@ -70,6 +70,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - **SystemProcess**: `StandardOutput` y `StandardError` dan a cada flujo del hijo su destino, un `TProcessOutput`: capturado, heredado del padre, descartado o escrito en un fichero
 - **SystemProcess**: `StandardOutputEncoding` y `StandardErrorEncoding` — la codificación de lo capturado
 - **SystemProcess**: `Id` — el identificador que el sistema dio al hijo, desde que se lanza
+- **Linq**: `Linq.FromOwned` — consultar una lista temporal que nadie más guarda: Linq la libera con la consulta, y cada objeto que devuelve un terminal pasa al llamante
 
 ### Changed
 

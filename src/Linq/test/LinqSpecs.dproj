@@ -99,6 +99,8 @@
         </DelphiCompile>
         <DCCReference Include="Sequence.Feat.pas"/>
         <DCCReference Include="Operators.Feat.pas"/>
+        <DCCReference Include="Ownership.Doubles.pas"/>
+        <DCCReference Include="OwnedSource.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>

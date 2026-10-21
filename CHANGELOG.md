@@ -71,6 +71,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - **SystemProcess**: `StandardOutput` and `StandardError` give each stream of the child its destination, a `TProcessOutput`: captured, inherited from the parent, discarded or written to a file
 - **SystemProcess**: `StandardOutputEncoding` and `StandardErrorEncoding` — the encoding of what is captured
 - **SystemProcess**: `Id` — the identifier the system gave the child, from the moment it is launched
+- **Linq**: `Linq.FromOwned` — query a temporary list that nobody else keeps: Linq frees it with the query, and each object a terminal returns passes to the caller
 
 ### Changed
 

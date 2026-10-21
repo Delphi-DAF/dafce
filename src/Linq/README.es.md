@@ -16,6 +16,7 @@ Biblioteca autónoma de transformación de colecciones: perezosa y con conteo de
 | `TQuery<T>` | La **superficie de operadores** fluida: un tipo valor que envuelve un `System.IEnumerable<T>` diferido y convierte implícitamente hacia y desde él |
 | `IGrouping<TKey, T>` | Un grupo producido por `GroupBy`: una `Key` y sus `Members` |
 | `Linq.From<T>` | Punto de entrada — construye un `TQuery<T>` sobre un array, un `TEnumerable<T>`, un `IEnumerable<T>` o un `TSmartArray<T>` |
+| `Linq.FromOwned<T>` | Punto de entrada sobre una lista temporal que Linq libera con la consulta — ver [Propiedad](#propiedad) |
 
 Las interfaces de Delphi no pueden declarar métodos genéricos: por eso los operadores genéricos (`Select`, `Map`, `Zip`, `GroupBy`) viven en el record `TQuery<T>` y no en la interfaz. Pasa `IEnumerable<T>`; encadena sobre `TQuery<T>`.
 
@@ -71,6 +72,8 @@ if not Q.IsEmpty then
 
 La contrapartida es que cada llamada a un terminal **vuelve a recorrer la fuente**. Con una fuente costosa o de una sola pasada, materializa una vez (`ToArray` / `ToList`) y consulta eso.
 
+Sobre una fuente que Linq posee, un elemento que un terminal entrega a la aplicación no vuelve a salir — ver [Propiedad](#propiedad).
+
 ### ¿`First…` o `Single…`?
 
 `Single` afirma una forma: lanza `ELinqError` si la secuencia está vacía **o tiene más de un elemento**. `SingleOrDefault` tolera vacío pero sigue lanzando con más de uno. Úsalos cuando "más de uno" signifique que tus datos están mal y quieras enterarte:
@@ -81,6 +84,51 @@ Entradas.OrderBy(MasRecientePrimero).FirstOrDefault;  // se esperan muchos → c
 ```
 
 `TryFirst` / `TrySingle` son las formas que no lanzan. `TryFirst` es además la única manera de distinguir una secuencia vacía de una cuyo primer elemento vale justo `Default(T)` — algo que `FirstOrDefault` no puede expresar en tipos valor.
+
+---
+
+## Propiedad
+
+Linq maneja referencias, nunca objetos: qué lista libera cada objeto lo deciden cuatro reglas.
+
+1. **`Linq.From(X)`** — X es de la aplicación. Linq nunca lo libera, ni a él ni a sus objetos.
+2. **`Linq.FromOwned(X)`** — X es una lista temporal que nadie más guarda. Linq la libera cuando se libera la última consulta construida sobre ella.
+3. **Los operadores** (`Where`, `Select`, `Take`…) no crean nada: mantienen la referencia a la fuente.
+4. **Lo que devuelve un terminal es de la aplicación.** El contenedor que crea, siempre. Los objetos, con `From`, siguen siendo de quien los poseía; con `FromOwned`, pasan a la aplicación. Un objeto que crea una lambda es de la aplicación en los dos casos.
+
+### Una fuente que Linq posee
+
+`FromOwned` recibe una `TObjectList<T>` —o una lista que descienda de ella— de una clase `T`. Es la entrada para una lista que devuelve una llamada y nadie guarda en una variable:
+
+```pascal
+Pedidos := TObjectList<TPedido>.Create;           // posee sus objetos
+Linq.FromOwned<TPedido>(CargarPedidos(Cliente))   // una lista temporal
+  .Where(EstaPendiente)
+  .ToList(Pedidos);
+// los pedidos pendientes son ahora de Pedidos; la lista temporal y los
+// demás pedidos se liberan con la consulta
+```
+
+Lo que hace cada terminal sobre una fuente poseída:
+
+| Terminal | Sobre una fuente poseída |
+|----------|--------------------------|
+| `ToList(List)` / `ToList` / `ToArray` / `ToSmartArray` | Cada elemento que pone en el contenedor pasa a la aplicación |
+| `FirstOrDefault` / `LastOrDefault` / `TryFirst` / `Single` / `SingleOrDefault` / `TrySingle` | El elemento que devuelve pasa a la aplicación; un valor por defecto que se le pase no es de la fuente y no se toca |
+| `IsEmpty` / `Any` | Ningún elemento cambia de dueño |
+| `for..in` | Presta los elementos mientras vive la consulta |
+
+- Un elemento que pasó a la aplicación no vuelve a salir en ningún terminal posterior sobre la misma fuente.
+- Si la lista no posee sus objetos (`OwnsObjects = False`), Linq libera solo la lista, y ningún elemento cambia de dueño.
+- Si añadir un elemento a la lista de destino lanza, el elemento se queda donde acabó —en el destino si lo guardó, en la fuente si no— y la excepción llega al llamante.
+- Para mirar un objeto sin quedártelo, proyecta antes del terminal: `Linq.FromOwned<TPedido>(CargarPedidos(Cliente)).Select<string>(NumeroDePedido).FirstOrDefault` devuelve una cadena, y todos los pedidos siguen siendo de la fuente.
+- Los temporales de la consulta viven hasta el final de la rutina que la construye, o dentro de un bucle hasta la vuelta siguiente, y la fuente vive con ellos. Para soltarla antes, guarda la consulta en una variable y reiníciala: `Q := Default(TQuery<TPedido>)`.
+
+Límites:
+
+- Convertir la consulta a `IEnumerable<T>` —de forma implícita o con `AsEnumerable`— y `GroupBy` prestan los elementos: lo que se lee por ahí vale mientras vive la consulta, y ningún terminal al que se llegue así entrega nada.
+- Una proyección que devuelve un objeto que posee un elemento —un `Select` que devuelve `Pedido.Cliente`— no cambia de dueño: vive lo que vive el elemento.
+- Una lista que la aplicación sigue usando se libera con la consulta: `FromOwned` es solo para una lista que nadie más guarda.
 
 ---
 
