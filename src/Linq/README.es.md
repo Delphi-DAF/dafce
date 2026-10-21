@@ -59,6 +59,7 @@ for var P in Adultos do                        // nada se ejecutó hasta esta l�
 | `TryFirst(out Value)` | terminal | El primer elemento **y además** un resultado encontrado/no encontrado |
 | `Single` / `SingleOrDefault` / `TrySingle` | terminal | El único elemento — ver más abajo |
 | `ToArray` / `ToList` / `ToList(List)` / `ToSmartArray` | terminal | Materializa la secuencia |
+| `MoveToList(List)` / `MoveToList` / `MoveToArray` | terminal | Mueve los elementos: los saca de la lista fuente al entregarlos — ver [Propiedad](#propiedad) |
 
 **Diferido por defecto.** `Where`/`Select`/`Take`/`Skip`/`Zip` se ejecutan elemento a elemento durante la iteración. `OrderBy`/`Distinct`/`GroupBy` necesitan todos los elementos, así que materializan una vez al comenzar la enumeración — pero tampoco antes de ella.
 
@@ -72,7 +73,7 @@ if not Q.IsEmpty then
 
 La contrapartida es que cada llamada a un terminal **vuelve a recorrer la fuente**. Con una fuente costosa o de una sola pasada, materializa una vez (`ToArray` / `ToList`) y consulta eso.
 
-Sobre una fuente que Linq posee, un elemento que un terminal entrega a la aplicación no vuelve a salir — ver [Propiedad](#propiedad).
+Las excepciones están en [Propiedad](#propiedad): sobre una fuente que Linq posee, un elemento que un terminal entrega a la aplicación no vuelve a salir, y los terminales `MoveTo…` sacan de la lista fuente lo que entregan.
 
 ### ¿`First…` o `Single…`?
 
@@ -89,12 +90,13 @@ Entradas.OrderBy(MasRecientePrimero).FirstOrDefault;  // se esperan muchos → c
 
 ## Propiedad
 
-Linq maneja referencias, nunca objetos: qué lista libera cada objeto lo deciden cuatro reglas.
+Linq maneja referencias, nunca objetos: qué lista libera cada objeto lo deciden cinco reglas.
 
 1. **`Linq.From(X)`** — X es de la aplicación. Linq nunca lo libera, ni a él ni a sus objetos.
 2. **`Linq.FromOwned(X)`** — X es una lista temporal que nadie más guarda. Linq la libera cuando se libera la última consulta construida sobre ella.
 3. **Los operadores** (`Where`, `Select`, `Take`…) no crean nada: mantienen la referencia a la fuente.
 4. **Lo que devuelve un terminal es de la aplicación.** El contenedor que crea, siempre. Los objetos, con `From`, siguen siendo de quien los poseía; con `FromOwned`, pasan a la aplicación. Un objeto que crea una lambda es de la aplicación en los dos casos.
+5. **`MoveToList` / `MoveToArray`** sacan de la lista fuente lo que entregan, y no liberan nada. Son los únicos terminales que cambian la fuente.
 
 ### Una fuente que Linq posee
 
@@ -129,6 +131,22 @@ Límites:
 - Convertir la consulta a `IEnumerable<T>` —de forma implícita o con `AsEnumerable`— y `GroupBy` prestan los elementos: lo que se lee por ahí vale mientras vive la consulta, y ningún terminal al que se llegue así entrega nada.
 - Una proyección que devuelve un objeto que posee un elemento —un `Select` que devuelve `Pedido.Cliente`— no cambia de dueño: vive lo que vive el elemento.
 - Una lista que la aplicación sigue usando se libera con la consulta: `FromOwned` es solo para una lista que nadie más guarda.
+
+### Mover elementos a otra lista
+
+Cuando la aplicación se queda la fuente y quiere parte de ella en otra lista, `MoveToList(List)` saca de la lista fuente cada elemento seleccionado —con `Extract`, que no lo libera— y lo añade a `List`. `MoveToList` sin argumentos hace lo mismo en una lista nueva, y `MoveToArray` en un array nuevo.
+
+```pascal
+Linq.From<TPedido>(Pedidos)        // Pedidos sigue siendo de la aplicación
+  .Where(EstaArchivado)
+  .MoveToList(Archivados);
+// los pedidos archivados salieron de Pedidos y están en Archivados: un dueño cada uno
+```
+
+- Mover necesita una consulta que llegue a una lista: `Linq.From` o `Linq.FromOwned` sobre un `TList<T>`, con operadores que conservan el tipo del elemento (`Where`, `Take`, `Skip`, `Distinct`, `OrderBy`). Sobre un array o un `IEnumerable<T>`, o después de `Select` o `Zip`, los tres lanzan `ELinqError` (`MoveToList: the query does not reach a source list…`) y la fuente no cambia.
+- La selección se recoge entera antes de mover nada, así que el orden de la cadena es el orden en el destino.
+- Si añadir un elemento al destino lanza, el elemento se queda donde acabó, como con una fuente poseída.
+- Sobre una fuente que Linq posee, lo que se mueve sale de la lista y no se libera con ella.
 
 ---
 

@@ -59,6 +59,7 @@ for var P in Adults do                        // nothing ran until this line
 | `TryFirst(out Value)` | terminal | The first element **plus** a found/not-found result |
 | `Single` / `SingleOrDefault` / `TrySingle` | terminal | The one and only element — see below |
 | `ToArray` / `ToList` / `ToList(List)` / `ToSmartArray` | terminal | Materializes the sequence |
+| `MoveToList(List)` / `MoveToList` / `MoveToArray` | terminal | Moves the elements: takes them out of the source list as it delivers them — see [Ownership](#ownership) |
 
 **Deferred by default.** `Where`/`Select`/`Take`/`Skip`/`Zip` run element-by-element while iterating. `OrderBy`/`Distinct`/`GroupBy` need every element, so they materialize once when enumeration starts — but still nothing happens until then.
 
@@ -72,7 +73,7 @@ if not Q.IsEmpty then
 
 The flip side is that each terminal call **re-enumerates the source**. With an expensive or single-shot source, materialize once (`ToArray` / `ToList`) and query that.
 
-Over a source Linq owns, an element a terminal hands to the application is not yielded again — see [Ownership](#ownership).
+The exceptions are in [Ownership](#ownership): over a source Linq owns, an element a terminal hands to the application is not yielded again, and the `MoveTo…` terminals take what they deliver out of the source list.
 
 ### `First…` or `Single…`?
 
@@ -89,12 +90,13 @@ Entries.OrderBy(NewestFirst).FirstOrDefault;  // many entries expected → take 
 
 ## Ownership
 
-Linq handles references, never objects: which list frees an object is decided by four rules.
+Linq handles references, never objects: which list frees an object is decided by five rules.
 
 1. **`Linq.From(X)`** — X belongs to the application. Linq never frees it, nor any of its objects.
 2. **`Linq.FromOwned(X)`** — X is a temporary list that nobody else keeps. Linq frees it when the last query built on it is released.
 3. **The operators** (`Where`, `Select`, `Take`…) create nothing: they keep referencing the source.
 4. **What a terminal returns belongs to the application.** The container it creates, always. The objects, with `From`, stay with whoever owned them; with `FromOwned`, they pass to the application. An object a lambda creates belongs to the application in both cases.
+5. **`MoveToList` / `MoveToArray`** take what they deliver out of the source list, and free nothing. They are the only terminals that change the source.
 
 ### A source Linq owns
 
@@ -129,6 +131,22 @@ Limits:
 - Converting the query to `IEnumerable<T>` — implicitly or with `AsEnumerable` — and `GroupBy` lend the elements: what is read through them is valid while the query lives, and no terminal reached that way hands anything over.
 - A projection that returns an object owned by an element — a `Select` returning `Order.Customer` — does not change its owner: it lives as long as the element.
 - A list the application still uses is freed with the query: `FromOwned` is only for a list nobody else keeps.
+
+### Moving elements to another list
+
+When the application keeps the source and wants part of it in another list, `MoveToList(List)` takes each selected element out of the source list — with `Extract`, which does not free it — and adds it to `List`. `MoveToList` without arguments does the same into a new list, and `MoveToArray` into a new array.
+
+```pascal
+Linq.From<TOrder>(Orders)          // Orders stays with the application
+  .Where(IsArchived)
+  .MoveToList(Archived);
+// the archived orders left Orders and are in Archived: one owner each
+```
+
+- Moving needs a query that reaches a list: `Linq.From` or `Linq.FromOwned` over a `TList<T>`, through operators that keep the element type (`Where`, `Take`, `Skip`, `Distinct`, `OrderBy`). Over an array or an `IEnumerable<T>`, or after `Select` or `Zip`, the three raise `ELinqError` (`MoveToList: the query does not reach a source list…`) and the source is left unchanged.
+- The selection is collected before anything moves, so the order of the chain is the order in the target.
+- When adding an element to the target raises, the element stays where it ended up, as with an owned source.
+- Over a source Linq owns, what is moved leaves the list and is not freed with it.
 
 ---
 

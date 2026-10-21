@@ -8,7 +8,8 @@ uses
   Sequence.Feat in 'Sequence.Feat.pas',
   Operators.Feat in 'Operators.Feat.pas',
   Ownership.Doubles in 'Ownership.Doubles.pas',
-  OwnedSource.Feat in 'OwnedSource.Feat.pas';
+  OwnedSource.Feat in 'OwnedSource.Feat.pas',
+  MoveTerminals.Feat in 'MoveTerminals.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

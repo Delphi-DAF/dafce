@@ -101,6 +101,7 @@
         <DCCReference Include="Operators.Feat.pas"/>
         <DCCReference Include="Ownership.Doubles.pas"/>
         <DCCReference Include="OwnedSource.Feat.pas"/>
+        <DCCReference Include="MoveTerminals.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>

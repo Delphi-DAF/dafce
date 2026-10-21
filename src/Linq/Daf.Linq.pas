@@ -104,9 +104,12 @@ type
   private
     FSeq: IEnumerable<T>;
     FOwner: IOwnedSource;
+    FSourceList: TList<T>;
     function TransfersOwnership: Boolean;
     procedure Handover(const Item: T);
     procedure AddHandingOver(const List: TList<T>; const Item: T);
+    function Collect: TArray<T>;
+    procedure MoveOne(const Target: TList<T>; const Item: T);
   public
     class operator Implicit(const Seq: IEnumerable<T>): TQuery<T>;
     class operator Implicit(const Query: TQuery<T>): IEnumerable<T>;
@@ -149,7 +152,8 @@ type
     // that each call re-enumerates the source, so with an expensive or
     // single-shot source materialize once (ToArray/ToList) and query that.
     // Over a source Linq owns (FromOwned), what a terminal hands to the caller
-    // is not yielded again.
+    // is not yielded again. The MoveTo terminals take what they deliver out of
+    // the source list.
 
     /// <summary>True when the sequence produces no element (stops at the first).</summary>
     function IsEmpty: Boolean;
@@ -195,6 +199,17 @@ type
     procedure ToList(const List: TList<T>); overload;
     /// <summary>Materializes into Commons' eager <c>TSmartArray&lt;T&gt;</c> (the lazy→eager bridge).</summary>
     function ToSmartArray: TSmartArray<T>;
+    /// <summary>
+    ///   Moves the sequence into a list the caller owns: each element is taken out of the source
+    ///   list, without being freed, and appended to <c>Target</c>. Needs a query built with
+    ///   <c>Linq.From</c> or <c>Linq.FromOwned</c> over a <c>TList&lt;T&gt;</c>, through operators
+    ///   that keep the element type; otherwise raises <see cref="ELinqError"/> and moves nothing.
+    /// </summary>
+    procedure MoveToList(const Target: TList<T>); overload;
+    /// <summary>As <c>MoveToList(Target)</c>, into a new list the caller owns.</summary>
+    function MoveToList: TList<T>; overload;
+    /// <summary>As <c>MoveToList(Target)</c>, into a new array.</summary>
+    function MoveToArray: TArray<T>;
   end;
 
   /// <summary>
@@ -318,6 +333,7 @@ end;
 class operator TQuery<T>.Implicit(const Seq: IEnumerable<T>): TQuery<T>;
 begin
   Result.FOwner := nil;
+  Result.FSourceList := nil;
   Result.FSeq := Seq;
 end;
 
@@ -341,6 +357,7 @@ begin
   var Src := FSeq;
   var Filter := Spec;   // local copy: a const parameter is not safely captured
   Result.FOwner := FOwner;
+  Result.FSourceList := FSourceList;
   Result.FSeq := TDeferredEnumerable<T>.Create(
     function: IEnumerator<T>
     var
@@ -370,6 +387,7 @@ function TQuery<T>.Select<TResult>(const Mapper: TFunc<T, TResult>): TQuery<TRes
 begin
   var Src := FSeq;
   Result.FOwner := FOwner;
+  Result.FSourceList := nil;
   Result.FSeq := TDeferredEnumerable<TResult>.Create(
     function: IEnumerator<TResult>
     var
@@ -396,6 +414,7 @@ begin
   var Src := FSeq;
   var Limit := Count;
   Result.FOwner := FOwner;
+  Result.FSourceList := FSourceList;
   Result.FSeq := TDeferredEnumerable<T>.Create(
     function: IEnumerator<T>
     var
@@ -424,6 +443,7 @@ begin
   var Src := FSeq;
   var Drop := Count;
   Result.FOwner := FOwner;
+  Result.FSourceList := FSourceList;
   Result.FSeq := TDeferredEnumerable<T>.Create(
     function: IEnumerator<T>
     var
@@ -451,6 +471,7 @@ begin
   if Cmp = nil then
     Cmp := TEqualityComparer<T>.Default;
   Result.FOwner := FOwner;
+  Result.FSourceList := FSourceList;
   Result.FSeq := TDeferredEnumerable<T>.Create(
     function: IEnumerator<T>
     var
@@ -490,6 +511,7 @@ begin
   var Src := FSeq;
   var Cmp := Comparer;
   Result.FOwner := FOwner;
+  Result.FSourceList := FSourceList;
   Result.FSeq := TDeferredEnumerable<T>.Create(
     function: IEnumerator<T>
     var
@@ -528,6 +550,7 @@ begin
   var Src := FSeq;
   var Oth := Other;
   Result.FOwner := FOwner;
+  Result.FSourceList := nil;
   Result.FSeq := TDeferredEnumerable<TResult>.Create(
     function: IEnumerator<TResult>
     var
@@ -761,11 +784,71 @@ begin
   Result := ToArray;   // TArray<T> -> TSmartArray<T> (implicit)
 end;
 
+function TQuery<T>.Collect: TArray<T>;
+begin
+  var Lst := TList<T>.Create;
+  try
+    var E := FSeq.GetEnumerator;
+    while E.MoveNext do
+      Lst.Add(E.Current);
+    Result := Lst.ToArray;
+  finally
+    Lst.Free;
+  end;
+end;
+
+procedure TQuery<T>.MoveOne(const Target: TList<T>; const Item: T);
+begin
+  try
+    Target.Add(Item);
+  except
+    // As in a handover: the item goes where it ended up, so a Notify that rejects it after
+    // keeping it does not leave it in both lists.
+    if Target.IndexOf(Item) >= 0 then
+      FSourceList.Extract(Item);
+    raise;
+  end;
+  FSourceList.Extract(Item);
+end;
+
+procedure TQuery<T>.MoveToList(const Target: TList<T>);
+begin
+  if FSourceList = nil then
+    raise ELinqError.Create('MoveToList: the query does not reach a source list. Moving needs '
+      + 'Linq.From or Linq.FromOwned over a TList<T>, and a chain that keeps the element type.');
+  // The selection is collected first: the lazy chain walks the same list that is about to lose
+  // the elements, and taking one out under the enumerator would skip the next.
+  for var Item in Collect do
+    MoveOne(Target, Item);
+end;
+
+function TQuery<T>.MoveToList: TList<T>;
+begin
+  Result := TList<T>.Create;
+  try
+    MoveToList(Result);
+  except
+    Result.Free;
+    raise;
+  end;
+end;
+
+function TQuery<T>.MoveToArray: TArray<T>;
+begin
+  var Lst := MoveToList;
+  try
+    Result := Lst.ToArray;
+  finally
+    Lst.Free;
+  end;
+end;
+
 { Linq }
 
 class function Linq.From<T>(const Source: IEnumerable<T>): TQuery<T>;
 begin
   Result.FOwner := nil;
+  Result.FSourceList := nil;
   Result.FSeq := Source;
 end;
 
@@ -780,6 +863,10 @@ begin
       Result := TEnumeratorAdapter<T>.Create(Src.GetEnumerator);
     end);
   Result.FOwner := nil;
+  if Source is TList<T> then
+    Result.FSourceList := TList<T>(Source)
+  else
+    Result.FSourceList := nil;
   Result.FSeq := Seq;
 end;
 
@@ -802,6 +889,7 @@ begin
         end);
     end);
   Result.FOwner := nil;
+  Result.FSourceList := nil;
   Result.FSeq := Seq;
 end;
 
@@ -816,6 +904,7 @@ begin
   var Owned := TOwnedSource<T>.Create(Source);
   Result.FSeq := Owned;
   Result.FOwner := Owned;
+  Result.FSourceList := Source;
 end;
 
 end.

@@ -71,6 +71,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - **SystemProcess**: `StandardOutputEncoding` y `StandardErrorEncoding` — la codificación de lo capturado
 - **SystemProcess**: `Id` — el identificador que el sistema dio al hijo, desde que se lanza
 - **Linq**: `Linq.FromOwned` — consultar una lista temporal que nadie más guarda: Linq la libera con la consulta, y cada objeto que devuelve un terminal pasa al llamante
+- **Linq**: `MoveToList` y `MoveToArray` — terminales que sacan de la lista fuente los elementos seleccionados al entregarlos, así que cada objeto conserva un solo dueño
 
 ### Changed
 

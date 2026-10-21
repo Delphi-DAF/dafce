@@ -72,6 +72,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - **SystemProcess**: `StandardOutputEncoding` and `StandardErrorEncoding` — the encoding of what is captured
 - **SystemProcess**: `Id` — the identifier the system gave the child, from the moment it is launched
 - **Linq**: `Linq.FromOwned` — query a temporary list that nobody else keeps: Linq frees it with the query, and each object a terminal returns passes to the caller
+- **Linq**: `MoveToList` and `MoveToArray` — terminals that take the selected elements out of the source list as they deliver them, so each object keeps a single owner
 
 ### Changed
 
