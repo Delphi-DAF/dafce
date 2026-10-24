@@ -33,6 +33,11 @@ type
     FArchivePattern: TRegEx;
     // Cierto mientras dura una racha de archivados fallidos: el primero se informa, los demas no.
     FArchiveFailing: Boolean;
+    // La fecha de comienzo de FStartedPath, fijada al abrirlo: las estrategias la preguntan en cada
+    // linea y no se vuelve a leer del disco.
+    FStartedPath: string;
+    FStartedAt: TDateTime;
+    function StartedAt(const Path: string): TDateTime;
     procedure EnsureStreamFor(const Path: string);
     function ResolveFileName(const Entry: TLogEntry): string;
     procedure SetFileName(const Value: string);
@@ -70,6 +75,9 @@ implementation
 uses
   {$IFDEF MSWINDOWS}
   Winapi.Windows,
+  {$ENDIF}
+  {$IFDEF POSIX}
+  Posix.Stdio,
   {$ENDIF}
   System.Zip,
   System.IOUtils,
@@ -150,6 +158,18 @@ begin
   except
     on Exception do ;
   end;
+  {$ENDIF}
+end;
+
+// La fecha de comienzo de un fichero que ya tenia contenido: la de creacion, y donde el sistema no la
+// conserva, la de ultima escritura. Fuera de Windows, macOS e iOS, GetCreationTime devuelve st_ctime,
+// la del ultimo cambio de estado, que se mueve con cada escritura.
+function StartDateOnDisk(const Path: string): TDateTime;
+begin
+  {$IF defined(MSWINDOWS) or defined(MACOS)}
+  Result := TFile.GetCreationTime(Path);
+  {$ELSE}
+  Result := TFile.GetLastWriteTime(Path);
   {$ENDIF}
 end;
 
@@ -250,7 +270,7 @@ end;
 
 class function TRotationHourly.NeedRotate(const Target: TFileTarget; const Path: string; out RotatedPath: string): Boolean;
 begin
-  var FileDate := TFile.GetCreationTime(Path);
+  var FileDate := Target.StartedAt(Path);
   if (Trunc(FileDate) <> Trunc(Now)) or (HourOf(FileDate) <> HourOf(Now)) then
   begin
     RotatedPath := BuildRotatePath(Path, FileDate);
@@ -263,7 +283,7 @@ end;
 
 class function TRotationDaily.NeedRotate(const Target: TFileTarget; const Path: string; out RotatedPath: string): Boolean;
 begin
-  var FileDate := TFile.GetCreationTime(Path);
+  var FileDate := Target.StartedAt(Path);
   if Trunc(Now) > Trunc(FileDate) then
   begin
     RotatedPath := BuildRotatePath(Path, FileDate);
@@ -276,7 +296,7 @@ end;
 
 class function TRotationDays.NeedRotate(const Target: TFileTarget; const Path: string; out RotatedPath: string): Boolean;
 begin
-  var FileDate := TFile.GetCreationTime(Path);
+  var FileDate := Target.StartedAt(Path);
   if Trunc(Now - FileDate) >= Target.MaxFileAge then
   begin
     RotatedPath := BuildRotatePath(Path, FileDate);
@@ -289,7 +309,7 @@ end;
 
 class function TRotationMonthly.NeedRotate(const Target: TFileTarget; const Path: string; out RotatedPath: string): Boolean;
 begin
-  var FileDate := TFile.GetCreationTime(Path);
+  var FileDate := Target.StartedAt(Path);
   if (MonthOf(FileDate) <> MonthOf(Now)) or (YearOf(FileDate) <> YearOf(Now)) then
   begin
     RotatedPath := BuildRotatePath(Path, FileDate);
@@ -302,7 +322,7 @@ end;
 
 class function TRotationSize.NeedRotate(const Target: TFileTarget; const Path: string; out RotatedPath: string): Boolean;
 begin
-  var FileDate := TFile.GetCreationTime(Path);
+  var FileDate := Target.StartedAt(Path);
   if TFile.GetSize(Path) >= Target.MaxFileSize then
   begin
     RotatedPath := BuildRotatePath(Path, FileDate);
@@ -360,12 +380,21 @@ begin
     end;
   end;
 
-  if not FileExists(Path) then
+  var Created := not FileExists(Path);
+  if Created then
     CreateStartingNow(Path);
   var FileStream := TFileStream.Create(Path, fmOpenWrite or fmShareDenyWrite);
 
   var NewWriter: TStreamWriter;
+  var Started: TDateTime;
   try
+    // Reabrir el mismo fichero tras un archivado que fallo conserva la fecha que ya tenia.
+    if Created or (FileStream.Size = 0) then
+      Started := Now
+    else if SameFileName(Path, FStartedPath) then
+      Started := FStartedAt
+    else
+      Started := StartDateOnDisk(Path);
     FileStream.Seek(0, soEnd);
     NewWriter := TStreamWriter.Create(FileStream);
   except
@@ -380,6 +409,16 @@ begin
   FreeAndNil(FStream);
   FStream := NewWriter;
   FCurrentPath := Path;
+  FStartedPath := Path;
+  FStartedAt := Started;
+end;
+
+function TFileTarget.StartedAt(const Path: string): TDateTime;
+begin
+  if SameFileName(Path, FStartedPath) then
+    Result := FStartedAt
+  else
+    Result := StartDateOnDisk(Path);
 end;
 
 function TFileTarget.RotateCurrentFileIfNeeded(const Path: string): Boolean;

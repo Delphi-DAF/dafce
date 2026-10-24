@@ -321,6 +321,11 @@ Rotated files go to a `history` directory beside the current one. The `Days` and
 policies compare against `MaxFileAge` and `MaxFileSize`, so each one needs its threshold set:
 left at `0` they rotate on every entry.
 
+A file's period starts when the target opens it: at that moment if the target creates the file or
+finds it empty, and at the file's creation date if it already holds entries from an earlier run. The
+target keeps that date while the file is open, so changing the file's dates on disk does not make it
+rotate.
+
 A rotated file is named after the file it archives and the moment that file was started: `app.log`
 becomes `history/app_2026-10-23_093015120.log`. When `history` already holds the file with that
 name, compressed or not, the rotated file is appended to it.

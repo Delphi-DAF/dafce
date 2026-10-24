@@ -326,6 +326,11 @@ Los ficheros rotados van a un directorio `history` junto al actual. Las polític
 comparan contra `MaxFileAge` y `MaxFileSize`, así que cada una necesita su umbral puesto: a `0`
 rotan en cada entrada.
 
+El periodo de un fichero empieza cuando el destino lo abre: en ese momento si el destino lo crea o lo
+encuentra vacío, y en su fecha de creación si ya tiene entradas de una ejecución anterior. El destino
+conserva esa fecha mientras lo tiene abierto, así que cambiar las fechas del fichero en disco no lo
+hace rotar.
+
 Un fichero rotado se nombra por el fichero que archiva y el momento en que ese fichero empezó:
 `app.log` pasa a `history/app_2026-10-23_093015120.log`. Si `history` ya tiene el fichero con ese
 nombre, comprimido o no, el rotado se añade al final de su contenido.

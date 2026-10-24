@@ -189,6 +189,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - **Web**: Destroying a `TDafHttpServer` frees the web modules WebBroker kept for reuse; a later server in the same process was handed the ones built for the previous one
 - **Web**: `Ok(Boolean)` no longer leaks the JSON value it serializes, one per response
 - **NNLog**: On NTFS, the file target no longer stops rotating after its first rotation, and an archive of the same period in `history`, plain or zipped, is appended to instead of overwritten
+- **NNLog**: Changing on disk the creation date of the file a file target has open no longer makes it rotate
 
 ### Security
 

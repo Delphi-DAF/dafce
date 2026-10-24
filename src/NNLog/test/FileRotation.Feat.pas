@@ -99,11 +99,18 @@ type
     procedure UnblockHistory;
     /// Cuantas veces ha dicho el canal de arranque que el destino no pudo archivar su fichero.
     function ArchiveFailureReports: Integer;
+    /// Fija a ayer la fecha de creacion del fichero actual mientras el destino lo tiene abierto. Pide
+    /// solo FILE_WRITE_ATTRIBUTES, que el modo de comparticion del destino no impide:
+    /// TFile.SetCreationTime pide escribir y, si no puede, no hace nada.
+    procedure BackdateCurrentFile;
   end;
 
 implementation
 
 uses
+  {$IFDEF MSWINDOWS}
+  Winapi.Windows,
+  {$ENDIF}
   System.Classes,
   System.IOUtils,
   System.DateUtils,
@@ -483,6 +490,25 @@ begin
     Inc(Result);
     At := Text.IndexOf('no pudo archivar su fichero', At + 1);
   end;
+end;
+
+procedure TRotationWorld.BackdateCurrentFile;
+begin
+  {$IFDEF MSWINDOWS}
+  var Handle := CreateFile(PChar(LogPath), FILE_WRITE_ATTRIBUTES,
+    FILE_SHARE_READ or FILE_SHARE_WRITE or FILE_SHARE_DELETE, nil, OPEN_EXISTING, 0, 0);
+  if Handle = INVALID_HANDLE_VALUE then
+    RaiseLastOSError;
+  try
+    var Clock: TSystemTime;
+    DateTimeToSystemTime(TTimeZone.Local.ToUniversalTime(IncDay(Now, -1)), Clock);
+    var Created: TFileTime;
+    if not SystemTimeToFileTime(Clock, Created) or not SetFileTime(Handle, @Created, nil, nil) then
+      RaiseLastOSError;
+  finally
+    CloseHandle(Handle);
+  end;
+  {$ENDIF}
 end;
 
 function TRotationWorld.HistoryText: string;
@@ -1129,6 +1155,29 @@ Feature La rotacion de NNLog archiva con un nombre que se puede leer @nnlog @tar
       procedure(W: TRotationWorld)
       begin
         Expect(W.ArchiveFailureReports).ToEqual(2);
+      end)
+
+.Rule('El periodo del fichero abierto se fija al abrirlo')
+
+  .Scenario('Cambiar la fecha en disco no lo hace rotar')
+    .Given('un destino con rotacion diaria que creo su fichero y escribio una linea, y alguien fijo despues a ayer su fecha de creacion en disco',
+      procedure(W: TRotationWorld)
+      begin
+        W.RotateDaily;
+        W.WriteLine('PRIMERA');
+        W.BackdateCurrentFile;
+        Expect(W.CurrentCreatedWhen).ToEqual('AYER');
+      end)
+    .When('se registra otra linea',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('SEGUNDA');
+      end)
+    .&Then('no se archiva nada, y las dos lineas estan en el fichero actual',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(Length(W.ArchivedNames)).ToEqual(0);
+        Expect(W.CurrentText).ToEqual('PRIMERA' + sLineBreak + 'SEGUNDA' + sLineBreak);
       end);
 
 end.

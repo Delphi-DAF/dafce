@@ -188,6 +188,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - **Web**: Destruir un `TDafHttpServer` libera los módulos web que WebBroker guardaba para reutilizarlos; un servidor posterior en el mismo proceso recibía los que se construyeron para el anterior
 - **Web**: `Ok(Boolean)` ya no pierde el valor JSON que serializa, uno por respuesta
 - **NNLog**: En NTFS, el destino de fichero ya no deja de rotar tras su primera rotación, y un archivo del mismo periodo en `history`, en claro o comprimido, recibe el fichero al final en vez de sobrescribirse
+- **NNLog**: Cambiar en disco la fecha de creación del fichero que un destino de fichero tiene abierto ya no lo hace rotar
 
 ### Security
 
