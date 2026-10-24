@@ -471,7 +471,15 @@ var
 
       var Ctor: TRttiMethod;
       var Failed: TRttiParameter;
-      if TActivatorUtilities.TryFindConstructor(Provider, AClass, Ctor, Failed) and (Ctor <> nil) then
+      // Dos constructores que compiten ya los informa Validate; aqui la clase no aporta aristas.
+      var Found: Boolean;
+      try
+        Found := TActivatorUtilities.TryFindConstructor(Provider, AClass, ccContainer, Ctor, Failed);
+      except
+        on EServiceProviderError do
+          Found := False;
+      end;
+      if Found and (Ctor <> nil) then
         for var Param in Ctor.GetParameters do
         begin
           if Param.ParamType = nil then Continue;
@@ -591,7 +599,18 @@ begin
 
       var Ctor: TRttiMethod;
       var Failed: TRttiParameter;
-      if not TActivatorUtilities.TryFindConstructor(Provider, Descriptor.ImplementationClass, Ctor, Failed) then
+      var Found: Boolean;
+      try
+        Found := TActivatorUtilities.TryFindConstructor(Provider, Descriptor.ImplementationClass, ccContainer, Ctor, Failed);
+      except
+        on E: EServiceProviderError do
+        begin
+          if Options.ValidateOnBuild then
+            Errors := Errors + [Format('%s: %s', [Descriptor.ServiceName, E.Message])];
+          Continue;
+        end;
+      end;
+      if not Found then
       begin
         if Options.ValidateOnBuild then
           Errors := Errors + [DescribeUnresolvable(Descriptor, Failed)];

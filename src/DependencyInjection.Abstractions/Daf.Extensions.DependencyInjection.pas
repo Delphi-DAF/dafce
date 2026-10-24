@@ -1292,7 +1292,7 @@ begin
             begin
               // Sin cablear: quien resuelve publica la instancia y la cablea despues, que es
               // lo que hace resoluble un ciclo por propiedad.
-              var Aux := TActivatorUtilities.CreateUnwired(Provider, TImpl);
+              var Aux := TActivatorUtilities.CreateUnwired(Provider, TImpl, ccContainer);
               Supports(Aux, _T.GUID(ServiceType), Result);
             end;
 end;

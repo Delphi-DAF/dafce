@@ -1012,12 +1012,10 @@ Feature Keyed services @di @keyed
         Expect(W.Report).ToEqual('plain');
       end)
 
-  .Scenario('A parameter with a key nobody registered leaves the dependency empty at resolve time')
-    // Y NO aborta, que es lo que se esperaria. El constructor con la clave insatisfacible queda
-    // descartado --eso es D6 funcionando-- y el activador cae al del ancestro, que si puede
-    // llamar. Quien nombra el servicio, la clave, el parametro y la clase es ValidateOnBuild, y
-    // ese escenario esta abajo. El de aqui existe para que el silencio quede escrito.
-    .Given('a class whose constructor declares a key nobody registered',
+  .Scenario('A parameter with a key nobody registered makes the construction fail')
+    // El constructor con la clave insatisfacible queda fuera de la eleccion y la clase no declara
+    // otro, asi que la construccion falla nombrando lo que falta.
+    .Given('a class whose only constructor declares a key nobody registered',
       procedure(W: TKeyedWorld)
       begin
         W.Services.AddKeyedSingleton<IStorage, TBlobStorage>('blob');
@@ -1029,16 +1027,19 @@ Feature Keyed services @di @keyed
         W.Build;
         W.Attempt(procedure begin W.Report := W.Provider.GetRequiredService<IUsesUnknownKey>.StorageName end);
       end)
-    .&Then('nothing is raised, and the dependency is left empty',
+    .&Then('it fails naming the service, the key, the parameter and the class',
       procedure(W: TKeyedWorld)
       begin
-        Expect(W.Outcome + ' / ' + W.Report).ToEqual(NoFailure + ' / <nil>');
+        Expect(W.Outcome).ToContain('EServiceProviderError: ');
+        Expect(W.Outcome).ToContain('IStorage');
+        Expect(W.Outcome).ToContain('nobody');
+        Expect(W.Outcome).ToContain('"Storage"');
+        Expect(W.Outcome).ToContain('TUsesUnknownKey');
       end)
 
   .Scenario('CONTROL: the same shape with no key at all and nothing registered')
-    // El control de lo de arriba, y es lo que lo hace una medida: esto tambien queda mudo, asi
-    // que lo que se ve arriba no es la clave -- es que el activador cae al constructor del
-    // ancestro cuando ninguno propio se puede satisfacer, y entrega la instancia a medias.
+    // El control de lo de arriba: sin clave y sin nada registrado falla igual, asi que lo que se ve
+    // arriba no lo produce la clave.
     .Given('a class whose constructor asks for IStorage with no key, and nothing registered',
       procedure(W: TKeyedWorld)
       begin
@@ -1050,10 +1051,13 @@ Feature Keyed services @di @keyed
         W.Build;
         W.Attempt(procedure begin W.Report := W.Provider.GetRequiredService<IUsesPlain>.StorageName end);
       end)
-    .&Then('nothing is raised either, and the dependency is left empty',
+    .&Then('it fails the same way, naming the service, the parameter and the class',
       procedure(W: TKeyedWorld)
       begin
-        Expect(W.Outcome + ' / ' + W.Report).ToEqual(NoFailure + ' / <nil>');
+        Expect(W.Outcome).ToContain('EServiceProviderError: ');
+        Expect(W.Outcome).ToContain('IStorage');
+        Expect(W.Outcome).ToContain('"Storage"');
+        Expect(W.Outcome).ToContain('TUsesPlain');
       end)
 
   .Scenario('A constructor whose keyed parameter cannot be satisfied is not the one chosen')

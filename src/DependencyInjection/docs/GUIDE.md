@@ -65,11 +65,16 @@ Which constructor it picks:
 
 - The candidates are the **public** constructors the class declares. One that declares none uses
   its ancestor's.
-- Among the ones the container can satisfy, the one taking **most parameters** wins.
-- `[ActivatorUtilitiesConstructor]` on one of them settles the choice, and no other is weighed.
-  It lives in `Daf.DependencyInjection.ActivatorUtilities`.
-- A parameter nobody registered rules its constructor out. When that leaves none, the resolution
-  fails naming the parameter, its type and the class.
+- Among the ones the container can satisfy, the one taking **most parameters** wins. Another one
+  that asks for a service the winner does not ask for competes with it, and the resolution fails
+  naming the class and both constructors.
+- `[ActivatorUtilitiesConstructor]` only counts in `TActivatorUtilities.CreateInstance`, which takes
+  the marked constructor as its only candidate; the container ignores it. It lives in
+  `Daf.DependencyInjection.ActivatorUtilities`. Without a mark, `CreateInstance` fails when two
+  constructors it can satisfy tie in number of parameters.
+- A parameter nobody registered rules its constructor out, and so does an `ILazy<X>` whose `X`
+  nobody registers. When that leaves none, the resolution fails naming the parameter, its type and
+  the class.
 
 A parameter can ask for a key — see [Keyed Services](#keyed-services) — and a dependency that
 would close a cycle enters through a property instead; see

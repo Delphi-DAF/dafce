@@ -650,6 +650,30 @@ Una suite que estaba en verde puede salir con escenarios Pending o Undefined, o 
   pasó; y la raíz añade `undefinedCount`. **Qué rompe**: un lector que tomaba por `fail` todo estado
   distinto de `pass`, o que leía `success` como «no falló».
 
+### 24. Un constructor que el contenedor no puede satisfacer falla, y el contenedor ignora la marca
+
+- **Una clase cuyos constructores el contenedor no puede satisfacer ya no se construye.** Resolverla
+  lanza `EServiceProviderError` nombrando el parámetro, su tipo y la clase. En 1.6 el contenedor caía
+  al constructor de un ancestro, como el de `TInterfacedObject`, y entregaba la instancia con la
+  dependencia a `nil`. Una clase que no declara ningún constructor público sigue usando el de su
+  ancestro.
+- **El contenedor ya no elige el constructor marcado con `[ActivatorUtilitiesConstructor]`.** La marca
+  solo cuenta en `TActivatorUtilities.CreateInstance`, que toma el constructor marcado como único
+  candidato y falla, nombrando su parámetro, cuando no lo puede satisfacer. En 1.6 el contenedor elegía
+  el marcado siempre que podía satisfacerlo.
+- **Qué rompe**: un registro que solo funcionaba gracias a la caída al ancestro, y uno que contaba con
+  que el contenedor eligiera el constructor marcado.
+
+### 25. Dos constructores que compiten hacen fallar la elección
+
+- **En el contenedor**, cuando un constructor que puede satisfacer pide un servicio que el más largo no
+  pide, la resolución falla con `EServiceProviderError` nombrando la clase y los dos constructores.
+  **En `TActivatorUtilities.CreateInstance`**, cuando empatan los dos más largos que puede satisfacer.
+  En 1.6 ganaba el primero de los más largos. `ValidateOnBuild` lo informa al construir el proveedor.
+- **Qué rompe**: una clase con dos constructores que el contenedor puede satisfacer y que no se
+  contienen. Déjale un solo constructor público, o haz que el más corto pida solo lo que pide el más
+  largo.
+
 ## Cómo hacerlo
 
 1. Compila. Lo que falte sale como error del compilador, no como comportamiento raro en
@@ -663,6 +687,6 @@ Una suite que estaba en verde puede salir con escenarios Pending o Undefined, o 
    `DAF_ENVIRONMENT=Development`: el host valida el contenedor, y un registro que se haya perdido detiene
    la construcción nombrándolo. Un servicio Scoped pedido al proveedor raíz también se rechaza, al
    resolverlo: se resuelve desde un ámbito que abre el trabajo, `Services.CreateScope`.
-6. Las secciones 2, de la 6 a la 13 y de la 15 a la 23 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
+6. Las secciones 2, de la 6 a la 13 y de la 15 a la 25 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
    contra tu propia composición — la vida de los ámbitos, los registros repetidos, las reglas de
    logging y los ajustes del host.

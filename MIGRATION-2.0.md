@@ -648,6 +648,29 @@ suite that was green can come out with scenarios Pending or Undefined, or red.
   passed; and the root adds `undefinedCount`. **What breaks**: a reader that took every status other
   than `pass` as `fail`, or that read `success` as "did not fail".
 
+### 24. A constructor the container cannot satisfy fails, and the container ignores the mark
+
+- **A class whose constructors the container cannot satisfy is no longer built.** Resolving it raises
+  `EServiceProviderError` naming the parameter, its type and the class. In 1.6 the container fell back
+  to the constructor of an ancestor, such as `TInterfacedObject`'s, and handed the instance over with
+  the dependency at `nil`. A class that declares no public constructor still uses its ancestor's.
+- **The container no longer chooses the constructor marked with `[ActivatorUtilitiesConstructor]`.**
+  The mark only counts in `TActivatorUtilities.CreateInstance`, which takes the marked constructor as
+  its only candidate and fails, naming its parameter, when it cannot satisfy it. In 1.6 the container
+  chose the marked one whenever it could satisfy it.
+- **What breaks**: a registration that only worked thanks to the fallback, and one that relied on the
+  container choosing the marked constructor.
+
+### 25. Two constructors that compete make the choice fail
+
+- **In the container**, when a constructor it can satisfy asks for a service the longest one does not
+  ask for, resolving fails with `EServiceProviderError` naming the class and both constructors.
+  **In `TActivatorUtilities.CreateInstance`**, when the two longest it can satisfy tie. In 1.6 the
+  first of the longest won. `ValidateOnBuild` reports it when the provider is built.
+- **What breaks**: a class with two constructors the container can satisfy that do not contain one
+  another. Leave it a single public constructor, or make the shorter one ask only for what the longer
+  one asks for.
+
 ## How to do it
 
 1. Compile. Whatever is missing comes out as a compiler error, not as odd behaviour at run time.
@@ -660,6 +683,6 @@ suite that was green can come out with scenarios Pending or Undefined, or red.
    the host validates the container, and a registration that went missing stops the build naming it.
    A Scoped service asked of the root provider is rejected too, when it is resolved: resolve it from a
    scope the work opens, `Services.CreateScope`.
-6. Sections 2, 6 to 13 and 15 to 23 carry **run-time** changes: the compiler says nothing about them. Read them
+6. Sections 2, 6 to 13 and 15 to 25 carry **run-time** changes: the compiler says nothing about them. Read them
    against your own composition — scope lifetimes, duplicate registrations, logging rules and
    host settings.

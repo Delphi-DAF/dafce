@@ -65,11 +65,16 @@ Qué constructor elige:
 
 - Los candidatos son los constructores **públicos** que la clase declara. La que no declara
   ninguno usa el de su ancestro.
-- Entre los que el contenedor puede satisfacer gana el que toma **más parámetros**.
-- `[ActivatorUtilitiesConstructor]` sobre uno de ellos zanja la elección, y ningún otro se
-  pondera. Vive en `Daf.DependencyInjection.ActivatorUtilities`.
-- Un parámetro que nadie registró descarta su constructor. Cuando eso no deja ninguno, la
-  resolución falla nombrando el parámetro, su tipo y la clase.
+- Entre los que el contenedor puede satisfacer gana el que toma **más parámetros**. Otro que pide un
+  servicio que el ganador no pide compite con él, y la resolución falla nombrando la clase y los dos
+  constructores.
+- `[ActivatorUtilitiesConstructor]` solo cuenta en `TActivatorUtilities.CreateInstance`, que toma el
+  constructor marcado como único candidato; el contenedor lo ignora. Vive en
+  `Daf.DependencyInjection.ActivatorUtilities`. Sin marca, `CreateInstance` falla cuando dos
+  constructores que puede satisfacer empatan en número de parámetros.
+- Un parámetro que nadie registró descarta su constructor, y también un `ILazy<X>` cuyo `X` nadie
+  registra. Cuando eso no deja ninguno, la resolución falla nombrando el parámetro, su tipo y la
+  clase.
 
 Un parámetro puede pedir una clave —ver [Keyed Services](#keyed-services)— y una dependencia que
 cerraría un ciclo entra por propiedad; ver [Property Injection](#property-injection).

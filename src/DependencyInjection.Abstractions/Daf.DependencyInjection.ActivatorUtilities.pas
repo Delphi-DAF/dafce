@@ -16,6 +16,12 @@ type
   end;
 
   /// <summary>
+  ///   Quien elige el constructor. El contenedor no mira la marca de constructor; el activador
+  ///   toma el marcado como unico candidato.
+  /// </summary>
+  TConstructorChooser = (ccContainer, ccActivator);
+
+  /// <summary>
   ///   Una propiedad marcada, con la clave que su marca declara.
   /// </summary>
   /// <remarks>
@@ -38,18 +44,22 @@ type
     class function SupplyFromContainer(const Provider: IServiceProvider; PInfo: PTypeInfo;
       const Construir: Boolean; out Aux: IInterface): Boolean; static;
     class function TryResolveArgs(Provider: IServiceProvider; Ctor: TRttiMethod; out Args: TArray<TValue>; out Failed: TRttiParameter): Boolean;
-    class function GetResolvableCtors(const AClass: TClass; const Provider: IServiceProviderImpl = nil): TArray<TRttiMethod>;
+    class function Candidates(const AClass: TClass; const Chooser: TConstructorChooser): TArray<TRttiMethod>;
     class function SelectBest(Ctors: TArray<TRttiMethod>): TRttiMethod;
+    class function ChooseAmong(const AClass: TClass; const Resolvable: TArray<TRttiMethod>;
+      const Chooser: TConstructorChooser): TRttiMethod;
   public
     class function CanResolveArgs(const Provider: IServiceProvider; const Ctor: TRttiMethod): Boolean;overload;
     class function CanResolveArgs(const Provider: IServiceProvider; const Ctor: TRttiMethod; out Failed: TRttiParameter): Boolean;overload;
     /// <summary>
-    /// Responde a la misma pregunta que CreateInstance se hace al construir: hay algun
-    /// constructor que el contenedor pueda satisfacer? Cuando no lo hay, devuelve el mejor
-    /// candidato y el primer parametro que nadie registra, para poder decirlo en el mensaje.
+    ///   El constructor que Chooser usaria para construir AClass, el mismo que usa CreateUnwired.
+    ///   Los candidatos son los constructores publicos del primer nivel de la jerarquia que
+    ///   declara alguno. Cuando ninguno se puede satisfacer devuelve False, el mas largo y el
+    ///   primer parametro que nadie registra, para poder decirlo en el mensaje. Cuando dos que se
+    ///   pueden satisfacer compiten, lanza EServiceProviderError nombrando los dos.
     /// </summary>
-    class function TryFindConstructor(const Provider: IServiceProvider; const AClass: TClass; out Ctor: TRttiMethod;
-      out Failed: TRttiParameter): Boolean;
+    class function TryFindConstructor(const Provider: IServiceProvider; const AClass: TClass;
+      const Chooser: TConstructorChooser; out Ctor: TRttiMethod; out Failed: TRttiParameter): Boolean;
     class function CreateInstance(const Provider: IServiceProvider; const AClass: TClass): TObject; overload;
     /// <summary>
     ///   Igual, pero con un hueco entre reservar la instancia y correr su constructor. Existe
@@ -60,13 +70,15 @@ type
       const Initialize: TProc<TObject>): TObject; overload;
     class function CreateInstance<T: class>(const Provider: IServiceProvider): T; overload;
     /// <summary>
-    ///   Construye SIN cablear. Lo usa el contenedor, que tiene que PUBLICAR la instancia entre
-    ///   construirla y cablearla: mientras no este publicada, un servicio que se pida a si mismo
-    ///   --directamente o a traves de otro-- vuelve a entrar en su propia fabrica sin fondo.
-    ///   Quien llame se encarga de llamar a Wire cuando toque.
+    ///   Construye SIN cablear, con el constructor que elige Chooser, y lanza
+    ///   EServiceProviderError nombrando el parametro cuando ninguno se puede satisfacer. Lo usa
+    ///   el contenedor, que tiene que PUBLICAR la instancia entre construirla y cablearla:
+    ///   mientras no este publicada, un servicio que se pida a si mismo --directamente o a traves
+    ///   de otro-- vuelve a entrar en su propia fabrica sin fondo. Quien llame se encarga de
+    ///   llamar a Wire cuando toque.
     /// </summary>
     class function CreateUnwired(const Provider: IServiceProvider; const AClass: TClass;
-      const Initialize: TProc<TObject> = nil): TObject;
+      const Chooser: TConstructorChooser; const Initialize: TProc<TObject> = nil): TObject;
 
     /// <summary>
     ///   Rellena las propiedades marcadas con DafInject de una instancia ya construida,
@@ -195,8 +207,13 @@ begin
   TryFindMark(Param, Key, KeyError);
   if KeyError <> '' then
     Exit(Format('%s: the key of parameter "%s" cannot be built: %s', [AClass.ClassName, Param.Name, KeyError]));
+  // De un ILazy<X> falta X: el ILazy lo fabrica el contenedor.
+  var ServiceType := Param.ParamType.Handle;
+  if Lazy.IsLazyType(ServiceType) and (Lazy.ServiceTypeOf(ServiceType) <> nil) then
+    Exit(Format('%s needs %s lazily for parameter "%s", and nothing registers it',
+      [AClass.ClassName, ServiceRequestName(Lazy.ServiceTypeOf(ServiceType), Key), Param.Name]));
   Result := Format('%s needs %s for parameter "%s", and nothing registers it',
-    [AClass.ClassName, ServiceRequestName(Param.ParamType.Handle, Key), Param.Name]);
+    [AClass.ClassName, ServiceRequestName(ServiceType, Key), Param.Name]);
 end;
 
 class function TActivatorUtilities.CanResolveArgs(const Provider: IServiceProvider; const Ctor: TRttiMethod): Boolean;
@@ -234,25 +251,27 @@ begin
   end;
 end;
 
-class function TActivatorUtilities.GetResolvableCtors(const AClass: TClass; const Provider: IServiceProviderImpl): TArray<TRttiMethod>;
+class function TActivatorUtilities.Candidates(const AClass: TClass; const Chooser: TConstructorChooser): TArray<TRttiMethod>;
 begin
+  // Los constructores publicos del primer nivel que declara alguno: los constructores se heredan,
+  // asi que una clase que no declara ninguno se construye con los de su ancestro, pero una que
+  // declara alguno no cae al del ancestro cuando no puede satisfacer los suyos.
   Result := [];
-  if AClass = nil then Exit;
-  var RType := RC.GetType(AClass) ;
-  for var Method in RType.GetDeclaredMethods do
+  var Level := AClass;
+  while (Level <> nil) and (Length(Result) = 0) do
   begin
-    if not Method.IsConstructor then Continue;
-    if not (Method.Visibility in [mvPublic, mvPublished]) then Continue;
-    if Assigned(Provider) and not CanResolveArgs(Provider, Method) then Continue;
+    for var Method in RC.GetType(Level).GetDeclaredMethods do
+      if Method.IsConstructor and (Method.Visibility in [mvPublic, mvPublished]) then
+        Result := Result + [Method];
+    Level := Level.ClassParent;
+  end;
+  if Chooser <> ccActivator then Exit;
+  for var Method in Result do
     if Method.GetAttribute<ActivatorUtilitiesConstructorAttribute> <> nil then
     begin
       Result := [Method];
       Exit;
-    End;
-    Result := Result + [Method];
-  end;
-  if Length(Result) = 0 then
-    Result := GetResolvableCtors(AClass.ClassParent, Provider)
+    end;
 end;
 
 class function TActivatorUtilities.SelectBest(Ctors: TArray<TRttiMethod>): TRttiMethod;
@@ -266,27 +285,81 @@ begin
   Result := Best;
 end;
 
+// La firma de un constructor para un mensaje: sus parametros con el servicio que pide cada uno.
+function SignatureOf(const Ctor: TRttiMethod): string;
+begin
+  var Params: TArray<string> := [];
+  for var Param in Ctor.GetParameters do
+    if Param.ParamType = nil then
+      Params := Params + [Param.Name]
+    else
+      Params := Params + [Format('%s: %s', [Param.Name,
+        ServiceRequestName(Param.ParamType.Handle, TActivatorUtilities.KeyOfParameter(Param))])];
+  Result := Format('%s(%s)', [Ctor.Name, string.Join('; ', Params)]);
+end;
+
+// Si cada servicio que pide Other --tipo y clave-- lo pide tambien Chosen.
+function AsksOnlyFor(const Other, Chosen: TRttiMethod): Boolean;
+begin
+  var Asked: TArray<string> := [];
+  for var Param in Chosen.GetParameters do
+    if Param.ParamType <> nil then
+      Asked := Asked + [ServiceRequestName(Param.ParamType.Handle, TActivatorUtilities.KeyOfParameter(Param))];
+  for var Param in Other.GetParameters do
+  begin
+    if Param.ParamType = nil then Continue;
+    var Wanted := ServiceRequestName(Param.ParamType.Handle, TActivatorUtilities.KeyOfParameter(Param));
+    var Found := False;
+    for var Name in Asked do
+      if Name = Wanted then
+      begin
+        Found := True;
+        Break;
+      end;
+    if not Found then
+      Exit(False);
+  end;
+  Result := True;
+end;
+
+class function TActivatorUtilities.ChooseAmong(const AClass: TClass; const Resolvable: TArray<TRttiMethod>;
+  const Chooser: TConstructorChooser): TRttiMethod;
+begin
+  // El mas largo, y el primero declarado si empatan. El contenedor exige ademas que cada uno de los
+  // demas pida solo servicios que pide el elegido; el activador, que ningun otro tenga su longitud.
+  Result := SelectBest(Resolvable);
+  if Result = nil then Exit;
+  var BestLength := Length(Result.GetParameters);
+  for var Other in Resolvable do
+  begin
+    if Other = Result then Continue;
+    if (Chooser = ccContainer) and not AsksOnlyFor(Other, Result) then
+      raise EServiceProviderError.CreateFmt(
+        '%s: the constructors %s and %s can both be satisfied, and the second one asks for a service the first one does not',
+        [AClass.ClassName, SignatureOf(Result), SignatureOf(Other)]);
+    if (Chooser = ccActivator) and (Length(Other.GetParameters) = BestLength) then
+      raise EServiceProviderError.CreateFmt(
+        '%s: the constructors %s and %s can both be satisfied and take the same number of parameters',
+        [AClass.ClassName, SignatureOf(Result), SignatureOf(Other)]);
+  end;
+end;
+
 class function TActivatorUtilities.TryFindConstructor(const Provider: IServiceProvider; const AClass: TClass;
-  out Ctor: TRttiMethod; out Failed: TRttiParameter): Boolean;
+  const Chooser: TConstructorChooser; out Ctor: TRttiMethod; out Failed: TRttiParameter): Boolean;
 begin
   Failed := nil;
   Ctor := nil;
-  // Candidatos: los constructores publicos del primer nivel de la jerarquia que declara
-  // alguno. Aqui NO se cae al constructor de un ancestro cuando ninguno de los propios se
-  // puede satisfacer, y esa es justo la diferencia con CreateInstance: una clase que pide
-  // una dependencia por constructor y acaba construida con TObject.Create queda a medias,
-  // y ese es el fallo que la validacion existe para ver.
-  var Declared := GetResolvableCtors(AClass);
+  var Declared := Candidates(AClass, Chooser);
   if Length(Declared) = 0 then Exit(True);
 
   // Que la clase declare mas de un constructor no es un fallo: basta con que alguno se
-  // pueda satisfacer, como hace el activador al elegir.
+  // pueda satisfacer.
   var Resolvable: TArray<TRttiMethod> := [];
   for var Candidate in Declared do
     if CanResolveArgs(Provider, Candidate) then
       Resolvable := Resolvable + [Candidate];
 
-  Ctor := SelectBest(Resolvable);
+  Ctor := ChooseAmong(AClass, Resolvable, Chooser);
   Result := Ctor <> nil;
   if Result then Exit;
 
@@ -306,17 +379,16 @@ begin
   end;
   if Lazy.IsLazyType(PInfo) then
   begin
-    // Al ELEGIR constructor se reconoce siempre: el contenedor sabe fabricar esto, y decir que no
-    // lo dejaria fuera para que se eligiese el Create sin parametros que trae TInterfacedObject
-    // --la clase se construye igual y el campo queda en nil, sin que nadie lo diga--.
-    if not Construir then Exit(True);
-    // Al RELLENAR si se pregunta: aplazar la construccion no es aplazar la pregunta. Si el
-    // servicio interno no lo sirve nadie se devuelve False y sigue el camino normal del parametro
-    // sin resolver, que falla nombrando el parametro y su clase.
+    // Aplazar la construccion no es aplazar la pregunta: con proveedor, al elegir constructor y al
+    // rellenarlo, el servicio interno tiene que poder resolverse. Si no, se devuelve False y sigue
+    // el camino del parametro sin resolver. Sin proveedor solo se reconoce.
+    if Provider = nil then
+      Exit(True);
     var Interno := Lazy.ServiceTypeOf(PInfo);
     if (Interno = nil) or not Provider.CanResolveKeyed(Interno, TValue.Empty) then
       Exit(False);
-    Aux := Lazy.ForParameter(Provider, PInfo);
+    if Construir then
+      Aux := Lazy.ForParameter(Provider, PInfo);
     Exit(True);
   end;
   Result := False;
@@ -351,7 +423,7 @@ end;
 class function TActivatorUtilities.CreateInstance(const Provider: IServiceProvider; const AClass: TClass;
   const Initialize: TProc<TObject>): TObject;
 begin
-  Result := CreateUnwired(Provider, AClass, Initialize);
+  Result := CreateUnwired(Provider, AClass, ccActivator, Initialize);
   try
     Wire(Provider, Result);
   except
@@ -362,16 +434,16 @@ begin
 end;
 
 class function TActivatorUtilities.CreateUnwired(const Provider: IServiceProvider; const AClass: TClass;
-  const Initialize: TProc<TObject>): TObject;
+  const Chooser: TConstructorChooser; const Initialize: TProc<TObject>): TObject;
 begin
-  var Ctor := SelectBest(GetResolvableCtors(AClass, Provider));
-  if Ctor = nil then
-    raise EArgumentException.CreateFmt('Cannot find resolvable constructor for %s', [AClass.ClassName]);
+  var Ctor: TRttiMethod;
+  var Failed: TRttiParameter;
+  if not TryFindConstructor(Provider, AClass, Chooser, Ctor, Failed) then
+    raise EServiceProviderError.Create(DescribeUnresolvedParameter(AClass, Failed));
 
   var Args: TArray<TValue>;
-  var Failed: TRttiParameter;
   if not TryResolveArgs(Provider, Ctor, Args, Failed) then
-    raise EArgumentException.Create(DescribeUnresolvedParameter(AClass, Failed));
+    raise EServiceProviderError.Create(DescribeUnresolvedParameter(AClass, Failed));
 
   // En dos tiempos, y no el Ctor.Invoke(AClass, Args) de una linea. Invocar
   // sobre la METACLASE construye el objeto dentro de la llamada, asi que no hay instancia que

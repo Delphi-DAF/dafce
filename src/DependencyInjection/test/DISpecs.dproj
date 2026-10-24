@@ -117,6 +117,7 @@
         <DCCReference Include="Options.Feat.pas"/>
         <DCCReference Include="ScopeLifetime.Feat.pas"/>
         <DCCReference Include="LazyResolution.Feat.pas"/>
+        <DCCReference Include="ConstructorSelection.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>

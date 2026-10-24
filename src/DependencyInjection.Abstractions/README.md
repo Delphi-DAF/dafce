@@ -213,15 +213,17 @@ end;
 ```
 
 Among the public constructors whose arguments the provider can satisfy, the one with the **most
-parameters** is used. A mark settles it:
+parameters** is used, and two that tie make it fail naming the class and both. A mark makes one the
+only candidate:
 
 ```pascal
 [ActivatorUtilitiesConstructor]
 constructor Create(const Storage: IStorage);
 ```
 
-⚠️ A marked constructor whose arguments cannot all be resolved is skipped like any other, and the
-choice falls back to the rest.
+⚠️ If the arguments of the marked constructor cannot all be resolved, `CreateInstance` fails naming
+the parameter, and does not fall back to another constructor. The container ignores the mark when it
+builds a registered class.
 
 `InjectInto(Provider, Instance)` fills the `[DafInject]` properties of an instance the container did
 not build — a form the platform creates, for one. It takes **no ownership**: closing the container

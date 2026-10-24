@@ -25,7 +25,8 @@ uses
   OpenGenerics.Feat in 'OpenGenerics.Feat.pas',
   Options.Feat in 'Options.Feat.pas',
   ScopeLifetime.Feat in 'ScopeLifetime.Feat.pas',
-  LazyResolution.Feat in 'LazyResolution.Feat.pas';
+  LazyResolution.Feat in 'LazyResolution.Feat.pas',
+  ConstructorSelection.Feat in 'ConstructorSelection.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

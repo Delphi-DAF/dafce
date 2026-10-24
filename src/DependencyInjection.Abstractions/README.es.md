@@ -216,15 +216,17 @@ end;
 ```
 
 De los constructores públicos cuyos argumentos el proveedor puede satisfacer se usa el de **más
-parámetros**. Una marca lo decide:
+parámetros**, y dos que empatan lo hacen fallar nombrando la clase y los dos. Una marca hace de uno el
+único candidato:
 
 ```pascal
 [ActivatorUtilitiesConstructor]
 constructor Create(const Storage: IStorage);
 ```
 
-⚠️ Un constructor marcado cuyos argumentos no se puedan resolver todos se salta como cualquier otro,
-y la elección vuelve a los demás.
+⚠️ Si los argumentos del constructor marcado no se pueden resolver todos, `CreateInstance` falla
+nombrando el parámetro, y no vuelve a otro constructor. El contenedor ignora la marca cuando construye
+una clase registrada.
 
 `InjectInto(Provider, Instance)` rellena las propiedades `[DafInject]` de una instancia que el
 contenedor no construyó —un formulario que crea la plataforma, por ejemplo—. **No toma posesión**:
