@@ -75,10 +75,8 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 
 ### Changed
 
-- ⚠️ **DependencyInjection**: `Replace` y `RemoveAll` alcanzan solo los registros **sin clave**; para los otros está `RemoveAllKeyed`. **Rompe** en verde a quien los use para desmontar registros en un arnés de specs: desmonta menos que antes
 - ⚠️ **DependencyInjection**: Soltar un ámbito **destruye los servicios Scoped que creó**. Antes los retenía hasta cerrarse, así que un ámbito por petición acumulaba una instancia por petición. **Rompe** a quien guardase una referencia a un Scoped sin sostenerla
 - ⚠️ **DependencyInjection**: La resolución **publica la instancia antes de rellenar sus propiedades**, participe o no en la inyección por propiedad. **Rompe** el constructor que resuelve su propio servicio: recibe la instancia a medio construir en vez de recursar sin fondo
-- ⚠️ **DependencyInjection**: Cerrar el contenedor **vacía las propiedades inyectadas** de lo que posee antes de soltar nada, para que dos servicios que se inyectaron mutuamente se destruyan
 - ⚠️ **DependencyInjection**: Un registro repetido **pasa a dar dos instancias**; pedirlos todos devolvía la primera dos veces. Resolver uno solo y el orden de cierre no cambian
 - ⚠️ **Logging**: Una línea que ningún destino aceptaría **deja de componerse**: el nivel se decide antes de analizar la plantilla. `ILogger` gana `IsEnabled`, y eso **rompe** a quien implemente el contrato sin heredar de `TLogger`
 - ⚠️ **Logging**: El `Message` de una entrada **deja de llevar el ámbito**, que viaja solo en `TLogEntry.Scope`. **Rompe, sin error de compilación,** a un proveedor propio que escriba `Entry.Message`: deja de escribir los ámbitos hasta que escriba también `Entry.Scope`
@@ -94,7 +92,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
   - `TFilterSpec<T>`, el filtro por clausuras, pasa a su propia unidad `Daf.FilterSpec`
   - `TSmartArray<T>.Select` toma `TFunc<T, TTarget>` en lugar de `TDeferred<TMapper<T, TTarget>>`
   - `Daf.Enumerable.ToArray` pasa de O(n²) a O(n)
-- **SQLCute**: De **5 paquetes a 4**: los seis compiladores de dialecto se integran en `Daf.SQLCute` y `Daf.SQLCute.Compilers` desaparece. Las unidades no cambian; quien lo referenciara en un `requires` o un `DCCReference` debe usar `Daf.SQLCute`
+- **SQLCute**: `Daf.SQLCute.Compilers` desaparece: los seis compiladores de dialecto se integran en `Daf.SQLCute`. Las unidades no cambian; quien lo referenciara en un `requires` o un `DCCReference` debe usar `Daf.SQLCute`
 - **SQLCute**: `CompileWhere` y `CompileHaving` emiten paréntesis explícitos de precedencia
 - **Hosting**: `THost.Start` y `THost.Stop` informan por el pipeline de `ILogger` —el canal de arranque queda de respaldo—, y los informes de DAF salen bajo la categoría de la clase que informa en vez de bajo `DAF`
 - ⚠️ **Hosting**: Los `IHostedService` se paran en el **orden inverso al de su registro**, el mismo en que libera el contenedor: un servicio arrancado después puede estar usando lo que suelta al parar uno arrancado antes. Antes se paraban en orden de registro
@@ -102,7 +100,6 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - ⚠️ **Hosting**: Los ajustes del host toman los nombres de .NET: `environment`, `applicationName` y `contentRoot`, como argumento —`--environment Staging`— o como variable `DAF_` sin el prefijo —`DAF_ENVIRONMENT`—. `THostDefaults` sustituye a `TDafEnvVars`, y sin `contentRoot` el content root es el directorio actual, salvo en el directorio del sistema, donde arranca un servicio de Windows. **Rompe**, en silencio, a quien fije `DAF_APP_ENV`, `DAF_APP_NAME` o `DAF_CONTENT_ROOT`, que dejan de leerse, y a quien arranque la aplicación desde otro directorio contando con el `appsettings.json` junto al ejecutable
 - ⚠️ **Web**: `TDafHttpServer.Start` sobre un puerto ocupado **lanza una excepción que nombra el puerto**, después del evento `OnError`. Antes terminaba con `Abort`: un `except on EAbort` alrededor de `Start` deja de capturarla
 - **Logging**: Componer el pipeline sin un solo proveedor **falla al construir el host**, con `ELoggingCompositionError`, en vez de entregar un `ILogger` que acepta todo y no escribe nada. El silencio deliberado se declara con `AddNullProvider`
-- **Logging**: Un destino del canal de arranque que no puede escribir **se declara no disponible** en lugar de aceptar el informe y perderlo, y uno que lanza queda fuera sin tumbar el arranque. `BootstrapLog.HasAvailableSink` lo distingue
 - **Samples**: Cada sample se archiva bajo el módulo que declara lo que usa: `ConsoleSample` a `src/Cli/samples/`, `TicTacToeApp` a `src/VCL/samples/`, y `HostedService` a `src/samples/`
 
 - **MediatR**: La clase base de un handler de notificación es `TNotificationHandler<T>`. La grafía anterior, `TNotificacionHandler<T>`, sigue compilando
@@ -170,7 +167,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - **NNLog**: Limpiar el histórico contaba y borraba todos los ficheros de `history`, así que los destinos que comparten carpeta se borraban los archivos unos a otros. `MaxArchivedFiles` cuenta ahora solo los archivos del propio destino, de todas sus ejecuciones
 - **NNLog**: Una regla construida en código llegaba desactivada, con su nivel máximo en el más bajo de todos, y reventaba al emparejar una categoría. `TLogRule.Create` fija ahora los mismos valores por defecto que escribe el cargador
 - **MediatR**: Componer dos veces en un mismo proceso da el mismo resultado; la contabilidad de paquetes ya escaneados era estado global de unit
-- **SQLCute**: `WhereIn` con un conjunto de valores **vacío** emitía `col IN ()`, inválido en casi cualquier motor; ahora no casa ninguna fila y `WhereNotIn` las casa todas, igual en los dos back-ends. Afecta también a `OrWhereIn` / `OrWhereNotIn` y a `IsIn([])`
+- **SQLCute**: `WhereIn` con un conjunto de valores **vacío** emitía `col IN ()`, inválido en casi cualquier motor; ahora no casa ninguna fila y `WhereNotIn` las casa todas. Afecta también a `OrWhereIn` / `OrWhereNotIn`
 - **Commons**: `TVersionInfo.Tag` estaba **siempre vacío**, y `GetFrom` sobre una clase sin atributo devolvía lo que hubiera en la memoria del destino
 - **Configuration**: El enlace ya no escribe un miembro cuya clave no menciona ninguna fuente: un defecto puesto en el constructor sobrevive al enlace, y un segundo enlace no borra lo que trajo el primero. Una clave presente con valor vacío se sigue escribiendo
 - **Configuration**: Una clave encadenada cuyo valor **es** la cadena vacía ya no desaparece al atravesar la cadena: `TChainedConfigurationProvider` pregunta la presencia en vez de deducirla del valor

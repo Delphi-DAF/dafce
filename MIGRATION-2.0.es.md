@@ -210,23 +210,18 @@ dónde migrar — pero si lo que necesitabas en realidad era un registro que sir
 cierres de un contrato, eso es ahora
 [registrar un contrato genérico una sola vez](src/DependencyInjection.Abstractions/README.es.md#registrar-un-contrato-genérico-una-sola-vez).
 
-### 5. Módulos de consulta renombrados
+### 5. `Daf.SQLCute.Compilers` se disuelve en `Daf.SQLCute`
 
-| Antes | Ahora |
-|---|---|
-| `Daf.Query.Expressions` | `Daf.Specification` |
-| `Daf.SQLCute.Expressions` | `Daf.SQLCute.Specification` |
-| `Daf.SQLCute.Compilers` | disuelto en `Daf.SQLCute` |
-
-Los nombres nuevos dicen el patrón que implementan. `Daf.SQLCute.Compilers` desaparece como
-paquete: sus seis compiladores de dialecto viven en `Daf.SQLCute`, junto al ANSI que ya estaba
-ahí, así que hay una línea menos en los `requires`.
+Los seis compiladores de dialecto viven en `Daf.SQLCute`, junto al ANSI, y conservan el nombre de
+sus unidades: los `uses` compilan sin cambios. Quita `Daf.SQLCute.Compilers` de los `requires`, y
+de cualquier `DCCReference`.
 
 ### 6. Logging: el modo mudo ya no existe
 
-- **`DAFInternalLogger` retirada.** Era la única vía mientras la categoría del canal estuvo
-  clavada a `DAF`; sin ese filtro es una segunda puerta que además etiqueta como DAF a quien no
-  lo es.
+- **`DAFInternalLogger` retirada.** Era un `ILogger` global de categoría `DAF` que escribía los
+  avisos y los errores en el depurador. La sustituye `BootstrapLog.LoggerFor(<categoría>)`: un
+  `ILogger` con la categoría que le des, que informa por el canal de arranque —por defecto, al
+  depurador y a la salida de error estándar—.
 - **Componer el pipeline sin un solo proveedor falla al construir el host**, con
   `ELoggingCompositionError`, en vez de entregar un `ILogger` que acepta todo y no escribe nada.
   Si tu arranque componía logging sin proveedores y no te habías dado cuenta, esto es lo que te lo
@@ -368,9 +363,9 @@ Es el frente más grande de 2.0 para cualquier cosa que tuviera un `.dpr`.
   var Value := Config['Features:Beta'];                      // '' si no está Y si está vacía
   ```
 
-- **Un fallo leyendo un fichero de configuración se informa al añadir la fuente**, y ya no dentro de
-  `Build` — porque es cuando el fichero se abre ahora. Sigue saliendo por el canal de arranque y
-  sigue propagando; lo que cambia es qué categoría lo firma.
+- **Un fallo leyendo un fichero de configuración salta al añadir la fuente**, y ya no dentro de
+  `Build`, porque es cuando el fichero se abre. Sigue propagando, y además se informa por el canal
+  de arranque.
 
 ### 9. MiniSpec: la marca de inyección se renombra, y el inyector guarda los tres contextos
 
@@ -413,12 +408,6 @@ Es el frente más grande de 2.0 para cualquier cosa que tuviera un `.dpr`.
   MiniSpec.UseSuiteContext<TTestResources>;   // TTestResources posee los mocks
   ```
 
-- **Cuando más de un contexto satisface una propiedad `[MiniInject]`, el que gana está declarado**:
-  primero el tipo exacto —escenario, luego feature, luego suite— y solo después un descendiente, en
-  ese mismo orden. Antes contestaba el primero que encajara según el orden interno de un
-  diccionario. Esta no rompe la compilación: el World que reciba un contexto distinto al de antes es
-  uno que tenía dos encajando en la misma propiedad, y hasta ahora cuál llegaba no se podía prever.
-
 ### 10. Un ámbito destruye ahora lo que creó
 
 - **Soltar un ámbito destruye los servicios Scoped que construyó.** El contenedor retenía todos los
@@ -440,41 +429,7 @@ FScope := Provider.CreateScope;
 FCache := FScope.ServiceProvider.GetRequiredService<ICache>;
 ```
 
-### 11. La inyección por propiedad cambia cuándo se publica una instancia, y cuándo se vacía
-
-- **La instancia se publica antes de rellenar sus propiedades**, para todo registro participe o no
-  en la inyección por propiedad. Es lo que hace resoluble un ciclo: quien reentre a resolver el
-  mismo servicio recibe la instancia ya publicada.
-- **Qué rompe**: un constructor que resuelve su propio servicio. Antes recursaba sin fondo; ahora
-  recibe la instancia a medio construir.
-- **Cerrar el contenedor vacía las propiedades inyectadas** de lo que posee antes de soltar nada.
-  Sin esa pasada, dos servicios que se inyectaron mutuamente se sostienen entre ellos y no se
-  destruyen nunca. Un destructor que lea una propiedad inyectada lee ahora `nil`.
-
-```pascal
-// Ahora: lo que necesite el destructor, guárdalo en un campo propio
-destructor TReportService.Destroy;
-begin
-  FLogger.Info('closing');             // FLogger es [DafInject]: a estas alturas, nil
-  inherited;
-end;
-```
-
-### 12. `Replace` y `RemoveAll` solo alcanzan los registros sin clave
-
-Los servicios con clave introducen un segundo espacio, y estas dos operaciones se quedan en el que
-no la tiene. Antes no había claves, así que «todos los del tipo» y «todos los del tipo sin clave»
-eran lo mismo.
-
-- **Qué rompe**: usarlos para desmontar un registro en un arnés de specs. Desmontan menos que antes,
-  y se descubre en verde.
-
-```pascal
-Services.RemoveAll<IClock>;                                  // solo los registros sin clave
-Services.RemoveAllKeyed<IClock>(TValue.From<string>('utc')); // el que la tiene
-```
-
-### 13. Un registro repetido da ahora dos instancias
+### 11. Un registro repetido da ahora dos instancias
 
 Registrar el mismo par dos veces y pedirlos todos devolvía la primera instancia repetida: el segundo
 registro se declaraba, se contaba y no se construía nunca.
@@ -484,7 +439,7 @@ registro se declaraba, se contaba y no se construía nunca.
 - Resolver un solo servicio no cambia —sigue ganando el último registrado— ni cambia el orden de
   cierre.
 
-### 14. SQLCute: una consulta declara qué sentencia es
+### 12. SQLCute: una consulta declara qué sentencia es
 
 `IQuery` gana `Kind: TQueryKind`. Vale `Select` por defecto y lo fijan `AsInsert`, `AsUpdate` y sus
 hermanos, en vez de deducirse de las cláusulas presentes.
@@ -493,7 +448,7 @@ hermanos, en vez de deducirse de las cláusulas presentes.
 - Declarar dos tipos en la misma consulta se queda ahora con el último, donde antes ganaba el
   primero. Una consulta de un solo tipo emite exactamente lo que emitía.
 
-### 15. MiniSpec: qué contexto satisface un `[MiniInject]` pasa a estar declarado
+### 13. MiniSpec: qué contexto satisface un `[MiniInject]` pasa a estar declarado
 
 - **La precedencia está declarada, y antes era el orden interno de un diccionario.** Dos pasadas:
   primero una coincidencia **exacta** de tipo, recorriendo escenario → feature → suite; y solo si no
@@ -503,13 +458,13 @@ hermanos, en vez de deducirse de las cláusulas presentes.
   compatibles. Compila, y recibe otra instancia que antes — el ganador anterior dependía del orden
   del hash, así que nunca fue una decisión. Nombra el tipo exacto que quieres, o deja uno de los dos.
 
-### 16. `csoReloadOnChange` desaparece
+### 14. `csoReloadOnChange` desaparece
 
 `TConfigurationSourceOption` se queda con `csoOptional`. El valor retirado no lo leía ningún proveedor, así que no cambia nada de lo que una fuente hacía.
 
 - **Qué rompe**: nombrarlo. Quítalo del conjunto — `[csoOptional, csoReloadOnChange]` pasa a `[csoOptional]`, y un conjunto que solo lo llevaba pasa a `[]`.
 
-### 17. NNLog: un destino que no puede escribir ya no lanza
+### 15. NNLog: un destino que no puede escribir ya no lanza
 
 Un fallo al escribir dentro de un destino llegaba hasta quien registraba. Ahora `TTarget.Write` lo
 captura y lo anota en el canal de arranque, bajo el nombre de clase del destino y nombrando el
@@ -538,6 +493,28 @@ begin
   Send(RenderEvent(Entry));   // un fallo aquí se anota en el canal de arranque
 end;
 ```
+
+### 16. NNLog: el `name` de una regla filtra, y un token de layout desconocido queda a la vista
+
+En 1.6 el `name` de una regla se ignoraba: toda regla recibía todas las categorías. Ahora filtra,
+como **expresión regular** anclada a la categoría entera. `*`, y un `name` ausente o vacío, siguen
+casando con todas.
+
+- **Qué rompe**: una regla cuyo `name` no es `*` deja de recibir las categorías que su patrón no
+  casa. Un glob de NLog casi siempre sigue valiendo —`Daf.*` sí—, pero el comodín `?` se escribe
+  `.` y un punto literal `\.`, y un `name` que no es una expresión regular válida hace que la
+  configuración no cargue, nombrando la regla.
+- **`enabled`** admite los literales `true` y `false`, en cualquier caja. Una regla que no lo declara
+  está activa, y cualquier otro valor la desactiva.
+- **Un token de layout sin renderer** —un `${mesage}` mal escrito— se escribe ahora tal cual, donde
+  1.6 no escribía nada.
+
+### 17. Web: `TDafHttpServer.Start` sobre un puerto en uso lanza
+
+Con el puerto ya en uso, `Start` lanza una excepción que nombra el puerto, después del evento
+`OnError`. En 1.6 terminaba con `Abort`.
+
+- **Qué rompe**: un `except on EAbort` alrededor de `Start` ya no la captura. Captura `Exception`.
 
 ### 18. Los servicios alojados paran en orden inverso
 
@@ -622,14 +599,14 @@ end;
 1. Compila. Lo que falte sale como error del compilador, no como comportamiento raro en
    ejecución.
 2. Sustituye cada `AddModules` por una llamada por módulo, y quita los `uses` de force-link.
-3. Añade a los `requires` los paquetes nuevos que necesites —`Daf.SystemProcess`, y
-   `Daf.CommandLine` si parseabas una línea de comandos— y quita `Daf.CmdLn` y
-   `Daf.SQLCute.Compilers`.
+3. Ajusta los `requires`: añade los paquetes que ahora usas —el de tu variante (`Daf.Cli`,
+   `Daf.Web`, `Daf.VCL` o `Daf.FMX`), `Daf.SystemProcess` si lanzas procesos y `Daf.CommandLine`
+   si parseas una línea de comandos— y quita `Daf.Application` y `Daf.SQLCute.Compilers`.
 4. Renombra los tipos y unidades de las tablas de arriba.
 5. Vuelve a compilar y pasa tus tests. Después arranca la aplicación una vez con
    `DAF_ENVIRONMENT=Development`: el host valida el contenedor, y un registro que se haya perdido detiene
    la construcción nombrándolo. Un servicio Scoped pedido al proveedor raíz también se rechaza, al
    resolverlo: se resuelve desde un ámbito que abre el trabajo, `Services.CreateScope`.
-6. Las secciones 10 a 13, la 15 y de la 17 a la 21 son cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
-   contra tu propia composición — la vida de los ámbitos, los registros repetidos, y lo que lea
-   un destructor.
+6. Las secciones 2, de la 6 a la 13 y de la 15 a la 21 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
+   contra tu propia composición — la vida de los ámbitos, los registros repetidos, las reglas de
+   logging y los ajustes del host.

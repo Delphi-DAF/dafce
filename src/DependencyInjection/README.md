@@ -112,9 +112,6 @@ contract with a key is a different contract:
 - `Decorate` wraps the keyless registrations and leaves the keyed ones alone. Decorating a type that
   has *only* keyed registrations fails saying nothing is registered for it.
 
-⚠️ **BREAKING** — `RemoveAll` used to remove everything registered for the type, because there were
-no keys. It now removes the keyless ones only.
-
 ### Asking for a key from a constructor or a property
 
 The same mark serves both positions, and the key travels inside it:

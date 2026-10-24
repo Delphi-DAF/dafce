@@ -210,22 +210,18 @@ nothing to migrate to — but if what you actually needed was one registration s
 of a contract, that is now
 [registering a generic contract once](src/DependencyInjection.Abstractions/README.md#registering-a-generic-contract-once).
 
-### 5. Query modules renamed
+### 5. `Daf.SQLCute.Compilers` is dissolved into `Daf.SQLCute`
 
-| Before | Now |
-|---|---|
-| `Daf.Query.Expressions` | `Daf.Specification` |
-| `Daf.SQLCute.Expressions` | `Daf.SQLCute.Specification` |
-| `Daf.SQLCute.Compilers` | dissolved into `Daf.SQLCute` |
-
-The new names state the pattern they implement. `Daf.SQLCute.Compilers` disappears as a package:
-its six dialect compilers live in `Daf.SQLCute`, next to the ANSI one that was already there, so
-there is one line less in `requires`.
+The six dialect compilers live in `Daf.SQLCute`, next to the ANSI one, and keep their unit names:
+`uses` clauses compile unchanged. Remove `Daf.SQLCute.Compilers` from `requires`, and from any
+`DCCReference`.
 
 ### 6. Logging: the mute mode is gone
 
-- **`DAFInternalLogger` removed.** It was the only route while the channel category was pinned to
-  `DAF`; without that filter it is a second door that also labels as DAF whoever is not.
+- **`DAFInternalLogger` removed.** It was a global `ILogger` under the `DAF` category that wrote
+  warnings and errors to the debugger. `BootstrapLog.LoggerFor(<category>)` replaces it: an
+  `ILogger` under the category you give it, which reports through the bootstrap channel — to the
+  debugger and to the standard error output, by default.
 - **Composing the pipeline with no provider at all now fails when the host is built**, with
   `ELoggingCompositionError`, instead of handing back an `ILogger` that accepts everything and
   writes nothing. If your startup composed logging without providers and you had not noticed, this
@@ -366,9 +362,9 @@ This is the largest front of 2.0 for anything that had a `.dpr`.
   var Value := Config['Features:Beta'];                      // '' when absent AND when empty
   ```
 
-- **A failure reading a configuration file is now reported when the source is added**, not inside
-  `Build` — because that is when the file is opened now. It still goes through the bootstrap
-  channel and still propagates; what changed is which category signs it.
+- **A failure reading a configuration file now surfaces when the source is added**, not inside
+  `Build`, because that is when the file is opened. It still propagates, and it is also reported
+  on the bootstrap channel.
 
 ### 9. MiniSpec: the injection mark is renamed, and the injector holds the three contexts
 
@@ -411,13 +407,6 @@ This is the largest front of 2.0 for anything that had a `.dpr`.
   MiniSpec.UseSuiteContext<TTestResources>;   // TTestResources owns the mocks
   ```
 
-- **When more than one context satisfies an `[MiniInject]` property, the winner is now declared**:
-  exact type first — scenario, then feature, then suite — and only then a descendant, in that same
-  order. It used to answer with the first entry that fitted according to a dictionary's internal
-  order. This one does not break compilation: a World that receives a different context than before
-  is one that had two of them fitting the same property, and until now which one arrived could not
-  be predicted.
-
 ### 10. A scope now destroys what it created
 
 - **Releasing a scope destroys the Scoped services it built.** The container used to retain every
@@ -439,40 +428,7 @@ FScope := Provider.CreateScope;
 FCache := FScope.ServiceProvider.GetRequiredService<ICache>;
 ```
 
-### 11. Property injection changes when an instance is published, and when it is cleared
-
-- **The instance is published before its properties are filled**, for every registration, whether or
-  not it takes part in property injection. That is what makes a cycle between two services
-  resolvable: whoever re-enters to resolve the same service receives the instance already published.
-- **What breaks**: a constructor that resolves its own service. It used to recurse without end; it
-  now receives the instance half built.
-- **Closing the container clears the injected properties** of everything it owns before releasing
-  anything. Without that pass, two services that injected each other hold one another up and are
-  never destroyed. A destructor that reads an injected property now reads `nil`.
-
-```pascal
-// Now: whatever the destructor needs, keep it in a field of its own
-destructor TReportService.Destroy;
-begin
-  FLogger.Info('closing');             // FLogger is [DafInject]: nil by now
-  inherited;
-end;
-```
-
-### 12. `Replace` and `RemoveAll` only reach unkeyed registrations
-
-Keyed services introduce a second space, and these two operations stay in the unkeyed one. Before
-there were no keys, so "all of the type" and "all of the type without a key" were the same thing.
-
-- **What breaks**: using them to dismantle a registration in a spec harness. They dismantle less
-  than they used to, and you find out in green.
-
-```pascal
-Services.RemoveAll<IClock>;                                  // unkeyed registrations only
-Services.RemoveAllKeyed<IClock>(TValue.From<string>('utc')); // the keyed one
-```
-
-### 13. A duplicate registration now yields two instances
+### 11. A duplicate registration now yields two instances
 
 Registering the same pair twice and then asking for all of them returned the first one twice: the
 second registration was declared, was counted, and was never built.
@@ -482,7 +438,7 @@ second registration was declared, was counted, and was never built.
 - Resolving a single service does not change — the last registration still wins — and neither does
   the order in which they are closed.
 
-### 14. SQLCute: a query declares its kind
+### 12. SQLCute: a query declares its kind
 
 `IQuery` gains `Kind: TQueryKind`. It defaults to `Select` and is set by `AsInsert`, `AsUpdate` and
 their siblings, instead of being deduced from the clauses present.
@@ -491,7 +447,7 @@ their siblings, instead of being deduced from the clauses present.
 - Declaring two kinds on the same query now keeps the last one, where the first used to win. A query
   with a single kind emits exactly what it emitted before.
 
-### 15. MiniSpec: which context satisfies a `[MiniInject]` is now declared
+### 13. MiniSpec: which context satisfies a `[MiniInject]` is now declared
 
 - **The precedence is declared, and it was the internal order of a dictionary before.** Two passes:
   first an **exact** type match, walking scenario → feature → suite; and only if there is none, a
@@ -501,13 +457,13 @@ their siblings, instead of being deduced from the clauses present.
   compiles, and it gets a different instance than before — the old winner depended on hash order,
   so it was never a decision. Name the exact type you want, or keep one of the two.
 
-### 16. `csoReloadOnChange` is gone
+### 14. `csoReloadOnChange` is gone
 
 `TConfigurationSourceOption` is left with `csoOptional`. The withdrawn value was never read by any provider, so nothing that a source did changes.
 
 - **What breaks**: naming it. Drop it from the set — `[csoOptional, csoReloadOnChange]` becomes `[csoOptional]`, and a set that only carried it becomes `[]`.
 
-### 17. NNLog: a target that cannot write no longer raises
+### 15. NNLog: a target that cannot write no longer raises
 
 A write that fails inside a target used to travel back to whoever logged. `TTarget.Write` now
 catches it and reports it on the bootstrap channel, under the target's class name and naming the
@@ -536,6 +492,29 @@ begin
   Send(RenderEvent(Entry));   // a failure here is reported on the bootstrap channel
 end;
 ```
+
+### 16. NNLog: a rule's `name` filters, and an unknown layout token stays visible
+
+In 1.6 a rule's `name` was ignored: every rule received every category. It now filters, as a
+**regular expression** anchored to the whole category. `*`, and an absent or empty `name`, still
+match every category.
+
+- **What breaks**: a rule whose `name` is not `*` stops receiving the categories its pattern does
+  not match. An NLog glob mostly keeps working — `Daf.*` does —, but a `?` wildcard is written
+  `.` and a literal dot `\.`, and a `name` that is not a valid regular expression makes the
+  configuration fail to load, naming the rule.
+- **`enabled`** takes the literals `true` and `false`, in any case. A rule that does not declare it
+  is enabled, and any other value disables it.
+- **A layout token with no renderer** — a misspelled `${mesage}` — is now written as it is, where
+  1.6 wrote nothing.
+
+### 17. Web: `TDafHttpServer.Start` on a port in use raises
+
+When the port is already in use, `Start` raises an exception that names the port, after the
+`OnError` event. In 1.6 it ended with `Abort`.
+
+- **What breaks**: an `except on EAbort` around `Start` no longer catches it. Catch `Exception`
+  instead.
 
 ### 18. Hosted services stop in reverse order
 
@@ -620,13 +599,14 @@ end;
 
 1. Compile. Whatever is missing comes out as a compiler error, not as odd behaviour at run time.
 2. Replace each `AddModules` with one call per module, and drop the force-link `uses`.
-3. Add the new packages you need to `requires` — `Daf.SystemProcess`, and `Daf.CommandLine` if
-   you parsed a command line — and remove `Daf.CmdLn` and `Daf.SQLCute.Compilers`.
+3. Fix `requires`: add the packages you now use — your variant's (`Daf.Cli`, `Daf.Web`, `Daf.VCL`
+   or `Daf.FMX`), `Daf.SystemProcess` if you launch processes, and `Daf.CommandLine` if you parse a
+   command line — and remove `Daf.Application` and `Daf.SQLCute.Compilers`.
 4. Rename the types and units from the tables above.
 5. Compile again and run your tests. Then start the application once with `DAF_ENVIRONMENT=Development`:
    the host validates the container, and a registration that went missing stops the build naming it.
    A Scoped service asked of the root provider is rejected too, when it is resolved: resolve it from a
    scope the work opens, `Services.CreateScope`.
-6. Sections 10 to 13, 15 and 17 to 21 are **run-time** changes: the compiler says nothing about them. Read them
-   against your own composition — scope lifetimes, duplicate registrations, and anything a
-   destructor reads.
+6. Sections 2, 6 to 13 and 15 to 21 carry **run-time** changes: the compiler says nothing about them. Read them
+   against your own composition — scope lifetimes, duplicate registrations, logging rules and
+   host settings.

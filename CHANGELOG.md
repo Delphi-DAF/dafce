@@ -76,10 +76,8 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 
 ### Changed
 
-- ⚠️ **DependencyInjection**: `Replace` and `RemoveAll` now reach only the registrations **without a key**; for the others there is `RemoveAllKeyed`. **Breaks**, and stays green, whoever uses them to tear a registration down in a spec harness: it tears down less than before
 - ⚠️ **DependencyInjection**: Releasing a scope **destroys the Scoped services it created**. The container used to retain them until it closed, so one scope per request piled up one instance per request. **Breaks** whoever kept a reference to a Scoped service without holding it
 - ⚠️ **DependencyInjection**: Resolution **publishes the instance before filling its properties**, whether or not it takes part in property injection. **Breaks** the constructor that resolves its own service: it now receives the half-built instance instead of recursing without end
-- ⚠️ **DependencyInjection**: Shutting the container down **clears the injected properties** of what it owns before releasing anything, so that two services that injected each other are destroyed
 - ⚠️ **DependencyInjection**: A repeated registration **now gives two instances**; asking for all of them returned the first one twice. Resolving a single one, and the shutdown order, do not change
 - ⚠️ **Logging**: A line no sink would accept **stops being composed**: the level is decided before parsing the template. `ILogger` gains `IsEnabled`, which **breaks** whoever implements the contract without inheriting from `TLogger`
 - ⚠️ **Logging**: An entry's `Message` **no longer carries the scope**, which travels only in `TLogEntry.Scope`. **Breaks, with no compiler error,** a provider of its own that writes `Entry.Message`: it stops writing the scopes until it also writes `Entry.Scope`
@@ -95,15 +93,14 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
   - `TFilterSpec<T>`, the closure-based filter, moves to its own unit `Daf.FilterSpec`
   - `TSmartArray<T>.Select` takes `TFunc<T, TTarget>` instead of `TDeferred<TMapper<T, TTarget>>`
   - `Daf.Enumerable.ToArray` goes from O(n²) to O(n)
-- **SQLCute**: From **5 packages to 4**: the six dialect compilers move into `Daf.SQLCute` and `Daf.SQLCute.Compilers` disappears. The units keep their names; whoever referenced that package in a `requires` or a `DCCReference` must use `Daf.SQLCute`
+- **SQLCute**: `Daf.SQLCute.Compilers` disappears: the six dialect compilers move into `Daf.SQLCute`. The units keep their names; whoever referenced that package in a `requires` or a `DCCReference` must use `Daf.SQLCute`
 - **SQLCute**: `CompileWhere` and `CompileHaving` emit explicit precedence parentheses
-- **Hosting**: `THost.Start` and `THost.Stop` report through the `ILogger` pipeline —the bootstrap channel stays as a fallback—, and DAF's own reports come out under the category of the class reporting instead of under `DAF`
+- **Hosting**: `THost.Start` and `THost.Stop` report through the `ILogger` pipeline —with the bootstrap channel as a fallback—, and DAF's own reports come out under the category of the class reporting instead of under `DAF`
 - ⚠️ **Hosting**: The `IHostedService`s stop in the **reverse order of their registration**, the same order the container releases in: a service started later can be using what one started earlier releases on stop. They used to stop in registration order
 - ⚠️ **Hosting**: The host loads `appsettings.json`, `appsettings.{Environment}.json`, `{ApplicationName}.settings.json` and `{ApplicationName}.settings.{Environment}.json` from the content root, all optional, and every environment variable, before the command line, as `Host.CreateApplicationBuilder` does. **Breaks** whoever counted on configuration holding only what they added: an environment variable such as `Db__Server` now overrides `Db:Server`
 - ⚠️ **Hosting**: The host settings take .NET's names: `environment`, `applicationName` and `contentRoot`, as an argument —`--environment Staging`— or as a `DAF_` variable with the prefix stripped —`DAF_ENVIRONMENT`—. `THostDefaults` replaces `TDafEnvVars`, and with no `contentRoot` the content root is the current directory, except in the system directory, where a Windows service starts. **Breaks**, silently, whoever sets `DAF_APP_ENV`, `DAF_APP_NAME` or `DAF_CONTENT_ROOT`, which are no longer read, and whoever starts the application from another directory counting on the `appsettings.json` next to the executable
 - ⚠️ **Web**: `TDafHttpServer.Start` on a port already in use **raises an exception that names the port**, after the `OnError` event. It used to end with `Abort`: an `except on EAbort` around `Start` no longer catches it
 - **Logging**: Composing the pipeline without a single provider **fails at host build time**, with `ELoggingCompositionError`, instead of handing out an `ILogger` that accepts everything and writes nothing. Deliberate silence is declared with `AddNullProvider`
-- **Logging**: A bootstrap-channel sink that cannot write **declares itself unavailable** instead of accepting the report and losing it, and one that raises is left out without taking startup down. `BootstrapLog.HasAvailableSink` tells them apart
 - **Samples**: Every sample is filed under the module that declares what it uses: `ConsoleSample` to `src/Cli/samples/`, `TicTacToeApp` to `src/VCL/samples/`, and `HostedService` to `src/samples/`
 
 - **MediatR**: The base class for a notification handler is `TNotificationHandler<T>`. The previous spelling, `TNotificacionHandler<T>`, still compiles
@@ -171,7 +168,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - **NNLog**: Cleaning the history counted and deleted every file in `history`, so targets sharing a folder removed each other's archives. `MaxArchivedFiles` now counts only the target's own archives, from all its runs
 - **NNLog**: A rule built in code arrived disabled, with its maximum level at the lowest of all, and raised while matching a category. `TLogRule.Create` now sets the same defaults the loader writes
 - **MediatR**: Composing twice in the same process gives the same result; the accounting of already-scanned packages was unit-global state
-- **SQLCute**: `WhereIn` with an **empty** set of values emitted `col IN ()`, invalid on almost any engine; it now matches no row and `WhereNotIn` matches them all, alike on both back-ends. It also affects `OrWhereIn` / `OrWhereNotIn` and `IsIn([])`
+- **SQLCute**: `WhereIn` with an **empty** set of values emitted `col IN ()`, invalid on almost any engine; it now matches no row and `WhereNotIn` matches them all. It also affects `OrWhereIn` / `OrWhereNotIn`
 - **Commons**: `TVersionInfo.Tag` was **always empty**, and `GetFrom` on a class with no attribute returned whatever was in the target's memory
 - **Configuration**: Binding no longer writes a member whose key no source mentions: a default set in the constructor survives the bind, and a second bind does not erase what the first one brought. A key present with an empty value is still written
 - **Configuration**: A chained key whose value **is** the empty string no longer disappears on its way through the chain: `TChainedConfigurationProvider` asks for presence instead of inferring it from the value

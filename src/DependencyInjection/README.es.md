@@ -112,9 +112,6 @@ contrato distinto:
 - `Decorate` envuelve los registros sin clave y deja intactos los que la tienen. Decorar un tipo que
   *solo* tiene registros con clave falla diciendo que no hay nada registrado para él.
 
-⚠️ **BREAKING** — `RemoveAll` quitaba todo lo registrado para el tipo, porque no había claves. Ahora
-quita únicamente los registros sin clave.
-
 ### Pedir una clave desde un constructor o una propiedad
 
 La misma marca sirve a las dos posiciones, y la clave viaja dentro de ella:
