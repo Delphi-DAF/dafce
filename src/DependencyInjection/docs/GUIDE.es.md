@@ -137,7 +137,7 @@ var Provider := Services.BuildServiceProvider;
 
 - `BuildServiceProvider` **congela** la colección — llamadas posteriores a `Add*` lanzan una excepción.
 - Solo puede llamarse **una vez** por instancia de `TServiceCollection`.
-- El `IServiceProvider` devuelto es el scope raíz (los Singletons viven aquí).
+- El `IServiceProvider` devuelto es el scope raíz. Los Singletons son del contenedor, no del ámbito que los pidió primero: todo ámbito que resuelve uno recibe la misma instancia, y vive hasta `ShutDown`.
 
 **Siempre llama a `ShutDown` al terminar:**
 

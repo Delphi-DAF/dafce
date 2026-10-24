@@ -138,7 +138,7 @@ var Provider := Services.BuildServiceProvider;
 
 - `BuildServiceProvider` **freezes** the collection — further calls to `Add*` raise an exception.
 - It can only be called **once** per `TServiceCollection` instance.
-- The returned `IServiceProvider` is the root scope (Singletons live here).
+- The returned `IServiceProvider` is the root scope. Singletons belong to the container, not to the scope that asked for them first: every scope that resolves one gets the same instance, and it lives until `ShutDown`.
 
 **Always call `ShutDown` when done:**
 
