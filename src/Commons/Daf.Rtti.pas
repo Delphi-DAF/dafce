@@ -129,9 +129,10 @@ function GetRttiFromInterface(AIntf: IInterface; out RttiType: TRttiInterfaceTyp
 function HasRtti(PInfo: PTypeInfo): Boolean;
 /// <summary>
 ///   Converts <c>Source</c> to a value assignable to <c>Target</c>, returning False when no
-///   reasonable conversion exists. Handles: exact type; a record with an <c>Implicit(X)</c>
-///   operator returning <c>Target</c> (the value is coerced to <c>X</c> then wrapped — e.g.
-///   <c>TNullable&lt;X&gt;</c>); a direct cast; and the same cast after a round-trip through a
+///   reasonable conversion exists. Handles: exact type; a NULL source -- an empty <c>TValue</c> or
+///   a Variant <c>Null</c> -- towards a <c>TNullable&lt;X&gt;</c>, which gives the absent nullable;
+///   a record with an <c>Implicit(X)</c> operator returning <c>Target</c> (the value is coerced to
+///   <c>X</c> then wrapped — e.g. <c>TNullable&lt;X&gt;</c>); a direct cast; and the same cast after a round-trip through a
 ///   Variant, which turns an enumeration into its ordinal and a Variant into the value it holds.
 ///   It does not convert between families -- an integer into a Boolean, a number into a string.
 ///   Shared by the smart <c>SetValue</c> helpers and by callers that materialize values (e.g.
@@ -142,6 +143,8 @@ function CoerceForAssign(const Target: TRttiType; const Source: TValue; out Res:
 implementation
 
 uses
+  System.Variants,
+  Daf.Nullable,
   Daf.Types;
 
 function TryGetMethod(const Instance: TObject; const MethodName: string; out Method: TMethod): Boolean;
@@ -561,7 +564,15 @@ begin
     Exit(True);
   end;
 
-  // 2. Record with an Implicit(X) operator returning Target (e.g. TNullable<X>):
+  // 2. NULL towards a TNullable<X> is the absent nullable, not one holding Default(X).
+  if (TNullableRtti.ValueTypeOf(Target.Handle) <> nil)
+     and (Source.IsEmpty or ((Source.Kind = tkVariant) and VarIsNull(Source.AsVariant))) then
+  begin
+    Res := TNullableRtti.Absent(Target.Handle);
+    Exit(True);
+  end;
+
+  // 3. Record with an Implicit(X) operator returning Target (e.g. TNullable<X>):
   //    coerce the source to X, then wrap it through the operator.
   if Target is TRttiRecordType then
     for var Op in Target.GetMethods do
@@ -579,11 +590,11 @@ begin
         end;
       end;
 
-  // 3. Direct cast (compatible ordinals, class/interface hierarchy, …).
+  // 4. Direct cast (compatible ordinals, class/interface hierarchy, …).
   if Source.TryCast(Target.Handle, Res) then
     Exit(True);
 
-  // 4. Round-trip through a Variant: an enumeration comes back as its ordinal and a Variant
+  // 5. Round-trip through a Variant: an enumeration comes back as its ordinal and a Variant
   //    as the value it holds, so either can take one of the casts above. It does not convert
   //    between families; the property helper leaves that to SetPropValue.
   try

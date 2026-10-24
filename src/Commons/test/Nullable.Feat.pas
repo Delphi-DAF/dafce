@@ -3,6 +3,7 @@
 interface
 
 uses
+  System.SysUtils,
   Daf.Nullable;
 
 type
@@ -14,13 +15,23 @@ type
     RoundTrip: Integer;
     Report: string;
     Fallback: Integer;
+    /// Ejecuta una lectura y deja en Report su resultado o la excepcion que lanzo.
+    procedure Attempt(const Read: TFunc<Integer>);
   end;
 
 implementation
 
 uses
-  System.SysUtils,
   Daf.MiniSpec;
+
+procedure TNullableWorld.Attempt(const Read: TFunc<Integer>);
+begin
+  try
+    Report := 'read ' + IntToStr(Read());
+  except
+    on E: Exception do Report := E.ClassName + ': ' + E.Message;
+  end;
+end;
 
 initialization
 
@@ -122,6 +133,74 @@ Feature Nullable @nullable @commons
       procedure(W: TNullableWorld)
       begin
         Expect(W.Fallback).ToEqual(99);
+      end)
+
+.Rule('Reading the value of an absent nullable raises')
+
+  .Scenario('An absent nullable does not convert')
+    .Given('an absent nullable',
+      procedure(W: TNullableWorld)
+      begin
+        W.IntNull := TNullable<Integer>.Null;
+      end)
+    .When('it is assigned to an Integer variable',
+      procedure(W: TNullableWorld)
+      begin
+        W.Attempt(
+          function: Integer
+          begin
+            W.RoundTrip := W.IntNull;
+            Result := W.RoundTrip;
+          end);
+      end)
+    .&Then('the assignment raises EInvalidOpException',
+      procedure(W: TNullableWorld)
+      begin
+        Expect(W.Report).ToEqual('EInvalidOpException: Nullable object must have a value.');
+      end)
+
+  .Scenario('Value of an absent nullable raises')
+    .Given('an absent nullable',
+      procedure(W: TNullableWorld)
+      begin
+        W.IntNull := TNullable<Integer>.Null;
+      end)
+    .When('its Value is read',
+      procedure(W: TNullableWorld)
+      begin
+        W.Attempt(
+          function: Integer
+          begin
+            Result := W.IntNull.Value;
+          end);
+      end)
+    .&Then('the read raises EInvalidOpException',
+      procedure(W: TNullableWorld)
+      begin
+        Expect(W.Report).ToEqual('EInvalidOpException: Nullable object must have a value.');
+      end)
+
+  .Scenario('A present nullable converts to its value')
+    .Given('a nullable holding 7',
+      procedure(W: TNullableWorld)
+      begin
+        W.Materialized := 7;
+      end)
+    .When('it is assigned to an Integer variable and its Value is read',
+      procedure(W: TNullableWorld)
+      begin
+        W.RoundTrip := W.Materialized;
+        W.Attempt(
+          function: Integer
+          begin
+            Result := W.Materialized.Value;
+          end);
+        W.Report := Format('assigned %d, %s', [W.RoundTrip, W.Report]);
+      end)
+    .&Then('both reads give 7',
+      procedure(W: TNullableWorld)
+      begin
+        Expect(W.Report).ToEqual('assigned 7, read 7');
       end);
 
 end.

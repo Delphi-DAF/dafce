@@ -354,7 +354,7 @@ var Plano: Integer := Edad;       // conversión implícita de vuelta a T
 | `IsNull` | True cuando no hay valor presente |
 | `HasValue` | True cuando sí lo hay. `HasValue = not IsNull` |
 | `GetValueOrDefault(Fallback)` | El valor si está presente y, si no, el que se le pase |
-| `Value` | El valor presente — `Default(T)` cuando es NULL |
+| `Value` | El valor presente. Cuando es NULL lanza `EInvalidOpException`, y también la conversión implícita a `T` |
 
 **Los dos predicados de presencia se publican a propósito.** `IsNull` es el idioma del dominio de
 datos, el que casa con el `TField.IsNull` de Delphi y con el `IS NULL` de SQLCute; `HasValue` es el

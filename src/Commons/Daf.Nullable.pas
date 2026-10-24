@@ -2,6 +2,11 @@
 
 interface
 
+uses
+  System.SysUtils,
+  System.TypInfo,
+  System.Rtti;
+
 type
   /// <summary>
   ///   Optional / Maybe value type. Represents either an absent value (SQL NULL)
@@ -35,8 +40,28 @@ type
     function HasValue: Boolean; inline;
     /// <summary>Returns the value when present, otherwise the supplied fallback.</summary>
     function GetValueOrDefault(const Fallback: T): T;
-    /// <summary>The present value (<c>Default(T)</c> when NULL).</summary>
+    /// <summary>
+    ///   The present value. Reading it when NULL raises <c>EInvalidOpException</c>, as does the
+    ///   implicit conversion to <c>T</c>; <see cref="GetValueOrDefault"/> reads without raising.
+    /// </summary>
     property Value: T read GetValue;
+  end;
+
+  /// <summary>
+  ///   What RTTI can tell about a <c>TNullable&lt;X&gt;</c> without knowing <c>X</c>. It reads the
+  ///   fields, because RTTI does not expose the properties of a record.
+  /// </summary>
+  TNullableRtti = record
+  public
+    /// <summary>The type of the value of a <c>TNullable&lt;X&gt;</c>, or nil when it is not one.</summary>
+    class function ValueTypeOf(const TypeInf: PTypeInfo): PTypeInfo; static;
+    /// <summary>
+    ///   True when <c>Value</c> holds a <c>TNullable&lt;X&gt;</c>. <c>Inner</c> is then its value when
+    ///   present, or an empty <c>TValue</c> when absent.
+    /// </summary>
+    class function TryUnwrap(const Value: TValue; out Inner: TValue): Boolean; static;
+    /// <summary>An absent <c>TNullable&lt;X&gt;</c> of the given type.</summary>
+    class function Absent(const TypeInf: PTypeInfo): TValue; static;
   end;
 
 implementation
@@ -57,7 +82,7 @@ end;
 
 class operator TNullable<T>.Implicit(const Value: TNullable<T>): T;
 begin
-  Result := Value.FValue;
+  Result := Value.GetValue;
 end;
 
 class function TNullable<T>.Null: TNullable<T>;
@@ -84,6 +109,8 @@ end;
 
 function TNullable<T>.GetValue: T;
 begin
+  if not FHasValue then
+    raise EInvalidOpException.Create('Nullable object must have a value.');
   Result := FValue;
 end;
 
@@ -93,6 +120,48 @@ begin
     Result := FValue
   else
     Result := Fallback;
+end;
+
+{ TNullableRtti }
+
+class function TNullableRtti.ValueTypeOf(const TypeInf: PTypeInfo): PTypeInfo;
+var
+  Context: TRttiContext;
+begin
+  Result := nil;
+  // TNullable is tkMRecord, because it declares an Initialize operator: by kind first, so every other
+  // type leaves without asking RTTI.
+  if (TypeInf = nil) or not (TypeInf.Kind in [tkRecord, tkMRecord]) then
+    Exit;
+  var Declared := Context.GetType(TypeInf);
+  if (Declared = nil) or not Declared.Name.StartsWith('TNullable<') then
+    Exit;
+  var ValueField := Declared.GetField('FValue');
+  var HasValueField := Declared.GetField('FHasValue');
+  if (ValueField = nil) or (ValueField.FieldType = nil) or (HasValueField = nil) or
+    (HasValueField.FieldType = nil) or (HasValueField.FieldType.Handle <> System.TypeInfo(Boolean)) then
+    Exit;
+  Result := ValueField.FieldType.Handle;
+end;
+
+class function TNullableRtti.TryUnwrap(const Value: TValue; out Inner: TValue): Boolean;
+var
+  Context: TRttiContext;
+begin
+  Inner := TValue.Empty;
+  if ValueTypeOf(Value.TypeInfo) = nil then
+    Exit(False);
+  var Declared := Context.GetType(Value.TypeInfo);
+  var Data := Value.GetReferenceToRawData;
+  if Declared.GetField('FHasValue').GetValue(Data).AsBoolean then
+    Inner := Declared.GetField('FValue').GetValue(Data);
+  Result := True;
+end;
+
+class function TNullableRtti.Absent(const TypeInf: PTypeInfo): TValue;
+begin
+  // Zero-filled is absent: FHasValue False and FValue its default.
+  TValue.Make(nil, TypeInf, Result);
 end;
 
 end.

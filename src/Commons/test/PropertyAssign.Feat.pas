@@ -49,6 +49,8 @@ type
     constructor Create;
     destructor Destroy; override;
     procedure Assign;
+    /// Coerce un TValue vacio hacia TNullable<Integer> y deja en Outcome si pudo y si quedo ausente.
+    procedure CoerceEmptyToNullable;
   end;
 
 implementation
@@ -57,6 +59,7 @@ uses
   System.SysUtils,
   System.Rtti,
   Daf.MiniSpec,
+  Daf.Nullable,
   Daf.Rtti;
 
 function SourceVariant(const Kind, Raw: string): Variant;
@@ -101,6 +104,15 @@ begin
   except
     on E: Exception do Outcome := 'raises ' + E.ClassName;
   end;
+end;
+
+procedure TPropertyAssignWorld.CoerceEmptyToNullable;
+begin
+  var Ctx := TRttiContext.Create;
+  var Res: TValue;
+  var Coerced := CoerceForAssign(Ctx.GetType(TypeInfo(TNullable<Integer>)), TValue.Empty, Res);
+  var Absent := Coerced and Res.AsType<TNullable<Integer>>.IsNull;
+  Outcome := Format('coerced=%s, absent=%s', [BoolToStr(Coerced, True), BoolToStr(Absent, True)]);
 end;
 
 initialization
@@ -159,6 +171,20 @@ Feature Assigning a value to a property through RTTI @commons @rtti @assign
       [['Prop',  'Kind',     'Raw', 'Expected'],
        ['Flag',  'ShortInt', '2',   'ERangeError'],
        ['State', 'Integer',  '3',   'ERangeError'],
-       ['Count', 'string',   'x',   'EVariantTypeCastError']]);
+       ['Count', 'string',   'x',   'EVariantTypeCastError']])
+
+.Rule('A NULL value leaves a TNullable absent')
+
+  .Scenario('An empty TValue towards TNullable')
+    .When('an empty TValue is coerced towards TNullable<Integer>',
+      procedure(W: TPropertyAssignWorld)
+      begin
+        W.CoerceEmptyToNullable;
+      end)
+    .&Then('the result is absent',
+      procedure(W: TPropertyAssignWorld)
+      begin
+        Expect(W.Outcome).ToEqual('coerced=True, absent=True');
+      end);
 
 end.

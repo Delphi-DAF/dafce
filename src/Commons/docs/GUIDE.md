@@ -352,7 +352,7 @@ var Plain: Integer := Age;      // implicit conversion back to T
 | `IsNull` | True when no value is present |
 | `HasValue` | True when one is. `HasValue = not IsNull` |
 | `GetValueOrDefault(Fallback)` | The value when present, otherwise the fallback given |
-| `Value` | The present value — `Default(T)` when NULL |
+| `Value` | The present value. When NULL it raises `EInvalidOpException`, and so does the implicit conversion to `T` |
 
 **Both presence predicates ship on purpose.** `IsNull` is the data-domain idiom, the one that
 matches Delphi's own `TField.IsNull` and SQLCute's `IS NULL`; `HasValue` is the .NET one. Whichever
