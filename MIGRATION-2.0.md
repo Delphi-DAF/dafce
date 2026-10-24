@@ -595,6 +595,22 @@ begin
 end;
 ```
 
+### 22. SQLCute: the `in` operator by name binds its values
+
+`Where(col, 'in', V)` — and `'not in'`, `OrWhere`, `WhereNot` and `OrWhereNot` — binds its values
+like `WhereIn`: one parameter per element when `V` is an array, and one for the whole value
+otherwise. In 1.6 the value was written into the SQL text.
+
+- **What breaks**: a string holding a list, `Where('id', 'in', '1,2,3')`, is now one value and
+  matches nothing. Pass the values with `WhereIn`.
+
+```pascal
+// before
+Q.Where('id', 'in', '1,2,3');
+// now
+Q.WhereIn('id', [1, 2, 3]);
+```
+
 ## How to do it
 
 1. Compile. Whatever is missing comes out as a compiler error, not as odd behaviour at run time.
@@ -607,6 +623,6 @@ end;
    the host validates the container, and a registration that went missing stops the build naming it.
    A Scoped service asked of the root provider is rejected too, when it is resolved: resolve it from a
    scope the work opens, `Services.CreateScope`.
-6. Sections 2, 6 to 13 and 15 to 21 carry **run-time** changes: the compiler says nothing about them. Read them
+6. Sections 2, 6 to 13 and 15 to 22 carry **run-time** changes: the compiler says nothing about them. Read them
    against your own composition — scope lifetimes, duplicate registrations, logging rules and
    host settings.

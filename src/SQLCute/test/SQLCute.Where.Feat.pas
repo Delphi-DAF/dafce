@@ -219,6 +219,29 @@ TQuery — WHERE @unit @sqlcute
 
 // -------------------------------------------------------------------------
 
+.Rule('The in operator by name binds its values, like WhereIn')
+
+  .Scenario('An array is bound element by element')
+    .Given('a Where with the in operator and an array')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users WHERE id IN (?, ?, ?)"')
+    .&Then('has 3 bindings')
+
+  .Scenario('A value that is not an array is bound whole')
+    .Given('a Where with the in operator and a string')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users WHERE id IN (?)"')
+    .&Then('has 1 binding')
+    .&Then('bindings in order are "1) OR (1=1"')
+
+  .Scenario('not in is bound the same way')
+    .Given('an OrWhere with the not in operator and an array')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM users WHERE active = ? OR id NOT IN (?, ?)"')
+    .&Then('has 3 bindings')
+
+// -------------------------------------------------------------------------
+
 .Rule('WhereExists and WhereNotExists test subquery row existence')
 
   .Scenario('WhereExists produces EXISTS (subquery)')

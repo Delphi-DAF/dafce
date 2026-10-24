@@ -54,6 +54,8 @@ type
       Conn: TBoolOp; IsNot: Boolean = False): IQuery;
     function AddEmptyInGroup(const Column: string; Negated: Boolean;
       Conn: TBoolOp): IQuery;
+    function AddInClause(const Column: string; const Values: TArray<Variant>;
+      Negated: Boolean; Conn: TBoolOp): IQuery;
     procedure SelectAggregateRaw(const AggFunc, Column, Alias: string);
     function AddWhereLikeClause(const Column, Pattern: string;
       Op: TWhereOp; Conn: TBoolOp; CaseSensitive: Boolean): IQuery;
@@ -257,11 +259,27 @@ begin
   Result := FKind;
 end;
 
+// The values of an IN, one per element when Value is an array and the whole Value otherwise.
+function InValues(const Value: Variant): TArray<Variant>;
+begin
+  if not VarIsArray(Value) then
+  begin
+    Result := [Value];
+    Exit;
+  end;
+  for var I := VarArrayLowBound(Value, 1) to VarArrayHighBound(Value, 1) do
+    Result := Result + [Value[I]];
+end;
+
 function TQueryImpl.AddWhereClause(const Column: string; Op: TWhereOp;
   const Value: Variant; Conn: TBoolOp; IsNot: Boolean): IQuery;
 var
   W: TWhereClause;
 begin
+  // IN by operator name goes the WhereIn way: one bound parameter per value, never the value
+  // written into the SQL text.
+  if Op in [TWhereOp.&In, TWhereOp.NotIn] then
+    Exit(AddInClause(Column, InValues(Value), (Op = TWhereOp.NotIn) <> IsNot, Conn));
   W := TWhereClause.Create;
   W.Column        := Column;
   W.Op            := Op;
@@ -1092,64 +1110,42 @@ begin
     Conn, Negated);
 end;
 
-function TQueryImpl.WhereIn(const Column: string; const Values: TArray<Variant>): IQuery;
+function TQueryImpl.AddInClause(const Column: string; const Values: TArray<Variant>;
+  Negated: Boolean; Conn: TBoolOp): IQuery;
+const
+  ConnectorText: array[TBoolOp] of string = ('AND', 'OR');
 var
   C: TWhereInClause;
 begin
   if Length(Values) = 0 then
-    Exit(AddEmptyInGroup(Column, False, TBoolOp.opAnd));
+    Exit(AddEmptyInGroup(Column, Negated, Conn));
   C           := TWhereInClause.Create;
   C.Column    := Column;
   C.Values    := Values;
-  C.Negated   := False;
-  C.Connector := 'AND';
+  C.Negated   := Negated;
+  C.Connector := ConnectorText[Conn];
   FClauses.Add(C);
   Result := Self;
+end;
+
+function TQueryImpl.WhereIn(const Column: string; const Values: TArray<Variant>): IQuery;
+begin
+  Result := AddInClause(Column, Values, False, TBoolOp.opAnd);
 end;
 
 function TQueryImpl.WhereNotIn(const Column: string; const Values: TArray<Variant>): IQuery;
-var
-  C: TWhereInClause;
 begin
-  if Length(Values) = 0 then
-    Exit(AddEmptyInGroup(Column, True, TBoolOp.opAnd));
-  C           := TWhereInClause.Create;
-  C.Column    := Column;
-  C.Values    := Values;
-  C.Negated   := True;
-  C.Connector := 'AND';
-  FClauses.Add(C);
-  Result := Self;
+  Result := AddInClause(Column, Values, True, TBoolOp.opAnd);
 end;
 
 function TQueryImpl.OrWhereIn(const Column: string; const Values: TArray<Variant>): IQuery;
-var
-  C: TWhereInClause;
 begin
-  if Length(Values) = 0 then
-    Exit(AddEmptyInGroup(Column, False, TBoolOp.opOr));
-  C           := TWhereInClause.Create;
-  C.Column    := Column;
-  C.Values    := Values;
-  C.Negated   := False;
-  C.Connector := 'OR';
-  FClauses.Add(C);
-  Result := Self;
+  Result := AddInClause(Column, Values, False, TBoolOp.opOr);
 end;
 
 function TQueryImpl.OrWhereNotIn(const Column: string; const Values: TArray<Variant>): IQuery;
-var
-  C: TWhereInClause;
 begin
-  if Length(Values) = 0 then
-    Exit(AddEmptyInGroup(Column, True, TBoolOp.opOr));
-  C           := TWhereInClause.Create;
-  C.Column    := Column;
-  C.Values    := Values;
-  C.Negated   := True;
-  C.Connector := 'OR';
-  FClauses.Add(C);
-  Result := Self;
+  Result := AddInClause(Column, Values, True, TBoolOp.opOr);
 end;
 
 // --- SELECT (aliases + aggregates) ---

@@ -187,6 +187,10 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - **Web**: Destruir un `TDafHttpServer` libera los módulos web que WebBroker guardaba para reutilizarlos; un servidor posterior en el mismo proceso recibía los que se construyeron para el anterior
 - **Web**: `Ok(Boolean)` ya no pierde el valor JSON que serializa, uno por respuesta
 
+### Security
+
+- **SQLCute**: `Where(col, 'in', V)` y `'not in'`, también por `OrWhere`, `WhereNot` y `OrWhereNot`, ligan sus valores como `WhereIn` en vez de escribir `V` en el SQL. Una cadena con una lista (`'1,2,3'`) es ahora un solo valor
+
 ## [1.6.0] - 2026-07-20
 
 ### Added

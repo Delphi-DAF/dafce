@@ -594,6 +594,22 @@ begin
 end;
 ```
 
+### 22. SQLCute: el operador `in` por nombre liga sus valores
+
+`Where(col, 'in', V)` —y `'not in'`, `OrWhere`, `WhereNot` y `OrWhereNot`— liga sus valores como
+`WhereIn`: un parámetro por elemento si `V` es un array, y uno para el valor entero si no lo es. En
+1.6 el valor se escribía en el texto del SQL.
+
+- **Qué rompe**: una cadena con una lista, `Where('id', 'in', '1,2,3')`, es ahora un solo valor, y no
+  casa con nada. Pasa los valores con `WhereIn`.
+
+```pascal
+// antes
+Q.Where('id', 'in', '1,2,3');
+// ahora
+Q.WhereIn('id', [1, 2, 3]);
+```
+
 ## Cómo hacerlo
 
 1. Compila. Lo que falte sale como error del compilador, no como comportamiento raro en
@@ -607,6 +623,6 @@ end;
    `DAF_ENVIRONMENT=Development`: el host valida el contenedor, y un registro que se haya perdido detiene
    la construcción nombrándolo. Un servicio Scoped pedido al proveedor raíz también se rechaza, al
    resolverlo: se resuelve desde un ámbito que abre el trabajo, `Services.CreateScope`.
-6. Las secciones 2, de la 6 a la 13 y de la 15 a la 21 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
+6. Las secciones 2, de la 6 a la 13 y de la 15 a la 22 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
    contra tu propia composición — la vida de los ámbitos, los registros repetidos, las reglas de
    logging y los ajustes del host.

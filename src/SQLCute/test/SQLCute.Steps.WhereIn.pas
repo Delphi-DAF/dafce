@@ -49,6 +49,15 @@ type
     [Given('an OrWhereNotInQuery query')]
     procedure GivenOrWhereNotInQuery(W: TSQLCuteWorld);
 
+    [Given('a Where with the in operator and an array')]
+    procedure GivenWhereInOperatorArray(W: TSQLCuteWorld);
+
+    [Given('a Where with the in operator and a string')]
+    procedure GivenWhereInOperatorString(W: TSQLCuteWorld);
+
+    [Given('an OrWhere with the not in operator and an array')]
+    procedure GivenOrWhereNotInOperatorArray(W: TSQLCuteWorld);
+
   end;
 
 // -----------------------------------------------------------------------
@@ -129,6 +138,24 @@ begin
     .OrWhereNotInQuery('id', TQuery.New.From('banned').Select('user_id'));
 end;
 
+procedure TSQLCuteStepsWhereIn.GivenWhereInOperatorArray(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('users')
+    .Where('id', 'in', VarArrayOf([1, 2, 3]));
+end;
+
+procedure TSQLCuteStepsWhereIn.GivenWhereInOperatorString(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('users')
+    .Where('id', 'in', '1) OR (1=1');
+end;
+
+procedure TSQLCuteStepsWhereIn.GivenOrWhereNotInOperatorArray(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('users')
+    .Where('active', True)
+    .OrWhere('id', 'not in', VarArrayOf([4, 5]));
+end;
 
 initialization
   Bindings.RegisterSteps<TSQLCuteStepsWhereIn>;

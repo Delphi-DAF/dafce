@@ -188,6 +188,10 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - **Web**: Destroying a `TDafHttpServer` frees the web modules WebBroker kept for reuse; a later server in the same process was handed the ones built for the previous one
 - **Web**: `Ok(Boolean)` no longer leaks the JSON value it serializes, one per response
 
+### Security
+
+- **SQLCute**: `Where(col, 'in', V)` and `'not in'`, also through `OrWhere`, `WhereNot` and `OrWhereNot`, bind their values like `WhereIn` instead of writing `V` into the SQL. A string with a list (`'1,2,3'`) is now a single value
+
 ## [1.6.0] - 2026-07-20
 
 ### Added

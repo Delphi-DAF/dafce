@@ -318,14 +318,20 @@ begin
         if W.SubQuery <> nil then
           Result := WrapColumn(W.Column) + ' IN (' + CompileSubQuery(W.SubQuery as IQuery) + ')'
         else
-          Result := WrapColumn(W.Column) + ' IN (' + VarToStr(W.Value) + ')';
+        begin
+          AddBinding(W.Value);
+          Result := WrapColumn(W.Column) + ' IN (' + ParamPlaceholder + ')';
+        end;
       end;
       TWhereOp.NotIn:
       begin
         if W.SubQuery <> nil then
           Result := WrapColumn(W.Column) + ' NOT IN (' + CompileSubQuery(W.SubQuery as IQuery) + ')'
         else
-          Result := WrapColumn(W.Column) + ' NOT IN (' + VarToStr(W.Value) + ')';
+        begin
+          AddBinding(W.Value);
+          Result := WrapColumn(W.Column) + ' NOT IN (' + ParamPlaceholder + ')';
+        end;
       end;
       TWhereOp.Raw:
         Result := W.RawSql;
