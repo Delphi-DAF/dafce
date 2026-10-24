@@ -634,6 +634,10 @@ Una suite que estaba en verde puede salir con escenarios Pending o Undefined, o 
 - **Un Scenario Outline sin `.Examples` se ejecuta una vez, como un escenario.** En 1.6 se quedaba
   fuera de la ejecución y del informe. **Qué rompe**: un outline escrito sin su tabla se ejecuta
   ahora, y un step suyo sin lambda ni binding es Undefined.
+- **Un hook de la suite que lanza cuenta como fallo.** Se ejecutan todos los `Before`, y si alguno
+  lanzó no se ejecuta ninguna feature; se ejecutan también todos los `After`. En 1.6 el error se
+  perdía y la ejecución salía con 0. **Qué rompe**: una suite cuyo hook de preparación o de limpieza
+  lanza sale ahora en rojo.
 
 ## Cómo hacerlo
 

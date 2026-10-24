@@ -634,6 +634,9 @@ suite that was green can come out with scenarios Pending or Undefined, or red.
 - **A Scenario Outline without `.Examples` runs once, as a scenario.** In 1.6 it was left out of the
   run and of the report. **What breaks**: an outline written without its table now runs, and a step
   of it with neither lambda nor binding is Undefined.
+- **A hook of the suite that raises counts as a failure.** Every `Before` runs, and when one raised
+  no feature runs; every `After` runs too. In 1.6 the error was lost and the run exited with 0.
+  **What breaks**: a suite whose set-up or clean-up hook raises now comes out red.
 
 ## How to do it
 

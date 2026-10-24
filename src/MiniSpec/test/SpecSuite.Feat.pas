@@ -5,7 +5,6 @@ interface
 var
   /// Marcadores para verificar ejecución de Suite hooks
   SuiteBeforeHookCalled: Boolean;
-  SuiteAfterHookCalled: Boolean;
   SuiteTitle: string;
 
 implementation
@@ -69,7 +68,5 @@ Feature SpecSuite @suite
     begin
       Expect(Ctx.Report).ToEqual('True');
     end);
-
-// Note: Suite After hook is verified via Assert after .Run() in the program
 
 end.

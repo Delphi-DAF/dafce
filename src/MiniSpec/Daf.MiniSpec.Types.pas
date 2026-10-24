@@ -432,7 +432,12 @@ type
     procedure AddFeature(const Feature: IFeature);
     procedure AddBeforeHook(const Description: string; const Hook: THookProc);
     procedure AddAfterHook(const Description: string; const Hook: THookProc);
-    procedure RunBeforeHooks;
+    /// <summary>
+    ///   Runs every Before hook, also after one fails, and notes each failure in the suite. False
+    ///   when one failed: then no feature runs.
+    /// </summary>
+    function RunBeforeHooks: Boolean;
+    /// <summary>Runs every After hook, and notes each failure in the suite.</summary>
     procedure RunAfterHooks;
     /// <summary>
     /// Title of the test suite (set via MiniSpec.Category).
@@ -755,13 +760,19 @@ type
     function GetFeatures: TList<IFeature>;
     function GetBeforeHooks: TList<IHook>;
     function GetAfterHooks: TList<IHook>;
+    procedure NoteHookFailure(const Hook: IHook);
   public
     constructor Create(const ATitle: string = '');
     destructor Destroy; override;
     procedure AddFeature(const Feature: IFeature);
     procedure AddBeforeHook(const Description: string; const Hook: THookProc);
     procedure AddAfterHook(const Description: string; const Hook: THookProc);
-    procedure RunBeforeHooks;
+    /// <summary>
+    ///   Runs every Before hook, also after one fails, and notes each failure in the suite. False
+    ///   when one failed: then no feature runs.
+    /// </summary>
+    function RunBeforeHooks: Boolean;
+    /// <summary>Runs every After hook, and notes each failure in the suite.</summary>
     procedure RunAfterHooks;
     /// Fija como se construye el contexto de suite. La invoca SetUpSuiteContext una sola vez;
     /// sin creator no hay contexto y SuiteContext queda nil.
@@ -1987,6 +1998,17 @@ begin
   Result := FFeatures;
 end;
 
+procedure TSpecSuite.NoteHookFailure(const Hook: IHook);
+begin
+  // Cada fallo se suma al mensaje de la suite y a su recuento.
+  var Msg := Format('%s: %s', [Hook.Description, Hook.RunInfo.ErrMsg]);
+  if Assigned(FRunInfo.Error) then
+    Msg := FRunInfo.ErrMsg + sLineBreak + Msg;
+  FRunInfo.Result := srrError;
+  FRunInfo.SetError(Exception.Create(Msg));
+  IncCount(rkFail);
+end;
+
 function TSpecSuite.GetBeforeHooks: TList<IHook>;
 begin
   Result := FBeforeHooks;
@@ -2014,16 +2036,28 @@ begin
   FAfterHooks.Add(THook.Create(sikAfter, Self, Description, Hook));
 end;
 
-procedure TSpecSuite.RunBeforeHooks;
+function TSpecSuite.RunBeforeHooks: Boolean;
 begin
+  Result := True;
   for var Hook in FBeforeHooks do
+  begin
     Hook.Execute;
+    if Hook.RunInfo.Result in [srrFail, srrError] then
+    begin
+      NoteHookFailure(Hook);
+      Result := False;
+    end;
+  end;
 end;
 
 procedure TSpecSuite.RunAfterHooks;
 begin
   for var Hook in FAfterHooks do
+  begin
     Hook.Execute;
+    if Hook.RunInfo.Result in [srrFail, srrError] then
+      NoteHookFailure(Hook);
+  end;
 end;
 
 procedure TSpecSuite.SetContextCreator(const Creator: TFunc<TObject>);

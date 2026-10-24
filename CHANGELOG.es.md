@@ -160,6 +160,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
   - Cada Background se ejecuta una vez por escenario: el de la feature se ejecutaba dos veces, y el de una regla sustituía al de la feature en todos sus escenarios
   - Un step declarado `.Pending` en un Scenario Outline queda pendiente en cada fila: las filas lo ejecutaban
   - Un Scenario Outline sin `.Examples` se ejecuta una vez como un escenario: se quedaba fuera de la ejecución y del informe
+  - Un hook de la suite que lanza cuenta como fallo y sale en el informe, y un `Before` que lanza impide que se ejecuten las features: el error se perdía y la ejecución salía con 0
 - **Hosting**: `IHostApplicationLifetime.StopApplication` para de verdad la aplicación: cancelaba `ApplicationStopping` en vez de pedir la parada, así que `WaitForShutdown` seguía bloqueado y los `IHostedService` no se paraban nunca
 - **Hosting**: Un proceso puede construir más de un host: «Build already called» y el «ya parado» eran estado de clase, así que un arnés que monta y desmonta hosts solo podía montar el primero
 - **Hosting**: Un servicio alojado cuyo `Stop` lanzaba dejaba sin parar a los que venían detrás, y el host sin liberar, contenedor incluido. La parada llega ahora hasta el final, y `Host.Stop` lanza lo que falló con el host ya liberado: la misma excepción, o una `EAggregateException` con todos los fallos si fallaron varios pasos

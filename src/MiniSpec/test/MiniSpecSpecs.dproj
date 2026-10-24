@@ -117,6 +117,7 @@
         <DCCReference Include="FailureReason.Feat.pas"/>
         <DCCReference Include="BackgroundSteps.Feat.pas"/>
         <DCCReference Include="ScenarioOutline.Feat.pas"/>
+        <DCCReference Include="SuiteHooks.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>

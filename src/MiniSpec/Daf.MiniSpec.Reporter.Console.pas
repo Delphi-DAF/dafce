@@ -176,6 +176,11 @@ procedure TConsoleReporter.OnBeginSuite(const Context: IRunContext; const Suite:
 begin
   if not Suite.Title.IsEmpty then
     OutputLn(0, 'Suite: ' + Suite.Title);
+  // Un hook de la suite que lanza no tiene otro sitio donde salir, como el de una feature.
+  var ErrMsg := Context.GetErrorDetail(Suite.RunInfo);
+  if not ErrMsg.IsEmpty then
+    for var Line in ErrMsg.Split([sLineBreak]) do
+      OutputLn(1, 'ERROR: "' + Line + '"');
 end;
 
 procedure TConsoleReporter.OnBeginReport(const Context: IRunContext);

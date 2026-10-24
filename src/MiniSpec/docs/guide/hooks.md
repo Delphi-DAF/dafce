@@ -43,6 +43,34 @@ Feature('Database Tests')
 
 **Note**: Hooks don't receive World because they execute before any instance exists.
 
+## Hooks of the suite
+
+`Before` and `After` declared on `MiniSpec`, in the program that runs the suite, execute once before
+the first feature and once after the last one, also when a feature fails:
+
+```pascal
+MiniSpec
+  .Before('Start the shared server', procedure
+    begin
+      // ...
+    end)
+  .After('Stop the shared server', procedure
+    begin
+      // ...
+    end)
+  .Run;
+```
+
+## When a hook raises
+
+In a feature, a `Before` that raises stops the `Before` hooks after it, and the scenarios of the
+feature do not run. The feature counts as a failure, and the report shows the message under its
+heading. Its `After` hooks run all the same.
+
+In the suite, every `Before` runs even when one raises, and then no feature runs. Every `After` runs
+too. Each hook that raises counts as one failure, its message appears at the start of the console
+report, and the run exits with 1.
+
 ---
 
 [← Pending and NoAction](pending-noaction.md) | [Next: Configuration →](configuration.md)

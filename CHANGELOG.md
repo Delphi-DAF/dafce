@@ -161,6 +161,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
   - Each Background runs once per scenario: the feature's ran twice, and a rule's replaced the feature's in every scenario of the feature
   - A step declared `.Pending` in a Scenario Outline is pending in every row: the rows ran it
   - A Scenario Outline without `.Examples` runs once as a scenario: it was left out of the run and of the report
+  - A hook of the suite that raises counts as a failure and shows in the report, and a `Before` that raises stops the features from running: the error was lost and the run exited with 0
 - **Hosting**: `IHostApplicationLifetime.StopApplication` really stops the application: it cancelled `ApplicationStopping` instead of requesting the stop, so `WaitForShutdown` stayed blocked and the `IHostedService`s were never stopped
 - **Hosting**: A process can build more than one host: "Build already called" and the "already stopped" flag were class state, so a harness that sets hosts up and tears them down could only set the first one up
 - **Hosting**: A hosted service whose `Stop` raised left the services after it unstopped and the host unreleased, container included. The shutdown now runs to the end, and `Host.Stop` raises what failed once the host is released: the exception itself, or an `EAggregateException` holding every failure when several steps failed

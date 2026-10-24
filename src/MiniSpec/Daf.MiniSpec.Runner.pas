@@ -1156,12 +1156,14 @@ begin
     // despues del ultimo, que es lo que significa «compartido por toda la suite».
     SuiteImpl.SetUpSuiteContext;
     try
-      FSuite.RunBeforeHooks;
+      var Prepared := FSuite.RunBeforeHooks;
       try
         // Se ejecutan TODAS las Features: el recuento debe reflejar el total definido, y cada
-        // Feature/Rule/Scenario decide si corre o se marca Skip.
-        for var F in FSuite.Features do
-          F.Run(FOptions.SpecMatcher, FOptions.IsDryRun);
+        // Feature/Rule/Scenario decide si corre o se marca Skip. Un Before de la suite que falla
+        // deja sin ejecutar ninguna, y los After corren igual.
+        if Prepared then
+          for var F in FSuite.Features do
+            F.Run(FOptions.SpecMatcher, FOptions.IsDryRun);
       finally
         FSuite.RunAfterHooks;
       end;

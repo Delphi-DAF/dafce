@@ -26,7 +26,8 @@ uses
   FailureVisibility.Feat in 'FailureVisibility.Feat.pas',
   FailureReason.Feat in 'FailureReason.Feat.pas',
   BackgroundSteps.Feat in 'BackgroundSteps.Feat.pas',
-  ScenarioOutline.Feat in 'ScenarioOutline.Feat.pas';
+  ScenarioOutline.Feat in 'ScenarioOutline.Feat.pas',
+  SuiteHooks.Feat in 'SuiteHooks.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;
@@ -42,11 +43,6 @@ begin
       begin
         SuiteBeforeHookCalled := True;
         SuiteTitle := MiniSpec.Suite.Title;
-      end)
-    .After('Cleanup test environment',
-      procedure
-      begin
-        SuiteAfterHookCalled := True;
       end)
     .Run;
 
