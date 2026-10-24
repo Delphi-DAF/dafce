@@ -17,9 +17,8 @@
 9. [Daf.Application.Version](#dafapplicationversion)
 10. [Daf.Types](#daftypes)
 
-`Daf.SystemProcess` y `Daf.CmdLn.Parser` se documentaban aquí. La primera vive en un paquete propio
-—ver [SystemProcess](../../SystemProcess/README.es.md)—; la segunda se ha retirado, y la línea de
-comandos es [`Daf.CommandLine`](../../CommandLine/README.es.md).
+`Daf.SystemProcess` vive en un paquete propio —ver [SystemProcess](../../SystemProcess/README.es.md)—.
+`Daf.CmdLn.Parser` se retiró en 2.0; la línea de comandos es [`Daf.CommandLine`](../../CommandLine/README.es.md).
 
 ---
 

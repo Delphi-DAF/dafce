@@ -72,7 +72,7 @@ Everything lives in one class, `TBuildTool`, and each part answers a different q
 - **`--min-sdk` is a type the engine knows nothing about, and it took one place to admit it.** The
   conversion is passed where the option is declared, so it travels with the option and nothing in DAF
   changed. Its refusal comes out through `Errors` like any other invalid invocation, with the message
-  the conversion itself wrote — a type a third party adds fails as well as one of serie.
+  the conversion itself wrote — a type a third party adds fails as well as a built-in one.
 
 - **`web` refuses `--minify` together with `--pretty`, and neither option can say so.** The rule is
   about the invocation of the command as a whole, so it is a validation of the command:

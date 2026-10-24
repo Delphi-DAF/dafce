@@ -207,9 +207,9 @@ obligatory or not, and arity cannot say which.
 A conversion consumes the **whole** token or fails. `--port 80xyz` is refused, naming the option and
 the text received, rather than becoming `80`; and `-5` is a value, not an unknown option.
 
-### The types of serie, and what each one translates
+### The built-in types, and what each one translates
 
-Each type of serie of .NET has its Delphi type, except `DateTimeOffset` — divergence 11 below.
+Each built-in type of .NET has its Delphi type, except `DateTimeOffset` — divergence 11 below.
 
 | `System.CommandLine` | Here | How it is read |
 |---|---|---|
@@ -278,7 +278,7 @@ MinOpt := CommandLine.Option<TSemVer>('--min',
 ```
 
 The refusal comes out through `ParseResult.Errors` like any other, so a type a third party added fails
-as well as one of serie. It also serves a type the engine already knows, for reading it some other way
+as well as a built-in one. It also serves a type the engine already knows, for reading it some other way
 — hexadecimal into an `Integer`, say.
 
 The second converts **the whole result**. `CustomParser` receives the result of the symbol — every
@@ -356,7 +356,7 @@ Root.Validators.Add(
 - The ones of an option or an argument run after its arity is checked and before its value is
   converted: an error of theirs keeps it from being converted.
 - An error that a validation of an option adds stays among the errors, and reading the option still
-  gives its value. `Validate` and the two of serie fail the value itself, and reading it raises.
+  gives its value. `Validate` and the two built-in ones fail the value itself, and reading it raises.
 
 ⚠️ **A conversion of one token, or a `Validate`, cannot be declared on a collection.** Both receive the
 value of **one** token, and for a collection that value is an element — which `T` cannot name, because
@@ -838,7 +838,7 @@ forms a reference cycle with it, and neither is ever released.
 ## Directives
 
 A directive is an instruction to the parser, not to the application: a token in square brackets,
-`[name]` or `[name:value]`, written before the rest of the invocation. A root declares none of serie.
+`[name]` or `[name:value]`, written before the rest of the invocation. A root declares no built-in directive.
 `[diagram]` is the one the module brings:
 
 ```pascal

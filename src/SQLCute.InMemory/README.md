@@ -104,7 +104,8 @@ for var V in TInMemory.Project<TPerson, TPersonView>(
 
 ## SQL Semantics
 
-The in-memory engine follows ANSI semantics so both back-ends answer the same question the same way:
+The in-memory engine follows ANSI semantics, so both back-ends answer the same question the same way, with
+one exception — the default NULL order, in the last point:
 
 - **Three-valued logic.** A comparison against NULL is *unknown*, not false; `AND`/`OR`/`NOT` combine by the SQL truth tables; a row is kept only when the predicate is *true*. So `WhereNot('age','>',18)` excludes a NULL age — exactly as a database does.
 - **WHERE precedence.** `AND` binds tighter than `OR`. Both back-ends build from one shared normalizer (`Daf.SQLCute.WhereTree`), so they cannot disagree; the SQL side emits explicit parentheses.
@@ -112,6 +113,8 @@ The in-memory engine follows ANSI semantics so both back-ends answer the same qu
 - **Aggregates** skip NULLs (`COUNT(col)`, `SUM`, `AVG`, `MIN`, `MAX`); `COUNT(*)` counts rows.
 - **GROUP BY** puts all NULL keys in one group.
 - **ORDER BY** treats NULL as the smallest value by default — nulls-first ascending, nulls-last descending — and a query overrides that per column with `NullsFirst` / `NullsLast`, which the plan honors.
+  Without them the two back-ends can differ: the database applies its own default, and Postgres and
+  Oracle put NULL last in ascending order.
 
 The full rules, with examples, are in the [usage guide](docs/GUIDE.md).
 

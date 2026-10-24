@@ -74,8 +74,8 @@ Use it to assert that two expressions are the same thing, as a cache key, or in 
 | A closure filter on a specification | Untranslatable must be unrepresentable; use `Daf.Linq` for that world |
 | Eager-loading directives (`includes`) | Nothing to lower into, and the wrong owner — assembling an aggregate is the adapter's job |
 | A `T: TEntity` constraint | Nothing downstream needs one; records work too |
-| Entity↔table mapping metadata | ORM territory, and the ORM is not designed yet |
-| Instance-driven DML | Needs the persistent-member set, the primary key and change tracking — all ORM metadata |
+| Entity↔table mapping metadata | Names resolve through `INameResolver`, and nothing else is mapped |
+| Instance-driven DML | Needs the persistent-member set, the primary key and change tracking, which this layer does not model |
 | Raw SQL and `EXISTS` operators | A domain expression must not be *able* to say them |
 
 The last one is enforced by the package boundary, not by discipline: this unit does not reference SQLCute, and its spec runner links the domain half alone. Acquire a SQL dependency and the project stops compiling.

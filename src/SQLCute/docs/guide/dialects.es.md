@@ -11,9 +11,9 @@
 El `TAnsiSqlCompiler` por defecto genera SQL ANSI genérico con marcadores `?` y sin entrecomillado de identificadores. Los compiladores de dialecto lo extienden para manejar:
 
 - **Entrecomillado de identificadores** — envolver nombres de tabla/columna para evitar conflictos con palabras reservadas
-- **Marcadores de parámetros** — `?`, `$1`, `:p1`, `@p1`, etc.
+- **Marcadores de parámetros** — `?`, `$1`, `:p1`, `@p0`, etc.
 - **Cast de fechas** — expresiones específicas del dialecto para `WhereDate`/`WhereDatePart`
-- **Paginación** — `LIMIT/OFFSET` vs `FETCH NEXT … ROWS ONLY` vs `ROWNUM`
+- **Paginación** — `LIMIT/OFFSET` vs `FETCH NEXT … ROWS ONLY` vs `ROWS m TO n`
 - **Emisión de la ordenación de NULL** — `NULLS FIRST/LAST` nativo, o una emulación donde el dialecto no tiene esa sintaxis
 
 ---
@@ -26,9 +26,9 @@ El `TAnsiSqlCompiler` por defecto genera SQL ANSI genérico con marcadores `?` y
 | `TPostgresCompiler` | `"` | `$1`, `$2`… | `Daf.SQLCute.Compiler.Postgres` |
 | `TMySqlCompiler` | `` ` `` | `?` | `Daf.SQLCute.Compiler.MySql` |
 | `TSQLiteCompiler` | `"` | `?` | `Daf.SQLCute.Compiler.SQLite` |
-| `TSqlServerCompiler` | `[`…`]` | `@p1`, `@p2`… | `Daf.SQLCute.Compiler.SqlServer` |
-| `TOracleCompiler` | `"` | `:p1`, `:p2`… | `Daf.SQLCute.Compiler.Oracle` |
-| `TFirebirdCompiler` | `"` | `?` | `Daf.SQLCute.Compiler.Firebird` |
+| `TSqlServerCompiler` | `[`…`]` | `@p0`, `@p1`… | `Daf.SQLCute.Compiler.SqlServer` |
+| `TOracleCompiler` | `"`, en mayúsculas | `:p1`, `:p2`… | `Daf.SQLCute.Compiler.Oracle` |
+| `TFirebirdCompiler` | ninguna | `?` | `Daf.SQLCute.Compiler.Firebird` |
 
 Todos los compiladores de dialecto viven en el paquete `Daf.SQLCute`, junto al `TAnsiSqlCompiler` del que extienden. Basta con requerir `Daf.SQLCute`: no hay un paquete de compiladores aparte que añadir.
 
@@ -99,11 +99,6 @@ type
   protected
     function WrapColumn(const Col: string): string; override;
     function WrapTable(const Table: string): string; override;
-    function ParamPlaceholder: string; override;
-  private
-    FIndice: Integer;
-  public
-    function Compile(const Query: IQuery): TSQLResult; override;
   end;
 
 function TMiDbCompilador.WrapColumn(const Col: string): string;
@@ -111,16 +106,9 @@ begin
   Result := '[' + Col + ']';
 end;
 
-function TMiDbCompilador.ParamPlaceholder: string;
+function TMiDbCompilador.WrapTable(const Table: string): string;
 begin
-  Inc(FIndice);
-  Result := ':param' + IntToStr(FIndice);
-end;
-
-function TMiDbCompilador.Compile(const Query: IQuery): TSQLResult;
-begin
-  FIndice := 0;
-  Result := inherited Compile(Query);
+  Result := '[' + Table + ']';
 end;
 ```
 
@@ -128,13 +116,14 @@ end;
 
 ## Paginación por Dialecto
 
-SQLCute emite `LIMIT … OFFSET …` por defecto. Los compiladores de SQL Server y Oracle sobreescriben la paginación para usar su sintaxis nativa:
+SQLCute emite `LIMIT … OFFSET …` por defecto. Los compiladores de SQL Server, Oracle y Firebird sobreescriben la paginación para usar su sintaxis nativa:
 
 | Dialecto | SQL de paginación |
 |----------|------------------|
-| ANSI / Postgres / MySQL / SQLite / Firebird | `LIMIT n OFFSET m` |
+| ANSI / Postgres / MySQL / SQLite | `LIMIT n OFFSET m` |
 | SQL Server | `ORDER BY … OFFSET m ROWS FETCH NEXT n ROWS ONLY` |
 | Oracle | `OFFSET m ROWS FETCH NEXT n ROWS ONLY` |
+| Firebird | `ROWS m+1 TO m+n` |
 
 > SQL Server requiere una cláusula `ORDER BY` cuando se usa `OFFSET/FETCH`. Añade `.OrderBy(…)` antes de llamar a `.ForPage(…)` con `TSqlServerCompiler`.
 

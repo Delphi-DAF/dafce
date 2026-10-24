@@ -27,7 +27,7 @@ var R := Compiler.Compile(Q);
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `SQL` | `string` | The compiled SQL string with `?` placeholders (dialect compilers may use `$1`, `:p1`, `@p1`) |
+| `SQL` | `string` | The compiled SQL string with `?` placeholders (dialect compilers may use `$1`, `:p1`, `@p0`) |
 | `Bindings` | `TArray<Variant>` | Positional values matching the placeholders |
 
 Pass `R.SQL` and `R.Bindings` to your database driver — SQLCute never executes queries itself.

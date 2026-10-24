@@ -153,10 +153,11 @@ Lifetime.StopApplication;
 
 ---
 
-## Usar la familia de aplicaciones (módulo Application)
+## Usar la familia de aplicaciones
 
-Para un programa con línea principal, el módulo `Application` envuelve este pipeline y añade `Run`,
-metadatos de versión y un accesor global. El builder es usable en cuanto se crea: `Services`,
+Para un programa con línea principal, cada variante de la familia de aplicaciones —`Daf.Cli`,
+`Daf.Web`, `Daf.VCL` o `Daf.FMX`— envuelve este pipeline y añade `Run`. El builder es usable en
+cuanto se crea: `Services`,
 `Configuration` y `Environment` responden en cuanto se leen, así que los registros ocurren donde
 están escritos.
 `Build` devuelve la aplicación, y su `Run` da el código de salida.

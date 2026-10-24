@@ -3,9 +3,7 @@
 Cuatro pasos: se construye, se declara la acción, se le dan los argumentos a la gramática y se
 ejecuta. Sin servicios y sin una segunda unit.
 
-Este sample es **la fuente del snippet de inicio rápido** de la documentación:
-`eng/check-quickstart-snippet.py` compara el bloque del documento con `QuickStart.dpr`. Si el
-arranque cambia, el sample deja de compilar y el check deja de cuadrar — que es el punto.
+Este sample es **la fuente del snippet de inicio rápido** de la documentación.
 
 ## Qué enseña
 

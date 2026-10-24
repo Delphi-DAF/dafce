@@ -55,7 +55,7 @@ principal y delega. Son dos contratos de ciclo de vida, no cuatro variaciones de
 | `TDafApplication.RunAsync` | `Run`. Era la misma llamada con otro nombre — Delphi no tiene `async`/`await` con el que hacerla otra cosa |
 | `TDafApplication.VersionRequested` | `IParseResult.IsVersionRequested` — la gramática contesta `--version`, y la comprobación escrita a mano se retira en vez de mudarse |
 | `TDafApplication.App` | `DafApp`, **solo en VCL y FMX**. CLI y Web no tienen global a propósito |
-| `Daf.Application.Version` | `Daf.Commons`, sin tocar — las cuatro variantes alcanzan ahí `TVersionInfo` y `[Version]` |
+| `Daf.Application.Version` | `Daf.Commons` — las cuatro variantes alcanzan ahí `TVersionInfo` y `[Version]`. `Debug` es de solo lectura y lo declara el binario, y `VersionTag` recibe una plantilla |
 
 ---
 

@@ -74,8 +74,8 @@ Sirve para afirmar que dos expresiones son la misma cosa, como clave de caché o
 | Un filtro con clausura en una especificación | Lo intraducible debe ser irrepresentable; para ese mundo está `Daf.Linq` |
 | Directivas de carga anticipada (`includes`) | No hay a qué emitirlas, y es el dueño equivocado — montar un agregado es del adaptador |
 | Una restricción `T: TEntity` | Nada aguas abajo la necesita; los registros también funcionan |
-| Metadatos de mapeo entidad↔tabla | Territorio del ORM, y el ORM aún no está diseñado |
-| DML dirigido por instancia | Necesita el conjunto de miembros persistentes, la clave primaria y seguimiento de cambios — todo metadato del ORM |
+| Metadatos de mapeo entidad↔tabla | Los nombres se resuelven con `INameResolver`, y no se mapea nada más |
+| DML dirigido por instancia | Necesita el conjunto de miembros persistentes, la clave primaria y seguimiento de cambios, que esta capa no modela |
 | Operadores de SQL crudo y `EXISTS` | Una expresión de dominio no debe *poder* decirlos |
 
 El último lo impone la frontera del paquete, no la disciplina: esta unidad no referencia SQLCute, y su ejecutor de specs enlaza solo la mitad de dominio. En cuanto adquiera una dependencia de SQL, el proyecto deja de compilar.

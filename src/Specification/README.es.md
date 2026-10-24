@@ -103,9 +103,9 @@ Sigue siendo una **opción**. Ambas formas producen nodos idénticos, se combina
 
 ---
 
-## Los nombres, y lo que esta capa se niega a poseer
+## Los nombres
 
-Una sola estrategia responde a las dos preguntas de nombres, y el mapeo más rico es del ORM:
+Una sola estrategia responde a las dos preguntas de nombres:
 
 ```pascal
 INameResolver.ColumnFor(EntityType, Member)   // por defecto: el nombre del miembro
@@ -114,7 +114,7 @@ INameResolver.TableFor(EntityType)            // por defecto: el nombre del tipo
 
 El valor por defecto de la tabla quita la `T` solo cuando le sigue una mayúscula, así que `TProduct` → `Product` mientras `Thing` se deja en paz. Sin pluralización y sin conversión de caso: eso es *política* de nombres, y esta capa no tiene ninguna.
 
-Claves, columnas de bloqueo, atributos y DML dirigido por instancia (`Update(Instance)`) están **ausentes**: esta capa se compromete con la costura, no con el mapeo.
+Claves, columnas de bloqueo, atributos y DML dirigido por instancia (`Update(Instance)`) están **ausentes**.
 
 ---
 

@@ -93,7 +93,7 @@ TExprEmitter.Apply<TProduct>(Q, Spec, TMappedResolver.Create);
 
 ## What the strategy is not
 
-It is a seam for names, not a mapping model. Keys, lock columns, attributes, inheritance mapping and instance-driven DML are all ORM metadata.
+It is a seam for names, not a mapping model: keys, lock columns, attributes, inheritance mapping and instance-driven DML are absent.
 
 
 ---

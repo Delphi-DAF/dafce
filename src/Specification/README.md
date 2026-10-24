@@ -103,9 +103,9 @@ It stays an **option**. Both forms produce identical nodes, mix freely in one ex
 
 ---
 
-## Names, and what this layer refuses to own
+## Names
 
-One strategy answers both naming questions, and richer mapping is the ORM's:
+One strategy answers both naming questions:
 
 ```pascal
 INameResolver.ColumnFor(EntityType, Member)   // default: the member name
@@ -114,7 +114,7 @@ INameResolver.TableFor(EntityType)            // default: type name minus a lead
 
 The table default strips `T` only when an upper-case letter follows, so `TProduct` → `Product` while `Thing` is left alone. No pluralization and no case conversion: those are naming *policy*, and this layer has none.
 
-Keys, lock columns, attributes and instance-driven DML (`Update(Instance)`) are **absent**: this layer commits to the seam, not to the mapping.
+Keys, lock columns, attributes and instance-driven DML (`Update(Instance)`) are **absent**.
 
 ---
 

@@ -11,9 +11,9 @@
 The default `TAnsiSqlCompiler` generates generic ANSI SQL with `?` placeholders and no identifier quoting. Dialect compilers extend it to handle:
 
 - **Identifier quoting** — wrapping table/column names to avoid keyword conflicts
-- **Parameter placeholders** — `?`, `$1`, `:p1`, `@p1`, etc.
+- **Parameter placeholders** — `?`, `$1`, `:p1`, `@p0`, etc.
 - **Date casting** — dialect-specific expressions for `WhereDate`/`WhereDatePart`
-- **Pagination** — `LIMIT/OFFSET` vs `FETCH NEXT … ROWS ONLY` vs `ROWNUM`
+- **Pagination** — `LIMIT/OFFSET` vs `FETCH NEXT … ROWS ONLY` vs `ROWS m TO n`
 - **NULL-ordering emission** — native `NULLS FIRST/LAST`, or an emulation where the dialect has no such syntax
 
 ---
@@ -26,9 +26,9 @@ The default `TAnsiSqlCompiler` generates generic ANSI SQL with `?` placeholders 
 | `TPostgresCompiler` | `"` | `$1`, `$2`, … | `Daf.SQLCute.Compiler.Postgres` |
 | `TMySqlCompiler` | `` ` `` | `?` | `Daf.SQLCute.Compiler.MySql` |
 | `TSQLiteCompiler` | `"` | `?` | `Daf.SQLCute.Compiler.SQLite` |
-| `TSqlServerCompiler` | `[` … `]` | `@p1`, `@p2`, … | `Daf.SQLCute.Compiler.SqlServer` |
-| `TOracleCompiler` | `"` | `:p1`, `:p2`, … | `Daf.SQLCute.Compiler.Oracle` |
-| `TFirebirdCompiler` | `"` | `?` | `Daf.SQLCute.Compiler.Firebird` |
+| `TSqlServerCompiler` | `[` … `]` | `@p0`, `@p1`, … | `Daf.SQLCute.Compiler.SqlServer` |
+| `TOracleCompiler` | `"`, upper-cased | `:p1`, `:p2`, … | `Daf.SQLCute.Compiler.Oracle` |
+| `TFirebirdCompiler` | none | `?` | `Daf.SQLCute.Compiler.Firebird` |
 
 All dialect compilers ship in the `Daf.SQLCute` package, alongside the `TAnsiSqlCompiler` they extend. Requiring `Daf.SQLCute` is enough — there is no separate compilers package to add.
 
@@ -99,11 +99,6 @@ type
   protected
     function WrapColumn(const Col: string): string; override;
     function WrapTable(const Table: string): string; override;
-    function ParamPlaceholder: string; override;
-  private
-    FIndex: Integer;
-  public
-    function Compile(const Query: IQuery): TSQLResult; override;
   end;
 
 function TMyDbCompiler.WrapColumn(const Col: string): string;
@@ -111,16 +106,9 @@ begin
   Result := '[' + Col + ']';
 end;
 
-function TMyDbCompiler.ParamPlaceholder: string;
+function TMyDbCompiler.WrapTable(const Table: string): string;
 begin
-  Inc(FIndex);
-  Result := ':param' + IntToStr(FIndex);
-end;
-
-function TMyDbCompiler.Compile(const Query: IQuery): TSQLResult;
-begin
-  FIndex := 0;
-  Result := inherited Compile(Query);
+  Result := '[' + Table + ']';
 end;
 ```
 
@@ -128,13 +116,14 @@ end;
 
 ## Pagination per Dialect
 
-SQLCute emits `LIMIT … OFFSET …` by default. SQL Server and Oracle compilers override pagination to use their native syntax:
+SQLCute emits `LIMIT … OFFSET …` by default. The SQL Server, Oracle and Firebird compilers override pagination to use their native syntax:
 
 | Dialect | Pagination SQL |
 |---------|---------------|
-| ANSI / Postgres / MySQL / SQLite / Firebird | `LIMIT n OFFSET m` |
+| ANSI / Postgres / MySQL / SQLite | `LIMIT n OFFSET m` |
 | SQL Server | `ORDER BY … OFFSET m ROWS FETCH NEXT n ROWS ONLY` |
 | Oracle | `OFFSET m ROWS FETCH NEXT n ROWS ONLY` |
+| Firebird | `ROWS m+1 TO m+n` |
 
 > SQL Server requires an `ORDER BY` clause when using `OFFSET/FETCH`. Add `.OrderBy(…)` before calling `.ForPage(…)` with `TSqlServerCompiler`.
 

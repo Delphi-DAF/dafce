@@ -104,7 +104,8 @@ for var V in TInMemory.Project<TPersona, TPersonaView>(
 
 ## Semántica SQL
 
-El motor en memoria sigue la semántica ANSI para que ambos back-ends respondan igual a la misma pregunta:
+El motor en memoria sigue la semántica ANSI, así que ambos back-ends responden igual a la misma pregunta, con
+una excepción —el orden de NULL por defecto, en el último punto—:
 
 - **Lógica de tres valores.** Una comparación contra NULL es *desconocida*, no falsa; `AND`/`OR`/`NOT` se combinan según las tablas de verdad de SQL; una fila se conserva solo cuando el predicado es *verdadero*. Así, `WhereNot('age','>',18)` excluye una edad NULL — exactamente como hace una base de datos.
 - **Precedencia en WHERE.** `AND` liga más fuerte que `OR`. Ambos back-ends parten de un mismo normalizador compartido (`Daf.SQLCute.WhereTree`), así que no pueden discrepar; el lado SQL emite paréntesis explícitos.
@@ -112,6 +113,8 @@ El motor en memoria sigue la semántica ANSI para que ambos back-ends respondan 
 - **Los agregados** ignoran los NULL (`COUNT(col)`, `SUM`, `AVG`, `MIN`, `MAX`); `COUNT(*)` cuenta filas.
 - **GROUP BY** agrupa todas las claves NULL en un único grupo.
 - **ORDER BY** trata NULL como el valor más pequeño **por defecto** —nulls primero en ascendente, al final en descendente— y una consulta lo cambia por columna con `NullsFirst` / `NullsLast`, que el plan respeta.
+  Sin ellos, los dos back-ends pueden discrepar: la base de datos aplica su propio defecto, y Postgres y
+  Oracle ponen NULL al final en orden ascendente.
 
 Las reglas completas, con ejemplos, están en la [guía de uso](docs/GUIDE.es.md).
 

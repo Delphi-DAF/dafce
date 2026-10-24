@@ -27,7 +27,7 @@ var R := Compiler.Compile(Q);
 
 | Campo | Tipo | Descripción |
 |-------|------|-------------|
-| `SQL` | `string` | El SQL compilado con marcadores `?` (los compiladores de dialecto pueden usar `$1`, `:p1`, `@p1`) |
+| `SQL` | `string` | El SQL compilado con marcadores `?` (los compiladores de dialecto pueden usar `$1`, `:p1`, `@p0`) |
 | `Bindings` | `TArray<Variant>` | Valores posicionales que corresponden a los marcadores |
 
 Pasa `R.SQL` y `R.Bindings` a tu driver de base de datos — SQLCute nunca ejecuta consultas por sí solo.

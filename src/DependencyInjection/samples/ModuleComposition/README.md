@@ -5,9 +5,7 @@ que el primero registró, y uno con configuración que solo puede entrar por la 
 instancia.
 
 Este sample es **la fuente de los dos bloques** de la sección *AppModule Pattern* de
-`docs/GUIDE.md`, y `eng/check-quickstart-snippet.py` compara los bloques con los ficheros. Si
-`AddModule<T>` cambia, el sample deja de compilar; si alguien edita el documento, el check deja de
-cuadrar.
+`docs/GUIDE.md`.
 
 ## Qué enseña
 
