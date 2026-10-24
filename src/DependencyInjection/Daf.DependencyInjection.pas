@@ -1248,6 +1248,14 @@ begin
         Result := nil;
         CheckNotShutDown(Descriptor.TypeInfo);
       end;
+      // Un nil de la factory no se cablea, y un Singleton no lo retiene: la siguiente resolucion
+      // vuelve a llamar a la factory. Un Scoped si lo guarda en su ambito.
+      if Result = nil then
+      begin
+        if Descriptor.LifeTime <> Singleton then
+          AddServiceInstance(Descriptor, nil);
+        Exit;
+      end;
       // Publicar y DESPUES cablear, en ese orden y para todo registro. Mientras la instancia no
       // este en el diccionario, quien la vuelva a pedir --ella misma, o alguien a quien ella
       // pide-- entra otra vez a construirla, y ahi no hay fondo.
@@ -1261,13 +1269,26 @@ begin
   end;
 end;
 
+// La clase de lo que devolvio una factory, para un mensaje de error: no puede fallar, porque lo
+// devuelto puede no ser un objeto de Delphi.
+function ImplementorName(const Intf: IInterface): string;
+begin
+  try
+    Result := (Intf as TObject).QualifiedClassName;
+  except
+    on EInvalidCast do
+      Result := 'an object that is not a Delphi object';
+  end;
+end;
+
 function TServiceScope.CreateInstance(const Descriptor: TServiceDescriptor; const Provider: IServiceProvider): IInterface;
 begin
-  var
-  Intf := Descriptor.Factory(Provider);
-
+  var Intf := Descriptor.Factory(Provider);
+  if Intf = nil then
+    Exit(nil);
   if not Supports(Intf, Descriptor.TypeInfo.TypeData.GUID, Result) then
-    raise Exception.CreateFmt('% don''t implements %s', [TObject(Intf).QualifiedClassName, Descriptor.ServiceName]);
+    raise EIntfCastError.CreateFmt('The factory of %s returned %s, which does not implement it',
+      [Descriptor.ServiceName, ImplementorName(Intf)]);
 end;
 
 function TServiceScope.GetServiceIdentity(const Descriptor: TServiceDescriptor): TServiceIdentity;
@@ -1328,6 +1349,13 @@ begin
         // = 2, and _Release leaves it at 1. The local also keeps the
         // entry alive across the Delete below.
         var Svc: IInterface := FServiceInstances.ValueList[idx];
+        // El nil que un Scoped guarda de su factory no sostiene nada.
+        if Svc = nil then
+        begin
+          FServiceInstances.Delete(idx);
+          UnusedFound := True;
+          Break;
+        end;
         var RefCount := Svc._Release;
         Svc._AddRef;
         if (RefCount = 1) then
@@ -1538,7 +1566,8 @@ begin
       BeginCreate(Frame, Descriptor);
       try
         Result := Self.CreateInstance(Descriptor, FProvider);
-        TActivatorUtilities.Wire(FProvider, InstanceOf(Result));
+        if Result <> nil then
+          TActivatorUtilities.Wire(FProvider, InstanceOf(Result));
       finally
         EndCreate(Frame);
       end;

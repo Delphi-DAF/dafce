@@ -94,6 +94,7 @@ type
     Found: Integer;
     Outcome: string;
     SameInstance: Boolean;
+    FactoryCalls: Integer;
     constructor Create;
     destructor Destroy; override;
     procedure Build;
@@ -137,6 +138,24 @@ type
   public
     constructor Create(const Inner: IHidden);
     function Mark: string;
+  end;
+
+  /// Lo que devuelve una factory que no cumple su contrato: no implementa IMark.
+  TNotAMark = class(TInterfacedObject)
+  end;
+
+  INeedsMark = interface(IInvokable)
+    ['{6C1F0B2E-3D4A-4E8B-9F21-7A5C6D8E9B03}']
+    function Received: string;
+  end;
+
+  /// Anota si su constructor recibio un IMark o nil.
+  TNeedsMark = class(TInterfacedObject, INeedsMark)
+  strict private
+    FReceived: string;
+  public
+    constructor Create(const Mark: IMark);
+    function Received: string;
   end;
 
 { TMarkA }
@@ -208,6 +227,33 @@ end;
 function TOuter.Mark: string;
 begin
   Result := 'outer(' + FInner.Mark + ')';
+end;
+
+{ TNeedsMark }
+
+constructor TNeedsMark.Create(const Mark: IMark);
+begin
+  inherited Create;
+  if Mark = nil then
+    FReceived := 'nil'
+  else
+    FReceived := Mark.Mark;
+end;
+
+function TNeedsMark.Received: string;
+begin
+  Result := FReceived;
+end;
+
+/// Una factory de IMark que devuelve nil y cuenta sus llamadas en el World.
+function NilMark(const W: TIdentityWorld): TServiceFactory;
+begin
+  Result :=
+    function(Provider: IServiceProvider): IInterface
+    begin
+      Inc(W.FactoryCalls);
+      Result := nil;
+    end;
 end;
 
 { TIdentityWorld }
@@ -490,6 +536,141 @@ Feature An instance belongs to its registration @di @lifetime @identity
       procedure(W: TIdentityWorld)
       begin
         Expect(TStep.Released).ToEqual('CBA');
+      end)
+
+.Rule('What does not implement the service fails as an interface conversion')
+
+  .Scenario('The factory returns something that does not implement the service')
+    .Given('a service registered with a factory that returns an object of another contract',
+      procedure(W: TIdentityWorld)
+      begin
+        W.Services.AddSingleton(TypeInfo(IMark),
+          function(Provider: IServiceProvider): IInterface
+          begin
+            Result := TNotAMark.Create;
+          end);
+      end)
+    .When('it is resolved',
+      procedure(W: TIdentityWorld)
+      begin
+        W.Build;
+        W.Attempt(procedure begin W.Marks := W.Provider.GetRequiredService<IMark>.Mark; end);
+      end)
+    .&Then('it fails with EIntfCastError',
+      procedure(W: TIdentityWorld)
+      begin
+        Expect(W.Outcome).ToContain('EIntfCastError: ');
+      end)
+    .&And('the message names the class of what was returned and the service',
+      procedure(W: TIdentityWorld)
+      begin
+        Expect(W.Outcome).ToContain('TNotAMark');
+        Expect(W.Outcome).ToContain('IMark');
+      end)
+
+.Rule('A factory that returns nil hands nil')
+
+  .Scenario('GetService hands nil')
+    .Given('a service registered with a factory that returns nil',
+      procedure(W: TIdentityWorld)
+      begin
+        W.Services.AddSingleton(TypeInfo(IMark), NilMark(W));
+      end)
+    .When('it is asked for with GetService',
+      procedure(W: TIdentityWorld)
+      begin
+        W.Build;
+        W.Attempt(procedure begin W.Marks := BoolToStr(W.Provider.GetService<IMark> = nil, True); end);
+      end)
+    .&Then('nil comes back, with no error',
+      procedure(W: TIdentityWorld)
+      begin
+        Expect(W.Outcome + ' / nil=' + W.Marks).ToEqual(SinFallo + ' / nil=True');
+      end)
+
+  .Scenario('GetRequiredService fails as for a service nobody registered')
+    .Given('the same service',
+      procedure(W: TIdentityWorld)
+      begin
+        W.Services.AddSingleton(TypeInfo(IMark), NilMark(W));
+      end)
+    .When('it is asked for with GetRequiredService',
+      procedure(W: TIdentityWorld)
+      begin
+        W.Build;
+        W.Attempt(procedure begin W.Provider.GetRequiredService<IMark>; end);
+      end)
+    .&Then('it fails with EServiceProviderError, naming the service',
+      procedure(W: TIdentityWorld)
+      begin
+        Expect(W.Outcome).ToContain('EServiceProviderError: ');
+        Expect(W.Outcome).ToContain('IMark');
+      end)
+
+  .Scenario('A constructor receives nil')
+    .Given('a registered class whose constructor asks for that service',
+      procedure(W: TIdentityWorld)
+      begin
+        W.Services.AddSingleton(TypeInfo(IMark), NilMark(W));
+        W.Services.AddSingleton<INeedsMark, TNeedsMark>;
+      end)
+    .When('it is resolved',
+      procedure(W: TIdentityWorld)
+      begin
+        W.Build;
+        W.Attempt(procedure begin W.Marks := W.Provider.GetRequiredService<INeedsMark>.Received; end);
+      end)
+    .&Then('it is built, and its parameter received nil',
+      procedure(W: TIdentityWorld)
+      begin
+        Expect(W.Outcome + ' / received ' + W.Marks).ToEqual(SinFallo + ' / received nil');
+      end)
+
+  .Scenario('A Singleton does not keep the nil')
+    .Given('a Singleton whose factory returns nil and counts its calls',
+      procedure(W: TIdentityWorld)
+      begin
+        W.Services.AddSingleton(TypeInfo(IMark), NilMark(W));
+      end)
+    .When('it is resolved twice',
+      procedure(W: TIdentityWorld)
+      begin
+        W.Build;
+        W.Attempt(
+          procedure
+          begin
+            W.Provider.GetService<IMark>;
+            W.Provider.GetService<IMark>;
+          end);
+      end)
+    .&Then('the factory has been called twice',
+      procedure(W: TIdentityWorld)
+      begin
+        Expect(Format('%s / %d call(s)', [W.Outcome, W.FactoryCalls])).ToEqual(SinFallo + ' / 2 call(s)');
+      end)
+
+  .Scenario('A Scoped keeps the nil in its scope')
+    .Given('a Scoped whose factory returns nil and counts its calls',
+      procedure(W: TIdentityWorld)
+      begin
+        W.Services.AddScoped(TypeInfo(IMark), NilMark(W));
+      end)
+    .When('it is resolved twice from the same scope',
+      procedure(W: TIdentityWorld)
+      begin
+        W.Build;
+        W.Attempt(
+          procedure
+          begin
+            var Scope := W.Provider.CreateScope;
+            Scope.ServiceProvider.GetService<IMark>;
+            Scope.ServiceProvider.GetService<IMark>;
+          end);
+      end)
+    .&Then('the factory has been called once',
+      procedure(W: TIdentityWorld)
+      begin
+        Expect(Format('%s / %d call(s)', [W.Outcome, W.FactoryCalls])).ToEqual(SinFallo + ' / 1 call(s)');
       end);
 
 end.

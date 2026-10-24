@@ -1190,7 +1190,8 @@ end;
 
 procedure IServiceProvider.GetRequiredKeyedService(const ServiceType: PTypeInfo; const Key: TValue; out Service);
 begin
-  if TryGetKeyed(ServiceType, Key, Service) then Exit;
+  // Un registro cuya factory devolvio nil no resuelve nada, como en el GetRequiredService de .NET.
+  if TryGetKeyed(ServiceType, Key, Service) and (IInterface(Service) <> nil) then Exit;
   if Key.IsEmpty then
     raise Error('Cannot resolve service: %s', [ServiceType.Name]);
   raise Error('Cannot resolve service: %s (key %s)', [ServiceType.Name, ServiceKey.Text(Key)]);

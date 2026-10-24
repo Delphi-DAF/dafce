@@ -148,6 +148,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
   - Resolving after `ShutDown` raises `EContainerShutDownError` naming the service, instead of `EAccessViolation`. Closing twice stops breaking
   - `Lazy.From<T>` builds its service once even when several threads reach it at the same time —eight threads used to build eight—, and a factory that returns nothing fails naming the contract instead of answering the zero of the return type
   - `Lazy.From<T>` releases what it built together with the lazy: every call through it kept one more reference, so the service was never destroyed
+  - A factory that returns an object that does not implement its service fails with `EIntfCastError` naming both, and one that returns `nil` hands `nil`, as in .NET: the error message itself failed, and `nil` was an `EAccessViolation`
 - **MiniSpec**: Fixes
   - The injection marker works **on a field**: the sweep only walked properties, so the field stayed `nil` with no warning
   - `UseSuiteContext<T>` builds the suite context: `SpecContext.SuiteContext` was `nil` in every step
