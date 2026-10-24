@@ -400,7 +400,9 @@ var Provider := Services.BuildServiceProvider(TServiceProviderOptions.Create(Tru
   both services. It reads the same two routes: the dependency captured through a marked
   property is caught like the one taken by the constructor. With it on, resolving a Scoped from the
   root provider — directly, or through a service that requires it — also fails, when it is resolved:
-  a Scoped resolved there lives until the container shuts down. Resolve it from a scope.
+  a Scoped resolved there lives until the container shuts down. Resolve it from a scope. A Scoped
+  resolved through the provider a Singleton received — from its factory, an `ILazy` or a provider it
+  kept — fails the same way.
 
 Both are calqued from `ServiceProviderOptions`, and both are **opt-in**: `BuildServiceProvider`
 without options validates nothing, and the host of the application family turns both on in the

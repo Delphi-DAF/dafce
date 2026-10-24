@@ -128,7 +128,8 @@ Builder.ServiceProviderOptions := TServiceProviderOptions.Create(True, True); //
 ```
 
 The validation reaches the registrations made by class; a factory registration is left out. With
-`ValidateScopes`, a Scoped service asked of the root provider is also rejected when it is resolved.
+`ValidateScopes`, a Scoped service asked of the root provider, or through the provider a Singleton
+received, is also rejected when it is resolved.
 Hosted services and startup tasks are Singletons, so what they need from a Scoped they resolve from
 a scope of their own, through an `IServiceScopeFactory` taken by constructor.
 

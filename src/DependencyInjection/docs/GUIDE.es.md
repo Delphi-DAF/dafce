@@ -217,7 +217,7 @@ Services.AddScoped<IUnitOfWork, TEFUnitOfWork>;
 Services.AddTransient<IEmailSender, TSmtpSender>;
 ```
 
-> ⚠️ **Dependencia cautiva**: nunca inyectes un servicio `Transient` o `Scoped` en un `Singleton` — la instancia de vida más corta quedará capturada durante la vida del Singleton. El contenedor no detecta esto automáticamente.
+> ⚠️ **Dependencia cautiva**: un servicio `Transient` o `Scoped` inyectado en un `Singleton` queda capturado durante la vida del Singleton. Con `ValidateScopes`, que el host activa en `Development`, un `Singleton` que resuelve un `Scoped` falla con `EServiceProviderError`: por constructor, por factory, a través de un `ILazy` o después, por el proveedor que guardó. Sin la opción, el `Scoped` que recibe es el que da el proveedor raíz. Un `Transient` capturado no se detecta.
 
 ---
 

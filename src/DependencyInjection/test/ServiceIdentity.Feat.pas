@@ -490,22 +490,27 @@ Feature An instance belongs to its registration @di @lifetime @identity
       end)
 
   .Scenario('The failure reported is the one that happened')
-    .Given('a singleton that depends on a scoped service reflection cannot name',
+    .Given('a singleton whose factory resolves a scoped service reflection cannot name, with ValidateScopes',
       procedure(W: TIdentityWorld)
       begin
         W.Services.AddScoped<IHidden, THidden>;
-        W.Services.AddSingleton<IOuter, TOuter>;
+        W.Services.AddSingleton<IOuter>(
+          function(Provider: IServiceProvider): IOuter
+          begin
+            Result := TOuter.Create(Provider.GetRequiredService<IHidden>);
+          end);
       end)
     .When('the singleton is resolved',
       procedure(W: TIdentityWorld)
       begin
-        W.Build;
+        W.Provider := W.Services.BuildServiceProvider(TServiceProviderOptions.Create(False, True));
         W.Attempt(procedure begin W.Marks := W.Provider.GetRequiredService<IOuter>.Mark; end);
       end)
     .&Then('what is reported is the captured dependency, not the visibility of a type',
       procedure(W: TIdentityWorld)
       begin
-        Expect(W.Outcome).ToContain('cannot depends on scoped');
+        Expect(W.Outcome).ToContain('EServiceProviderError: ');
+        Expect(W.Outcome).ToContain('scoped');
       end)
     .&And('and the message identifies the service',
       procedure(W: TIdentityWorld)

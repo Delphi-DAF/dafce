@@ -671,6 +671,18 @@ suite that was green can come out with scenarios Pending or Undefined, or red.
   another. Leave it a single public constructor, or make the shorter one ask only for what the longer
   one asks for.
 
+### 26. A Singleton that resolves a Scoped
+
+- **Without `ValidateScopes` it is no longer rejected.** A Singleton that resolves a Scoped — by
+  constructor, by factory, through an `ILazy` or through the provider it kept — receives the root
+  provider's instance, the same one `Provider` gives, which lives until the container shuts down. In
+  1.6 the resolution raised an `Exception` while the Singleton was being built.
+- **With `ValidateScopes` it fails with `EServiceProviderError`**, naming the Scoped and, while it is
+  being built, the Singleton — also when a Singleton already built resolves it through the provider
+  it kept. A Scoped resolved in a scope the Singleton opens itself is not a capture.
+- **What breaks**: code that caught that `Exception`. A Singleton that needs a Scoped opens a scope
+  through `IServiceScopeFactory` and resolves it there.
+
 ## How to do it
 
 1. Compile. Whatever is missing comes out as a compiler error, not as odd behaviour at run time.
@@ -682,7 +694,8 @@ suite that was green can come out with scenarios Pending or Undefined, or red.
 5. Compile again and run your tests. Then start the application once with `DAF_ENVIRONMENT=Development`:
    the host validates the container, and a registration that went missing stops the build naming it.
    A Scoped service asked of the root provider is rejected too, when it is resolved: resolve it from a
-   scope the work opens, `Services.CreateScope`.
-6. Sections 2, 6 to 13 and 15 to 25 carry **run-time** changes: the compiler says nothing about them. Read them
+   scope the work opens, `Services.CreateScope`. So is a Scoped a Singleton resolves: the Singleton
+   resolves it in a scope it opens through `IServiceScopeFactory`.
+6. Sections 2, 6 to 13 and 15 to 26 carry **run-time** changes: the compiler says nothing about them. Read them
    against your own composition — scope lifetimes, duplicate registrations, logging rules and
    host settings.

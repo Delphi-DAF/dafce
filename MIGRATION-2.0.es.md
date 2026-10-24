@@ -674,6 +674,18 @@ Una suite que estaba en verde puede salir con escenarios Pending o Undefined, o 
   contienen. Déjale un solo constructor público, o haz que el más corto pida solo lo que pide el más
   largo.
 
+### 26. Un Singleton que resuelve un Scoped
+
+- **Sin `ValidateScopes` ya no se rechaza.** Un Singleton que resuelve un Scoped —por constructor, por
+  factory, a través de un `ILazy` o por el proveedor que guardó— recibe la instancia del proveedor
+  raíz, la misma que da `Provider`, que vive hasta que el contenedor se cierra. En 1.6 la resolución
+  lanzaba una `Exception` mientras el Singleton se construía.
+- **Con `ValidateScopes` falla con `EServiceProviderError`**, nombrando el Scoped y, si se está
+  construyendo, el Singleton; también cuando un Singleton ya construido lo resuelve por el proveedor
+  que guardó. Un Scoped resuelto en un ámbito que abre el propio Singleton no es una captura.
+- **Qué rompe**: el código que capturaba esa `Exception`. Un Singleton que necesita un Scoped abre un
+  ámbito con `IServiceScopeFactory` y lo resuelve en él.
+
 ## Cómo hacerlo
 
 1. Compila. Lo que falte sale como error del compilador, no como comportamiento raro en
@@ -686,7 +698,9 @@ Una suite que estaba en verde puede salir con escenarios Pending o Undefined, o 
 5. Vuelve a compilar y pasa tus tests. Después arranca la aplicación una vez con
    `DAF_ENVIRONMENT=Development`: el host valida el contenedor, y un registro que se haya perdido detiene
    la construcción nombrándolo. Un servicio Scoped pedido al proveedor raíz también se rechaza, al
-   resolverlo: se resuelve desde un ámbito que abre el trabajo, `Services.CreateScope`.
-6. Las secciones 2, de la 6 a la 13 y de la 15 a la 25 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
+   resolverlo: se resuelve desde un ámbito que abre el trabajo, `Services.CreateScope`. También un
+   Scoped que resuelve un Singleton: el Singleton lo resuelve en un ámbito que abre con
+   `IServiceScopeFactory`.
+6. Las secciones 2, de la 6 a la 13 y de la 15 a la 26 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
    contra tu propia composición — la vida de los ámbitos, los registros repetidos, las reglas de
    logging y los ajustes del host.

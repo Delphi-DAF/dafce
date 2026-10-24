@@ -218,7 +218,7 @@ Services.AddScoped<IUnitOfWork, TEFUnitOfWork>;
 Services.AddTransient<IEmailSender, TSmtpSender>;
 ```
 
-> ⚠️ **Captive dependency**: never inject a `Transient` or `Scoped` service into a `Singleton` — the shorter-lived instance will be captured for the Singleton's lifetime. The container does not detect this automatically.
+> ⚠️ **Captive dependency**: a `Transient` or `Scoped` service injected into a `Singleton` is captured for the Singleton's lifetime. With `ValidateScopes`, which the host turns on in `Development`, a `Singleton` that resolves a `Scoped` fails with `EServiceProviderError`: by constructor, by factory, through an `ILazy`, or later through the provider it kept. Without the option, the `Scoped` it receives is the one the root provider gives. A captured `Transient` is not detected.
 
 ---
 

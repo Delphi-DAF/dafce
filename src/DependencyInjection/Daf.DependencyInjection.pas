@@ -35,6 +35,8 @@ type
     // murieran cuando su creador los suelta. La baja la da el destructor del ambito, que es lo
     // unico que ocurre exactamente cuando muere. Alcanzar sin sostener.
     FScopes: TList<TServiceScope>;
+    // El ambito que devuelve BuildServiceProvider, apuntado igual que los de FScopes. Bajo FLock.
+    FRootScope: TServiceScope;
     // Guarda FScopes y FShutDonwnDone, y nada mas. Es una HOJA: no se sostiene mientras se pide
     // ningun otro cerrojo, asi que la jerarquia no puede tener ciclos y no hay orden que
     // recordar. Lo que se hace bajo el es tomar una foto --la lista de ambitos, con referencias
@@ -52,6 +54,7 @@ type
     procedure RemoveFromSingletonScope;
     procedure RemoveScope(const Scope: TServiceScope);
     function LiveScopes: TArray<IServiceScope>;
+    function TryAcquireRoot(out Root: IServiceScope): Boolean;
   protected
     procedure Shutdown;
     function OwnedInstanceCount: Integer;
@@ -118,7 +121,8 @@ type
     // --para leer, o para anadir-- y nunca se sostiene mientras se pide FBuildLock ni mientras
     // corre un constructor. Anidar dos tomas suyas, o leer teniendo la escritura, BLOQUEA sin
     // lanzar. FBuildLock si es reentrante, que es lo que pide un grafo: construir A reentra la
-    // resolucion para B en el mismo hilo. Orden de los tres: fabrica, construccion, diccionario.
+    // resolucion para B en el mismo hilo. Orden de los tres: fabrica, construccion, diccionario; y
+    // entre construcciones, la del ambito de singletons antes que la de la raiz.
     FInstancesLock: TLightweightMREW;
     FBuildLock: TCriticalSection;
     FIsSingletonsScope: Boolean;
@@ -143,6 +147,8 @@ type
     procedure CheckNotShutDown(const ServiceType: PTypeInfo);
     procedure RaiseShutDown(const ServiceType: PTypeInfo);
     procedure RaiseScopedFromRoot(const Descriptor: TServiceDescriptor);
+    procedure RaiseScopedFromSingleton(const Descriptor: TServiceDescriptor);
+    function ResolveCapturedScoped(const Descriptor: TServiceDescriptor): IInterface;
     procedure CollectGarbage;
     function InjectorsFor(const AClass: TClass): TArray<TServiceInjector>;
     class function TryAcquire(const Scope: TServiceScope; out Ref: IServiceScope): Boolean; static;
@@ -852,6 +858,8 @@ begin
     // creado con el contenedor ya cerrado se descarta sin llegar a apuntarse.
     if Assigned(FScopes) then
       FScopes.Remove(Scope);
+    if Scope = FRootScope then
+      FRootScope := nil;
   finally
     FLock.Release;
   end;
@@ -950,7 +958,24 @@ function TServiceScopeFactory.CreateRootScope(const ValidateScopes: Boolean): IS
 begin
   FValidateScopes := ValidateScopes;
   Result := CreateScope;
-  TServiceScope(Result as TObject).FIsRoot := True;
+  var Root := TServiceScope(Result as TObject);
+  Root.FIsRoot := True;
+  FLock.Acquire;
+  try
+    FRootScope := Root;
+  finally
+    FLock.Release;
+  end;
+end;
+
+function TServiceScopeFactory.TryAcquireRoot(out Root: IServiceScope): Boolean;
+begin
+  FLock.Acquire;
+  try
+    Result := TServiceScope.TryAcquire(FRootScope, Root);
+  finally
+    FLock.Release;
+  end;
 end;
 
 function TServiceScopeFactory.CreateScope: IServiceScope;
@@ -1257,105 +1282,121 @@ begin
   var ServiceIdentity := GetServiceIdentity(Descriptor);
   if TryGetInstance(ServiceIdentity, False, Result) then Exit;
 
-  FBuildLock.Acquire;
+  // La raiz toma antes la construccion del ambito de singletons: un Singleton que captura un Scoped
+  // lo construye aqui teniendo ya la suya, y un Scoped de la raiz puede pedir un Singleton. Con un
+  // solo orden, singletons y despues raiz, esas dos construcciones no se esperan mutuamente.
+  var Singletons: IServiceResolver;
+  if FIsRoot then
+  begin
+    Singletons := SingletonsScope;
+    if Singletons = nil then
+      RaiseShutDown(Descriptor.TypeInfo);
+    TServiceScope(Singletons as TObject).FBuildLock.Acquire;
+  end;
   try
-    // Quien esperaba este cerrojo mientras el ambito se cerraba llega aqui con el cierre hecho, y no
-    // construye.
-    CheckNotShutDown(Descriptor.TypeInfo);
-    // La segunda comprobacion no es una precaucion opcional: entre la lectura de arriba y este
-    // cerrojo otro hilo pudo construirlo. Sin ella la ventana sigue abierta, mas estrecha -- y
-    // una carrera mas estrecha es peor, porque aparece en produccion y no en los tests.
-    if TryGetInstance(ServiceIdentity, True, Result) then Exit;
-
-    var Frame: TCreationFrame;
-    BeginCreate(Frame, Descriptor);
+    FBuildLock.Acquire;
     try
-      // El constructor corre con la construccion cerrada, no con el diccionario cerrado. Que
-      // corra dentro es lo que hace cierto "se construye una vez": construir fuera y quedarse con
-      // el ganador ejecuta el constructor una vez por hilo, y los efectos de un constructor no se
-      // deshacen por perder la carrera.
-      Result := CreateInstance(Descriptor, Provider);
+      // Quien esperaba este cerrojo mientras el ambito se cerraba llega aqui con el cierre hecho, y no
+      // construye.
+      CheckNotShutDown(Descriptor.TypeInfo);
+      // La segunda comprobacion no es una precaucion opcional: entre la lectura de arriba y este
+      // cerrojo otro hilo pudo construirlo. Sin ella la ventana sigue abierta, mas estrecha -- y
+      // una carrera mas estrecha es peor, porque aparece en produccion y no en los tests.
+      if TryGetInstance(ServiceIdentity, True, Result) then Exit;
 
-      if FShutDonwnDone then
-      begin
-        // Perdio la carrera con el cierre despues de construir. Soltar la referencia aqui destruye
-        // la instancia: entregarla seria una fuga --el contenedor ya no la va a desmontar-- y no
-        // entregarla pero dejarla viva, otra.
-        Result := nil;
-        CheckNotShutDown(Descriptor.TypeInfo);
-      end;
-      // Un nil de la factory no se cablea, y un Singleton no lo retiene: la siguiente resolucion
-      // vuelve a llamar a la factory. Un Scoped si lo guarda en su ambito.
-      if Result = nil then
-      begin
-        if Descriptor.LifeTime <> Singleton then
-          AddServiceInstance(Descriptor, nil);
-        Exit;
-      end;
-      // Solo se cablea lo construido por clase: lo que devuelve una factory, o una instancia
-      // registrada, es de quien lo construyo.
-      if Descriptor.ImplementationClass = nil then
-      begin
-        AddServiceInstance(Descriptor, Result);
-        Exit;
-      end;
-      // Publicar y DESPUES cablear, en ese orden. Mientras la instancia no este en el diccionario,
-      // quien la vuelva a pedir --ella misma, o alguien a quien ella pide-- entra otra vez a
-      // construirla, y ahi no hay fondo. Se publica marcada «en cableado», de una vez: otro hilo no
-      // la recibe hasta que la marca se quita.
-      var Instance := InstanceOf(Result);
-      FInstancesLock.BeginWrite;
+      var Frame: TCreationFrame;
+      BeginCreate(Frame, Descriptor);
       try
-        FServiceInstances.Add(ServiceIdentity, Result);
-        FWired.AddOrSetValue(Instance, 0);
-        FWiring.AddOrSetValue(ServiceIdentity, 0);
-      finally
-        FInstancesLock.EndWrite;
-      end;
-      try
-        TActivatorUtilities.Wire(Provider, Instance);
-      except
-        // Un cableado que falla no deja nada publicado: la siguiente resolucion vuelve a construir.
-        // La entrada se quita bajo el cerrojo, y las propiedades se vacian fuera, antes de soltarla.
+        // El constructor corre con la construccion cerrada, no con el diccionario cerrado. Que
+        // corra dentro es lo que hace cierto "se construye una vez": construir fuera y quedarse con
+        // el ganador ejecuta el constructor una vez por hilo, y los efectos de un constructor no se
+        // deshacen por perder la carrera.
+        Result := CreateInstance(Descriptor, Provider);
+
+        if FShutDonwnDone then
+        begin
+          // Perdio la carrera con el cierre despues de construir. Soltar la referencia aqui destruye
+          // la instancia: entregarla seria una fuga --el contenedor ya no la va a desmontar-- y no
+          // entregarla pero dejarla viva, otra.
+          Result := nil;
+          CheckNotShutDown(Descriptor.TypeInfo);
+        end;
+        // Un nil de la factory no se cablea, y un Singleton no lo retiene: la siguiente resolucion
+        // vuelve a llamar a la factory. Un Scoped si lo guarda en su ambito.
+        if Result = nil then
+        begin
+          if Descriptor.LifeTime <> Singleton then
+            AddServiceInstance(Descriptor, nil);
+          Exit;
+        end;
+        // Solo se cablea lo construido por clase: lo que devuelve una factory, o una instancia
+        // registrada, es de quien lo construyo.
+        if Descriptor.ImplementationClass = nil then
+        begin
+          AddServiceInstance(Descriptor, Result);
+          Exit;
+        end;
+        // Publicar y DESPUES cablear, en ese orden. Mientras la instancia no este en el diccionario,
+        // quien la vuelva a pedir --ella misma, o alguien a quien ella pide-- entra otra vez a
+        // construirla, y ahi no hay fondo. Se publica marcada «en cableado», de una vez: otro hilo no
+        // la recibe hasta que la marca se quita.
+        var Instance := InstanceOf(Result);
         FInstancesLock.BeginWrite;
         try
-          FServiceInstances.Remove(ServiceIdentity);
-          FWired.Remove(Instance);
-          FWiring.Remove(ServiceIdentity);
+          FServiceInstances.Add(ServiceIdentity, Result);
+          FWired.AddOrSetValue(Instance, 0);
+          FWiring.AddOrSetValue(ServiceIdentity, 0);
         finally
           FInstancesLock.EndWrite;
         end;
-        TActivatorUtilities.ClearInjected(Instance);
-        Result := nil;
-        raise;
-      end;
-      // Si el contenedor se cerro durante el cableado, el cierre dejo la instancia sin vaciar, y es
-      // este hilo quien la descarta. Bajo el mismo cerrojo se quita tambien la entrada: si el cierre
-      // aun no la ha recorrido, ya no la encontrara, y nadie mas le escribe las propiedades.
-      var ClosedMeanwhile: Boolean;
-      FInstancesLock.BeginWrite;
-      try
-        FWiring.Remove(ServiceIdentity);
-        ClosedMeanwhile := FShutDonwnDone;
+        try
+          TActivatorUtilities.Wire(Provider, Instance);
+        except
+          // Un cableado que falla no deja nada publicado: la siguiente resolucion vuelve a construir.
+          // La entrada se quita bajo el cerrojo, y las propiedades se vacian fuera, antes de soltarla.
+          FInstancesLock.BeginWrite;
+          try
+            FServiceInstances.Remove(ServiceIdentity);
+            FWired.Remove(Instance);
+            FWiring.Remove(ServiceIdentity);
+          finally
+            FInstancesLock.EndWrite;
+          end;
+          TActivatorUtilities.ClearInjected(Instance);
+          Result := nil;
+          raise;
+        end;
+        // Si el contenedor se cerro durante el cableado, el cierre dejo la instancia sin vaciar, y es
+        // este hilo quien la descarta. Bajo el mismo cerrojo se quita tambien la entrada: el cierre que
+        // todavia no la haya recorrido no la encuentra, y nadie mas le escribe las propiedades.
+        var ClosedMeanwhile: Boolean;
+        FInstancesLock.BeginWrite;
+        try
+          FWiring.Remove(ServiceIdentity);
+          ClosedMeanwhile := FShutDonwnDone;
+          if ClosedMeanwhile then
+          begin
+            FServiceInstances.Remove(ServiceIdentity);
+            FWired.Remove(Instance);
+          end;
+        finally
+          FInstancesLock.EndWrite;
+        end;
         if ClosedMeanwhile then
         begin
-          FServiceInstances.Remove(ServiceIdentity);
-          FWired.Remove(Instance);
+          TActivatorUtilities.ClearInjected(Instance);
+          Result := nil;
+          RaiseShutDown(Descriptor.TypeInfo);
         end;
       finally
-        FInstancesLock.EndWrite;
-      end;
-      if ClosedMeanwhile then
-      begin
-        TActivatorUtilities.ClearInjected(Instance);
-        Result := nil;
-        RaiseShutDown(Descriptor.TypeInfo);
+        EndCreate(Frame);
       end;
     finally
-      EndCreate(Frame);
+      FBuildLock.Release;
     end;
   finally
-    FBuildLock.Release;
+    if Singletons <> nil then
+      TServiceScope(Singletons as TObject).FBuildLock.Release;
   end;
 end;
 
@@ -1628,6 +1669,34 @@ begin
   RaiseShutDown(ServiceType);
 end;
 
+// Un Scoped pedido al ambito de singletons --por el constructor, la factory o un ILazy de un
+// Singleton, o por el proveedor que guardo-- es la captura que .NET resuelve en su raiz, porque alli
+// la raiz es el ambito de los singletons.
+function TServiceScope.ResolveCapturedScoped(const Descriptor: TServiceDescriptor): IInterface;
+begin
+  if FScopeFactory = nil then
+    RaiseShutDown(Descriptor.TypeInfo);
+  if FScopeFactory.ValidateScopes then
+    RaiseScopedFromSingleton(Descriptor);
+  // Sin la opcion, en el ambito raiz y con su proveedor: es la misma instancia que da el proveedor
+  // raiz, y vive hasta que ese ambito se cierra.
+  var Root: IServiceScope;
+  if not FScopeFactory.TryAcquireRoot(Root) then
+    RaiseShutDown(Descriptor.TypeInfo);
+  var RootScope := TServiceScope(Root as TObject);
+  Result := RootScope.GetOrCreate(Descriptor, RootScope.FProvider);
+end;
+
+procedure TServiceScope.RaiseScopedFromSingleton(const Descriptor: TServiceDescriptor);
+begin
+  var Captor := CreatingSingleton;
+  if Captor = nil then
+    raise EServiceProviderError.CreateFmt('Cannot resolve scoped service %s from a singleton',
+      [Descriptor.ServiceName]);
+  raise EServiceProviderError.CreateFmt('Cannot resolve scoped service %s from singleton %s',
+    [Descriptor.ServiceName, Captor.ServiceName]);
+end;
+
 procedure TServiceScope.RaiseScopedFromRoot(const Descriptor: TServiceDescriptor);
 begin
   // Lo que se pidio a la raiz es el marco mas externo de lo que este hilo construye; sin ninguno,
@@ -1662,9 +1731,8 @@ begin
       Result := Singletons.GetOrCreate(Descriptor, Singletons.HandedProvider);
     end;
     Scoped: begin
-      var Captor := CreatingSingleton;
-      if Captor <> nil then
-        raise Exception.CreateFmt('singleton %s cannot depends on scoped %s ',[Captor.ServiceName, Descriptor.ServiceName]);
+      if FIsSingletonsScope then
+        Exit(ResolveCapturedScoped(Descriptor));
       if FIsRoot and Assigned(FScopeFactory) and FScopeFactory.ValidateScopes then
         RaiseScopedFromRoot(Descriptor);
       Result := Self.GetOrCreate(Descriptor, FProvider);

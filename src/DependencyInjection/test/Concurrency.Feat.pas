@@ -160,6 +160,13 @@ type
     /// puerta. Deja en Report lo que vio el cableado, como acabo la resolucion y las destrucciones.
     procedure CloseWhileWiring;
     function ResolveWiredAndDrop: string;
+    /// Sin ValidateScopes: un Scoped IRacer cuya factory cumple la cita de FInCtorGate y FCtorGate
+    /// y despues pide el Singleton IOther, y un Singleton IWiredRacer cuya factory captura IRacer.
+    procedure RegisterCaptureAgainstRoot;
+    /// Un hilo construye IRacer desde la raiz y, con su factory dentro, otro hilo resuelve el
+    /// Singleton que lo captura; el escenario abre la puerta. Deja en Report como acabo cada uno.
+    procedure CaptureWhileRootBuilds;
+    function ResolveRacerAndDrop: string;
     /// Un hilo lo construye y, con su cableado dentro, otro hilo lo pide. Deja en Report si el
     /// segundo lo pidio con la puerta cerrada y si lo recibio cableado.
     procedure AskWhileWiring;
@@ -427,6 +434,85 @@ begin
     Result := 'delivered';
   except
     on E: Exception do Result := E.ClassName;
+  end;
+end;
+
+procedure TConcurrencyWorld.RegisterCaptureAgainstRoot;
+begin
+  var InCtor := FInCtorGate;
+  var Gate := FCtorGate;
+  Services.AddSingleton<IOther, TOther>;
+  Services.AddScoped<IRacer>(
+    function(Provider: IServiceProvider): IRacer
+    begin
+      InCtor.SetEvent;
+      Gate.WaitFor(10000);
+      Provider.GetRequiredService<IOther>;
+      Result := TRacer.Create;
+    end);
+  Services.AddSingleton<IWiredRacer>(
+    function(Provider: IServiceProvider): IWiredRacer
+    begin
+      Provider.GetRequiredService<IRacer>;
+      Result := TWiredRacer.Create;
+    end);
+end;
+
+function TConcurrencyWorld.ResolveRacerAndDrop: string;
+begin
+  try
+    Provider.GetRequiredService<IRacer>;
+    Result := 'delivered';
+  except
+    on E: Exception do Result := E.ClassName;
+  end;
+end;
+
+procedure TConcurrencyWorld.CaptureWhileRootBuilds;
+var
+  RootDone, CaptorDone: TEvent;
+  RootOutcome, CaptorOutcome: string;
+begin
+  RootOutcome := '<sin resultado>';
+  CaptorOutcome := '<sin resultado>';
+  RootDone := TEvent.Create(nil, True, False, '');
+  CaptorDone := TEvent.Create(nil, True, False, '');
+  try
+    TThread.CreateAnonymousThread(
+      procedure
+      begin
+        RootOutcome := ResolveRacerAndDrop;
+        RootDone.SetEvent;
+      end).Start;
+    if FInCtorGate.WaitFor(10000) <> wrSignaled then
+    begin
+      FCtorGate.SetEvent;
+      RootDone.WaitFor(10000);
+      Report := 'the root construction never started';
+      Exit;
+    end;
+    TThread.CreateAnonymousThread(
+      procedure
+      begin
+        CaptorOutcome := ResolveWiredAndDrop;
+        CaptorDone.SetEvent;
+      end).Start;
+    // El tiempo de que el Singleton llegue a esperar un cerrojo antes de abrir la puerta.
+    TThread.Sleep(300);
+    FCtorGate.SetEvent;
+    // Dos hilos que se esperan mutuamente no vuelven nunca: el plazo lo convierte en un informe, y
+    // el desmontaje no cierra un contenedor con cerrojos que nadie va a soltar.
+    FTimedOut := (RootDone.WaitFor(5000) <> wrSignaled) or (CaptorDone.WaitFor(5000) <> wrSignaled);
+    if FTimedOut then
+      Report := 'TIMEOUT: the two threads wait for each other'
+    else
+      Report := Format('root=%s, captor=%s', [RootOutcome, CaptorOutcome]);
+  finally
+    if not FTimedOut then
+    begin
+      CaptorDone.Free;
+      RootDone.Free;
+    end;
   end;
 end;
 
@@ -1335,6 +1421,27 @@ Feature Resolving from several threads at once @di @concurrency
       begin
         Expect(W.Report).ToEqual('closed while wiring=True, saw its property filled=True, '
           + 'resolution=EContainerShutDownError, destroyed=1, destroyed empty=1');
+      end)
+
+.Rule('A Singleton that captures a Scoped does not lock up with a resolution from the root')
+
+  .Scenario('The root builds a Scoped while another thread builds the Singleton that captures it')
+    .Given('a provider without options, and the root building a Scoped that will then ask for a Singleton',
+      procedure(W: TConcurrencyWorld)
+      begin
+        W.NoCtorDelay;
+        W.RegisterCaptureAgainstRoot;
+        W.Build;
+      end)
+    .When('another thread resolves a Singleton whose factory captures that Scoped',
+      procedure(W: TConcurrencyWorld)
+      begin
+        W.CaptureWhileRootBuilds;
+      end)
+    .&Then('both resolutions finish and deliver their service',
+      procedure(W: TConcurrencyWorld)
+      begin
+        Expect(W.Report).ToEqual('root=delivered, captor=delivered');
       end)
 
 .Rule('Closing while another thread resolves ends in a defined state')

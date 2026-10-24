@@ -407,7 +407,8 @@ var Provider := Services.BuildServiceProvider(TServiceProviderOptions.Create(Tru
   propiedad marcada se caza como la que entra por el constructor. Con ella activa, resolver un Scoped
   desde el proveedor raíz —directamente, o a través de un servicio que lo requiere— también falla, al
   resolverlo: un Scoped resuelto allí vive hasta que se cierra el contenedor. Se resuelve desde un
-  ámbito.
+  ámbito. Un Scoped resuelto por el proveedor que recibió un Singleton —desde su factory, un `ILazy` o
+  un proveedor que guardó— falla igual.
 
 Ambos son calcados de `ServiceProviderOptions`, y ambos son **opt-in**: `BuildServiceProvider`
 sin opciones no valida nada, y el host de la familia de aplicaciones activa los dos en el entorno

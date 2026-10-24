@@ -59,6 +59,34 @@ type
     constructor Create(const Dep: IScopedDep);
   end;
 
+  /// Un Singleton que guarda el Scoped que le dieron al construirlo.
+  IScopedKeeper = interface(IInvokable)
+    ['{91CB915A-2D9F-449F-866F-819232397008}']
+    function Kept: IScopedDep;
+  end;
+
+  TScopedKeeper = class(TInterfacedObject, IScopedKeeper)
+  private
+    FKept: IScopedDep;
+  public
+    constructor Create(const Kept: IScopedDep);
+    function Kept: IScopedDep;
+  end;
+
+  /// Un Singleton que guarda el proveedor que recibio su constructor.
+  IProviderKeeper = interface(IInvokable)
+    ['{0EC11604-A747-4915-9DC1-48992A1C97FA}']
+    function Provider: IServiceProvider;
+  end;
+
+  TProviderKeeper = class(TInterfacedObject, IProviderKeeper)
+  private
+    FProvider: IServiceProvider;
+  public
+    constructor Create(const Provider: IServiceProvider);
+    function Provider: IServiceProvider;
+  end;
+
   TDependent = class(TInterfacedObject, IHealthy)
   public
     constructor Create(const Dep: IScopedDep);
@@ -107,6 +135,8 @@ type
     Provider: IServiceProvider;
     Failure: string;
     ResolveFailure: string;
+    Outcome: string;
+    Keeper: IProviderKeeper;
     constructor Create;
     destructor Destroy; override;
     procedure BuildWith(const Options: TServiceProviderOptions);
@@ -152,6 +182,28 @@ begin
   inherited Create;
 end;
 
+constructor TScopedKeeper.Create(const Kept: IScopedDep);
+begin
+  inherited Create;
+  FKept := Kept;
+end;
+
+function TScopedKeeper.Kept: IScopedDep;
+begin
+  Result := FKept;
+end;
+
+constructor TProviderKeeper.Create(const Provider: IServiceProvider);
+begin
+  inherited Create;
+  FProvider := Provider;
+end;
+
+function TProviderKeeper.Provider: IServiceProvider;
+begin
+  Result := FProvider;
+end;
+
 { TValidationWorld }
 
 constructor TValidationWorld.Create;
@@ -183,7 +235,7 @@ begin
   try
     Resolve;
   except
-    on E: Exception do ResolveFailure := E.Message;
+    on E: Exception do ResolveFailure := E.ClassName + ': ' + E.Message;
   end;
 end;
 
@@ -586,6 +638,119 @@ Feature Dependency graph validation @di @validation
       procedure(W: TValidationWorld)
       begin
         Expect(W.ResolveFailure).ToEqual('');
+      end)
+
+.Rule('With ValidateScopes, a Singleton does not resolve a Scoped')
+
+  .Scenario('The factory of a Singleton resolves a Scoped')
+    .Given('a Singleton whose factory resolves a Scoped by the provider it gets, and a provider with ValidateScopes',
+      procedure(W: TValidationWorld)
+      begin
+        W.Services.AddScoped<IScopedDep, TScopedDep>;
+        W.Services.AddSingleton<IScopedKeeper>(
+          function(Provider: IServiceProvider): IScopedKeeper
+          begin
+            Result := TScopedKeeper.Create(Provider.GetRequiredService<IScopedDep>);
+          end);
+        W.BuildWith(TServiceProviderOptions.Create(False, True));
+      end)
+    .When('the Singleton is resolved',
+      procedure(W: TValidationWorld)
+      begin
+        W.TryResolve(
+          procedure
+          begin
+            W.Provider.GetRequiredService<IScopedKeeper>;
+          end);
+      end)
+    .&Then('it fails with EServiceProviderError, naming the Scoped and the Singleton',
+      procedure(W: TValidationWorld)
+      begin
+        Expect(W.ResolveFailure).ToContain('EServiceProviderError: ');
+        Expect(W.ResolveFailure).ToContain('IScopedDep');
+        Expect(W.ResolveFailure).ToContain('IScopedKeeper');
+      end)
+
+  .Scenario('Without ValidateScopes the same composition is resolved')
+    .Given('the same composition with a provider built without options, and a Singleton keeping the Scoped it resolved',
+      procedure(W: TValidationWorld)
+      begin
+        W.Services.AddScoped<IScopedDep, TScopedDep>;
+        W.Services.AddSingleton<IScopedKeeper>(
+          function(Provider: IServiceProvider): IScopedKeeper
+          begin
+            Result := TScopedKeeper.Create(Provider.GetRequiredService<IScopedDep>);
+          end);
+        W.BuildWith(TServiceProviderOptions.None);
+      end)
+    .When('the Singleton is resolved, and then the Scoped from the root provider',
+      procedure(W: TValidationWorld)
+      begin
+        W.TryResolve(
+          procedure
+          begin
+            var Kept := W.Provider.GetRequiredService<IScopedKeeper>.Kept;
+            W.Outcome := 'same instance=' + BoolToStr(Kept = W.Provider.GetRequiredService<IScopedDep>, True);
+          end);
+      end)
+    .&Then('the Singleton is built with no error, and the Scoped it keeps is the one the root provider gives',
+      procedure(W: TValidationWorld)
+      begin
+        Expect(W.ResolveFailure + W.Outcome).ToEqual('same instance=True');
+      end)
+
+  .Scenario('The factory of the Singleton opens its own scope')
+    .Given('a Singleton whose factory opens a scope and resolves a Scoped in it, and a provider with ValidateScopes',
+      procedure(W: TValidationWorld)
+      begin
+        W.Services.AddScoped<IScopedDep, TScopedDep>;
+        W.Services.AddSingleton<IScopedKeeper>(
+          function(Provider: IServiceProvider): IScopedKeeper
+          begin
+            var Scope := Provider.CreateScope;
+            Scope.ServiceProvider.GetRequiredService<IScopedDep>;
+            Result := TScopedKeeper.Create(nil);
+          end);
+        W.BuildWith(TServiceProviderOptions.Create(False, True));
+      end)
+    .When('the Singleton is resolved',
+      procedure(W: TValidationWorld)
+      begin
+        W.TryResolve(
+          procedure
+          begin
+            W.Provider.GetRequiredService<IScopedKeeper>;
+          end);
+      end)
+    .&Then('it is built with no error',
+      procedure(W: TValidationWorld)
+      begin
+        Expect(W.ResolveFailure).ToEqual('');
+      end)
+
+  .Scenario('A Singleton that resolves a Scoped after being built')
+    .Given('a Singleton keeping the provider its constructor got, and a provider built with ValidateScopes',
+      procedure(W: TValidationWorld)
+      begin
+        W.Services.AddScoped<IScopedDep, TScopedDep>;
+        W.Services.AddSingleton<IProviderKeeper, TProviderKeeper>;
+        W.BuildWith(TServiceProviderOptions.Create(False, True));
+        W.Keeper := W.Provider.GetRequiredService<IProviderKeeper>;
+      end)
+    .When('the Singleton, already built, resolves a Scoped through that provider',
+      procedure(W: TValidationWorld)
+      begin
+        W.TryResolve(
+          procedure
+          begin
+            W.Keeper.Provider.GetRequiredService<IScopedDep>;
+          end);
+      end)
+    .&Then('it fails with EServiceProviderError, naming the Scoped',
+      procedure(W: TValidationWorld)
+      begin
+        Expect(W.ResolveFailure).ToContain('EServiceProviderError: ');
+        Expect(W.ResolveFailure).ToContain('IScopedDep');
       end);
 
 end.
