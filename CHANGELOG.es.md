@@ -32,7 +32,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - **Logging**: `ILogger<T>` — un servicio lo pide por constructor y recibe un registrador con su propia categoría
 - **Logging**: Canal de arranque — un `ILogger` desde la primera línea del proceso, sin inyección de dependencias y sin configuración, para la fase anterior a `BuildServiceProvider`: informa con `BootstrapLog.LoggerFor` y añade destinos con `BootstrapLog.AddSink`. El catálogo de destinos, en el README
 - **Logging**: `Builder.AddNullProvider` — descartar las entradas a propósito, dicho al componer
-- **Configuration**: Cuarto proveedor, la línea de comandos — `CommandLineConfig.AddArgs`, en `Daf.Configuration.CommandLine`, lee los argumentos del proceso como claves. Las formas admitidas, en el README
+- **Configuration**: Un proveedor nuevo, la línea de comandos — `CommandLineConfig.AddArgs`, en `Daf.Configuration.CommandLine`, lee los argumentos del proceso como claves. Las formas admitidas, en el README
 - **Configuration**: `ConfigOptions.Bind<T>` — una sección llega tipada y con dueño a quien la necesita, y el servicio deja de nombrar su sección: la decide el arranque
 - ⚠️ **Configuration**: `IConfiguration.Exists` y `Find` — la presencia se **pregunta**, no se deduce de que el valor esté vacío; `Find` contesta presencia y valor en una sola consulta, como `TNullable<string>`. El indexador sigue siendo `string`. **Rompe** a quien implemente `IConfiguration` sin heredar de `TConfigurationRoot`
 - **Configuration**: `IConfigurationManager` — constructor y lectura sobre el mismo objeto, así que la configuración se lee mientras se está componiendo. Cada `Add` construye y carga solo el proveedor nuevo

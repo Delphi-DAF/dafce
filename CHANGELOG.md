@@ -33,7 +33,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - **Logging**: `ILogger<T>` — a service asks for it by constructor and gets a logger carrying its own category
 - **Logging**: Bootstrap channel — an `ILogger` from the process's first line, with no dependency injection and no configuration, for the phase before `BuildServiceProvider`: report with `BootstrapLog.LoggerFor` and add sinks with `BootstrapLog.AddSink`. The sink catalogue, in the README
 - **Logging**: `Builder.AddNullProvider` — discarding entries on purpose, stated while composing
-- **Configuration**: A fourth provider, the command line — `CommandLineConfig.AddArgs`, in `Daf.Configuration.CommandLine`, reads the process arguments as keys. The accepted forms, in the README
+- **Configuration**: A new provider, the command line — `CommandLineConfig.AddArgs`, in `Daf.Configuration.CommandLine`, reads the process arguments as keys. The accepted forms, in the README
 - **Configuration**: `ConfigOptions.Bind<T>` — a section arrives typed and owned to whoever needs it, and the service stops naming its section: startup decides it
 - ⚠️ **Configuration**: `IConfiguration.Exists` and `Find` — presence is **asked**, not inferred from an empty value; `Find` answers presence and value in one lookup, as a `TNullable<string>`. The indexer stays a `string`. **Breaks** whoever implements `IConfiguration` without inheriting from `TConfigurationRoot`
 - **Configuration**: `IConfigurationManager` — builder and reader on the same object, so configuration can be read while it is still being composed. Each `Add` builds and loads only the new provider

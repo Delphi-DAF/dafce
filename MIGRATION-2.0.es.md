@@ -195,7 +195,7 @@ comparte motor con ninguno de los dos módulos.
 | `TFilterSpec<T>`, en `Daf.Expression` | misma clase, en `Daf.FilterSpec` |
 | unidad `Daf.Expression` | disuelta en `Daf.FilterSpec` y `Daf.Types` |
 | `TBooleanExpresion` | retirado |
-| `&If.Exp<T>` | retirado — lo sustituye el operador ternario de Delphi 13, `if … then … else` como expresión, que evalúa solo la rama que toma |
+| `&If.Exp<T>` | retirado — en Delphi 13 lo sustituye el operador ternario (`if … then … else` como expresión), que evalúa solo la rama que toma; en Delphi 12, una sentencia `if` |
 | `TGenericRTTI.GetGenericArguments(TRttiType)` | **`_T.GenericArgs(PTypeInfo)`**, en `Daf.Rtti` — devuelve información de tipo en vez de tipos reflejados, y cuenta como uno un argumento que a su vez es genérico |
 | `TGenericRTTI.MakeGenericType` | retirado sin sustituto — ver abajo |
 | `TSmartArray<T>.Select(TDeferred<TMapper<T, TTarget>>)` | `Select(TFunc<T, TTarget>)` |

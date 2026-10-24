@@ -194,7 +194,7 @@ no engine with either module.
 | `TFilterSpec<T>`, in `Daf.Expression` | same class, in `Daf.FilterSpec` |
 | unit `Daf.Expression` | dissolved into `Daf.FilterSpec` and `Daf.Types` |
 | `TBooleanExpresion` | removed |
-| `&If.Exp<T>` | removed — Delphi 13's ternary operator, `if … then … else` as an expression, replaces it and evaluates only the branch it takes |
+| `&If.Exp<T>` | removed — on Delphi 13, the ternary operator (`if … then … else` as an expression) replaces it and evaluates only the branch it takes; on Delphi 12, an `if` statement |
 | `TGenericRTTI.GetGenericArguments(TRttiType)` | **`_T.GenericArgs(PTypeInfo)`**, in `Daf.Rtti` — returns type information rather than reflected types, and counts an argument that is itself generic as one |
 | `TGenericRTTI.MakeGenericType` | removed with no replacement — see below |
 | `TSmartArray<T>.Select(TDeferred<TMapper<T, TTarget>>)` | `Select(TFunc<T, TTarget>)` |
