@@ -27,7 +27,8 @@ uses
   FailureReason.Feat in 'FailureReason.Feat.pas',
   BackgroundSteps.Feat in 'BackgroundSteps.Feat.pas',
   ScenarioOutline.Feat in 'ScenarioOutline.Feat.pas',
-  SuiteHooks.Feat in 'SuiteHooks.Feat.pas';
+  SuiteHooks.Feat in 'SuiteHooks.Feat.pas',
+  JUnitReport.Feat in 'JUnitReport.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

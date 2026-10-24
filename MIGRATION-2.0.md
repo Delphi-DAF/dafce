@@ -637,6 +637,10 @@ suite that was green can come out with scenarios Pending or Undefined, or red.
 - **A hook of the suite that raises counts as a failure.** Every `Before` runs, and when one raised
   no feature runs; every `After` runs too. In 1.6 the error was lost and the run exited with 0.
   **What breaks**: a suite whose set-up or clean-up hook raises now comes out red.
+- **The JUnit report counts like the run.** An Undefined scenario or row is a `<failure>` and a
+  Pending one a `<skipped>`; a scenario that did not run is not listed; and each hook that raised is
+  a failed case. In 1.6 Undefined and Pending came out as passed, and a filtered scenario as skipped.
+  **What breaks**: a CI that read the report as green now sees the Undefined scenarios as failures.
 
 ## How to do it
 

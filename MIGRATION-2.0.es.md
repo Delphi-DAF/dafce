@@ -638,6 +638,11 @@ Una suite que estaba en verde puede salir con escenarios Pending o Undefined, o 
   lanzó no se ejecuta ninguna feature; se ejecutan también todos los `After`. En 1.6 el error se
   perdía y la ejecución salía con 0. **Qué rompe**: una suite cuyo hook de preparación o de limpieza
   lanza sale ahora en rojo.
+- **El informe JUnit cuenta como la ejecución.** Un escenario o una fila Undefined es un `<failure>`
+  y uno Pending un `<skipped>`; un escenario que no se ejecutó no se lista; y cada hook que lanzó es un
+  caso fallido. En 1.6 Undefined y Pending salían como aprobados, y un escenario filtrado como
+  omitido. **Qué rompe**: un CI que leía el informe en verde ve ahora como fallos los escenarios
+  Undefined.
 
 ## Cómo hacerlo
 

@@ -35,6 +35,17 @@ Cuando se usa `-f`, los reporters solo incluyen features que tienen al menos un 
 
 Genera XML en formato JUnit para integración CI/CD. Compatible con GitHub Actions, GitLab CI, Jenkins, Azure DevOps.
 
+Cada escenario que se ejecutó, y cada fila de un Scenario Outline, es un caso. Uno fallado o
+Undefined lleva un `<failure>`, y uno Pending un `<skipped>`, cuyo mensaje nombra el step que lo dejó
+así. Un escenario que no se ejecutó, como uno que el filtro dejó fuera, no se lista.
+
+Cada hook que lanzó, de la suite o de una feature, es un caso con un `<failure>` que lleva la
+descripción del hook y su mensaje. Los de una feature van en su bloque, y los de la suite en un bloque
+con el nombre de la suite. Los atributos cuentan los casos que se listan: `failures` recoge los
+escenarios fallados y Undefined y los hooks, y `skipped` los Pending. `--allow-undefined` y
+`--strict-pending` cambian el código de salida, no el informe. Cucumber, desde la 6.11, da un escenario
+Pending como fallo; MiniSpec lo mantiene como omitido, igual que su código de salida.
+
 ## Live Reporter
 
 Por defecto espera 3 segundos para conexión del navegador. Usa `wait=0` para deshabilitar.

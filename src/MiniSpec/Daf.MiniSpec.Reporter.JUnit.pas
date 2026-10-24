@@ -17,10 +17,6 @@ type
   TJUnitReporter = class(TCustomListener)
   private
     FOutput: string;
-    function EscapeXml(const S: string): string;
-    function TimeToXml(const Ms: Int64): string;
-    function BuildTestCase(const Context: IRunContext; const Scenario: IScenario; const ClassName: string): string;
-    function BuildTestSuite(const Context: IRunContext; const Feature: IFeature): string;
     function BuildXml(const Context: IRunContext): string;
   public
     function GetContent: string; override;
@@ -32,11 +28,166 @@ type
 implementation
 
 uses
-  System.IOUtils;
+  System.IOUtils,
+  System.Generics.Collections;
+
+type
+  /// <summary>What a block lists: its attributes count the cases it carries.</summary>
+  TCaseCounts = record
+    Tests: Integer;
+    Failures: Integer;
+    Skipped: Integer;
+    procedure Add(const Other: TCaseCounts);
+  end;
 
 var
   /// Format settings with dot as decimal separator for XML compatibility
   XmlFormatSettings: TFormatSettings;
+
+procedure TCaseCounts.Add(const Other: TCaseCounts);
+begin
+  Inc(Tests, Other.Tests);
+  Inc(Failures, Other.Failures);
+  Inc(Skipped, Other.Skipped);
+end;
+
+function EscapeXml(const S: string): string;
+begin
+  Result := S;
+  Result := StringReplace(Result, '&', '&amp;', [rfReplaceAll]);
+  Result := StringReplace(Result, '<', '&lt;', [rfReplaceAll]);
+  Result := StringReplace(Result, '>', '&gt;', [rfReplaceAll]);
+  Result := StringReplace(Result, '"', '&quot;', [rfReplaceAll]);
+  Result := StringReplace(Result, '''', '&apos;', [rfReplaceAll]);
+end;
+
+function TimeToXml(const Ms: Int64): string;
+begin
+  // Format time in seconds with dot as decimal separator (XML/JUnit standard)
+  Result := FormatFloat('0.000', Ms / 1000.0, XmlFormatSettings);
+end;
+
+function FirstStepWith(const Steps: TList<IScenarioStep>; Outcome: TSpecRunResult): IScenarioStep;
+begin
+  Result := nil;
+  if Assigned(Steps) then
+    for var Step in Steps do
+      if Step.RunInfo.Result = Outcome then
+        Exit(Step);
+end;
+
+// The step that left the scenario Pending or Undefined: its own first, then those of its Background.
+function DecidingStep(const Scenario: IScenario; Outcome: TSpecRunResult): IScenarioStep;
+begin
+  Result := FirstStepWith(Scenario.StepsGiven, Outcome);
+  if not Assigned(Result) then
+    Result := FirstStepWith(Scenario.StepsWhen, Outcome);
+  if not Assigned(Result) then
+    Result := FirstStepWith(Scenario.StepsThen, Outcome);
+  if Assigned(Result) then
+    Exit;
+  var Owner := Scenario.Parent;
+  if Supports(Owner, IScenarioOutline) then
+    Owner := Owner.Parent;
+  var Rule: IRule;
+  if not Supports(Owner, IRule, Rule) then
+    Exit;
+  if Assigned(Rule.Feature) and Assigned(Rule.Feature.BackGround) then
+    Result := FirstStepWith(Rule.Feature.BackGround.StepsGiven, Outcome);
+  if not Assigned(Result) and Assigned(Rule.BackGround) then
+    Result := FirstStepWith(Rule.BackGround.StepsGiven, Outcome);
+end;
+
+function OutcomeMessage(const Scenario: IScenario; Outcome: TSpecRunResult): string;
+begin
+  if Outcome = srrPending then
+    Result := 'Pending'
+  else
+    Result := 'Undefined';
+  var Step := DecidingStep(Scenario, Outcome);
+  if Assigned(Step) then
+    Result := Result + ' step: ' + Step.KeyWord + ' ' + Step.Description;
+end;
+
+function ClosedCase(const Open, Child: string): string;
+begin
+  Result := Open + '>' + sLineBreak + '      ' + Child + sLineBreak + '    </testcase>' + sLineBreak;
+end;
+
+// The case of a scenario or of a row: Fail, Error and Undefined give a failure, Pending a skipped.
+// What did not run is not listed.
+function TestCase(const Context: IRunContext; const Scenario: IScenario; const Name, ClassName: string;
+  var Counts: TCaseCounts): string;
+begin
+  Result := '';
+  var RunInfo := (Scenario as ISpecItem).RunInfo;
+  if RunInfo.State <> srsFinished then
+    Exit;
+  Inc(Counts.Tests);
+  var Open := Format('    <testcase name="%s" classname="%s" time="%s"',
+    [EscapeXml(Name), EscapeXml(ClassName), TimeToXml(RunInfo.ExecTimeMs)]);
+  case RunInfo.Result of
+    srrFail, srrError:
+      begin
+        Inc(Counts.Failures);
+        Result := ClosedCase(Open, Format('<failure message="%s" type="AssertionError"/>',
+          [EscapeXml(ScenarioFailure(Context, Scenario))]));
+      end;
+    srrUndefined:
+      begin
+        Inc(Counts.Failures);
+        Result := ClosedCase(Open, Format('<failure message="%s" type="Undefined"/>',
+          [EscapeXml(OutcomeMessage(Scenario, srrUndefined))]));
+      end;
+    srrPending:
+      begin
+        Inc(Counts.Skipped);
+        Result := ClosedCase(Open, Format('<skipped message="%s"/>', [EscapeXml(OutcomeMessage(Scenario, srrPending))]));
+      end;
+  else
+    Result := Open + '/>' + sLineBreak;
+  end;
+end;
+
+// Each hook that failed is a failed case with its description and its message. One that passed is
+// not listed.
+function HookCases(const Hooks: TList<IHook>; const ClassName: string; var Counts: TCaseCounts): string;
+begin
+  Result := '';
+  for var Hook in Hooks do
+    if Hook.RunInfo.Result in [srrFail, srrError] then
+    begin
+      Inc(Counts.Tests);
+      Inc(Counts.Failures);
+      Result := Result + ClosedCase(Format('    <testcase name="%s" classname="%s" time="%s"',
+        [EscapeXml(Hook.Description), EscapeXml(ClassName), TimeToXml(Hook.RunInfo.ExecTimeMs)]),
+        Format('<failure message="%s" type="HookError"/>', [EscapeXml(Hook.RunInfo.ErrMsg)]));
+    end;
+end;
+
+function FeatureCases(const Context: IRunContext; const Feature: IFeature; var Counts: TCaseCounts): string;
+begin
+  Result := HookCases(Feature.BeforeHooks, Feature.Title, Counts);
+  for var Rule in Feature.Rules do
+    for var Scenario in Rule.Scenarios do
+    begin
+      var Outline: IScenarioOutline;
+      if Supports(Scenario, IScenarioOutline, Outline) and (Outline.Examples.Count > 0) then
+        for var I := 0 to Outline.Examples.Count - 1 do
+          Result := Result + TestCase(Context, Outline.Examples[I],
+            Format('%s [Example %d]', [Outline.Description, I + 1]), Feature.Title, Counts)
+      else
+        Result := Result + TestCase(Context, Scenario, Scenario.Description, Feature.Title, Counts);
+    end;
+  Result := Result + HookCases(Feature.AfterHooks, Feature.Title, Counts);
+end;
+
+function TestSuite(const Name, Cases: string; const Counts: TCaseCounts; const TimeMs: Int64): string;
+begin
+  Result := Format('  <testsuite name="%s" tests="%d" failures="%d" errors="0" skipped="%d" time="%s">',
+    [EscapeXml(Name), Counts.Tests, Counts.Failures, Counts.Skipped, TimeToXml(TimeMs)]) + sLineBreak +
+    Cases + '  </testsuite>' + sLineBreak;
+end;
 
 { TJUnitReporter }
 
@@ -60,166 +211,44 @@ begin
   Result := True;
 end;
 
-function TJUnitReporter.EscapeXml(const S: string): string;
-begin
-  Result := S;
-  Result := StringReplace(Result, '&', '&amp;', [rfReplaceAll]);
-  Result := StringReplace(Result, '<', '&lt;', [rfReplaceAll]);
-  Result := StringReplace(Result, '>', '&gt;', [rfReplaceAll]);
-  Result := StringReplace(Result, '"', '&quot;', [rfReplaceAll]);
-  Result := StringReplace(Result, '''', '&apos;', [rfReplaceAll]);
-end;
-
-function TJUnitReporter.TimeToXml(const Ms: Int64): string;
-begin
-  // Format time in seconds with dot as decimal separator (XML/JUnit standard)
-  Result := FormatFloat('0.000', Ms / 1000.0, XmlFormatSettings);
-end;
-
-function TJUnitReporter.BuildTestCase(const Context: IRunContext; const Scenario: IScenario; const ClassName: string): string;
-var
-  SB: TStringBuilder;
-  RunInfo: TSpecRunInfo;
-begin
-  RunInfo := (Scenario as ISpecItem).RunInfo;
-
-  SB := TStringBuilder.Create;
-  try
-    if RunInfo.State <> srsFinished then
-    begin
-      // Skipped
-      SB.AppendFormat('    <testcase name="%s" classname="%s" time="%s">',
-        [EscapeXml(Scenario.Description), EscapeXml(ClassName), TimeToXml(RunInfo.ExecTimeMs)]);
-      SB.AppendLine;
-      SB.AppendLine('      <skipped/>');
-      SB.AppendLine('    </testcase>');
-    end
-    else if RunInfo.Result in [srrFail, srrError] then
-    begin
-      // Failed
-      SB.AppendFormat('    <testcase name="%s" classname="%s" time="%s">',
-        [EscapeXml(Scenario.Description), EscapeXml(ClassName), TimeToXml(RunInfo.ExecTimeMs)]);
-      SB.AppendLine;
-      SB.AppendFormat('      <failure message="%s" type="AssertionError"/>',
-        [EscapeXml(ScenarioFailure(Context, Scenario))]);
-      SB.AppendLine;
-      SB.AppendLine('    </testcase>');
-    end
-    else
-    begin
-      // Passed
-      SB.AppendFormat('    <testcase name="%s" classname="%s" time="%s"/>',
-        [EscapeXml(Scenario.Description), EscapeXml(ClassName), TimeToXml(RunInfo.ExecTimeMs)]);
-      SB.AppendLine;
-    end;
-
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
-
-function TJUnitReporter.BuildTestSuite(const Context: IRunContext; const Feature: IFeature): string;
-var
-  SB: TStringBuilder;
-  Rule: IRule;
-  Scenario: IScenario;
-  Outline: IScenarioOutline;
-  Example: IScenario;
-  RunInfo, ExampleRunInfo: TSpecRunInfo;
-  ExampleNum: Integer;
-  ExampleDesc: string;
-begin
-  RunInfo := (Feature as ISpecItem).RunInfo;
-
-  SB := TStringBuilder.Create;
-  try
-    SB.AppendFormat('  <testsuite name="%s" tests="%d" failures="%d" errors="0" skipped="%d" time="%s">',
-      [EscapeXml(Feature.Title), RunInfo.TotalCount, RunInfo.FailCount, RunInfo.SkipCount, TimeToXml(RunInfo.ExecTimeMs)]);
-    SB.AppendLine;
-
-    // Iterate through all Rules (including ImplicitRule via Feature.Rules)
-    for Rule in Feature.Rules do
-    begin
-      for Scenario in Rule.Scenarios do
-      begin
-        // Check if it's a ScenarioOutline
-        if Supports(Scenario, IScenarioOutline, Outline) then
-        begin
-          // Report each Example as a separate test case
-          ExampleNum := 0;
-          for Example in Outline.Examples do
-          begin
-            Inc(ExampleNum);
-            ExampleDesc := Format('%s [Example %d]', [Outline.Description, ExampleNum]);
-            ExampleRunInfo := (Example as ISpecItem).RunInfo;
-
-            if ExampleRunInfo.State <> srsFinished then
-            begin
-              SB.AppendFormat('    <testcase name="%s" classname="%s" time="%s">',
-                [EscapeXml(ExampleDesc), EscapeXml(Feature.Title), TimeToXml(ExampleRunInfo.ExecTimeMs)]);
-              SB.AppendLine;
-              SB.AppendLine('      <skipped/>');
-              SB.AppendLine('    </testcase>');
-            end
-            else if ExampleRunInfo.Result in [srrFail, srrError] then
-            begin
-              SB.AppendFormat('    <testcase name="%s" classname="%s" time="%s">',
-                [EscapeXml(ExampleDesc), EscapeXml(Feature.Title), TimeToXml(ExampleRunInfo.ExecTimeMs)]);
-              SB.AppendLine;
-              SB.AppendFormat('      <failure message="%s" type="AssertionError"/>',
-                [EscapeXml(ScenarioFailure(Context, Example))]);
-              SB.AppendLine;
-              SB.AppendLine('    </testcase>');
-            end
-            else
-            begin
-              SB.AppendFormat('    <testcase name="%s" classname="%s" time="%s"/>',
-                [EscapeXml(ExampleDesc), EscapeXml(Feature.Title), TimeToXml(ExampleRunInfo.ExecTimeMs)]);
-              SB.AppendLine;
-            end;
-          end;
-        end
-        else
-        begin
-          // Regular scenario
-          SB.Append(BuildTestCase(Context, Scenario, Feature.Title));
-        end;
-      end;
-    end;
-
-    SB.AppendLine('  </testsuite>');
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
-
 function TJUnitReporter.BuildXml(const Context: IRunContext): string;
 var
   SB: TStringBuilder;
-  Feature: IFeature;
-  SuiteRunInfo: TSpecRunInfo;
 begin
-  SuiteRunInfo := Context.Suite.RunInfo;
+  var Total := Default(TCaseCounts);
+  var Blocks := '';
+  // The hooks of the suite get a block of their own, which exists only when one of them failed.
+  var SuiteName := Context.Suite.Title;
+  if SuiteName.IsEmpty then
+    SuiteName := 'MiniSpec';
+  var SuiteCounts := Default(TCaseCounts);
+  var SuiteCases := HookCases(Context.Suite.BeforeHooks, SuiteName, SuiteCounts) +
+    HookCases(Context.Suite.AfterHooks, SuiteName, SuiteCounts);
+  if SuiteCounts.Tests > 0 then
+  begin
+    Blocks := Blocks + TestSuite(SuiteName, SuiteCases, SuiteCounts, Context.Suite.RunInfo.ExecTimeMs);
+    Total.Add(SuiteCounts);
+  end;
+  // A feature with no case listed is left out.
+  for var Feature in Context.Suite.Features do
+  begin
+    var Counts := Default(TCaseCounts);
+    var Cases := FeatureCases(Context, Feature, Counts);
+    if Counts.Tests > 0 then
+    begin
+      Blocks := Blocks + TestSuite(Feature.Title, Cases, Counts, (Feature as ISpecItem).RunInfo.ExecTimeMs);
+      Total.Add(Counts);
+    end;
+  end;
 
   SB := TStringBuilder.Create;
   try
-    // XML header
     SB.AppendLine('<?xml version="1.0" encoding="UTF-8"?>');
-
-    // Root testsuites element - use Suite.RunInfo for totals
     SB.AppendFormat('<testsuites name="MiniSpec" tests="%d" failures="%d" errors="0" skipped="%d" time="%s">',
-      [SuiteRunInfo.TotalCount, SuiteRunInfo.FailCount, SuiteRunInfo.SkipCount, TimeToXml(SuiteRunInfo.ExecTimeMs)]);
+      [Total.Tests, Total.Failures, Total.Skipped, TimeToXml(Context.Suite.RunInfo.ExecTimeMs)]);
     SB.AppendLine;
-
-    // Each feature as a testsuite — skip features with no executed scenarios
-    for Feature in Context.Suite.Features do
-      if (Feature as ISpecItem).RunInfo.TotalCount > 0 then
-        SB.Append(BuildTestSuite(Context, Feature));
-
+    SB.Append(Blocks);
     SB.AppendLine('</testsuites>');
-
     Result := SB.ToString;
   finally
     SB.Free;
