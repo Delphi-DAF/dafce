@@ -28,7 +28,8 @@ uses
   Daf.Web.Application,
   WebVariant.Feat in 'WebVariant.Feat.pas',
   Binding.Feat in 'Binding.Feat.pas',
-  Http.Feat in 'Http.Feat.pas';
+  Http.Feat in 'Http.Feat.pas',
+  StaticFiles.Feat in 'StaticFiles.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

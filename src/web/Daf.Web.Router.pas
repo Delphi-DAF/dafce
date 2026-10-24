@@ -582,15 +582,33 @@ begin
   TDispatcherAccess(WebDispatcher).BeforeDispatch := WebDispatch;
 end;
 
+// The file a request path names inside the root, or '' when there is no root or the path
+// resolves outside it -- with .., or as an absolute path, which Combine would return as is.
+function StaticFileUnder(const Root, PathInfo: string): string;
+begin
+  Result := '';
+  if Root = '' then
+    Exit;
+  try
+    var FullRoot := IncludeTrailingPathDelimiter(TPath.GetFullPath(Root));
+    var Candidate := TPath.GetFullPath(TPath.Combine(FullRoot, PathInfo.TrimLeft(['/'])));
+    if Candidate.StartsWith(FullRoot, True) and TFile.Exists(Candidate) then
+      Result := Candidate;
+  except
+    // A path with characters no file name can hold names no file.
+    on EArgumentException do
+      Result := '';
+  end;
+end;
+
 procedure TWebRouter.WebDispatch(Sender: TObject; Request: TWebRequest; Response: TWebResponse; var Handled: Boolean);
 begin
   TMonitor.Enter(Self);
   try
     Handled := True;
     Logger.LogInformation('[%s] %s?%s', [Request.Method, Request.PathInfo, Request.Query]);
-    var
-    StaticFilePath := TPath.Combine(FRootDirectory, Request.PathInfo.TrimLeft(['/']));
-    if TFile.Exists(StaticFilePath) then
+    var StaticFilePath := StaticFileUnder(FRootDirectory, Request.PathInfo);
+    if StaticFilePath <> '' then
     begin
       Response.ContentType := TMimeTypes.GetContentType(StaticFilePath);
       Response.ContentStream := TFileStream.Create(StaticFilePath, fmOpenRead or fmShareDenyWrite);

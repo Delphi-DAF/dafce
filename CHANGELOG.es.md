@@ -190,6 +190,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 ### Security
 
 - **SQLCute**: `Where(col, 'in', V)` y `'not in'`, también por `OrWhere`, `WhereNot` y `OrWhereNot`, ligan sus valores como `WhereIn` en vez de escribir `V` en el SQL. Una cadena con una lista (`'1,2,3'`) es ahora un solo valor
+- **Web**: El router sirve ficheros estáticos solo cuando se declara `RootDirectory`, y solo de dentro de ella. Sin raíz servía cualquier fichero del directorio de trabajo, `appsettings.json` incluido; con ella, `..` y las rutas absolutas salían fuera
 
 ## [1.6.0] - 2026-07-20
 

@@ -191,6 +191,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 ### Security
 
 - **SQLCute**: `Where(col, 'in', V)` and `'not in'`, also through `OrWhere`, `WhereNot` and `OrWhereNot`, bind their values like `WhereIn` instead of writing `V` into the SQL. A string with a list (`'1,2,3'`) is now a single value
+- **Web**: The router serves static files only once `RootDirectory` is declared, and only from inside it. With no root it served any file under the working directory, `appsettings.json` included; with one, `..` and absolute paths reached outside it
 
 ## [1.6.0] - 2026-07-20
 

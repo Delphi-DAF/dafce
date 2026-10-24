@@ -105,6 +105,7 @@
         <DCCReference Include="WebVariant.Feat.pas"/>
         <DCCReference Include="Binding.Feat.pas"/>
         <DCCReference Include="Http.Feat.pas"/>
+        <DCCReference Include="StaticFiles.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>
