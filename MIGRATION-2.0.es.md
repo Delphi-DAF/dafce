@@ -614,6 +614,21 @@ Q.Where('id', 'in', '1,2,3');
 Q.WhereIn('id', [1, 2, 3]);
 ```
 
+### 23. MiniSpec: lo que ve distinto una suite escrita para 1.6
+
+Cómo ejecuta y cuenta MiniSpec una suite cambia en estos casos, y ninguno es un error de compilación.
+Una suite que estaba en verde puede salir con escenarios Pending o Undefined, o en rojo.
+
+- **Un step Pending o Undefined de un Background decide el escenario.** El resto del Background y los
+  steps del escenario no se ejecutan, y el escenario cuenta como Pending o como Undefined. En 1.6 el
+  escenario se ejecutaba, y podía contar como aprobado. **Qué rompe**: un step Undefined en un
+  Background hace ahora que la ejecución salga con 1.
+- **Cada Background se ejecuta una vez por escenario, el de la feature antes que el de la regla.** En
+  1.6 el Background de la feature se ejecutaba dos veces en cada escenario, y el de una regla
+  sustituía al de la feature en todos sus escenarios. **Qué rompe**: un step de Background que no es
+  idempotente se ejecutaba dos veces; y una feature con Background propio y reglas con el suyo
+  prepara ahora los escenarios de esas reglas con los dos.
+
 ## Cómo hacerlo
 
 1. Compila. Lo que falte sale como error del compilador, no como comportamiento raro en
@@ -627,6 +642,6 @@ Q.WhereIn('id', [1, 2, 3]);
    `DAF_ENVIRONMENT=Development`: el host valida el contenedor, y un registro que se haya perdido detiene
    la construcción nombrándolo. Un servicio Scoped pedido al proveedor raíz también se rechaza, al
    resolverlo: se resuelve desde un ámbito que abre el trabajo, `Services.CreateScope`.
-6. Las secciones 2, de la 6 a la 13 y de la 15 a la 22 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
+6. Las secciones 2, de la 6 a la 13 y de la 15 a la 23 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
    contra tu propia composición — la vida de los ámbitos, los registros repetidos, las reglas de
    logging y los ajustes del host.

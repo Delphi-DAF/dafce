@@ -383,7 +383,7 @@ end;
 function TBackgroundBuilder<T>.Pending: IBackgroundBuilder<T>;
 begin
   if FBackground.StepsGiven.Count > 0 then
-    FBackground.StepsGiven.Last.MarkAsPending;
+    TScenarioStep<T>(FBackground.StepsGiven.Last).DeclarePending;
   Result := Self;
 end;
 
@@ -611,11 +611,11 @@ function TScenarioBuilder<T>.Pending: IScenarioBuilder<T>;
 begin
   case FLastStep of
     lskGiven: if FScenario.StepsGiven.Count > 0 then
-                FScenario.StepsGiven.Last.MarkAsPending;
+                TScenarioStep<T>(FScenario.StepsGiven.Last).DeclarePending;
     lskWhen:  if FScenario.StepsWhen.Count > 0 then
-                FScenario.StepsWhen.Last.MarkAsPending;
+                TScenarioStep<T>(FScenario.StepsWhen.Last).DeclarePending;
     lskThen:  if FScenario.StepsThen.Count > 0 then
-                FScenario.StepsThen.Last.MarkAsPending;
+                TScenarioStep<T>(FScenario.StepsThen.Last).DeclarePending;
   end;
   Result := Self;
 end;
@@ -831,11 +831,11 @@ function TScenarioOutlineBuilder<T>.Pending: IScenarioOutlineBuilder<T>;
 begin
   case FLastStep of
     lskGiven: if FStepsGiven.Count > 0 then
-                FStepsGiven.Last.MarkAsPending;
+                FStepsGiven.Last.DeclarePending;
     lskWhen:  if FStepsWhen.Count > 0 then
-                FStepsWhen.Last.MarkAsPending;
+                FStepsWhen.Last.DeclarePending;
     lskThen:  if FStepsThen.Count > 0 then
-                FStepsThen.Last.MarkAsPending;
+                FStepsThen.Last.DeclarePending;
   end;
   Result := Self;
 end;

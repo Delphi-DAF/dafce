@@ -10,23 +10,27 @@ MiniSpec proporciona dos formas de marcar steps que no tienen código ejecutable
 
 | Método | Semántica | Resultado | Uso típico |
 |--------|-----------|-----------|------------|
-| `.Pending` | "Pendiente de implementar" | Skip + detiene escenario | Work in progress |
+| `.Pending` | "Pendiente de implementar" | Pending + detiene escenario | Work in progress |
 | `.NoAction` | "Sin acción requerida" | Pass + continúa escenario | Steps puramente descriptivos |
 
 ## Pending
 
-Indica que un step está pendiente de implementar. El escenario se marca como Skip y **no se ejecutan los steps siguientes**:
+Indica que un step está pendiente de implementar. El escenario cuenta como Pending y **no se ejecutan los steps siguientes**:
 
 ```pascal
 .Scenario('Feature en desarrollo')
   .Given('una precondición', procedure(Ctx: TMyWorld) begin end)
   .When('algo pendiente de implementar')
-    .Pending                          // Escenario Skip, no sigue
+    .Pending                          // Escenario Pending, no sigue
   .&Then('nunca se ejecuta', procedure(Ctx: TMyWorld)
     begin
       // Este código no se ejecuta
     end)
 ```
+
+Un step del Background funciona igual: uno `.Pending`, o uno sin binding, deja sin ejecutar el resto
+del Background y los steps del escenario, y el escenario cuenta como Pending o como Undefined, igual
+que si el step fuera suyo.
 
 ## NoAction
 

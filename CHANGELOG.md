@@ -157,6 +157,8 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
   - The JUnit report gives the failure message of every failing scenario —it was always empty— and reports a scenario that raised as failed instead of passed
   - A failing row of a Scenario Outline says which step failed and why, in the console, JSON, gherkin-results and live reports; it only showed its cross
   - A failing Background step fails the scenario it prepares, which no longer runs; the scenario used to run and could pass
+  - A Pending or Undefined step of a Background leaves the scenario Pending or Undefined, with its own steps unrun: the scenario ran, and could count as passed
+  - Each Background runs once per scenario: the feature's ran twice, and a rule's replaced the feature's in every scenario of the feature
 - **Hosting**: `IHostApplicationLifetime.StopApplication` really stops the application: it cancelled `ApplicationStopping` instead of requesting the stop, so `WaitForShutdown` stayed blocked and the `IHostedService`s were never stopped
 - **Hosting**: A process can build more than one host: "Build already called" and the "already stopped" flag were class state, so a harness that sets hosts up and tears them down could only set the first one up
 - **Hosting**: A hosted service whose `Stop` raised left the services after it unstopped and the host unreleased, container included. The shutdown now runs to the end, and `Host.Stop` raises what failed once the host is released: the exception itself, or an `EAggregateException` holding every failure when several steps failed

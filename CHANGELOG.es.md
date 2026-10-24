@@ -156,6 +156,8 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
   - El informe JUnit da el mensaje de fallo de cada escenario que falla —salía siempre vacío— y un escenario que lanzó sale como fallido en vez de como pasado
   - Una fila de Scenario Outline que falla dice qué step falló y por qué, en los informes de consola, JSON, gherkin-results y live; solo enseñaba su aspa
   - Un paso de Background que falla hace fallar el escenario que prepara, que ya no se ejecuta; antes el escenario se ejecutaba y podía pasar
+  - Un step Pending o Undefined de un Background deja el escenario Pending o Undefined, sin ejecutar sus steps: el escenario se ejecutaba, y podía contar como aprobado
+  - Cada Background se ejecuta una vez por escenario: el de la feature se ejecutaba dos veces, y el de una regla sustituía al de la feature en todos sus escenarios
 - **Hosting**: `IHostApplicationLifetime.StopApplication` para de verdad la aplicación: cancelaba `ApplicationStopping` en vez de pedir la parada, así que `WaitForShutdown` seguía bloqueado y los `IHostedService` no se paraban nunca
 - **Hosting**: Un proceso puede construir más de un host: «Build already called» y el «ya parado» eran estado de clase, así que un arnés que monta y desmonta hosts solo podía montar el primero
 - **Hosting**: Un servicio alojado cuyo `Stop` lanzaba dejaba sin parar a los que venían detrás, y el host sin liberar, contenedor incluido. La parada llega ahora hasta el final, y `Host.Stop` lanza lo que falló con el host ya liberado: la misma excepción, o una `EAggregateException` con todos los fallos si fallaron varios pasos

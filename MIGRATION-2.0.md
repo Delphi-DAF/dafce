@@ -615,6 +615,21 @@ Q.Where('id', 'in', '1,2,3');
 Q.WhereIn('id', [1, 2, 3]);
 ```
 
+### 23. MiniSpec: what a suite written for 1.6 sees differently
+
+How MiniSpec runs and counts a suite changes in these cases, and none of them is a compiler error. A
+suite that was green can come out with scenarios Pending or Undefined, or red.
+
+- **A Pending or Undefined step of a Background decides the scenario.** The rest of the Background
+  and the steps of the scenario do not run, and the scenario counts as Pending or Undefined. In 1.6
+  the scenario ran, and could count as passed. **What breaks**: an Undefined step in a Background
+  now makes the run exit with 1.
+- **Each Background runs once per scenario, the feature's before the rule's.** In 1.6 the feature's
+  Background ran twice for every scenario, and the Background of a rule replaced the feature's in
+  every scenario of the feature. **What breaks**: a Background step that is not idempotent ran
+  twice; and a feature with its own Background and rules with theirs now prepares the scenarios of
+  those rules with both.
+
 ## How to do it
 
 1. Compile. Whatever is missing comes out as a compiler error, not as odd behaviour at run time.
@@ -627,6 +642,6 @@ Q.WhereIn('id', [1, 2, 3]);
    the host validates the container, and a registration that went missing stops the build naming it.
    A Scoped service asked of the root provider is rejected too, when it is resolved: resolve it from a
    scope the work opens, `Services.CreateScope`.
-6. Sections 2, 6 to 13 and 15 to 22 carry **run-time** changes: the compiler says nothing about them. Read them
+6. Sections 2, 6 to 13 and 15 to 23 carry **run-time** changes: the compiler says nothing about them. Read them
    against your own composition — scope lifetimes, duplicate registrations, logging rules and
    host settings.

@@ -24,7 +24,8 @@ uses
   InjectionPrecedence.Feat in 'InjectionPrecedence.Feat.pas',
   NestedRun.Feat in 'NestedRun.Feat.pas',
   FailureVisibility.Feat in 'FailureVisibility.Feat.pas',
-  FailureReason.Feat in 'FailureReason.Feat.pas';
+  FailureReason.Feat in 'FailureReason.Feat.pas',
+  BackgroundSteps.Feat in 'BackgroundSteps.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

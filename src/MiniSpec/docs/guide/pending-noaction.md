@@ -10,23 +10,27 @@ MiniSpec provides two ways to mark steps that have no executable code:
 
 | Method | Semantics | Result | Typical use |
 |--------|-----------|--------|-------------|
-| `.Pending` | "Pending implementation" | Skip + stops scenario | Work in progress |
+| `.Pending` | "Pending implementation" | Pending + stops scenario | Work in progress |
 | `.NoAction` | "No action required" | Pass + continues scenario | Purely descriptive steps |
 
 ## Pending
 
-Indicates a step is pending implementation. The scenario is marked as Skip and **following steps are not executed**:
+Indicates a step is pending implementation. The scenario counts as Pending and **following steps are not executed**:
 
 ```pascal
 .Scenario('Feature in development')
   .Given('a precondition', procedure(Ctx: TMyWorld) begin end)
   .When('something pending implementation')
-    .Pending                          // Scenario Skip, doesn't continue
+    .Pending                          // Scenario Pending, doesn't continue
   .&Then('never executes', procedure(Ctx: TMyWorld)
     begin
       // This code does not execute
     end)
 ```
+
+A step of the Background works the same way: a `.Pending` step, or one with no binding, leaves the
+rest of the Background and the steps of the scenario unrun, and the scenario counts as Pending or
+Undefined, as if the step were its own.
 
 ## NoAction
 

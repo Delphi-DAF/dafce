@@ -350,6 +350,12 @@ type
     procedure ClearCapturedRaise;
     function ConsumeCapturedRaise: TCapturedRaise;
     function GetFailedStep: IScenarioStep;
+    /// <summary>
+    ///   Ends this scenario without running it, as Pending or Undefined: what a step of its
+    ///   Background with that result decides. Its steps are left Skipped and it counts with that
+    ///   result, so, like MarkAsError, it replaces the run.
+    /// </summary>
+    procedure SkipWith(const Outcome: TSpecRunResult);
     property StepsWhen: TList<IScenarioStep> read GetStepsWhen;
     property StepsThen: TList<IScenarioStep> read GetStepsThen;
     property ExampleMeta: TExampleMeta read GetExampleMeta;
@@ -572,6 +578,7 @@ type
   strict private
     FProc: TStepProc<T>;
     FDataTable: TDataTableObj;
+    FDeclaredPending: Boolean;
     function GetDataTable: TDataTableObj;
   protected
   public
@@ -583,6 +590,11 @@ type
     /// Replaces the step procedure. Used by NoAction to replace a pending step with an empty one.
     /// </summary>
     procedure SetProc(const AProc: TStepProc<T>);
+    /// <summary>
+    ///   Declares the step Pending, as <c>.Pending</c> does: every run of it ends Pending without
+    ///   executing it.
+    /// </summary>
+    procedure DeclarePending;
     property Proc: TStepProc<T> read FProc;
     property DataTable: TDataTableObj read GetDataTable;
   end;
@@ -652,6 +664,7 @@ type
     function &Then(const Desc: string; Step: TStepProc<T>) : TScenario<T>; overload;
     function &Then(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): TScenario<T>; overload;
     procedure Run(World: TObject);override;
+    procedure SkipWith(const Outcome: TSpecRunResult);
     property Feature: IFeature read GetFeature;
     property ExampleMeta: TExampleMeta read GetExampleMeta;
     property StepsGiven: TList<IScenarioStep> read GetStepsGiven;
@@ -772,8 +785,8 @@ type
     procedure SetBackGround(const Value: IBackground);
     function GetFeature: IFeature;
   private
-    procedure RunBackground(World: T);
-    procedure RunCheckedBackground(const Background: IBackground; World: T);
+    function RunBackground(World: T): TSpecRunResult;
+    function RunCheckedBackground(const Background: IBackground; World: T): TSpecRunResult;
     function GetScenarios: TList<IScenario>;
     function CreateWorld: T;
   public
@@ -1197,6 +1210,11 @@ begin
   FProc := AProc;
 end;
 
+procedure TScenarioStep<T>.DeclarePending;
+begin
+  FDeclaredPending := True;
+end;
+
 function TScenarioStep<T>.GetDataTable: TDataTableObj;
 begin
   Result := FDataTable;
@@ -1206,9 +1224,14 @@ procedure TScenarioStep<T>.Run(World: TObject);
 var
   Ctx: TSpecContextImpl;
 begin
-  // If already marked (pending/skipped/undefined set before execution), don't run
-  if FRunInfo.Result in [srrPending, srrSkipped, srrUndefined] then
+  // Every run starts from what the builder declared, not from the result of the previous one: the
+  // steps of a Background are the same objects for every scenario it prepares.
+  if FDeclaredPending then
+  begin
+    FRunInfo.Clear;
+    MarkAsPending;
     Exit;
+  end;
 
   var SW := TStopwatch.StartNew;
   try
@@ -1286,7 +1309,6 @@ constructor TBackground<T>.Create(const Feature: IFeature);
 begin
   inherited Create(sikBackground, Feature, Description);
   FStepsGiven := TList<IScenarioStep>.Create;
-  Feature.Background := Self;
 end;
 
 destructor TBackground<T>.Destroy;
@@ -1338,16 +1360,21 @@ end;
 
 procedure TBackground<T>.RunSteps(Steps: TList<IScenarioStep>; World: TObject);
 begin
+  // A step that fails, is Pending or is Undefined leaves the rest unrun and gives its result to the
+  // Background, as it would to a scenario if the step were its own.
   for var Step in Steps do
   begin
-    if FRunInfo.Result = srrFail then
+    if FRunInfo.Result <> srrSuccess then
     begin
       Step.MarkAsSkipped;
       Continue;
     end;
     Step.Run(World);
-    if Step.RunInfo.Result in [srrFail, srrError] then
-      FRunInfo.Result := srrFail;
+    case Step.RunInfo.Result of
+      srrFail, srrError: FRunInfo.Result := srrFail;
+      srrPending: FRunInfo.Result := srrPending;
+      srrUndefined: FRunInfo.Result := srrUndefined;
+    end;
   end;
 end;
 
@@ -1561,6 +1588,24 @@ begin
   end;
 end;
 
+procedure TScenario<T>.SkipWith(const Outcome: TSpecRunResult);
+begin
+  Assert(Outcome in [srrPending, srrUndefined]);
+  for var Step in FStepsGiven do
+    Step.MarkAsSkipped;
+  for var Step in FStepsWhen do
+    Step.MarkAsSkipped;
+  for var Step in FStepsThen do
+    Step.MarkAsSkipped;
+  FRunInfo.Clear;
+  FRunInfo.Result := Outcome;
+  FRunInfo.State := srsFinished;
+  if Outcome = srrPending then
+    IncCount(rkPending)
+  else
+    IncCount(rkUndefined);
+end;
+
 function TScenario<T>.When(const Desc: string; Step: TStepProc<T>): TScenario<T>;
 begin
   Result := Self;
@@ -1639,15 +1684,17 @@ begin
       try
         SpecContext.Injector.InjectInto(ExampleWorld);
         // Lo que falla preparando una fila es un fallo de esa fila, no del Outline entero.
-        var Prepared := True;
+        var Prepared := srrSuccess;
         try
-          Rule.RunBackground(ExampleWorld);
+          Prepared := Rule.RunBackground(ExampleWorld);
         except
           Example.MarkAsError;
-          Prepared := False;
+          Prepared := srrError;
         end;
-        if Prepared then
-          Example.Run(ExampleWorld);
+        if Prepared = srrSuccess then
+          Example.Run(ExampleWorld)
+        else if Prepared in [srrPending, srrUndefined] then
+          Example.SkipWith(Prepared);
         if not Example.RunInfo.IsSuccess then
           FRunInfo.Result := srrFail;
       finally
@@ -2031,20 +2078,31 @@ begin
   Result := T.Create;
 end;
 
-procedure TRule<T>.RunBackground(World: T);
+function TRule<T>.RunBackground(World: T): TSpecRunResult;
 begin
-  // Primero ejecutar Background de Feature, luego el de Rule
-  if Assigned(FFeature) and Assigned(FFeature.BackGround) then
-    RunCheckedBackground(FFeature.BackGround, World);
+  // Primero ejecutar Background de Feature, luego el de Rule. Uno Pending o Undefined deja sin
+  // ejecutar los steps del otro, y su resultado es el del escenario. La feature guarda su Background
+  // en la regla implicita, asi que para esa los dos son el mismo y se ejecuta una vez.
+  Result := srrSuccess;
+  if Assigned(FFeature) and Assigned(FFeature.BackGround) and (FFeature.BackGround <> FBackground) then
+    Result := RunCheckedBackground(FFeature.BackGround, World);
   if Assigned(FBackground) then
-    RunCheckedBackground(FBackground, World);
+    if Result = srrSuccess then
+      Result := RunCheckedBackground(FBackground, World)
+    else
+      for var Step in FBackground.StepsGiven do
+        Step.MarkAsSkipped;
 end;
 
-procedure TRule<T>.RunCheckedBackground(const Background: IBackground; World: T);
+function TRule<T>.RunCheckedBackground(const Background: IBackground; World: T): TSpecRunResult;
 begin
   // Un Background que falla deja sin sentido el escenario que prepara: se corta aqui, como
   // cualquier otro fallo al preparar un escenario, con el step que fallo y su mensaje.
   Background.Run(World);
+  Result := Background.RunInfo.Result;
+  if Result in [srrPending, srrUndefined] then
+    Exit;
+  Result := srrSuccess;
   if not (Background.RunInfo.Result in [srrFail, srrError]) then
     Exit;
   for var Step in Background.StepsGiven do
@@ -2109,8 +2167,11 @@ begin
             SpecContext.SetScenarioContext(World);
             try
               SpecContext.Injector.InjectInto(World);
-              RunBackground(World);
-              Scenario.Run(World);
+              var Prepared := RunBackground(World);
+              if Prepared = srrSuccess then
+                Scenario.Run(World)
+              else
+                Scenario.SkipWith(Prepared);
             finally
               SpecContext.SetScenarioContext(nil);
               SpecContext.Injector.Unregister(csScenario);
