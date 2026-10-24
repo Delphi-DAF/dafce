@@ -516,6 +516,36 @@ type
   TThrower = class(TInterfacedObject, IThrower)
   end;
 
+  ISelfResolving = interface(IInvokable)
+    ['{D85F2A31-6C07-4B94-8E2D-1A9C3F7B0E62}']
+  end;
+
+  /// Su constructor pide su propio servicio al proveedor.
+  TSelfResolving = class(TInterfacedObject, ISelfResolving)
+  public
+    constructor Create(const Provider: IServiceProvider);
+  end;
+
+  IFlakyWired = interface(IInvokable)
+    ['{A2C47E19-5B83-4D06-9E71-3F8B0D6C2A45}']
+    function Describe: string;
+  end;
+
+  /// Se numera al construirse y cuenta construcciones y destrucciones: lo que distingue «se volvio a
+  /// construir» de «se entrego la misma».
+  TFlakyWired = class(TInterfacedObject, IFlakyWired)
+  private
+    FNumber: Integer;
+    FWired: string;
+  public
+    class var Created: Integer;
+    class var Destroyed: Integer;
+    constructor Create;
+    destructor Destroy; override;
+    procedure MarkWired;
+    function Describe: string;
+  end;
+
   // --- Decoracion ---
 
   IDecoratedSvc = interface(IInvokable)
@@ -887,6 +917,39 @@ end;
 
 { TInjectionWorld }
 
+{ TSelfResolving }
+
+constructor TSelfResolving.Create(const Provider: IServiceProvider);
+begin
+  inherited Create;
+  Provider.GetRequiredService<ISelfResolving>;
+end;
+
+{ TFlakyWired }
+
+constructor TFlakyWired.Create;
+begin
+  inherited Create;
+  Inc(Created);
+  FNumber := Created;
+end;
+
+destructor TFlakyWired.Destroy;
+begin
+  Inc(Destroyed);
+  inherited;
+end;
+
+procedure TFlakyWired.MarkWired;
+begin
+  FWired := 'wired';
+end;
+
+function TFlakyWired.Describe: string;
+begin
+  Result := Format('#%d %s', [FNumber, FWired]);
+end;
+
 { TDecoratedOriginal }
 
 destructor TDecoratedOriginal.Destroy;
@@ -924,6 +987,8 @@ begin
   inherited;
   TDecoratedOriginal.Destroyed := 0;
   TDecoratorSvc.Destroyed := 0;
+  TFlakyWired.Created := 0;
+  TFlakyWired.Destroyed := 0;
   TBySetter.SetterRuns := 0;
   TCounted.Destroyed := 0;
   TCtorReader.StorageInCtorWasNil := False;
@@ -1585,6 +1650,75 @@ Feature Property injection @di @injection
         Expect(W.Held = nil).ToBeTrue;
       end)
 
+.Rule('An instance whose wiring fails is not left published')
+
+  .Scenario('The second resolution builds again')
+    .Given('a Singleton whose code wiring always raises',
+      procedure(W: TInjectionWorld)
+      begin
+        W.Services.AddSingleton<IFlakyWired, TFlakyWired>;
+        W.Services.AddInjector<TFlakyWired>(
+          procedure(const Instance: TFlakyWired; const Provider: IServiceProvider)
+          begin
+            raise Exception.Create('wiring refused');
+          end);
+      end)
+    .When('it is resolved twice',
+      procedure(W: TInjectionWorld)
+      begin
+        W.Build;
+        W.Report := '';
+        for var Round := 1 to 2 do
+          try
+            W.Report := W.Report + W.Provider.GetRequiredService<IFlakyWired>.Describe + '; ';
+          except
+            on E: Exception do
+              W.Report := W.Report + E.Message + '; ';
+          end;
+      end)
+    .&Then('both resolutions fail with that error',
+      procedure(W: TInjectionWorld)
+      begin
+        Expect(W.Report).ToEqual('wiring refused; wiring refused; ');
+      end)
+    .&And('two instances were built, and none is alive',
+      procedure(W: TInjectionWorld)
+      begin
+        Expect(Format('built %d, destroyed %d', [TFlakyWired.Created, TFlakyWired.Destroyed])).ToEqual('built 2, destroyed 2');
+      end)
+
+  .Scenario('A failure that does not repeat leaves no trace')
+    .Given('a Singleton whose code wiring raises only the first time',
+      procedure(W: TInjectionWorld)
+      begin
+        W.Services.AddSingleton<IFlakyWired, TFlakyWired>;
+        W.Services.AddInjector<TFlakyWired>(
+          procedure(const Instance: TFlakyWired; const Provider: IServiceProvider)
+          begin
+            if TFlakyWired.Created = 1 then
+              raise Exception.Create('wiring refused');
+            Instance.MarkWired;
+          end);
+      end)
+    .When('it is resolved twice',
+      procedure(W: TInjectionWorld)
+      begin
+        W.Build;
+        W.Report := '';
+        for var Round := 1 to 2 do
+          try
+            W.Report := W.Report + W.Provider.GetRequiredService<IFlakyWired>.Describe + '; ';
+          except
+            on E: Exception do
+              W.Report := W.Report + E.Message + '; ';
+          end;
+      end)
+    .&Then('the second resolution hands over an instance with its wiring complete, and not the discarded one',
+      procedure(W: TInjectionWorld)
+      begin
+        Expect(W.Report).ToEqual('wiring refused; #2 wired; ');
+      end)
+
 .Rule('The container wires what it builds from a class, and nothing else')
 
   .Scenario('What a factory returns is not wired')
@@ -1792,6 +1926,26 @@ Feature Property injection @di @injection
       procedure(W: TInjectionWorld)
       begin
         Expect(W.Provider <> nil).ToBeTrue;
+      end)
+
+  .Scenario('A constructor that resolves its own service fails with the cycle error')
+    .Given('a Singleton whose constructor asks the provider for its own service',
+      procedure(W: TInjectionWorld)
+      begin
+        W.Services.AddSingleton<ISelfResolving, TSelfResolving>;
+      end)
+    .When('it is resolved',
+      procedure(W: TInjectionWorld)
+      begin
+        W.Build;
+        W.Attempt(procedure begin W.Held := W.Provider.GetRequiredService<ISelfResolving>; end);
+      end)
+    .&Then('it fails with an error naming the cycle, and hands nothing over',
+      procedure(W: TInjectionWorld)
+      begin
+        Expect(W.Outcome).ToContain('cycle');
+        Expect(W.Outcome).ToContain('ISelfResolving');
+        Expect(W.Held = nil).ToBeTrue;
       end)
 
   .Scenario('A cycle going through a transient fails naming itself')

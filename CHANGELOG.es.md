@@ -77,7 +77,6 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 ### Changed
 
 - ⚠️ **DependencyInjection**: Soltar un ámbito **destruye los servicios Scoped que creó**. Antes los retenía hasta cerrarse, así que un ámbito por petición acumulaba una instancia por petición. **Rompe** a quien guardase una referencia a un Scoped sin sostenerla
-- ⚠️ **DependencyInjection**: La resolución **publica la instancia antes de rellenar sus propiedades**, participe o no en la inyección por propiedad. **Rompe** el constructor que resuelve su propio servicio: recibe la instancia a medio construir en vez de recursar sin fondo
 - ⚠️ **DependencyInjection**: Un registro repetido **pasa a dar dos instancias**; pedirlos todos devolvía la primera dos veces. Resolver uno solo y el orden de cierre no cambian
 - ⚠️ **DependencyInjection**: `CanResolve` sobre un contenedor cerrado lanza `EContainerShutDownError`, como resolver; antes contestaba como si siguiera abierto. **Rompe** a quien le preguntaba después de `ShutDown`
 - ⚠️ **DependencyInjection**: Una clase cuyos constructores el contenedor no puede satisfacer falla con `EServiceProviderError` nombrando el parámetro, en vez de construirse con el constructor de un ancestro y la dependencia a `nil`. **Rompe** un registro que solo funcionaba gracias a esa caída

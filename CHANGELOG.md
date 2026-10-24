@@ -78,7 +78,6 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 ### Changed
 
 - ⚠️ **DependencyInjection**: Releasing a scope **destroys the Scoped services it created**. The container used to retain them until it closed, so one scope per request piled up one instance per request. **Breaks** whoever kept a reference to a Scoped service without holding it
-- ⚠️ **DependencyInjection**: Resolution **publishes the instance before filling its properties**, whether or not it takes part in property injection. **Breaks** the constructor that resolves its own service: it now receives the half-built instance instead of recursing without end
 - ⚠️ **DependencyInjection**: A repeated registration **now gives two instances**; asking for all of them returned the first one twice. Resolving a single one, and the shutdown order, do not change
 - ⚠️ **DependencyInjection**: `CanResolve` on a closed container raises `EContainerShutDownError`, like resolving; it used to answer as if the container were open. **Breaks** whoever asked it after `ShutDown`
 - ⚠️ **DependencyInjection**: A class whose constructors the container cannot satisfy fails with `EServiceProviderError` naming the parameter, instead of being built through an ancestor's constructor with the dependency at `nil`. **Breaks** a registration that only worked thanks to that fallback

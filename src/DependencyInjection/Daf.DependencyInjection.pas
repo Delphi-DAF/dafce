@@ -112,6 +112,8 @@ type
     // Las instancias que este ambito cableo, las unicas a las que vacia las propiedades al cerrar.
     // Se lee y se escribe bajo FInstancesLock.
     FWired: TDictionary<Pointer, Byte>;
+    // Las instancias publicadas cuyo cableado sigue en curso. Bajo FInstancesLock.
+    FWiring: TDictionary<TServiceIdentity, Byte>;
     // Los dos cerrojos del ambito. La regla: FInstancesLock se toma y se suelta en linea recta
     // --para leer, o para anadir-- y nunca se sostiene mientras se pide FBuildLock ni mientras
     // corre un constructor. Anidar dos tomas suyas, o leer teniendo la escritura, BLOQUEA sin
@@ -134,7 +136,7 @@ type
       const MatchedOpen, MatchedAnyKey: Boolean): TServiceDescriptor;
     function GetSingletonsScope: IServiceResolver;
     procedure AddServiceInstance(const Descriptor: TServiceDescriptor; const Service: IInterface);
-    function TryGetInstance(const Identity: TServiceIdentity; out Service: IInterface): Boolean;
+    function TryGetInstance(const Identity: TServiceIdentity; const InBuild: Boolean; out Service: IInterface): Boolean;
     procedure RemoveFirstInstance;
     function InstanceCount: Integer;
     function CanResolve(const Slot: TServiceSlot): Boolean;
@@ -1073,18 +1075,19 @@ begin
   // Comparador explicito y no el binario por defecto: TServiceIdentity tiene dos campos de
   // tamaños distintos, asi que en 64 bits lleva relleno, y el relleno de un record sin
   // inicializar no vale como parte de una clave.
-  FServiceInstances := TOrderedDictionary<TServiceIdentity, IInterface>.Create(
-    TEqualityComparer<TServiceIdentity>.Construct(
-      function(const A, B: TServiceIdentity): Boolean
-      begin
-        Result := A = B;
-      end,
-      function(const Value: TServiceIdentity): Integer
-      begin
-        Result := Integer(Value.Registration) xor Integer(NativeInt(Value.ClosedType)) xor
-          ServiceKey.HashOf(Value.ServedKey);
-      end));
+  var IdentityComparer := TEqualityComparer<TServiceIdentity>.Construct(
+    function(const A, B: TServiceIdentity): Boolean
+    begin
+      Result := A = B;
+    end,
+    function(const Value: TServiceIdentity): Integer
+    begin
+      Result := Integer(Value.Registration) xor Integer(NativeInt(Value.ClosedType)) xor
+        ServiceKey.HashOf(Value.ServedKey);
+    end);
+  FServiceInstances := TOrderedDictionary<TServiceIdentity, IInterface>.Create(IdentityComparer);
   FWired := TDictionary<Pointer, Byte>.Create;
+  FWiring := TDictionary<TServiceIdentity, Byte>.Create(IdentityComparer);
   FIsSingletonsScope := SingletonsScope;
   FBuildLock := TCriticalSection.Create;
   FServiceCollection := Factory.ServiceCollection;
@@ -1129,6 +1132,7 @@ begin
   Shutdown;
   FreeAndNil(FServiceInstances);
   FreeAndNil(FWired);
+  FreeAndNil(FWiring);
   FreeAndNil(FBuildLock);
   inherited;
 end;
@@ -1143,11 +1147,16 @@ begin
   end;
 end;
 
-function TServiceScope.TryGetInstance(const Identity: TServiceIdentity; out Service: IInterface): Boolean;
+function TServiceScope.TryGetInstance(const Identity: TServiceIdentity; const InBuild: Boolean;
+  out Service: IInterface): Boolean;
 begin
+  // Una instancia en cableado solo se entrega dentro de FBuildLock, donde solo esta el hilo que la
+  // construye.
   FInstancesLock.BeginRead;
   try
-    Result := FServiceInstances.TryGetValue(Identity, Service);
+    Result := FServiceInstances.TryGetValue(Identity, Service) and (InBuild or not FWiring.ContainsKey(Identity));
+    if not Result then
+      Service := nil;
   finally
     FInstancesLock.EndRead;
   end;
@@ -1246,14 +1255,14 @@ begin
   CheckNotShutDown(Descriptor.TypeInfo);
 
   var ServiceIdentity := GetServiceIdentity(Descriptor);
-  if TryGetInstance(ServiceIdentity, Result) then Exit;
+  if TryGetInstance(ServiceIdentity, False, Result) then Exit;
 
   FBuildLock.Acquire;
   try
     // La segunda comprobacion no es una precaucion opcional: entre la lectura de arriba y este
     // cerrojo otro hilo pudo construirlo. Sin ella la ventana sigue abierta, mas estrecha -- y
     // una carrera mas estrecha es peor, porque aparece en produccion y no en los tests.
-    if TryGetInstance(ServiceIdentity, Result) then Exit;
+    if TryGetInstance(ServiceIdentity, True, Result) then Exit;
 
     var Frame: TCreationFrame;
     BeginCreate(Frame, Descriptor);
@@ -1280,20 +1289,48 @@ begin
           AddServiceInstance(Descriptor, nil);
         Exit;
       end;
+      // Solo se cablea lo construido por clase: lo que devuelve una factory, o una instancia
+      // registrada, es de quien lo construyo.
+      if Descriptor.ImplementationClass = nil then
+      begin
+        AddServiceInstance(Descriptor, Result);
+        Exit;
+      end;
       // Publicar y DESPUES cablear, en ese orden. Mientras la instancia no este en el diccionario,
       // quien la vuelva a pedir --ella misma, o alguien a quien ella pide-- entra otra vez a
-      // construirla, y ahi no hay fondo. Solo se cablea lo construido por clase: lo que devuelve una
-      // factory, o una instancia registrada, es de quien lo construyo.
-      AddServiceInstance(Descriptor, Result);
-      if Descriptor.ImplementationClass <> nil then
-      begin
+      // construirla, y ahi no hay fondo. Se publica marcada «en cableado», de una vez: otro hilo no
+      // la recibe hasta que la marca se quita.
+      var Instance := InstanceOf(Result);
+      FInstancesLock.BeginWrite;
+      try
+        FServiceInstances.Add(ServiceIdentity, Result);
+        FWired.AddOrSetValue(Instance, 0);
+        FWiring.AddOrSetValue(ServiceIdentity, 0);
+      finally
+        FInstancesLock.EndWrite;
+      end;
+      try
+        TActivatorUtilities.Wire(Provider, Instance);
+      except
+        // Un cableado que falla no deja nada publicado: la siguiente resolucion vuelve a construir.
+        // La entrada se quita bajo el cerrojo, y las propiedades se vacian fuera, antes de soltarla.
         FInstancesLock.BeginWrite;
         try
-          FWired.AddOrSetValue(InstanceOf(Result), 0);
+          FServiceInstances.Remove(ServiceIdentity);
+          FWired.Remove(Instance);
+          FWiring.Remove(ServiceIdentity);
         finally
           FInstancesLock.EndWrite;
         end;
-        TActivatorUtilities.Wire(Provider, InstanceOf(Result));
+        TActivatorUtilities.ClearInjected(Instance);
+        Result := nil;
+        raise;
+      end;
+      FInstancesLock.BeginWrite;
+      try
+        FWiring.Remove(ServiceIdentity);
+      finally
+        FInstancesLock.EndWrite;
       end;
     finally
       EndCreate(Frame);

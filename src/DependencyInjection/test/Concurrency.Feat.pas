@@ -87,6 +87,20 @@ type
     function Serial: Integer;
   end;
 
+  IWiredRacer = interface(IInvokable)
+    ['{4C0A9E11-0004-4B77-9E4E-2F6D1B0A7C04}']
+    function WiringDone: Boolean;
+  end;
+
+  /// Lo que su cableado por codigo deja hecho, para ver si alguien lo recibio antes de tiempo.
+  TWiredRacer = class(TInterfacedObject, IWiredRacer)
+  private
+    FWiringDone: Boolean;
+  public
+    procedure FinishWiring;
+    function WiringDone: Boolean;
+  end;
+
   /// <summary>
   ///   Captura lo que pasa en cada hilo en vez de dejarlo escapar, y lo devuelve en informes que
   ///   NOMBRAN los numeros. Un `ToBeEmpty` o un `ToBeTrue` no imprimen el valor, asi que el fallo
@@ -101,6 +115,9 @@ type
     FOutcomes: TArray<string>;
     FCtorGate: TEvent;
     FInCtorGate: TEvent;
+    // La cita de un cableado: avisa de que esta dentro y espera a la puerta.
+    FInWiring: TEvent;
+    FWiringGate: TEvent;
     FSameFromCreator: Integer;
     FTimedOut: Boolean;
     procedure Race(const Count: Integer; const Body: TProc<Integer>);
@@ -113,10 +130,18 @@ type
     SharedScope: IServiceScope;
     OwnedBefore, OwnedAfter: Integer;
     Closed: Boolean;
+    Report: string;
     constructor Create;
     destructor Destroy; override;
 
     procedure Register(const LifeTime: TServiceLifeTime);
+    /// Un Singleton IWiredRacer cuyo cableado por codigo cumple la cita de FInWiring y FWiringGate.
+    procedure RegisterWiredRacer;
+    /// Un hilo lo construye y, con su cableado dentro, otro hilo lo pide. Deja en Report si el
+    /// segundo lo pidio con la puerta cerrada y si lo recibio cableado.
+    procedure AskWhileWiring;
+    /// Un hilo resuelve uno de dos servicios que se piden por propiedad; deja en Report lo que ve.
+    procedure ResolvePropertyCycleInThread;
     procedure NoCtorDelay;
     procedure HoldCtorUntilClosed;
     procedure RegisterOther(const LifeTime: TServiceLifeTime);
@@ -169,7 +194,8 @@ uses
   System.Diagnostics,
   Daf.MiniSpec,
   Daf.Rtti,
-  Daf.DependencyInjection;
+  Daf.DependencyInjection,
+  PropertyInjection.Feat;
 
 { TRacer }
 
@@ -245,6 +271,8 @@ begin
   TOther.Reset;
   FCtorGate := TEvent.Create(nil, True, False, '');
   FInCtorGate := TEvent.Create(nil, True, False, '');
+  FInWiring := TEvent.Create(nil, True, False, '');
+  FWiringGate := TEvent.Create(nil, True, False, '');
   Services := TServiceCollection.Create;
 end;
 
@@ -263,6 +291,8 @@ begin
     Provider.ShutDown;
   FCtorGate.Free;
   FInCtorGate.Free;
+  FInWiring.Free;
+  FWiringGate.Free;
   inherited;
 end;
 
@@ -314,6 +344,100 @@ end;
 procedure TConcurrencyWorld.OpenSharedScope;
 begin
   SharedScope := Provider.CreateScope;
+end;
+
+{ TWiredRacer }
+
+procedure TWiredRacer.FinishWiring;
+begin
+  FWiringDone := True;
+end;
+
+function TWiredRacer.WiringDone: Boolean;
+begin
+  Result := FWiringDone;
+end;
+
+procedure TConcurrencyWorld.RegisterWiredRacer;
+begin
+  var InWiring := FInWiring;
+  var Gate := FWiringGate;
+  Services.AddSingleton<IWiredRacer, TWiredRacer>;
+  Services.AddInjector<TWiredRacer>(
+    procedure(const Instance: TWiredRacer; const Provider: IServiceProvider)
+    begin
+      InWiring.SetEvent;
+      Gate.WaitFor(10000);
+      Instance.FinishWiring;
+    end);
+end;
+
+procedure TConcurrencyWorld.AskWhileWiring;
+var
+  BuilderDone, AskerDone: TEvent;
+  AskedWhileClosed, ReceivedWired: Boolean;
+  AskerFailure: string;
+begin
+  AskedWhileClosed := False;
+  ReceivedWired := False;
+  AskerFailure := '';
+  BuilderDone := TEvent.Create(nil, True, False, '');
+  AskerDone := TEvent.Create(nil, True, False, '');
+  try
+    TThread.CreateAnonymousThread(
+      procedure
+      begin
+        try
+          Provider.GetRequiredService<IWiredRacer>;
+        except
+          on Exception do ;
+        end;
+        BuilderDone.SetEvent;
+      end).Start;
+    if FInWiring.WaitFor(10000) <> wrSignaled then
+    begin
+      FWiringGate.SetEvent;
+      BuilderDone.WaitFor(10000);
+      Report := 'the wiring never started';
+      Exit;
+    end;
+    TThread.CreateAnonymousThread(
+      procedure
+      begin
+        try
+          AskedWhileClosed := FWiringGate.WaitFor(0) <> wrSignaled;
+          ReceivedWired := Provider.GetRequiredService<IWiredRacer>.WiringDone;
+        except
+          on E: Exception do AskerFailure := ' (' + E.ClassName + ')';
+        end;
+        AskerDone.SetEvent;
+      end).Start;
+    // Quien espera al cableado no termina antes del plazo; quien recibe la instancia a medias,
+    // termina enseguida. La puerta se abre en los dos casos.
+    AskerDone.WaitFor(1500);
+    FWiringGate.SetEvent;
+    AskerDone.WaitFor(10000);
+    BuilderDone.WaitFor(10000);
+    Report := Format('asked while wiring=%s, received wired=%s%s',
+      [BoolToStr(AskedWhileClosed, True), BoolToStr(ReceivedWired, True), AskerFailure]);
+  finally
+    AskerDone.Free;
+    BuilderDone.Free;
+  end;
+end;
+
+procedure TConcurrencyWorld.ResolvePropertyCycleInThread;
+begin
+  Race(1,
+    procedure(Idx: Integer)
+    begin
+      var Alpha := Provider.GetRequiredService<IAlphaSvc>;
+      var Beta := Alpha.Peer;
+      Report := Format('alpha->beta=%s, beta->alpha=%s',
+        [BoolToStr(Beta <> nil, True), BoolToStr((Beta <> nil) and (Beta.Peer = Alpha), True)]);
+    end);
+  if FFailures[0] <> '' then
+    Report := FFailures[0];
 end;
 
 procedure TConcurrencyWorld.Race(const Count: Integer; const Body: TProc<Integer>);
@@ -982,6 +1106,45 @@ Feature Resolving from several threads at once @di @concurrency
       procedure(W: TConcurrencyWorld)
       begin
         Expect(W.TeardownReport).ToEqual('construidos=1, destruidos=1, vivos=0');
+      end)
+
+.Rule('Another thread does not receive a service half wired')
+
+  .Scenario('Another thread waits for the wiring to finish')
+    .Given('a Singleton whose code wiring is under way in one thread',
+      procedure(W: TConcurrencyWorld)
+      begin
+        W.RegisterWiredRacer;
+        W.Build;
+      end)
+    .When('another thread resolves it',
+      procedure(W: TConcurrencyWorld)
+      begin
+        W.AskWhileWiring;
+      end)
+    .&Then('it receives it with the wiring finished, having asked while the wiring was still under way',
+      procedure(W: TConcurrencyWorld)
+      begin
+        Expect(W.Report).ToEqual('asked while wiring=True, received wired=True');
+      end)
+
+  .Scenario('A cycle by property is still resolved in the thread that builds it')
+    .Given('two Singletons that ask for each other by marked property',
+      procedure(W: TConcurrencyWorld)
+      begin
+        W.Services.AddSingleton<IAlphaSvc, TAlphaSvc>;
+        W.Services.AddSingleton<IBetaSvc, TBetaSvc>;
+        W.Build;
+      end)
+    .When('one thread resolves one of the two',
+      procedure(W: TConcurrencyWorld)
+      begin
+        W.ResolvePropertyCycleInThread;
+      end)
+    .&Then('each one has its property towards the other filled, with no error',
+      procedure(W: TConcurrencyWorld)
+      begin
+        Expect(W.Report).ToEqual('alpha->beta=True, beta->alpha=True');
       end)
 
 .Rule('Closing while another thread resolves ends in a defined state')

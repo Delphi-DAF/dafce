@@ -111,6 +111,14 @@ type
     constructor Create; overload;
   end;
 
+  /// Su constructor lanza; cuenta sus destrucciones.
+  TRaisingCtor = class(TChoosing)
+  public
+    class var Destroyed: Integer;
+    constructor Create;
+    destructor Destroy; override;
+  end;
+
   TSelectionWorld = class
   public
     Services: IServiceCollection;
@@ -247,6 +255,18 @@ begin
   FChosen := 'empty';
 end;
 
+constructor TRaisingCtor.Create;
+begin
+  inherited Create;
+  raise Exception.Create('the constructor refused');
+end;
+
+destructor TRaisingCtor.Destroy;
+begin
+  Inc(Destroyed);
+  inherited;
+end;
+
 /// Registra IAlphaSel, IBetaSel e IGammaSel.
 procedure RegisterAll(const W: TSelectionWorld);
 begin
@@ -261,6 +281,7 @@ constructor TSelectionWorld.Create;
 begin
   inherited;
   TMarkedOrEmpty.EmptyRuns := 0;
+  TRaisingCtor.Destroyed := 0;
   Outcome := '<sin intentar>';
   Services := TServiceCollection.Create;
 end;
@@ -376,6 +397,31 @@ Feature Constructor selection @di @constructor-selection
       procedure(W: TSelectionWorld)
       begin
         Expect(W.Outcome + ' / ' + W.Report).ToEqual(NoFailure + ' / alpha');
+      end)
+
+.Rule('The error of a constructor that raises reaches whoever resolves')
+
+  .Scenario('A constructor that raises')
+    .Given('a registered class whose constructor raises',
+      procedure(W: TSelectionWorld)
+      begin
+        W.Services.AddTransient<ISel, TRaisingCtor>;
+      end)
+    .When('it is resolved',
+      procedure(W: TSelectionWorld)
+      begin
+        W.Build;
+        W.Attempt(procedure begin W.Report := W.Provider.GetRequiredService<ISel>.Chosen; end);
+      end)
+    .&Then('the error that reaches the caller is the one the constructor raised',
+      procedure(W: TSelectionWorld)
+      begin
+        Expect(W.Outcome).ToEqual('Exception: the constructor refused');
+      end)
+    .&And('the half built instance was destroyed',
+      procedure(W: TSelectionWorld)
+      begin
+        Expect(TRaisingCtor.Destroyed).ToEqual(1);
       end)
 
 .Rule('The constructor mark only counts in the activator')

@@ -171,6 +171,19 @@ begin
   end;
 end;
 
+// Destruye una instancia cuyo constructor lanzo, como lo hace el compilador: el destructor sin
+// BeforeDestruction --en un TInterfacedObject lanzaria, porque AfterConstruction no llego a bajar el
+// recuento que deja NewInstance-- y despues FreeInstance. Es la llamada de TObject.DisposeOf.
+procedure DestroyUnconstructed(const Instance: TObject);
+type
+  TDestructorProc = procedure(Instance: Pointer; OuterMost: ShortInt);
+begin
+  {$WARN SYMBOL_DEPRECATED OFF}
+  TDestructorProc(PPointer(PByte(PPointer(Instance)^) + vmtDestroy)^)(Instance, 0);
+  {$WARN SYMBOL_DEPRECATED DEFAULT}
+  Instance.FreeInstance;
+end;
+
 { TActivatorUtilities }
 
 class function TActivatorUtilities.TryFindMark(const Member: TRttiObject; out Key: TValue;
@@ -456,10 +469,15 @@ begin
     if Assigned(Initialize) then
       Initialize(Result);
     Ctor.Invoke(TValue.From<TObject>(Result), Args);
+  except
+    // En la forma asignadora es el compilador quien destruye la instancia si el constructor lanza.
+    // Aqui no hay quien lo haga.
+    DestroyUnconstructed(Result);
+    raise;
+  end;
+  try
     Result.AfterConstruction;
   except
-    // En la forma asignadora es el compilador quien libera la instancia si el constructor
-    // lanza. Aqui no hay quien lo haga.
     Result.Free;
     raise;
   end;
