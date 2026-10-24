@@ -57,9 +57,13 @@ type
     class var FCtrlHandlerEntered: Boolean;
     class var FTerminated: Boolean;
     class var FEvent: TEvent;
+    class var FLock: TCriticalSection;
+    class var FOnShutdownRequested: TProc;
+    // A request made while nobody listened, waiting for the next one who subscribes.
+    class var FPending: Boolean;
+    class procedure SetOnShutdownRequested(const Value: TProc); static;
     {$IFDEF MSWINDOWS}
     class function WinHandleSignal(dwCtrlType: DWORD): BOOL; static; stdcall;
-    class procedure DoSignalHandled; static;
     {$ENDIF}
     {$IFDEF POSIX}
     class procedure HandleSignal(SigNum: Integer); static;
@@ -67,11 +71,17 @@ type
   public
     // You can translate this message on app start
     class var PresCtlCMsg: string;
-    class var OnShutdownRequested: TProc;
     class constructor Create;
     class destructor Destroy;
     class procedure WaitForShutdown;
     class property Terminated: Boolean read FTerminated;
+    /// <summary>
+    ///   Who hears a shutdown request. A request made while nobody listened is delivered to the
+    ///   next listener on assignment, once.
+    /// </summary>
+    class property OnShutdownRequested: TProc read FOnShutdownRequested write SetOnShutdownRequested;
+    /// <summary>Asks for the shutdown the way the console signal does.</summary>
+    class procedure RequestShutdown; static;
     class procedure CreateHook;
   end;
 
@@ -411,28 +421,62 @@ class constructor TShutdownHook.Create;
 begin
   PresCtlCMsg := 'Press Ctrl+C to exit...';
   FEvent := TEvent.Create(nil, True, False, '');
+  FLock := TCriticalSection.Create;
   CreateHook;
 end;
 
 class destructor TShutdownHook.Destroy;
 begin
+  FLock.Free;
   FEvent.Free;
 end;
 
-class procedure TShutdownHook.DoSignalHandled;
+class procedure TShutdownHook.SetOnShutdownRequested(const Value: TProc);
 begin
-  FCtrlHandlerEntered := True;
-  FTerminated := True;
-  FEvent.SetEvent;
-  if Assigned(OnShutdownRequested) then
-    OnShutdownRequested;
+  var Deliver := False;
+  FLock.Acquire;
+  try
+    FOnShutdownRequested := Value;
+    Deliver := Assigned(Value) and FPending;
+    if Deliver then
+      FPending := False;
+  finally
+    FLock.Release;
+  end;
+  // Outside the lock, as in RequestShutdown: the listener runs whatever hangs on the shutdown.
+  if Deliver then
+    Value();
+end;
+
+class procedure TShutdownHook.RequestShutdown;
+var
+  Listener: TProc;
+begin
+  // The signal arrives on a thread the system creates, so reading the listener and leaving the
+  // request pending share the lock with the assignment: otherwise a request that found nobody an
+  // instant before somebody subscribed would be lost.
+  FLock.Acquire;
+  try
+    FTerminated := True;
+    FEvent.SetEvent;
+    Listener := FOnShutdownRequested;
+    if not Assigned(Listener) then
+      FPending := True;
+  finally
+    FLock.Release;
+  end;
+  if Assigned(Listener) then
+    Listener();
 end;
 
 {$IFDEF MSWINDOWS}
 class function TShutdownHook.WinHandleSignal(dwCtrlType: DWORD): BOOL;
 begin
   if (dwCtrlType = CTRL_C_EVENT) and not FCtrlHandlerEntered then
-    DoSignalHandled;
+  begin
+    FCtrlHandlerEntered := True;
+    RequestShutdown;
+  end;
   Result := True;
 end;
 {$ENDIF}
@@ -443,7 +487,11 @@ begin
   if not FCtrlHandlerEntered then
   begin
     case SigNum of
-      SIGINT, SIGTERM: DoSignalHandled;
+      SIGINT, SIGTERM:
+        begin
+          FCtrlHandlerEntered := True;
+          RequestShutdown;
+        end;
     end;
   end;
 end;

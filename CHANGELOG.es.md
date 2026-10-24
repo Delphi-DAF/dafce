@@ -66,6 +66,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - **Commons**: `TVersionInfo.IsEmpty` e `IsSemVer` — «no se fijó versión», «el tag no se entendió» y «la versión es esta» dejan de compartir una sola representación que parecía una versión válida
 - **Commons**: `VersionTag` toma una plantilla de marcadores `${...}`, con `VersionTemplate` y `VersionTemplateWithBuild` como sus dos plantillas por defecto. La lista de marcadores, en el GUIDE
 - **Commons**: `TMacrosList.MissingMacroPolicy` y `OnMissingMacro` deciden en qué se convierte una referencia a una macro que no está registrada: se queda como está escrita, toma un valor de reserva o lanza `EMacroNotFound`. Sin configurar nada sigue resolviéndose como vacía
+- **Commons**: `TShutdownHook.RequestShutdown` — pedir la parada como lo hace Ctrl+C. Una petición hecha sin ningún host escuchando la recibe el siguiente que arranca
 - **SystemProcess**: `TProcessResult.TStatus.Killed` — un `Kill` explícito y un plazo vencido dejan de compartir el valor `Timeout`, así que un resultado dice cuál de los dos cortó la ejecución
 - **SystemProcess**: `StandardOutput` y `StandardError` dan a cada flujo del hijo su destino, un `TProcessOutput`: capturado, heredado del padre, descartado o escrito en un fichero
 - **SystemProcess**: `StandardOutputEncoding` y `StandardErrorEncoding` — la codificación de lo capturado

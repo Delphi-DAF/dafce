@@ -6,6 +6,12 @@ uses
   Daf.Extensions.Hosting;
 
 type
+  /// Pide la parada mientras el host arranca, antes de que nadie la atienda.
+  TStopRequestingTask = class(TInterfacedObject, IStartupTask)
+  public
+    procedure Run;
+  end;
+
   /// El host vive aqui y no dentro de una funcion porque el escenario tiene que poder mirarlo
   /// entre fases: con el host encerrado en un callback, tanto la consulta como la peticion de
   /// parada tenian que ocurrir ahi dentro, que es donde estaba el Given.
@@ -15,7 +21,9 @@ type
     Lifetime: IHostApplicationLifetime;
     Report: string;
     procedure BuildHost;
+    procedure BuildHostRequestingStopAtStartup;
     procedure StartHost;
+    procedure StopHost;
     destructor Destroy; override;
   end;
 
@@ -28,12 +36,32 @@ uses
   Daf.Extensions.DependencyInjection,
   Daf.Hosting;
 
+{ TStopRequestingTask }
+
+procedure TStopRequestingTask.Run;
+begin
+  TShutdownHook.RequestShutdown;
+end;
+
 { TShutdownWorld }
 
 procedure TShutdownWorld.BuildHost;
 begin
   var Builder := THost.CreateBuilder;
   Host := Builder.Build;
+end;
+
+procedure TShutdownWorld.BuildHostRequestingStopAtStartup;
+begin
+  var Builder := THost.CreateBuilder;
+  Builder.Services.AddStartupTask<TStopRequestingTask>;
+  Host := Builder.Build;
+end;
+
+procedure TShutdownWorld.StopHost;
+begin
+  Host.Stop;
+  Pointer(Host) := nil;
 end;
 
 procedure TShutdownWorld.StartHost;
@@ -43,13 +71,10 @@ end;
 
 destructor TShutdownWorld.Destroy;
 begin
+  // Stop destruye el host --THost es TNoRefCountObject--, asi que StopHost suelta la referencia
+  // sin pasar por _Release: el finalizador del campo lo llamaria sobre memoria ya devuelta.
   if Host <> nil then
-  begin
-    Host.Stop;
-    // Stop destruye el host --THost es TNoRefCountObject--, asi que la referencia se suelta sin
-    // pasar por _Release: el finalizador del campo lo llamaria sobre memoria ya devuelta.
-    Pointer(Host) := nil;
-  end;
+    StopHost;
   inherited;
 end;
 
@@ -114,6 +139,51 @@ Feature Pedir la parada de la aplicacion @hosting @lifetime
       procedure(W: TShutdownWorld)
       begin
         Expect(W.Lifetime.ApplicationStopping.IsCancellationRequested).ToBeTrue;
+      end)
+
+.Rule('Una peticion de parada durante el arranque no se pierde')
+
+  .Scenario('Una peticion durante las tareas de arranque para la aplicacion')
+    .Given('un host con una tarea de arranque que pide la parada, y ningun host atendiendo la señal',
+      procedure(W: TShutdownWorld)
+      begin
+        W.BuildHostRequestingStopAtStartup;
+        Expect(Assigned(TShutdownHook.OnShutdownRequested)).ToBeFalse;
+      end)
+    .When('el host arranca',
+      procedure(W: TShutdownWorld)
+      begin
+        W.StartHost;
+        W.Lifetime := W.Host.Services.GetService<IHostApplicationLifetime>;
+        W.Report := BoolToStr(W.Lifetime.ApplicationStopping.IsCancellationRequested, True);
+      end)
+    .&Then('al terminar de arrancar, ApplicationStopping esta cancelado',
+      procedure(W: TShutdownWorld)
+      begin
+        Expect(W.Report).ToEqual('True');
+      end)
+
+  .Scenario('Una peticion pendiente la recibe un solo host')
+    .Given('una peticion de parada que ya entrego un host al arrancar',
+      procedure(W: TShutdownWorld)
+      begin
+        W.BuildHostRequestingStopAtStartup;
+        W.StartHost;
+        W.StopHost;
+        Expect(Assigned(TShutdownHook.OnShutdownRequested)).ToBeFalse;
+      end)
+    .When('arranca despues otro host',
+      procedure(W: TShutdownWorld)
+      begin
+        W.BuildHost;
+        W.StartHost;
+        W.Lifetime := W.Host.Services.GetService<IHostApplicationLifetime>;
+        W.Report := BoolToStr(W.Lifetime.ApplicationStopping.IsCancellationRequested, True);
+      end)
+    .&Then('su ApplicationStopping no esta cancelado',
+      procedure(W: TShutdownWorld)
+      begin
+        Expect(W.Report).ToEqual('False');
       end);
 
 end.

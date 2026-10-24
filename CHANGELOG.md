@@ -67,6 +67,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - **Commons**: `TVersionInfo.IsEmpty` and `IsSemVer` — «no version was set», «the tag was not understood» and «the version is this one» stop sharing a single representation that looked like a valid version
 - **Commons**: `VersionTag` takes a template of `${...}` markers, with `VersionTemplate` and `VersionTemplateWithBuild` as its two defaults. The marker list, in the GUIDE
 - **Commons**: `TMacrosList.MissingMacroPolicy` and `OnMissingMacro` decide what a reference to a macro that is not registered becomes: kept as written, a fallback value, or `EMacroNotFound`. With nothing configured it still resolves to empty
+- **Commons**: `TShutdownHook.RequestShutdown` — asking for the shutdown the way Ctrl+C does. A request made while no host is listening is delivered to the next one that starts
 - **SystemProcess**: `TProcessResult.TStatus.Killed` — an explicit `Kill` and an expired deadline stop sharing the `Timeout` value, so a result says which of the two cut the run short
 - **SystemProcess**: `StandardOutput` and `StandardError` give each stream of the child its destination, a `TProcessOutput`: captured, inherited from the parent, discarded or written to a file
 - **SystemProcess**: `StandardOutputEncoding` and `StandardErrorEncoding` — the encoding of what is captured
