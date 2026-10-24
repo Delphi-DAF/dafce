@@ -663,10 +663,20 @@ end;
 
 function TQuery<T>.ToList: TList<T>;
 begin
+  // Nothing is handed over until the enumeration ends: if it raises, the list goes and an owned
+  // source keeps everything it had.
   Result := TList<T>.Create;
-  var E := FSeq.GetEnumerator;
-  while E.MoveNext do
-    AddHandingOver(Result, E.Current);
+  try
+    var E := FSeq.GetEnumerator;
+    while E.MoveNext do
+      Result.Add(E.Current);
+  except
+    Result.Free;
+    raise;
+  end;
+  if TransfersOwnership then
+    for var Item in Result do
+      Handover(Item);
 end;
 
 procedure TQuery<T>.ToList(const List: TList<T>);

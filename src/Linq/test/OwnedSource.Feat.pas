@@ -87,6 +87,17 @@ begin
     end;
 end;
 
+function FailsOnC: TPredicate<TTracked>;
+begin
+  Result :=
+    function(X: TTracked): Boolean
+    begin
+      if X.Name = 'C' then
+        raise Exception.Create('falla en C');
+      Result := True;
+    end;
+end;
+
 // The Then steps never read an object that the code under test may have freed: they ask the
 // registry, by name or by pointer, so a red scenario reports instead of crashing.
 function AliveText(const Items: array of TTracked): string;
@@ -572,6 +583,62 @@ Feature Una fuente que Linq posee @linq @owned
       procedure(W: TOwnedWorld)
       begin
         Expect(Tracking.AliveNames).ToEqual('');
+      end)
+
+.Rule('Un terminal que lanza al enumerar no entrega su coleccion nueva')
+
+  .Scenario('Lo que llevaba ToList() muere con la fuente')
+    .Given('una fuente poseida de tres objetos, y un Where que lanza en el tercero',
+      procedure(W: TOwnedWorld)
+      begin
+        FillABC(W);
+        W.Query := Linq.FromOwned<TTracked>(W.Source).Where(FailsOnC());
+        Expect(Tracking.AliveNames).ToEqual('Lista,A,B,C');
+      end)
+    .When('se llama a ToList(), la excepcion llega al llamante, y se libera la consulta',
+      procedure(W: TOwnedWorld)
+      begin
+        try
+          W.Query.ToList.Free;
+        except
+          on E: Exception do
+            W.Raised := E.Message;
+        end;
+        W.Query := Default(TQuery<TTracked>);
+      end)
+    .&Then('los tres objetos se han liberado',
+      procedure(W: TOwnedWorld)
+      begin
+        Expect(W.Raised).ToEqual('falla en C');
+        Expect(Tracking.AliveNames).ToEqual('');
+      end)
+
+  .Scenario('Lo que ToList(Destino) ya anadio se queda en el destino')
+    .Given('una fuente poseida de tres objetos, un Where que lanza en el tercero, y un destino que posee sus objetos',
+      procedure(W: TOwnedWorld)
+      begin
+        FillABC(W);
+        W.Target := TTrackedList.Create('Destino');
+        W.Query := Linq.FromOwned<TTracked>(W.Source).Where(FailsOnC());
+        Expect(Tracking.AliveNames).ToEqual('Lista,A,B,C,Destino');
+      end)
+    .When('ToList(Destino) vuelca la consulta, la excepcion llega al llamante, y se libera la consulta',
+      procedure(W: TOwnedWorld)
+      begin
+        try
+          W.Query.ToList(W.Target);
+        except
+          on E: Exception do
+            W.Raised := E.Message;
+        end;
+        W.Query := Default(TQuery<TTracked>);
+      end)
+    .&Then('los dos primeros siguen vivos en el destino, que es su unico dueno, y el tercero se ha liberado',
+      procedure(W: TOwnedWorld)
+      begin
+        Expect(W.Raised).ToEqual('falla en C');
+        Expect(W.Target.Count).ToEqual(2);
+        Expect(Tracking.AliveNames).ToEqual('A,B,Destino');
       end);
 
 end.

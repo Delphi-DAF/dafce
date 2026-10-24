@@ -3,11 +3,17 @@
 interface
 
 uses
-  System.Generics.Collections;
+  System.Generics.Collections,
+  Daf.Linq,
+  Ownership.Doubles;
 
 type
   TOpsWorld = class
   public
+    Terminal: string;
+    Counted: TArray<ICounted>;
+    CountedQuery: TQuery<ICounted>;
+    Raised: string;
     Nums: TList<Integer>;
     Collected: TArray<Integer>;
     Strs: TArray<string>;
@@ -23,6 +29,8 @@ type
     Num3: Integer;
     constructor Create;
     destructor Destroy; override;
+    /// <summary>Calls the terminal named by <c>Terminal</c> on <c>CountedQuery</c>, keeping what it raises.</summary>
+    procedure CallTerminal;
   end;
 
 implementation
@@ -33,8 +41,7 @@ uses
   Daf.MiniSpec,
   Daf.Enumerable,
   Daf.Arrays,
-  Daf.FilterSpec,
-  Daf.Linq;
+  Daf.FilterSpec;
 
 { TOpsWorld }
 
@@ -47,8 +54,29 @@ end;
 
 destructor TOpsWorld.Destroy;
 begin
+  CountedQuery := Default(TQuery<ICounted>);
+  Counted := nil;
+  Tracking.FreeSurvivors;
   Nums.Free;
   inherited;
+end;
+
+procedure TOpsWorld.CallTerminal;
+begin
+  Raised := '';
+  try
+    if Terminal = 'ToList()' then
+      CountedQuery.ToList.Free
+    else if Terminal = 'ToArray' then
+      CountedQuery.ToArray
+    else if Terminal = 'ToSmartArray' then
+      CountedQuery.ToSmartArray
+    else
+      raise Exception.Create('unknown terminal ' + Terminal);
+  except
+    on E: Exception do
+      Raised := E.Message;
+  end;
 end;
 
 initialization
@@ -566,6 +594,41 @@ Feature Linq operators @linq @operators
       procedure(W: TOpsWorld)
       begin
         Expect(Length(W.Collected)).ToEqual(6);
-      end);
+      end)
+
+.Rule('A terminal that builds its collection frees it when the enumeration raises')
+
+  .ScenarioOutline('A condition that raises halfway through the enumeration, under <Terminal>')
+    .Given('an array of three objects freed with their last reference, and a query over it whose Where raises on the third',
+      procedure(W: TOpsWorld)
+      begin
+        W.Counted := [TCounted.Create('A'), TCounted.Create('B'), TCounted.Create('C')];
+        W.CountedQuery := Linq.From<ICounted>(W.Counted).Where(
+          function(X: ICounted): Boolean
+          begin
+            if X.Name = 'C' then
+              raise Exception.Create('fails on C');
+            Result := True;
+          end);
+        Expect(Tracking.AliveNames).ToEqual('A,B,C');
+      end)
+    .When('<Terminal> is called, and the array and the query are let go',
+      procedure(W: TOpsWorld)
+      begin
+        W.CallTerminal;
+        W.Counted := nil;
+        W.CountedQuery := Default(TQuery<ICounted>);
+      end)
+    .&Then('the exception reached the caller, and none of the three objects is alive',
+      procedure(W: TOpsWorld)
+      begin
+        Expect(W.Raised).ToEqual('fails on C');
+        Expect(Tracking.AliveNames).ToEqual('');
+      end)
+    .Examples(
+      [['Terminal'],
+       ['ToList()'],
+       ['ToArray'],
+       ['ToSmartArray']]);
 
 end.

@@ -56,6 +56,23 @@ type
     procedure Notify(const Value: TTracked; Action: TCollectionNotification); override;
   end;
 
+  ICounted = interface
+    function Name: string;
+  end;
+
+  /// <summary>
+  ///   A reference-counted object that signs in the same registry while alive, so a scenario sees
+  ///   the references that a collection nobody freed still holds.
+  /// </summary>
+  TCounted = class(TInterfacedObject, ICounted)
+  private
+    FName: string;
+  public
+    constructor Create(const Name: string);
+    destructor Destroy; override;
+    function Name: string;
+  end;
+
   Tracking = record
   public
     /// <summary>The names of what is alive, in creation order and joined with commas.</summary>
@@ -64,7 +81,8 @@ type
     /// <summary>
     ///   Frees what is still alive and nothing twice: first the lists, with their ownership
     ///   off, then the elements. A red scenario leaves objects whose owner the code under test
-    ///   got wrong, and this is what returns them without a double free.
+    ///   got wrong, and this is what returns them without a double free. A counted object belongs
+    ///   to whoever holds its references, so it only signs out.
     /// </summary>
     class procedure FreeSurvivors; static;
   end;
@@ -84,6 +102,8 @@ begin
     Result := TTracked(Obj).Name
   else if Obj is TTrackedList then
     Result := TTrackedList(Obj).Name
+  else if Obj is TCounted then
+    Result := TCounted(Obj).Name
   else
     Result := Obj.ClassName;
 end;
@@ -145,6 +165,26 @@ begin
     raise Exception.Create('rechazo ' + Value.Name);
 end;
 
+{ TCounted }
+
+constructor TCounted.Create(const Name: string);
+begin
+  inherited Create;
+  FName := Name;
+  Registry.Add(Self);
+end;
+
+destructor TCounted.Destroy;
+begin
+  Registry.Remove(Self);
+  inherited;
+end;
+
+function TCounted.Name: string;
+begin
+  Result := FName;
+end;
+
 { Tracking }
 
 class function Tracking.AliveNames: string;
@@ -165,6 +205,9 @@ end;
 
 class procedure Tracking.FreeSurvivors;
 begin
+  for var I := Registry.Count - 1 downto 0 do
+    if Registry[I] is TCounted then
+      Registry.Delete(I);
   for var I := Registry.Count - 1 downto 0 do
     if Registry[I] is TTrackedList then
     begin
