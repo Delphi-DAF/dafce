@@ -70,6 +70,29 @@ type
     ['{8B521187-079B-44FE-9124-5A1E6771ECCE}']
     function CreateInstance(const Descriptor: TServiceDescriptor; const Provider: IServiceProvider): IInterface;
     function GetOrCreate(const Descriptor: TServiceDescriptor; const Provider: IServiceProvider): IInterface;overload;
+    /// <summary>El proveedor que reciben los servicios que construye este ambito.</summary>
+    function HandedProvider: IServiceProvider;
+  end;
+
+  // Lo que el contenedor entrega a lo que construye: responde como su ambito, pero no lo sostiene,
+  // asi que un servicio que guarda su proveedor no mantiene vivo el ambito. Apunta sin contar
+  // referencia, como la fabrica, y la baja se la da el destructor del ambito.
+  TScopeProvider = class(TInterfacedObject, IServiceProviderImpl)
+  private
+    FScope: TServiceScope;
+    // Guarda FScope: leerlo y tomar referencia no puede cruzarse con la baja, o se tocaria un
+    // ambito ya liberado.
+    FLock: TLightweightMREW;
+    function Live(out Ref: IServiceScope; const ServiceType: PTypeInfo): TServiceScope;
+    procedure Detach;
+  protected
+    function QueryInterface(const IID: TGUID; out Obj): HResult; stdcall;
+  public
+    constructor Create(const Scope: TServiceScope);
+    function CanResolve(const Slot: TServiceSlot): Boolean;
+    function TryGet(const Slot: TServiceSlot; out Service): Boolean;
+    function TryGetAll(const Slot: TServiceSlot; out Services: IInterfaceList): Boolean;
+    function CreateScope: IServiceScope;
   end;
 
   TServiceScope = class(TInterfacedObject, IServiceScope, IServiceProviderImpl, IServiceResolver,
@@ -81,6 +104,8 @@ type
     FScopeFactory: TServiceScopeFactory;
     [Weak]
     FServiceCollection: IServiceCollectionImpl;
+    FProviderObj: TScopeProvider;
+    FProvider: IServiceProviderImpl;
     // Ordenado a proposito: CollectGarbage lo recorre de atras hacia
     // delante para liberar en orden inverso al de creacion.
     FServiceInstances : TOrderedDictionary<TServiceIdentity, IInterface>;
@@ -130,6 +155,7 @@ type
     procedure Shutdown;
     function CreateScope: IServiceScope;
     function ServiceProvider: IServiceProvider;
+    function HandedProvider: IServiceProvider;
     property ServiceCollection: IServiceCollectionImpl read FServiceCollection;
     property SingletonsScope: IServiceResolver read GetSingletonsScope;
   end;
@@ -936,6 +962,86 @@ begin
   Result := FSingletonScope;
 end;
 
+{ TScopeProvider }
+
+constructor TScopeProvider.Create(const Scope: TServiceScope);
+begin
+  inherited Create;
+  FScope := Scope;
+end;
+
+procedure TScopeProvider.Detach;
+begin
+  FLock.BeginWrite;
+  try
+    FScope := nil;
+  finally
+    FLock.EndWrite;
+  end;
+end;
+
+function TScopeProvider.Live(out Ref: IServiceScope; const ServiceType: PTypeInfo): TServiceScope;
+begin
+  FLock.BeginRead;
+  try
+    if TServiceScope.TryAcquire(FScope, Ref) then
+      Result := FScope
+    else
+      Result := nil;
+  finally
+    FLock.EndRead;
+  end;
+  if Result = nil then
+    raise EContainerShutDownError.CreateFmt(
+      'Cannot resolve %s: the scope that built this service has been released', [_T.NameOf(ServiceType)]);
+end;
+
+function TScopeProvider.QueryInterface(const IID: TGUID; out Obj): HResult;
+begin
+  // Lo suyo primero; lo demas --los cableados, el acceso al contenedor, AsType-- es del ambito, y
+  // un ambito ya soltado no responde a nada.
+  Result := inherited QueryInterface(IID, Obj);
+  if Result = S_OK then
+    Exit;
+  var Ref: IServiceScope;
+  FLock.BeginRead;
+  try
+    if not TServiceScope.TryAcquire(FScope, Ref) then
+      Exit(E_NOINTERFACE);
+  finally
+    FLock.EndRead;
+  end;
+  Result := Ref.QueryInterface(IID, Obj);
+end;
+
+function TScopeProvider.CanResolve(const Slot: TServiceSlot): Boolean;
+var
+  Ref: IServiceScope;
+begin
+  Result := Live(Ref, Slot.ServiceType).CanResolve(Slot);
+end;
+
+function TScopeProvider.TryGet(const Slot: TServiceSlot; out Service): Boolean;
+var
+  Ref: IServiceScope;
+begin
+  Result := Live(Ref, Slot.ServiceType).TryGet(Slot, Service);
+end;
+
+function TScopeProvider.TryGetAll(const Slot: TServiceSlot; out Services: IInterfaceList): Boolean;
+var
+  Ref: IServiceScope;
+begin
+  Result := Live(Ref, Slot.ServiceType).TryGetAll(Slot, Services);
+end;
+
+function TScopeProvider.CreateScope: IServiceScope;
+var
+  Ref: IServiceScope;
+begin
+  Result := Live(Ref, TypeInfo(IServiceScope)).CreateScope;
+end;
+
 { TServiceScope }
 
 constructor TServiceScope.Create(const Factory: TServiceScopeFactory; const SingletonsScope: Boolean = False);
@@ -959,6 +1065,8 @@ begin
   FIsSingletonsScope := SingletonsScope;
   FBuildLock := TCriticalSection.Create;
   FServiceCollection := Factory.ServiceCollection;
+  FProviderObj := TScopeProvider.Create(Self);
+  FProvider := FProviderObj;
 end;
 
 class function TServiceScope.TryAcquire(const Scope: TServiceScope; out Ref: IServiceScope): Boolean;
@@ -988,8 +1096,10 @@ end;
 
 destructor TServiceScope.Destroy;
 begin
-  // La baja es lo PRIMERO: desde aqui la fabrica ya no puede alcanzarlo. Al reves --desmontar y
-  // darse de baja despues-- deja una ventana en la que alcanza un ambito a medio destruir.
+  // La baja es lo PRIMERO: desde aqui ni la fabrica ni el proveedor que tienen los servicios lo
+  // alcanzan. Al reves --desmontar y darse de baja despues-- deja una ventana en la que alcanzan
+  // un ambito a medio destruir.
+  FProviderObj.Detach;
   if FScopeFactory <> nil then
     FScopeFactory.RemoveScope(Self);
   // Just in case this Scope is temporal, and we not are in Shutdown
@@ -1267,6 +1377,11 @@ begin
   Result := Self;
 end;
 
+function TServiceScope.HandedProvider: IServiceProvider;
+begin
+  Result := FProvider;
+end;
+
 function TServiceScope.CanResolve(const Slot: TServiceSlot): Boolean;
 begin
   Result := ServiceCollection.Contains(Slot);
@@ -1402,7 +1517,9 @@ begin
       var Singletons := SingletonsScope;
       if Singletons = nil then
         RaiseShutDown(Descriptor.TypeInfo);
-      Result := Singletons.GetOrCreate(Descriptor, Self);
+      // Con el proveedor del contenedor y no con el de quien lo pidio: el singleton vive mas que
+      // cualquier ambito hijo.
+      Result := Singletons.GetOrCreate(Descriptor, Singletons.HandedProvider);
     end;
     Scoped: begin
       var Captor := CreatingSingleton;
@@ -1410,7 +1527,7 @@ begin
         raise Exception.CreateFmt('singleton %s cannot depends on scoped %s ',[Captor.ServiceName, Descriptor.ServiceName]);
       if FIsRoot and Assigned(FScopeFactory) and FScopeFactory.ValidateScopes then
         RaiseScopedFromRoot(Descriptor);
-      Result := Self.GetOrCreate(Descriptor, Self);
+      Result := Self.GetOrCreate(Descriptor, FProvider);
     end;
     Transient: begin
       // El contenedor no retiene los transient, asi que no hay nada que publicar y el cableado
@@ -1420,8 +1537,8 @@ begin
       var Frame: TCreationFrame;
       BeginCreate(Frame, Descriptor);
       try
-        Result := Self.CreateInstance(Descriptor, Self);
-        TActivatorUtilities.Wire(Self, InstanceOf(Result));
+        Result := Self.CreateInstance(Descriptor, FProvider);
+        TActivatorUtilities.Wire(FProvider, InstanceOf(Result));
       finally
         EndCreate(Frame);
       end;

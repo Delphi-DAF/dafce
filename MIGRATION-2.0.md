@@ -415,6 +415,10 @@ This is the largest front of 2.0 for anything that had a `.dpr`.
   life.
 - **What breaks**: keeping a reference to a Scoped service without holding its scope. Until now it
   survived the scope it came from; now it does not.
+- **The provider a service receives does not hold its scope**, so a service that keeps it does not
+  keep the scope alive. Using it once the scope is released raises `EContainerShutDownError`, and it
+  is not the same object as `Scope.ServiceProvider`. A singleton receives the container's provider,
+  not that of the scope that asked for it first.
 
 ```pascal
 // Before: the cache outlived its scope by accident

@@ -49,6 +49,42 @@ type
     function Name: string;
   end;
 
+  ITransientThing = interface(IInvokable)
+    ['{389A4218-0901-471C-89C8-0A5EBA9D597E}']
+    function Name: string;
+  end;
+
+  TTransientThing = class(TInterfacedObject, ITransientThing)
+  public
+    function Name: string;
+  end;
+
+  /// <summary>
+  /// Guarda el proveedor que le dio el contenedor y resuelve por el despues: la forma de un
+  /// servicio que pide cosas cuando las necesita, y no al construirse.
+  /// </summary>
+  IProviderHolder = interface(IInvokable)
+    ['{71922D2B-94D6-4A62-8AE3-3F0359F0C6EA}']
+    function ResolveTransient: string;
+  end;
+
+  TProviderHolder = class(TCountedBase, IProviderHolder)
+  private
+    FProvider: IServiceProvider;
+  public
+    constructor Create(const Provider: IServiceProvider);
+    function ResolveTransient: string;
+  end;
+
+  /// <summary>Un Scoped que guarda un ILazy de otro servicio, sin pedir nunca su valor.</summary>
+  TLazyHolder = class(TCountedBase, IPerScope)
+  private
+    FShared: ILazy<IShared>;
+  public
+    constructor Create(const Shared: ILazy<IShared>);
+    function Name: string;
+  end;
+
   /// <summary>
   /// ⚠️ Las cuentas de vivos se leen desde el paso THEN, nunca se guardan durante el WHEN.
   /// El compilador finaliza el temporal del resultado de una funcion que devuelve interfaz al
@@ -63,6 +99,9 @@ type
     // El ambito que el llamante sostiene, en los escenarios que lo piden. Sostenerlo desde el
     // World y no desde el paso es lo que lo hace sobrevivir de un paso al siguiente.
     Held: IServiceScope;
+    // Un servicio que el llamante sigue sosteniendo despues de soltar su ambito.
+    Holder: IProviderHolder;
+    Resolved: string;
     Outcome: string;
     OwnedBefore, OwnedAfter: Integer;
     Closed: Boolean;
@@ -71,6 +110,8 @@ type
     procedure Build;
     procedure ResolveInRoot;
     procedure WorkUnits(const Count: Integer);
+    procedure WorkUnitsOf<T: IInterface>(const Count: Integer);
+    procedure KeepServiceReleaseScope;
     procedure HoldScopeWithService;
     procedure Close;
     procedure ReleaseEverything;
@@ -129,6 +170,39 @@ begin
   Result := 'shared';
 end;
 
+{ TTransientThing }
+
+function TTransientThing.Name: string;
+begin
+  Result := 'transient';
+end;
+
+{ TProviderHolder }
+
+constructor TProviderHolder.Create(const Provider: IServiceProvider);
+begin
+  inherited Create;
+  FProvider := Provider;
+end;
+
+function TProviderHolder.ResolveTransient: string;
+begin
+  Result := FProvider.GetRequiredService<ITransientThing>.Name;
+end;
+
+{ TLazyHolder }
+
+constructor TLazyHolder.Create(const Shared: ILazy<IShared>);
+begin
+  inherited Create;
+  FShared := Shared;
+end;
+
+function TLazyHolder.Name: string;
+begin
+  Result := 'lazy-holder';
+end;
+
 { TScopeLifetimeWorld }
 
 constructor TScopeLifetimeWorld.Create;
@@ -141,6 +215,7 @@ end;
 
 destructor TScopeLifetimeWorld.Destroy;
 begin
+  Holder := nil;
   Held := nil;
   if (not Closed) and (Provider <> nil) then
     Provider.ShutDown;
@@ -168,6 +243,26 @@ begin
     Scope.ServiceProvider.GetRequiredService<IPerScope>;
     Scope := nil;
   end;
+end;
+
+procedure TScopeLifetimeWorld.WorkUnitsOf<T>(const Count: Integer);
+begin
+  for var Idx := 1 to Count do
+  begin
+    var Scope: IServiceScope := Provider.CreateScope;
+    Scope.ServiceProvider.GetRequiredService<T>;
+    Scope := nil;
+  end;
+end;
+
+procedure TScopeLifetimeWorld.KeepServiceReleaseScope;
+begin
+  // Un ambito hijo resuelve el servicio que se queda el llamante y un Scoped que no se queda
+  // nadie: si el ambito se cierra al soltarlo, ese Scoped muere, y la cuenta de vivos lo ve.
+  var Scope: IServiceScope := Provider.CreateScope;
+  Holder := Scope.ServiceProvider.GetRequiredService<IProviderHolder>;
+  Scope.ServiceProvider.GetRequiredService<IPerScope>;
+  Scope := nil;
 end;
 
 procedure TScopeLifetimeWorld.HoldScopeWithService;
@@ -376,6 +471,111 @@ Feature Releasing a scope releases what it resolved @di @lifetime @scope
       procedure(W: TScopeLifetimeWorld)
       begin
         Expect(W.Outcome).ToContain('EContainerShutDownError');
+      end)
+
+.Rule('What the container builds does not hold its scope')
+
+  .Scenario('A scoped service that keeps its provider does not retain its scope')
+    .Given('a scoped service whose constructor receives and keeps an IServiceProvider',
+      procedure(W: TScopeLifetimeWorld)
+      begin
+        W.Services.AddScoped<IProviderHolder, TProviderHolder>;
+        W.Services.AddTransient<ITransientThing, TTransientThing>;
+        W.Provider := W.Services.BuildServiceProvider;
+      end)
+    .When('I serve many units of work, each one opening and releasing its own scope',
+      procedure(W: TScopeLifetimeWorld)
+      begin
+        W.WorkUnitsOf<IProviderHolder>(UnitsOfWork);
+      end)
+    .&Then('none of the services that were built is still alive',
+      procedure(W: TScopeLifetimeWorld)
+      begin
+        Expect(W.LiveNow).ToEqual(0);
+      end)
+    .&And('one was built per round, so the count above is not zero for having done nothing',
+      procedure(W: TScopeLifetimeWorld)
+      begin
+        Expect(W.BuiltNow).ToEqual(UnitsOfWork);
+      end)
+
+  .Scenario('A scoped service that keeps an ILazy does not retain its scope')
+    .Given('a scoped service whose constructor receives and keeps an ILazy of another service',
+      procedure(W: TScopeLifetimeWorld)
+      begin
+        W.Services.AddScoped<IPerScope, TLazyHolder>;
+        W.Services.AddSingleton<IShared, TShared>;
+        W.Provider := W.Services.BuildServiceProvider;
+      end)
+    .When('I serve many units of work, each one opening and releasing its own scope',
+      procedure(W: TScopeLifetimeWorld)
+      begin
+        W.WorkUnitsOf<IPerScope>(UnitsOfWork);
+      end)
+    .&Then('none of the services that were built is still alive',
+      procedure(W: TScopeLifetimeWorld)
+      begin
+        Expect(W.LiveNow).ToEqual(0);
+      end)
+    .&And('one was built per round, so the count above is not zero for having done nothing',
+      procedure(W: TScopeLifetimeWorld)
+      begin
+        Expect(W.BuiltNow).ToEqual(UnitsOfWork);
+      end)
+
+  .Scenario('A service that outlives its scope does not bring it back')
+    .Given('a scoped service that keeps its provider, held by the caller after its scope was released',
+      procedure(W: TScopeLifetimeWorld)
+      begin
+        W.Services.AddScoped<IProviderHolder, TProviderHolder>;
+        W.Services.AddScoped<IPerScope, TPerScope>;
+        W.Services.AddTransient<ITransientThing, TTransientThing>;
+        W.Provider := W.Services.BuildServiceProvider;
+        W.KeepServiceReleaseScope;
+      end)
+    .When('the service resolves something through that provider',
+      procedure(W: TScopeLifetimeWorld)
+      begin
+        W.Attempt(procedure begin W.Holder.ResolveTransient; end);
+      end)
+    .&Then('the resolution fails with the shut down error',
+      procedure(W: TScopeLifetimeWorld)
+      begin
+        Expect(W.Outcome).ToContain('EContainerShutDownError');
+      end)
+    .&And('the scope closed when it was released, though the service is still alive',
+      procedure(W: TScopeLifetimeWorld)
+      begin
+        Expect(W.LiveNow).ToEqual(1);
+      end)
+
+.Rule('A singleton receives the provider of the container')
+
+  .Scenario('A singleton outlives the scope that asked for it first')
+    .Given('a singleton that keeps its provider, resolved first from a child scope that was then released',
+      procedure(W: TScopeLifetimeWorld)
+      begin
+        W.Services.AddSingleton<IProviderHolder, TProviderHolder>;
+        W.Services.AddScoped<IPerScope, TPerScope>;
+        W.Services.AddTransient<ITransientThing, TTransientThing>;
+        W.Provider := W.Services.BuildServiceProvider;
+        W.KeepServiceReleaseScope;
+      end)
+    .When('the singleton resolves a transient service through its provider',
+      procedure(W: TScopeLifetimeWorld)
+      begin
+        W.Attempt(procedure begin W.Resolved := W.Holder.ResolveTransient; end);
+      end)
+    .&Then('the resolution works, because its provider is the container''s',
+      procedure(W: TScopeLifetimeWorld)
+      begin
+        Expect(W.Outcome).ToEqual(SinError);
+        Expect(W.Resolved).ToEqual('transient');
+      end)
+    .&And('the child scope closed when it was released',
+      procedure(W: TScopeLifetimeWorld)
+      begin
+        Expect(W.LiveNow).ToEqual(1);
       end)
 
 ;

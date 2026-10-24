@@ -416,6 +416,10 @@ Es el frente más grande de 2.0 para cualquier cosa que tuviera un `.dpr`.
   vida.
 - **Qué rompe**: guardar una referencia a un servicio Scoped sin sostener su ámbito. Hasta ahora
   sobrevivía al ámbito del que salió; ya no.
+- **El proveedor que recibe un servicio no sostiene su ámbito**, así que un servicio que lo guarda no
+  mantiene vivo el ámbito. Usarlo cuando el ámbito ya se soltó lanza `EContainerShutDownError`, y no
+  es el mismo objeto que `Scope.ServiceProvider`. Un singleton recibe el proveedor del contenedor, no
+  el del ámbito que lo pidió primero.
 
 ```pascal
 // Antes: la caché sobrevivía a su ámbito por accidente
