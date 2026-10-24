@@ -1259,6 +1259,9 @@ begin
 
   FBuildLock.Acquire;
   try
+    // Quien esperaba este cerrojo mientras el ambito se cerraba llega aqui con el cierre hecho, y no
+    // construye.
+    CheckNotShutDown(Descriptor.TypeInfo);
     // La segunda comprobacion no es una precaucion opcional: entre la lectura de arriba y este
     // cerrojo otro hilo pudo construirlo. Sin ella la ventana sigue abierta, mas estrecha -- y
     // una carrera mas estrecha es peor, porque aparece en produccion y no en los tests.
@@ -1326,11 +1329,27 @@ begin
         Result := nil;
         raise;
       end;
+      // Si el contenedor se cerro durante el cableado, el cierre dejo la instancia sin vaciar, y es
+      // este hilo quien la descarta. Bajo el mismo cerrojo se quita tambien la entrada: si el cierre
+      // aun no la ha recorrido, ya no la encontrara, y nadie mas le escribe las propiedades.
+      var ClosedMeanwhile: Boolean;
       FInstancesLock.BeginWrite;
       try
         FWiring.Remove(ServiceIdentity);
+        ClosedMeanwhile := FShutDonwnDone;
+        if ClosedMeanwhile then
+        begin
+          FServiceInstances.Remove(ServiceIdentity);
+          FWired.Remove(Instance);
+        end;
       finally
         FInstancesLock.EndWrite;
+      end;
+      if ClosedMeanwhile then
+      begin
+        TActivatorUtilities.ClearInjected(Instance);
+        Result := nil;
+        RaiseShutDown(Descriptor.TypeInfo);
       end;
     finally
       EndCreate(Frame);
@@ -1398,9 +1417,11 @@ begin
     // sosteniendo al otro. Y todas antes que ninguna, porque alternando podria morir uno
     // mientras otro lo tiene en una propiedad sin vaciar.
     // Solo las que el ambito cableo: lo que devuelve una factory, o una instancia registrada, es de
-    // quien lo construyo, y sus propiedades tambien.
+    // quien lo construyo, y sus propiedades tambien. Y ninguna en cableado: sus propiedades son del
+    // hilo que la cablea, que la vacia el mismo al ver el cierre.
     for var idx := 0 to FServiceInstances.Count - 1 do
     begin
+      if FWiring.ContainsKey(FServiceInstances.KeyList[idx]) then Continue;
       // A una local, como el bucle de abajo. Pasar ValueList[idx] directo a una llamada deja
       // viva hasta el final del metodo la referencia del temporal que emite el compilador, y esa
       // referencia impide que su instancia baje a uno: se libera fuera de orden, la ultima.
@@ -1470,8 +1491,23 @@ end;
 procedure TServiceScope.Shutdown;
 begin
   if FShutDonwnDone then Exit;
-  FShutDonwnDone := True;
-  CollectGarbage;
+  // El ambito de singletons no espera: lo que se este construyendo en el lo descarta su propio
+  // hilo al ver el cierre. Los demas toman la construccion antes de marcarse, asi que la que este
+  // en curso termina y entrega su instancia, y este cierre la recoge despues con las demas.
+  if FIsSingletonsScope then
+  begin
+    FShutDonwnDone := True;
+    CollectGarbage;
+    Exit;
+  end;
+  FBuildLock.Acquire;
+  try
+    if FShutDonwnDone then Exit;
+    FShutDonwnDone := True;
+    CollectGarbage;
+  finally
+    FBuildLock.Release;
+  end;
 end;
 
 function TServiceScope.ServiceProvider: IServiceProvider;

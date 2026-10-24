@@ -101,6 +101,20 @@ type
     function WiringDone: Boolean;
   end;
 
+  /// Un Singleton con una propiedad marcada, para ver si un cierre se la vacia mientras su cableado
+  /// por codigo sigue en curso. Anota al morir si la tenia vacia.
+  TWiredHolder = class(TInterfacedObject, IWiredRacer)
+  private
+    FOther: IOther;
+  public
+    class var Destroyed: Integer;
+    class var DestroyedEmpty: Integer;
+    destructor Destroy; override;
+    function WiringDone: Boolean;
+    [DafInject]
+    property Other: IOther read FOther write FOther;
+  end;
+
   /// <summary>
   ///   Captura lo que pasa en cada hilo en vez de dejarlo escapar, y lo devuelve en informes que
   ///   NOMBRAN los numeros. Un `ToBeEmpty` o un `ToBeTrue` no imprimen el valor, asi que el fallo
@@ -120,6 +134,8 @@ type
     FWiringGate: TEvent;
     FSameFromCreator: Integer;
     FTimedOut: Boolean;
+    // Lo que el cableado de TWiredHolder vio de su propiedad al salir de la puerta.
+    FSawFilled: string;
     procedure Race(const Count: Integer; const Body: TProc<Integer>);
     function ThreadBody(const Idx: Integer; const Body: TProc<Integer>;
       const Gate, Done: TCountdownEvent): TProc;
@@ -137,13 +153,20 @@ type
     procedure Register(const LifeTime: TServiceLifeTime);
     /// Un Singleton IWiredRacer cuyo cableado por codigo cumple la cita de FInWiring y FWiringGate.
     procedure RegisterWiredRacer;
+    /// Un Singleton TWiredHolder, con IOther en su propiedad marcada, cuyo cableado por codigo
+    /// cumple la cita y anota si sigue viendo esa propiedad rellena.
+    procedure RegisterWiredHolder;
+    /// Un hilo lo resuelve y, con su cableado dentro, el escenario cierra el contenedor y abre la
+    /// puerta. Deja en Report lo que vio el cableado, como acabo la resolucion y las destrucciones.
+    procedure CloseWhileWiring;
+    function ResolveWiredAndDrop: string;
     /// Un hilo lo construye y, con su cableado dentro, otro hilo lo pide. Deja en Report si el
     /// segundo lo pidio con la puerta cerrada y si lo recibio cableado.
     procedure AskWhileWiring;
     /// Un hilo resuelve uno de dos servicios que se piden por propiedad; deja en Report lo que ve.
     procedure ResolvePropertyCycleInThread;
     procedure NoCtorDelay;
-    procedure HoldCtorUntilClosed;
+    procedure HoldCtorAtGate;
     procedure RegisterOther(const LifeTime: TServiceLifeTime);
     procedure Build;
     procedure OpenScopePerThread;
@@ -156,6 +179,11 @@ type
     procedure RaceResolveWhileClosing;
     procedure RaceReleaseScopesWhileClosing;
     procedure RaceConstructionAgainstClose;
+    /// Un hilo construye el Scoped del ambito compartido y, con su constructor dentro, otro hilo
+    /// cierra el contenedor; el escenario abre la puerta pasado un plazo. Deja en Report como acabo
+    /// la resolucion, si el cierre termino despues de la construccion y lo que queda poseido.
+    procedure CloseWhileBuildingScoped;
+    function ResolveScopedAndDrop: string;
     procedure ResolveSharedScopeFromOtherThread;
     procedure CloseFromOtherThread;
     procedure RaceOnOpenGenericClosures;
@@ -269,6 +297,8 @@ begin
   inherited;
   TRacer.Reset;
   TOther.Reset;
+  TWiredHolder.Destroyed := 0;
+  TWiredHolder.DestroyedEmpty := 0;
   FCtorGate := TEvent.Create(nil, True, False, '');
   FInCtorGate := TEvent.Create(nil, True, False, '');
   FInWiring := TEvent.Create(nil, True, False, '');
@@ -320,7 +350,7 @@ begin
   TOther.CtorDelayMs := 0;
 end;
 
-procedure TConcurrencyWorld.HoldCtorUntilClosed;
+procedure TConcurrencyWorld.HoldCtorAtGate;
 begin
   TRacer.CtorDelayMs := 0;
   TRacer.CtorGate := FCtorGate;
@@ -356,6 +386,86 @@ end;
 function TWiredRacer.WiringDone: Boolean;
 begin
   Result := FWiringDone;
+end;
+
+{ TWiredHolder }
+
+destructor TWiredHolder.Destroy;
+begin
+  TInterlocked.Increment(Destroyed);
+  if FOther = nil then
+    TInterlocked.Increment(DestroyedEmpty);
+  inherited;
+end;
+
+function TWiredHolder.WiringDone: Boolean;
+begin
+  Result := True;
+end;
+
+procedure TConcurrencyWorld.RegisterWiredHolder;
+begin
+  var InWiring := FInWiring;
+  var Gate := FWiringGate;
+  Services.AddSingleton<IOther, TOther>;
+  Services.AddSingleton<IWiredRacer, TWiredHolder>;
+  Services.AddInjector<TWiredHolder>(
+    procedure(const Instance: TWiredHolder; const Provider: IServiceProvider)
+    begin
+      InWiring.SetEvent;
+      Gate.WaitFor(10000);
+      FSawFilled := BoolToStr(Instance.Other <> nil, True);
+    end);
+end;
+
+// En un metodo aparte para que el temporal de la resolucion muera al volver, y no al final del
+// hilo, despues de que el escenario haya contado las destrucciones.
+function TConcurrencyWorld.ResolveWiredAndDrop: string;
+begin
+  try
+    Provider.GetRequiredService<IWiredRacer>;
+    Result := 'delivered';
+  except
+    on E: Exception do Result := E.ClassName;
+  end;
+end;
+
+procedure TConcurrencyWorld.CloseWhileWiring;
+var
+  BuilderDone: TEvent;
+  Outcome: string;
+  ClosedWhileWiring: Boolean;
+begin
+  Outcome := '<sin resultado>';
+  ClosedWhileWiring := False;
+  FSawFilled := '<sin anotar>';
+  BuilderDone := TEvent.Create(nil, True, False, '');
+  try
+    TThread.CreateAnonymousThread(
+      procedure
+      begin
+        Outcome := ResolveWiredAndDrop;
+        BuilderDone.SetEvent;
+      end).Start;
+    if FInWiring.WaitFor(10000) <> wrSignaled then
+    begin
+      FWiringGate.SetEvent;
+      BuilderDone.WaitFor(10000);
+      Report := 'the wiring never started';
+      Exit;
+    end;
+    try
+      Close;
+      ClosedWhileWiring := FWiringGate.WaitFor(0) <> wrSignaled;
+    finally
+      FWiringGate.SetEvent;
+    end;
+    BuilderDone.WaitFor(10000);
+    Report := Format('closed while wiring=%s, saw its property filled=%s, resolution=%s, destroyed=%d, destroyed empty=%d',
+      [BoolToStr(ClosedWhileWiring, True), FSawFilled, Outcome, TWiredHolder.Destroyed, TWiredHolder.DestroyedEmpty]);
+  finally
+    BuilderDone.Free;
+  end;
 end;
 
 procedure TConcurrencyWorld.RegisterWiredRacer;
@@ -655,6 +765,64 @@ begin
         on E: Exception do FOutcomes[Idx] := E.ClassName;
       end;
     end);
+end;
+
+// Aparte por lo mismo que ResolveWiredAndDrop: el temporal de la resolucion muere al volver.
+function TConcurrencyWorld.ResolveScopedAndDrop: string;
+begin
+  try
+    SharedScope.ServiceProvider.GetRequiredService<IRacer>;
+    Result := 'delivered';
+  except
+    on E: Exception do Result := E.ClassName;
+  end;
+end;
+
+procedure TConcurrencyWorld.CloseWhileBuildingScoped;
+var
+  BuilderDone, CloseDone: TEvent;
+  Outcome: string;
+  ClosedAfterBuild: Boolean;
+begin
+  Outcome := '<sin resultado>';
+  ClosedAfterBuild := False;
+  BuilderDone := TEvent.Create(nil, True, False, '');
+  CloseDone := TEvent.Create(nil, True, False, '');
+  try
+    TThread.CreateAnonymousThread(
+      procedure
+      begin
+        Outcome := ResolveScopedAndDrop;
+        BuilderDone.SetEvent;
+      end).Start;
+    if FInCtorGate.WaitFor(10000) <> wrSignaled then
+    begin
+      FCtorGate.SetEvent;
+      BuilderDone.WaitFor(10000);
+      Report := 'the construction never started';
+      Exit;
+    end;
+    TThread.CreateAnonymousThread(
+      procedure
+      begin
+        Close;
+        // Termino despues de la construccion si para entonces la puerta ya estaba abierta.
+        ClosedAfterBuild := FCtorGate.WaitFor(0) = wrSignaled;
+        CloseDone.SetEvent;
+      end).Start;
+    // Un cierre que no espera termina enseguida; uno que espera no termina antes del plazo. La
+    // puerta se abre en los dos casos.
+    CloseDone.WaitFor(1500);
+    FCtorGate.SetEvent;
+    BuilderDone.WaitFor(10000);
+    CloseDone.WaitFor(10000);
+    ReadOwnership;
+    Report := Format('resolution=%s, close finished after the construction=%s, owned=%d',
+      [Outcome, BoolToStr(ClosedAfterBuild, True), OwnedAfter]);
+  finally
+    CloseDone.Free;
+    BuilderDone.Free;
+  end;
 end;
 
 procedure TConcurrencyWorld.ResolveSharedScopeFromOtherThread;
@@ -1147,6 +1315,28 @@ Feature Resolving from several threads at once @di @concurrency
         Expect(W.Report).ToEqual('alpha->beta=True, beta->alpha=True');
       end)
 
+.Rule('Closing while another thread wires a Singleton does not cross the wiring')
+
+  .Scenario('A close during a wiring leaves its properties alone')
+    .Given('a Singleton with a marked property already filled, whose code wiring is under way in one thread',
+      procedure(W: TConcurrencyWorld)
+      begin
+        W.NoCtorDelay;
+        W.RegisterWiredHolder;
+        W.Build;
+      end)
+    .When('another thread closes the container, and then the wiring finishes',
+      procedure(W: TConcurrencyWorld)
+      begin
+        W.CloseWhileWiring;
+      end)
+    .&Then('the wiring saw its property filled to the end, the resolution failed as shut down, and it died empty',
+      procedure(W: TConcurrencyWorld)
+      begin
+        Expect(W.Report).ToEqual('closed while wiring=True, saw its property filled=True, '
+          + 'resolution=EContainerShutDownError, destroyed=1, destroyed empty=1');
+      end)
+
 .Rule('Closing while another thread resolves ends in a defined state')
 
   .Scenario('A close concurrent with resolutions')
@@ -1236,7 +1426,7 @@ Feature Resolving from several threads at once @di @concurrency
       procedure(W: TConcurrencyWorld)
       begin
         W.Register(Singleton);
-        W.HoldCtorUntilClosed;
+        W.HoldCtorAtGate;
         W.Build;
       end)
     .When('one thread builds it while another closes the container',
@@ -1249,6 +1439,26 @@ Feature Resolving from several threads at once @di @concurrency
       begin
         Expect(W.LoserOutcomeReport).ToEqual(
           'constructor=EContainerShutDownError, cierre=closer, construidos=1, destruidos=1, vivos=0');
+      end)
+
+  .Scenario('Closing a scope waits for its Scoped construction under way')
+    .Given('one thread building a Scoped service in a scope, and another thread closing the container meanwhile',
+      procedure(W: TConcurrencyWorld)
+      begin
+        W.Register(Scoped);
+        W.HoldCtorAtGate;
+        W.Build;
+        W.OpenSharedScope;
+      end)
+    .When('the construction finishes',
+      procedure(W: TConcurrencyWorld)
+      begin
+        W.CloseWhileBuildingScoped;
+      end)
+    .&Then('the resolution delivers the instance, the close finished after it, and the container owns nothing',
+      procedure(W: TConcurrencyWorld)
+      begin
+        Expect(W.Report).ToEqual('resolution=delivered, close finished after the construction=True, owned=0');
       end)
 
 ;
