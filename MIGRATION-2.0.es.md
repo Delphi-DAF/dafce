@@ -628,6 +628,12 @@ Una suite que estaba en verde puede salir con escenarios Pending o Undefined, o 
   sustituía al de la feature en todos sus escenarios. **Qué rompe**: un step de Background que no es
   idempotente se ejecutaba dos veces; y una feature con Background propio y reglas con el suyo
   prepara ahora los escenarios de esas reglas con los dos.
+- **Un step declarado `.Pending` en un Scenario Outline queda pendiente en cada fila.** En 1.6 las
+  filas lo ejecutaban. **Qué rompe**: un outline que pasaba con un step pendiente cuenta ahora sus
+  filas como Pending.
+- **Un Scenario Outline sin `.Examples` se ejecuta una vez, como un escenario.** En 1.6 se quedaba
+  fuera de la ejecución y del informe. **Qué rompe**: un outline escrito sin su tabla se ejecuta
+  ahora, y un step suyo sin lambda ni binding es Undefined.
 
 ## Cómo hacerlo
 

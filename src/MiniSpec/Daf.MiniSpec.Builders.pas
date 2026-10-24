@@ -77,7 +77,8 @@ type
     FLastTable: TDataTable;
     FRule: TRule<T>;  // Siempre es una Rule (explícita o implícita)
     class procedure NoActionStep(World: T); static;
-    function CreateBindingStep(Kind: TStepKind; const Desc: string): TStepProc<T>;
+  private
+    class function CreateBindingStep(Kind: TStepKind; const Desc: string): TStepProc<T>; static;
   public
     constructor Create(const ARule: IRule; const Description: string);
     function ExampleInit(Step: TStepProc<T>): IScenarioBuilder<T>;
@@ -114,6 +115,11 @@ type
     FStepsWhen: TList<TScenarioStep<T>>;
     FStepsThen: TList<TScenarioStep<T>>;
     FLastStep: TLastStepKind;
+    // Registrado en la regla desde que se declara: sin Examples se ejecuta como un escenario. Lo
+    // posee la regla.
+    FOutline: TScenarioOutline<T>;
+    procedure AddToOutline(Kind: TStepKind; const Desc: string; Step: TStepProc<T>; const Table: TDataTable);
+    function OutlineSteps(Kind: TLastStepKind): TList<IScenarioStep>;
     function BuildInitStep(Headers, Row: TArray<TValue>): TStepProc<T>;
     function SubstitutePlaceholders(const Template: string;
       const Headers: TArray<string>; const Row: TArray<TValue>): string;
@@ -426,7 +432,7 @@ begin
   // Intentionally empty - step passes without doing anything
 end;
 
-function TScenarioBuilder<T>.CreateBindingStep(Kind: TStepKind; const Desc: string): TStepProc<T>;
+class function TScenarioBuilder<T>.CreateBindingStep(Kind: TStepKind; const Desc: string): TStepProc<T>;
 var
   Binding: TStepBinding;
   Captures: TArray<string>;
@@ -658,6 +664,33 @@ begin
   FStepsWhen := TObjectList<TScenarioStep<T>>.Create;
   FStepsThen := TObjectList<TScenarioStep<T>>.Create;
   FLastStep := lskNone;
+  FOutline := TScenarioOutline<T>.Create(FRule, FDescription, nil);
+end;
+
+procedure TScenarioOutlineBuilder<T>.AddToOutline(Kind: TStepKind; const Desc: string; Step: TStepProc<T>;
+  const Table: TDataTable);
+begin
+  // La copia del Outline es la que se ejecuta cuando no hay filas: un step sin lambda resuelve su
+  // binding como en un Scenario.
+  var Proc := Step;
+  if not Assigned(Proc) then
+    Proc := TScenarioBuilder<T>.CreateBindingStep(Kind, Desc);
+  case Kind of
+    skGiven: FOutline.Given(Desc, Table, Proc);
+    skWhen:  FOutline.When(Desc, Table, Proc);
+    skThen:  FOutline.&Then(Desc, Table, Proc);
+  end;
+end;
+
+function TScenarioOutlineBuilder<T>.OutlineSteps(Kind: TLastStepKind): TList<IScenarioStep>;
+begin
+  case Kind of
+    lskGiven: Result := FOutline.StepsGiven;
+    lskWhen:  Result := FOutline.StepsWhen;
+    lskThen:  Result := FOutline.StepsThen;
+  else
+    Result := nil;
+  end;
 end;
 
 function TScenarioOutlineBuilder<T>.GetFeature: TFeature<T>;
@@ -711,6 +744,7 @@ end;
 function TScenarioOutlineBuilder<T>.Given(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
 begin
   FStepsGiven.Add(TScenarioStep<T>.Create(sikGiven, nil, Desc, Step));
+  AddToOutline(skGiven, Desc, Step, nil);
   FLastStep := lskGiven;
   Result := Self;
 end;
@@ -723,6 +757,7 @@ end;
 function TScenarioOutlineBuilder<T>.Given(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
 begin
   FStepsGiven.Add(TScenarioStep<T>.Create(sikGiven, nil, Desc, Step, Table));
+  AddToOutline(skGiven, Desc, Step, Table);
   FLastStep := lskGiven;
   Result := Self;
 end;
@@ -736,6 +771,7 @@ end;
 function TScenarioOutlineBuilder<T>.When(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
 begin
   FStepsWhen.Add(TScenarioStep<T>.Create(sikWhen, nil, Desc, Step));
+  AddToOutline(skWhen, Desc, Step, nil);
   FLastStep := lskWhen;
   Result := Self;
 end;
@@ -743,6 +779,7 @@ end;
 function TScenarioOutlineBuilder<T>.When(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
 begin
   FStepsWhen.Add(TScenarioStep<T>.Create(sikWhen, nil, Desc, Step, Table));
+  AddToOutline(skWhen, Desc, Step, Table);
   FLastStep := lskWhen;
   Result := Self;
 end;
@@ -756,6 +793,7 @@ end;
 function TScenarioOutlineBuilder<T>.&Then(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
 begin
   FStepsThen.Add(TScenarioStep<T>.Create(sikThen, nil, Desc, Step));
+  AddToOutline(skThen, Desc, Step, nil);
   FLastStep := lskThen;
   Result := Self;
 end;
@@ -763,6 +801,7 @@ end;
 function TScenarioOutlineBuilder<T>.&Then(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
 begin
   FStepsThen.Add(TScenarioStep<T>.Create(sikThen, nil, Desc, Step, Table));
+  AddToOutline(skThen, Desc, Step, Table);
   FLastStep := lskThen;
   Result := Self;
 end;
@@ -776,9 +815,18 @@ end;
 function TScenarioOutlineBuilder<T>.&And(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
 begin
   case FLastStep of
-    lskGiven: FStepsGiven.Add(TScenarioStep<T>.Create(sikAnd, nil, Desc, Step));
-    lskWhen:  FStepsWhen.Add(TScenarioStep<T>.Create(sikAnd, nil, Desc, Step));
-    lskThen:  FStepsThen.Add(TScenarioStep<T>.Create(sikAnd, nil, Desc, Step));
+    lskGiven: begin
+                FStepsGiven.Add(TScenarioStep<T>.Create(sikAnd, nil, Desc, Step));
+                AddToOutline(skGiven, Desc, Step, nil);
+              end;
+    lskWhen:  begin
+                FStepsWhen.Add(TScenarioStep<T>.Create(sikAnd, nil, Desc, Step));
+                AddToOutline(skWhen, Desc, Step, nil);
+              end;
+    lskThen:  begin
+                FStepsThen.Add(TScenarioStep<T>.Create(sikAnd, nil, Desc, Step));
+                AddToOutline(skThen, Desc, Step, nil);
+              end;
   else
     raise Exception.Create('And must follow Given, When or Then');
   end;
@@ -788,9 +836,18 @@ end;
 function TScenarioOutlineBuilder<T>.&And(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
 begin
   case FLastStep of
-    lskGiven: FStepsGiven.Add(TScenarioStep<T>.Create(sikAnd, nil, Desc, Step, Table));
-    lskWhen:  FStepsWhen.Add(TScenarioStep<T>.Create(sikAnd, nil, Desc, Step, Table));
-    lskThen:  FStepsThen.Add(TScenarioStep<T>.Create(sikAnd, nil, Desc, Step, Table));
+    lskGiven: begin
+                FStepsGiven.Add(TScenarioStep<T>.Create(sikAnd, nil, Desc, Step, Table));
+                AddToOutline(skGiven, Desc, Step, Table);
+              end;
+    lskWhen:  begin
+                FStepsWhen.Add(TScenarioStep<T>.Create(sikAnd, nil, Desc, Step, Table));
+                AddToOutline(skWhen, Desc, Step, Table);
+              end;
+    lskThen:  begin
+                FStepsThen.Add(TScenarioStep<T>.Create(sikAnd, nil, Desc, Step, Table));
+                AddToOutline(skThen, Desc, Step, Table);
+              end;
   else
     raise Exception.Create('And must follow Given, When or Then');
   end;
@@ -806,9 +863,18 @@ end;
 function TScenarioOutlineBuilder<T>.But(const Desc: string; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
 begin
   case FLastStep of
-    lskGiven: FStepsGiven.Add(TScenarioStep<T>.Create(sikBut, nil, Desc, Step));
-    lskWhen:  FStepsWhen.Add(TScenarioStep<T>.Create(sikBut, nil, Desc, Step));
-    lskThen:  FStepsThen.Add(TScenarioStep<T>.Create(sikBut, nil, Desc, Step));
+    lskGiven: begin
+                FStepsGiven.Add(TScenarioStep<T>.Create(sikBut, nil, Desc, Step));
+                AddToOutline(skGiven, Desc, Step, nil);
+              end;
+    lskWhen:  begin
+                FStepsWhen.Add(TScenarioStep<T>.Create(sikBut, nil, Desc, Step));
+                AddToOutline(skWhen, Desc, Step, nil);
+              end;
+    lskThen:  begin
+                FStepsThen.Add(TScenarioStep<T>.Create(sikBut, nil, Desc, Step));
+                AddToOutline(skThen, Desc, Step, nil);
+              end;
   else
     raise Exception.Create('But must follow Given, When or Then');
   end;
@@ -818,9 +884,18 @@ end;
 function TScenarioOutlineBuilder<T>.But(const Desc: string; const Table: TDataTable; Step: TStepProc<T>): IScenarioOutlineBuilder<T>;
 begin
   case FLastStep of
-    lskGiven: FStepsGiven.Add(TScenarioStep<T>.Create(sikBut, nil, Desc, Step, Table));
-    lskWhen:  FStepsWhen.Add(TScenarioStep<T>.Create(sikBut, nil, Desc, Step, Table));
-    lskThen:  FStepsThen.Add(TScenarioStep<T>.Create(sikBut, nil, Desc, Step, Table));
+    lskGiven: begin
+                FStepsGiven.Add(TScenarioStep<T>.Create(sikBut, nil, Desc, Step, Table));
+                AddToOutline(skGiven, Desc, Step, Table);
+              end;
+    lskWhen:  begin
+                FStepsWhen.Add(TScenarioStep<T>.Create(sikBut, nil, Desc, Step, Table));
+                AddToOutline(skWhen, Desc, Step, Table);
+              end;
+    lskThen:  begin
+                FStepsThen.Add(TScenarioStep<T>.Create(sikBut, nil, Desc, Step, Table));
+                AddToOutline(skThen, Desc, Step, Table);
+              end;
   else
     raise Exception.Create('But must follow Given, When or Then');
   end;
@@ -837,6 +912,9 @@ begin
     lskThen:  if FStepsThen.Count > 0 then
                 FStepsThen.Last.DeclarePending;
   end;
+  var Steps := OutlineSteps(FLastStep);
+  if Assigned(Steps) and (Steps.Count > 0) then
+    TScenarioStep<T>(Steps.Last).DeclarePending;
   Result := Self;
 end;
 
@@ -850,6 +928,9 @@ begin
     lskThen:  if FStepsThen.Count > 0 then
                 FStepsThen.Last.SetProc(NoActionStep);
   end;
+  var Steps := OutlineSteps(FLastStep);
+  if Assigned(Steps) and (Steps.Count > 0) then
+    TScenarioStep<T>(Steps.Last).SetProc(NoActionStep);
   Result := Self;
 end;
 
@@ -907,6 +988,13 @@ begin
         skThen:  Example.&Then(Desc, Proc);
       end;
     end;
+    // Cada fila es un escenario con sus steps, y lo que declara la plantilla vale para todas.
+    if Step.DeclaredPending then
+      case Kind of
+        skGiven: TScenarioStep<T>(Example.StepsGiven.Last).DeclarePending;
+        skWhen:  TScenarioStep<T>(Example.StepsWhen.Last).DeclarePending;
+        skThen:  TScenarioStep<T>(Example.StepsThen.Last).DeclarePending;
+      end;
   end;
 end;
 
@@ -922,15 +1010,7 @@ begin
   for var i := 0 to High(Headers) do
     HeaderStrings[i] := Headers[i].AsString;
 
-  // Crear el ScenarioOutline como nodo padre
-  var Outline := TScenarioOutline<T>.Create(FRule, FDescription, HeaderStrings);
-  // Copiar los steps template al outline
-  for var Step in FStepsGiven do
-    Outline.Given(Step.Description, Step.Proc);
-  for var Step in FStepsWhen do
-    Outline.When(Step.Description, Step.Proc);
-  for var Step in FStepsThen do
-    Outline.&Then(Step.Description, Step.Proc);
+  FOutline.SetHeaders(HeaderStrings);
 
   for var RowIdx := 1 to High(Table) do
   begin
@@ -939,7 +1019,7 @@ begin
       raise Exception.CreateFmt('Row %d does not match header column count.', [RowIdx]);
 
     // Crear Example con el Outline como parent
-    var Example := TScenario<T>.CreateExample(Outline, FDescription);
+    var Example := TScenario<T>.CreateExample(FOutline, FDescription);
     Example.ExampleInit(BuildInitStep(Headers, CurrentRow));
 
     // Asignar metadata simplificada
@@ -956,7 +1036,7 @@ begin
 
     // Registrar el Example solo en el Outline (no en Rule.Scenarios)
     // El Outline ya está en Rule.Scenarios y ejecuta sus Examples
-    Outline.AddExample(Example);
+    FOutline.AddExample(Example);
   end;
 
   // Siempre devolver builder de la Rule actual

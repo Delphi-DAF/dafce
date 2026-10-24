@@ -596,6 +596,7 @@ type
     /// </summary>
     procedure DeclarePending;
     property Proc: TStepProc<T> read FProc;
+    property DeclaredPending: Boolean read FDeclaredPending;
     property DataTable: TDataTableObj read GetDataTable;
   end;
 
@@ -686,6 +687,11 @@ type
     constructor Create(const ARule: IRule; const Description: string; const Headers: TArray<string>);
     destructor Destroy; override;
     procedure AddExample(const Example: IScenario);
+    procedure SetHeaders(const Headers: TArray<string>);
+    /// <summary>
+    ///   Runs each row with its own World. Without rows it runs once as a scenario, with the World
+    ///   and the Background that the rule prepares for it.
+    /// </summary>
     procedure Run(World: TObject); override;
     property Headers: TArray<string> read GetHeaders;
     property Examples: TList<IScenario> read GetExamples;
@@ -1665,11 +1671,21 @@ begin
   FExamples.Add(Example);
 end;
 
+procedure TScenarioOutline<T>.SetHeaders(const Headers: TArray<string>);
+begin
+  FHeaders := Headers;
+end;
+
 procedure TScenarioOutline<T>.Run(World: TObject);
 var
   Rule: TRule<T>;
   ExampleWorld: T;
 begin
+  if FExamples.Count = 0 then
+  begin
+    inherited Run(World);
+    Exit;
+  end;
   // El Outline ejecuta cada Example con su propio World
   Rule := FParent as TRule<T>;
   FRunInfo.State := srsRunning;
@@ -2154,8 +2170,9 @@ begin
       // vienen detrás se ejecutan igual.
       try
         // ScenarioOutline maneja sus propios Worlds (uno por Example)
-        // No crear World aquí para evitar Worlds fantasma
-        if Supports(Scenario, IScenarioOutline) then
+        // No crear World aquí para evitar Worlds fantasma. Sin filas es un escenario como otro.
+        var Outline: IScenarioOutline;
+        if Supports(Scenario, IScenarioOutline, Outline) and (Outline.Examples.Count > 0) then
           Scenario.Run(nil)
         else
         begin

@@ -70,6 +70,15 @@ A step defined without a lambda is display-only: it appears in the report but ru
 
 The `Given` line appears in the output as context but does not execute any code. If a step binding matching the substituted description is registered, it runs instead.
 
+## Pending steps, and an outline without Examples
+
+A step declared `.Pending` in the outline is pending in every row: no row runs it or the steps after
+it, and each row counts as Pending.
+
+An outline with no `.Examples` runs once, as a scenario: with its World and its Background, counted as
+one scenario and printed with its steps. There a step without a lambda is not display-only: with no
+binding that matches it, it is Undefined, as in a Scenario.
+
 ---
 
 [← The World](world.md) | [Next: DataTables →](datatables.md)

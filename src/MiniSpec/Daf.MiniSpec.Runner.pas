@@ -978,7 +978,7 @@ begin
       Continue;
 
     var Outline: IScenarioOutline;
-    if Supports(Scenario, IScenarioOutline, Outline) then
+    if Supports(Scenario, IScenarioOutline, Outline) and (Outline.Examples.Count > 0) then
       ReportOutline(Outline)
     else
       Report(Scenario);

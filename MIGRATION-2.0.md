@@ -629,6 +629,11 @@ suite that was green can come out with scenarios Pending or Undefined, or red.
   every scenario of the feature. **What breaks**: a Background step that is not idempotent ran
   twice; and a feature with its own Background and rules with theirs now prepares the scenarios of
   those rules with both.
+- **A step declared `.Pending` in a Scenario Outline is pending in every row.** In 1.6 the rows ran
+  it. **What breaks**: an outline that passed with a pending step now counts its rows as Pending.
+- **A Scenario Outline without `.Examples` runs once, as a scenario.** In 1.6 it was left out of the
+  run and of the report. **What breaks**: an outline written without its table now runs, and a step
+  of it with neither lambda nor binding is Undefined.
 
 ## How to do it
 

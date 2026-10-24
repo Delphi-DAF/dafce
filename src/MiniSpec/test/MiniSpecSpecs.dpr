@@ -25,7 +25,8 @@ uses
   NestedRun.Feat in 'NestedRun.Feat.pas',
   FailureVisibility.Feat in 'FailureVisibility.Feat.pas',
   FailureReason.Feat in 'FailureReason.Feat.pas',
-  BackgroundSteps.Feat in 'BackgroundSteps.Feat.pas';
+  BackgroundSteps.Feat in 'BackgroundSteps.Feat.pas',
+  ScenarioOutline.Feat in 'ScenarioOutline.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;
