@@ -122,7 +122,7 @@ type
     property Environment: IHostEnvironment read GetEnvironment;
     /// <summary>
     /// Solo se compone si alguien la toca: componer sin proveedores es un error, asi que
-    /// tocarla por sistema rompeia toda aplicacion que no configure logging.
+    /// tocarla por sistema romperia toda aplicacion que no configure logging.
     /// </summary>
     property Logging: ILoggingBuilder read GetLogging;
     /// <summary>Datos que comparten entre si las piezas que componen el arranque.</summary>

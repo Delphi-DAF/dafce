@@ -111,7 +111,6 @@ type
   /// <summary>
   ///   Clase para leer y almacenar las variables de entorno en un diccionario.
   ///   Llama a Refresh() para actualizar la lista en cualquier momento.
-  ///   Usa
   /// </summary>
   TEnvVars = class
   private

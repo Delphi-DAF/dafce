@@ -7,7 +7,7 @@
   The one divergence that shows in every call is how a value is read. In .NET you
   write result.GetValue(fileOption). Here you write FileOption.ValueIn(Parsed): the
   object asks the result, not the result the object.
-  an interface cannot declare a generic method at all --
+  An interface cannot declare a generic method at all --
   E2535 -- and even on a class Delphi will not infer T through an IOption<T>
   parameter -- E2010. Writing it the .NET way would mean giving up counted
   interfaces AND spelling the type out by hand, which is the repetition this module
