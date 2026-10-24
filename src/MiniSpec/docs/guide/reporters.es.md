@@ -46,6 +46,14 @@ escenarios fallados y Undefined y los hooks, y `skipped` los Pending. `--allow-u
 `--strict-pending` cambian el código de salida, no el informe. Cucumber, desde la 6.11, da un escenario
 Pending como fallo; MiniSpec lo mantiene como omitido, igual que su código de salida.
 
+## JSON Reporter
+
+Cada escenario, cada fila de un Scenario Outline y cada Background lleva un `status`: `pass`, `fail`,
+`pending`, `undefined`, o `skip` si no se ejecutó. Cada step lleva un `status` con los nombres del
+formateador JSON de Cucumber, `passed`, `failed`, `skipped`, `pending` y `undefined`, y `success`,
+verdadero solo para un step que pasó. La raíz lleva los totales: `passCount`, `failCount`,
+`skipCount`, `pendingCount` y `undefinedCount`.
+
 ## Live Reporter
 
 Por defecto espera 3 segundos para conexión del navegador. Usa `wait=0` para deshabilitar.

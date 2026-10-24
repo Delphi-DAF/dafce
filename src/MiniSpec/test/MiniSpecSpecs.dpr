@@ -28,7 +28,8 @@ uses
   BackgroundSteps.Feat in 'BackgroundSteps.Feat.pas',
   ScenarioOutline.Feat in 'ScenarioOutline.Feat.pas',
   SuiteHooks.Feat in 'SuiteHooks.Feat.pas',
-  JUnitReport.Feat in 'JUnitReport.Feat.pas';
+  JUnitReport.Feat in 'JUnitReport.Feat.pas',
+  JsonReport.Feat in 'JsonReport.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

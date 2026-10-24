@@ -46,6 +46,14 @@ failed and Undefined scenarios and the hooks, and `skipped` the Pending ones. `-
 and `--strict-pending` change the exit code, not the report. Cucumber, since 6.11, reports a Pending
 scenario as a failure; MiniSpec keeps it as skipped, as its exit code does.
 
+## JSON Reporter
+
+Each scenario, each row of a Scenario Outline and each Background carries a `status`: `pass`, `fail`,
+`pending`, `undefined`, or `skip` when it did not run. Each step carries a `status` with the names of
+Cucumber's JSON formatter, `passed`, `failed`, `skipped`, `pending` and `undefined`, and `success`,
+true only for a step that passed. The root carries the totals: `passCount`, `failCount`, `skipCount`,
+`pendingCount` and `undefinedCount`.
+
 ## Live Reporter
 
 By default waits 3 seconds for browser connection. Use `wait=0` to disable.

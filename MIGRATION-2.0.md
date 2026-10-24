@@ -641,6 +641,10 @@ suite that was green can come out with scenarios Pending or Undefined, or red.
   Pending one a `<skipped>`; a scenario that did not run is not listed; and each hook that raised is
   a failed case. In 1.6 Undefined and Pending came out as passed, and a filtered scenario as skipped.
   **What breaks**: a CI that read the report as green now sees the Undefined scenarios as failures.
+- **The JSON report gives each element the state it ended in.** A scenario or a row is `pending` or
+  `undefined` when it ends so; each step carries a `status`; `success` is true only for a step that
+  passed; and the root adds `undefinedCount`. **What breaks**: a reader that took every status other
+  than `pass` as `fail`, or that read `success` as "did not fail".
 
 ## How to do it
 

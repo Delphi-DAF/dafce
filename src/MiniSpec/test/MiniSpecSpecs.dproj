@@ -119,6 +119,7 @@
         <DCCReference Include="ScenarioOutline.Feat.pas"/>
         <DCCReference Include="SuiteHooks.Feat.pas"/>
         <DCCReference Include="JUnitReport.Feat.pas"/>
+        <DCCReference Include="JsonReport.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>

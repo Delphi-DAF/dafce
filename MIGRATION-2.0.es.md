@@ -643,6 +643,10 @@ Una suite que estaba en verde puede salir con escenarios Pending o Undefined, o 
   caso fallido. En 1.6 Undefined y Pending salían como aprobados, y un escenario filtrado como
   omitido. **Qué rompe**: un CI que leía el informe en verde ve ahora como fallos los escenarios
   Undefined.
+- **El informe JSON da a cada elemento el estado en que acabó.** Un escenario o una fila es `pending`
+  o `undefined` si acaba así; cada step lleva un `status`; `success` es verdadero solo para un step que
+  pasó; y la raíz añade `undefinedCount`. **Qué rompe**: un lector que tomaba por `fail` todo estado
+  distinto de `pass`, o que leía `success` como «no falló».
 
 ## Cómo hacerlo
 
