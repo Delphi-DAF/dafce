@@ -149,8 +149,9 @@ Services.TryAddSingleton<IClock, TSystemClock>;
 Services.AddSingleton<IClock, TFrozenClock>;
 ```
 
-`Replace` quita los registros previos del tipo y añade el nuevo; `RemoveAll` los quita sin
-añadir nada — que es lo que necesita un arnés de specs para desmontar un registro de
+`Replace` quita el primer registro del tipo, si lo hay, y añade el nuevo al final, como en .NET:
+con dos registros previos, el segundo se queda y el nuevo va detrás. `RemoveAll` los quita todos
+sin añadir nada — que es lo que necesita un arnés de specs para desmontar un registro de
 producción.
 
 **Una diferencia deliberada con .NET.** Allí la colección *es* una lista mutable, y `TryAdd`,

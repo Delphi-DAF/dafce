@@ -525,7 +525,8 @@ type
     function TryAddTransient<ServiceType: IInterface>(const Factory: TServiceFactoryEx<ServiceType>): IServiceCollection; overload;
     function TryAddTransient<ServiceType: IInterface; TImpl: ServiceType>: IServiceCollection; overload;
 
-    // Replace quita los registros previos del tipo y anade el nuevo; RemoveAll solo quita.
+    // Replace quita el primer registro sin clave del tipo, si lo hay, y anade el nuevo al final;
+    // RemoveAll los quita todos.
     function Replace(const LifeTime: TServiceLifeTime; const ServiceType: PTypeInfo; const Factory: TServiceFactory): IServiceCollection; overload;
     function Replace(const LifeTime: TServiceLifeTime; const ServiceType: PTypeInfo; const TImpl: TClass): IServiceCollection; overload;
     function Replace<ServiceType: IInterface>(const LifeTime: TServiceLifeTime; const Factory: TServiceFactory<ServiceType>): IServiceCollection; overload;
@@ -1675,14 +1676,14 @@ end;
 function IServiceCollection.Replace(const LifeTime: TServiceLifeTime; const ServiceType: PTypeInfo;
   const Factory: TServiceFactory): IServiceCollection;
 begin
-  FImplementor.RemoveAll(TServiceSlot.Create(ServiceType));
+  FImplementor.SetDescriptors(TServiceSlot.Create(ServiceType), Copy(Descriptors(ServiceType), 1, MaxInt));
   Result := AddDescriptor(LifeTime, TServiceSlot.Create(ServiceType), Factory, nil);
 end;
 
 function IServiceCollection.Replace(const LifeTime: TServiceLifeTime; const ServiceType: PTypeInfo;
   const TImpl: TClass): IServiceCollection;
 begin
-  FImplementor.RemoveAll(TServiceSlot.Create(ServiceType));
+  FImplementor.SetDescriptors(TServiceSlot.Create(ServiceType), Copy(Descriptors(ServiceType), 1, MaxInt));
   Result := AddDescriptor(LifeTime, TServiceSlot.Create(ServiceType), Factory.From(ServiceType, TImpl), TImpl);
 end;
 

@@ -147,9 +147,10 @@ Services.TryAddSingleton<IClock, TSystemClock>;
 Services.AddSingleton<IClock, TFrozenClock>;
 ```
 
-`Replace` removes the previous registrations of the type and adds the new one; `RemoveAll`
-removes them without adding anything — which is what a spec harness needs to take a
-production registration apart.
+`Replace` removes the first registration of the type, if there is one, and adds the new one at
+the end, as in .NET: with two registrations before, the second stays and the new one comes after
+it. `RemoveAll` removes them all without adding anything — which is what a spec harness needs to
+take a production registration apart.
 
 **A deliberate difference from .NET.** There, the collection *is* a mutable list, and
 `TryAdd`, `Replace` and Scrutor are all extension methods on top of it. In DAF the

@@ -38,6 +38,18 @@ begin
     end);
 end;
 
+/// Las clases de los descriptores de IFoo, en orden, unidas por comas.
+function DescriptorClasses(const Services: IServiceCollection): string;
+begin
+  Result := '';
+  for var D in Services.Descriptors<IFoo> do
+  begin
+    if Result <> '' then
+      Result := Result + ',';
+    Result := Result + D.ImplementationClass.ClassName;
+  end;
+end;
+
 initialization
 
 Feature('''
@@ -93,24 +105,46 @@ Feature Service collection composition @di @composition
 
 .Rule('A registration can be replaced and removed')
 
-  .Scenario('Replace leaves a single registration')
+  .Scenario('Replace removes only the first registration')
     .Given('two registrations for IFoo',
       procedure(W: TFooWorld)
       begin
         W.Services.AddSingleton<IFoo, TAppFoo>;
         W.Services.AddSingleton<IFoo, TLibFoo>;
-        Expect(Length(W.Services.Descriptors<IFoo>)).ToEqual(2);
+        Expect(DescriptorClasses(W.Services)).ToEqual('TAppFoo,TLibFoo');
       end)
     .When('Replace is called for IFoo',
       procedure(W: TFooWorld)
       begin
         W.Services.Replace<IFoo, TOtherFoo>(Singleton);
       end)
-    .&Then('exactly one descriptor is left, the new one',
+    .&Then('two descriptors are left for IFoo: the second one before, and the new one, in that order',
       procedure(W: TFooWorld)
       begin
-        Expect(Length(W.Services.Descriptors<IFoo>)).ToEqual(1);
+        Expect(DescriptorClasses(W.Services)).ToEqual('TLibFoo,TOtherFoo');
+      end)
+    .&And('resolving IFoo gives the new one',
+      procedure(W: TFooWorld)
+      begin
         Expect(W.ResolveName).ToEqual('other');
+      end)
+
+  .Scenario('Replace leaves a single registration')
+    .Given('a single registration for IFoo',
+      procedure(W: TFooWorld)
+      begin
+        W.Services.AddSingleton<IFoo, TAppFoo>;
+        Expect(DescriptorClasses(W.Services)).ToEqual('TAppFoo');
+      end)
+    .When('Replace is called for IFoo',
+      procedure(W: TFooWorld)
+      begin
+        W.Services.Replace<IFoo, TOtherFoo>(Singleton);
+      end)
+    .&Then('exactly one descriptor is left for IFoo, the new one',
+      procedure(W: TFooWorld)
+      begin
+        Expect(DescriptorClasses(W.Services)).ToEqual('TOtherFoo');
       end)
 
   .Scenario('A spec harness can take a registration apart')
