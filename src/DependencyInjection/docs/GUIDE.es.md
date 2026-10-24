@@ -323,8 +323,14 @@ camino que recorrió.
 ⚠️ **Durante la resolución de un ciclo, un participante recibe a otro que todavía no tiene sus propias
 propiedades rellenas.** Un constructor no puede suponer nada de una propiedad marcada.
 
-Cerrar el contenedor vacía las propiedades inyectadas de todo lo que posee antes de soltar nada, así
+Cerrar el contenedor vacía las propiedades inyectadas de todo lo que cableó antes de soltar nada, así
 que un ciclo se desmonta en vez de quedarse vivo.
+
+**Solo se cablea lo que el contenedor construye a partir de una clase.** Lo que devuelve una factory,
+y una instancia registrada como tal, son de quien los construyó: el contenedor no les rellena ninguna
+propiedad, no les ejecuta ningún cableado por código y no les vacía las propiedades al cerrar. Su
+dueño los cablea a petición con `InjectInto`. Cuando se decora un servicio registrado por clase, el
+original llega al decorador ya cableado.
 
 ### Cablear una instancia que el contenedor no construyó
 

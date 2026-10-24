@@ -322,8 +322,14 @@ at startup; with validation off, the resolution that walks into one fails naming
 ⚠️ **During the resolution of a cycle, one participant receives another whose own properties are not
 filled yet.** A constructor can assume nothing about a marked property.
 
-Closing the container empties the injected properties of everything it owns before releasing any of
+Closing the container empties the injected properties of everything it wired before releasing any of
 it, so a cycle is taken apart instead of leaking.
+
+**Only what the container builds from a class is wired.** What a factory returns, and an instance
+registered as such, belong to whoever built them: the container fills no property of theirs, runs no
+code wiring on them and does not empty their properties when it closes. Their owner wires them on
+request with `InjectInto`. When a service registered by class is decorated, the original reaches the
+decorator already wired.
 
 ### Wiring an instance the container did not build
 

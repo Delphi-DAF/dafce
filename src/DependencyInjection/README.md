@@ -202,6 +202,12 @@ filled aborts naming the property, its type and the class.
 marked property is `nil` inside it. A dependency needed *during* construction goes through the
 constructor; both routes live together in the same class.
 
+**Only what the container builds from a class is wired.** What a factory returns, and an instance
+registered as such, belong to whoever built them: the container fills no property of theirs, runs no
+code wiring on them and does not empty their properties when it closes. Their owner wires them on
+request with `InjectInto`. When a service registered by class is decorated, the original reaches the
+decorator already wired.
+
 ### Wiring an instance the container did not build
 
 ```pascal

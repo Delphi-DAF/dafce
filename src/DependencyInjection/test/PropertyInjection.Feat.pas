@@ -516,10 +516,41 @@ type
   TThrower = class(TInterfacedObject, IThrower)
   end;
 
+  // --- Decoracion ---
+
+  IDecoratedSvc = interface(IInvokable)
+    ['{6B3E9A17-2D50-4C84-9F16-0A7C5E3B8D21}']
+    function Name: string;
+  end;
+
+  /// El original que el contenedor construye por clase: recibe un ICounted por propiedad.
+  TDecoratedOriginal = class(TInterfacedObject, IDecoratedSvc)
+  private
+    FCounted: ICounted;
+  public
+    class var Destroyed: Integer;
+    destructor Destroy; override;
+    [DafInject]
+    property Counted: ICounted read FCounted write FCounted;
+    function Name: string;
+  end;
+
+  TDecoratorSvc = class(TInterfacedObject, IDecoratedSvc)
+  private
+    FInner: IDecoratedSvc;
+  public
+    class var Destroyed: Integer;
+    constructor Create(const Inner: IDecoratedSvc);
+    destructor Destroy; override;
+    function Name: string;
+  end;
+
   TInjectionWorld = class
   public
     Services: IServiceCollection;
     Provider: IServiceProvider;
+    // Lo que el dueno de una instancia registrada le pone en su propiedad marcada.
+    OwnerStorage: IStorage;
     Guest: TGuest;
     Outcome: string;
     Report: string;
@@ -856,9 +887,43 @@ end;
 
 { TInjectionWorld }
 
+{ TDecoratedOriginal }
+
+destructor TDecoratedOriginal.Destroy;
+begin
+  Inc(Destroyed);
+  inherited;
+end;
+
+function TDecoratedOriginal.Name: string;
+begin
+  Result := 'original';
+end;
+
+{ TDecoratorSvc }
+
+constructor TDecoratorSvc.Create(const Inner: IDecoratedSvc);
+begin
+  inherited Create;
+  FInner := Inner;
+end;
+
+destructor TDecoratorSvc.Destroy;
+begin
+  Inc(Destroyed);
+  inherited;
+end;
+
+function TDecoratorSvc.Name: string;
+begin
+  Result := 'decorated(' + FInner.Name + ')';
+end;
+
 constructor TInjectionWorld.Create;
 begin
   inherited;
+  TDecoratedOriginal.Destroyed := 0;
+  TDecoratorSvc.Destroyed := 0;
   TBySetter.SetterRuns := 0;
   TCounted.Destroyed := 0;
   TCtorReader.StorageInCtorWasNil := False;
@@ -1518,6 +1583,124 @@ Feature Property injection @di @injection
       procedure(W: TInjectionWorld)
       begin
         Expect(W.Held = nil).ToBeTrue;
+      end)
+
+.Rule('The container wires what it builds from a class, and nothing else')
+
+  .Scenario('What a factory returns is not wired')
+    .Given('a factory that returns an instance with an unfilled marked property, and a code wiring registered for its class',
+      procedure(W: TInjectionWorld)
+      begin
+        W.Services.AddSingleton<IStorage, TStorage>;
+        W.Services.AddSingleton<IMarkedAndWired>(
+          function(Provider: IServiceProvider): IMarkedAndWired
+          begin
+            Result := TMarkedAndWired.Create;
+          end);
+        W.Services.AddInjector<TMarkedAndWired>(
+          procedure(const Instance: TMarkedAndWired; const Provider: IServiceProvider)
+          begin
+            Instance.SetNote('wired');
+          end);
+      end)
+    .When('it is resolved',
+      procedure(W: TInjectionWorld)
+      begin
+        W.Build;
+        var Svc := W.Provider.GetRequiredService<IMarkedAndWired>;
+        var Inst := TMarkedAndWired(Svc as TObject);
+        W.Report := Format('storage=%s note=%s', [BoolToStr(Inst.Storage <> nil, True), Svc.Note]);
+      end)
+    .&Then('the property is still nil, and the code wiring has not run',
+      procedure(W: TInjectionWorld)
+      begin
+        Expect(W.Report).ToEqual('storage=False note=');
+      end)
+
+  .Scenario('A registered instance is neither wired nor cleared')
+    .Given('a registered instance whose marked property its owner filled with an object of its own',
+      procedure(W: TInjectionWorld)
+      begin
+        W.Services.AddSingleton<IStorage, TStorage>;
+        var Inst := TMarkedAndWired.Create;
+        W.OwnerStorage := TStorage.Create;
+        Inst.Storage := W.OwnerStorage;
+        W.Held := Inst as IMarkedAndWired;
+        W.Services.AddSingleton<IMarkedAndWired>(Inst as IMarkedAndWired);
+      end)
+    .When('it is resolved, and then the container is closed',
+      procedure(W: TInjectionWorld)
+      begin
+        W.Build;
+        var Inst := TMarkedAndWired(W.Provider.GetRequiredService<IMarkedAndWired> as TObject);
+        W.Report := 'resolved: ' + BoolToStr(Inst.Storage = W.OwnerStorage, True);
+        W.Close;
+        W.Report := W.Report + ', closed: ' + BoolToStr(Inst.Storage = W.OwnerStorage, True);
+      end)
+    .&Then('at both moments the property still points to the object its owner put there',
+      procedure(W: TInjectionWorld)
+      begin
+        Expect(W.Report).ToEqual('resolved: True, closed: True');
+      end)
+
+.Rule('The original of a decoration reaches the decorator wired')
+
+  .Scenario('The decorator receives the original already wired')
+    .Given('a service registered by class with a marked property, and a decorator that reads that property from the original',
+      procedure(W: TInjectionWorld)
+      begin
+        W.Services.AddSingleton<ICounted, TCounted>;
+        W.Services.AddSingleton<IDecoratedSvc, TDecoratedOriginal>;
+        W.Services.Decorate<IDecoratedSvc>(
+          function(const Inner: IDecoratedSvc; const Provider: IServiceProvider): IDecoratedSvc
+          begin
+            W.Report := 'counted=' + BoolToStr(TDecoratedOriginal(Inner as TObject).Counted <> nil, True);
+            Result := TDecoratorSvc.Create(Inner);
+          end);
+      end)
+    .When('the service is resolved',
+      procedure(W: TInjectionWorld)
+      begin
+        W.Build;
+        W.Provider.GetRequiredService<IDecoratedSvc>;
+      end)
+    .&Then('the decorator saw the property filled',
+      procedure(W: TInjectionWorld)
+      begin
+        Expect(W.Report).ToEqual('counted=True');
+      end)
+
+  .Scenario('Closing destroys the wired original')
+    .Given('a decorated Singleton whose original, registered by class, received another Singleton by property',
+      procedure(W: TInjectionWorld)
+      begin
+        W.Services.AddSingleton<ICounted, TCounted>;
+        W.Services.AddSingleton<IDecoratedSvc, TDecoratedOriginal>;
+        W.Services.Decorate<IDecoratedSvc>(
+          function(const Inner: IDecoratedSvc; const Provider: IServiceProvider): IDecoratedSvc
+          begin
+            W.Report := 'counted=' + BoolToStr(TDecoratedOriginal(Inner as TObject).Counted <> nil, True);
+            Result := TDecoratorSvc.Create(Inner);
+          end);
+        W.Build;
+        W.Provider.GetRequiredService<IDecoratedSvc>;
+      end)
+    .When('the container is closed',
+      procedure(W: TInjectionWorld)
+      begin
+        W.Close;
+      end)
+    .&Then('the original had received the other Singleton',
+      procedure(W: TInjectionWorld)
+      begin
+        Expect(W.Report).ToEqual('counted=True');
+      end)
+    .&And('the original, the decorator and the other Singleton are destroyed',
+      procedure(W: TInjectionWorld)
+      begin
+        Expect(Format('original %d, decorator %d, counted %d',
+          [TDecoratedOriginal.Destroyed, TDecoratorSvc.Destroyed, TCounted.Destroyed]))
+          .ToEqual('original 1, decorator 1, counted 1');
       end)
 
 .Rule('A marked property that cannot be filled aborts naming it')

@@ -109,6 +109,9 @@ type
     // Ordenado a proposito: CollectGarbage lo recorre de atras hacia
     // delante para liberar en orden inverso al de creacion.
     FServiceInstances : TOrderedDictionary<TServiceIdentity, IInterface>;
+    // Las instancias que este ambito cableo, las unicas a las que vacia las propiedades al cerrar.
+    // Se lee y se escribe bajo FInstancesLock.
+    FWired: TDictionary<Pointer, Byte>;
     // Los dos cerrojos del ambito. La regla: FInstancesLock se toma y se suelta en linea recta
     // --para leer, o para anadir-- y nunca se sostiene mientras se pide FBuildLock ni mientras
     // corre un constructor. Anidar dos tomas suyas, o leer teniendo la escritura, BLOQUEA sin
@@ -1081,6 +1084,7 @@ begin
         Result := Integer(Value.Registration) xor Integer(NativeInt(Value.ClosedType)) xor
           ServiceKey.HashOf(Value.ServedKey);
       end));
+  FWired := TDictionary<Pointer, Byte>.Create;
   FIsSingletonsScope := SingletonsScope;
   FBuildLock := TCriticalSection.Create;
   FServiceCollection := Factory.ServiceCollection;
@@ -1124,6 +1128,7 @@ begin
   // Just in case this Scope is temporal, and we not are in Shutdown
   Shutdown;
   FreeAndNil(FServiceInstances);
+  FreeAndNil(FWired);
   FreeAndNil(FBuildLock);
   inherited;
 end;
@@ -1275,11 +1280,21 @@ begin
           AddServiceInstance(Descriptor, nil);
         Exit;
       end;
-      // Publicar y DESPUES cablear, en ese orden y para todo registro. Mientras la instancia no
-      // este en el diccionario, quien la vuelva a pedir --ella misma, o alguien a quien ella
-      // pide-- entra otra vez a construirla, y ahi no hay fondo.
+      // Publicar y DESPUES cablear, en ese orden. Mientras la instancia no este en el diccionario,
+      // quien la vuelva a pedir --ella misma, o alguien a quien ella pide-- entra otra vez a
+      // construirla, y ahi no hay fondo. Solo se cablea lo construido por clase: lo que devuelve una
+      // factory, o una instancia registrada, es de quien lo construyo.
       AddServiceInstance(Descriptor, Result);
-      TActivatorUtilities.Wire(Provider, InstanceOf(Result));
+      if Descriptor.ImplementationClass <> nil then
+      begin
+        FInstancesLock.BeginWrite;
+        try
+          FWired.AddOrSetValue(InstanceOf(Result), 0);
+        finally
+          FInstancesLock.EndWrite;
+        end;
+        TActivatorUtilities.Wire(Provider, InstanceOf(Result));
+      end;
     finally
       EndCreate(Frame);
     end;
@@ -1345,15 +1360,17 @@ begin
     // bucle de abajo termina sin liberar nada y el Clear final los suelta a la vez, cada uno
     // sosteniendo al otro. Y todas antes que ninguna, porque alternando podria morir uno
     // mientras otro lo tiene en una propiedad sin vaciar.
-    // El catalogo sale del objeto real y no del descriptor: una factory es opaca, y lo que
-    // devuelva puede haberse cableado por su cuenta.
+    // Solo las que el ambito cableo: lo que devuelve una factory, o una instancia registrada, es de
+    // quien lo construyo, y sus propiedades tambien.
     for var idx := 0 to FServiceInstances.Count - 1 do
     begin
       // A una local, como el bucle de abajo. Pasar ValueList[idx] directo a una llamada deja
       // viva hasta el final del metodo la referencia del temporal que emite el compilador, y esa
       // referencia impide que su instancia baje a uno: se libera fuera de orden, la ultima.
       var Svc: IInterface := FServiceInstances.ValueList[idx];
-      TActivatorUtilities.ClearInjected(InstanceOf(Svc));
+      var Instance := InstanceOf(Svc);
+      if (Instance <> nil) and FWired.ContainsKey(Instance) then
+        TActivatorUtilities.ClearInjected(Instance);
     end;
 
     var UnusedFound: Boolean;
@@ -1389,6 +1406,7 @@ begin
       end;
     until not UnusedFound;
     FServiceInstances.Clear;
+    FWired.Clear;
   finally
     FInstancesLock.EndWrite;
   end;
@@ -1587,7 +1605,7 @@ begin
       BeginCreate(Frame, Descriptor);
       try
         Result := Self.CreateInstance(Descriptor, FProvider);
-        if Result <> nil then
+        if (Result <> nil) and (Descriptor.ImplementationClass <> nil) then
           TActivatorUtilities.Wire(FProvider, InstanceOf(Result));
       finally
         EndCreate(Frame);

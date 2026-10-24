@@ -1355,7 +1355,7 @@ end;
 // variable, no su valor, asi que un closure creado dentro del bucle veria el ultimo
 // descriptor. Los parametros de esta funcion si son un marco por llamada.
 function DecoratedFactory(const ServiceType: PTypeInfo; const Inner: TServiceFactory;
-  const Decorator: TServiceDecorator): TServiceFactory;
+  const Decorator: TServiceDecorator; const InnerByClass: Boolean): TServiceFactory;
 begin
   Result := function(Provider: IServiceProvider): IInterface
             begin
@@ -1363,6 +1363,18 @@ begin
               if not Supports(Inner(Provider), ServiceType.TypeData.GUID, Original) then
                 raise EServiceProviderError.CreateFmt('Cannot decorate %s: the registered factory did not produce it',
                   [_T.NameOf(ServiceType)]);
+              // El original que el contenedor construye por clase llega cableado al decorador. Lo que
+              // devuelve el decorador no se cablea: es una lambda.
+              if InnerByClass then
+              begin
+                var Instance := Original as TObject;
+                try
+                  TActivatorUtilities.Wire(Provider, Instance);
+                except
+                  TActivatorUtilities.ClearInjected(Instance);
+                  raise;
+                end;
+              end;
               Result := Decorator(Original, Provider);
             end;
 end;
@@ -2011,8 +2023,8 @@ begin
   for var Idx := 0 to High(Current) do
     // El descriptor decorado pasa a ser un registro por factory: su implementacion ya no
     // es una clase inspeccionable, y la validacion del grafo no debe fingir que lo es.
-    Wrapped[Idx] := TServiceDescriptor.Create(DecoratedFactory(ServiceType, Current[Idx].Factory, Decorator),
-      Current[Idx].LifeTime, ServiceType);
+    Wrapped[Idx] := TServiceDescriptor.Create(DecoratedFactory(ServiceType, Current[Idx].Factory, Decorator,
+      Current[Idx].ImplementationClass <> nil), Current[Idx].LifeTime, ServiceType);
 
   FImplementor.SetDescriptors(TServiceSlot.Create(ServiceType), Wrapped);
 end;
