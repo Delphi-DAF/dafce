@@ -84,6 +84,8 @@ type
     /// sentencia: leido dentro del escenario, un temporal invisible seguiria sujetando la opcion
     /// y el cierre no podria liberar nada.
     function ReadTitle: string;
+    /// Lee Title y Port, y suelta la opcion antes de volver, por lo mismo que ReadTitle.
+    function ReadSettings: string;
   end;
 
 implementation
@@ -93,6 +95,7 @@ uses
   Daf.Configuration.Builder,
   Daf.Configuration.Memory,
   Daf.Configuration.Binder,
+  Daf.Options,
   Daf.Options.Configuration,
   Daf.DependencyInjection;
 
@@ -182,6 +185,12 @@ end;
 function TBindingWorld.ReadTitle: string;
 begin
   Result := Provider.GetRequiredService<IOptions<TAppSettings>>.Value.Title;
+end;
+
+function TBindingWorld.ReadSettings: string;
+begin
+  var Value := Provider.GetRequiredService<IOptions<TAppSettings>>.Value;
+  Result := Format('%s/%d', [Value.Title, Value.Port]);
 end;
 
 // --- Feature definition ---
@@ -355,6 +364,57 @@ Feature A configuration section arrives as settings with an owner @configuration
       procedure(W: TBindingWorld)
       begin
         Expect(W.AliveAfterFree).ToEqual(0);
+      end)
+
+.Rule('Binding a section accumulates with the other configurations of its type')
+
+  .Scenario('A section and a configuration with code accumulate')
+    .Given('settings bound to a section and then configured with code in only one of their settings',
+      procedure(W: TBindingWorld)
+      begin
+        W.Configure('App:Title', 'from-section');
+        W.Configure('App:Port', '8080');
+        W.BuildConfig;
+        ConfigOptions.Bind<TAppSettings>(W.Services, W.Config, 'App');
+        AppOptions.Configure<TAppSettings>(W.Services,
+          procedure(S: TAppSettings)
+          begin
+            S.Port := 9090;
+          end);
+      end)
+    .When('they are asked for',
+      procedure(W: TBindingWorld)
+      begin
+        W.Build;
+        W.Told := W.ReadSettings;
+      end)
+    .&Then('that setting has the value the code set, and the others those of the section',
+      procedure(W: TBindingWorld)
+      begin
+        Expect(W.Told).ToEqual('from-section/9090');
+      end)
+
+  .Scenario('Two sections of the same type accumulate')
+    .Given('settings bound to a whole section and then to another that only carries one of their keys',
+      procedure(W: TBindingWorld)
+      begin
+        W.Configure('App:Title', 'from-app');
+        W.Configure('App:Port', '8080');
+        W.Configure('Override:Port', '9090');
+        W.BuildConfig;
+        ConfigOptions.Bind<TAppSettings>(W.Services, W.Config, 'App');
+        ConfigOptions.Bind<TAppSettings>(W.Services, W.Config, 'Override');
+      end)
+    .When('they are asked for',
+      procedure(W: TBindingWorld)
+      begin
+        W.Build;
+        W.Told := W.ReadSettings;
+      end)
+    .&Then('that setting has the value of the second section, and the others those of the first',
+      procedure(W: TBindingWorld)
+      begin
+        Expect(W.Told).ToEqual('from-app/9090');
       end);
 
 end.

@@ -14,8 +14,8 @@ Contratos principales (interfaces y tipos) del sistema de Inyección de Dependen
 | Unidad | Contenido |
 |--------|-----------|
 | `Daf.Extensions.DependencyInjection` | `IServiceCollection`, `IServiceProvider`, `IServiceScope`, `IAppModule`, tiempos de vida, `Factory`, `TDuckDecorator<T>`, `ILazy<T>` y `Lazy` |
-| `Daf.Extensions.Options` | `IOptions<T>`, `TOptionsValidator<T>`, `EOptionsValidationError` — el contrato del patrón de opciones |
-| `Daf.Options` | `TOptions<T>` y `AppOptions` — ajustes registrados con código |
+| `Daf.Extensions.Options` | `IOptions<T>`, `IConfigureOptions<T>`, `IValidateOptions<T>`, `TValidateOptionsResult`, `TOptionsValidator<T>`, `EOptionsValidationError` — el contrato del patrón de opciones |
+| `Daf.Options` | `TOptions<T>`, `TConfigureOptions<T>`, `TValidateOptions<T>` y `AppOptions` — ajustes registrados con código |
 | `Daf.AppModule` | **Alias de compatibilidad** de `IAppModule`: el contrato se mudó junto a `AddModule<T>`, que es método del record `IServiceCollection` y no puede depender de esta unit. Un `uses Daf.AppModule` que ya existiera sigue valiendo |
 | `Daf.DependencyInjection.ActivatorUtilities` | `TActivatorUtilities`: construir un objeto con sus argumentos de constructor resueltos, e `InjectInto` para cablear una instancia que el contenedor no construyó |
 | `Daf.DependencyInjection.OpenGenerics` | Emparejamiento, comprobaciones y activación de los registros que dejan sus argumentos de tipo sin fijar |
@@ -267,8 +267,14 @@ misma puerta que los que vienen de un fichero, y el servicio que los recibe no d
 salen. Llenarlos desde una sección de configuración es `ConfigOptions.Bind`, en
 [`Configuration`](../Configuration/README.es.md).
 
-El valor se construye en el **primer uso**, no al registrarse, y **una sola vez**: unos ajustes que la
-ejecución no llega a usar no leen ni validan nada.
+El valor se construye en el **primer uso**, no al registrarse, y **una sola vez**, también cuando
+varios hilos lo leen por primera vez a la vez: unos ajustes que la ejecución no llega a usar no leen ni
+validan nada.
+
+**Las configuraciones se acumulan.** Cada `AppOptions.Configure` y cada `ConfigOptions.Bind` de un tipo
+de ajustes es un `IConfigureOptions<T>` más: corren todas, en orden de registro, sobre el mismo objeto,
+y cada una ve lo que dejaron las anteriores. Una configuración registrada directamente como
+`IConfigureOptions<T>` corre en su turno.
 
 ### El valor tiene dueño, y aquí es donde muerde
 
@@ -302,8 +308,26 @@ AppOptions.Configure<TCacheSettings>(Services,
   end);
 ```
 
-Corre una vez, al construirse el valor, y un fallo levanta `EOptionsValidationError` **nombrando el
-ajuste**.
+Corre una vez, al construirse el valor y después de todas las configuraciones, y un fallo levanta
+`EOptionsValidationError` **nombrando el ajuste**. Corren todas las validaciones del tipo —las que se
+pasan a `Configure` o a `Bind`, y cada `IValidateOptions<T>` registrado directamente—, y un solo error
+reúne los motivos de todas, unidos por `'; '`. Un validador responde con un `TValidateOptionsResult`:
+`Success`, `Skip`, que no cuenta como fallo, o `Fail` con uno o varios motivos. Su `Name` es siempre la
+cadena vacía: los ajustes no tienen nombre.
+
+```pascal
+type
+  TCacheRules = class(TInterfacedObject, IValidateOptions<TCacheSettings>)
+  public
+    function Validate(const Name: string; const Options: TCacheSettings): TValidateOptionsResult;
+  end;
+
+Services.AddSingleton<IValidateOptions<TCacheSettings>>(
+  function(Provider: IServiceProvider): IValidateOptions<TCacheSettings>
+  begin
+    Result := TCacheRules.Create;
+  end);
+```
 
 ### Lo que nadie registró no se inventa
 

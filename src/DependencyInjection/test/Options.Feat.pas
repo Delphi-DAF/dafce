@@ -16,6 +16,7 @@ interface
 
 uses
   System.SysUtils,
+  System.SyncObjs,
   Daf.Extensions.DependencyInjection,
   Daf.Extensions.Options;
 
@@ -130,6 +131,21 @@ type
     function Settings: TCacheSettings;
   end;
 
+  /// Una configuracion registrada directamente como contrato: anade su marca al Host.
+  TMarkConfigure = class(TInterfacedObject, IConfigureOptions<TCacheSettings>)
+  strict private
+    FMark: string;
+  public
+    constructor Create(const AMark: string);
+    procedure Configure(const Options: TCacheSettings);
+  end;
+
+  /// Un validador registrado directamente como contrato, que da un motivo por ajuste que rechaza.
+  TCacheRulesValidator = class(TInterfacedObject, IValidateOptions<TCacheSettings>)
+  public
+    function Validate(const Name: string; const Options: TCacheSettings): TValidateOptionsResult;
+  end;
+
   TOptionsWorld = class
   public
     Services: IServiceCollection;
@@ -144,6 +160,13 @@ type
     AliveAfterClose: Integer;
     SectionBuilt: Integer;
     SectionAliveAfterClose: Integer;
+    Report: string;
+    Runs: Integer;
+    FirstSaw: TCacheSettings;
+    SecondSaw: TCacheSettings;
+    // La cita de una configuracion: avisa de que esta dentro y espera a la puerta.
+    InConfigure: TEvent;
+    ConfigureGate: TEvent;
     constructor Create;
     destructor Destroy; override;
     procedure Build;
@@ -159,6 +182,15 @@ type
     /// Captura clase y mensaje del fallo, o un centinela con texto si no lo hubo. Afirmar solo
     /// que "fallo" da por bueno cualquier fallo, incluido uno que no viene al caso.
     procedure Attempt(const Action: TProc);
+    /// Lo leido, cuantas configuraciones corrieron, si vieron el mismo objeto, y el fallo si lo hubo.
+    function AccumulationReport: string;
+    /// Una configuracion de TCacheSettings que cumple la cita, y una validacion que cuenta.
+    procedure RegisterConfigureAtGate;
+    /// Un hilo pide el valor y, con su configuracion dentro, otro hilo lo pide tambien; despues
+    /// se abre la puerta. Deja en Report cuantas veces corrieron, si los dos recibieron el mismo
+    /// objeto y si el segundo pidio con la puerta cerrada.
+    procedure ReadFromTwoThreads;
+    function ReadCacheSettings: TCacheSettings;
   end;
 
 const
@@ -170,6 +202,7 @@ const
 implementation
 
 uses
+  System.Classes,
   Daf.MiniSpec,
   Daf.Options,
   Daf.DependencyInjection;
@@ -247,6 +280,34 @@ begin
   Result := FOptions.Value;
 end;
 
+{ TMarkConfigure }
+
+constructor TMarkConfigure.Create(const AMark: string);
+begin
+  inherited Create;
+  FMark := AMark;
+end;
+
+procedure TMarkConfigure.Configure(const Options: TCacheSettings);
+begin
+  Options.Host := Options.Host + FMark;
+end;
+
+{ TCacheRulesValidator }
+
+function TCacheRulesValidator.Validate(const Name: string; const Options: TCacheSettings): TValidateOptionsResult;
+begin
+  var Failures: TArray<string> := [];
+  if Options.Host = '' then
+    Failures := Failures + ['Host must not be empty'];
+  if Options.MaxItems <= 0 then
+    Failures := Failures + ['MaxItems must be greater than zero'];
+  if Length(Failures) = 0 then
+    Result := TValidateOptionsResult.Success
+  else
+    Result := TValidateOptionsResult.Fail(Failures);
+end;
+
 { TOptionsWorld }
 
 constructor TOptionsWorld.Create;
@@ -258,6 +319,8 @@ begin
   TDbSection.Alive := 0;
   Told := SinRespuesta;
   Outcome := '<sin intentar>';
+  InConfigure := TEvent.Create(nil, True, False, '');
+  ConfigureGate := TEvent.Create(nil, True, False, '');
   Services := TServiceCollection.Create;
 end;
 
@@ -265,6 +328,8 @@ destructor TOptionsWorld.Destroy;
 begin
   if (Provider <> nil) and not Closed then
     Provider.ShutDown;
+  InConfigure.Free;
+  ConfigureGate.Free;
   inherited;
 end;
 
@@ -284,6 +349,84 @@ begin
   if Closed then Exit;
   Provider.ShutDown;
   Closed := True;
+end;
+
+function TOptionsWorld.AccumulationReport: string;
+begin
+  Result := Format('%s, runs=%d, same object=%s',
+    [Told, Runs, BoolToStr((FirstSaw <> nil) and (FirstSaw = SecondSaw), True)]);
+  if Outcome <> SinFallo then
+    Result := Result + ' | ' + Outcome;
+end;
+
+procedure TOptionsWorld.RegisterConfigureAtGate;
+begin
+  var Entered := InConfigure;
+  var Gate := ConfigureGate;
+  AppOptions.Configure<TCacheSettings>(Services,
+    procedure(S: TCacheSettings)
+    begin
+      TInterlocked.Increment(Runs);
+      Entered.SetEvent;
+      Gate.WaitFor(10000);
+      S.Host := 'shared-host';
+      S.MaxItems := 1;
+    end,
+    function(const S: TCacheSettings; out Error: string): Boolean
+    begin
+      TInterlocked.Increment(Validations);
+      Result := True;
+    end);
+end;
+
+// Aparte para que el temporal de la opcion muera al volver, y no al final del hilo.
+function TOptionsWorld.ReadCacheSettings: TCacheSettings;
+begin
+  Result := Provider.GetRequiredService<IOptions<TCacheSettings>>.Value;
+end;
+
+procedure TOptionsWorld.ReadFromTwoThreads;
+var
+  FirstDone, SecondDone: TEvent;
+  AskedWhileConfiguring: Boolean;
+begin
+  AskedWhileConfiguring := False;
+  FirstDone := TEvent.Create(nil, True, False, '');
+  SecondDone := TEvent.Create(nil, True, False, '');
+  try
+    TThread.CreateAnonymousThread(
+      procedure
+      begin
+        FirstSaw := ReadCacheSettings;
+        FirstDone.SetEvent;
+      end).Start;
+    if InConfigure.WaitFor(10000) <> wrSignaled then
+    begin
+      ConfigureGate.SetEvent;
+      FirstDone.WaitFor(10000);
+      Report := 'the configuration never started';
+      Exit;
+    end;
+    TThread.CreateAnonymousThread(
+      procedure
+      begin
+        AskedWhileConfiguring := ConfigureGate.WaitFor(0) <> wrSignaled;
+        SecondSaw := ReadCacheSettings;
+        SecondDone.SetEvent;
+      end).Start;
+    // Quien espera al valor no termina antes del plazo; quien lo construye por su cuenta se para
+    // en la misma puerta. Se abre en los dos casos.
+    SecondDone.WaitFor(1500);
+    ConfigureGate.SetEvent;
+    FirstDone.WaitFor(10000);
+    SecondDone.WaitFor(10000);
+    Report := Format('configure=%d, validate=%d, same object=%s, asked while configuring=%s',
+      [Runs, Validations, BoolToStr((FirstSaw <> nil) and (FirstSaw = SecondSaw), True),
+       BoolToStr(AskedWhileConfiguring, True)]);
+  finally
+    SecondDone.Free;
+    FirstDone.Free;
+  end;
 end;
 
 procedure TOptionsWorld.Attempt(const Action: TProc);
@@ -699,6 +842,220 @@ Feature A service asks for its settings and owns nothing @di @options
       procedure(W: TOptionsWorld)
       begin
         Expect(W.SectionAliveAfterClose).ToEqual(0);
+      end)
+
+.Rule('The configurations of one settings type accumulate')
+
+  .Scenario('Two configurations with code accumulate in order')
+    .Given('two configurations of the same settings: the first sets Host and MaxItems, the second only MaxItems',
+      procedure(W: TOptionsWorld)
+      begin
+        AppOptions.Configure<TCacheSettings>(W.Services,
+          procedure(S: TCacheSettings)
+          begin
+            Inc(W.Runs);
+            W.FirstSaw := S;
+            S.Host := 'first-host';
+            S.MaxItems := 1;
+          end);
+        AppOptions.Configure<TCacheSettings>(W.Services,
+          procedure(S: TCacheSettings)
+          begin
+            Inc(W.Runs);
+            W.SecondSaw := S;
+            S.MaxItems := 2;
+          end);
+      end)
+    .When('the value is asked for',
+      procedure(W: TOptionsWorld)
+      begin
+        W.Build;
+        W.Attempt(
+          procedure
+          begin
+            var Value := W.Provider.GetRequiredService<IOptions<TCacheSettings>>.Value;
+            W.Told := Format('host=%s, max=%d', [Value.Host, Value.MaxItems]);
+          end);
+      end)
+    .&Then('Host has the value of the first and MaxItems that of the second, and each ran once on the same object',
+      procedure(W: TOptionsWorld)
+      begin
+        Expect(W.AccumulationReport).ToEqual('host=first-host, max=2, runs=2, same object=True');
+      end)
+
+  .Scenario('A configuration registered as a contract is applied in its turn')
+    .Given('a configuration with code, then one registered as a contract, then another with code, each marking Host',
+      procedure(W: TOptionsWorld)
+      begin
+        AppOptions.Configure<TCacheSettings>(W.Services,
+          procedure(S: TCacheSettings)
+          begin
+            S.Host := S.Host + 'a';
+          end);
+        W.Services.AddSingleton<IConfigureOptions<TCacheSettings>>(
+          function(Provider: IServiceProvider): IConfigureOptions<TCacheSettings>
+          begin
+            Result := TMarkConfigure.Create('b');
+          end);
+        AppOptions.Configure<TCacheSettings>(W.Services,
+          procedure(S: TCacheSettings)
+          begin
+            S.Host := S.Host + 'c';
+          end);
+      end)
+    .When('the value is asked for',
+      procedure(W: TOptionsWorld)
+      begin
+        W.Build;
+        W.Attempt(
+          procedure
+          begin
+            W.Told := W.Provider.GetRequiredService<IOptions<TCacheSettings>>.Value.Host;
+          end);
+      end)
+    .&Then('Host shows the three marks in the order they were registered',
+      procedure(W: TOptionsWorld)
+      begin
+        Expect(W.Told + ' ' + W.Outcome).ToEqual('abc ' + SinFallo);
+      end)
+
+.Rule('Every validation of a settings type runs, and the failure gathers them')
+
+  .Scenario('A validator registered as a contract gives several reasons')
+    .Given('a configuration with code, and a validator registered as a contract that rejects two settings',
+      procedure(W: TOptionsWorld)
+      begin
+        AppOptions.Configure<TCacheSettings>(W.Services,
+          procedure(S: TCacheSettings)
+          begin
+            S.Host := '';
+            S.MaxItems := 0;
+          end);
+        W.Services.AddSingleton<IValidateOptions<TCacheSettings>>(
+          function(Provider: IServiceProvider): IValidateOptions<TCacheSettings>
+          begin
+            Result := TCacheRulesValidator.Create;
+          end);
+      end)
+    .When('the value is asked for',
+      procedure(W: TOptionsWorld)
+      begin
+        W.Build;
+        W.Attempt(
+          procedure
+          begin
+            W.Told := W.Provider.GetRequiredService<IOptions<TCacheSettings>>.Value.Host;
+          end);
+      end)
+    .&Then('it fails with a single validation error that gives both reasons',
+      procedure(W: TOptionsWorld)
+      begin
+        Expect(W.Outcome).ToContain('EOptionsValidationError: ');
+        Expect(W.Outcome).ToContain('Host must not be empty; MaxItems must be greater than zero');
+      end)
+
+  .Scenario('Two failing validations are reported together')
+    .Given('two configurations of the same settings, each with a validation that rejects a different setting',
+      procedure(W: TOptionsWorld)
+      begin
+        AppOptions.Configure<TCacheSettings>(W.Services,
+          procedure(S: TCacheSettings)
+          begin
+            S.Host := '';
+          end,
+          function(const S: TCacheSettings; out Error: string): Boolean
+          begin
+            Result := S.Host <> '';
+            if not Result then
+              Error := 'Host must not be empty';
+          end);
+        AppOptions.Configure<TCacheSettings>(W.Services,
+          procedure(S: TCacheSettings)
+          begin
+            S.MaxItems := 0;
+          end,
+          function(const S: TCacheSettings; out Error: string): Boolean
+          begin
+            Result := S.MaxItems > 0;
+            if not Result then
+              Error := 'MaxItems must be greater than zero';
+          end);
+      end)
+    .When('the value is asked for',
+      procedure(W: TOptionsWorld)
+      begin
+        W.Build;
+        W.Attempt(
+          procedure
+          begin
+            W.Told := W.Provider.GetRequiredService<IOptions<TCacheSettings>>.Value.Host;
+          end);
+      end)
+    .&Then('it fails with a single validation error that names both settings',
+      procedure(W: TOptionsWorld)
+      begin
+        Expect(W.Outcome).ToContain('EOptionsValidationError: ');
+        Expect(W.Outcome).ToContain('Host must not be empty');
+        Expect(W.Outcome).ToContain('MaxItems must be greater than zero');
+      end)
+
+  .Scenario('A validation sees every configuration applied')
+    .Given('a configuration whose validation needs a setting that only a later configuration sets',
+      procedure(W: TOptionsWorld)
+      begin
+        AppOptions.Configure<TCacheSettings>(W.Services,
+          procedure(S: TCacheSettings)
+          begin
+            S.Host := 'host';
+          end,
+          function(const S: TCacheSettings; out Error: string): Boolean
+          begin
+            Inc(W.Validations);
+            Result := S.MaxItems > 0;
+            if not Result then
+              Error := 'MaxItems must be greater than zero';
+          end);
+        AppOptions.Configure<TCacheSettings>(W.Services,
+          procedure(S: TCacheSettings)
+          begin
+            S.MaxItems := 5;
+          end);
+      end)
+    .When('the value is asked for',
+      procedure(W: TOptionsWorld)
+      begin
+        W.Build;
+        W.Attempt(
+          procedure
+          begin
+            W.Told := IntToStr(W.Provider.GetRequiredService<IOptions<TCacheSettings>>.Value.MaxItems);
+          end);
+      end)
+    .&Then('the validation ran once and passed, and the value is handed back',
+      procedure(W: TOptionsWorld)
+      begin
+        Expect(Format('validations=%d, value=%s, %s', [W.Validations, W.Told, W.Outcome]))
+          .ToEqual('validations=1, value=5, ' + SinFallo);
+      end)
+
+.Rule('Reading the value from several threads at once builds it once')
+
+  .Scenario('Two first reads at the same time')
+    .Given('settings whose configuration is under way in a thread that asked for the value',
+      procedure(W: TOptionsWorld)
+      begin
+        W.RegisterConfigureAtGate;
+        W.Build;
+      end)
+    .When('another thread asks for the value',
+      procedure(W: TOptionsWorld)
+      begin
+        W.ReadFromTwoThreads;
+      end)
+    .&Then('configuration and validation ran once, both threads got the same object, and the second asked meanwhile',
+      procedure(W: TOptionsWorld)
+      begin
+        Expect(W.Report).ToEqual('configure=1, validate=1, same object=True, asked while configuring=True');
       end);
 
 end.

@@ -31,21 +31,45 @@ type
   ///   objeto mutable, y dos lecturas que devolvieran objetos distintos harian que escribir en el
   ///   significase cosas distintas segun quien preguntara.
   ///
-  ///   El delegado de construccion, y no un T.Create aqui dentro, es lo que permite que la misma
-  ///   clase sirva a unos ajustes fijados con codigo y a unos leidos de una seccion: lo que
-  ///   cambia entre las dos mitades del patron es de donde sale el objeto, no que se hace con el.
+  ///   Construir es crear T, aplicarle todas las configuraciones en orden de registro y correr
+  ///   todas las validaciones: un fallo reune los motivos de todas en un solo error.
   /// </remarks>
-  TOptions<T: class> = class(TInterfacedObject, IOptions<T>)
+  TOptions<T: class, constructor> = class(TInterfacedObject, IOptions<T>)
   strict private
-    FBuild: TFunc<T>;
-    FValidate: TOptionsValidator<T>;
+    FConfigures: TArray<IConfigureOptions<T>>;
+    FValidators: TArray<IValidateOptions<T>>;
     FValue: T;
     FBuilt: Boolean;
+    function Build: T;
     procedure Check(const Value: T);
   public
-    constructor Create(const ABuild: TFunc<T>; const AValidate: TOptionsValidator<T> = nil);
+    constructor Create(const AConfigures: TArray<IConfigureOptions<T>>;
+      const AValidators: TArray<IValidateOptions<T>>);
     destructor Destroy; override;
     function GetValue: T;
+    /// <summary>
+    ///   Registra IOptions&lt;T&gt; como singleton si nadie lo ha registrado: el que reune las
+    ///   configuraciones y las validaciones de T que haya en el contenedor.
+    /// </summary>
+    class function TryAdd(const Services: IServiceCollection): IServiceCollection; static;
+  end;
+
+  /// <summary>Una configuracion que es un delegado sobre el objeto.</summary>
+  TConfigureOptions<T: class> = class(TInterfacedObject, IConfigureOptions<T>)
+  strict private
+    FAction: TProc<T>;
+  public
+    constructor Create(const AAction: TProc<T>);
+    procedure Configure(const Options: T);
+  end;
+
+  /// <summary>Una validacion que es un TOptionsValidator&lt;T&gt;.</summary>
+  TValidateOptions<T: class> = class(TInterfacedObject, IValidateOptions<T>)
+  strict private
+    FValidate: TOptionsValidator<T>;
+  public
+    constructor Create(const AValidate: TOptionsValidator<T>);
+    function Validate(const Name: string; const Options: T): TValidateOptionsResult;
   end;
 
   /// <summary>
@@ -54,8 +78,10 @@ type
   AppOptions = class
   public
     /// <summary>
-    ///   Registra IOptions&lt;T&gt; como singleton. Setup recibe el objeto recien construido para
-    ///   rellenarlo; Validate, si se pasa, corre al construirlo y aborta nombrando el ajuste.
+    ///   Registra una configuracion de T y, si nadie lo ha hecho, IOptions&lt;T&gt; como singleton.
+    ///   Setup rellena el objeto en su turno, despues de las configuraciones registradas antes;
+    ///   Validate, si se pasa, corre con las demas validaciones al construirlo y aborta nombrando
+    ///   el ajuste.
     /// </summary>
     class function Configure<T: class, constructor>(const Services: IServiceCollection;
       const Setup: TProc<T>; const Validate: TOptionsValidator<T> = nil): IServiceCollection; static;
@@ -65,11 +91,12 @@ implementation
 
 { TOptions<T> }
 
-constructor TOptions<T>.Create(const ABuild: TFunc<T>; const AValidate: TOptionsValidator<T>);
+constructor TOptions<T>.Create(const AConfigures: TArray<IConfigureOptions<T>>;
+  const AValidators: TArray<IValidateOptions<T>>);
 begin
   inherited Create;
-  FBuild := ABuild;
-  FValidate := AValidate;
+  FConfigures := AConfigures;
+  FValidators := AValidators;
 end;
 
 destructor TOptions<T>.Destroy;
@@ -80,32 +107,100 @@ end;
 
 procedure TOptions<T>.Check(const Value: T);
 begin
-  if not Assigned(FValidate) then Exit;
+  var Failures: TArray<string> := [];
+  for var Validator in FValidators do
+  begin
+    var Outcome := Validator.Validate('', Value);
+    if Outcome.Failed then
+      Failures := Failures + Outcome.Failures;
+  end;
+  if Length(Failures) = 0 then Exit;
 
-  var Error := '';
-  if FValidate(Value, Error) then Exit;
+  raise EOptionsValidationError.CreateFmt('Invalid options %s: %s',
+    [Value.ClassName, string.Join('; ', Failures)]);
+end;
 
-  raise EOptionsValidationError.CreateFmt('Invalid options %s: %s', [Value.ClassName, Error]);
+function TOptions<T>.Build: T;
+begin
+  // Validado ANTES de guardarse, y liberado aqui si no pasa: unos ajustes invalidos no se quedan
+  // en el campo, asi que no hay puerta de atras por la que leerlos, y tampoco se fugan esperando
+  // al destructor de una opcion que ya nadie va a usar.
+  Result := T.Create;
+  try
+    for var Configure in FConfigures do
+      Configure.Configure(Result);
+    Check(Result);
+  except
+    Result.Free;
+    raise;
+  end;
 end;
 
 function TOptions<T>.GetValue: T;
 begin
-  if not FBuilt then
-  begin
-    var Value := FBuild();
-    // Validado ANTES de guardarse, y liberado aqui si no pasa: unos ajustes invalidos no se
-    // quedan en el campo, asi que no hay puerta de atras por la que leerlos, y tampoco se fugan
-    // esperando al destructor de una opcion que ya nadie va a usar.
-    try
-      Check(Value);
-    except
-      Value.Free;
-      raise;
+  // Comprobar y construir bajo el mismo cerrojo: dos primeras lecturas a la vez construyen,
+  // configuran y validan una sola vez, y las dos reciben el mismo objeto.
+  TMonitor.Enter(Self);
+  try
+    if not FBuilt then
+    begin
+      FValue := Build;
+      FBuilt := True;
     end;
-    FValue := Value;
-    FBuilt := True;
+    Result := FValue;
+  finally
+    TMonitor.Exit(Self);
   end;
-  Result := FValue;
+end;
+
+class function TOptions<T>.TryAdd(const Services: IServiceCollection): IServiceCollection;
+begin
+  // SIEMPRE por factory, nunca por clase, y no es una preferencia de estilo. Todas las
+  // instanciaciones de una interfaz generica comparten el GUID que se declaro una vez, asi que
+  // el Supports en el que se apoya el registro por clase no comprueba nada entre ellas: daria
+  // verde a AddSingleton<IOptions<TA>, TOptions<TB>>. El camino que no se pisa no engana.
+  Result := Services.TryAddSingleton<IOptions<T>>(
+    function(Provider: IServiceProvider): IOptions<T>
+    begin
+      var Configures: TArray<IConfigureOptions<T>> := [];
+      for var Configure in Provider.GetServices<IConfigureOptions<T>> do
+        Configures := Configures + [Configure];
+      var Validators: TArray<IValidateOptions<T>> := [];
+      for var Validator in Provider.GetServices<IValidateOptions<T>> do
+        Validators := Validators + [Validator];
+      Result := TOptions<T>.Create(Configures, Validators);
+    end);
+end;
+
+{ TConfigureOptions<T> }
+
+constructor TConfigureOptions<T>.Create(const AAction: TProc<T>);
+begin
+  inherited Create;
+  FAction := AAction;
+end;
+
+procedure TConfigureOptions<T>.Configure(const Options: T);
+begin
+  if Assigned(FAction) then
+    FAction(Options);
+end;
+
+{ TValidateOptions<T> }
+
+constructor TValidateOptions<T>.Create(const AValidate: TOptionsValidator<T>);
+begin
+  inherited Create;
+  FValidate := AValidate;
+end;
+
+function TValidateOptions<T>.Validate(const Name: string; const Options: T): TValidateOptionsResult;
+begin
+  var Error := '';
+  if FValidate(Options, Error) then
+    Result := TValidateOptionsResult.Success
+  else
+    Result := TValidateOptionsResult.Fail(Error);
 end;
 
 { AppOptions }
@@ -113,27 +208,18 @@ end;
 class function AppOptions.Configure<T>(const Services: IServiceCollection; const Setup: TProc<T>;
   const Validate: TOptionsValidator<T>): IServiceCollection;
 begin
-  // SIEMPRE por factory, nunca por clase, y no es una preferencia de estilo. Todas las
-  // instanciaciones de una interfaz generica comparten el GUID que se declaro una vez, asi que
-  // el Supports en el que se apoya el registro por clase no comprueba nada entre ellas: daria
-  // verde a AddSingleton<IOptions<TA>, TOptions<TB>>. El camino que no se pisa no engana.
-  Result := Services.AddSingleton<IOptions<T>>(
-    function(Provider: IServiceProvider): IOptions<T>
+  Services.AddSingleton<IConfigureOptions<T>>(
+    function(Provider: IServiceProvider): IConfigureOptions<T>
     begin
-      Result := TOptions<T>.Create(
-        function: T
-        begin
-          Result := T.Create;
-          try
-            if Assigned(Setup) then
-              Setup(Result);
-          except
-            Result.Free;
-            raise;
-          end;
-        end,
-        Validate);
+      Result := TConfigureOptions<T>.Create(Setup);
     end);
+  if Assigned(Validate) then
+    Services.AddSingleton<IValidateOptions<T>>(
+      function(Provider: IServiceProvider): IValidateOptions<T>
+      begin
+        Result := TValidateOptions<T>.Create(Validate);
+      end);
+  Result := TOptions<T>.TryAdd(Services);
 end;
 
 end.

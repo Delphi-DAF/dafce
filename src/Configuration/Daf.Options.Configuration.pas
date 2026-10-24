@@ -27,10 +27,12 @@ type
   ConfigOptions = class
   public
     /// <summary>
-    ///   Registra IOptions&lt;T&gt; como singleton, llenandolo desde Config. Path es la seccion,
-    ///   y la cadena vacia significa la raiz; Option decide si se enlaza por propiedades o por
-    ///   campos, igual que en el enlazador. Validate, si se pasa, corre al construir el valor y
-    ///   aborta nombrando el ajuste.
+    ///   Registra una configuracion de T que lo llena desde Config y, si nadie lo ha hecho,
+    ///   IOptions&lt;T&gt; como singleton. Path es la seccion, y la cadena vacia significa la raiz;
+    ///   Option decide si se enlaza por propiedades o por campos, igual que en el enlazador. Se
+    ///   aplica en su turno, entre las demas configuraciones de T, y escribe solo los ajustes cuya
+    ///   clave trae la seccion. Validate, si se pasa, corre con las demas validaciones al
+    ///   construir el valor y aborta nombrando el ajuste.
     /// </summary>
     /// <remarks>
     ///   La lectura ocurre al CONSTRUIR el valor, no al registrar, y una sola vez: lo que el
@@ -55,22 +57,24 @@ implementation
 class function ConfigOptions.Bind<T>(const Services: IServiceCollection; const Config: IConfiguration;
   const Path: string; const Option: TBindOption; const Validate: TOptionsValidator<T>): IServiceCollection;
 begin
-  // Por factory y no por clase, por lo mismo que AppOptions.Configure: el GUID declarado lo
-  // comparten todas las instanciaciones, asi que el Supports del camino por clase no comprueba
-  // nada entre ellas.
-  Result := Services.AddSingleton<IOptions<T>>(
-    function(Provider: IServiceProvider): IOptions<T>
+  Services.AddSingleton<IConfigureOptions<T>>(
+    function(Provider: IServiceProvider): IConfigureOptions<T>
     begin
-      Result := TOptions<T>.Create(
-        function: T
+      // Los miembros de tipo objeto que el enlazador construya dentro los libera el POCO en su
+      // destructor: la opcion libera la raiz, y nada mas.
+      Result := TConfigureOptions<T>.Create(
+        procedure(Options: T)
         begin
-          // El enlazador construye el objeto y lo devuelve; a partir de aqui el dueño es la
-          // opcion. Los miembros de tipo objeto que el enlazador construya dentro los libera el
-          // POCO en su destructor: la opcion libera la raiz, y nada mas.
-          Result := TConfigurationBinder.Bind<T>(Config, Path, Option);
-        end,
-        Validate);
+          TConfigurationBinder.Bind(Config, Path, Options, Option);
+        end);
     end);
+  if Assigned(Validate) then
+    Services.AddSingleton<IValidateOptions<T>>(
+      function(Provider: IServiceProvider): IValidateOptions<T>
+      begin
+        Result := TValidateOptions<T>.Create(Validate);
+      end);
+  Result := TOptions<T>.TryAdd(Services);
 end;
 
 end.

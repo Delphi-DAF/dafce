@@ -14,8 +14,8 @@ Core contracts (interfaces and types) for the DAF Dependency Injection system. T
 | Unit | Contents |
 |------|----------|
 | `Daf.Extensions.DependencyInjection` | `IServiceCollection`, `IServiceProvider`, `IServiceScope`, `IAppModule`, lifetimes, `Factory`, `TDuckDecorator<T>`, `ILazy<T>` y `Lazy` |
-| `Daf.Extensions.Options` | `IOptions<T>`, `TOptionsValidator<T>`, `EOptionsValidationError` — the options pattern contract |
-| `Daf.Options` | `TOptions<T>` and `AppOptions` — settings registered with code |
+| `Daf.Extensions.Options` | `IOptions<T>`, `IConfigureOptions<T>`, `IValidateOptions<T>`, `TValidateOptionsResult`, `TOptionsValidator<T>`, `EOptionsValidationError` — the options pattern contract |
+| `Daf.Options` | `TOptions<T>`, `TConfigureOptions<T>`, `TValidateOptions<T>` and `AppOptions` — settings registered with code |
 | `Daf.AppModule` | **Compatibility alias** for `IAppModule`: the contract moved next to `AddModule<T>`, which is a method of the `IServiceCollection` record and cannot depend on this unit. An existing `uses Daf.AppModule` keeps working |
 | `Daf.DependencyInjection.ActivatorUtilities` | `TActivatorUtilities`: build an object with its constructor arguments resolved, and `InjectInto` to wire an instance the container did not build |
 | `Daf.DependencyInjection.OpenGenerics` | Matching, checking and activation for registrations whose type arguments are left open |
@@ -264,8 +264,14 @@ read from a file, and the service that receives them cannot tell where they came
 from a configuration section is `ConfigOptions.Bind`, in
 [`Configuration`](../Configuration/README.md).
 
-The value is built on **first use** rather than when it is registered, and built **once**: settings
-the run never gets to use read nothing and validate nothing.
+The value is built on **first use** rather than when it is registered, and built **once**, also when
+several threads read it for the first time at once: settings the run never gets to use read nothing
+and validate nothing.
+
+**Configurations accumulate.** Each `AppOptions.Configure` and each `ConfigOptions.Bind` of a settings
+type is one more `IConfigureOptions<T>`: all of them run, in registration order, on the same object,
+and each sees what the earlier ones left. A configuration registered directly as
+`IConfigureOptions<T>` runs in its turn.
 
 ### The value has an owner, and this is where it bites
 
@@ -299,8 +305,26 @@ AppOptions.Configure<TCacheSettings>(Services,
   end);
 ```
 
-It runs once, when the value is built, and a failure raises `EOptionsValidationError` **naming the
-setting**.
+It runs once, when the value is built and after every configuration, and a failure raises
+`EOptionsValidationError` **naming the setting**. Every validation of the type runs — those passed to
+`Configure` or `Bind`, and each `IValidateOptions<T>` registered directly — and one error gathers the
+reasons of all of them, joined by `'; '`. A validator answers with a `TValidateOptionsResult`:
+`Success`, `Skip`, which does not count as a failure, or `Fail` with one reason or several. Its `Name`
+is always the empty string: settings have no names.
+
+```pascal
+type
+  TCacheRules = class(TInterfacedObject, IValidateOptions<TCacheSettings>)
+  public
+    function Validate(const Name: string; const Options: TCacheSettings): TValidateOptionsResult;
+  end;
+
+Services.AddSingleton<IValidateOptions<TCacheSettings>>(
+  function(Provider: IServiceProvider): IValidateOptions<TCacheSettings>
+  begin
+    Result := TCacheRules.Create;
+  end);
+```
 
 Asking for settings nobody registered **fails naming the type**. This diverges from the framework
 being ported: in .NET a single open registration serves every settings type at once, so asking for one
