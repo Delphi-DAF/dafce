@@ -472,7 +472,13 @@ begin
   var Ctx: TEmitCtx;
   Ctx.Resolver := Resolver;
   Ctx.EntityType := EntityType;
-  EmitTop(Expression, Query, Ctx);
+  // A disjunction at the root goes in as one group: the query's clause list is not this
+  // emission's own, so the alternation must not mix with conditions already there or added later.
+  if (Expression <> nil) and (Expression.Kind = TExprKind.Logical)
+    and ((Expression as ILogicalExpr).Op = TLogicalOp.opOr) then
+    EmitGroup(Expression, Query, Ctx, TLogicalOp.opAnd, False)
+  else
+    EmitTop(Expression, Query, Ctx);
   Result := Query;
 end;
 

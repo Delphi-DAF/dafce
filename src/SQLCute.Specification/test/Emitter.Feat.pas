@@ -256,8 +256,8 @@ Feature Emitting an expression to WHERE clauses @expressions @emitter
       begin
         // Delphi's parser already grouped this as Or(And(a,b), And(c,d)) — `and`
         // binds tighter than `or` in Delphi exactly as in SQL. The emitter walked
-        // that tree and wrote one group per operator change: two conjunctions
-        // under a disjunction, so two groups and nothing else at this level.
+        // that tree and wrote one group per operator change: the disjunction at the
+        // root is one group, and inside it two conjunctions, two groups more.
         //
         // The evidence is the SHAPE MATCHING THE TREE, not the list being flat.
         var Root := W.Authored as ILogicalExpr;
@@ -265,8 +265,12 @@ Feature Emitting an expression to WHERE clauses @expressions @emitter
         Expect(Root.Left.Kind = TExprKind.Logical).ToBeTrue;
         Expect(Root.Right.Kind = TExprKind.Logical).ToBeTrue;
 
-        Expect(Length(WhereClausesOf(W.Query))).ToEqual(2);
-        Expect(NestedGroupCount(W.Query)).ToEqual(2);
+        Expect(Length(WhereClausesOf(W.Query))).ToEqual(1);
+        Expect(NestedGroupCount(W.Query)).ToEqual(1);
+        var Outer := WhereClausesOf(W.Query)[0] as TNestedWhereClause;
+        Expect(Length(Outer.SubClauses)).ToEqual(2);
+        for var C in Outer.SubClauses do
+          Expect(C is TNestedWhereClause).ToBeTrue;
       end)
     .&Then('and the normalizer grouped it as (a and b) or (c and d)',
       procedure(W: TEmitterWorld)
@@ -538,6 +542,62 @@ Feature Emitting an expression to WHERE clauses @expressions @emitter
       procedure(W: TEmitterWorld)
       begin
         Expect(W.Outcome).ToStartWith('EExprEmissionError');
+      end)
+
+.Rule('A disjunction at the root, emitted onto a query, stays grouped')
+
+  .Scenario('A base query does not leak through the OR')
+    .Given('a query that already selects only active products',
+      procedure(W: TEmitterWorld)
+      begin
+        W.Products := SampleProducts;
+        W.Query := TQuery.New.Where('Active', True);
+        Expect(string.Join(',', NamesOf(W.Products, W.Query))).ToEqual('Anvil,Bolt,Drill,Engine');
+      end)
+    .When('(Price < 10) or (Price > 500) is emitted onto it and run',
+      procedure(W: TEmitterWorld)
+      begin
+        TExprEmitter.Where(W.Query, (Prop('Price') < 10) or (Prop('Price') > 500));
+        W.Names := NamesOf(W.Products, W.Query);
+      end)
+    .&Then('only active products matching either side are selected, and the inactive Crane is not',
+      procedure(W: TEmitterWorld)
+      begin
+        Expect(string.Join(',', W.Names)).ToEqual('Bolt');
+      end)
+
+  .Scenario('What is added afterwards does not mix in either')
+    .When('a or b is emitted onto an empty query, and c is added to the query afterwards',
+      procedure(W: TEmitterWorld)
+      begin
+        W.Query := Emit(Leaf('a') or Leaf('b'));
+        W.Query.Where('c', 1);
+        W.Tree := Normalized(W.Query);
+      end)
+    .&Then('normalizing gives the conjunction of (a or b) with c',
+      procedure(W: TEmitterWorld)
+      begin
+        Expect(W.Tree.Kind = TWhereNodeKind.Conjunction).ToBeTrue;
+        Expect(Length(W.Tree.Children)).ToEqual(2);
+        var Group := W.Tree.Children[0];
+        Expect(Group.Kind = TWhereNodeKind.Disjunction).ToBeTrue;
+        Expect(Length(Group.Children)).ToEqual(2);
+        var Rest := W.Tree.Children[1];
+        Expect(Rest.Kind = TWhereNodeKind.Leaf).ToBeTrue;
+        Expect(TWhereClause(Rest.Clause).Column).ToEqual('c');
+      end)
+
+  .Scenario('A conjunctive root is not grouped')
+    .When('a and b is emitted onto an empty query',
+      procedure(W: TEmitterWorld)
+      begin
+        W.Query := Emit(Leaf('a') and Leaf('b'));
+      end)
+    .&Then('the query receives two conditions and no group',
+      procedure(W: TEmitterWorld)
+      begin
+        Expect(Length(WhereClausesOf(W.Query))).ToEqual(2);
+        Expect(NestedGroupCount(W.Query)).ToEqual(0);
       end);
 
 end.
