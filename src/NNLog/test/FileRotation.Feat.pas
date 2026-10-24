@@ -28,6 +28,8 @@ type
     FHolds: TArray<TObject>;
     FSavedSinks: TArray<IBootstrapSink>;
     FChannel: IBootstrapSink;
+    FTakenName: string;
+    FTakenCompressed: Boolean;
   public
     Failure: string;
     constructor Create;
@@ -78,6 +80,19 @@ type
     function ArchivesStartingWith(const Prefix: string): Integer;
     /// El fichero de este proceso cuando escribe uno por proceso.
     function OwnFileName: string;
+    procedure Compress;
+    /// 'HOY' o 'AYER' segun la fecha de creacion del fichero actual: texto, porque un Boolean sin
+    /// asignar ya vale False.
+    function CurrentCreatedWhen: string;
+    /// Deja en history/, con el contenido dado, el archivo cuyo nombre le daria la rotacion al log
+    /// actual: el de su fecha de creacion, leida del disco tal como la leera el destino.
+    procedure ArchiveTakenFor(const Content: string; const Compressed: Boolean);
+    /// Lo que guarda ahora ese archivo, en claro o dentro del comprimido.
+    function TakenArchiveText: string;
+    /// Los archivos de history/ del periodo del archivo ocupado, comprimidos o no.
+    function ArchivesOfTakenPeriod: Integer;
+    /// El contenido de todos los archivos en claro de history/, por orden de nombre.
+    function HistoryText: string;
   end;
 
 implementation
@@ -86,6 +101,8 @@ uses
   System.Classes,
   System.IOUtils,
   System.DateUtils,
+  System.Generics.Collections,
+  System.Zip,
   Daf.Types,
   Daf.NNLog.Layout,
   Daf.MiniSpec;
@@ -380,6 +397,71 @@ end;
 function TRotationWorld.OwnFileName: string;
 begin
   Result := Format('app-%d.log', [Debugger.CurrentProcessId]);
+end;
+
+procedure TRotationWorld.Compress;
+begin
+  FTarget.CompressOnRotate := True;
+end;
+
+function TRotationWorld.CurrentCreatedWhen: string;
+begin
+  if Trunc(TFile.GetCreationTime(LogPath)) < Trunc(Now) then
+    Result := 'AYER'
+  else
+    Result := 'HOY';
+end;
+
+procedure TRotationWorld.ArchiveTakenFor(const Content: string; const Compressed: Boolean);
+begin
+  FTakenName := 'app_' + FormatDateTime('yyyy-mm-dd_hhnnsszzz', TFile.GetCreationTime(LogPath)) + '.log';
+  FTakenCompressed := Compressed;
+  TDirectory.CreateDirectory(HistoryDir);
+  var P := TPath.Combine(HistoryDir, FTakenName);
+  if not Compressed then
+  begin
+    TFile.WriteAllText(P, Content + sLineBreak);
+    Exit;
+  end;
+  var Zip := TZipFile.Create;
+  try
+    Zip.Open(P + '.zip', zmWrite);
+    Zip.Add(TEncoding.UTF8.GetBytes(Content + sLineBreak), FTakenName);
+    Zip.Close;
+  finally
+    Zip.Free;
+  end;
+end;
+
+function TRotationWorld.TakenArchiveText: string;
+begin
+  var P := TPath.Combine(HistoryDir, FTakenName);
+  if not FTakenCompressed then
+    Exit(ReadAllTextShared(P));
+  var Bytes: TBytes;
+  var Zip := TZipFile.Create;
+  try
+    Zip.Open(P + '.zip', zmRead);
+    Zip.Read(FTakenName, Bytes);
+    Zip.Close;
+  finally
+    Zip.Free;
+  end;
+  Result := TEncoding.UTF8.GetString(Bytes);
+end;
+
+function TRotationWorld.ArchivesOfTakenPeriod: Integer;
+begin
+  Result := ArchivesStartingWith(TPath.GetFileNameWithoutExtension(FTakenName));
+end;
+
+function TRotationWorld.HistoryText: string;
+begin
+  Result := EmptyStr;
+  var Names := ArchivedNames;
+  TArray.Sort<string>(Names);
+  for var N in Names do
+    Result := Result + ReadAllTextShared(TPath.Combine(HistoryDir, N));
 end;
 
 initialization
@@ -832,6 +914,112 @@ Feature La rotacion de NNLog archiva con un nombre que se puede leer @nnlog @tar
       procedure(W: TRotationWorld)
       begin
         Expect(W.OneArchivedName).ToEqual(EmptyStr);
+      end)
+
+.Rule('El fichero que crea un destino empieza su periodo al crearse')
+
+  .Scenario('Tras rotar, el fichero nuevo es de hoy')
+    .Given('un destino con rotacion diaria cuyo fichero actual se creo ayer, y un receptor del canal de arranque',
+      procedure(W: TRotationWorld)
+      begin
+        W.RotateDaily;
+        W.ExistingLogCreatedDaysAgo(1, 'AYER');
+        W.WatchStartupChannel;
+        Expect(W.CurrentCreatedWhen).ToEqual('AYER');
+      end)
+    .When('registra una linea, que dispara la rotacion, y despues otra',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('NUEVA');
+        W.WriteLine('OTRA');
+      end)
+    .&Then('el fichero actual tiene fecha de creacion de hoy',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.CurrentCreatedWhen).ToEqual('HOY');
+      end)
+    .&And('la segunda linea fue al mismo fichero sin rotarlo, y el receptor no recibio nada',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(Length(W.ArchivedNames)).ToEqual(1);
+        Expect(W.CurrentText).ToEqual('NUEVA' + sLineBreak + 'OTRA' + sLineBreak);
+        Expect(W.ChannelText).ToEqual(EmptyStr);
+      end)
+
+.Rule('Archivar no sobrescribe un archivo anterior')
+
+  .Scenario('El nombre que le toca ya esta ocupado')
+    .Given('un destino diario cuyo fichero actual se creo ayer, y en history/ un archivo con el nombre que la rotacion le daria',
+      procedure(W: TRotationWorld)
+      begin
+        W.RotateDaily;
+        W.ExistingLogCreatedDaysAgo(1, 'AYER');
+        W.ArchiveTakenFor('PREVIO', False);
+      end)
+    .When('registra una linea, y la rotacion se dispara',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('NUEVA');
+      end)
+    .&Then('el archivo que habia tiene su contenido seguido del contenido del fichero archivado',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.TakenArchiveText).ToEqual('PREVIO' + sLineBreak + 'AYER' + sLineBreak);
+      end)
+    .&And('el fichero actual solo tiene la linea nueva',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.CurrentText).ToEqual('NUEVA' + sLineBreak);
+      end)
+
+  .Scenario('El nombre que le toca esta ocupado por un comprimido')
+    .Given('el mismo destino, que comprime al rotar, y en history/ el .zip con el nombre que la rotacion le daria',
+      procedure(W: TRotationWorld)
+      begin
+        W.RotateDaily;
+        W.Compress;
+        W.ExistingLogCreatedDaysAgo(1, 'AYER');
+        W.ArchiveTakenFor('PREVIO', True);
+      end)
+    .When('registra una linea, y la rotacion se dispara',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('NUEVA');
+      end)
+    .&Then('lo que guarda el .zip que habia es su contenido seguido del contenido del fichero archivado',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.TakenArchiveText).ToEqual('PREVIO' + sLineBreak + 'AYER' + sLineBreak);
+      end)
+    .&And('en history/ no hay otro archivo de ese periodo',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.ArchivesOfTakenPeriod).ToEqual(1);
+      end)
+
+  .Scenario('Rotar en cada linea no pierde ninguna')
+    .Given('un destino que rota por tamano en cada linea',
+      procedure(W: TRotationWorld)
+      begin
+        W.RotateOnEverySize;
+      end)
+    .When('registra tres lineas seguidas',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('L1');
+        W.WriteLine('L2');
+        W.WriteLine('L3');
+      end)
+    .&Then('history/ conserva las dos primeras',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.HistoryText).ToContain('L1');
+        Expect(W.HistoryText).ToContain('L2');
+      end)
+    .&And('el fichero actual tiene solo la tercera',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.CurrentText).ToEqual('L3' + sLineBreak);
       end);
 
 end.

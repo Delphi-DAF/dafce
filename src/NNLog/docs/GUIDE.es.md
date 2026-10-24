@@ -322,6 +322,10 @@ Los ficheros rotados van a un directorio `history` junto al actual. Las polític
 comparan contra `MaxFileAge` y `MaxFileSize`, así que cada una necesita su umbral puesto: a `0`
 rotan en cada entrada.
 
+Un fichero rotado se nombra por el fichero que archiva y el momento en que ese fichero empezó:
+`app.log` pasa a `history/app_2026-10-23_093015120.log`. Si `history` ya tiene el fichero con ese
+nombre, comprimido o no, el rotado se añade al final de su contenido.
+
 `MaxArchivedFiles` cuenta los ficheros de `history` que proceden del `FileName` del destino,
 comprimidos o no y de cualquiera de sus ejecuciones; los demás ficheros de ahí ni cuentan ni se
 borran. A `0` no se borra nada.

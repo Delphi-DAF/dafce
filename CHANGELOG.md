@@ -188,6 +188,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - **Web**: A `[FromServices]` parameter receives its service. With the service registered the request failed with `EInvalidCast`, and without it the action received `nil` with no warning; that case now fails the request naming the service
 - **Web**: Destroying a `TDafHttpServer` frees the web modules WebBroker kept for reuse; a later server in the same process was handed the ones built for the previous one
 - **Web**: `Ok(Boolean)` no longer leaks the JSON value it serializes, one per response
+- **NNLog**: On NTFS, the file target no longer stops rotating after its first rotation, and an archive of the same period in `history`, plain or zipped, is appended to instead of overwritten
 
 ### Security
 

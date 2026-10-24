@@ -187,6 +187,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - **Web**: Un parámetro `[FromServices]` recibe su servicio. Con el servicio registrado la petición fallaba con `EInvalidCast`, y sin él la acción recibía `nil` sin aviso; ese caso hace fallar ahora la petición nombrando el servicio
 - **Web**: Destruir un `TDafHttpServer` libera los módulos web que WebBroker guardaba para reutilizarlos; un servidor posterior en el mismo proceso recibía los que se construyeron para el anterior
 - **Web**: `Ok(Boolean)` ya no pierde el valor JSON que serializa, uno por respuesta
+- **NNLog**: En NTFS, el destino de fichero ya no deja de rotar tras su primera rotación, y un archivo del mismo periodo en `history`, en claro o comprimido, recibe el fichero al final en vez de sobrescribirse
 
 ### Security
 

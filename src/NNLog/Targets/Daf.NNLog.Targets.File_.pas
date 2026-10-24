@@ -66,6 +66,9 @@ type
 implementation
 
 uses
+  {$IFDEF MSWINDOWS}
+  Winapi.Windows,
+  {$ENDIF}
   System.Zip,
   System.IOUtils,
   System.Rtti,
@@ -129,6 +132,95 @@ begin
     on EFOpenError do
       Result := True;
   end;
+end;
+
+// Crea el fichero vacio y, en Windows, le fija la fecha de creacion de ahora. NTFS da a un fichero que
+// se crea con el nombre de otro borrado o renombrado hace unos segundos la fecha de creacion de aquel
+// (tunneling), y una rotacion es justo eso: sin fijarla, el fichero nuevo seria tan viejo como el que se
+// acaba de archivar. Se fija con el fichero cerrado, porque SetCreationTime necesita abrirlo para
+// escribir. Si no se puede fijar, el fichero sirve igual.
+procedure CreateStartingNow(const Path: string);
+begin
+  TFileStream.Create(Path, fmCreate or fmShareDenyWrite).Free;
+  {$IFDEF MSWINDOWS}
+  try
+    TFile.SetCreationTime(Path, Now);
+  except
+    on Exception do ;
+  end;
+  {$ENDIF}
+end;
+
+procedure ReplaceFile(const Source, Dest: string);
+begin
+  {$IFDEF MSWINDOWS}
+  if not MoveFileEx(PChar(Source), PChar(Dest), MOVEFILE_REPLACE_EXISTING) then
+    RaiseLastOSError;
+  {$ELSE}
+  if not RenameFile(Source, Dest) then
+    RaiseLastOSError;
+  {$ENDIF}
+end;
+
+// Mueve el fichero a su archivo, o, si el archivo de ese periodo ya existe, lo copia al final de este y
+// lo borra: el nombre ocupado es el mismo periodo, como en el ArchiveFileAppendExisting de NLog, y
+// moverlo encima fallaria.
+procedure ArchiveFile(const Path, ArchivePath: string);
+begin
+  if not TFile.Exists(ArchivePath) then
+  begin
+    TFile.Move(Path, ArchivePath);
+    Exit;
+  end;
+  var Source := TFileStream.Create(Path, fmOpenRead or fmShareDenyWrite);
+  try
+    var Dest := TFileStream.Create(ArchivePath, fmOpenWrite or fmShareDenyWrite);
+    try
+      Dest.Seek(0, soEnd);
+      Dest.CopyFrom(Source, 0);
+    finally
+      Dest.Free;
+    end;
+  finally
+    Source.Free;
+  end;
+  TFile.Delete(Path);
+end;
+
+// Lo mismo dentro de un .zip que ya existe. Una entrada no se amplia en sitio y zmWrite sobrescribe el
+// comprimido, asi que se escribe entero en un temporal, con la entrada seguida del fichero, y solo
+// entonces sustituye al anterior.
+procedure AppendIntoZip(const ZipPath, Entry, SourcePath: string);
+begin
+  var Tmp := ZipPath + '.tmp';
+  var Source := TFile.ReadAllBytes(SourcePath);
+  var Old := TZipFile.Create;
+  var New := TZipFile.Create;
+  try
+    Old.Open(ZipPath, zmRead);
+    New.Open(Tmp, zmWrite);
+    var Appended := False;
+    for var I := 0 to Old.FileCount - 1 do
+    begin
+      var Bytes: TBytes;
+      Old.Read(I, Bytes);
+      var Name := Old.FileName[I];
+      if SameText(Name, Entry) then
+      begin
+        Bytes := Bytes + Source;
+        Appended := True;
+      end;
+      New.Add(Bytes, Name);
+    end;
+    if not Appended then
+      New.Add(Source, Entry);
+    New.Close;
+    Old.Close;
+  finally
+    New.Free;
+    Old.Free;
+  end;
+  ReplaceFile(Tmp, ZipPath);
 end;
 
 { TRotationStrategy }
@@ -266,11 +358,9 @@ begin
     end;
   end;
 
-  var FileStream: TFileStream;
-  if FileExists(Path) then
-    FileStream := TFileStream.Create(Path, fmOpenWrite or fmShareDenyWrite)
-  else
-    FileStream := TFileStream.Create(Path, fmCreate or fmShareDenyWrite);
+  if not FileExists(Path) then
+    CreateStartingNow(Path);
+  var FileStream := TFileStream.Create(Path, fmOpenWrite or fmShareDenyWrite);
 
   var NewWriter: TStreamWriter;
   try
@@ -315,7 +405,7 @@ begin
   // falla si otro tiene un archivo abierto. Ninguna de las dos es parte de escribir esa linea.
   FreeAndNil(FStream);
   try
-    TFile.Move(Path, RotatedPath);
+    ArchiveFile(Path, RotatedPath);
   except
     on E: Exception do
     begin
@@ -339,13 +429,20 @@ procedure TFileTarget.CompressIfAsked(const RotatedPath: string);
 begin
   if not CompressOnRotate then
     Exit;
-  var Zip := TZipFile.Create;
-  try
-    Zip.Open(RotatedPath + '.zip', zmWrite);
-    Zip.Add(RotatedPath, TPath.GetFileName(RotatedPath));
-    Zip.Close;
-  finally
-    Zip.Free;
+  var ZipPath := RotatedPath + '.zip';
+  var Entry := TPath.GetFileName(RotatedPath);
+  if TFile.Exists(ZipPath) then
+    AppendIntoZip(ZipPath, Entry, RotatedPath)
+  else
+  begin
+    var Zip := TZipFile.Create;
+    try
+      Zip.Open(ZipPath, zmWrite);
+      Zip.Add(RotatedPath, Entry);
+      Zip.Close;
+    finally
+      Zip.Free;
+    end;
   end;
   TFile.Delete(RotatedPath);
 end;
@@ -409,7 +506,7 @@ begin
   // El mismo nombre que le da la rotacion de su propio proceso.
   RotatedPath := TPath.Combine(HistoryDir, TPath.GetFileName(RotatedPath));
   try
-    TFile.Move(Candidate, RotatedPath);
+    ArchiveFile(Candidate, RotatedPath);
   except
     // Otro proceso lo archivo, o lo abrio, entre la comprobacion y el movimiento.
     if not TFile.Exists(Candidate) or OpenedByAnother(Candidate) then
