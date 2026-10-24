@@ -21,17 +21,17 @@ uses
 /// </remarks>
 function FunctionAction(const Action: TCommandAction; ClearsParseErrors: Boolean = False): ICommandLineAction;
 
-/// <summary>The action of serie of a help option: it writes the help of the command reached, and answers 0.</summary>
+/// <summary>The built-in action of a help option: it writes the help of the command reached, and answers 0.</summary>
 function NewHelpAction: IHelpAction;
 
-/// <summary>The action of serie of a version option: it writes the version the root declared, and answers 0.</summary>
+/// <summary>The built-in action of a version option: it writes the version the root declared, and answers 0.</summary>
 function NewVersionAction: IVersionAction;
 
 /// <summary>What the parse picks when it ends with errors and no action takes them.</summary>
 function NewParseErrorAction: IParseErrorAction;
 
 /// <summary>
-///   The action of serie of a diagram directive: it writes the diagram of the parse, and answers <c>Ok</c>, or the
+///   The built-in action of a diagram directive: it writes the diagram of the parse, and answers <c>Ok</c>, or the
 ///   <c>ParseErrorReturnValue</c> of <c>Directive</c> when the parse has errors.
 /// </summary>
 /// <remarks>It holds the directive weakly, because the directive holds it.</remarks>

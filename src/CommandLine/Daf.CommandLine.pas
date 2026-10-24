@@ -163,7 +163,7 @@ type
     property ShowTypoCorrections: Boolean read GetShowTypoCorrections write SetShowTypoCorrections;
   end;
 
-  /// <summary>The action of serie of a help option: it writes the help of the command reached.</summary>
+  /// <summary>The built-in action of a help option: it writes the help of the command reached.</summary>
   /// <remarks>A hidden command has no help, and for it the action writes nothing.</remarks>
   IHelpAction = interface(ICommandLineAction)
     ['{7C4B1A20-000F-4F31-9C10-4B0E2D5A000F}']
@@ -177,7 +177,7 @@ type
     property MaxWidth: Integer read GetMaxWidth write SetMaxWidth;
   end;
 
-  /// <summary>The action of serie of a version option: it writes the version the root declared.</summary>
+  /// <summary>The built-in action of a version option: it writes the version the root declared.</summary>
   /// <remarks>A root that declares no version writes an empty one.</remarks>
   IVersionAction = interface(ICommandLineAction)
     ['{7C4B1A20-0016-4F31-9C10-4B0E2D5A0016}']
@@ -651,7 +651,7 @@ type
     /// <summary>The name the help gives the tool; empty when none was declared, and then it is the root's name.</summary>
     function HelpName: string; overload;
     function HelpName(const Value: string): IRootCommand; overload;
-    /// <summary>The directives it declares, in the order they were added. A root declares none of serie.</summary>
+    /// <summary>The directives it declares, in the order they were added. A root declares no built-in one.</summary>
     function Directives: TArray<IDirective>;
     /// <summary>Declares a directive.</summary>
     /// <remarks>Only a root takes one: <c>Add</c> with an array raises <c>ECommandLine</c> on any other command.</remarks>
@@ -989,7 +989,7 @@ type
     ///   directory, as .NET's <c>FileInfo</c> does.
     ///
     ///   It is written over <c>Validate</c>'s own hook and not over a mechanism of its
-    ///   own -- if the validations of serie needed one, the hook would not be doing its
+    ///   own -- if the built-in validations needed one, the hook would not be doing its
     ///   job. It ASKS THE FILE SYSTEM, which is the conscious exception to a validation
     ///   being a pure question about the value.
     /// </remarks>
@@ -1152,7 +1152,7 @@ type
     /// <summary>True when the declared set of accepted values holds <c>Raw</c>, by its comparer.</summary>
     function IsAccepted(const Raw: string): Boolean;
     /// <summary>
-    ///   Where the validations of its value go -- the typed <c>Validate</c> and the ones of serie: the
+    ///   Where the validations of its value go -- the typed <c>Validate</c> and the built-in ones: the
     ///   validations of the argument the value is carried in.
     /// </summary>
     /// <remarks>
@@ -1193,7 +1193,7 @@ type
     procedure SetAccepted(const Comparer: IEqualityComparer<string>; const Values: array of string);
     procedure SetDefaultText(const Text: string);
     procedure AddValidator(const Validator: TUntypedValidator);
-    // The validations of serie on a path, written over the hook above and nothing else.
+    // The built-in validations on a path, written over the hook above and nothing else.
     procedure DemandExistingPath;
     procedure DemandLegalFileName;
     procedure DemandLegalFilePath;
@@ -2422,7 +2422,7 @@ begin
   if IsCollection then
     // Same reason as the conversion: a validation receives the value of one token, and T
     // here is the array. Refused where it is declared rather than silently never run.
-    // The two of serie do not have the problem -- they are written over the value the
+    // The two built-in ones do not have the problem -- they are written over the value the
     // engine boxes, so they run per element.
     raise ECommandLine.CreateFmt('A validation of its own cannot be declared on "%s", which is a collection: ' +
       'it would receive one value and the declared type is the whole collection', [Name]);

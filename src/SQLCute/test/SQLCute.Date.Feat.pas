@@ -1,7 +1,7 @@
 ﻿unit SQLCute.Date.Feat;
 
 {
-  Dialect compiler specs for F7: date/time WHERE operations.
+  Dialect compiler specs for date/time WHERE operations.
   Covers WhereDate, WhereTime, WhereDatePart and their OR variants
   across ANSI, SQL Server, Postgres, MySQL, SQLite, Oracle, and Firebird.
 }
