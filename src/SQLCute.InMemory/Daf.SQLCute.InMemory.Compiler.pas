@@ -670,7 +670,7 @@ end;
 
 procedure EnsureSingleSource(const Query: IQuery);
 begin
-  // Read-only is now a whitelist of one: anything that is not a retrieval is
+  // Read-only is a whitelist of one: anything that is not a retrieval is
   // rejected by the declared kind, naming it — so a statement kind added later
   // is covered without anyone remembering to blacklist its clause here.
   if Query.Kind <> TQueryKind.Select then

@@ -33,8 +33,7 @@ requires
   IndyCore,
   IndySystem,
   Daf.Commons,
-  // The binder it needs now lives here, with the contract it works over, so a
-  // logging provider no longer drags the configuration providers.
+  // The binder it needs lives here, with the contract it works over.
   Daf.Configuration.Abstractions,
   Daf.Logging.Abstractions,
   Daf.Logging,

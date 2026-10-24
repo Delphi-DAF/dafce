@@ -258,7 +258,7 @@ end;
 function ToIEnumerable<T>.ToArray: TArray<T>;
 begin
   // O(n): collect into a TList<T> (amortized geometric growth) instead of
-  // growing the result array one element at a time (which was O(n^2)).
+  // growing the result array one element at a time.
   var List := TList<T>.Create;
   try
     for var Item in FSource do

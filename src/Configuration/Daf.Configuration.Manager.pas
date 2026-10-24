@@ -97,7 +97,7 @@ begin
     begin
       // Este es el punto donde se ABRE el fichero, y con el estilo inmediato eso pasa aqui y no
       // dentro de Build: la fuente se carga cuando se anade. El informe tiene que estar donde
-      // ocurre el fallo, no donde ocurria antes -- en una aplicacion de escritorio, sin consola
+      // ocurre el fallo -- en una aplicacion de escritorio, sin consola
       // y sin depurador, el canal de arranque es lo unico que queda entre el fallo y el silencio.
       //
       // Y despues se relanza: la propagacion es la otra mitad del informe.
@@ -111,7 +111,7 @@ function TConfigurationManager.Build: IConfigurationRoot;
 begin
   // Itself -- there is nothing left to build, every source was built as it arrived. And
   // NOT kept in a field: an object holding a reference to itself never reaches refcount
-  // zero, which is the leak T4 warns about.
+  // zero.
   Result := Self;
 end;
 

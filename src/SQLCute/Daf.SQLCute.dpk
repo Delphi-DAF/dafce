@@ -37,9 +37,8 @@ contains
   // implementations rather than with IQuery.
   Daf.SQLCute.WhereTree in 'Daf.SQLCute.WhereTree.pas',
   Daf.SQLCute.Compiler in 'Daf.SQLCute.Compiler.pas',
-  // The six dialect compilers shipped as a separate Daf.SQLCute.Compilers package,
-  // which required nothing this one does not already require — so the boundary
-  // bought nobody anything, while splitting the ANSI compiler from the other six.
+  // The six dialect compilers live here, with the ANSI one they extend: a package of their
+  // own would require nothing this one does not already require.
   Daf.SQLCute.Compiler.SqlServer in 'Daf.SQLCute.Compiler.SqlServer.pas',
   Daf.SQLCute.Compiler.Postgres in 'Daf.SQLCute.Compiler.Postgres.pas',
   Daf.SQLCute.Compiler.MySql in 'Daf.SQLCute.Compiler.MySql.pas',

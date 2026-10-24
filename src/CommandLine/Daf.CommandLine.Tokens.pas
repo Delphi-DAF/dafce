@@ -80,7 +80,7 @@ type
     /// <summary>
     ///   A token starting with a dash is an option -- unless it is a negative number,
     ///   and then it is a value. Without this an Integer argument could never be given
-    ///   -5, which is one of the two defects this module exists not to inherit.
+    ///   -5.
     /// </summary>
     class function LooksLikeOption(const Token: string): Boolean; static;
     /// <summary>Splits <c>--name=value</c>, the only inline form the parser reads.</summary>

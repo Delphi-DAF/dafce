@@ -167,7 +167,7 @@ type
     function AsInsertFrom(const Columns: TArray<string>; const SubQuery: IQuery): IQuery;
     function AsUpdate(const Columns: TArray<string>; const Values: TArray<Variant>): IQuery;
     function AsDelete: IQuery;
-    // IQuery — F2: groups, columns, when
+    // IQuery — groups, columns, when
     function Where(const Callback: TQueryBuilderCallback): IQuery; overload;
     function OrWhere(const Callback: TQueryBuilderCallback): IQuery; overload;
     function WhereNot(const Callback: TQueryBuilderCallback): IQuery; overload;
@@ -179,7 +179,7 @@ type
     function When(const Condition: Boolean;
       const TrueCallback: TQueryBuilderCallback;
       const FalseCallback: TQueryBuilderCallback): IQuery; overload;
-    // IQuery — F3: string / LIKE operations
+    // IQuery — string / LIKE operations
     function WhereLike(const Column, Pattern: string; CaseSensitive: Boolean = False): IQuery;
     function WhereNotLike(const Column, Pattern: string; CaseSensitive: Boolean = False): IQuery;
     function OrWhereLike(const Column, Pattern: string; CaseSensitive: Boolean = False): IQuery;
@@ -196,7 +196,7 @@ type
     function WhereNotContains(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
     function OrWhereContains(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
     function OrWhereNotContains(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
-    // IQuery — F7: date / time operations
+    // IQuery — date / time operations
     function WhereDate(const Column: string; const Value: Variant): IQuery;
     function OrWhereDate(const Column: string; const Value: Variant): IQuery;
     function WhereTime(const Column, Op: string; const Value: Variant): IQuery;
@@ -1373,7 +1373,7 @@ begin
   Result := Self;
 end;
 
-// --- F2: WHERE groups, WhereColumns, When ---
+// --- WHERE groups, WhereColumns, When ---
 
 function TQueryImpl.AddNestedWhereGroup(const Callback: TQueryBuilderCallback;
   Conn: TBoolOp; IsNot: Boolean = False): IQuery;
@@ -1469,7 +1469,7 @@ begin
   Result := Self;
 end;
 
-// --- F3: string / LIKE operations ---
+// --- string / LIKE operations ---
 
 function TQueryImpl.AddWhereLikeClause(const Column, Pattern: string;
   Op: TWhereOp; Conn: TBoolOp; CaseSensitive: Boolean): IQuery;
@@ -1571,7 +1571,7 @@ begin
   Result := OrWhereNotLike(Column, '%' + Value + '%', CaseSensitive);
 end;
 
-// --- F7: date / time operations ---
+// --- date / time operations ---
 
 function TQueryImpl.AddDateWhereClause(Part: TDatePart; const Column, Op: string;
   const Value: Variant; Conn: TBoolOp): IQuery;

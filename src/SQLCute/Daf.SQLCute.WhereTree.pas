@@ -10,8 +10,7 @@
   (TNestedWhereClause) recurse; a clause's IsNot wraps its node in NOT(...).
 
   Both back-ends consume the SAME tree:
-    * TAnsiSqlCompiler.CompileWhere walks it and emits explicit parentheses, so
-      precedence no longer relies on the database parser.
+    * TAnsiSqlCompiler.CompileWhere walks it and emits explicit parentheses.
     * The in-memory compiler builds its (tri-state) predicate from it, so the two
       back-ends agree on precedence by construction.
 

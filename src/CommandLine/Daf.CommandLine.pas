@@ -364,8 +364,7 @@ type
     /// <remarks>
     ///   It is what a diagnostic option, one in transition, or one only an internal script
     ///   uses needs: to exist without being put in front of everybody who asks how the
-    ///   tool works. Today the alternatives are not declaring it -- and then it does not
-    ///   work -- or declaring it and accepting that it shows: two bad ones.
+    ///   tool works.
     ///
     ///   Hiding is the HELP's business and nothing else. A hidden symbol that
     ///   gets an invalid value fails the same way and is named in the error: hiding it

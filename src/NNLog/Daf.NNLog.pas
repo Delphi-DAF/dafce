@@ -28,7 +28,7 @@ type
     FLostLines: Integer;
   protected
     function RenderEvent(Entry: TLogEntry): string;
-    // Lo que implementa cada destino. La escritura publica ya no es virtual: el candado no es cosa
+    // Lo que implementa cada destino. La escritura publica no es virtual: el candado no es cosa
     // de quien escribe un destino, porque el recurso compartido es el destino mismo -- una regla
     // guarda sus destinos y todos los loggers despachan por ellos.
     procedure DoWrite(const Entry: TLogEntry); virtual; abstract;

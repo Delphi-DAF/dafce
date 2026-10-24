@@ -79,10 +79,9 @@ end;
 
 function TChainedConfigurationProvider.TryGet(const Key: string; out Value: string): Boolean;
 begin
-  // Asked, not inferred. Inferring presence from the value not being empty made a chained
-  // key whose value IS the empty string disappear on the way through: the source answered
-  // that it did not have it, and whoever composed got what an absent key would give. Both
-  // read as the empty string afterwards, so there was no way to notice from outside.
+  // Asked, not inferred: a chained key whose value IS the empty string is present, and
+  // inferring presence from the value would make it disappear on the way through. Both
+  // read as the empty string afterwards, so the loss would not show from outside.
   var Found := FConfiguration.Find(Key);
   Value := Found.GetValueOrDefault('');
   Result := Found.HasValue;

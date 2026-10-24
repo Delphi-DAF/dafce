@@ -385,8 +385,7 @@ begin
   Result := LowerCase(TEnum.ToString<TServiceLifeTime>(LifeTime));
 end;
 
-// Nombre de un par (tipo, clave) para un mensaje. Sin clave da exactamente el texto de siempre,
-// para que un mensaje que ya existia no cambie por existir esta capacidad.
+// Nombre de un par (tipo, clave) para un mensaje. Sin clave da exactamente el texto de siempre.
 function SlotName(const Slot: TServiceSlot): string;
 begin
   Result := ServiceRequestName(Slot.ServiceType, Slot.Key);
@@ -460,8 +459,7 @@ var
           Nodes[Idx].Edges := Nodes[Idx].Edges + [Edge];
         end;
 
-      // Sin guarda de participacion: una clase que no marca nada devuelve una lista vacia, que es
-      // lo mismo que decia la guarda y una condicion menos que mantener.
+      // Sin guarda de participacion: una clase que no marca nada devuelve una lista vacia.
       for var Entry in TActivatorUtilities.InjectableProperties(AClass) do
       begin
         var Prop := Entry.Prop;
@@ -607,8 +605,7 @@ begin
 
   // El texto del parametro lo compone el activador, para que la validacion y la construccion
   // digan lo mismo: el tipo, la clave que el parametro pide, y su nombre. El tipo del parametro
-  // tampoco tiene por que ser nombrable -- QualifiedName aqui abortaba la validacion con un error
-  // de visibilidad en lugar de decir que falta el registro.
+  // tampoco tiene por que ser nombrable.
   Result := Format('%s: %s', [Descriptor.ServiceName,
     TActivatorUtilities.DescribeUnresolvedParameter(Descriptor.ImplementationClass, Failed)]);
 end;
@@ -847,9 +844,7 @@ begin
   _AddRef;
   try
     RemoveFromSingletonScope;
-    // downto, no to: ascendente iba de High a Low, asi que corria UNA vez con un solo ambito y
-    // NINGUNA con dos o mas -- que es cuando de verdad hacia falta. Cerrar en orden inverso al de
-    // creacion es ademas el orden correcto.
+    // Cerrar en orden inverso al de creacion es el orden correcto.
     for var idx := High(Scopes) downto Low(Scopes) do
     begin
       TServiceScope(Scopes[idx]).Shutdown;
@@ -859,7 +854,7 @@ begin
 
     // El ambito de singletons se suelta al FINAL y con una referencia propia: mientras exista un
     // ambito sin marcar, una resolucion suya puede pedirle un Singleton, y encontrarlo en nil
-    // seria el Access Violation que el requisito prohibe. Todos los ambitos alcanzables estan en
+    // seria el Access Violation. Todos los ambitos alcanzables estan en
     // FScopes --incluido el que creo BuildServiceProvider-- asi que a esta linea ya llevan todos
     // la marca puesta.
     var Singletons: IServiceScope;
@@ -1182,8 +1177,7 @@ begin
   // ambito de singletons al final, y una resolucion que ya paso la guarda de SU ambito puede
   // llegar aqui justo despues. Comprobar y usar no es atomico y no se puede hacer que lo sea sin
   // un cerrojo en el camino caliente, asi que lo que se arregla es el modo de fallo: sin esto,
-  // "nil as IServiceResolver" daba un Access Violation leyendo la direccion 0 -- el tercer
-  // resultado que el requisito de cierre prohibe.
+  // "nil as IServiceResolver" daba un Access Violation leyendo la direccion 0.
   var Scope := FScopeFactory.SingletonsScope;
   if Scope = nil then Exit(nil);
   Result := Scope as IServiceResolver;
@@ -1222,8 +1216,7 @@ begin
         // Reading into a local and restoring the count keeps the read balanced. The
         // threshold does not move: with the local alive the count is dictionary + local
         // = 2, and _Release leaves it at 1. The local also keeps the
-        // entry alive across the Delete below, so the last reference can no longer drop
-        // while the dictionary is still holding it.
+        // entry alive across the Delete below.
         var Svc: IInterface := FServiceInstances.ValueList[idx];
         var RefCount := Svc._Release;
         Svc._AddRef;

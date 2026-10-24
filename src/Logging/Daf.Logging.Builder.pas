@@ -98,7 +98,7 @@ begin
   Services.AddSingleton<ILoggerFactory>((Builder as ILoggingBuilder).Build);
   // UN registro para todos los servicios, con los argumentos de tipo sin fijar. Es lo que hace
   // util a ILogger<T>: sin esto haria falta una linea de composicion por cada clase que quisiera
-  // un registrador con su nombre, y por eso el contrato llevaba años declarado y sin consumidores.
+  // un registrador con su nombre.
   // TryAdd y no Add: quien componga la aplicacion manda sobre el default de la libreria.
   Services.TryAddSingleton<ILogger<_>, TTypedLogger<_>>;
 end;

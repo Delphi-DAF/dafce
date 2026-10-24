@@ -720,7 +720,7 @@ type
 // que se estaba contando y el original se pierde.
 function ServiceTypeName(const ServiceType: PTypeInfo): string;
 // Lo mismo para un servicio PEDIDO con una clave: nombra las dos cosas. Sin clave da exactamente
-// el texto de arriba, para que un mensaje que ya existia no cambie por existir esta capacidad.
+// el texto de arriba.
 function ServiceRequestName(const ServiceType: PTypeInfo; const Key: TValue): string;
 
 implementation
@@ -813,7 +813,7 @@ begin
   else
     // Un tipo que no es clave no llega aqui, porque Check lo rechazo donde entraba. Y no se lanza
     // desde aqui a proposito: una comprobacion puesta en la comparacion solo corre cuando dos
-    // claves caen en el mismo cubo -- medido -- asi que seria un guardian que salta a veces.
+    // claves caen en el mismo cubo -- asi que seria un guardian que salta a veces.
     Result := False;
   end;
 end;
@@ -1069,7 +1069,7 @@ begin
         // A una variable local y NO a Result: Delphi pasa Result como parametro oculto por
         // referencia, y una funcion que lanza ya lo ha vaciado antes de hacerlo. Escribiendo
         // directamente en Result, el nombre simple de arriba desaparece y el mensaje de error
-        // acaba sin nombrar el servicio -- medido, y con la excepcion capturada igualmente.
+        // acaba sin nombrar el servicio -- y con la excepcion capturada igualmente.
         var Qualified := RType.QualifiedName;
         Result := Qualified;
       end;
@@ -2030,8 +2030,7 @@ end;
 
 function IServiceCollection.AddModule<T>: IServiceCollection;
 begin
-  // La restriccion `constructor` llama al constructor propio de T y sin RTTI. El
-  // descubrimiento hacia MetaclassType.Create, que se lo saltaba en silencio.
+  // La restriccion `constructor` llama al constructor propio de T y sin RTTI.
   var Instance := T.Create;
   var Module: IAppModule;
   if not Supports(Instance, IAppModule, Module) then

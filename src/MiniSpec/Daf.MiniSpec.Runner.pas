@@ -199,7 +199,7 @@ type
     function IRunContext.GetOptions = GetOptionsImpl;
     function IRunContext.GetCompletedAt = GetCompletedAtImpl;
     function IRunContext.GetErrorDetail = GetErrorDetailImpl;
-  protected //kyvvuw-2hamve-xeNhar
+  protected
     // IRunContext implementation
     function GetSuiteImpl: ISpecSuite;
     function GetCurrentFeatureImpl: IFeature;
@@ -943,7 +943,7 @@ end;
 procedure TSpecRunner.ReportOutline(const Outline: IScenarioOutline);
 begin
   BeginOutline(Outline);
-  // Counters are now automatically propagated via IncCount in TScenario<T>.Run
+  // Counters are automatically propagated via IncCount in TScenario<T>.Run
   EndOutline(Outline);
 end;
 
@@ -1015,7 +1015,7 @@ end;
 
 procedure TSpecRunner.DoReport(const S: ISpecItem);
 begin
-  // Counters are now automatically propagated via IncCount in TScenario<T>.Run
+  // Counters are automatically propagated via IncCount in TScenario<T>.Run
   NotifyItem(S);
 end;
 

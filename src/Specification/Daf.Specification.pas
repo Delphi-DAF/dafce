@@ -133,7 +133,7 @@ type
     function Name: string;
     /// <summary>
     ///   A pre-resolved accessor for the member, or <c>nil</c> — which is what
-    ///   it always is today. The room is reserved from the first commit because
+    ///   it always is today. The room is reserved because
     ///   the real payoff of generated metamodels is not the names but attaching
     ///   an accessor here, letting the in-memory lane skip the name
     ///   normalization, dictionary lookup and boxing it does per row and per
@@ -146,8 +146,7 @@ type
   /// <summary>
   ///   A literal. The payload is a single <c>Variant</c> — the representation
   ///   SQLCute clauses already hold, so nothing is reimplemented and nothing is
-  ///   lost: the DAL's 42 typed accessors had the very same ceiling. Typing is
-  ///   the binding layer's business; NULL is Variant's <c>Null</c>.
+  ///   lost. Typing is the binding layer's business; NULL is Variant's <c>Null</c>.
   /// </summary>
   IValueExpr = interface(IExpr)
     ['{7B0D4A93-2E61-4F58-9C27-8A5B3D06E1C4}']
@@ -276,11 +275,10 @@ type
     /// </summary>
     class function From<T>(const V: TNullable<T>): Variant; overload; static;
     /// <summary>
-    ///   A GUID as its canonical string form — the same thing the DAL's
-    ///   dedicated <c>SetAsGUID</c> accessor did, minus the boilerplate around
-    ///   it. Narrowing here rather than in the emission is what keeps the two
-    ///   lanes honest: a leaf holding a real <c>TGUID</c> would leave the
-    ///   in-memory side comparing a record while SQL compares a string.
+    ///   A GUID as its canonical string form. Narrowing here rather than in the
+    ///   emission is what keeps the two lanes honest: a leaf holding a real
+    ///   <c>TGUID</c> would leave the in-memory side comparing a record while SQL
+    ///   compares a string.
     /// </summary>
     class function From(const V: TGUID): Variant; overload; static;
   end;
@@ -439,9 +437,7 @@ type
   ///   hazard being avoided is a pass-through default: it makes a wrong name
   ///   look right on whichever path tolerates it — SQL will happily send an
   ///   unmapped column to the server — so the divergence surfaces far from its
-  ///   cause and on only one back-end. The house precedent is already set;
-  ///   <c>TRttiAccessors&lt;T&gt;.Get</c> raises naming both the column and the
-  ///   type rather than returning an empty value.
+  ///   cause and on only one back-end.
   /// </remarks>
   EExprMemberError = class(Exception);
 
@@ -616,9 +612,7 @@ type
   /// <remarks>
   ///   Note what is <b>not</b> here: a <c>T: TEntity</c> constraint, or any other
   ///   base class. Nothing downstream needs one — <c>TRttiAccessors&lt;T&gt;</c>
-  ///   imposes none and records work too. The DAL's <c>IRepository&lt;T: TEntity&gt;</c>
-  ///   invites copying that constraint by inertia; it is the one door through
-  ///   which <c>TEntity</c> would creep back in, and it stays shut.
+  ///   imposes none and records work too.
   /// </remarks>
   IRepository<T> = interface
     /// <summary>

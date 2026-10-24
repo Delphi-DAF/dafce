@@ -83,9 +83,7 @@ type
     /// <remarks>
     ///   Se llama al EMPAREJAR, no al construir, y por eso no esta dentro de Activate: que un
     ///   emparejamiento sea seguro es una propiedad del par contrato-abierto/cierre, y no
-    ///   depende de si el objeto lo fabrica una clase o una factory escrita a mano. Puesta en
-    ///   la ruta por clase dejaba fuera la otra mitad de las entradas -- medido: por factory el
-    ///   cierre inseguro se entregaba y devolvia un cero.
+    ///   depende de si el objeto lo fabrica una clase o una factory escrita a mano.
     /// </remarks>
     class procedure CheckMatch(const OpenType, ClosedType: PTypeInfo); static;
 
@@ -164,8 +162,7 @@ begin
   Holder := RT.GetField(ClosedArgs);
   if Holder = nil then Exit;
   // Holder sale puesto aunque el campo no sea un record, que es lo que permite a quien llama
-  // distinguir "no lo declara" de "lo declara y no se puede rellenar". Las dos cosas daban nil
-  // antes, y por eso no se podia dejar pasar la primera sin dejar pasar la segunda.
+  // distinguir "no lo declara" de "lo declara y no se puede rellenar".
   if Holder.FieldType is TRttiRecordType then
     Result := Holder.FieldType.GetFields;
 end;

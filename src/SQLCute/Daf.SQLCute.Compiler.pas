@@ -271,7 +271,7 @@ begin
   if Clause is TDateWhereClause then
     Exit(CompileDateWhere(TDateWhereClause(Clause)));
 
-  // --- HAVING condition (raw, or col op ?; note: no WrapColumn, matching legacy) ---
+  // --- HAVING condition (raw, or col op ?; note: no WrapColumn) ---
   if Clause is THavingClause then
   begin
     H := THavingClause(Clause);
@@ -426,7 +426,7 @@ end;
 function TAnsiSqlCompiler.CompileOrderByColumn(const O: TOrderByClause): string;
 begin
   Result := WrapColumn(O.Column) + ' ' + SortDirKeyword(O.Direction);
-  // Default emits nothing: the database applies its own rule, as before.
+  // Default emits nothing: the database applies its own rule.
   case O.Nulls of
     TNullsOrder.First: Result := Result + ' NULLS FIRST';
     TNullsOrder.Last:  Result := Result + ' NULLS LAST';
@@ -621,7 +621,7 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-//  Phase-2 compile methods
+//  compile methods
 // ---------------------------------------------------------------------------
 
 function TAnsiSqlCompiler.CompileJoin(const Clauses: TArray<TAbstractClause>): string;
@@ -820,7 +820,7 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-//  Phase-3 DML compile methods
+//  DML compile methods
 // ---------------------------------------------------------------------------
 
 function TAnsiSqlCompiler.CompileInsert(const Clauses: TArray<TAbstractClause>): string;

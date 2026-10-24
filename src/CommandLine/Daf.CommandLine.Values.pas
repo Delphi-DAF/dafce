@@ -5,8 +5,7 @@
 
   Here a conversion consumes the WHOLE token or fails. Nothing is anchored by hand,
   because nothing is matched by pattern: TryStrToInt and TryStrToFloat already answer
-  "does this entire string denote one value", which is the question that was being
-  asked badly.
+  "does this entire string denote one value".
 }
 
 interface

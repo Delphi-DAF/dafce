@@ -1051,7 +1051,7 @@ begin
     var PHName := Match.Groups[1].Value;
     var Field := RTTType.GetField(PHName);
     // Still loud: a misspelled placeholder in an Outline would otherwise print
-    // garbage and pass. Only the diagnosis changed, to name both readings.
+    // garbage and pass.
     if not Assigned(Field) then
       raise Exception.CreateFmt(
         '%s: placeholder <%s> has no matching field in World %s. If it was meant ' +

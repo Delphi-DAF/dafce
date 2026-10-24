@@ -135,7 +135,7 @@ end;
 
 class function TRotationStrategy.BuildRotatePath(const Path: string; const FileDate: TDateTime): string;
 begin
-  // GetExtension devuelve la extension CON su punto, asi que concatenar otro daba "app_....log".
+  // GetExtension devuelve la extension CON su punto.
   var Ext := TPath.GetExtension(Path);
   var Dir := TPath.GetDirectoryName(Path);
   // La marca es la del fichero que se archiva y no la del instante de rotar: una rotacion diaria

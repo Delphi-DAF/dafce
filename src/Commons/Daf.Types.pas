@@ -18,8 +18,7 @@ type
   ///   Named for what it does, and deliberately not for what it resembles.
   ///   It is <i>not</i> .NET's <c>Expression&lt;TDelegate&gt;</c>, which is an
   ///   inspectable expression tree — that world is <c>IExpr</c> /
-  ///   <c>TSpecification&lt;T&gt;</c> in <c>Daf.Specification</c>, and calling
-  ///   this one an expression claimed a correspondence that does not hold.
+  ///   <c>TSpecification&lt;T&gt;</c> in <c>Daf.Specification</c>.
   ///   Nor is it <c>Lazy&lt;T&gt;</c>, which memoizes: here the thunk runs
   ///   again on each read, which is exactly what macro resolution wants.
   /// </remarks>

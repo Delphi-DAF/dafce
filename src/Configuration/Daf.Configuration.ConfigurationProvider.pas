@@ -55,11 +55,6 @@ type
     /// <param name="ParentPath">The path for the parent IConfiguration.</param>
     /// <returns>The list of keys for this provider.</returns>
     function GetChildKeys(const EarlierKeys: IEnumerable<string>; const ParentPath: string): IEnumerable<string>; virtual;
-    /// <summary>
-    /// Returns a <see cref="IChangeToken"/> that can be used to listen when this provider is reloaded.
-    /// </summary>
-    /// <returns>The <see cref="IChangeToken"/>.</returns>
-    /// function  GetReloadToken: IChangeToken;
   public
     /// <summary>
     /// Generates a string representing this provider name and relevant details.
@@ -116,8 +111,7 @@ begin
   // AddOrSetValue y no Data[Key] := : el setter de TDictionary EXIGE que la clave ya exista
   // y levanta 'Item not found' si no. Escribir una clave nueva es lo normal en una
   // configuracion --y lo unico que hace SetItem--, asi que con el indexador este proveedor
-  // solo sabia sobrescribir. No se veia porque la configuracion de host no llevaba ningun
-  // proveedor de estos hasta que el entorno paso a derivarse de ella.
+  // solo sabia sobrescribir.
   Data.AddOrSetValue(Key, value);
 end;
 

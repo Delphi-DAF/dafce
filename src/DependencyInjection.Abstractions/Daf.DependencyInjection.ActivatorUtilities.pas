@@ -373,7 +373,7 @@ begin
   if not TryResolveArgs(Provider, Ctor, Args, Failed) then
     raise EArgumentException.Create(DescribeUnresolvedParameter(AClass, Failed));
 
-  // En dos tiempos, y no el Ctor.Invoke(AClass, Args) de una linea que habia antes. Invocar
+  // En dos tiempos, y no el Ctor.Invoke(AClass, Args) de una linea. Invocar
   // sobre la METACLASE construye el objeto dentro de la llamada, asi que no hay instancia que
   // preparar antes de que corra el constructor -- y ademas reasigna. Con NewInstance la hay.
   // Invocar sobre la INSTANCIA no reasigna, y el conteo de referencias queda igual que en la

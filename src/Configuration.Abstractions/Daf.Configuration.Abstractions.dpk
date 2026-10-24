@@ -37,9 +37,7 @@ requires
 contains
   Daf.Extensions.Configuration in 'Daf.Extensions.Configuration.pas',
   // Behaviour over this package's own contract, not a provider: it binds any
-  // IConfiguration to an object and knows nothing about JSON, INI or env. It shipped
-  // with the providers, which forced anyone who only wanted to bind — NNLog — to
-  // take the whole implementation with it.
+  // IConfiguration to an object and knows nothing about JSON, INI or env.
   Daf.Configuration.Binder in 'Daf.Configuration.Binder.pas';
 
 end.

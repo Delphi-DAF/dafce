@@ -708,7 +708,7 @@ procedure THostBuilder.InitializeAppConfiguration;
 begin
   // Queda una fase, no un objeto: la configuracion es la misma de siempre, y este es el momento
   // en que lo que el usuario anadio entre el constructor y Build pasa a ser lo definitivo para
-  // el contexto. Antes aqui se construia una segunda configuracion y se encadenaba la de host.
+  // el contexto.
   THostBuilderContext(FHostBuilderContext).Configuration := FConfiguration as IConfiguration;
 end;
 
@@ -724,7 +724,7 @@ begin
 
   // Solo si alguien pidio la propiedad. AddLogging levanta el error de composicion cuando no se
   // le anadio ningun proveedor, asi que llamarlo por sistema romperia toda aplicacion que no
-  // configure logging -- que hoy son todas menos las que lo hacen a proposito.
+  // configure logging.
   if FLoggingTouched then
     AddLogging(FServices, FLoggingImpl);
 

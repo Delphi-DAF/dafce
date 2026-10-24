@@ -52,10 +52,6 @@ type
     class function FindConfiguration(const Providers: IEnumerable<IConfigurationProvider>; const Key: string): TNullable<string>;
     function InternalGetChildKeys(const Prefix: string): TArray<string>;
     function GetChildrenImplementation(const Path: string): IEnumerable<IConfigurationSection>;
-    /// <summary>
-    /// Returns a <see cref="IChangeToken"/> that can be used to observe when this configuration is reloaded.
-    /// </summary>
-    /// <returns>The <see cref="IChangeToken"/>.</returns>
 
   public
     constructor Create(const Providers: TList<IConfigurationProvider>);

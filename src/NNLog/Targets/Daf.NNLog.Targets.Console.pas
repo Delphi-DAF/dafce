@@ -29,8 +29,7 @@ uses
 {$IFNDEF MSWINDOWS}
 const
   // Vive aqui y no dentro del metodo porque un const EN LINEA solo admite constantes simples: una
-  // constante tipada como este array da E2003 en su propia linea de declaracion (medido con
-  // dcclinux64 37.0). El array cubre TLogLevel entero -- son siete valores, no seis.
+  // constante tipada como este array da E2003 en su propia linea de declaracion.
   AnsiReset = #27'[0m';
   AnsiColors: array[TLogLevel] of string = (
     #27'[90m',    // Trace = gris

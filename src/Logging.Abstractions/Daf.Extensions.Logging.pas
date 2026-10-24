@@ -94,8 +94,7 @@ type
   ILogger = interface(IInvokable)
     // La forma de .NET: contesta si una entrada de ese nivel llegaria a algun destino, para que el
     // consumidor pueda saltarse la construccion de sus argumentos --que puede costar mas que la
-    // propia linea-- cuando la respuesta es que no. BREAKING: rompe a quien implemente ILogger sin
-    // heredar de TLogger.
+    // propia linea-- cuando la respuesta es que no.
     function IsEnabled(const Level: TLogLevel): Boolean;
     function BeginScope(const Msg: string; const Args: TArray<TValue>; const ScopedProc: TProc = nil): ILogScopeVoid;overload;
     function BeginScope(const Msg: string; const ScopedProc: TProc = nil): ILogScopeVoid;overload;
@@ -216,11 +215,7 @@ type
   end;
 
   // Aqui y no en el paquete concreto, que es donde .NET lo tiene
-  // (Microsoft.Extensions.Logging.Abstractions). Sus dos dependencias --ILoggerProvider e
-  // ILoggerFactory-- ya estaban declaradas justo encima, asi que la mudanza sale gratis; lo que
-  // la obliga es que el contrato comun de la familia de aplicaciones expone Logging, y un
-  // paquete .Abstractions no puede requerir uno concreto: es la invariante que el verificador
-  // de paquetes falla, y esa si es compuerta de CI.
+  // (Microsoft.Extensions.Logging.Abstractions).
   // La implementacion --TLoggingBuilder--, el error de composicion y AddLogging se quedan en
   // Daf.Logging
   ILoggingBuilder = interface(IInvokable)

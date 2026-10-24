@@ -64,9 +64,7 @@ type
     /// <summary>
     ///   Projects each element. Takes a plain <c>TFunc&lt;T, TTarget&gt;</c> — the same
     ///   type the lazy <c>Daf.Linq</c> <c>Select</c> takes — so one mapper value
-    ///   serves both APIs. (It used to take <c>TDeferred&lt;TMapper&lt;T,TTarget&gt;&gt;</c>,
-    ///   a deferred-value wrapper that was unwrapped on entry and never
-    ///   exercised, and that blocked passing a mapper to anything else.)
+    ///   serves both APIs.
     /// </summary>
     function Select<TTarget>(const Map: TFunc<T, TTarget>): TSmartArray<TTarget>;
     function Any(const Filter: TFilterSpec<T>): Boolean;
