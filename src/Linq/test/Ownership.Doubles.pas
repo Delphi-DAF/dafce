@@ -20,6 +20,19 @@ type
   end;
 
   /// <summary>
+  ///   A tracked object whose class declares two instances equal when they share a key: the
+  ///   shape of a value object, so a scenario can tell identity from equality.
+  /// </summary>
+  TEqualTracked = class(TTracked)
+  private
+    FKey: Integer;
+  public
+    constructor Create(const Name: string; Key: Integer);
+    function Equals(Obj: TObject): Boolean; override;
+    function GetHashCode: Integer; override;
+  end;
+
+  /// <summary>
   ///   A list that signs in the same registry as its elements, so a scenario also sees when the
   ///   list itself is freed.
   /// </summary>
@@ -59,7 +72,8 @@ type
 implementation
 
 uses
-  System.SysUtils;
+  System.SysUtils,
+  System.Generics.Defaults;
 
 var
   Registry: TList<TObject>;
@@ -87,6 +101,24 @@ destructor TTracked.Destroy;
 begin
   Registry.Remove(Self);
   inherited;
+end;
+
+{ TEqualTracked }
+
+constructor TEqualTracked.Create(const Name: string; Key: Integer);
+begin
+  inherited Create(Name);
+  FKey := Key;
+end;
+
+function TEqualTracked.Equals(Obj: TObject): Boolean;
+begin
+  Result := (Obj is TEqualTracked) and (TEqualTracked(Obj).FKey = FKey);
+end;
+
+function TEqualTracked.GetHashCode: Integer;
+begin
+  Result := FKey;
 end;
 
 { TTrackedList }
@@ -145,7 +177,18 @@ begin
 end;
 
 initialization
-  Registry := TList<TObject>.Create;
+  // By address: a registry that compared with Equals would sign out the first object equal to the
+  // one being destroyed, which is not always the same object.
+  Registry := TList<TObject>.Create(TComparer<TObject>.Construct(
+    function(const L, R: TObject): Integer
+    begin
+      if Pointer(L) = Pointer(R) then
+        Result := 0
+      else if NativeUInt(L) < NativeUInt(R) then
+        Result := -1
+      else
+        Result := 1;
+    end));
 
 finalization
   Registry.Free;

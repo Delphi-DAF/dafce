@@ -88,7 +88,9 @@ type
   private
     FList: TObjectList<T>;
     FOwnsItems: Boolean;
-    FDelivered: TDictionary<TObject, Byte>;
+    // Keyed by address: a delivered object may already be freed when the source dies, and a
+    // TObject key would call its virtual Equals and GetHashCode.
+    FDelivered: TDictionary<Pointer, Byte>;
   public
     constructor Create(const List: TObjectList<T>);
     destructor Destroy; override;
@@ -277,7 +279,7 @@ constructor TOwnedSource<T>.Create(const List: TObjectList<T>);
 begin
   FList := List;
   FOwnsItems := List.OwnsObjects;
-  FDelivered := TDictionary<TObject, Byte>.Create;
+  FDelivered := TDictionary<Pointer, Byte>.Create;
   var Src: TEnumerable<T> := List;
   var Delivered := FDelivered;
   inherited Create(
@@ -289,7 +291,7 @@ begin
         begin
           repeat
             Result := Inner.MoveNext;
-          until not Result or (Delivered.Count = 0) or not Delivered.ContainsKey(TObject(Inner.Current));
+          until not Result or (Delivered.Count = 0) or not Delivered.ContainsKey(Pointer(Inner.Current));
           if Result then
             Current := Inner.Current;
         end);
@@ -307,7 +309,7 @@ begin
     SetLength(Kept, FList.Count);
     var N := 0;
     for var Item in FList do
-      if not FDelivered.ContainsKey(TObject(Item)) then
+      if not FDelivered.ContainsKey(Pointer(Item)) then
       begin
         Kept[N] := Item;
         Inc(N);
@@ -325,7 +327,7 @@ end;
 procedure TOwnedSource<T>.Release(Item: TObject);
 begin
   if FOwnsItems then
-    FDelivered.AddOrSetValue(Item, 0);
+    FDelivered.AddOrSetValue(Pointer(Item), 0);
 end;
 
 { TQuery<T> }

@@ -51,6 +51,14 @@ begin
   W.Source.AddRange([W.A, W.B, W.C]);
 end;
 
+procedure FillEqualPair(W: TOwnedWorld);
+begin
+  W.Source := TTrackedList.Create('Lista');
+  W.A := TEqualTracked.Create('X1', 7);
+  W.B := TEqualTracked.Create('X2', 7);
+  W.Source.AddRange([W.A, W.B]);
+end;
+
 procedure FillAB(W: TOwnedWorld);
 begin
   W.Source := TTrackedList.Create('Lista');
@@ -519,6 +527,51 @@ Feature Una fuente que Linq posee @linq @owned
       begin
         Expect(Tracking.AliveNames).ToEqual('ListaB,B1,B2,Destino');
         Expect(W.Other.Count).ToEqual(2);
+      end)
+
+.Rule('Lo entregado se reconoce por identidad')
+
+  .Scenario('Un objeto igual a uno entregado sigue saliendo')
+    .Given('una consulta de una fuente poseida con dos objetos distintos que su clase declara iguales',
+      procedure(W: TOwnedWorld)
+      begin
+        FillEqualPair(W);
+        W.Query := Linq.FromOwned<TTracked>(W.Source);
+        Expect(BoolToStr(W.A.Equals(W.B), True)).ToEqual('True');
+      end)
+    .When('FirstOrDefault entrega el primero, y despues se enumera la misma consulta',
+      procedure(W: TOwnedWorld)
+      begin
+        W.Got := W.Query.FirstOrDefault;
+        W.Seen := NamesOf(W.Query);
+      end)
+    .&Then('la enumeracion produce el segundo',
+      procedure(W: TOwnedWorld)
+      begin
+        Expect(W.Got.Name).ToEqual('X1');
+        Expect(W.Seen).ToEqual('X2');
+      end)
+
+  .Scenario('Un objeto igual a uno entregado muere con la fuente')
+    .Given('una consulta de una fuente poseida con dos objetos distintos que su clase declara iguales',
+      procedure(W: TOwnedWorld)
+      begin
+        FillEqualPair(W);
+        W.Query := Linq.FromOwned<TTracked>(W.Source);
+        Expect(Tracking.AliveNames).ToEqual('Lista,X1,X2');
+      end)
+    .When('FirstOrDefault entrega el primero, la aplicacion lo libera, y se suelta la consulta',
+      procedure(W: TOwnedWorld)
+      begin
+        W.Got := W.Query.FirstOrDefault;
+        W.Got.Free;
+        W.Got := nil;
+        W.Query := Default(TQuery<TTracked>);
+      end)
+    .&Then('el segundo se ha liberado con la fuente, y no queda vivo ninguno de los dos',
+      procedure(W: TOwnedWorld)
+      begin
+        Expect(Tracking.AliveNames).ToEqual('');
       end);
 
 end.
