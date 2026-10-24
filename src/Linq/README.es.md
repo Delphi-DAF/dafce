@@ -51,7 +51,7 @@ for var P in Adultos do                        // nada se ejecutó hasta esta l�
 | `Skip(N)` | perezoso | Descarta los primeros `N` |
 | `Zip<TOther, TResult>` | perezoso | Empareja con otra secuencia elemento a elemento hasta que una termina |
 | `Distinct(Comparer)` | con buffer | Elimina duplicados por valor; pasa un comparador consciente de NULL para semántica SQL |
-| `OrderBy(Comparer)` | con buffer | Ordena mediante un `IComparer<T>`. Descendente es un comparador invertido: no hay `OrderByDescending` |
+| `OrderBy(Comparer)` | con buffer | Ordena mediante un `IComparer<T>`, y es estable, como en .NET: los elementos que el comparador considera iguales conservan el orden de la fuente. Descendente es un comparador invertido: no hay `OrderByDescending` |
 | `GroupBy<TKey>(KeySelector)` | con buffer | Devuelve `IEnumerable<IGrouping<TKey, T>>`, preservando el orden de las claves |
 | `IsEmpty` | terminal | True si no produce nada; se detiene en el primer elemento |
 | `Any(Spec)` | terminal | True si algún elemento cumple; se detiene en la primera coincidencia |

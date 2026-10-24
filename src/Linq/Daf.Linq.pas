@@ -140,7 +140,11 @@ type
     function Skip(Count: Integer): TQuery<T>;
     /// <summary>De-duplicates by value; pass a NULL-aware comparer for SQL semantics.</summary>
     function Distinct(const Comparer: IEqualityComparer<T> = nil): TQuery<T>;
-    /// <summary>Orders elements by the comparer (materialized on iteration).</summary>
+    /// <summary>
+    ///   Orders elements by the comparer, or by <c>TComparer&lt;T&gt;.Default</c> when it is nil
+    ///   (materialized on iteration). Stable, as <c>Enumerable.OrderBy</c>: elements the comparer
+    ///   considers equal keep their source order.
+    /// </summary>
     function OrderBy(const Comparer: IComparer<T>): TQuery<T>;
     /// <summary>Pairs elements with another sequence element-wise until either ends.</summary>
     function Zip<TOther, TResult>(const Other: IEnumerable<TOther>;
@@ -519,6 +523,7 @@ begin
     var
       Inner: IEnumerator<T>;
       Acc: TArray<T>;
+      Order: TArray<Integer>;
       Idx: Integer;
     begin
       var Lst := TList<T>.Create;
@@ -530,18 +535,29 @@ begin
       finally
         Lst.Free;
       end;
-      if Cmp <> nil then
-        TArray.Sort<T>(Acc, Cmp)
-      else
-        TArray.Sort<T>(Acc);
+      var ByElement := Cmp;
+      if ByElement = nil then
+        ByElement := TComparer<T>.Default;
+      // Positions are sorted, and a tie is broken by position: two positions never tie, so the
+      // source order among equal elements survives whatever algorithm TArray.Sort uses.
+      SetLength(Order, Length(Acc));
+      for var I := 0 to High(Order) do
+        Order[I] := I;
+      TArray.Sort<Integer>(Order, TComparer<Integer>.Construct(
+        function(const L, R: Integer): Integer
+        begin
+          Result := ByElement.Compare(Acc[L], Acc[R]);
+          if Result = 0 then
+            Result := L - R;
+        end));
       Idx := -1;
       Result := TGeneratorEnumerator<T>.Create(
         function(var Current: T): Boolean
         begin
           Inc(Idx);
-          Result := Idx <= High(Acc);
+          Result := Idx <= High(Order);
           if Result then
-            Current := Acc[Idx];
+            Current := Acc[Order[Idx]];
         end);
     end);
 end;

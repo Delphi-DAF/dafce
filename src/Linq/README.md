@@ -51,7 +51,7 @@ for var P in Adults do                        // nothing ran until this line
 | `Skip(N)` | lazy | Drops the first `N` |
 | `Zip<TOther, TResult>` | lazy | Pairs with another sequence element-wise until either ends |
 | `Distinct(Comparer)` | buffered | De-duplicates by value; pass a NULL-aware comparer for SQL semantics |
-| `OrderBy(Comparer)` | buffered | Sorts by an `IComparer<T>`. Descending is an inverted comparer: there is no `OrderByDescending` |
+| `OrderBy(Comparer)` | buffered | Sorts by an `IComparer<T>`, and is stable, as in .NET: elements the comparer considers equal keep their source order. Descending is an inverted comparer: there is no `OrderByDescending` |
 | `GroupBy<TKey>(KeySelector)` | buffered | Yields `IEnumerable<IGrouping<TKey, T>>`, key order preserved |
 | `IsEmpty` | terminal | True when nothing is produced; stops at the first element |
 | `Any(Spec)` | terminal | True when some element matches; stops at the first match |

@@ -61,6 +61,23 @@ begin
   inherited;
 end;
 
+function JoinInts(const Values: TArray<Integer>): string;
+begin
+  Result := '';
+  for var V in Values do
+  begin
+    if Result <> '' then
+      Result := Result + ',';
+    Result := Result + IntToStr(V);
+  end;
+end;
+
+// The text after the slash of 'Name/Department'.
+function DepartmentOf(const Person: string): string;
+begin
+  Result := Copy(Person, Pos('/', Person) + 1, MaxInt);
+end;
+
 procedure TOpsWorld.CallTerminal;
 begin
   Raised := '';
@@ -220,6 +237,60 @@ Feature Linq operators @linq @operators
         Expect(Length(W.Collected)).ToEqual(6);
         Expect(W.Collected[0]).ToEqual(1);
         Expect(W.Collected[5]).ToEqual(8);
+      end)
+
+  .Scenario('OrderBy keeps the source order among many elements with few keys')
+    .Given('a hundred elements numbered in order, whose key is the number modulo three',
+      procedure(W: TOpsWorld)
+      begin
+        W.Nums.Clear;
+        for var I := 0 to 99 do
+          W.Nums.Add(I);
+      end)
+    .When('they are ordered with OrderBy by their key',
+      procedure(W: TOpsWorld)
+      begin
+        W.Collected := Linq.From<Integer>(W.Nums)
+          .OrderBy(TComparer<Integer>.Construct(
+            function(const L, R: Integer): Integer
+            begin
+              Result := (L mod 3) - (R mod 3);
+            end))
+          .ToArray;
+      end)
+    .&Then('within each key they come out in the order of their number',
+      procedure(W: TOpsWorld)
+      begin
+        var Expected: TArray<Integer> := [];
+        for var Key := 0 to 2 do
+          for var I := 0 to 99 do
+            if I mod 3 = Key then
+              Expected := Expected + [I];
+        Expect(JoinInts(W.Collected)).ToEqual(JoinInts(Expected));
+      end)
+
+  .Scenario('Ordering by one key keeps the previous order as tie-breaker')
+    .Given('a list of people already ordered by name, with repeated departments',
+      procedure(W: TOpsWorld)
+      begin
+        W.Strs := ['Ana/Sales', 'Bea/IT', 'Carlos/Sales', 'Diana/IT', 'Elena/HR', 'Fede/IT', 'Gema/Sales'];
+      end)
+    .When('they are ordered with OrderBy by department',
+      procedure(W: TOpsWorld)
+      begin
+        W.LazyStrs := Linq.From<string>(W.Strs)
+          .OrderBy(TComparer<string>.Construct(
+            function(const L, R: string): Integer
+            begin
+              Result := CompareStr(DepartmentOf(L), DepartmentOf(R));
+            end))
+          .ToArray;
+      end)
+    .&Then('they come out grouped by department, and by name within each one',
+      procedure(W: TOpsWorld)
+      begin
+        Expect(String.Join(',', W.LazyStrs)).ToEqual(
+          'Elena/HR,Bea/IT,Diana/IT,Fede/IT,Ana/Sales,Carlos/Sales,Gema/Sales');
       end)
 
 .Rule('Zip and group')
