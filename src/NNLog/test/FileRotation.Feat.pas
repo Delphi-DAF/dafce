@@ -93,6 +93,12 @@ type
     function ArchivesOfTakenPeriod: Integer;
     /// El contenido de todos los archivos en claro de history/, por orden de nombre.
     function HistoryText: string;
+    /// Un fichero normal llamado history donde iria la carpeta: el destino no puede llevar nada a
+    /// history/, y puede seguir escribiendo su fichero. Si la carpeta ya existe, se va con lo que tenga.
+    procedure BlockHistory;
+    procedure UnblockHistory;
+    /// Cuantas veces ha dicho el canal de arranque que el destino no pudo archivar su fichero.
+    function ArchiveFailureReports: Integer;
   end;
 
 implementation
@@ -453,6 +459,30 @@ end;
 function TRotationWorld.ArchivesOfTakenPeriod: Integer;
 begin
   Result := ArchivesStartingWith(TPath.GetFileNameWithoutExtension(FTakenName));
+end;
+
+procedure TRotationWorld.BlockHistory;
+begin
+  if TDirectory.Exists(HistoryDir) then
+    TDirectory.Delete(HistoryDir, True);
+  TFile.WriteAllText(HistoryDir, 'no es una carpeta');
+end;
+
+procedure TRotationWorld.UnblockHistory;
+begin
+  TFile.Delete(HistoryDir);
+end;
+
+function TRotationWorld.ArchiveFailureReports: Integer;
+begin
+  Result := 0;
+  var Text := ChannelText;
+  var At := Text.IndexOf('no pudo archivar su fichero');
+  while At >= 0 do
+  begin
+    Inc(Result);
+    At := Text.IndexOf('no pudo archivar su fichero', At + 1);
+  end;
 end;
 
 function TRotationWorld.HistoryText: string;
@@ -1020,6 +1050,85 @@ Feature La rotacion de NNLog archiva con un nombre que se puede leer @nnlog @tar
       procedure(W: TRotationWorld)
       begin
         Expect(W.CurrentText).ToEqual('L3' + sLineBreak);
+      end)
+
+.Rule('Un archivado que falla se informa una vez por racha')
+
+  .Scenario('Muchas lineas con el archivado bloqueado, un informe')
+    .Given('un destino diario cuyo fichero es de ayer y no se puede llevar a history/, y un receptor del canal de arranque',
+      procedure(W: TRotationWorld)
+      begin
+        W.RotateDaily;
+        W.ExistingLogCreatedDaysAgo(1, 'AYER');
+        W.BlockHistory;
+        W.WatchStartupChannel;
+      end)
+    .When('se registran diez lineas',
+      procedure(W: TRotationWorld)
+      begin
+        for var I := 1 to 10 do
+          W.WriteLine('L' + IntToStr(I));
+      end)
+    .&Then('las diez estan en el fichero actual',
+      procedure(W: TRotationWorld)
+      begin
+        var Expected := 'AYER' + sLineBreak;
+        for var I := 1 to 10 do
+          Expected := Expected + 'L' + IntToStr(I) + sLineBreak;
+        Expect(W.CurrentText).ToEqual(Expected);
+      end)
+    .&And('el receptor recibe un solo informe de que no pudo archivar',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.ArchiveFailureReports).ToEqual(1);
+      end)
+
+  .Scenario('En cuanto desaparece el obstaculo, la linea siguiente archiva')
+    .Given('un destino cuyo archivado acaba de fallar',
+      procedure(W: TRotationWorld)
+      begin
+        W.RotateDaily;
+        W.ExistingLogCreatedDaysAgo(1, 'AYER');
+        W.BlockHistory;
+        W.WriteLine('BLOQUEADA');
+        Expect(W.CurrentText).ToEqual('AYER' + sLineBreak + 'BLOQUEADA' + sLineBreak);
+      end)
+    .When('desaparece lo que lo impedia, y se registra otra linea',
+      procedure(W: TRotationWorld)
+      begin
+        W.UnblockHistory;
+        W.WriteLine('LIBRE');
+      end)
+    .&Then('el fichero esta en history/, y la linea en un fichero nuevo',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.HistoryText).ToEqual('AYER' + sLineBreak + 'BLOQUEADA' + sLineBreak);
+        Expect(W.CurrentText).ToEqual('LIBRE' + sLineBreak);
+      end)
+
+  .Scenario('Un fallo despues de archivar bien se vuelve a informar')
+    .Given('un destino que rota en cada linea, que no pudo archivar, archivo despues y lo vuelve a tener bloqueado, y un receptor del canal de arranque',
+      procedure(W: TRotationWorld)
+      begin
+        W.RotateOnEverySize;
+        W.WatchStartupChannel;
+        W.WriteLine('L0');
+        W.BlockHistory;
+        W.WriteLine('L1');
+        W.UnblockHistory;
+        W.WriteLine('L2');
+        W.BlockHistory;
+        Expect(W.ArchiveFailureReports).ToEqual(1);
+      end)
+    .When('se registra otra linea',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('L3');
+      end)
+    .&Then('el receptor tiene dos informes de que no pudo archivar',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.ArchiveFailureReports).ToEqual(2);
       end);
 
 end.

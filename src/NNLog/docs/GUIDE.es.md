@@ -242,6 +242,10 @@ se cuenta, y no se informa nada más. La primera entrada que vuelve a escribir i
 cuántas perdió —`el destino "file" vuelve a escribir; perdio 3 lineas`— y cierra la racha, así que un
 fallo posterior se vuelve a informar.
 
+Un destino de fichero que no puede llevar su fichero a `history` sigue escribiendo en el mismo fichero
+y lo vuelve a intentar en la entrada siguiente. El fallo se informa una vez por racha —`el destino
+"file" no pudo archivar su fichero`— y un archivado que sale bien cierra la racha.
+
 ---
 
 ## Tokens de layout

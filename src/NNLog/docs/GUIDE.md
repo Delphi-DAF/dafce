@@ -238,6 +238,10 @@ counted, and nothing more is reported. The first entry it writes again reports, 
 many it lost — `el destino "file" vuelve a escribir; perdio 3 lineas` — and closes the run, so a
 later failure is reported again.
 
+A file target that cannot move its file to `history` keeps writing in the same file and tries again
+on the next entry. The failure is reported once per run — `el destino "file" no pudo archivar su
+fichero` — and an archive that succeeds closes the run.
+
 ---
 
 ## Layout tokens

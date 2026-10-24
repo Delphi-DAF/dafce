@@ -31,13 +31,15 @@ type
     FOtherRunsSwept: Boolean;
     // Los archivos de history/ que proceden de FileName, de cualquier ejecucion y comprimidos o no.
     FArchivePattern: TRegEx;
+    // Cierto mientras dura una racha de archivados fallidos: el primero se informa, los demas no.
+    FArchiveFailing: Boolean;
     procedure EnsureStreamFor(const Path: string);
     function ResolveFileName(const Entry: TLogEntry): string;
     procedure SetFileName(const Value: string);
     procedure BuildOwnPatterns;
     procedure CleanupHistory(const HistoryDir: string);
     procedure CompressIfAsked(const RotatedPath: string);
-    procedure MoveToHistory(const Path, RotatedPath: string);
+    function MoveToHistory(const Path, RotatedPath: string): Boolean;
     function RotateCurrentFileIfNeeded(const Path: string): Boolean;
     procedure ArchiveOtherRuns(const Path: string);
     function MoveOtherRun(const Candidate, HistoryDir: string; out RotatedPath: string): Boolean;
@@ -389,16 +391,15 @@ begin
     Exit;
 
   if not StrategyOf[RotationPolicy].NeedRotate(Self, Path, RotatedPath) then Exit;
-  Result := True;
-  // Ajustar ruta de histórico
   var HistoryDir := TPath.Combine(TPath.GetDirectoryName(Path), 'history');
   ForceDirectories(HistoryDir);
   RotatedPath := TPath.Combine(HistoryDir, TPath.GetFileName(RotatedPath));
-  MoveToHistory(Path, RotatedPath);
+  Result := MoveToHistory(Path, RotatedPath);
 end;
 
-procedure TFileTarget.MoveToHistory(const Path: string; const RotatedPath: string);
+function TFileTarget.MoveToHistory(const Path: string; const RotatedPath: string): Boolean;
 begin
+  Result := False;
   // Soltar el fichero es obligado para moverlo: el archivo conserva el nombre del original, asi que
   // no hay un segundo fichero que abrir antes. Lo que NO es obligado es que archivar pueda costar la
   // linea que provoco la rotacion -- comprimir un log de varios megas tarda, y limpiar el historico
@@ -410,11 +411,15 @@ begin
     on E: Exception do
     begin
       // Sin rotar. El llamante reabre el mismo fichero y la linea se escribe igual, al final del
-      // que ya habia: peor que rotar, mejor que perderla y quedarse sin destino.
-      BootstrapLog.LoggerFor(ClassName).LogError(E, Format('el destino "%s" no pudo archivar su fichero', [DisplayName]));
+      // que ya habia, y la escritura siguiente lo vuelve a intentar.
+      if not FArchiveFailing then
+        BootstrapLog.LoggerFor(ClassName).LogError(E, Format('el destino "%s" no pudo archivar su fichero', [DisplayName]));
+      FArchiveFailing := True;
       Exit;
     end;
   end;
+  FArchiveFailing := False;
+  Result := True;
 
   try
     CompressIfAsked(RotatedPath);
