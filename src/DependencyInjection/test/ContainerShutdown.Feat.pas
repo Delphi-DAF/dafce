@@ -291,6 +291,70 @@ Feature Container shutdown leaves a defined state @di @lifetime @shutdown
         Expect(W.LastName).ToEqual('alpha');
       end)
 
+.Rule('A closed container does not answer whether it can resolve')
+
+  .Scenario('With the collection already released')
+    .Given('a closed container whose collection nobody holds any more',
+      procedure(W: TShutdownWorld)
+      begin
+        W.BuildAndResolve;
+        W.Close;
+        W.HeldBeta := nil;
+        W.Services := Default(IServiceCollection);
+      end)
+    .When('it is asked whether it can resolve a service that was registered',
+      procedure(W: TShutdownWorld)
+      begin
+        W.Attempt(procedure begin W.LastName := BoolToStr(W.Provider.CanResolve(TypeInfo(IAlpha)), True); end);
+      end)
+    .&Then('it fails with the shut down error, naming the service',
+      procedure(W: TShutdownWorld)
+      begin
+        Expect(W.Outcome).ToContain('EContainerShutDownError');
+        Expect(W.Outcome).ToContain('IAlpha');
+      end)
+
+  .Scenario('With the collection still alive')
+    .Given('a closed container whose collection is still held by whoever composed it',
+      procedure(W: TShutdownWorld)
+      begin
+        W.BuildAndResolve;
+        W.Close;
+      end)
+    .When('it is asked the same',
+      procedure(W: TShutdownWorld)
+      begin
+        W.Attempt(procedure begin W.LastName := BoolToStr(W.Provider.CanResolve(TypeInfo(IAlpha)), True); end);
+      end)
+    .&Then('it fails with the same error, instead of answering',
+      procedure(W: TShutdownWorld)
+      begin
+        Expect(W.Outcome).ToContain('EContainerShutDownError');
+      end)
+
+  .Scenario('Before closing it answers')
+    .Given('an open container with IAlpha registered and IBeta not',
+      procedure(W: TShutdownWorld)
+      begin
+        W.Services.AddSingleton<IAlpha, TAlpha>;
+        W.Provider := W.Services.BuildServiceProvider;
+      end)
+    .When('it is asked whether it can resolve each of them',
+      procedure(W: TShutdownWorld)
+      begin
+        W.Attempt(
+          procedure
+          begin
+            W.LastName := Format('IAlpha %s, IBeta %s', [BoolToStr(W.Provider.CanResolve(TypeInfo(IAlpha)), True),
+              BoolToStr(W.Provider.CanResolve(TypeInfo(IBeta)), True)]);
+          end);
+      end)
+    .&Then('it answers yes to the first one and no to the second',
+      procedure(W: TShutdownWorld)
+      begin
+        Expect(W.Outcome + ' / ' + W.LastName).ToEqual(SinError + ' / IAlpha True, IBeta False');
+      end)
+
 .Rule('Closing an already closed container does nothing')
 
   .Scenario('Closing twice in a row')

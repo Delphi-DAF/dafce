@@ -253,6 +253,8 @@ de cualquier `DCCReference`.
   el padre sigue capturándolo.
 - **Crear un ámbito desde un contenedor cerrado falla igual**, en vez de entregar un ámbito que no
   puede resolver.
+- **Preguntar a un contenedor cerrado si puede resolver falla igual.** `CanResolve` contestaba como
+  si el contenedor siguiera abierto.
 - **Cerrar dos veces ya no rompe.** Si tu código cerraba en dos sitios —el cierre explícito de la
   aplicación y el desmontaje de quien posee el proveedor— y evitabas el segundo con una bandera,
   esa bandera ya no hace falta.

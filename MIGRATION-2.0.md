@@ -252,6 +252,8 @@ The six dialect compilers live in `Daf.SQLCute`, next to the ANSI one, and keep 
   `EServiceProviderError`, so whoever already catches the parent still catches it.
 - **Creating a scope from a closed container fails the same way**, instead of handing out a scope
   that cannot resolve.
+- **Asking a closed container whether it can resolve fails the same way.** `CanResolve` used to
+  answer as if the container were still open.
 - **Closing twice no longer breaks.** If your code closed in two places — the application's explicit
   shutdown and the teardown of whoever owns the provider — and you avoided the second one with a
   flag, that flag is no longer needed.

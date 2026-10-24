@@ -1412,6 +1412,8 @@ end;
 
 function TServiceScope.CanResolve(const Slot: TServiceSlot): Boolean;
 begin
+  // Antes que la coleccion: el ambito la apunta sin sostenerla, y cerrado puede no existir ya.
+  CheckNotShutDown(Slot.ServiceType);
   Result := ServiceCollection.Contains(Slot);
   if Result then Exit;
   // Y esto no es un adorno: TActivatorUtilities pregunta aqui ANTES de elegir constructor. Si
