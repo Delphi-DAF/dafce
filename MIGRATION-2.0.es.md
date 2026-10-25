@@ -43,12 +43,9 @@ Builder.Services
   .AddModule<TEvaluationModule>;
 ```
 
-**Por qué.** En compilación nativa el descubrimiento no ahorraba la declaración: la escondía. Para
-que la RTTI vea una clase, su unit tiene que estar en la imagen, y el linker solo la deja si
-alguien hizo `uses` — así que la declaración ya existía, disfrazada. A cambio de no ahorrar nada
-añadía dos modos de fallo: una RTTI recortada dejaba el descubrimiento **ciego en silencio**, y el
-orden de registro lo decidía el recorrido de la reflexión. `AddModule<T>` además respeta el
-constructor del módulo, que el descubrimiento se saltaba sin decirlo.
+**Qué cambia al ejecutar.** Los módulos se registran en el orden de las llamadas a `AddModule<T>`,
+ya no en el que los encontraba el recorrido de la reflexión, y se ejecuta el constructor propio de
+cada módulo.
 
 ### 2. `Daf.Commons` se ha partido
 
@@ -174,8 +171,7 @@ La parte mecánica, término a término:
 | `Params.Command = 'build'` | `Parsed.Command`, un `ICommand` — compáralo con el objeto que declaraste |
 | `Parser.Parse(…) = nil` | `Parsed.Succeeded` en falso. `Parsed.Errors` lleva cada error con el resultado de su símbolo, y `Parsed.ErrorText` su texto |
 
-**Lo que no pasa igual.** Se dice porque una migración que solo enseña la mitad fácil deja al lector
-creyendo que ya está:
+**Lo que no pasa igual:**
 
 - **`Parse(string)` no es `Parser.Parse(GetCommandLine)`.** Para la línea de comandos del proceso,
   `Parse` sin argumentos lee `ParamStr`. `Parse(string)` parte una línea con
@@ -253,8 +249,7 @@ de cualquier `DCCReference`.
   construcción de argumentos que cuestan más que la propia línea —un volcado de estado, una consulta—.
   Un descendiente de `TLogger` hereda un defecto que contesta `True`, así que un proveedor de logging
   escrito fuera de DAF sigue compilando sin tocarlo; solo un tipo que implemente `ILogger` **a mano**
-  tiene que añadirlo. Contesta `True` si dudas — perder una línea por no saber es peor que componer una
-  de más:
+  tiene que añadirlo. Contesta `True` si dudas:
 
   ```pascal
   // añadir a cualquier implementador de ILogger escrito a mano
@@ -497,8 +492,7 @@ captura y lo anota en el canal de arranque, bajo el nombre de clase del destino 
 destino, así que una línea que no llega a donde iba deja de abortar el código que solo intentaba
 registrar.
 
-- **Qué rompe**: un spec que afirme la propagación. Se pone rojo, y eso es el cambio llegando y no
-  una regresión — no hay nada que restaurar de tu lado.
+- **Qué rompe**: un spec que afirme la propagación. Reescríbelo contra el canal de arranque, abajo.
 - **Dónde sale ahora el fallo**: en `BootstrapLog`, como un `LogError` con la excepción y el nombre
   del destino. Un destino cuyos fallos haya que ver se vigila ahí.
 - **Un destino propio sobrescribe `DoWrite`, no `Write`**, y de esta mitad sí avisa el compilador:

@@ -123,8 +123,7 @@ if B.Configuration.Find('Features:Beta').GetValueOrDefault('') = 'on' then
 ```
 
 DAF has **one** builder style, and it is this one. The deferred style — registering through
-`ConfigureServices` callbacks — is gone: .NET keeps it only for backwards compatibility, and two ways
-to express one thing is the defect, not the convenience.
+`ConfigureServices` callbacks — is gone.
 
 ---
 
@@ -267,8 +266,7 @@ from it to group its own.
 | `TCliExit.InvocationError` (2) | The invocation does not fit the declared grammar |
 | `TCliExit.AlreadyRunning` (3) | Another instance holds the declared single-instance id |
 
-`Run` returns an `Integer` and that is not decoration: a CLI application that cannot tell the system
-how it ended is not usable in a script.
+`Run` returns the exit code, for the `.dpr` to assign to `ExitCode`.
 
 ### The startup channel
 

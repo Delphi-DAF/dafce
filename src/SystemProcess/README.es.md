@@ -248,6 +248,4 @@ que acaba de terminar no hace nada.
 
 Esta unit formaba parte de `Daf.Commons` hasta que se mudó a un paquete propio. Ni el nombre de la
 unit ni el de sus tipos han cambiado: basta añadir una referencia a `Daf.SystemProcess` y las
-cláusulas `uses` existentes siguen compilando. Se fue porque `Daf.Commons` es el suelo que pisan
-todos los demás paquetes, y lanzar procesos es algo que hace una *aplicación* — no una extensión de
-la biblioteca estándar.
+cláusulas `uses` existentes siguen compilando.

@@ -43,12 +43,8 @@ Builder.Services
   .AddModule<TEvaluationModule>;
 ```
 
-**Why.** Under native compilation, discovery did not save the declaration: it hid it. For the RTTI
-to see a class, its unit must be in the image, and the linker only keeps it if somebody wrote
-`uses` — so the declaration was already there, in disguise. In exchange for saving nothing it added
-two failure modes: a trimmed RTTI left discovery **blind in silence**, and the registration order
-was decided by the reflection walk. `AddModule<T>` also honours the module's own constructor, which
-discovery skipped without saying so.
+**What changes when it runs.** Modules register in the order of the `AddModule<T>` calls, no longer
+in the order the reflection walk found them, and each module's own constructor runs.
 
 ### 2. `Daf.Commons` has been split
 
@@ -173,8 +169,7 @@ The mechanical part, term by term:
 | `Params.Command = 'build'` | `Parsed.Command`, an `ICommand` — compare it against the object you declared |
 | `Parser.Parse(…) = nil` | `Parsed.Succeeded` false. `Parsed.Errors` holds each error with the result of its symbol, and `Parsed.ErrorText` their text |
 
-**What does not carry over unchanged.** Naming it because a migration that only shows the easy half
-leaves you thinking you are done:
+**What does not carry over unchanged:**
 
 - **`Parse(string)` is not `Parser.Parse(GetCommandLine)`.** For the command line of the process,
   `Parse` with no arguments reads `ParamStr`. `Parse(string)` splits a line with
@@ -252,7 +247,7 @@ The six dialect compilers live in `Daf.SQLCute`, next to the ANSI one, and keep 
   arguments that cost more than the line itself — a state dump, a query. A `TLogger`
   descendant inherits a default that answers `True`, so a logging provider written outside DAF keeps
   compiling untouched; only a type that implements `ILogger` **by hand** has to add it. Answer
-  `True` if in doubt — dropping a line by not knowing is worse than composing one too many:
+  `True` if in doubt:
 
   ```pascal
   // add to any hand-written ILogger implementer
@@ -495,8 +490,8 @@ catches it and reports it on the bootstrap channel, under the target's class nam
 target, so a line that never reaches its destination stops aborting the code that was only trying
 to log.
 
-- **What breaks**: a spec that asserts the propagation. It goes red, and that is the change
-  arriving rather than a regression — there is nothing to restore on your side.
+- **What breaks**: a spec that asserts the propagation. Rewrite it against the bootstrap channel,
+  below.
 - **Where the failure shows now**: `BootstrapLog`, as a `LogError` carrying the exception and the
   target's name. A target whose failures have to be seen is watched there.
 - **A custom target overrides `DoWrite`, not `Write`**, and this half the compiler does tell you:

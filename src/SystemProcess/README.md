@@ -248,5 +248,4 @@ just exited does nothing.
 
 This unit was part of `Daf.Commons` until it moved to a package of its own. The unit name and its
 types did not change: add a reference to `Daf.SystemProcess` and existing `uses` clauses keep
-compiling. It left because `Daf.Commons` is the floor every other package stands on, and launching
-processes is something an *application* does — not an extension of the runtime library.
+compiling.

@@ -88,8 +88,8 @@ var Missing := Provider.GetKeyedService<IStorage>('nadie');   // nil
 `AddKeyedSingleton`, `AddKeyedScoped` y `AddKeyedTransient` vienen en las mismas formas que sus
 `Add*` —por clase, por factoría y por instancia— y cada uno tiene su `TryAddKeyed*`.
 
-**La clave enumerada es la forma recomendada**, y la razón es el compilador: renombrar un miembro
-propaga a todos sus usos y un typo es un error. `'bolb'` compila.
+**La clave enumerada es la forma recomendada**: renombrar un miembro llega a todos sus usos, y un
+typo es un error de compilación. Una clave de cadena como `'bolb'` compila.
 
 Una clave puede ser una **cadena**, un **entero**, un **booleano**, un valor de un **enumerado**, una
 **metaclase** o un **`PTypeInfo`**. Dos claves son la misma cuando coinciden **su tipo y su valor**,
@@ -164,7 +164,7 @@ Services.AddKeyedSingleton<IStorage>(ServiceKey.Any,
 
 Un registro concreto le gana —al comodín se le pregunta solo al fallar la búsqueda directa— y cada
 clave que atiende recibe su propia instancia. El centinela es un valor de un tipo declarado dentro del
-módulo de DI, así que nadie de fuera puede construirlo por accidente.
+módulo de DI, y no se puede construir desde fuera.
 
 ⚠️ **Un registro con clave no puede dejar sus argumentos genéricos sin fijar.** Los dos
 emparejamientos no se combinan, y el registro se rechaza en el acto.
@@ -268,8 +268,7 @@ entre hilos como lo haya hecho quien lo escribió.
 
 **Componer es de un solo hilo.** Se registra en un hilo, se construye el proveedor, y desde entonces
 la colección solo se lee — registrar después de construir falla diciendo que está congelada. No hay
-garantía frente a componer desde dos hilos, y no se piensa dar: es el montaje de una aplicación, y
-ocurre una vez.
+garantía frente a componer desde dos hilos.
 
 **Un ámbito es una frontera de vida, no un hilo.** Un ámbito se puede usar desde cualquier hilo, y
 desde varios a la vez, lo haya creado quien sea. Un ámbito por unidad de trabajo sigue siendo la

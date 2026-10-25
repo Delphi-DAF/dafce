@@ -88,8 +88,8 @@ var Missing := Provider.GetKeyedService<IStorage>('nobody');   // nil
 `AddKeyedSingleton`, `AddKeyedScoped` and `AddKeyedTransient` come in the same forms as their `Add*`
 — by class, by factory and by instance — and each has its `TryAddKeyed*`.
 
-**An enumerated key is the recommended form**, and the reason is the compiler: renaming a member
-propagates to every use and a typo is an error. `'bolb'` compiles.
+**An enumerated key is the recommended form**: renaming a member reaches every use, and a typo is
+a compile error. A string key such as `'bolb'` compiles.
 
 A key can be a **string**, an **integer**, a **boolean**, a value of an **enumerated type**, a
 **metaclass** or a **`PTypeInfo`**. Two keys are the same when their **type and value** match, so two
@@ -164,7 +164,7 @@ Services.AddKeyedSingleton<IStorage>(ServiceKey.Any,
 
 A concrete registration beats it — the wildcard is asked only when the direct lookup fails — and each
 key it serves gets its own instance. The sentinel is a value of a type declared inside the DI module,
-so nobody outside can build it by accident.
+and it cannot be built from outside.
 
 ⚠️ **A keyed registration cannot leave its generic arguments unbound.** The two matchings are not
 combined, and the registration is rejected on the spot.
@@ -267,7 +267,7 @@ thread-safe as its author made it.
 
 **Composing is single-threaded.** Register on one thread, build the provider, and from then on the
 collection is only read — registering after building fails saying it is frozen. There is no guarantee
-against composing from two threads, and none is planned: it is the one-time setup of an application.
+against composing from two threads.
 
 **A scope is a lifetime boundary, not a thread.** A scope can be used from any thread, and from
 several at the same time, whoever created it. One scope per unit of work is still the recommendation,

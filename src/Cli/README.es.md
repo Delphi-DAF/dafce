@@ -124,8 +124,7 @@ if B.Configuration.Find('Features:Beta').GetValueOrDefault('') = 'on' then
 ```
 
 DAF tiene **un solo** estilo de builder, y es este. El diferido —registrar por callbacks de
-`ConfigureServices`— se retiró: .NET lo conserva solo por compatibilidad hacia atrás, y dos formas de
-expresar lo mismo son el defecto, no la comodidad.
+`ConfigureServices`— se retiró.
 
 ---
 
@@ -268,8 +267,7 @@ puede derivar de ella para agrupar las suyas.
 | `TCliExit.InvocationError` (2) | La invocación no encaja con la gramática declarada |
 | `TCliExit.AlreadyRunning` (3) | Ya hay otra instancia con ese identificador |
 
-`Run` devuelve un `Integer`, y no es adorno: una aplicación CLI que no puede decirle al sistema cómo
-terminó no sirve en un script.
+`Run` devuelve el código de salida, para que el `.dpr` lo asigne a `ExitCode`.
 
 ### El canal de arranque
 
