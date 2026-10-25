@@ -135,6 +135,12 @@ A parameter typed `TWebRequest` or `TWebResponse` receives the request or the re
 A `[FromServices]` parameter is an interface, resolved from the request's scope. A service nobody
 registered fails the request naming the service: the action never receives a `nil`.
 
+A `[FromBody]` parameter is a class, built with its parameterless constructor and filled from the
+body, which has to be a JSON object. An empty body, one that does not parse, another JSON type, or one
+that does not fill the class, answers `400 Bad Request` naming the parameter, and the action is not
+invoked. The object lives as long as the request: the router frees it after executing the action's
+result, so an action that has to keep something copies it.
+
 ---
 
 ## Action results reference

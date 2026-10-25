@@ -49,7 +49,6 @@ type
     Name: string;
     Kind: TBindingKind;
     Param: TRttiParameter;
-    Value: TValue;
   end;
 
   TRouteParameter = record
@@ -110,10 +109,11 @@ type
     function BuildRegexFromRoute(const RouteTemplate: string): string;
     function ExtractRouteParams(const RouteTemplate: string): TArray<TRouteParameter>;
     procedure GetRouteParamValues(const Path: string);
-    function GetBodyValue(Param: TRttiParameter; const Request: TWebRequest): TValue;
+    function GetBodyValue(Param: TRttiParameter; const Request: TWebRequest; const Owned: TObjectList<TObject>): TValue;
     function GetServiceValue(Param: TRttiParameter; const Services: IServiceProvider): TValue;
     function GetQueryValue(const Param: TRttiParameter; const Request: TWebRequest): string;
-    procedure BindParams(Services: IServiceProvider; Request: TWebRequest; Response: TWebResponse);
+    function BindParams(Services: IServiceProvider; Request: TWebRequest; Response: TWebResponse;
+      const Owned: TObjectList<TObject>): TArray<TValue>;
     function GetRouteValue(Param: TRttiParameter): TValue;
   public
     constructor Create(const ControllerType: TRttiInstanceType; const ControllerMethod: TRttiMethod;
@@ -137,6 +137,7 @@ uses
   System.JSON,
   REST.Json,
   REST.Json.Types,
+  Daf.Activator,
   Daf.Web.ActionResult,
   Daf.DependencyInjection.ActivatorUtilities,
   Daf.Web.Controller;
@@ -146,6 +147,9 @@ type
   public
     class function GetContentType(const FileName: string): string; static;
   end;
+
+  /// What the request carries cannot bind a parameter: the action is not invoked and the answer is 400.
+  EBadRequest = class(Exception);
 
 
 
@@ -335,7 +339,10 @@ begin
   Result := Request.QueryFields.Values[Param.Name];
 end;
 
-function TWebRouteMatcher.GetBodyValue(Param: TRttiParameter; const Request: TWebRequest): TValue;
+// As an ASP.NET Core API controller: the object is built by its constructor and filled from a body
+// that has to be a JSON object, or the request is rejected. It lives as long as the request, in Owned.
+function TWebRouteMatcher.GetBodyValue(Param: TRttiParameter; const Request: TWebRequest;
+  const Owned: TObjectList<TObject>): TValue;
 begin
   var Body := Request.Content;
   case Param.ParamType.TypeKind of
@@ -347,10 +354,22 @@ begin
     tkString: ;
     tkSet: ;
     tkClass: begin
-      var Obj := (Param.ParamType as TRttiInstanceType).MetaclassType.Create;
-      var Json := TJSonValue.ParseJSONValue(Body) as TJSonObject;
-      TJSOn.JsonToObject(Obj, Json, []);
-      Result := Obj;
+      var Json := TJSONValue.ParseJSONValue(Body);
+      try
+        if not (Json is TJSONObject) then
+          raise EBadRequest.CreateFmt('The body for "%s" is not a JSON object', [Param.Name]);
+        var Obj := TActivator.CreateInstance((Param.ParamType as TRttiInstanceType).MetaclassType);
+        Owned.Add(Obj);
+        try
+          TJson.JsonToObject(Obj, TJSONObject(Json), []);
+        except
+          on E: Exception do
+            raise EBadRequest.CreateFmt('The body for "%s" does not bind: %s', [Param.Name, E.Message]);
+        end;
+        Result := Obj;
+      finally
+        Json.Free;
+      end;
     end;
     tkMethod: ;
     tkWChar: ;
@@ -408,23 +427,27 @@ begin
   end;
 end;
 
-procedure TWebRouteMatcher.BindParams(Services: IServiceProvider; Request: TWebRequest; Response: TWebResponse);
+// The values of this request, in a local array: the objects it creates for them go to Owned, which
+// whoever dispatches frees when the request is over.
+function TWebRouteMatcher.BindParams(Services: IServiceProvider; Request: TWebRequest; Response: TWebResponse;
+  const Owned: TObjectList<TObject>): TArray<TValue>;
 begin
   GetRouteParamValues(Request.PathInfo);
 
+  SetLength(Result, Length(FBoundParams));
   for var P in FBoundParams do
   begin
     case P.Kind of
-      bkRequest: FBoundParams[P.Index].Value := Request;
-      bkResponse: FBoundParams[P.Index].Value := Response;
+      bkRequest: Result[P.Index] := Request;
+      bkResponse: Result[P.Index] := Response;
       bkServices:
-        FBoundParams[P.Index].Value := GetServiceValue(P.Param, Services);
+        Result[P.Index] := GetServiceValue(P.Param, Services);
       bkBody:
-        FBoundParams[P.Index].Value := GetBodyValue(P.Param, Request);
+        Result[P.Index] := GetBodyValue(P.Param, Request, Owned);
       bkQuery:
-        FBoundParams[P.Index].Value := GetQueryValue(P.Param, Request);
+        Result[P.Index] := GetQueryValue(P.Param, Request);
       bkRoute:
-          FBoundParams[P.Index].Value := GetRouteValue(P.Param);
+          Result[P.Index] := GetRouteValue(P.Param);
       else
           raise Exception.CreateFmt('Missing route param "%s"', [P.Name]);
     end;
@@ -451,13 +474,22 @@ begin
 
   if not Assigned(Controller) then
     Exit;
+  // What the binding creates dies with the controller, after the result has been executed.
+  var Owned := TObjectList<TObject>.Create(True);
   try
     TWebController(Controller).ConfigureRenderer(WebRouter.RootDirectory);
-    BindParams(Services, Request, Response);
     var Params: TArray<TValue>;
-    Setlength(Params, Length(FBoundParams));
-    for var idx := Low(Params) to High(Params) do
-      Params[idx] := FBoundParams[idx].Value;
+    try
+      Params := BindParams(Services, Request, Response, Owned);
+    except
+      on E: EBadRequest do
+      begin
+        Response.StatusCode := 400;
+        Response.ContentType := 'text/plain';
+        Response.Content := E.Message;
+        Exit;
+      end;
+    end;
 
     var ResultValue := FControllerMethod.Invoke(Controller, Params);
 
@@ -477,6 +509,7 @@ begin
       raise Exception.Create('Unsupported return type from controller action.');
   finally
     Controller.Free;
+    Owned.Free;
   end;
 end;
 

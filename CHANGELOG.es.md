@@ -114,6 +114,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - ⚠️ **Hosting**: Los ajustes del host toman los nombres de .NET: `environment`, `applicationName` y `contentRoot`, como argumento —`--environment Staging`— o como variable `DAF_` sin el prefijo —`DAF_ENVIRONMENT`—. `THostDefaults` sustituye a `TDafEnvVars`, y sin `contentRoot` el content root es el directorio actual, salvo en el directorio del sistema, donde arranca un servicio de Windows. **Rompe**, en silencio, a quien fije `DAF_APP_ENV`, `DAF_APP_NAME` o `DAF_CONTENT_ROOT`, que dejan de leerse, y a quien arranque la aplicación desde otro directorio contando con el `appsettings.json` junto al ejecutable
 - ⚠️ **Hosting**: El nombre de entorno se conserva tal cual, como en .NET: `deve`, `stag`, `prod` y `test` dejan de nombrar los entornos conocidos, y `development` sigue siendo `development`, que responde a `IsDevelopment`. **Rompe** a quien fije una abreviatura en `DAF_ENVIRONMENT`, o un nombre propio que contaba con ejecutarse como `Production`
 - ⚠️ **Web**: `TDafHttpServer.Start` sobre un puerto ocupado **lanza una excepción que nombra el puerto**, después del evento `OnError`. Antes terminaba con `Abort`: un `except on EAbort` alrededor de `Start` deja de capturarla
+- ⚠️ **Web**: Un objeto `[FromBody]` vive lo que la petición: el router lo libera después de ejecutar el resultado de la acción, donde antes fugaba. **Rompe** a una acción que lo guardara
 - **Logging**: Componer el pipeline sin un solo proveedor **falla al construir el host**, con `ELoggingCompositionError`, en vez de entregar un `ILogger` que acepta todo y no escribe nada. El silencio deliberado se declara con `AddNullProvider`
 - **Samples**: Cada sample se archiva bajo el módulo que declara lo que usa: `ConsoleSample` a `src/Cli/samples/`, `TicTacToeApp` a `src/VCL/samples/`, y `HostedService` a `src/samples/`
 
@@ -242,6 +243,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - **SQLCute**: `Where(col, 'in', V)` y `'not in'`, también por `OrWhere`, `WhereNot` y `OrWhereNot`, ligan sus valores como `WhereIn` en vez de escribir `V` en el SQL. Una cadena con una lista (`'1,2,3'`) es ahora un solo valor
 - **SQLCute**: El operador de `WhereTime`, `OrWhereTime` y de una unión por columnas se valida contra la lista que acepta `Where`, y lo que se emite es el operador reconocido; antes se escribía en el SQL tal como llegaba
 - **Web**: El router sirve ficheros estáticos solo cuando se declara `RootDirectory`, y solo de dentro de ella. Sin raíz servía cualquier fichero del directorio de trabajo, `appsettings.json` incluido; con ella, `..` y las rutas absolutas salían fuera
+- **Web**: un parámetro `[FromBody]` se saltaba su constructor, y el JSON analizado fugaba en cada petición; un cuerpo que no es un objeto JSON responde ahora 400 sin invocar la acción
 
 ## [1.6.0] - 2026-07-20
 

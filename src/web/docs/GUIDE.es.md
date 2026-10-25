@@ -135,6 +135,12 @@ Un parámetro de tipo `TWebRequest` o `TWebResponse` recibe la propia petición 
 Un parámetro `[FromServices]` es una interfaz y se resuelve del ámbito de la petición. Un servicio que
 nadie registró hace fallar la petición nombrando el servicio: la acción no recibe nunca un `nil`.
 
+Un parámetro `[FromBody]` es una clase: se construye con su constructor sin parámetros y se rellena con
+el cuerpo, que tiene que ser un objeto JSON. Un cuerpo vacío, que no se analiza, de otro tipo JSON o
+que no rellena la clase responde `400 Bad Request` nombrando el parámetro, y la acción no se invoca. El
+objeto vive lo que la petición: el router lo libera después de ejecutar el resultado de la acción, así
+que una acción que tiene que guardar algo lo copia.
+
 ---
 
 ## Referencia de action results

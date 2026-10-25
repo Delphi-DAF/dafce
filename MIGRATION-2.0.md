@@ -818,6 +818,17 @@ for var Token in Tokens do
 - **What breaks**: a program without a host that relied on surviving a Ctrl+C. It assigns a listener
   to `TShutdownHook.OnShutdownRequested` for as long as it has to hold the signal.
 
+### 35. Web: a `[FromBody]` object lives as long as the request
+
+- **It is built with its parameterless constructor** and filled from the body. In 1.6 the constructor
+  did not run.
+- **The router frees it after executing the action's result**, as it frees the controller. In 1.6 it
+  leaked, so an action that kept it worked.
+- **A body that is not a JSON object answers `400 Bad Request`**, naming the parameter, without
+  invoking the action.
+- **What breaks**: an action that keeps the object past the request, in a field, a list or a service.
+  It copies what it needs.
+
 ## How to do it
 
 1. Compile. Whatever is missing comes out as a compiler error, not as odd behaviour at run time.
@@ -831,6 +842,6 @@ for var Token in Tokens do
    A Scoped service asked of the root provider is rejected too, when it is resolved: resolve it from a
    scope the work opens, `Services.CreateScope`. So is a Scoped a Singleton resolves: the Singleton
    resolves it in a scope it opens through `IServiceScopeFactory`.
-6. Sections 2, 6 to 13 and 15 to 34 carry **run-time** changes: the compiler says nothing about them. Read them
+6. Sections 2, 6 to 13 and 15 to 35 carry **run-time** changes: the compiler says nothing about them. Read them
    against your own composition — scope lifetimes, duplicate registrations, logging rules and
    host settings.

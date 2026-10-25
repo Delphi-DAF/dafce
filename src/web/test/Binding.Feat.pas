@@ -32,15 +32,37 @@ type
     function Name: string;
   end;
 
+  /// What a [FromBody] parameter is built into. Its constructor sets Origin, which no JSON in the
+  /// specs carries, and it counts its live instances whichever constructor builds it.
+  TSpecOrder = class
+  private
+    FProduct: string;
+    FQuantity: Integer;
+    FOrigin: string;
+  public
+    class var Alive: Integer;
+    constructor Create;
+    procedure AfterConstruction; override;
+    procedure BeforeDestruction; override;
+    property Product: string read FProduct;
+    property Quantity: Integer read FQuantity;
+    property Origin: string read FOrigin;
+  end;
+
   [WebRoutePrefix('/spec/bind')]
   TBindingController = class(TWebController)
   public
+    /// The calls PlaceOrder received, and how many TSpecOrder were alive during the last one.
+    class var OrderCalls: Integer;
+    class var AliveDuringCall: Integer;
     [WebRoute(mtGet, '/clock')]
     function ReadClock([FromServices] Clock: ISpecClock): IActionResult;
     [WebRoute(mtGet, '/unregistered')]
     function Unregistered([FromServices] Missing: ISpecUnregistered): IActionResult;
     [WebRoute(mtGet, '/find')]
     function Find([FromQuery] Q: string): IActionResult;
+    [WebRoute(mtPost, '/order')]
+    function PlaceOrder([FromBody] Order: TSpecOrder): IActionResult;
   end;
 
   TBindingWorld = class
@@ -55,6 +77,9 @@ type
     constructor Create;
     destructor Destroy; override;
     procedure DispatchRequest(const APath: string; const AQuery: string = '');
+    procedure PostBody(const APath, ABody: string);
+    /// 'status=<code> calls=<n>': what the response said and whether the action ran.
+    function Outcome: string;
   end;
 
 implementation
@@ -72,7 +97,34 @@ begin
   Result := 'tick';
 end;
 
+{ TSpecOrder }
+
+constructor TSpecOrder.Create;
+begin
+  inherited Create;
+  FOrigin := 'constructor';
+end;
+
+procedure TSpecOrder.AfterConstruction;
+begin
+  inherited;
+  Inc(Alive);
+end;
+
+procedure TSpecOrder.BeforeDestruction;
+begin
+  Dec(Alive);
+  inherited;
+end;
+
 { TBindingController }
+
+function TBindingController.PlaceOrder(Order: TSpecOrder): IActionResult;
+begin
+  Inc(OrderCalls);
+  AliveDuringCall := TSpecOrder.Alive;
+  Result := Ok(Format('%s x%d from %s', [Order.Product, Order.Quantity, Order.Origin]));
+end;
 
 function TBindingController.ReadClock(Clock: ISpecClock): IActionResult;
 begin
@@ -94,6 +146,9 @@ end;
 constructor TBindingWorld.Create;
 begin
   inherited;
+  TSpecOrder.Alive := 0;
+  TBindingController.OrderCalls := 0;
+  TBindingController.AliveDuringCall := 0;
   var Services: IServiceCollection := TServiceCollection.Create;
   Services.AddSingleton<ISpecClock, TSpecClock>;
   Provider := Services.BuildServiceProvider;
@@ -109,6 +164,25 @@ begin
   RouterRef := nil;
   Provider.ShutDown;
   inherited;
+end;
+
+procedure TBindingWorld.PostBody(const APath, ABody: string);
+begin
+  Request := TSpecWebRequest.Create('POST', APath, '', ABody);
+  Response := TSpecWebResponse.Create(Request);
+  var Handled := False;
+  try
+    Router.WebDispatch(nil, Request, Response, Handled);
+    Report := Format('answered %d [%s]', [Response.StatusCode, Response.Content]);
+  except
+    on E: Exception do
+      Report := 'raised ' + E.ClassName + ': ' + E.Message;
+  end;
+end;
+
+function TBindingWorld.Outcome: string;
+begin
+  Result := Format('status=%d calls=%d', [Response.StatusCode, TBindingController.OrderCalls]);
 end;
 
 procedure TBindingWorld.DispatchRequest(const APath, AQuery: string);
@@ -188,6 +262,74 @@ Feature Binding action parameters @routing @binding
       procedure(W: TBindingWorld)
       begin
         Expect(W.Report).ToEqual('answered 200 []');
+      end)
+
+.Rule('A [FromBody] parameter goes through its constructor and lives as long as the request')
+
+  .Scenario('The object goes through its constructor')
+    .Given('an action whose [FromBody] class sets in its constructor a field the JSON does not carry',
+      procedure(W: TBindingWorld)
+      begin
+        var Probe := TSpecOrder.Create;
+        try
+          Expect(Probe.Origin).ToEqual('constructor');
+        finally
+          Probe.Free;
+        end;
+      end)
+    .When('a request arrives with a JSON body that fills the other fields',
+      procedure(W: TBindingWorld)
+      begin
+        W.PostBody('/spec/bind/order', '{"product":"drill","quantity":3}');
+      end)
+    .&Then('the action receives the JSON values, and in the absent field the one the constructor set',
+      procedure(W: TBindingWorld)
+      begin
+        Expect(W.Report).ToEqual('answered 200 [drill x3 from constructor]');
+      end)
+
+  .Scenario('Nothing bound outlives the request')
+    .Given('an action with a [FromBody] parameter whose class counts its live instances',
+      procedure(W: TBindingWorld)
+      begin
+        Expect(TSpecOrder.Alive).ToEqual(0);
+      end)
+    .When('a request with a JSON body is served',
+      procedure(W: TBindingWorld)
+      begin
+        W.PostBody('/spec/bind/order', '{"product":"drill","quantity":3}');
+      end)
+    .&Then('the action received one instance, and none is alive once the request is over',
+      procedure(W: TBindingWorld)
+      begin
+        Expect(Format('during=%d after=%d', [TBindingController.AliveDuringCall, TSpecOrder.Alive]))
+          .ToEqual('during=1 after=0');
+      end)
+
+.Rule('A body that is not a JSON object is rejected with 400')
+
+  .Scenario('A malformed body')
+    .When('a request whose body is not valid JSON reaches an action with [FromBody]',
+      procedure(W: TBindingWorld)
+      begin
+        W.PostBody('/spec/bind/order', 'this is not json');
+      end)
+    .&Then('the response is 400, and the action was not invoked',
+      procedure(W: TBindingWorld)
+      begin
+        Expect(W.Outcome).ToEqual('status=400 calls=0');
+      end)
+
+  .Scenario('An empty body')
+    .When('a request with no body reaches an action with [FromBody]',
+      procedure(W: TBindingWorld)
+      begin
+        W.PostBody('/spec/bind/order', '');
+      end)
+    .&Then('the response is 400, and the action was not invoked',
+      procedure(W: TBindingWorld)
+      begin
+        Expect(W.Outcome).ToEqual('status=400 calls=0');
       end);
 
 end.

@@ -115,6 +115,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - ⚠️ **Hosting**: The host settings take .NET's names: `environment`, `applicationName` and `contentRoot`, as an argument —`--environment Staging`— or as a `DAF_` variable with the prefix stripped —`DAF_ENVIRONMENT`—. `THostDefaults` replaces `TDafEnvVars`, and with no `contentRoot` the content root is the current directory, except in the system directory, where a Windows service starts. **Breaks**, silently, whoever sets `DAF_APP_ENV`, `DAF_APP_NAME` or `DAF_CONTENT_ROOT`, which are no longer read, and whoever starts the application from another directory counting on the `appsettings.json` next to the executable
 - ⚠️ **Hosting**: The environment name is kept as given, as in .NET: `deve`, `stag`, `prod` and `test` no longer name the known environments, and `development` stays `development`, which still answers `IsDevelopment`. **Breaks** whoever sets an abbreviation in `DAF_ENVIRONMENT`, or a name of their own that relied on running as `Production`
 - ⚠️ **Web**: `TDafHttpServer.Start` on a port already in use **raises an exception that names the port**, after the `OnError` event. It used to end with `Abort`: an `except on EAbort` around `Start` no longer catches it
+- ⚠️ **Web**: A `[FromBody]` object lives as long as the request: the router frees it after executing the action's result, where it used to leak. **Breaks** an action that kept it
 - **Logging**: Composing the pipeline without a single provider **fails at host build time**, with `ELoggingCompositionError`, instead of handing out an `ILogger` that accepts everything and writes nothing. Deliberate silence is declared with `AddNullProvider`
 - **Samples**: Every sample is filed under the module that declares what it uses: `ConsoleSample` to `src/Cli/samples/`, `TicTacToeApp` to `src/VCL/samples/`, and `HostedService` to `src/samples/`
 
@@ -243,6 +244,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - **SQLCute**: `Where(col, 'in', V)` and `'not in'`, also through `OrWhere`, `WhereNot` and `OrWhereNot`, bind their values like `WhereIn` instead of writing `V` into the SQL. A string with a list (`'1,2,3'`) is now a single value
 - **SQLCute**: The operator of `WhereTime`, `OrWhereTime` and of a join by columns is validated against the list `Where` accepts, and what is emitted is the recognised operator; it used to be written into the SQL as it came
 - **Web**: The router serves static files only once `RootDirectory` is declared, and only from inside it. With no root it served any file under the working directory, `appsettings.json` included; with one, `..` and absolute paths reached outside it
+- **Web**: A `[FromBody]` parameter skipped its constructor, and the parsed JSON leaked on every request; a body that is not a JSON object now answers 400 without invoking the action
 
 ## [1.6.0] - 2026-07-20
 

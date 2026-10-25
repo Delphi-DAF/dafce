@@ -40,6 +40,9 @@ end;
 
 `Web.HTTPApp` is there for the verb constants — `mtGet`, `mtPost` and the rest. Everything else a controller needs, including the attributes, comes from `Daf.Web.Controller`.
 
+The router builds `Command` from the JSON body with its parameterless constructor, and frees it once
+the action's result has run. A body that is not a JSON object answers `400 Bad Request`.
+
 ---
 
 ## Starting the server

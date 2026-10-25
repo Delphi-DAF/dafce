@@ -825,6 +825,17 @@ for var Token in Tokens do
 - **Qué rompe**: un programa sin host que contaba con sobrevivir a un Ctrl+C. Asigna un oyente a
   `TShutdownHook.OnShutdownRequested` mientras tenga que retener la señal.
 
+### 35. Web: un objeto `[FromBody]` vive lo que la petición
+
+- **Se construye con su constructor sin parámetros** y se rellena con el cuerpo. En 1.6 el constructor
+  no se ejecutaba.
+- **El router lo libera después de ejecutar el resultado de la acción**, como libera el controlador.
+  En 1.6 fugaba, así que una acción que lo guardaba funcionaba.
+- **Un cuerpo que no es un objeto JSON responde `400 Bad Request`**, nombrando el parámetro, sin
+  invocar la acción.
+- **Qué rompe**: una acción que guarda el objeto más allá de la petición, en un campo, una lista o un
+  servicio. Copia lo que necesita.
+
 ## Cómo hacerlo
 
 1. Compila. Lo que falte sale como error del compilador, no como comportamiento raro en
@@ -840,6 +851,6 @@ for var Token in Tokens do
    resolverlo: se resuelve desde un ámbito que abre el trabajo, `Services.CreateScope`. También un
    Scoped que resuelve un Singleton: el Singleton lo resuelve en un ámbito que abre con
    `IServiceScopeFactory`.
-6. Las secciones 2, de la 6 a la 13 y de la 15 a la 34 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
+6. Las secciones 2, de la 6 a la 13 y de la 15 a la 35 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
    contra tu propia composición — la vida de los ámbitos, los registros repetidos, las reglas de
    logging y los ajustes del host.
