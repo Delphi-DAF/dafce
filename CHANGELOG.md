@@ -211,6 +211,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - **SystemProcess**: `ExecuteAndFree` and `ExecuteAsyncAndFree` leaked their builder on every call
 - **SystemProcess**: An `ExecuteAsync` whose `ISystemProcess` was released before the child finished went on using the freed instance, and its notifications never arrived
 - **SystemProcess**: Killing a child that had just finished raised `EOSError`; a `Kill` with no child alive cut the next run short without killing anybody, and after the end it killed by an identifier that could belong to another process
+- **SystemProcess**: The child of one launch could inherit the pipe or the file of another launched at the same time, and hold them while it lived
 - **Web**: A literal route segment is tried before a parameter in the same position; the action declared first used to win, so `/items/search` could land on `/items/{Id}`
 - **Web**: A `[FromServices]` parameter receives its service. With the service registered the request failed with `EInvalidCast`, and without it the action received `nil` with no warning; that case now fails the request naming the service
 - **Web**: Destroying a `TDafHttpServer` frees the web modules WebBroker kept for reuse; a later server in the same process was handed the ones built for the previous one

@@ -8,6 +8,8 @@ uses
   System.SysUtils,
   System.Classes,
   System.IOUtils,
+  System.Generics.Collections,
+  System.Threading,
   Winapi.Windows,
   Daf.MiniSpec,
   Daf.SystemProcess;
@@ -15,6 +17,8 @@ uses
 const
   // Muchas veces los 4 KB que admite una tuberia creada con el tamano por defecto.
   BigSize = 1024 * 1024;
+  // Ejecuciones con la salida a un fichero mientras otro hilo lanza hijos.
+  RaceRounds = 20;
   Enye = #$00F1;
 
 function GetConsoleProcessList(lpdwProcessList: PDWORD; dwProcessCount: DWORD): DWORD; stdcall;
@@ -44,6 +48,9 @@ type
     Report: string;
     ConsoleBefore: Integer;
     ConsoleMost: Integer;
+    /// El hilo que lanza hijos sin pausa, y la orden de parar; espera a sus hijos antes de acabar.
+    Launcher: TThread;
+    [volatile] StopLaunching: Boolean;
     constructor Create;
     destructor Destroy; override;
     function PathOf(const Name: string): string;
@@ -93,6 +100,12 @@ end;
 
 destructor TStreamsWorld.Destroy;
 begin
+  if Assigned(Launcher) then
+  begin
+    StopLaunching := True;
+    Launcher.WaitFor;
+    Launcher.Free;
+  end;
   RestoreParent;
   LeaveDir;
   if Assigned(Builder) then
@@ -739,6 +752,69 @@ Feature Cada flujo del hijo va adonde se declara @systemprocess @process @stream
       procedure(W: TStreamsWorld)
       begin
         Expect(W.ReadText(W.PathOf('padre.txt'))).ToEqual('hola');
+      end)
+
+.Rule('Un hijo no hereda los flujos de otro lanzamiento')
+
+  .Scenario('Un lanzamiento concurrente no retiene el fichero de otro')
+    .Given('un hilo que lanza sin pausa hijos que viven unos segundos',
+      procedure(W: TStreamsWorld)
+      begin
+        W.Launcher := TThread.CreateAnonymousThread(
+          procedure
+          begin
+            var Live := TList<IFuture<TProcessResult>>.Create;
+            try
+              while not W.StopLaunching do
+              begin
+                Live.Add(TSystemProcess.Builder
+                  .Command('ping')
+                  .CmdArgs(['-n', '3', '127.0.0.1'])
+                  .StandardOutput(TProcessOutput.Discard)
+                  .StandardError(TProcessOutput.Discard)
+                  .HideWindow(True)
+                  .Timeout(30000)
+                  .Build
+                  .ExecuteAsync);
+                if Live.Count >= 8 then
+                begin
+                  Live[0].Wait;
+                  Live.Delete(0);
+                end;
+              end;
+              for var F in Live do
+                F.Wait;
+            finally
+              Live.Free;
+            end;
+          end);
+        W.Launcher.FreeOnTerminate := False;
+        W.Launcher.Start;
+      end)
+    .When('otro hilo ejecuta muchas veces un hijo corto con la salida a un fichero, y lo borra al volver',
+      procedure(W: TStreamsWorld)
+      begin
+        var Failed := 0;
+        var Target := W.PathOf('carrera.txt');
+        for var Round := 1 to RaceRounds do
+        begin
+          TSystemProcess.Builder
+            .Command('cmd /c echo hola')
+            .StandardOutput(TProcessOutput.ToFile(Target))
+            .StandardError(TProcessOutput.Discard)
+            .HideWindow(True)
+            .Timeout(10000)
+            .Build
+            .Execute;
+          if not DeleteFile(PChar(Target)) then
+            Inc(Failed);
+        end;
+        W.Report := Format('%d de %d borrados fallaron', [Failed, RaceRounds]);
+      end)
+    .&Then('todos los borrados funcionan',
+      procedure(W: TStreamsWorld)
+      begin
+        Expect(W.Report).ToEqual(Format('0 de %d borrados fallaron', [RaceRounds]));
       end)
 
 .Rule('La entrada estandar del hijo es la del padre')

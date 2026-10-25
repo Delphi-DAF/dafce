@@ -327,24 +327,36 @@ begin
   Result := toFailed;
 end;
 
-function InheritableAttributes: TSecurityAttributes;
+var
+  // Mientras los handles de un hijo son heredables, ningún otro lanzamiento crea su proceso: un hijo
+  // lanzado en ese momento heredaría la tubería o el fichero de otro, y los retendría mientras viva.
+  LaunchLock: TCriticalSection;
+
+// Los handles del hijo nacen no heredables; solo lo son mientras se crea su proceso.
+function ChildAttributes: TSecurityAttributes;
 begin
   Result.nLength := SizeOf(Result);
-  Result.bInheritHandle := True;
+  Result.bInheritHandle := False;
   Result.lpSecurityDescriptor := nil;
 end;
 
 // Un handle que el padre no tiene llega al hijo tal cual: si el hijo tiene consola propia, el sistema
 // pone en ese flujo el de ella.
-function DuplicateInheritable(Handle: THandle; out Duplicate: THandle): Boolean;
+function DuplicateForChild(Handle: THandle; out Duplicate: THandle): Boolean;
 begin
   if not IsValidHandle(Handle) then
   begin
     Duplicate := Handle;
     Exit(True);
   end;
-  Result := DuplicateHandle(GetCurrentProcess, Handle, GetCurrentProcess, @Duplicate, 0, True,
+  Result := DuplicateHandle(GetCurrentProcess, Handle, GetCurrentProcess, @Duplicate, 0, False,
     DUPLICATE_SAME_ACCESS);
+end;
+
+procedure MakeInheritable(Handle: THandle);
+begin
+  if IsValidHandle(Handle) then
+    SetHandleInformation(Handle, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
 end;
 
 { TProcessResult }
@@ -679,10 +691,10 @@ begin
   ReadEnd := 0;
   ErrorCode := 0;
   Detail := '';
-  var SA := InheritableAttributes;
+  var SA := ChildAttributes;
   case Output.Kind of
     TProcessOutput.TKind.Inherit:
-      Result := DuplicateInheritable(GetStdHandle(StdHandle), Child);
+      Result := DuplicateForChild(GetStdHandle(StdHandle), Child);
     TProcessOutput.TKind.Discard:
       begin
         Child := CreateFile('NUL', GENERIC_WRITE, FILE_SHARE_READ or FILE_SHARE_WRITE, @SA, OPEN_EXISTING, 0, 0);
@@ -693,8 +705,6 @@ begin
     TProcessOutput.TKind.Capture:
       begin
         Result := CreatePipe(ReadEnd, Child, @SA, 0);
-        if Result then
-          SetHandleInformation(ReadEnd, HANDLE_FLAG_INHERIT, 0);
       end;
     TProcessOutput.TKind.ToFile:
       Result := OpenFile(Output, @SA, Child, Detail);
@@ -714,7 +724,7 @@ var
 begin
   ErrorCode := 0;
   Detail := '';
-  Result := DuplicateInheritable(GetStdHandle(STD_INPUT_HANDLE), FChildIn);
+  Result := DuplicateForChild(GetStdHandle(STD_INPUT_HANDLE), FChildIn);
   if not Result then
     ErrorCode := GetLastError;
   if Result then
@@ -1025,8 +1035,20 @@ begin
   end;
 
   try
-    Result := CreateProcessW(nil, PWideChar(FCommandLine), nil, nil, True, Flags,
-      EnvBuffer, WorkDir, StartInfo, ProcessInfo);
+    LaunchLock.Enter;
+    try
+      MakeInheritable(FChildIn);
+      MakeInheritable(FChildOut);
+      MakeInheritable(FChildErr);
+      Result := CreateProcessW(nil, PWideChar(FCommandLine), nil, nil, True, Flags,
+        EnvBuffer, WorkDir, StartInfo, ProcessInfo);
+      if not Result then
+        FLaunchError := GetLastError;
+      // El hijo ya tiene los suyos; sin cerrar estos, una tubería no llegaría nunca a su fin.
+      CloseChildHandles;
+    finally
+      LaunchLock.Leave;
+    end;
     if Result then
     begin
       FLock.Enter;
@@ -1035,9 +1057,7 @@ begin
       finally
         FLock.Leave;
       end;
-    end
-    else
-      FLaunchError := GetLastError;
+    end;
   finally
     FreeMem(EnvBuffer);
   end;
@@ -1069,9 +1089,6 @@ begin
     ResumeThread(FProcessInfo.hThread);
     CloseHandle(FProcessInfo.hThread);
     FProcessInfo.hThread := 0;
-
-    // El hijo ya tiene los suyos; sin cerrar estos, una tubería no llegaría nunca a su fin.
-    CloseChildHandles;
     StartReadingPipes;
     Result := True;
   finally
@@ -1284,5 +1301,11 @@ begin
       end;
     end);
 end;
+
+initialization
+  LaunchLock := TCriticalSection.Create;
+
+finalization
+  LaunchLock.Free;
 
 end.
