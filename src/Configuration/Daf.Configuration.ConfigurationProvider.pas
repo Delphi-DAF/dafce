@@ -152,7 +152,7 @@ begin
       if not Results.Contains(Key) then
         Results.Add(Key);
 
-  Results.Sort;
+  Results.Sort(TConfigurationKeyComparer.Instance);
   Result := ToIEnumerable<string>(Results);
 end;
 

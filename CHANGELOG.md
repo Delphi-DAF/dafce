@@ -34,6 +34,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - **Logging**: Bootstrap channel — an `ILogger` from the process's first line, with no dependency injection and no configuration, for the phase before `BuildServiceProvider`: report with `BootstrapLog.LoggerFor` and add sinks with `BootstrapLog.AddSink`. The sink catalogue, in the README
 - **Logging**: `Builder.AddNullProvider` — discarding entries on purpose, stated while composing
 - **Configuration**: A new provider, the command line — `CommandLineConfig.AddArgs`, in `Daf.Configuration.CommandLine`, reads the process arguments as keys. The accepted forms, in the README
+- **Configuration**: `TConfigurationKeyComparer` — the order of configuration keys, as `ConfigurationKeyComparer` in .NET
 - **Configuration**: `ConfigOptions.Bind<T>` — a section arrives typed and owned to whoever needs it, and the service stops naming its section: startup decides it
 - ⚠️ **Configuration**: `IConfiguration.Exists` and `Find` — presence is **asked**, not inferred from an empty value; `Find` answers presence and value in one lookup, as a `TNullable<string>`. The indexer stays a `string`. **Breaks** whoever implements `IConfiguration` without inheriting from `TConfigurationRoot`
 - **Configuration**: `IConfigurationManager` — builder and reader on the same object, so configuration can be read while it is still being composed. Each `Add` builds and loads only the new provider
@@ -211,6 +212,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - **Commons**: `TVersionInfo.Tag` was **always empty**, and `GetFrom` on a class with no attribute returned whatever was in the target's memory
 - **Configuration**: Binding no longer writes a member whose key no source mentions: a default set in the constructor survives the bind, and a second bind does not erase what the first one brought. A key present with an empty value is still written
 - **Configuration**: A chained key whose value **is** the empty string no longer disappears on its way through the chain: `TChainedConfigurationProvider` asks for presence instead of inferring it from the value
+- **Configuration**: A section's children came in text order, so an array of more than ten elements bound out of order, and a key a later source brought went last; they now follow the order of .NET
 - **Commons**: `TMacrosList.GetValueFromIndex` returned an empty string on every macro read
 - **Docs**: The startup the documentation taught **did not compile**, and Hosting's guide still promised automatic discovery of `IAppModule`s. It now teaches `AddModule<T>`
 - **Docs**: Hosting's examples waited for the shutdown signal and never called `Host.Stop`: copied as they were, the hosted services never stopped and the container was never released. They now stop the host in a `finally`

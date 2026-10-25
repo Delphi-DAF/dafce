@@ -33,6 +33,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - **Logging**: Canal de arranque — un `ILogger` desde la primera línea del proceso, sin inyección de dependencias y sin configuración, para la fase anterior a `BuildServiceProvider`: informa con `BootstrapLog.LoggerFor` y añade destinos con `BootstrapLog.AddSink`. El catálogo de destinos, en el README
 - **Logging**: `Builder.AddNullProvider` — descartar las entradas a propósito, dicho al componer
 - **Configuration**: Un proveedor nuevo, la línea de comandos — `CommandLineConfig.AddArgs`, en `Daf.Configuration.CommandLine`, lee los argumentos del proceso como claves. Las formas admitidas, en el README
+- **Configuration**: `TConfigurationKeyComparer` — el orden de las claves de configuración, como `ConfigurationKeyComparer` de .NET
 - **Configuration**: `ConfigOptions.Bind<T>` — una sección llega tipada y con dueño a quien la necesita, y el servicio deja de nombrar su sección: la decide el arranque
 - ⚠️ **Configuration**: `IConfiguration.Exists` y `Find` — la presencia se **pregunta**, no se deduce de que el valor esté vacío; `Find` contesta presencia y valor en una sola consulta, como `TNullable<string>`. El indexador sigue siendo `string`. **Rompe** a quien implemente `IConfiguration` sin heredar de `TConfigurationRoot`
 - **Configuration**: `IConfigurationManager` — constructor y lectura sobre el mismo objeto, así que la configuración se lee mientras se está componiendo. Cada `Add` construye y carga solo el proveedor nuevo
@@ -210,6 +211,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - **Commons**: `TVersionInfo.Tag` estaba **siempre vacío**, y `GetFrom` sobre una clase sin atributo devolvía lo que hubiera en la memoria del destino
 - **Configuration**: El enlace ya no escribe un miembro cuya clave no menciona ninguna fuente: un defecto puesto en el constructor sobrevive al enlace, y un segundo enlace no borra lo que trajo el primero. Una clave presente con valor vacío se sigue escribiendo
 - **Configuration**: Una clave encadenada cuyo valor **es** la cadena vacía ya no desaparece al atravesar la cadena: `TChainedConfigurationProvider` pregunta la presencia en vez de deducirla del valor
+- **Configuration**: los hijos de una sección salían en orden de texto, así que un array de más de diez elementos se enlazaba desordenado, y una clave que aportaba una fuente posterior iba la última; ahora siguen el orden de .NET
 - **Commons**: `TMacrosList.GetValueFromIndex` devolvía cadena vacía en toda lectura de macro
 - **Docs**: El arranque que enseñaba la documentación **no compilaba**, y la guía de Hosting seguía prometiendo el descubrimiento automático de los `IAppModule`. Ahora enseña `AddModule<T>`
 - **Docs**: Los ejemplos de Hosting esperaban la señal de parada y no llamaban nunca a `Host.Stop`: copiados tal cual, los servicios alojados no se paraban y el contenedor no se liberaba. Ahora paran el host en un `finally`

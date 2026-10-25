@@ -3,6 +3,7 @@
 interface
 uses
   System.Generics.Collections,
+  System.Generics.Defaults,
   System.SysUtils,
   System.Rtti,
   Daf.Nullable;
@@ -242,6 +243,20 @@ type
     class function GetParentPath(const Path: string): string;
   end;
 
+  /// <summary>
+  ///   The order of configuration keys, as ConfigurationKeyComparer in .NET: segment by segment, two
+  ///   numbers by their value, a number before a text, and two texts ordinal ignoring case. It is the
+  ///   order of a section's children, and so the order a binder fills an array in.
+  /// </summary>
+  TConfigurationKeyComparer = class(TInterfacedObject, IComparer<string>)
+  strict private
+    class var FInstance: IComparer<string>;
+  public
+    class constructor Create;
+    class function Instance: IComparer<string>; static;
+    function Compare(const Left, Right: string): Integer;
+  end;
+
   ConfigurationKeyNameAttribute = class(TCustomAttribute)
   strict private
     FName: string;
@@ -259,6 +274,69 @@ type
   end;
 
 implementation
+
+{ TConfigurationKeyComparer }
+
+class constructor TConfigurationKeyComparer.Create;
+begin
+  FInstance := TConfigurationKeyComparer.Create;
+end;
+
+class function TConfigurationKeyComparer.Instance: IComparer<string>;
+begin
+  Result := FInstance;
+end;
+
+// A whole number as int.TryParse reads it: digits with an optional sign, and no hexadecimal.
+function TryKeyNumber(const Part: string; out Value: Integer): Boolean;
+begin
+  var First := 1;
+  if (Part <> '') and CharInSet(Part[1], ['+', '-']) then
+    First := 2;
+  Result := Length(Part) >= First;
+  for var I := First to Length(Part) do
+    if not CharInSet(Part[I], ['0'..'9']) then
+      Exit(False);
+  Result := Result and TryStrToInt(Part, Value);
+end;
+
+function CompareKeyPart(const Left, Right: string): Integer;
+var
+  LeftValue, RightValue: Integer;
+begin
+  var LeftIsNumber := TryKeyNumber(Left, LeftValue);
+  var RightIsNumber := TryKeyNumber(Right, RightValue);
+  if LeftIsNumber and RightIsNumber then
+  begin
+    if LeftValue < RightValue then
+      Result := -1
+    else if LeftValue > RightValue then
+      Result := 1
+    else
+      Result := 0;
+  end
+  else if LeftIsNumber then
+    Result := -1
+  else if RightIsNumber then
+    Result := 1
+  else
+    Result := CompareText(Left, Right);
+end;
+
+function TConfigurationKeyComparer.Compare(const Left, Right: string): Integer;
+begin
+  var LeftParts := Left.Split([TConfigurationPath.KeyDelimiter]);
+  var RightParts := Right.Split([TConfigurationPath.KeyDelimiter]);
+  var I := 0;
+  while (I < Length(LeftParts)) and (I < Length(RightParts)) do
+  begin
+    Result := CompareKeyPart(LeftParts[I], RightParts[I]);
+    if Result <> 0 then
+      Exit;
+    Inc(I);
+  end;
+  Result := Length(LeftParts) - Length(RightParts);
+end;
 
 { TConfigurationPath }
 

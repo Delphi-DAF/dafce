@@ -65,6 +65,11 @@ for var Child in Config.GetSection('Logging').GetChildren do
 
 Key paths use `:` as the hierarchy separator. Arrays use zero-based numeric suffixes: `Plugins:0`, `Plugins:1`, etc.
 
+`GetChildren` returns them in the order of .NET's `ConfigurationKeyComparer`, also when the keys come
+from several sources: numeric keys by their value and before the rest, and the rest by their text
+ignoring case. So an array binds in the order it was written, past its tenth element too.
+`TConfigurationKeyComparer.Instance` is that order.
+
 ---
 
 ## Telling an absent key from an empty one

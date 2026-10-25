@@ -239,21 +239,25 @@ begin
   Result := ToIEnumerable<IConfigurationSection>(Aux);
 end;
 
+// As ConfigurationRoot in .NET: each provider receives what the ones before it gave and returns it
+// merged with its own keys, in order, so the children are the last answer without a key repeated in
+// another case.
 function TConfigurationRoot.InternalGetChildKeys(const Prefix: string): TArray<string>;
 begin
-  var AllKeys := TList<string>.Create(TIStringComparer.Ordinal);
-
-  // this owns the TList
-  var AllKeysEnum := ToIEnumerable<string>(AllKeys);
+  var Keys: IEnumerable<string> := nil;
   if Assigned(FProviders) then
-  for var Provider in FProviders do
-  begin
-    var ProviderKeys := ToIENumerable<string>(Provider.GetChildKeys(AllKeysEnum, Prefix)).ToArray;
-    for var ChildKey in ProviderKeys do
-      if not AllKeys.Contains(ChildKey) then
-        AllKeys.Add(ChildKey);
+    for var Provider in FProviders do
+      Keys := Provider.GetChildKeys(Keys, Prefix);
+  var Distinct := TList<string>.Create(TIStringComparer.Ordinal);
+  try
+    if Assigned(Keys) then
+      for var Key in ToIEnumerable<string>(Keys).ToArray do
+        if not Distinct.Contains(Key) then
+          Distinct.Add(Key);
+    Result := Distinct.ToArray;
+  finally
+    Distinct.Free;
   end;
-  Result := AllKeys.ToArray;
 end;
 
 end.

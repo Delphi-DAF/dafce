@@ -65,6 +65,11 @@ for var Child in Config.GetSection('Logging').GetChildren do
 
 Las rutas de clave usan `:` como separador de jerarquía. Los arrays usan sufijos numéricos desde cero: `Plugins:0`, `Plugins:1`, etc.
 
+`GetChildren` los devuelve en el orden de `ConfigurationKeyComparer` de .NET, también cuando las claves
+llegan de varias fuentes: las numéricas por su valor y antes que las demás, y el resto por su texto sin
+distinguir mayúsculas. Así un array se enlaza en el orden en que se escribió, también pasado su décimo
+elemento. `TConfigurationKeyComparer.Instance` es ese orden.
+
 ---
 
 ## Distinguir una clave ausente de una vacía

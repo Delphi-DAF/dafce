@@ -105,7 +105,7 @@ begin
         if not Keys.Contains(Key) then
           Keys.Add(Key);
 
-    Keys.Sort;
+    Keys.Sort(TConfigurationKeyComparer.Instance);
     Result := ToIEnumerable<string>(Keys);
   except
     Keys.Free;
