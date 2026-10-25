@@ -30,9 +30,21 @@ type
     function Text: string;
   end;
 
+  /// Sus dos propiedades las rellena el loader desde la configuración. MaxSize arranca en un valor
+  /// que no es el cero de su tipo, para que «conservó su valor» y «se escribió el cero» no coincidan.
   TProbeTarget = class(TTarget)
+  private
+    FMaxSize: Int64;
+    FRatio: Double;
   protected
     procedure DoWrite(const Entry: TLogEntry); override;
+  public
+    /// El último destino de prueba construido, mientras vive: el escenario solo tiene el proveedor.
+    class var Last: TProbeTarget;
+    constructor Create; override;
+    destructor Destroy; override;
+    property MaxSize: Int64 read FMaxSize write FMaxSize;
+    property Ratio: Double read FRatio write FRatio;
   end;
 
 // Grabador global, de proceso: cada escenario lo limpia al empezar (TRuleWorld.Create). Es global
@@ -94,6 +106,20 @@ begin
 end;
 
 { TProbeTarget }
+
+constructor TProbeTarget.Create;
+begin
+  inherited Create;
+  FMaxSize := 1024;
+  Last := Self;
+end;
+
+destructor TProbeTarget.Destroy;
+begin
+  if Last = Self then
+    Last := nil;
+  inherited;
+end;
 
 procedure TProbeTarget.DoWrite(const Entry: TLogEntry);
 begin

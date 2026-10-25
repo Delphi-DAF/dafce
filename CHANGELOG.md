@@ -245,6 +245,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - **Web**: `Ok(Boolean)` no longer leaks the JSON value it serializes, one per response
 - **NNLog**: On NTFS, the file target no longer stops rotating after its first rotation, and an archive of the same period in `history`, plain or zipped, is appended to instead of overwritten
 - **NNLog**: Changing on disk the creation date of the file a file target has open no longer makes it rotate
+- **NNLog**: A target property whose configured value does not convert was set to zero, with no warning; it is now reported through the bootstrap channel and keeps its value, as in NLog
 
 ### Security
 

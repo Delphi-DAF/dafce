@@ -69,11 +69,21 @@ begin
 
   Result := TargetClass.Create as TTarget;
   Result.Name := TargetCfg.Name;
+  // Como NLog sin throwConfigExceptions: un valor que no sirve para su propiedad se avisa por el canal
+  // de arranque, que hace aqui el papel de su InternalLogger, y la propiedad conserva el que tenia.
   for var Key in TargetCfg.Keys do
   begin
     var Prop := RttiType.GetProperty(Key);
     if Assigned(Prop) and Prop.IsWritable then
-      Prop.SetValue(Result, ConvertTo(TargetCfg[Key], Prop.DataType.Handle));
+    begin
+      var Value: TValue;
+      if TryConvert(TargetCfg[Key], Prop.DataType.Handle, Value) then
+        Prop.SetValue(Result, Value)
+      else
+        BootstrapLog.LoggerFor(TNNLogLoader.ClassName).LogWarning(
+          Format('Error when setting value ''%s'' for property ''%s'' on target ''%s'': it does not convert to %s',
+            [TargetCfg[Key], Key, Result.Name, Prop.DataType.Name]));
+    end;
   end;
 end;
 

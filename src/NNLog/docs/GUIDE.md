@@ -114,6 +114,11 @@ rule fields keep the values of a freshly created object — `Enabled = False` an
 `targetType` picks the class; every other key is set on the target as a property of that name, so a
 target's configurable surface is its writable properties. Keys are matched without regard to case.
 
+A value converts to its property's type with the invariant culture, as configuration binding does. A
+value that does not convert is reported through the bootstrap channel, naming the target, the property
+and the value, and the property keeps the value it had, as NLog does without `throwConfigExceptions`:
+`Error when setting value 'abc' for property 'MaxFileSize' on target 'file': it does not convert to Int64`.
+
 `targetType` resolves by RTTI to `Daf.NNLog.Targets.<Type>.T<Type>Target`, **and this lookup is
 case-sensitive**: `Console` finds `TConsoleTarget`, `console` does not. `File` is the one exception
 to the unit name — `file` is a reserved word, so the unit is `Daf.NNLog.Targets.File_`. A

@@ -11,7 +11,8 @@ uses
   TargetConcurrency.Feat in 'TargetConcurrency.Feat.pas',
   TargetRecovery.Feat in 'TargetRecovery.Feat.pas',
   FileRotation.Feat in 'FileRotation.Feat.pas',
-  LayoutTokens.Feat in 'LayoutTokens.Feat.pas';
+  LayoutTokens.Feat in 'LayoutTokens.Feat.pas',
+  TargetConfiguration.Feat in 'TargetConfiguration.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

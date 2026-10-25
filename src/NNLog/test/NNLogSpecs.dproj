@@ -103,6 +103,7 @@
         <DCCReference Include="TargetRecovery.Feat.pas"/>
         <DCCReference Include="FileRotation.Feat.pas"/>
         <DCCReference Include="LayoutTokens.Feat.pas"/>
+        <DCCReference Include="TargetConfiguration.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>

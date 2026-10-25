@@ -244,6 +244,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - **Web**: `Ok(Boolean)` ya no pierde el valor JSON que serializa, uno por respuesta
 - **NNLog**: En NTFS, el destino de fichero ya no deja de rotar tras su primera rotación, y un archivo del mismo periodo en `history`, en claro o comprimido, recibe el fichero al final en vez de sobrescribirse
 - **NNLog**: Cambiar en disco la fecha de creación del fichero que un destino de fichero tiene abierto ya no lo hace rotar
+- **NNLog**: una propiedad de destino cuyo valor configurado no convierte se ponía a cero, sin aviso; ahora se avisa por el canal de arranque y conserva su valor, como en NLog
 
 ### Security
 

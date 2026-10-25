@@ -115,6 +115,12 @@ proveedor que escriba, pasar por `TNNLogLoader`.
 nombre, así que la superficie configurable de un target son sus propiedades escribibles. Las claves
 se emparejan sin distinguir mayúsculas.
 
+Un valor se convierte al tipo de su propiedad con la cultura invariante, como el enlace de
+configuración. Un valor que no convierte se avisa por el canal de arranque, nombrando el destino, la
+propiedad y el valor, y la propiedad conserva el valor que tenía, como hace NLog sin
+`throwConfigExceptions`:
+`Error when setting value 'abc' for property 'MaxFileSize' on target 'file': it does not convert to Int64`.
+
 `targetType` se resuelve por RTTI a `Daf.NNLog.Targets.<Tipo>.T<Tipo>Target`, **y esa búsqueda sí
 distingue mayúsculas**: `Console` encuentra `TConsoleTarget`, `console` no. `File` es la única
 excepción en el nombre de la unit — `file` es palabra reservada, así que la unit es
