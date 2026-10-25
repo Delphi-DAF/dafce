@@ -1130,7 +1130,10 @@ begin
       if (Clause.Op = TWhereOp.&Exists) or (Clause.Op = TWhereOp.NotExists) then
         Exit(BoolToTri(Cache[Idx].NonEmpty = (Clause.Op = TWhereOp.&Exists)));
 
-      // IN / NOT IN — 3VL membership against the subquery's values.
+      // IN / NOT IN — against an empty subquery no comparison can be unknown,
+      // so the empty set decides before the value; otherwise 3VL membership.
+      if not Cache[Idx].NonEmpty then
+        Exit(BoolToTri(Clause.Op = TWhereOp.NotIn));
       var ColVal := Get(Clause.Column);
       if IsNullValue(ColVal) then
         Exit(TTriState.Unknown);

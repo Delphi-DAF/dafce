@@ -20,7 +20,9 @@
 interface
 
 uses
-  System.Generics.Collections;
+  System.Generics.Collections,
+  Daf.SQLCute,
+  Daf.SQLCute.InMemory;
 
 type
   /// <summary>Seed entity; Price is Variant so one row can carry SQL NULL.</summary>
@@ -34,9 +36,32 @@ type
     property Price: Variant read FPrice write FPrice;
   end;
 
+  /// <summary>A person whose Id is Variant so one of them can carry SQL NULL.</summary>
+  TIdPerson = class
+  private
+    FName: string;
+    FId: Variant;
+  public
+    constructor Create(const AName: string; const AId: Variant);
+    property Name: string read FName write FName;
+    property Id: Variant read FId write FId;
+  end;
+
+  TUserRef = class
+  private
+    FUserId: Integer;
+  public
+    constructor Create(const AUserId: Integer);
+    property UserId: Integer read FUserId write FUserId;
+  end;
+
   TEmptyInWorld = class
   public
     Parts: TObjectList<TPart>;
+    People: TObjectList<TIdPerson>;
+    Refs: TObjectList<TUserRef>;
+    Ctx: TQueryContext;
+    Empty: IQuery;
     Names: TArray<string>;
     OtherNames: TArray<string>;
     Sql: string;
@@ -50,9 +75,7 @@ uses
   System.SysUtils,
   System.Variants,
   Daf.MiniSpec,
-  Daf.SQLCute,
-  Daf.SQLCute.Compiler,
-  Daf.SQLCute.InMemory;
+  Daf.SQLCute.Compiler;
 
 { TPart }
 
@@ -61,6 +84,23 @@ begin
   inherited Create;
   FName := AName;
   FPrice := APrice;
+end;
+
+{ TIdPerson }
+
+constructor TIdPerson.Create(const AName: string; const AId: Variant);
+begin
+  inherited Create;
+  FName := AName;
+  FId := AId;
+end;
+
+{ TUserRef }
+
+constructor TUserRef.Create(const AUserId: Integer);
+begin
+  inherited Create;
+  FUserId := AUserId;
 end;
 
 { TEmptyInWorld }
@@ -80,8 +120,32 @@ end;
 
 destructor TEmptyInWorld.Destroy;
 begin
+  Ctx.Free;
+  Refs.Free;
+  People.Free;
   Parts.Free;
   inherited;
+end;
+
+// Cara carries the NULL id, and the subquery returns no rows.
+procedure MapPeopleAndEmptySubquery(W: TEmptyInWorld);
+begin
+  W.People := TObjectList<TIdPerson>.Create(True);
+  W.People.Add(TIdPerson.Create('Ann', 1));
+  W.People.Add(TIdPerson.Create('Bob', 2));
+  W.People.Add(TIdPerson.Create('Cara', Null));
+  W.Refs := TObjectList<TUserRef>.Create(True);
+  W.Refs.Add(TUserRef.Create(1));
+  W.Ctx := TQueryContext.Create;
+  W.Ctx.Map<TIdPerson>('people', W.People).Map<TUserRef>('refs', W.Refs);
+  W.Empty := TQuery.New.From('refs').Select('user_id').Where('user_id', -1);
+end;
+
+function RunOverContext(W: TEmptyInWorld; const Q: IQuery): TArray<string>;
+begin
+  Result := nil;
+  for var R in TInMemory.Rows(Q, W.Ctx) do
+    Result := Result + [VarToStr(R.Get('name').AsVariant)];
 end;
 
 function RunNames(W: TEmptyInWorld; const Q: IQuery): TArray<string>;
@@ -197,6 +261,40 @@ Feature The empty IN set @inmemory @emptyin @sqlcute
       procedure(W: TEmptyInWorld)
       begin
         Expect(W.Sql).ToEqual('SELECT * FROM parts WHERE price IS NULL AND price IS NOT NULL');
+      end)
+
+.Rule('NULL against an empty subquery')
+
+  .Scenario('NOT IN an empty subquery also selects the NULL')
+    .Given('a context with people, one of them with a NULL id, and a subquery that returns no rows',
+      MapPeopleAndEmptySubquery)
+    .When('WhereNotInQuery(id, subquery) runs in memory over the people',
+      procedure(W: TEmptyInWorld)
+      begin
+        W.Names := RunOverContext(W, TQuery.New.From('people').WhereNotInQuery('id', W.Empty));
+      end)
+    .&Then('it selects all of them, the one with the NULL id too',
+      procedure(W: TEmptyInWorld)
+      begin
+        Expect(string.Join(',', W.Names)).ToEqual('Ann,Bob,Cara');
+      end)
+
+  .Scenario('Negating an IN of an empty subquery also selects the NULL')
+    .Given('the same context and the same subquery', MapPeopleAndEmptySubquery)
+    .When('WhereNot runs in memory over a group with WhereInQuery(id, subquery)',
+      procedure(W: TEmptyInWorld)
+      begin
+        var Sub := W.Empty;
+        W.Names := RunOverContext(W, TQuery.New.From('people').WhereNot(
+          function(Q: IQuery): IQuery
+          begin
+            Result := Q.WhereInQuery('id', Sub);
+          end));
+      end)
+    .&Then('it selects all of them, the one with the NULL id too',
+      procedure(W: TEmptyInWorld)
+      begin
+        Expect(string.Join(',', W.Names)).ToEqual('Ann,Bob,Cara');
       end);
 
 end.

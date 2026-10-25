@@ -578,6 +578,8 @@ begin
   Result :=
     function(const Get: TColumnGetter): TTriState
     begin
+      if Length(Vals) = 0 then
+        Exit(BoolToTri(Negate));          // the empty set decides before the value
       var V := Get(Col);
       if IsNullValue(V) then
         Exit(TTriState.Unknown);
