@@ -13,17 +13,28 @@ uses
 type
   TBindOption = (boProperties, boFields);
 
+  /// <summary>A configuration value that does not convert to the type of the member it binds.</summary>
+  EConfigurationBindingError = class(Exception);
+
   TConfigurationBinder = class sealed
   public
     class function Bind<T: class, constructor>(const Config: IConfiguration; const Path: string = ''; const Option: TBindOption = boProperties): T; overload;
     class procedure Bind(const Config: IConfiguration; const Path: string; Instance: TObject; const Option: TBindOption); overload;
   end;
 
+  /// <summary>
+  ///   Converts the text of a configuration value to a type as the .NET binder does: with the invariant
+  ///   culture, dates in ISO 8601 or the invariant format, booleans as true or false, and enumerations
+  ///   by name, in any case, or by number. Answers whether it could.
+  /// </summary>
+  function TryConvert(const Text: string; const PInfo: PTypeInfo; out Value: TValue): Boolean;
+  /// <summary>As TryConvert, with the type's empty value when the text does not convert.</summary>
   function ConvertTo(const Src: Variant; const PInfo: PTypeInfo): TValue;
 implementation
 
 uses
   System.StrUtils,
+  System.DateUtils,
   System.Variants;
 
 type
@@ -66,28 +77,80 @@ type
     function GetMembers(const Typ: TRttiType): TArray<TRttiDataMember>; override;
   end;
 
+function TryConvert(const Text: string; const PInfo: PTypeInfo; out Value: TValue): Boolean;
+var
+  Int, Number: Integer;
+  Int64Value: Int64;
+  Float: Extended;
+  Date: TDateTime;
+begin
+  Result := True;
+  case PInfo.Kind of
+    tkString, tkLString, tkWString, tkUString:
+      Value := TValue.From<string>(Text).Cast(PInfo);
+    tkChar, tkWChar:
+      if Length(Text) = 1 then
+        Value := TValue.From<Char>(Text[1]).Cast(PInfo)
+      else
+        Result := False;
+    tkVariant:
+      Value := TValue.From<Variant>(Text);
+    tkInteger:
+      if TryStrToInt(Text, Int) then
+        Value := TValue.FromOrdinal(PInfo, Int)
+      else
+        Result := False;
+    tkInt64:
+      if TryStrToInt64(Text, Int64Value) then
+        Value := TValue.From<Int64>(Int64Value).Cast(PInfo)
+      else
+        Result := False;
+    tkFloat:
+      if (PInfo = TypeInfo(TDateTime)) or (PInfo = TypeInfo(TDate)) or (PInfo = TypeInfo(TTime)) then
+      begin
+        Result := TryISO8601ToDate(Text, Date, False) or TryStrToDateTime(Text, Date, TFormatSettings.Invariant);
+        if Result then
+          Value := TValue.From<TDateTime>(Date).Cast(PInfo);
+      end
+      else
+      begin
+        Result := TryStrToFloat(Text, Float, TFormatSettings.Invariant);
+        if Result then
+          Value := TValue.From<Extended>(Float).Cast(PInfo);
+      end;
+    tkEnumeration:
+      if PInfo = TypeInfo(Boolean) then
+      begin
+        Result := SameText(Text, 'true') or SameText(Text, 'false');
+        if Result then
+          Value := SameText(Text, 'true');
+      end
+      else
+      begin
+        Int := GetEnumValue(PInfo, Text);
+        if (Int < 0) and TryStrToInt(Text, Number) and (Number >= GetTypeData(PInfo).MinValue) and
+          (Number <= GetTypeData(PInfo).MaxValue) then
+          Int := Number;
+        Result := Int >= 0;
+        if Result then
+          Value := TValue.FromOrdinal(PInfo, Int);
+      end;
+  else
+    Result := False;
+  end;
+end;
+
 function ConvertTo(const Src: Variant; const PInfo: PTypeInfo): TValue;
 begin
-  TValue.Make(nil, PInfo, Result);
-  if PInfo.Kind = tkEnumeration then
-  begin
-    var EnumValue := GetEnumValue(PInfo, Src);
-    if EnumValue = -1 then //not found, use default
-      EnumValue := 0;
-    TValue.Make(EnumValue, PInfo, Result);
-    Exit;
-  end;
+  if not TryConvert(VarToStr(Src), PInfo, Result) then
+    TValue.Make(nil, PInfo, Result);
+end;
 
-  var Dest := Result.AsVariant;
-  var OldNullStrictConvert := NullStrictConvert;
-  try
-    NullStrictConvert := False;
-    VarCast(Dest, Src, VarType(Dest));
-    NullStrictConvert := OldNullStrictConvert;
-    Result := TValue.FromVariant(Dest);
-  except
-    NullStrictConvert := OldNullStrictConvert;
-  end;
+// The message of the .NET binder: the value, where it is, and the type it does not convert to.
+function BindingError(const Text, Path: string; const PInfo: PTypeInfo): EConfigurationBindingError;
+begin
+  Result := EConfigurationBindingError.CreateFmt('Failed to convert configuration value ''%s'' at ''%s'' to type ''%s''.',
+    [Text, Path, string(PInfo.Name)]);
 end;
 
 
@@ -96,7 +159,12 @@ end;
 class function TConfigurationBinder.Bind<T>(const Config: IConfiguration; const Path: string; const Option: TBindOption): T;
 begin
   Result := T.Create;
-  Bind(Config, Path, Result, Option);
+  try
+    Bind(Config, Path, Result, Option);
+  except
+    Result.Free;
+    raise;
+  end;
 end;
 
 class procedure TConfigurationBinder.Bind(const Config: IConfiguration; const Path: string; Instance: TObject; const Option: TBindOption);
@@ -190,7 +258,9 @@ end;
 
 function TBaseBinder.BindPlain(const Path: string; const DataType: TRttiType): TValue;
 begin
-  Result := ConvertTo(FConfig[Path], DataType.Handle);
+  var Text := FConfig[Path];
+  if not TryConvert(Text, DataType.Handle, Result) then
+    raise BindingError(Text, Path, DataType.Handle);
 end;
 
 function TBaseBinder.BindObject(const Path: string; const DataType: TRttiType; const BindedObj: TObject): TValue;
@@ -247,7 +317,9 @@ begin
   begin
     var ChildPath := TConfigurationPath.Combine([Path, Child.Key]);
 
-    var Key := ConvertTo(Child.Key, KeyType.Handle);
+    var Key: TValue;
+    if not TryConvert(Child.Key, KeyType.Handle, Key) then
+      raise BindingError(Child.Key, ChildPath, KeyType.Handle);
     var Value: TValue;
     Value := BindDataType(ChildPath, ValueType, Value);
     AddMethod.Invoke(Result, [Key, Value]);

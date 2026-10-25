@@ -851,6 +851,17 @@ procedure TMyForm.ServerError(Sender: TObject);
 procedure TMyForm.ServerError(Sender: TObject; const Error: Exception);
 ```
 
+### 38. Configuration: a value that does not convert stops the binding
+
+- **Binding converts with the invariant culture**: a decimal carries a point. In 1.6 it followed the
+  process format, and with a decimal comma `1.5` was bound as 15.
+- **A present value that does not convert raises `EConfigurationBindingError`**, naming the value, the
+  key and the type. In 1.6 the member was left at zero, or at the first value of an enumeration, and the
+  application started.
+- **An enumeration binds by the name of a value, in any case, or by its number.**
+- **What breaks**: a configuration with a value that does not convert, which now stops at binding, and
+  a decimal written with a comma.
+
 ## How to do it
 
 1. Compile. Whatever is missing comes out as a compiler error, not as odd behaviour at run time.
@@ -864,6 +875,6 @@ procedure TMyForm.ServerError(Sender: TObject; const Error: Exception);
    A Scoped service asked of the root provider is rejected too, when it is resolved: resolve it from a
    scope the work opens, `Services.CreateScope`. So is a Scoped a Singleton resolves: the Singleton
    resolves it in a scope it opens through `IServiceScopeFactory`.
-6. Sections 2, 6 to 13 and 15 to 37 carry **run-time** changes: the compiler says nothing about them. Read them
+6. Sections 2, 6 to 13 and 15 to 38 carry **run-time** changes: the compiler says nothing about them. Read them
    against your own composition — scope lifetimes, duplicate registrations, logging rules and
    host settings.

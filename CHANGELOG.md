@@ -35,6 +35,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - **Logging**: `Builder.AddNullProvider` — discarding entries on purpose, stated while composing
 - **Configuration**: A new provider, the command line — `CommandLineConfig.AddArgs`, in `Daf.Configuration.CommandLine`, reads the process arguments as keys. The accepted forms, in the README
 - **Configuration**: `TConfigurationKeyComparer` — the order of configuration keys, as `ConfigurationKeyComparer` in .NET
+- **Configuration**: `TryConvert` — converting the text of a configuration value to a type the way binding does, saying whether it could
 - **Configuration**: `ConfigOptions.Bind<T>` — a section arrives typed and owned to whoever needs it, and the service stops naming its section: startup decides it
 - ⚠️ **Configuration**: `IConfiguration.Exists` and `Find` — presence is **asked**, not inferred from an empty value; `Find` answers presence and value in one lookup, as a `TNullable<string>`. The indexer stays a `string`. **Breaks** whoever implements `IConfiguration` without inheriting from `TConfigurationRoot`
 - **Configuration**: `IConfigurationManager` — builder and reader on the same object, so configuration can be read while it is still being composed. Each `Add` builds and loads only the new provider
@@ -110,6 +111,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
   - `Daf.Enumerable.ToArray` goes from O(n²) to O(n)
 - **SQLCute**: `Daf.SQLCute.Compilers` disappears: the six dialect compilers move into `Daf.SQLCute`. The units keep their names; whoever referenced that package in a `requires` or a `DCCReference` must use `Daf.SQLCute`
 - **SQLCute**: `CompileWhere` and `CompileHaving` emit explicit precedence parentheses
+- ⚠️ **Configuration**: A present value that does not convert fails the binding with `EConfigurationBindingError`, naming the value, the key and the type, as in .NET; the member used to be left at zero, or at the first value of an enumeration. **Breaks** an application that started with an invalid value, which now stops at binding
 - **Hosting**: `THost.Start` and `THost.Stop` report through the `ILogger` pipeline —with the bootstrap channel as a fallback—, and DAF's own reports come out under the category of the class reporting instead of under `DAF`
 - ⚠️ **Hosting**: The `IHostedService`s stop in the **reverse order of their registration**, the same order the container releases in: a service started later can be using what one started earlier releases on stop. They used to stop in registration order
 - ⚠️ **Hosting**: The host loads `appsettings.json`, `appsettings.{Environment}.json`, `{ApplicationName}.settings.json` and `{ApplicationName}.settings.{Environment}.json` from the content root, all optional, and every environment variable, before the command line, as `Host.CreateApplicationBuilder` does. **Breaks** whoever counted on configuration holding only what they added: an environment variable such as `Db__Server` now overrides `Db:Server`
@@ -213,6 +215,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - **Configuration**: Binding no longer writes a member whose key no source mentions: a default set in the constructor survives the bind, and a second bind does not erase what the first one brought. A key present with an empty value is still written
 - **Configuration**: A chained key whose value **is** the empty string no longer disappears on its way through the chain: `TChainedConfigurationProvider` asks for presence instead of inferring it from the value
 - **Configuration**: A section's children came in text order, so an array of more than ten elements bound out of order, and a key a later source brought went last; they now follow the order of .NET
+- **Configuration**: Binding converts with the invariant culture: in a process with a decimal comma, `1.5` was bound as 15
 - **Commons**: `TMacrosList.GetValueFromIndex` returned an empty string on every macro read
 - **Docs**: The startup the documentation taught **did not compile**, and Hosting's guide still promised automatic discovery of `IAppModule`s. It now teaches `AddModule<T>`
 - **Docs**: Hosting's examples waited for the shutdown signal and never called `Host.Stop`: copied as they were, the hosted services never stopped and the container was never released. They now stop the host in a `finally`

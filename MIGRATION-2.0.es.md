@@ -858,6 +858,17 @@ procedure TMyForm.ServerError(Sender: TObject);
 procedure TMyForm.ServerError(Sender: TObject; const Error: Exception);
 ```
 
+### 38. Configuration: un valor que no convierte para el enlace
+
+- **El enlace convierte con la cultura invariante**: un decimal lleva punto. En 1.6 seguía el formato
+  del proceso, y con coma decimal `1.5` se enlazaba como 15.
+- **Un valor presente que no convierte lanza `EConfigurationBindingError`**, nombrando el valor, la
+  clave y el tipo. En 1.6 el miembro se quedaba en cero, o en el primer valor de un enumerado, y la
+  aplicación arrancaba.
+- **Un enumerado se enlaza por el nombre de un valor, en cualquier caja, o por su número.**
+- **Qué rompe**: una configuración con un valor que no convierte, que ahora se para al enlazar, y un
+  decimal escrito con coma.
+
 ## Cómo hacerlo
 
 1. Compila. Lo que falte sale como error del compilador, no como comportamiento raro en
@@ -873,6 +884,6 @@ procedure TMyForm.ServerError(Sender: TObject; const Error: Exception);
    resolverlo: se resuelve desde un ámbito que abre el trabajo, `Services.CreateScope`. También un
    Scoped que resuelve un Singleton: el Singleton lo resuelve en un ámbito que abre con
    `IServiceScopeFactory`.
-6. Las secciones 2, de la 6 a la 13 y de la 15 a la 37 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
+6. Las secciones 2, de la 6 a la 13 y de la 15 a la 38 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
    contra tu propia composición — la vida de los ámbitos, los registros repetidos, las reglas de
    logging y los ajustes del host.

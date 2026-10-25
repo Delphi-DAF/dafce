@@ -34,6 +34,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - **Logging**: `Builder.AddNullProvider` — descartar las entradas a propósito, dicho al componer
 - **Configuration**: Un proveedor nuevo, la línea de comandos — `CommandLineConfig.AddArgs`, en `Daf.Configuration.CommandLine`, lee los argumentos del proceso como claves. Las formas admitidas, en el README
 - **Configuration**: `TConfigurationKeyComparer` — el orden de las claves de configuración, como `ConfigurationKeyComparer` de .NET
+- **Configuration**: `TryConvert` — convertir el texto de un valor de configuración a un tipo como lo hace el enlace, diciendo si pudo
 - **Configuration**: `ConfigOptions.Bind<T>` — una sección llega tipada y con dueño a quien la necesita, y el servicio deja de nombrar su sección: la decide el arranque
 - ⚠️ **Configuration**: `IConfiguration.Exists` y `Find` — la presencia se **pregunta**, no se deduce de que el valor esté vacío; `Find` contesta presencia y valor en una sola consulta, como `TNullable<string>`. El indexador sigue siendo `string`. **Rompe** a quien implemente `IConfiguration` sin heredar de `TConfigurationRoot`
 - **Configuration**: `IConfigurationManager` — constructor y lectura sobre el mismo objeto, así que la configuración se lee mientras se está componiendo. Cada `Add` construye y carga solo el proveedor nuevo
@@ -109,6 +110,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
   - `Daf.Enumerable.ToArray` pasa de O(n²) a O(n)
 - **SQLCute**: `Daf.SQLCute.Compilers` desaparece: los seis compiladores de dialecto se integran en `Daf.SQLCute`. Las unidades no cambian; quien lo referenciara en un `requires` o un `DCCReference` debe usar `Daf.SQLCute`
 - **SQLCute**: `CompileWhere` y `CompileHaving` emiten paréntesis explícitos de precedencia
+- ⚠️ **Configuration**: Un valor presente que no convierte hace fallar el enlace con `EConfigurationBindingError`, nombrando el valor, la clave y el tipo, como en .NET; antes el miembro se quedaba en cero, o en el primer valor de un enumerado. **Rompe** a una aplicación que arrancaba con un valor inválido, que ahora se para al enlazar
 - **Hosting**: `THost.Start` y `THost.Stop` informan por el pipeline de `ILogger` —el canal de arranque queda de respaldo—, y los informes de DAF salen bajo la categoría de la clase que informa en vez de bajo `DAF`
 - ⚠️ **Hosting**: Los `IHostedService` se paran en el **orden inverso al de su registro**, el mismo en que libera el contenedor: un servicio arrancado después puede estar usando lo que suelta al parar uno arrancado antes. Antes se paraban en orden de registro
 - ⚠️ **Hosting**: El host carga `appsettings.json`, `appsettings.{Entorno}.json`, `{ApplicationName}.settings.json` y `{ApplicationName}.settings.{Entorno}.json` del content root, todos opcionales, y todas las variables de entorno, antes de la línea de comandos, como `Host.CreateApplicationBuilder`. **Rompe** a quien contara con que la configuración solo tuviera lo que añadió: una variable como `Db__Server` pasa a pisar `Db:Server`
@@ -212,6 +214,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - **Configuration**: El enlace ya no escribe un miembro cuya clave no menciona ninguna fuente: un defecto puesto en el constructor sobrevive al enlace, y un segundo enlace no borra lo que trajo el primero. Una clave presente con valor vacío se sigue escribiendo
 - **Configuration**: Una clave encadenada cuyo valor **es** la cadena vacía ya no desaparece al atravesar la cadena: `TChainedConfigurationProvider` pregunta la presencia en vez de deducirla del valor
 - **Configuration**: los hijos de una sección salían en orden de texto, así que un array de más de diez elementos se enlazaba desordenado, y una clave que aportaba una fuente posterior iba la última; ahora siguen el orden de .NET
+- **Configuration**: el enlace convierte con la cultura invariante: en un proceso con coma decimal, `1.5` se enlazaba como 15
 - **Commons**: `TMacrosList.GetValueFromIndex` devolvía cadena vacía en toda lectura de macro
 - **Docs**: El arranque que enseñaba la documentación **no compilaba**, y la guía de Hosting seguía prometiendo el descubrimiento automático de los `IAppModule`. Ahora enseña `AddModule<T>`
 - **Docs**: Los ejemplos de Hosting esperaban la señal de parada y no llamaban nunca a `Host.Stop`: copiados tal cual, los servicios alojados no se paraban y el contenedor no se liberaba. Ahora paran el host en un `finally`

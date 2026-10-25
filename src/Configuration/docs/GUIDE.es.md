@@ -348,6 +348,21 @@ que eso trae: para un compuesto, «la sección no está» y «la sección no tie
 objeto, y quien los separa es `Config.Exists('Server')`. Un miembro de array se sustituye por uno
 nuevo, mientras que una colección que ya tenía elementos se reutiliza y el enlace añade sobre ella.
 
+### Un valor se convierte con la cultura invariante, o el enlace falla
+
+Un valor se convierte al tipo de su miembro como lo hace el enlace de .NET: con la cultura invariante,
+así que un decimal lleva punto sea cual sea el locale del proceso; fechas en ISO 8601 o en el formato
+invariante; booleanos como `true` o `false` en cualquier caja; y un enumerado por el nombre de uno de
+sus valores, en cualquier caja, o por su número. Un valor presente que no convierte hace fallar el
+enlace con `EConfigurationBindingError` (unit `Daf.Configuration.Binder`), cuyo mensaje nombra el
+valor, la clave y el tipo:
+
+```
+Failed to convert configuration value 'abc' at 'Server:Port' to type 'Integer'.
+```
+
+`TryConvert(Text, TypeInfo, Value)` es esa conversión por separado, y responde si pudo.
+
 ### La clase de ajustes libera sus miembros objeto
 
 Un miembro de tipo objeto lo **construye** el enlazador, recursivamente —eso es lo que hace útil

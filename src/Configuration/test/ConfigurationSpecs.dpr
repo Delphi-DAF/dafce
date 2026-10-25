@@ -13,7 +13,8 @@ uses
   BinderKeyName.Feat in 'BinderKeyName.Feat.pas',
   ConfigManager.Feat in 'ConfigManager.Feat.pas',
   ChainedConfig.Feat in 'ChainedConfig.Feat.pas',
-  OptionsBinding.Feat in 'OptionsBinding.Feat.pas';
+  OptionsBinding.Feat in 'OptionsBinding.Feat.pas',
+  BinderConversion.Feat in 'BinderConversion.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

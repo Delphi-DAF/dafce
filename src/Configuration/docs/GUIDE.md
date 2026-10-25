@@ -348,6 +348,21 @@ for a composite, "the section is not there" and "the section has no children" gi
 and `Config.Exists('Server')` is what tells them apart. An array member is replaced by a new one,
 where a collection that already had elements is reused and added to.
 
+### A value converts with the invariant culture, or the binding fails
+
+A value converts to its member's type as the .NET binder does it: with the invariant culture, so a
+decimal carries a point whatever the process locale; dates in ISO 8601 or the invariant format;
+booleans as `true` or `false` in any case; and an enumeration by the name of one of its values, in
+any case, or by its number. A present value that does not convert fails the binding with
+`EConfigurationBindingError` (unit `Daf.Configuration.Binder`), whose message names the value, the
+key and the type:
+
+```
+Failed to convert configuration value 'abc' at 'Server:Port' to type 'Integer'.
+```
+
+`TryConvert(Text, TypeInfo, Value)` is that conversion on its own, and answers whether it could.
+
 ### The settings class frees its object members
 
 A member of object type is **built** by the binder, recursively — that is what makes it useful to
