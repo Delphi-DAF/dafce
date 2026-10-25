@@ -110,7 +110,7 @@ one exception — the default NULL order, in the last point:
 - **Three-valued logic.** A comparison against NULL is *unknown*, not false; `AND`/`OR`/`NOT` combine by the SQL truth tables; a row is kept only when the predicate is *true*. So `WhereNot('age','>',18)` excludes a NULL age — exactly as a database does.
 - **WHERE precedence.** `AND` binds tighter than `OR`. Both back-ends build from one shared normalizer (`Daf.SQLCute.WhereTree`), so they cannot disagree; the SQL side emits explicit parentheses.
 - **DISTINCT** de-duplicates over the *output* columns, by value, with NULLs comparing equal.
-- **Aggregates** skip NULLs (`COUNT(col)`, `SUM`, `AVG`, `MIN`, `MAX`); `COUNT(*)` counts rows.
+- **Aggregates** skip NULLs (`COUNT(col)`, `SUM`, `AVG`, `MIN`, `MAX`); `COUNT(*)` counts rows. `SUM` of integers is an `Int64`, of `Currency` values a `Currency`, and a `Double` only when a value is floating point; an overflow, or a value that is not a number in `SUM` or `AVG`, raises `EInMemoryQueryError`.
 - **GROUP BY** puts all NULL keys in one group.
 - **ORDER BY** treats NULL as the smallest value by default — nulls-first ascending, nulls-last descending — and a query overrides that per column with `NullsFirst` / `NullsLast`, which the plan honors.
   Without them the two back-ends can differ: the database applies its own default, and Postgres and

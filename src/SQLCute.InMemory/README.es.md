@@ -110,7 +110,7 @@ una excepción —el orden de NULL por defecto, en el último punto—:
 - **Lógica de tres valores.** Una comparación contra NULL es *desconocida*, no falsa; `AND`/`OR`/`NOT` se combinan según las tablas de verdad de SQL; una fila se conserva solo cuando el predicado es *verdadero*. Así, `WhereNot('age','>',18)` excluye una edad NULL — exactamente como hace una base de datos.
 - **Precedencia en WHERE.** `AND` liga más fuerte que `OR`. Ambos back-ends parten de un mismo normalizador compartido (`Daf.SQLCute.WhereTree`), así que no pueden discrepar; el lado SQL emite paréntesis explícitos.
 - **DISTINCT** deduplica sobre las columnas *de salida*, por valor, y los NULL se comparan como iguales.
-- **Los agregados** ignoran los NULL (`COUNT(col)`, `SUM`, `AVG`, `MIN`, `MAX`); `COUNT(*)` cuenta filas.
+- **Los agregados** ignoran los NULL (`COUNT(col)`, `SUM`, `AVG`, `MIN`, `MAX`); `COUNT(*)` cuenta filas. `SUM` de enteros es un `Int64`, de valores `Currency` un `Currency`, y un `Double` solo cuando algún valor es de coma flotante; un desbordamiento, o un valor que no es número en `SUM` o `AVG`, lanza `EInMemoryQueryError`.
 - **GROUP BY** agrupa todas las claves NULL en un único grupo.
 - **ORDER BY** trata NULL como el valor más pequeño **por defecto** —nulls primero en ascendente, al final en descendente— y una consulta lo cambia por columna con `NullsFirst` / `NullsLast`, que el plan respeta.
   Sin ellos, los dos back-ends pueden discrepar: la base de datos aplica su propio defecto, y Postgres y

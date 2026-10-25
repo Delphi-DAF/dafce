@@ -169,10 +169,10 @@ end;
 class function TDictRow.Make(const AColumns: array of string; const AValues: array of Variant): IRow;
 begin
   var Row := TDictRow.Create;
+  Result := Row;
   for var I := 0 to High(AColumns) do
     if I <= High(AValues) then
       Row.Put(AColumns[I], AValues[I]);
-  Result := Row;
 end;
 
 function TDictRow.Get(const Column: string): TValue;

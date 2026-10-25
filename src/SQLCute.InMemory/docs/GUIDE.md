@@ -286,9 +286,15 @@ Grouping emits one flat row per group carrying the group-key columns and the agg
 TQuery.New.From('people')
   .Select('country').SelectCount('*', 'n')
   .GroupBy('country')
-  .Having('n', '>', 1)
+  .HavingRaw('count(*) > 1')
 // rows: (country, n)
 ```
+
+`HavingRaw` is evaluated over the members of each group when it is exactly one aggregate over a column — `COUNT`, `SUM`, `AVG`, `MIN` or `MAX`, or `COUNT(*)` — compared with a number by `=`, `<>`, `!=`, `<`, `<=`, `>` or `>=`, whether or not the query selects that aggregate. Any other expression raises `EInMemoryQueryError` quoting it.
+
+`Having` reads its column as a group key or the alias of an output column, so `Having('n', '>', 1)` works in memory. In SQL, MySQL, SQLite and Oracle 23 accept an output alias in `HAVING`, and Postgres, SQL Server and Firebird reject it; `HavingRaw('count(*) > 1')` works in every engine and in memory.
+
+A grouped query raises `EInMemoryQueryError` when it is built if a raw SELECT column is anything but `FUNC(column)`, optionally with `AS alias`, or if a `Having` uses an operator other than the six comparisons and the two NULL checks.
 
 The sequence library's own `GroupBy` yields the richer `IGrouping<TKey, T>` — the key plus its members — for code that goes through [`Daf.Linq`](../../Linq/README.md) directly.
 

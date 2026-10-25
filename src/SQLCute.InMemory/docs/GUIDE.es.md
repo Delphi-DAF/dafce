@@ -286,9 +286,15 @@ La agrupación emite una fila plana por grupo con las columnas de clave y las de
 TQuery.New.From('people')
   .Select('country').SelectCount('*', 'n')
   .GroupBy('country')
-  .Having('n', '>', 1)
+  .HavingRaw('count(*) > 1')
 // filas: (country, n)
 ```
+
+`HavingRaw` se evalúa sobre los miembros de cada grupo cuando es exactamente un agregado sobre una columna —`COUNT`, `SUM`, `AVG`, `MIN` o `MAX`, o `COUNT(*)`— comparado con un número por `=`, `<>`, `!=`, `<`, `<=`, `>` o `>=`, lo seleccione o no la consulta. Cualquier otra expresión lanza `EInMemoryQueryError` citándola.
+
+`Having` lee su columna como clave de grupo o alias de una columna de salida, así que `Having('n', '>', 1)` funciona en memoria. En SQL, MySQL, SQLite y Oracle 23 aceptan un alias de salida en `HAVING`, y Postgres, SQL Server y Firebird lo rechazan; `HavingRaw('count(*) > 1')` funciona en todos los motores y en memoria.
+
+Una consulta agrupada lanza `EInMemoryQueryError` al construirse si una columna de SELECT en bruto es otra cosa que `FUNC(columna)`, con `AS alias` o sin él, o si un `Having` usa un operador distinto de las seis comparaciones y las dos de NULL.
 
 El `GroupBy` de la propia biblioteca de secuencias produce el `IGrouping<TKey, T>` más rico —la clave y sus miembros— para el código que pasa por [`Daf.Linq`](../../Linq/README.es.md) directamente.
 

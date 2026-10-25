@@ -92,6 +92,9 @@ type
     Projection: TArray<TProjColumn>;   // nil = no reshape (all columns / preserve T)
     GroupBy: TArray<string>;           // nil = no grouping
     Aggregates: TArray<TAggregateSpec>;
+    /// The aggregates a HavingRaw evaluates, computed per group and read by Having
+    /// under their HavingAggregateName; they are not output columns.
+    HavingAggregates: TArray<TAggregateSpec>;
     Having: TValuePredicate;           // nil = no HAVING (filters flat aggregate rows)
     Distinct: Boolean;
     HasLimit: Boolean;
@@ -130,6 +133,8 @@ function CompareForOrder(const L, R: TValue; const Spec: TOrderSpec): Integer;
 ///   (snake_case ↔ PascalCase) — the naming bridge the symmetry goal needs.
 /// </summary>
 function NormalizeName(const Column: string): string;
+/// <summary>The name under which Having reads an aggregate of a HavingRaw.</summary>
+function HavingAggregateName(const Spec: TAggregateSpec): string;
 /// <summary>Folds a value hash into an accumulator (wraparound; overflow-safe).</summary>
 function CombineHash(Acc, Value: Integer): Integer;
 /// <summary>3VL comparison of two values by operator (a NULL operand ⇒ Unknown).</summary>
@@ -368,6 +373,105 @@ begin
   end;
 end;
 
+{ ---- Aggregate expressions ---- }
+
+function IsColumnName(const S: string): Boolean;
+begin
+  Result := (S <> '') and not CharInSet(S[1], ['0'..'9', '.']);
+  for var Ch in S do
+    if not CharInSet(Ch, ['A'..'Z', 'a'..'z', '0'..'9', '_', '.']) then
+      Exit(False);
+end;
+
+// FUNC(column) at position P: one of the five functions over one column, or
+// COUNT(*); the first ')' closes it. P comes back just after the ')'.
+function TryParseAggregateCall(const S: string; var P: Integer; out Spec: TAggregateSpec): Boolean;
+begin
+  Result := False;
+  var I := P;
+  while (I <= Length(S)) and (S[I] = ' ') do
+    Inc(I);
+  var Start := I;
+  while (I <= Length(S)) and CharInSet(S[I], ['A'..'Z', 'a'..'z']) do
+    Inc(I);
+  var FuncName := UpperCase(Copy(S, Start, I - Start));
+  while (I <= Length(S)) and (S[I] = ' ') do
+    Inc(I);
+  if (I > Length(S)) or (S[I] <> '(') then
+    Exit;
+  var Close := Pos(')', S, I + 1);
+  if Close = 0 then
+    Exit;
+  var Col := Trim(Copy(S, I + 1, Close - I - 1));
+  if FuncName = 'COUNT' then Spec.Func := TAggFunc.Count
+  else if FuncName = 'SUM' then Spec.Func := TAggFunc.Sum
+  else if FuncName = 'AVG' then Spec.Func := TAggFunc.Avg
+  else if FuncName = 'MIN' then Spec.Func := TAggFunc.Min
+  else if FuncName = 'MAX' then Spec.Func := TAggFunc.Max
+  else
+    Exit;
+  if not (IsColumnName(Col) or ((Col = '*') and (Spec.Func = TAggFunc.Count))) then
+    Exit;
+  Spec.Column := Col;
+  Spec.Output := LowerCase(FuncName);
+  P := Close + 1;
+  Result := True;
+end;
+
+// A raw SELECT column that is exactly "FUNC(column)", optionally "AS alias".
+function TryParseAggregate(const Raw: string; out Spec: TAggregateSpec): Boolean;
+begin
+  var P := 1;
+  if not TryParseAggregateCall(Raw, P, Spec) then
+    Exit(False);
+  var Rest := Trim(Copy(Raw, P, MaxInt));
+  if Rest = '' then
+    Exit(True);
+  Result := SameText(Copy(Rest, 1, 3), 'AS ') and IsColumnName(Trim(Copy(Rest, 4, MaxInt)));
+  if Result then
+    Spec.Output := Trim(Copy(Rest, 4, MaxInt));
+end;
+
+// A raw HAVING that is exactly "FUNC(column) op number", op one of the six comparisons.
+function TryParseHavingRaw(const Raw: string; out Spec: TAggregateSpec; out Op: TWhereOp;
+  out Bound: TValue): Boolean;
+const
+  Ops: array[0..6] of string = ('<=', '>=', '<>', '!=', '<', '>', '=');
+  OpValues: array[0..6] of TWhereOp = (TWhereOp.LessOrEqual, TWhereOp.GreaterOrEqual,
+    TWhereOp.NotEqual, TWhereOp.NotEqual, TWhereOp.Less, TWhereOp.Greater, TWhereOp.Equal);
+begin
+  Result := False;
+  var P := 1;
+  if not TryParseAggregateCall(Raw, P, Spec) then
+    Exit;
+  var Rest := Trim(Copy(Raw, P, MaxInt));
+  var OpIndex := -1;
+  for var I := 0 to High(Ops) do
+    if Copy(Rest, 1, Length(Ops[I])) = Ops[I] then
+    begin
+      OpIndex := I;
+      Break;
+    end;
+  if OpIndex < 0 then
+    Exit;
+  Op := OpValues[OpIndex];
+  var Num := Trim(Copy(Rest, Length(Ops[OpIndex]) + 1, MaxInt));
+  var AsInt: Int64;
+  var AsFloat: Double;
+  if TryStrToInt64(Num, AsInt) then
+    Bound := AsInt
+  else if (Pos(' ', Num) = 0) and TryStrToFloat(Num, AsFloat, TFormatSettings.Invariant) then
+    Bound := AsFloat
+  else
+    Exit;
+  Result := True;
+end;
+
+function HavingAggregateName(const Spec: TAggregateSpec): string;
+begin
+  Result := #1 + IntToStr(Ord(Spec.Func)) + ':' + LowerCase(Spec.Column);
+end;
+
 { ---- Leaf builders — extract everything at compile time into closures ---- }
 
 function BuildComparison(W: TWhereClause): TValuePredicate;
@@ -501,7 +605,25 @@ begin
     // HAVING leaf: compares an aggregate/output column against a bound value.
     var H := THavingClause(Clause);
     if H.Op = TWhereOp.Raw then
-      raise EInMemoryQueryError.Create('Raw HAVING expressions cannot be evaluated in memory.');
+    begin
+      // FUNC(column) op number, over the members of the group.
+      var Spec: TAggregateSpec;
+      var ROp: TWhereOp;
+      var RBound: TValue;
+      if not TryParseHavingRaw(H.RawSql, Spec, ROp, RBound) then
+        raise EInMemoryQueryError.CreateFmt(
+          'HAVING "%s" cannot be evaluated in memory: only FUNC(column) op number can.', [H.RawSql]);
+      var Hidden := HavingAggregateName(Spec);
+      Exit(
+        function(const Get: TColumnGetter): TTriState
+        begin
+          Result := CompareOp(ROp, Get(Hidden), RBound);
+        end);
+    end;
+    if not (H.Op in [TWhereOp.Equal, TWhereOp.NotEqual, TWhereOp.Less, TWhereOp.LessOrEqual,
+      TWhereOp.Greater, TWhereOp.GreaterOrEqual, TWhereOp.IsNull, TWhereOp.IsNotNull]) then
+      raise EInMemoryQueryError.CreateFmt(
+        'HAVING on "%s" uses an operator the in-memory engine does not evaluate over a group.', [H.Column]);
     var HCol := H.Column;
     var HOp := H.Op;
     if HOp in [TWhereOp.IsNull, TWhereOp.IsNotNull] then
@@ -632,46 +754,6 @@ begin
   end;
 end;
 
-// Parses a raw aggregate select expression "FUNC(col) AS alias" into a spec.
-// Returns False when it is not a recognised aggregate.
-function TryParseAggregate(const Raw: string; out Spec: TAggregateSpec): Boolean;
-begin
-  Result := False;
-  var Expr := Trim(Raw);
-  var Alias := '';
-  var AsPos := Pos(' AS ', UpperCase(Expr));
-  if AsPos > 0 then
-  begin
-    Alias := Trim(Copy(Expr, AsPos + 4, MaxInt));
-    Expr := Trim(Copy(Expr, 1, AsPos - 1));
-  end;
-  var Paren := Pos('(', Expr);
-  var LastParen := 0;
-  for var I := Length(Expr) downto 1 do
-    if Expr[I] = ')' then
-    begin
-      LastParen := I;
-      Break;
-    end;
-  if (Paren = 0) or (LastParen <= Paren) then
-    Exit;
-  var FuncName := UpperCase(Trim(Copy(Expr, 1, Paren - 1)));
-  var Col := Trim(Copy(Expr, Paren + 1, LastParen - Paren - 1));
-  if FuncName = 'COUNT' then Spec.Func := TAggFunc.Count
-  else if FuncName = 'SUM' then Spec.Func := TAggFunc.Sum
-  else if FuncName = 'AVG' then Spec.Func := TAggFunc.Avg
-  else if FuncName = 'MIN' then Spec.Func := TAggFunc.Min
-  else if FuncName = 'MAX' then Spec.Func := TAggFunc.Max
-  else
-    Exit;
-  Spec.Column := Col;
-  if Alias <> '' then
-    Spec.Output := Alias
-  else
-    Spec.Output := LowerCase(FuncName);
-  Result := True;
-end;
-
 function ExtractGroupBy(const Clauses: TArray<TAbstractClause>): TArray<string>;
 begin
   Result := nil;
@@ -680,7 +762,8 @@ begin
       Result := Result + [TGroupByClause(C).Column];
 end;
 
-function ExtractAggregates(const Clauses: TArray<TAbstractClause>): TArray<TAggregateSpec>;
+// In a grouped query a raw SELECT column is an aggregate or it is rejected.
+function ExtractAggregates(const Clauses: TArray<TAbstractClause>; Grouped: Boolean): TArray<TAggregateSpec>;
 begin
   Result := nil;
   for var C in Clauses do
@@ -690,8 +773,34 @@ begin
         begin
           var Spec: TAggregateSpec;
           if TryParseAggregate(Col.Column, Spec) then
-            Result := Result + [Spec];
+            Result := Result + [Spec]
+          else if Grouped then
+            raise EInMemoryQueryError.CreateFmt(
+              'SELECT "%s" cannot be evaluated over a group in memory: only FUNC(column) [AS alias] can.',
+              [Col.Column]);
         end;
+end;
+
+// The aggregates the HavingRaw conditions read, once each.
+function ExtractHavingAggregates(const Clauses: TArray<TAbstractClause>): TArray<TAggregateSpec>;
+begin
+  Result := nil;
+  for var C in Clauses do
+    if (C is THavingClause) and (THavingClause(C).Op = TWhereOp.Raw) then
+    begin
+      var Spec: TAggregateSpec;
+      var Op: TWhereOp;
+      var Bound: TValue;
+      if not TryParseHavingRaw(THavingClause(C).RawSql, Spec, Op, Bound) then
+        Continue;   // HavingPredicate rejects it, naming the expression
+      Spec.Output := HavingAggregateName(Spec);
+      var Seen := False;
+      for var S in Result do
+        if S.Output = Spec.Output then
+          Seen := True;
+      if not Seen then
+        Result := Result + [Spec];
+    end;
 end;
 
 { ---- Source / shape analysis (fail-fast) ---- }
@@ -837,7 +946,8 @@ begin
     Result.Projection := ExtractProjection(Clauses);
     ResolveOrderAliases(Result.Orders, Result.Projection);
     Result.GroupBy := ExtractGroupBy(Clauses);
-    Result.Aggregates := ExtractAggregates(Clauses);
+    Result.Aggregates := ExtractAggregates(Clauses, Length(Result.GroupBy) > 0);
+    Result.HavingAggregates := ExtractHavingAggregates(Clauses);
     Result.Having := HavingPredicate(Clauses);
     Result.Distinct := HasDistinct(Clauses);
     ExtractLimits(Clauses, Result);

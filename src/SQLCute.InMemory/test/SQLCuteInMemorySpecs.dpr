@@ -14,7 +14,8 @@ uses
   Parity.Feat in 'Parity.Feat.pas',
   ReadOnly.Feat in 'ReadOnly.Feat.pas',
   NullableMembers.Feat in 'NullableMembers.Feat.pas',
-  Columns.Feat in 'Columns.Feat.pas';
+  Columns.Feat in 'Columns.Feat.pas',
+  Grouping.Feat in 'Grouping.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

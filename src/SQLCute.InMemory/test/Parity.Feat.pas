@@ -240,7 +240,7 @@ begin
     // --- multi-source: grouping, joins, subqueries, set ops ---------------
     MakeCase('group-having',
       TQuery.New.From('people').Select('country').SelectCount('*', 'n')
-        .GroupBy('country').Having('n', '>', 1).OrderBy('country'),
+        .GroupBy('country').HavingRaw('count(*) > 1').OrderBy('country'),
       ['country', 'n'], 'UK/3, US/3',
       {TypedLane} False, {RowLane} False),
     MakeCase('group-avg-skips-nulls',

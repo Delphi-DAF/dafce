@@ -835,13 +835,107 @@ end;
 
 { GROUP BY / aggregates / HAVING }
 
-function AsNumber(const V: TValue): Double;
-begin
-  try
-    Result := V.AsVariant;   // numeric / date families coerce to Double
-  except
-    Result := 0;
+type
+  TNumberFamily = (Integral, Money, Float);
+
+  /// <summary>A non-NULL value of SUM or AVG, by the family its sum keeps.</summary>
+  TNumber = record
+    Family: TNumberFamily;
+    Int: Int64;
+    Money: Currency;
+    Float: Double;
+    function AsDouble: Double;
   end;
+
+function TNumber.AsDouble: Double;
+begin
+  case Family of
+    TNumberFamily.Integral: Result := Int;
+    TNumberFamily.Money:    Result := Money;
+  else
+    Result := Float;
+  end;
+end;
+
+// A number of SUM or AVG; anything that is not one raises, naming the column.
+function AsNumber(const Column: string; const Value: TValue): TNumber;
+begin
+  var V := Value;
+  if V.Kind = tkVariant then
+    V := TValue.FromVariant(V.AsVariant);
+  case V.Kind of
+    tkInteger, tkInt64:
+      begin
+        Result.Family := TNumberFamily.Integral;
+        Result.Int := V.AsInt64;
+        Exit;
+      end;
+    tkFloat:
+      if (V.TypeInfo <> TypeInfo(TDateTime)) and (V.TypeInfo <> TypeInfo(TDate))
+         and (V.TypeInfo <> TypeInfo(TTime)) then
+      begin
+        if GetTypeData(V.TypeInfo).FloatType = ftCurr then
+        begin
+          Result.Family := TNumberFamily.Money;
+          Result.Money := V.AsCurrency;
+        end
+        else
+        begin
+          Result.Family := TNumberFamily.Float;
+          Result.Float := V.AsExtended;
+        end;
+        Exit;
+      end;
+  end;
+  raise EInMemoryQueryError.CreateFmt('The aggregate of "%s" needs numbers, and got %s.', [Column, V.ToString]);
+end;
+
+function AddInt64(const A, B: Int64; const Column: string): Int64;
+begin
+  if ((B > 0) and (A > High(Int64) - B)) or ((B < 0) and (A < Low(Int64) - B)) then
+    raise EInMemoryQueryError.CreateFmt('SUM of "%s" overflows its type.', [Column]);
+  Result := A + B;
+end;
+
+// SUM keeps the family of its values: Int64 for integers, Currency when any is
+// Currency and none is floating point, Double otherwise. Currency adds in its
+// Int64 representation, scaled by 10000, so neither family rounds.
+function SumOf(const Column: string; const Numbers: TArray<TNumber>): TValue;
+const
+  MoneyScale = 10000;
+begin
+  var AnyFloat := False;
+  var AnyMoney := False;
+  for var N in Numbers do
+    case N.Family of
+      TNumberFamily.Float: AnyFloat := True;
+      TNumberFamily.Money: AnyMoney := True;
+    end;
+  if AnyFloat then
+  begin
+    var D: Double := 0;
+    for var N in Numbers do
+      D := D + N.AsDouble;
+    Exit(D);
+  end;
+  if AnyMoney then
+  begin
+    var Scaled: Int64 := 0;
+    for var N in Numbers do
+      if N.Family = TNumberFamily.Money then
+        Scaled := AddInt64(Scaled, PInt64(@N.Money)^, Column)
+      else if Abs(N.Int) > High(Int64) div MoneyScale then
+        raise EInMemoryQueryError.CreateFmt('SUM of "%s" overflows its type.', [Column])
+      else
+        Scaled := AddInt64(Scaled, N.Int * MoneyScale, Column);
+    var Total: Currency;
+    PInt64(@Total)^ := Scaled;
+    Exit(TValue.From<Currency>(Total));
+  end;
+  var Total: Int64 := 0;
+  for var N in Numbers do
+    Total := AddInt64(Total, N.Int, Column);
+  Result := TValue.From<Int64>(Total);
 end;
 
 // One aggregate over a group's members; NULLs are skipped (COUNT(*) counts rows).
@@ -861,18 +955,14 @@ begin
       end;
     TAggFunc.Sum:
       begin
-        var S: Double := 0;
-        var Any := False;
+        var Numbers: TArray<TNumber> := nil;
         for var R in Members do
         begin
           var V := ReadColumn(R, Agg.Column);
           if not IsNullValue(V) then
-          begin
-            S := S + AsNumber(V);
-            Any := True;
-          end;
+            Numbers := Numbers + [AsNumber(Agg.Column, V)];
         end;
-        if Any then Result := S else Result := TValue.Empty;
+        if Numbers <> nil then Result := SumOf(Agg.Column, Numbers) else Result := TValue.Empty;
       end;
     TAggFunc.Avg:
       begin
@@ -883,7 +973,7 @@ begin
           var V := ReadColumn(R, Agg.Column);
           if not IsNullValue(V) then
           begin
-            S := S + AsNumber(V);
+            S := S + AsNumber(Agg.Column, V).AsDouble;
             Inc(N);
           end;
         end;
@@ -950,17 +1040,27 @@ begin
   for var G in Groups do             // key order preserved by GroupBy
   begin
     var Members := G.Members;
+    // Held by its interface from the start: an aggregate that raises frees it.
     var Flat := TDictRow.Create;
+    var FlatRow: IRow := Flat;
     for var Gc in Cols do
       Flat.Put(Gc, ReadColumn(Members[0], Gc));   // any member carries the group's key values
     for var Agg in C.Aggregates do
       Flat.Put(Agg.Output, ComputeAggregate(Agg, Members));
-    var FlatRow: IRow := Flat;
+    // The aggregates a HavingRaw reads are computed over the members too, and
+    // stay out of the output row.
+    var Hidden: TArray<TValue> := nil;
+    for var Agg in C.HavingAggregates do
+      Hidden := Hidden + [ComputeAggregate(Agg, Members)];
+    var HiddenSpecs := C.HavingAggregates;
     var Keep := True;
     if Assigned(C.Having) then
       Keep := C.Having(
         function(const Col: string): TValue
         begin
+          for var I := 0 to High(HiddenSpecs) do
+            if HiddenSpecs[I].Output = Col then
+              Exit(Hidden[I]);
           Result := ReadColumn(FlatRow, Col);
         end) = TTriState.Yes;
     if Keep then
