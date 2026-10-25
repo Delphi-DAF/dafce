@@ -81,9 +81,9 @@ type
   end;
 
   /// <summary>
-  ///   A composite row combining named child rows. Resolves a
-  ///   qualified <c>alias.column</c> to the matching side and a bare column to the
-  ///   first side that carries it, so joined rows expose every side's columns.
+  ///   A composite row combining named child rows. Resolves a qualified
+  ///   <c>alias.column</c> only on the side whose alias is the prefix, and a bare
+  ///   column on the first side that carries it.
   /// </summary>
   TJoinRow = class(TInterfacedObject, IRow, IJoinRow)
   private
@@ -96,14 +96,26 @@ type
     function Columns: TArray<string>;
   end;
 
-  /// <summary>An all-NULL row — the absent side of an outer join.</summary>
+  /// <summary>
+  ///   An all-NULL row — the absent side of an outer join. It carries the columns
+  ///   of the source it stands for, or any column when that schema is unknown.
+  /// </summary>
   TNullRow = class(TInterfacedObject, IRow)
+  private
+    FColumns: TArray<string>;
+    FAnyColumn: Boolean;
   public
+    constructor Create(const AColumns: TArray<string>; AAnyColumn: Boolean);
     function Get(const Column: string): TValue;
     function Has(const Column: string): Boolean;
     function Columns: TArray<string>;
   end;
 
+/// <summary>
+///   The value of a column the engine reads from a row. Raises
+///   <c>EInMemoryQueryError</c> naming the column when the row does not carry it.
+/// </summary>
+function ReadColumn(const Row: IRow; const Column: string): TValue;
 /// <summary>Wraps the tri-state predicate as a two-valued predicate over a row (keep iff True).</summary>
 function MakeRowPredicate(const Pred: TValuePredicate): TPredicate<IRow>;
 /// <summary>ORDER BY comparer over rows (multi-column, direction + NULL policy).</summary>
@@ -192,7 +204,7 @@ function TProjectedRow.Get(const Column: string): TValue;
 begin
   for var P in FProj do
     if SameText(P.Output, Column) then
-      Exit(FRow.Get(P.Source));
+      Exit(ReadColumn(FRow, P.Source));
   Result := TValue.Empty;
 end;
 
@@ -213,6 +225,13 @@ end;
 
 { pipeline helpers }
 
+function ReadColumn(const Row: IRow; const Column: string): TValue;
+begin
+  if not Row.Has(Column) then
+    raise EInMemoryQueryError.CreateFmt('Column "%s" resolves to no source of the query.', [Column]);
+  Result := Row.Get(Column);
+end;
+
 function MakeRowPredicate(const Pred: TValuePredicate): TPredicate<IRow>;
 begin
   Result :=
@@ -221,7 +240,7 @@ begin
       Result := Pred(
         function(const C: string): TValue
         begin
-          Result := R.Get(C);
+          Result := ReadColumn(R, C);
         end) = TTriState.Yes;
     end;
 end;
@@ -235,7 +254,7 @@ begin
       Result := 0;
       for var S in Specs do
       begin
-        Result := CompareForOrder(A.Get(S.Column), B.Get(S.Column), S);
+        Result := CompareForOrder(ReadColumn(A, S.Column), ReadColumn(B, S.Column), S);
         if Result <> 0 then
           Exit;
       end;
@@ -255,7 +274,7 @@ begin
       if Keys = nil then
         Keys := A.Columns;
       for var K in Keys do
-        if not VE.Equals(A.Get(K), B.Get(K)) then
+        if not VE.Equals(ReadColumn(A, K), ReadColumn(B, K)) then
           Exit(False);
       Result := True;
     end,
@@ -268,7 +287,7 @@ begin
         Keys := X.Columns;
       Result := 17;
       for var K in Keys do
-        Result := CombineHash(Result, VE.GetHashCode(X.Get(K)));
+        Result := CombineHash(Result, VE.GetHashCode(ReadColumn(X, K)));
     end);
 end;
 
@@ -293,23 +312,33 @@ begin
   Result := FChildren;
 end;
 
-function TJoinRow.Get(const Column: string): TValue;
+// The side a qualified name points at: the child whose alias, followed by a dot,
+// starts the name. Rest is the column on that side.
+function FindSide(const Children: TArray<TJoinChild>; const Column: string;
+  out Side: IRow; out Rest: string): Boolean;
 begin
-  var Dot := Pos('.', Column);
-  if Dot > 0 then
+  for var Ch in Children do
+    if (Ch.Alias <> '') and (Length(Column) > Length(Ch.Alias) + 1)
+       and SameText(Copy(Column, 1, Length(Ch.Alias) + 1), Ch.Alias + '.') then
+    begin
+      Side := Ch.Row;
+      Rest := Copy(Column, Length(Ch.Alias) + 2, MaxInt);
+      Exit(True);
+    end;
+  Result := False;
+end;
+
+function TJoinRow.Get(const Column: string): TValue;
+var
+  Side: IRow;
+  Rest: string;
+begin
+  if Pos('.', Column) > 0 then
   begin
-    var Prefix := Copy(Column, 1, Dot - 1);
-    var Rest := Copy(Column, Dot + 1, MaxInt);
-    for var Ch in FChildren do
-      if SameText(Ch.Alias, Prefix) then
-        Exit(Ch.Row.Get(Rest));
-    // qualified, but no alias matched — any side carrying the bare name
-    for var Ch in FChildren do
-      if Ch.Row.Has(Rest) then
-        Exit(Ch.Row.Get(Rest));
+    if FindSide(FChildren, Column, Side, Rest) then
+      Exit(Side.Get(Rest));
     Exit(TValue.Empty);
   end;
-  // bare name — the first side that carries it
   for var Ch in FChildren do
     if Ch.Row.Has(Column) then
       Exit(Ch.Row.Get(Column));
@@ -317,16 +346,12 @@ begin
 end;
 
 function TJoinRow.Has(const Column: string): Boolean;
+var
+  Side: IRow;
+  Rest: string;
 begin
-  var Dot := Pos('.', Column);
-  if Dot > 0 then
-  begin
-    var Prefix := Copy(Column, 1, Dot - 1);
-    var Rest := Copy(Column, Dot + 1, MaxInt);
-    for var Ch in FChildren do
-      if SameText(Ch.Alias, Prefix) then
-        Exit(Ch.Row.Has(Rest));
-  end;
+  if Pos('.', Column) > 0 then
+    Exit(FindSide(FChildren, Column, Side, Rest) and Side.Has(Rest));
   for var Ch in FChildren do
     if Ch.Row.Has(Column) then
       Exit(True);
@@ -343,6 +368,13 @@ end;
 
 { TNullRow }
 
+constructor TNullRow.Create(const AColumns: TArray<string>; AAnyColumn: Boolean);
+begin
+  inherited Create;
+  FColumns := AColumns;
+  FAnyColumn := AAnyColumn;
+end;
+
 function TNullRow.Get(const Column: string): TValue;
 begin
   Result := TValue.Empty;
@@ -350,12 +382,18 @@ end;
 
 function TNullRow.Has(const Column: string): Boolean;
 begin
+  if FAnyColumn then
+    Exit(True);
+  var Key := NormalizeName(Column);
+  for var C in FColumns do
+    if NormalizeName(C) = Key then
+      Exit(True);
   Result := False;
 end;
 
 function TNullRow.Columns: TArray<string>;
 begin
-  Result := nil;
+  Result := FColumns;
 end;
 
 { composition helpers }

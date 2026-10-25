@@ -352,6 +352,9 @@ function CompareOp(Op: TWhereOp; const L, R: TValue): TTriState;
 begin
   if IsNullValue(L) or IsNullValue(R) then
     Exit(TTriState.Unknown);   // 3VL: any NULL operand ⇒ Unknown
+  // like between two values: R is the pattern, as in WhereLike.
+  if Op in [TWhereOp.Like, TWhereOp.NotLike] then
+    Exit(BoolToTri(SqlLikeMatch(VarToStr(L.AsVariant), VarToStr(R.AsVariant)) = (Op = TWhereOp.Like)));
   var C := CompareValues(L, R);
   case Op of
     TWhereOp.Equal:          Result := BoolToTri(C = 0);
@@ -427,6 +430,17 @@ end;
 function BuildLike(W: TWhereClause): TValuePredicate;
 begin
   var Col := W.Column;
+  if W.IsColumnValue then
+  begin
+    // The pattern is the value of the right-hand column in the same row.
+    var Col2 := VarToStr(W.Value);
+    var Op := W.Op;
+    Exit(
+      function(const Get: TColumnGetter): TTriState
+      begin
+        Result := CompareOp(Op, Get(Col), Get(Col2));
+      end);
+  end;
   // The builder already lower-cased the pattern when CaseSensitive = False.
   var Pattern := VarToStr(W.Value);
   var CaseSensitive := W.CaseSensitive;
@@ -799,6 +813,19 @@ begin
       Exit(True);
 end;
 
+// An ORDER BY column that names an output alias sorts by that alias's source:
+// ordering runs before the projection.
+procedure ResolveOrderAliases(var Orders: TArray<TOrderSpec>; const Projection: TArray<TProjColumn>);
+begin
+  for var I := 0 to High(Orders) do
+    for var P in Projection do
+      if SameText(P.Output, Orders[I].Column) and not SameText(P.Source, P.Output) then
+      begin
+        Orders[I].Column := P.Source;
+        Break;
+      end;
+end;
+
 // Shared extraction: WHERE predicate, ORDER BY, projection, DISTINCT, LIMIT/OFFSET.
 // Source shape (single vs multi) is vetoed by the callers, not here.
 function Populate(const Clauses: TArray<TAbstractClause>): TCompiledQuery;
@@ -808,6 +835,7 @@ begin
     Result.Predicate := WherePredicate(Clauses);
     Result.Orders := ExtractOrders(Clauses);
     Result.Projection := ExtractProjection(Clauses);
+    ResolveOrderAliases(Result.Orders, Result.Projection);
     Result.GroupBy := ExtractGroupBy(Clauses);
     Result.Aggregates := ExtractAggregates(Clauses);
     Result.Having := HavingPredicate(Clauses);

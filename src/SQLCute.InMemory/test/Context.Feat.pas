@@ -371,6 +371,58 @@ Feature SQLCute in-memory multi-source @inmemory @context
         Expect(HasCara).ToBeFalse;
       end)
 
+  .Scenario('A derived-table FROM is rejected')
+    .Given('a context with people, and a query whose FROM is a subquery',
+      procedure(W: TCtxWorld)
+      begin
+        W.Ctx := TQueryContext.Create;
+        W.Ctx.Map<TPerson>('people', W.People);
+        W.Query := TQuery.New.From(TQuery.New.From('people'), 'p');
+      end)
+    .When('the query is run over that context',
+      procedure(W: TCtxWorld)
+      begin
+        try
+          for var R in TInMemory.Rows(W.Query, W.Ctx) do
+            ;
+          W.Outcome := '<it ran>';
+        except
+          on E: Exception do
+            W.Outcome := E.ClassName + ': ' + E.Message;
+        end;
+      end)
+    .&Then('it raises EInMemoryQueryError instead of rows',
+      procedure(W: TCtxWorld)
+      begin
+        Expect(W.Outcome).ToStartWith('EInMemoryQueryError');
+      end)
+
+  .Scenario('A scalar subquery column is rejected')
+    .Given('a context with people and orders, and a query that selects a subquery as a column',
+      procedure(W: TCtxWorld)
+      begin
+        W.Ctx := TQueryContext.Create;
+        W.Ctx.Map<TPerson>('people', W.People).Map<TOrder>('orders', W.Orders);
+        W.Query := TQuery.New.From('people').Select(TQuery.New.From('orders').SelectCount('*', 'n'), 'n');
+      end)
+    .When('the query is run over that context',
+      procedure(W: TCtxWorld)
+      begin
+        try
+          for var R in TInMemory.Rows(W.Query, W.Ctx) do
+            ;
+          W.Outcome := '<it ran>';
+        except
+          on E: Exception do
+            W.Outcome := E.ClassName + ': ' + E.Message;
+        end;
+      end)
+    .&Then('it raises EInMemoryQueryError instead of rows',
+      procedure(W: TCtxWorld)
+      begin
+        Expect(W.Outcome).ToStartWith('EInMemoryQueryError');
+      end)
+
 .Rule('OrHaving adds a condition with OR')
 
   .Scenario('OrHaving in memory')

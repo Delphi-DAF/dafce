@@ -88,6 +88,8 @@ for var P in Plan.Over(EquipoB) do ...
 
 Las columnas se emparejan con miembros mediante una clave normalizada: se descarta el prefijo de tabla, se ignoran mayúsculas y se eliminan los guiones bajos. Así, la columna SQL `user_id` resuelve al miembro Delphi `UserId`, y `people.name` resuelve a `Name`.
 
+Sobre un contexto el prefijo no se descarta: nombra el lado del que se lee la columna (ver [El modelo de fila](#el-modelo-de-fila)).
+
 ---
 
 ## El modelo de fila
@@ -109,9 +111,9 @@ Los valores son `TValue`, no `Variant`: RTTI es nativo en `TValue`, y `TValue` t
 | `TRttiRow<T>` | un objeto o record | sin copia; búsquedas de miembro cacheadas por (tipo, columna) |
 | `TDictRow` | un mapa nombre → `TValue` | sin RTTI; `TDictRow.Make(['age','name'], [30, 'Bob'])` |
 | `TJoinRow` | filas hijas con alias | resuelve `orders.total` al lado `orders` |
-| `TNullRow` | nada | el lado todo-NULL de un outer join |
+| `TNullRow` | nada | el lado todo-NULL de un outer join, con las columnas de la fuente a la que sustituye |
 
-`TJoinRow` resuelve un nombre cualificado contra el alias correspondiente, y uno sin cualificar contra el primer lado que lo tenga.
+`TJoinRow` resuelve un nombre cualificado solo contra el alias correspondiente, y uno sin cualificar contra el primer lado que lo tenga.
 
 ```pascal
 var Row: IRow := TRttiRow<TPersona>.Create(Accessors, Persona);
@@ -211,6 +213,13 @@ TInMemory.Elements<TPersona>(
 
 Sirven ambas formas fluidas (`NullsFirst` / `NullsLast`, o la sobrecarga `OrderBy(col, TNullsOrder.Last)`); el compilador lee la opción de la cláusula en `TOrderSpec.Nulls`.
 
+Un `OrderBy` sobre el alias de una columna de SELECT ordena por esa columna, como SQL:
+
+```pascal
+TInMemory.Rows<TPersona>(
+  TQuery.New.From('personas').SelectAs('edad', 'anios').OrderByDesc('anios'), Personas);
+```
+
 > **El único punto donde los dos back-ends aún pueden discrepar.** Una ordenación *sin cualificar* sobre una columna nullable sigue el valor por omisión de cada lado: NULL-es-el-menor en memoria, y lo que haga el dialecto en SQL — donde Postgres y Oracle hacen lo contrario (nulls al final en ascendente). Este carril no conoce dialectos. **Cualifica la ordenación —`NullsFirst` / `NullsLast`— para obtener resultados idénticos en ambos.**
 
 ### Materialización
@@ -262,6 +271,13 @@ TQuery.New.From('people').LeftJoin('orders', 'people.id', 'orders.user_id')
 // las personas sin pedidos siguen apareciendo; orders.* se lee como NULL
 ```
 
+Una unión por columnas con `like` o `not like`, y `WhereColumns` con ellos, toman el patrón de la columna derecha de la misma fila:
+
+```pascal
+TQuery.New.From('filas').WhereColumns('nombre', 'like', 'patron')
+// casa una fila cuyo nombre encaja en el patrón que guarda esa misma fila
+```
+
 ### GROUP BY, agregados, HAVING
 
 La agrupación emite una fila plana por grupo con las columnas de clave y las de agregado, que es la forma que devuelve SQL:
@@ -284,17 +300,24 @@ El `GroupBy` de la propia biblioteca de secuencias produce el `IGrouping<TKey, T
 
 ## Errores y limitaciones
 
-Todo lo que el motor no puede ejecutar fielmente lanza `EInMemoryQueryError` en tiempo de compilación, en lugar de devolver filas aproximadas:
+Todo lo que el motor no puede ejecutar fielmente lanza `EInMemoryQueryError`, en lugar de devolver filas aproximadas. Esto se rechaza al construir el plan:
 
 | Rechazado | Motivo |
 |-----------|--------|
 | `INSERT` / `UPDATE` / `DELETE` | el back-end es de solo lectura; el DML sigue siendo de SQL |
-| `FROM` crudo, `ORDER BY` crudo, `ON` crudo de JOIN, `CombineRaw` | el texto SQL crudo no tiene significado en memoria |
+| `FROM` de tabla derivada, `FROM` crudo, `ORDER BY` crudo, `ON` crudo de JOIN, `CombineRaw` | el texto SQL crudo no tiene significado en memoria, y un `FROM` es una fuente mapeada |
 | `WITH` (CTE), JOIN sobre subconsulta | no soportado |
 | `WhereDate`, `WhereTime`, `WhereDatePart` y sus `Or*` | los casts de fecha son propios de cada dialecto; solo SQL |
 | columnas `SELECT` crudas o con subconsulta | no soportado |
 | una consulta multi-fuente ejecutada con una sola lista | necesita un contexto |
 | una consulta con proyección vía `Elements<T>` | usa `Rows` o `Project` |
+
+Una columna que la fila no lleva lanza `EInMemoryQueryError` nombrándola al ejecutar la consulta, en SELECT, WHERE, ORDER BY, GROUP BY, HAVING o un agregado: una errata no se lee como NULL. Un nombre cualificado se lee solo del lado que nombra su prefijo, así que una subconsulta correlacionada —la que nombra una columna de la consulta de fuera— se rechaza igual.
+
+Dos límites vienen de las fuentes de `IRow`, cuyas columnas no las declara un tipo:
+
+- Cada fila tiene que llevar las columnas que lee la consulta; una fila a la que le falta una lanza donde se lee.
+- Mapeada sin filas, la fuente no tiene columnas conocidas, y como lado ausente de un outer join acepta cualquier columna.
 
 La ejecución es un recorrido completo ingenuo — sin índices ni optimizador.
 

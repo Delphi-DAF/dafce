@@ -13,7 +13,8 @@ uses
   EmptyIn.Feat in 'EmptyIn.Feat.pas',
   Parity.Feat in 'Parity.Feat.pas',
   ReadOnly.Feat in 'ReadOnly.Feat.pas',
-  NullableMembers.Feat in 'NullableMembers.Feat.pas';
+  NullableMembers.Feat in 'NullableMembers.Feat.pas',
+  Columns.Feat in 'Columns.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

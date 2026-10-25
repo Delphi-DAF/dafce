@@ -88,6 +88,8 @@ for var P in Plan.Over(TeamB) do ...
 
 Columns are matched against members by a normalized key: the table prefix is dropped, case is ignored and underscores are stripped. So the SQL column `user_id` resolves to the Delphi member `UserId`, and `people.name` resolves to `Name`.
 
+Over a context the prefix is not dropped: it names the side the column is read from (see [The row model](#the-row-model)).
+
 ---
 
 ## The row model
@@ -109,9 +111,9 @@ Values are `TValue`, not `Variant`: RTTI is `TValue`-native, and `TValue` carrie
 | `TRttiRow<T>` | an object or record | zero-copy; member lookups cached per (type, column) |
 | `TDictRow` | a name → `TValue` map | no RTTI; `TDictRow.Make(['age','name'], [30, 'Bob'])` |
 | `TJoinRow` | child rows with aliases | resolves `orders.total` to the `orders` side |
-| `TNullRow` | nothing | the all-NULL side of an outer join |
+| `TNullRow` | nothing | the all-NULL side of an outer join, carrying the columns of the source it stands for |
 
-`TJoinRow` resolves a qualified name against the matching alias, and an unqualified name against the first side that carries it.
+`TJoinRow` resolves a qualified name only against the matching alias, and an unqualified name against the first side that carries it.
 
 ```pascal
 var Row: IRow := TRttiRow<TPerson>.Create(Accessors, Person);
@@ -211,6 +213,13 @@ TInMemory.Elements<TPerson>(
 
 Both fluent forms work (`NullsFirst` / `NullsLast`, or the `OrderBy(col, TNullsOrder.Last)` overload); the compiler reads the clause's option into `TOrderSpec.Nulls`.
 
+An `OrderBy` on the alias of a SELECT column sorts by that column, as SQL does:
+
+```pascal
+TInMemory.Rows<TPerson>(
+  TQuery.New.From('people').SelectAs('age', 'years').OrderByDesc('years'), People);
+```
+
 > **The one place the two back-ends can still disagree.** An *unqualified* sort over a nullable column follows each side's own default: NULL-is-smallest in memory, whatever the dialect does in SQL — and Postgres and Oracle do the opposite (nulls last ascending). This lane has no notion of a dialect. **Qualify the sort — `NullsFirst` / `NullsLast` — to get identical results from both.**
 
 ### Materialization
@@ -262,6 +271,13 @@ TQuery.New.From('people').LeftJoin('orders', 'people.id', 'orders.user_id')
 // people with no orders still appear; orders.* reads as NULL
 ```
 
+A join by columns with `like` or `not like`, and `WhereColumns` with them, take the pattern from the right-hand column of the same row:
+
+```pascal
+TQuery.New.From('rows').WhereColumns('name', 'like', 'pattern')
+// matches a row whose name fits the pattern stored in that row
+```
+
 ### GROUP BY, aggregates, HAVING
 
 Grouping emits one flat row per group carrying the group-key columns and the aggregate columns, which is the shape SQL returns:
@@ -284,17 +300,24 @@ The sequence library's own `GroupBy` yields the richer `IGrouping<TKey, T>` — 
 
 ## Errors and limitations
 
-Everything the engine cannot faithfully execute raises `EInMemoryQueryError` at compile time rather than returning approximate rows:
+Everything the engine cannot faithfully execute raises `EInMemoryQueryError` rather than returning approximate rows. These are rejected when the plan is built:
 
 | Rejected | Why |
 |----------|-----|
 | `INSERT` / `UPDATE` / `DELETE` | the back-end is read-only; DML stays SQL-only |
-| raw `FROM`, raw `ORDER BY`, raw JOIN `ON`, `CombineRaw` | raw SQL text has no in-memory meaning |
+| derived-table `FROM`, raw `FROM`, raw `ORDER BY`, raw JOIN `ON`, `CombineRaw` | raw SQL text has no in-memory meaning, and a `FROM` is a mapped source |
 | `WITH` (CTEs), subquery JOINs | not supported |
 | `WhereDate`, `WhereTime`, `WhereDatePart` and their `Or*` | the date casts are dialect-specific; SQL-only |
 | raw / subquery `SELECT` columns | not supported |
 | a multi-source query run with a single list | needs a context |
 | a projecting query run through `Elements<T>` | use `Rows` or `Project` |
+
+A column the row does not carry raises `EInMemoryQueryError` naming it when the query runs, in SELECT, WHERE, ORDER BY, GROUP BY, HAVING or an aggregate: a typo is not read as NULL. A qualified name is read only from the side its prefix names, so a correlated subquery — one that names a column of the outer query — is rejected the same way.
+
+Two limits come from sources of `IRow`, whose columns are not declared by a type:
+
+- Every row has to carry the columns the query reads; a row that lacks one raises where it is read.
+- Mapped with no rows, the source has no known columns, and as the absent side of an outer join it accepts any column.
 
 Execution is a naive full scan — no indexes, no optimizer.
 

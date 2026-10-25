@@ -129,6 +129,11 @@ type
     function Resolve(const Name: string): TArray<IRow>;
     /// <summary>True when a source is mapped to <c>Name</c>.</summary>
     function Has(const Name: string): Boolean;
+    /// <summary>
+    ///   The columns of a mapped source. False when they are unknown: a source of
+    ///   <c>IRow</c> mapped with no rows.
+    /// </summary>
+    function ColumnsOf(const Name: string; out Columns: TArray<string>): Boolean;
   end;
 
   /// <summary>
@@ -143,6 +148,9 @@ type
     function _Release: Integer; stdcall;
   private
     FSources: TDictionary<string, TArray<IRow>>;
+    FSchemas: TDictionary<string, TArray<string>>;
+    procedure Store(const Name: string; const Rows: TArray<IRow>; const Schema: TArray<string>;
+      SchemaKnown: Boolean);
   public
     constructor Create;
     destructor Destroy; override;
@@ -151,6 +159,7 @@ type
     function Map(const Name: string; const Rows: TArray<IRow>): TQueryContext; overload;
     function Resolve(const Name: string): TArray<IRow>;
     function Has(const Name: string): Boolean;
+    function ColumnsOf(const Name: string; out Columns: TArray<string>): Boolean;
   end;
 
   /// <summary>Entry point: compile a SQLCute AST onto the in-memory engine.</summary>
@@ -426,7 +435,7 @@ begin
       Assign(Result, C, Row.Get(C))
   else
     for var P in Proj do
-      Assign(Result, P.Output, Row.Get(P.Source));
+      Assign(Result, P.Output, ReadColumn(Row, P.Source));
 end;
 
 { TInMemoryPlan<T> }
@@ -558,12 +567,27 @@ constructor TQueryContext.Create;
 begin
   inherited Create;
   FSources := TDictionary<string, TArray<IRow>>.Create;
+  FSchemas := TDictionary<string, TArray<string>>.Create;
 end;
 
 destructor TQueryContext.Destroy;
 begin
+  FSchemas.Free;
   FSources.Free;
   inherited;
+end;
+
+procedure TQueryContext.Store(const Name: string; const Rows: TArray<IRow>;
+  const Schema: TArray<string>; SchemaKnown: Boolean);
+begin
+  var Key := LowerCase(Name);
+  FSources.AddOrSetValue(Key, Rows);
+  if SchemaKnown then
+    FSchemas.AddOrSetValue(Key, Schema)
+  else if Length(Rows) > 0 then
+    FSchemas.AddOrSetValue(Key, Rows[0].Columns)
+  else
+    FSchemas.Remove(Key);
 end;
 
 // Not ref-counted: a per-call context is owned and freed by the caller, so a
@@ -578,6 +602,8 @@ begin
   Result := -1;
 end;
 
+// A typed source knows its columns from its accessors, also with no elements; a
+// source of IRow knows them from its first row.
 function TQueryContext.Map<T>(const Name: string; const Source: TEnumerable<T>): TQueryContext;
 begin
   var Rows: TArray<IRow> := nil;
@@ -585,14 +611,15 @@ begin
   begin
     for var X in Source do
       Rows := Rows + [TValue.From<T>(X).AsType<IRow>];
+    Store(Name, Rows, nil, False);
   end
   else
   begin
     var Acc: IRttiAccessors<T> := TRttiAccessors<T>.Create;
     for var X in Source do
       Rows := Rows + [TRttiRow<T>.Create(Acc, X)];
+    Store(Name, Rows, Acc.AllColumns, True);
   end;
-  FSources.AddOrSetValue(LowerCase(Name), Rows);
   Result := Self;
 end;
 
@@ -603,20 +630,21 @@ begin
   begin
     for var X in Source do
       Rows := Rows + [TValue.From<T>(X).AsType<IRow>];
+    Store(Name, Rows, nil, False);
   end
   else
   begin
     var Acc: IRttiAccessors<T> := TRttiAccessors<T>.Create;
     for var X in Source do
       Rows := Rows + [TRttiRow<T>.Create(Acc, X)];
+    Store(Name, Rows, Acc.AllColumns, True);
   end;
-  FSources.AddOrSetValue(LowerCase(Name), Rows);
   Result := Self;
 end;
 
 function TQueryContext.Map(const Name: string; const Rows: TArray<IRow>): TQueryContext;
 begin
-  FSources.AddOrSetValue(LowerCase(Name), Rows);
+  Store(Name, Rows, nil, False);
   Result := Self;
 end;
 
@@ -629,6 +657,11 @@ end;
 function TQueryContext.Has(const Name: string): Boolean;
 begin
   Result := FSources.ContainsKey(LowerCase(Name));
+end;
+
+function TQueryContext.ColumnsOf(const Name: string; out Columns: TArray<string>): Boolean;
+begin
+  Result := FSchemas.TryGetValue(LowerCase(Name), Columns);
 end;
 
 { multi-source engine: FROM + JOINs }
@@ -674,7 +707,7 @@ begin
     Result :=
       function(R: IRow): Boolean
       begin
-        Result := CompareOp(Op, R.Get(C1), R.Get(C2)) = TTriState.Yes;
+        Result := CompareOp(Op, ReadColumn(R, C1), ReadColumn(R, C2)) = TTriState.Yes;
       end;
   end
   else if Jc.Condition <> '' then
@@ -684,27 +717,44 @@ begin
     Result := function(R: IRow): Boolean begin Result := True; end;
 end;
 
-// An all-NULL left composite, carrying the same aliases as the accumulated left
-// side, for the unmatched right rows of a RIGHT / FULL OUTER join.
-function NullLeft(const Left: TArray<IRow>): IRow;
+type
+  /// <summary>One source already joined: the alias the row uses, and the mapped table.</summary>
+  TJoinedSide = record
+    Alias: string;
+    Table: string;
+  end;
+
+// The absent side of an outer join: the columns of the source it stands for, or
+// any column when the context does not know them.
+function NullSide(const Context: IQueryContext; const Table: string): IRow;
+var
+  Columns: TArray<string>;
+begin
+  if Context.ColumnsOf(Table, Columns) then
+    Result := TNullRow.Create(Columns, False)
+  else
+    Result := TNullRow.Create(nil, True);
+end;
+
+// An all-NULL left composite, one side per source already joined, for the
+// unmatched right rows of a RIGHT / FULL OUTER join.
+function NullLeft(const Sides: TArray<TJoinedSide>; const Context: IQueryContext): IRow;
 var
   Children: TArray<TJoinChild>;
-  JR: IJoinRow;
 begin
   Children := nil;
-  if (Length(Left) > 0) and Supports(Left[0], IJoinRow, JR) then
-    for var Ch in JR.Children do
-    begin
-      var NC: TJoinChild;
-      NC.Alias := Ch.Alias;
-      NC.Row := TNullRow.Create;
-      Children := Children + [NC];
-    end;
+  for var S in Sides do
+  begin
+    var NC: TJoinChild;
+    NC.Alias := S.Alias;
+    NC.Row := NullSide(Context, S.Table);
+    Children := Children + [NC];
+  end;
   Result := TJoinRow.Create(Children);
 end;
 
-function ApplyJoin(const Left: TArray<IRow>; const Context: IQueryContext;
-  const Jc: TJoinClause): TArray<IRow>;
+function ApplyJoin(const Left: TArray<IRow>; const Sides: TArray<TJoinedSide>;
+  const Context: IQueryContext; const Jc: TJoinClause): TArray<IRow>;
 begin
   var RightAlias := Jc.Alias;
   if RightAlias = '' then
@@ -735,7 +785,7 @@ begin
           end;
         end;
         if not Matched then
-          Result := Result + [CombineRows(L, RightAlias, TNullRow.Create)];
+          Result := Result + [CombineRows(L, RightAlias, NullSide(Context, Jc.Table))];
       end;
     TJoinType.Right:
       for var R in Rights do
@@ -751,7 +801,7 @@ begin
           end;
         end;
         if not Matched then
-          Result := Result + [CombineRows(NullLeft(Left), RightAlias, R)];
+          Result := Result + [CombineRows(NullLeft(Sides, Context), RightAlias, R)];
       end;
     TJoinType.FullOuter:
       begin
@@ -771,11 +821,11 @@ begin
               end;
             end;
             if not Matched then
-              Result := Result + [CombineRows(L, RightAlias, TNullRow.Create)];
+              Result := Result + [CombineRows(L, RightAlias, NullSide(Context, Jc.Table))];
           end;
           for var R in Rights do
             if not MatchedRight.ContainsKey(R) then
-              Result := Result + [CombineRows(NullLeft(Left), RightAlias, R)];
+              Result := Result + [CombineRows(NullLeft(Sides, Context), RightAlias, R)];
         finally
           MatchedRight.Free;
         end;
@@ -805,7 +855,7 @@ begin
       begin
         var N := 0;
         for var R in Members do
-          if not IsNullValue(R.Get(Agg.Column)) then
+          if not IsNullValue(ReadColumn(R, Agg.Column)) then
             Inc(N);
         Result := N;
       end;
@@ -815,7 +865,7 @@ begin
         var Any := False;
         for var R in Members do
         begin
-          var V := R.Get(Agg.Column);
+          var V := ReadColumn(R, Agg.Column);
           if not IsNullValue(V) then
           begin
             S := S + AsNumber(V);
@@ -830,7 +880,7 @@ begin
         var N := 0;
         for var R in Members do
         begin
-          var V := R.Get(Agg.Column);
+          var V := ReadColumn(R, Agg.Column);
           if not IsNullValue(V) then
           begin
             S := S + AsNumber(V);
@@ -845,7 +895,7 @@ begin
         var HasBest := False;
         for var R in Members do
         begin
-          var V := R.Get(Agg.Column);
+          var V := ReadColumn(R, Agg.Column);
           if IsNullValue(V) then
             Continue;
           if not HasBest then
@@ -874,7 +924,7 @@ begin
   Result := '';
   for var C in Cols do
   begin
-    var V := R.Get(C);
+    var V := ReadColumn(R, C);
     if IsNullValue(V) then
       Result := Result + #0 + '<null>' + #1
     else
@@ -902,7 +952,7 @@ begin
     var Members := G.Members;
     var Flat := TDictRow.Create;
     for var Gc in Cols do
-      Flat.Put(Gc, Members[0].Get(Gc));   // any member carries the group's key values
+      Flat.Put(Gc, ReadColumn(Members[0], Gc));   // any member carries the group's key values
     for var Agg in C.Aggregates do
       Flat.Put(Agg.Output, ComputeAggregate(Agg, Members));
     var FlatRow: IRow := Flat;
@@ -911,7 +961,7 @@ begin
       Keep := C.Having(
         function(const Col: string): TValue
         begin
-          Result := FlatRow.Get(Col);
+          Result := ReadColumn(FlatRow, Col);
         end) = TTriState.Yes;
     if Keep then
       Result := Result + [FlatRow];
@@ -928,7 +978,7 @@ begin
     if Pred(
       function(const Col: string): TValue
       begin
-        Result := R.Get(Col);
+        Result := ReadColumn(R, Col);
       end) = TTriState.Yes then
       Result := Result + [R];
 end;
@@ -1026,9 +1076,21 @@ begin
   for var R in Context.Resolve(FromCl.Table) do
     Composite := Composite + [SingleRow(FromAlias, R)];
 
+  var Side: TJoinedSide;
+  Side.Alias := FromAlias;
+  Side.Table := FromCl.Table;
+  var Sides: TArray<TJoinedSide> := [Side];
   for var C in Clauses do
     if C is TJoinClause then
-      Composite := ApplyJoin(Composite, Context, TJoinClause(C));
+    begin
+      var Jc := TJoinClause(C);
+      Composite := ApplyJoin(Composite, Sides, Context, Jc);
+      Side.Alias := Jc.Alias;
+      if Side.Alias = '' then
+        Side.Alias := Jc.Table;
+      Side.Table := Jc.Table;
+      Sides := Sides + [Side];
+    end;
 
   // Build the predicate with a subquery resolver in scope; the built predicate
   // captures it, so the global is cleared right after compilation.

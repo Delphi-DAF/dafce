@@ -104,6 +104,7 @@
         <DCCReference Include="Parity.Feat.pas"/>
         <DCCReference Include="ReadOnly.Feat.pas"/>
         <DCCReference Include="NullableMembers.Feat.pas"/>
+        <DCCReference Include="Columns.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>
