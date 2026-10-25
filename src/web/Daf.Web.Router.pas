@@ -366,7 +366,7 @@ end;
 // client's mistake, and it answers 400.
 function ConvertValue(const Param: TRttiParameter; const Raw: string): TValue;
 var
-  Int: Integer;
+  Int, Number: Integer;
   Int64Value: Int64;
   Float: Extended;
   Date: TDateTime;
@@ -400,9 +400,9 @@ begin
       else
       begin
         Int := GetEnumValue(Info, Raw);
-        if (Int < 0) and TryStrToInt(Raw, Int) and
-          ((Int < GetTypeData(Info).MinValue) or (Int > GetTypeData(Info).MaxValue)) then
-          Int := -1;
+        if (Int < 0) and TryStrToInt(Raw, Number) and (Number >= GetTypeData(Info).MinValue) and
+          (Number <= GetTypeData(Info).MaxValue) then
+          Int := Number;
         if Int >= 0 then
           Exit(TValue.FromOrdinal(Info, Int));
       end;

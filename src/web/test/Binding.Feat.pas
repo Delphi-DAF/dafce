@@ -9,6 +9,7 @@
 interface
 
 uses
+  System.Classes,
   Web.HTTPApp,
   Daf.Extensions.DependencyInjection,
   Daf.Web.Router,
@@ -70,6 +71,8 @@ type
     function Item(Id: Integer): IActionResult;
     [WebRoute(mtGet, '/paged')]
     function Paged([FromQuery] Page: Integer): IActionResult;
+    [WebRoute(mtGet, '/align/{Side}')]
+    function Align(Side: TAlignment): IActionResult;
   end;
 
   TBindingWorld = class
@@ -95,6 +98,7 @@ implementation
 
 uses
   System.SysUtils,
+  System.TypInfo,
   System.IOUtils,
   Daf.DependencyInjection,
   Daf.MiniSpec;
@@ -138,6 +142,12 @@ function TBindingController.Item(Id: Integer): IActionResult;
 begin
   Inc(Calls);
   Result := Ok(IntToStr(Id));
+end;
+
+function TBindingController.Align(Side: TAlignment): IActionResult;
+begin
+  Inc(Calls);
+  Result := Ok(GetEnumName(TypeInfo(TAlignment), Ord(Side)));
 end;
 
 function TBindingController.Paged(Page: Integer): IActionResult;
@@ -406,6 +416,19 @@ Feature Binding action parameters @routing @binding
       begin
         Expect(W.Outcome).ToEqual('status=400 calls=0');
         Expect(W.Response.Content).ToContain('"Id"');
+      end)
+
+  .Scenario('A route enumeration that is neither a name nor a number')
+    .When('/align/Middle reaches an action whose route parameter is a TAlignment',
+      procedure(W: TBindingWorld)
+      begin
+        W.DispatchRequest('/spec/bind/align/Middle');
+      end)
+    .&Then('the answer is 400 and names the parameter, and the action was not invoked',
+      procedure(W: TBindingWorld)
+      begin
+        Expect(W.Outcome).ToEqual('status=400 calls=0');
+        Expect(W.Response.Content).ToContain('"Side"');
       end)
 
   .Scenario('A query integer that is not a number')
