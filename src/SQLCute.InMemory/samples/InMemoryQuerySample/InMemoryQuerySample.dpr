@@ -176,7 +176,7 @@ begin
   ShowSql(Q);
   for var R in TInMemory.Rows<TEmployee>(Q, Employees) do
     Writeln(Format('  name=%-5s age=%-4s (department projected away: %s)',
-      [Cell(R, 'name'), Cell(R, 'age'), BoolToStr(R.Has('department'), True)]));
+      [Cell(R, 'name'), Cell(R, 'age'), BoolToStr(not R.Has('department'), True)]));
 end;
 
 // With a result class each row is materialized by RTTI; a NULL column leaves a
