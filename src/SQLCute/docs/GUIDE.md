@@ -92,6 +92,24 @@ All `Where*` methods that take a `Variant` accept `Null` values. When the value 
 
 ---
 
+## Differences from SqlKata
+
+SQLCute follows the builder and the compilers of [SqlKata](https://sqlkata.com/). These are the places where the SQL it emits, or what it accepts, differs:
+
+| Case | SqlKata | SQLCute |
+|------|---------|---------|
+| Case-insensitive LIKE on Postgres | `ILIKE` | `LOWER(column) LIKE ?`, as in every dialect |
+| Placeholders | `@p0`, `@p1`… in every dialect, and `:p0`… on Oracle | `$1`… on Postgres, `@p0`… on SQL Server, `:p1`… on Oracle, `?` in the others |
+| Base compiler | quotes identifiers with `"` | `TAnsiSqlCompiler` quotes nothing; each dialect compiler quotes with its own character |
+| `WhereIn` with an empty set | `1 = 0` | `col IS NULL AND col IS NOT NULL`, which names the column |
+| `Where(col, 'in', values)` | rejected | binds the values, like `WhereIn` |
+| `WhereNot` with `Null` or a logical value | drops the negation | keeps it: `NOT (col IS NULL)` |
+| A negated comparison with a logical value | `col != true` | `NOT (col = true)` |
+| Escape character of the LIKE family | any character | a single quote or a `?` raise `EArgumentException` |
+| `\?` in a raw expression | stays `\?` in the SQL | becomes a literal `?` |
+
+---
+
 ## See Also
 
 - [Sample Application](../samples/SQLCuteSample/README.md)

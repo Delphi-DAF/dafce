@@ -92,6 +92,24 @@ Todos los métodos `Where*` que reciben un `Variant` aceptan valores `Null`. Cua
 
 ---
 
+## Diferencias con SqlKata
+
+SQLCute sigue el constructor y los compiladores de [SqlKata](https://sqlkata.com/). Estos son los puntos en que el SQL que emite, o lo que acepta, es distinto:
+
+| Caso | SqlKata | SQLCute |
+|------|---------|---------|
+| LIKE insensible a mayúsculas en Postgres | `ILIKE` | `LOWER(columna) LIKE ?`, como en todos los dialectos |
+| Marcadores | `@p0`, `@p1`… en todos los dialectos, y `:p0`… en Oracle | `$1`… en Postgres, `@p0`… en SQL Server, `:p1`… en Oracle, `?` en los demás |
+| Compilador base | entrecomilla los identificadores con `"` | `TAnsiSqlCompiler` no entrecomilla; cada compilador de dialecto entrecomilla con su carácter |
+| `WhereIn` con un conjunto vacío | `1 = 0` | `col IS NULL AND col IS NOT NULL`, que nombra la columna |
+| `Where(col, 'in', valores)` | lo rechaza | liga los valores, como `WhereIn` |
+| `WhereNot` con `Null` o con un valor lógico | pierde la negación | la conserva: `NOT (col IS NULL)` |
+| Una comparación negada con un valor lógico | `col != true` | `NOT (col = true)` |
+| Carácter de escape de la familia LIKE | cualquier carácter | una comilla simple o un `?` lanzan `EArgumentException` |
+| `\?` en una expresión en bruto | queda `\?` en el SQL | pasa a ser un `?` literal |
+
+---
+
 ## Ver También
 
 - [Aplicación de Muestra](../samples/SQLCuteSample/README.md)
