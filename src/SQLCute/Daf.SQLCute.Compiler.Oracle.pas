@@ -9,17 +9,13 @@ uses
 
 type
   TOracleCompiler = class(TAnsiSqlCompiler)
-  private
-    FParamIndex: Integer;
   protected
     function WrapColumn(const Col: string): string; override;
     function WrapTable(const Table: string): string; override;
-    function ParamPlaceholder: string; override;
-    function CompileLimit(const Clauses: TArray<TAbstractClause>): string; override;
-    function CompileOffset(const Clauses: TArray<TAbstractClause>): string; override;
-    function CompileDateWhere(const Clause: TDateWhereClause): string; override;
-  public
-    function Compile(const Query: IQuery): TSQLResult;
+    function FormatPlaceholder(const Index: Integer): string; override;
+    function CompileLimit(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string; override;
+    function CompileOffset(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string; override;
+    function CompileDateWhere(const C: TSqlCompilation; const Clause: TDateWhereClause): string; override;
   end;
 
 implementation
@@ -37,13 +33,12 @@ begin
   Result := '"' + UpperCase(Table) + '"';
 end;
 
-function TOracleCompiler.ParamPlaceholder: string;
+function TOracleCompiler.FormatPlaceholder(const Index: Integer): string;
 begin
-  Inc(FParamIndex);
-  Result := ':p' + IntToStr(FParamIndex);
+  Result := ':p' + IntToStr(Index + 1);
 end;
 
-function TOracleCompiler.CompileLimit(const Clauses: TArray<TAbstractClause>): string;
+function TOracleCompiler.CompileLimit(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string;
 var
   Clause: TAbstractClause;
   LimitVal: Integer;
@@ -65,7 +60,7 @@ begin
     Result := '';
 end;
 
-function TOracleCompiler.CompileOffset(const Clauses: TArray<TAbstractClause>): string;
+function TOracleCompiler.CompileOffset(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string;
 var
   Clause: TAbstractClause;
   OffsetVal, LimitVal: Integer;
@@ -92,20 +87,14 @@ begin
     Result := 'OFFSET ' + IntToStr(OffsetVal) + ' ROWS FETCH NEXT ' + IntToStr(LimitVal) + ' ROWS ONLY';
 end;
 
-function TOracleCompiler.Compile(const Query: IQuery): TSQLResult;
-begin
-  FParamIndex := 0;
-  Result := inherited Compile(Query);
-end;
-
-function TOracleCompiler.CompileDateWhere(const Clause: TDateWhereClause): string;
+function TOracleCompiler.CompileDateWhere(const C: TSqlCompilation; const Clause: TDateWhereClause): string;
 const
   ExtractPart: array[TDatePart] of string = (
     '', '', 'YEAR', 'MONTH', 'DAY', 'HOUR', 'MINUTE');
 var
   ColExpr: string;
 begin
-  AddBinding(Clause.Value);
+  C.AddBinding(Clause.Value);
   case Clause.DatePart of
     TDatePart.dpDate:
       ColExpr := 'TRUNC(' + WrapColumn(Clause.Column) + ')';
@@ -115,7 +104,7 @@ begin
     else
       ColExpr := 'EXTRACT(' + ExtractPart[Clause.DatePart] + ' FROM ' + WrapColumn(Clause.Column) + ')';
   end;
-  Result := ColExpr + ' ' + Clause.Op + ' ' + ParamPlaceholder;
+  Result := ColExpr + ' ' + Clause.Op + ' ' + '?';
 end;
 
 end.

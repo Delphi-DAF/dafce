@@ -45,6 +45,8 @@ With bindings:
 .FromRaw('fn_get_events(?, ?) AS e', [StartDate, EndDate])
 ```
 
+Its `?` are numbered with the placeholders of the rest of the query, and its bindings take that same place: in Postgres, `$1` and `$2` here, and the next one in the query `$3`.
+
 ---
 
 ## Subquery in WHERE IN
@@ -137,6 +139,8 @@ TQuery.New
   .WithRaw('cte_name', 'SELECT id FROM legacy_table WHERE flag = ?', [1])
   .From('cte_name')
 ```
+
+Its `?` count with the placeholders of the rest of the query, in the order of the text.
 
 ---
 

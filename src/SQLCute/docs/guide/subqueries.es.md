@@ -45,6 +45,8 @@ Con bindings:
 .FromRaw('fn_obtener_eventos(?, ?) AS e', [FechaInicio, FechaFin])
 ```
 
+Sus `?` se numeran con los marcadores del resto de la consulta, y sus enlaces ocupan ese mismo lugar: en Postgres, `$1` y `$2` aquí, y el siguiente de la consulta `$3`.
+
 ---
 
 ## Subconsulta en WHERE IN
@@ -137,6 +139,8 @@ TQuery.New
   .WithRaw('nombre_cte', 'SELECT id FROM tabla_legacy WHERE flag = ?', [1])
   .From('nombre_cte')
 ```
+
+Sus `?` cuentan con los marcadores del resto de la consulta, en el orden del texto.
 
 ---
 

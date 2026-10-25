@@ -9,25 +9,21 @@ uses
 
 type
   TSqlServerCompiler = class(TAnsiSqlCompiler)
-  private
-    FParamIndex: Integer;
   protected
     function WrapColumn(const Col: string): string; override;
     function WrapTable(const Table: string): string; override;
-    function ParamPlaceholder: string; override;
-    function CompileSelect(const Clauses: TArray<TAbstractClause>): string; override;
-    function CompileLimit(const Clauses: TArray<TAbstractClause>): string; override;
-    function CompileOffset(const Clauses: TArray<TAbstractClause>): string; override;
-    function CompileDateWhere(const Clause: TDateWhereClause): string; override;
+    function FormatPlaceholder(const Index: Integer): string; override;
+    function CompileSelect(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string; override;
+    function CompileLimit(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string; override;
+    function CompileOffset(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string; override;
+    function CompileDateWhere(const C: TSqlCompilation; const Clause: TDateWhereClause): string; override;
     /// <summary>
     /// T-SQL has no <c>NULLS FIRST/LAST</c>, and no boolean expression is
     /// allowed in <c>ORDER BY</c>, so a requested placement is emulated with a
     /// leading <c>CASE</c> key: 1 for NULL and 0 otherwise, sorted DESC for
     /// nulls-first and ASC for nulls-last. Adds no binding.
     /// </summary>
-    function CompileOrderByColumn(const O: TOrderByClause): string; override;
-  public
-    function Compile(const Query: IQuery): TSQLResult;
+    function CompileOrderByColumn(const C: TSqlCompilation; const O: TOrderByClause): string; override;
   end;
 
 implementation
@@ -45,18 +41,17 @@ begin
   Result := '[' + Table + ']';
 end;
 
-function TSqlServerCompiler.ParamPlaceholder: string;
+function TSqlServerCompiler.FormatPlaceholder(const Index: Integer): string;
 begin
-  Result := '@p' + IntToStr(FParamIndex);
-  Inc(FParamIndex);
+  Result := '@p' + IntToStr(Index);
 end;
 
-function TSqlServerCompiler.CompileOrderByColumn(const O: TOrderByClause): string;
+function TSqlServerCompiler.CompileOrderByColumn(const C: TSqlCompilation; const O: TOrderByClause): string;
 var
   Col: string;
 begin
   if O.Nulls = TNullsOrder.Default then
-    Exit(inherited CompileOrderByColumn(O));
+    Exit(inherited CompileOrderByColumn(C, O));
   Col := WrapColumn(O.Column);
   Result := 'CASE WHEN ' + Col + ' IS NULL THEN 1 ELSE 0 END ';
   if O.Nulls = TNullsOrder.First then
@@ -66,7 +61,7 @@ begin
   Result := Result + ', ' + Col + ' ' + SortDirKeyword(O.Direction);
 end;
 
-function TSqlServerCompiler.CompileSelect(const Clauses: TArray<TAbstractClause>): string;
+function TSqlServerCompiler.CompileSelect(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string;
 var
   Clause: TAbstractClause;
   HasLimit, HasOffset: Boolean;
@@ -85,7 +80,7 @@ begin
     if Clause is TOffsetClause then
       HasOffset := True;
   end;
-  Result := inherited CompileSelect(Clauses);
+  Result := inherited CompileSelect(C, Clauses);
   // Inject TOP (N) right after SELECT or SELECT DISTINCT — only when no OFFSET
   if HasLimit and not HasOffset then
   begin
@@ -96,13 +91,13 @@ begin
   end;
 end;
 
-function TSqlServerCompiler.CompileLimit(const Clauses: TArray<TAbstractClause>): string;
+function TSqlServerCompiler.CompileLimit(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string;
 begin
   // SQL Server uses TOP (injected in SELECT) or OFFSET-FETCH — never LIMIT keyword
   Result := '';
 end;
 
-function TSqlServerCompiler.CompileOffset(const Clauses: TArray<TAbstractClause>): string;
+function TSqlServerCompiler.CompileOffset(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string;
 var
   Clause: TAbstractClause;
   OffsetVal, LimitVal: Integer;
@@ -129,20 +124,14 @@ begin
     Result := 'OFFSET ' + IntToStr(OffsetVal) + ' ROWS FETCH NEXT ' + IntToStr(LimitVal) + ' ROWS ONLY';
 end;
 
-function TSqlServerCompiler.Compile(const Query: IQuery): TSQLResult;
-begin
-  FParamIndex := 0;
-  Result := inherited Compile(Query);
-end;
-
-function TSqlServerCompiler.CompileDateWhere(const Clause: TDateWhereClause): string;
+function TSqlServerCompiler.CompileDateWhere(const C: TSqlCompilation; const Clause: TDateWhereClause): string;
 const
   DatePartName: array[TDatePart] of string = (
     '', '', 'year', 'month', 'day', 'hour', 'minute');
 var
   ColExpr: string;
 begin
-  AddBinding(Clause.Value);
+  C.AddBinding(Clause.Value);
   case Clause.DatePart of
     TDatePart.dpDate:
       ColExpr := 'CAST(' + WrapColumn(Clause.Column) + ' AS date)';
@@ -151,7 +140,7 @@ begin
     else
       ColExpr := 'DATEPART(' + DatePartName[Clause.DatePart] + ', ' + WrapColumn(Clause.Column) + ')';
   end;
-  Result := ColExpr + ' ' + Clause.Op + ' ' + ParamPlaceholder;
+  Result := ColExpr + ' ' + Clause.Op + ' ' + '?';
 end;
 
 end.

@@ -34,6 +34,17 @@ Todos los compiladores de dialecto viven en el paquete `Daf.SQLCute`, junto al `
 
 ---
 
+## Marcadores en Expresiones en Bruto
+
+Cada `?` de una expresión en bruto —`WhereRaw`, `FromRaw`, `WithRaw` y las demás formas `Raw`— es un marcador, numerado con los que genera la consulta, y su enlace ocupa ese mismo lugar. Para un signo de interrogación literal, como el operador `?` de Postgres sobre `jsonb`, se escribe `\?`:
+
+```pascal
+TQuery.New.From('docs').WhereRaw('data \? ''tag''').Where('id', 1)
+// Postgres → SELECT * FROM "docs" WHERE data ? 'tag' AND "id" = $1
+```
+
+---
+
 ## Usar un Compilador de Dialecto
 
 ```pascal
@@ -46,7 +57,7 @@ var Q := TQuery.New
   .Where('activo', True)
   .OrderBy('nombre');
 
-var Compilador := TPostgresCompiler.Create;
+var Compilador: IQueryCompiler := TPostgresCompiler.Create;
 var R := Compilador.Compile(Q);
 // R.SQL      → 'SELECT * FROM "usuarios" WHERE "activo" = $1 ORDER BY "nombre"'
 // R.Bindings → [True]
@@ -62,7 +73,7 @@ var R := Q.Compile(TPostgresCompiler.Create);
 
 ## Inyección de Dependencias
 
-Registra el compilador como singleton e inyecta `IQueryCompiler` donde sea necesario:
+Una instancia de compilador no guarda nada entre compilaciones: sirve compilaciones sucesivas, anidadas y concurrentes. Regístrala como singleton e inyecta `IQueryCompiler` donde sea necesario:
 
 ```pascal
 // Raíz de composición
@@ -92,13 +103,14 @@ end;
 Extiende `TAnsiSqlCompiler` y sobreescribe solo lo que difiere:
 
 ```pascal
-uses Daf.SQLCute, Daf.SQLCute.Compiler;
+uses System.SysUtils, Daf.SQLCute, Daf.SQLCute.Compiler;
 
 type
   TMiDbCompilador = class(TAnsiSqlCompiler)
   protected
     function WrapColumn(const Col: string): string; override;
     function WrapTable(const Table: string): string; override;
+    function FormatPlaceholder(const Index: Integer): string; override;
   end;
 
 function TMiDbCompilador.WrapColumn(const Col: string): string;
@@ -110,7 +122,14 @@ function TMiDbCompilador.WrapTable(const Table: string): string;
 begin
   Result := '[' + Table + ']';
 end;
+
+function TMiDbCompilador.FormatPlaceholder(const Index: Integer): string;
+begin
+  Result := ':' + IntToStr(Index + 1);
+end;
 ```
+
+Cada método que emite SQL —de `CompileSelect` a `CompileDelete`, `CompileWhereList`, `CompileDateWhere`, `CompileOrderByColumn`— recibe la compilación, un `TSqlCompilation`, como primer parámetro, le añade sus enlaces con `AddBinding` y escribe cada marcador como `?`. Una pasada final sustituye el `?` de cada posición por lo que devuelve para ella `FormatPlaceholder`, contando desde 0.
 
 ---
 

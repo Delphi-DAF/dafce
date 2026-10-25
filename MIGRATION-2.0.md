@@ -683,6 +683,34 @@ suite that was green can come out with scenarios Pending or Undefined, or red.
 - **What breaks**: code that caught that `Exception`. A Singleton that needs a Scoped opens a scope
   through `IServiceScopeFactory` and resolves it there.
 
+### 27. SQLCute: a derived compiler receives the compilation
+
+- **The protected methods of `TAnsiSqlCompiler` that emit SQL take the compilation as their first
+  parameter**, a `TSqlCompilation`, and add their bindings to it with `C.AddBinding`. They write every
+  placeholder as `?`: `ParamPlaceholder` is gone, and a dialect that numbers its placeholders
+  overrides `FormatPlaceholder(Index)`, which receives the position counted from 0.
+- **A `?` in a raw expression is a placeholder in every dialect**, numbered with the others. A literal
+  question mark, such as the `?` operator of Postgres on `jsonb`, is written `\?`.
+- **What breaks**: a compiler derived from `TAnsiSqlCompiler` that overrides an emitting method or
+  `ParamPlaceholder`, at compile time and in that method; and a raw expression with a literal `?` on
+  Postgres, SQL Server or Oracle.
+
+```pascal
+// Before
+function TMyCompiler.CompileDateWhere(const Clause: TDateWhereClause): string;
+begin
+  AddBinding(Clause.Value);
+  Result := 'CAST(' + WrapColumn(Clause.Column) + ' AS DATE) ' + Clause.Op + ' ' + ParamPlaceholder;
+end;
+
+// Now
+function TMyCompiler.CompileDateWhere(const C: TSqlCompilation; const Clause: TDateWhereClause): string;
+begin
+  C.AddBinding(Clause.Value);
+  Result := 'CAST(' + WrapColumn(Clause.Column) + ' AS DATE) ' + Clause.Op + ' ?';
+end;
+```
+
 ## How to do it
 
 1. Compile. Whatever is missing comes out as a compiler error, not as odd behaviour at run time.
@@ -696,6 +724,6 @@ suite that was green can come out with scenarios Pending or Undefined, or red.
    A Scoped service asked of the root provider is rejected too, when it is resolved: resolve it from a
    scope the work opens, `Services.CreateScope`. So is a Scoped a Singleton resolves: the Singleton
    resolves it in a scope it opens through `IServiceScopeFactory`.
-6. Sections 2, 6 to 13 and 15 to 26 carry **run-time** changes: the compiler says nothing about them. Read them
+6. Sections 2, 6 to 13 and 15 to 27 carry **run-time** changes: the compiler says nothing about them. Read them
    against your own composition — scope lifetimes, duplicate registrations, logging rules and
    host settings.

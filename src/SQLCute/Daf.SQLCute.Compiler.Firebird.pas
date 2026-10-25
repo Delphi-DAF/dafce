@@ -12,9 +12,9 @@ type
   protected
     function WrapColumn(const Col: string): string; override;
     function WrapTable(const Table: string): string; override;
-    function CompileLimit(const Clauses: TArray<TAbstractClause>): string; override;
-    function CompileOffset(const Clauses: TArray<TAbstractClause>): string; override;
-    function CompileDateWhere(const Clause: TDateWhereClause): string; override;
+    function CompileLimit(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string; override;
+    function CompileOffset(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string; override;
+    function CompileDateWhere(const C: TSqlCompilation; const Clause: TDateWhereClause): string; override;
   end;
 
 implementation
@@ -32,7 +32,7 @@ begin
   Result := Table;
 end;
 
-function TFirebirdCompiler.CompileLimit(const Clauses: TArray<TAbstractClause>): string;
+function TFirebirdCompiler.CompileLimit(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string;
 var
   Clause: TAbstractClause;
   LimitVal: Integer;
@@ -54,7 +54,7 @@ begin
     Result := '';
 end;
 
-function TFirebirdCompiler.CompileOffset(const Clauses: TArray<TAbstractClause>): string;
+function TFirebirdCompiler.CompileOffset(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string;
 var
   Clause: TAbstractClause;
   OffsetVal, LimitVal: Integer;
@@ -85,14 +85,14 @@ begin
     Result := 'ROWS ' + IntToStr(OffsetVal + 1) + ' TO 2147483647';
 end;
 
-function TFirebirdCompiler.CompileDateWhere(const Clause: TDateWhereClause): string;
+function TFirebirdCompiler.CompileDateWhere(const C: TSqlCompilation; const Clause: TDateWhereClause): string;
 const
   ExtractPart: array[TDatePart] of string = (
     '', '', 'YEAR', 'MONTH', 'DAY', 'HOUR', 'MINUTE');
 var
   ColExpr: string;
 begin
-  AddBinding(Clause.Value);
+  C.AddBinding(Clause.Value);
   case Clause.DatePart of
     TDatePart.dpDate:
       ColExpr := 'CAST(' + WrapColumn(Clause.Column) + ' AS DATE)';
@@ -101,7 +101,7 @@ begin
     else
       ColExpr := 'EXTRACT(' + ExtractPart[Clause.DatePart] + ' FROM ' + WrapColumn(Clause.Column) + ')';
   end;
-  Result := ColExpr + ' ' + Clause.Op + ' ' + ParamPlaceholder;
+  Result := ColExpr + ' ' + Clause.Op + ' ' + '?';
 end;
 
 end.

@@ -686,6 +686,34 @@ Una suite que estaba en verde puede salir con escenarios Pending o Undefined, o 
 - **Qué rompe**: el código que capturaba esa `Exception`. Un Singleton que necesita un Scoped abre un
   ámbito con `IServiceScopeFactory` y lo resuelve en él.
 
+### 27. SQLCute: un compilador derivado recibe la compilación
+
+- **Los métodos protegidos de `TAnsiSqlCompiler` que emiten SQL reciben la compilación como primer
+  parámetro**, un `TSqlCompilation`, y le añaden sus enlaces con `C.AddBinding`. Escriben cada marcador
+  como `?`: `ParamPlaceholder` desaparece, y un dialecto que numera sus marcadores sobreescribe
+  `FormatPlaceholder(Index)`, que recibe la posición contando desde 0.
+- **Un `?` de una expresión en bruto es un marcador en todos los dialectos**, numerado con los demás.
+  Un signo de interrogación literal, como el operador `?` de Postgres sobre `jsonb`, se escribe `\?`.
+- **Qué rompe**: un compilador derivado de `TAnsiSqlCompiler` que sobreescriba un método que emite o
+  `ParamPlaceholder`, al compilar y en ese método; y una expresión en bruto con un `?` literal en
+  Postgres, SQL Server u Oracle.
+
+```pascal
+// Antes
+function TMiCompilador.CompileDateWhere(const Clause: TDateWhereClause): string;
+begin
+  AddBinding(Clause.Value);
+  Result := 'CAST(' + WrapColumn(Clause.Column) + ' AS DATE) ' + Clause.Op + ' ' + ParamPlaceholder;
+end;
+
+// Ahora
+function TMiCompilador.CompileDateWhere(const C: TSqlCompilation; const Clause: TDateWhereClause): string;
+begin
+  C.AddBinding(Clause.Value);
+  Result := 'CAST(' + WrapColumn(Clause.Column) + ' AS DATE) ' + Clause.Op + ' ?';
+end;
+```
+
 ## Cómo hacerlo
 
 1. Compila. Lo que falte sale como error del compilador, no como comportamiento raro en
@@ -701,6 +729,6 @@ Una suite que estaba en verde puede salir con escenarios Pending o Undefined, o 
    resolverlo: se resuelve desde un ámbito que abre el trabajo, `Services.CreateScope`. También un
    Scoped que resuelve un Singleton: el Singleton lo resuelve en un ámbito que abre con
    `IServiceScopeFactory`.
-6. Las secciones 2, de la 6 a la 13 y de la 15 a la 26 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
+6. Las secciones 2, de la 6 a la 13 y de la 15 a la 27 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
    contra tu propia composición — la vida de los ámbitos, los registros repetidos, las reglas de
    logging y los ajustes del host.

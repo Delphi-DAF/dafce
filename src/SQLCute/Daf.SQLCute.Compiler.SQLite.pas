@@ -12,7 +12,7 @@ type
   protected
     function WrapColumn(const Col: string): string; override;
     function WrapTable(const Table: string): string; override;
-    function CompileDateWhere(const Clause: TDateWhereClause): string; override;
+    function CompileDateWhere(const C: TSqlCompilation; const Clause: TDateWhereClause): string; override;
   end;
 
 implementation
@@ -27,14 +27,14 @@ begin
   Result := '"' + Table + '"';
 end;
 
-function TSQLiteCompiler.CompileDateWhere(const Clause: TDateWhereClause): string;
+function TSQLiteCompiler.CompileDateWhere(const C: TSqlCompilation; const Clause: TDateWhereClause): string;
 const
   StrftimeFmt: array[TDatePart] of string = (
     '', '', '%Y', '%m', '%d', '%H', '%M');
 var
   ColExpr: string;
 begin
-  AddBinding(Clause.Value);
+  C.AddBinding(Clause.Value);
   case Clause.DatePart of
     TDatePart.dpDate:
       ColExpr := 'date(' + WrapColumn(Clause.Column) + ')';
@@ -43,7 +43,7 @@ begin
     else
       ColExpr := 'strftime(''' + StrftimeFmt[Clause.DatePart] + ''', ' + WrapColumn(Clause.Column) + ')';
   end;
-  Result := ColExpr + ' ' + Clause.Op + ' ' + ParamPlaceholder;
+  Result := ColExpr + ' ' + Clause.Op + ' ' + '?';
 end;
 
 end.

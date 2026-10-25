@@ -34,6 +34,17 @@ All dialect compilers ship in the `Daf.SQLCute` package, alongside the `TAnsiSql
 
 ---
 
+## Placeholders in Raw Expressions
+
+Every `?` in a raw expression — `WhereRaw`, `FromRaw`, `WithRaw` and the other `Raw` forms — is a placeholder, numbered with those the query generates, and its binding takes that same place. Write `\?` for a literal question mark, such as the `?` operator of Postgres on `jsonb`:
+
+```pascal
+TQuery.New.From('docs').WhereRaw('data \? ''tag''').Where('id', 1)
+// Postgres → SELECT * FROM "docs" WHERE data ? 'tag' AND "id" = $1
+```
+
+---
+
 ## Using a Dialect Compiler
 
 ```pascal
@@ -46,7 +57,7 @@ var Q := TQuery.New
   .Where('active', True)
   .OrderBy('name');
 
-var Compiler := TPostgresCompiler.Create;
+var Compiler: IQueryCompiler := TPostgresCompiler.Create;
 var R := Compiler.Compile(Q);
 // R.SQL      → 'SELECT * FROM "users" WHERE "active" = $1 ORDER BY "name"'
 // R.Bindings → [True]
@@ -62,7 +73,7 @@ var R := Q.Compile(TPostgresCompiler.Create);
 
 ## Dependency Injection
 
-Register the compiler as a singleton and inject `IQueryCompiler` wherever needed:
+A compiler instance keeps nothing between compilations: one instance serves successive, nested and concurrent compilations. Register it as a singleton and inject `IQueryCompiler` wherever needed:
 
 ```pascal
 // Composition root
@@ -92,13 +103,14 @@ end;
 Extend `TAnsiSqlCompiler` and override only what differs:
 
 ```pascal
-uses Daf.SQLCute, Daf.SQLCute.Compiler;
+uses System.SysUtils, Daf.SQLCute, Daf.SQLCute.Compiler;
 
 type
   TMyDbCompiler = class(TAnsiSqlCompiler)
   protected
     function WrapColumn(const Col: string): string; override;
     function WrapTable(const Table: string): string; override;
+    function FormatPlaceholder(const Index: Integer): string; override;
   end;
 
 function TMyDbCompiler.WrapColumn(const Col: string): string;
@@ -110,7 +122,14 @@ function TMyDbCompiler.WrapTable(const Table: string): string;
 begin
   Result := '[' + Table + ']';
 end;
+
+function TMyDbCompiler.FormatPlaceholder(const Index: Integer): string;
+begin
+  Result := ':' + IntToStr(Index + 1);
+end;
 ```
+
+Every method that emits SQL — `CompileSelect` to `CompileDelete`, `CompileWhereList`, `CompileDateWhere`, `CompileOrderByColumn` — receives the compilation, a `TSqlCompilation`, as its first parameter, adds its bindings to it with `AddBinding`, and writes each placeholder as `?`. A final pass replaces the `?` at each position with what `FormatPlaceholder` returns for it, counted from 0.
 
 ---
 

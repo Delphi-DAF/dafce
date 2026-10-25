@@ -122,6 +122,7 @@
         <DCCReference Include="SQLCute.Compilers.Feat.pas"/>
         <DCCReference Include="SQLCute.Compilers.Steps.pas"/>
         <DCCReference Include="SQLCute.Date.Feat.pas"/>
+        <DCCReference Include="SQLCute.Reentrancy.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>
