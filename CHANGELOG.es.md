@@ -189,6 +189,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - **Hosting**: Liberar un host que no se había parado lo liberaba dos veces, con `EInvalidPointer`. Ahora lo para y lo libera una vez
 - **Hosting**: un callback del ciclo de vida que lanzaba —en `ApplicationStarted`, `ApplicationStopping` o `ApplicationStopped`— hacía lanzar a `Start`, `Stop` o `StopApplication`; ahora se informa y el host sigue, como en .NET
 - **Hosting**: un nombre de entorno que no es uno de los cuatro conocidos —`QA`, por ejemplo— se ejecutaba como `Production`, así que el host cargaba `appsettings.Production.json`
+- **Hosting**: parar o liberar un host que no se había arrancado llamaba a `Stop` de sus servicios alojados; ahora notifica la parada y cierra el contenedor sin llamarlos, como `Host.StopAsync` de .NET
 - **NNLog**: `enabled` y `name` de una regla se ignoraban en silencio: `enabled` ausente vale **activada** y `name` filtra de verdad. Solo el literal `true`, con cualquier caja, mantiene activada una regla; cualquier otro valor la desactiva. **Cambio observable**: un config con alguna regla de `name` distinto de `*` deja de recibirlo todo
 - **NNLog**: `TFileTarget` podía quedar en un estado donde toda escritura posterior fallaba el resto del proceso: una apertura fallida dejaba la ruta fijada sin stream, y la guarda ya no volvía a abrir. Ahora reintenta
 - **NNLog**: El nombre del fichero rotado doblaba el punto antes de la extensión (`app_<marca>..log`) y llevaba el instante de rotar en vez de la fecha del contenido que archiva

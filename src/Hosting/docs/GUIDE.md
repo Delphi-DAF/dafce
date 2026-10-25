@@ -51,8 +51,8 @@ var Builder := THost.CreateBuilder;
 Builder.Services.AddSingleton<IMyService, TMyService>;
 
 var Host := Builder.Build;
-Host.Start;
 try
+  Host.Start;
   Host.WaitForShutdown; // blocks until shutdown signal
 finally
   StopAndNil(Host);
@@ -337,8 +337,8 @@ Lifetime.StopApplication;
 
 ```pascal
 var Host := Builder.Build;
-Host.Start;
 try
+  Host.Start;
   // Access services from outside the DI graph
   var Svc := Host.Services.GetRequiredService<IMyService>;
   Svc.Execute;
@@ -389,6 +389,11 @@ host. Release the copy in `ApplicationStopped`, which fires with the host still 
 
 Freeing a host that was never stopped runs the same sequence once. What fails there is reported,
 and the destructor does not raise it.
+
+`Stop` reaches every hosted service of a host whose `Start` began, also those that did not start or
+whose `Start` raised, so a service's `Stop` tolerates that its `Start` never ran. A host that was
+never started notifies the shutdown and closes the container without calling any service's `Stop`,
+so `Host.Start` goes inside the `try`, as in the examples above.
 
 `WaitForShutdown` integrates with the OS signal handler via `TShutdownHook`.
 

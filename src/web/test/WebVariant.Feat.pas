@@ -62,7 +62,7 @@ type
     procedure RunQuietly;
   end;
 
-  /// Falla al pararse: es lo que pone a prueba la liberacion de una aplicacion sin parar.
+  /// Falla al pararse, y cuenta en RefusedStops las veces que se le llamo a Stop.
   TRefusingStop = class(TInterfacedObject, IHostedService)
   public
     procedure Start;
@@ -110,6 +110,8 @@ uses
 
 var
   Log: string;
+  // Las veces que se llamo a Stop de un TRefusingStop.
+  RefusedStops: Integer;
   /// El gancho del RTL tal como lo vio el servicio alojado al arrancar.
   HookAtStart: TMethod;
 
@@ -201,6 +203,7 @@ end;
 
 procedure TRefusingStop.Stop;
 begin
+  Inc(RefusedStops);
   raise Exception.Create('la parada fallo');
 end;
 
@@ -673,12 +676,13 @@ Feature La variante Web de la familia @web @application-family
           .ToEqual('cli=42 web=42 llamadas=2');
       end)
 
-.Rule('Lo que falla al parar no sale del destructor')
+.Rule('Soltar una aplicacion sin ejecutarla no para sus servicios alojados')
 
-  .Scenario('Soltar una aplicacion web sin ejecutarla, cuyo servicio alojado falla al parar')
-    .Given('una aplicacion web construida, con un servicio alojado que falla al parar',
+  .Scenario('Soltar una aplicacion web sin ejecutarla')
+    .Given('una aplicacion web construida, con un servicio alojado que anota su Stop',
       procedure(W: TWebVariantWorld)
       begin
+        RefusedStops := 0;
         W.WebBuilder := TWebApplication.CreateBuilder;
         Hosting.AddHostedService(W.WebBuilder.Services, TRefusingStop);
         W.App := W.WebBuilder.Build;
@@ -704,10 +708,10 @@ Feature La variante Web de la familia @web @application-family
             BootstrapLog.AddSink(Sink);
         end;
       end)
-    .&Then('la liberacion termina sin error',
+    .&Then('su servicio alojado no recibio Stop, y la liberacion termina sin error',
       procedure(W: TWebVariantWorld)
       begin
-        Expect(W.Report).ToEqual('<sin excepcion>');
+        Expect(Format('paradas=%d %s', [RefusedStops, W.Report])).ToEqual('paradas=0 <sin excepcion>');
       end);
 
 end.

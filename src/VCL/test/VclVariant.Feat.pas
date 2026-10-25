@@ -54,7 +54,7 @@ type
     destructor Destroy; override;
   end;
 
-  /// Falla al pararse: es lo que pone a prueba la liberacion de una aplicacion sin parar.
+  /// Falla al pararse, y cuenta en RefusedStops las veces que se le llamo a Stop.
   TRefusingStop = class(TInterfacedObject, IHostedService)
   public
     procedure Start;
@@ -69,6 +69,10 @@ uses
   Daf.MiniSpec,
   Daf.Extensions.Logging,
   SpecForm;
+
+var
+  // Las veces que se llamo a Stop de un TRefusingStop.
+  RefusedStops: Integer;
 
 /// Lo que se ve de una aplicacion de escritorio despues de arrancarla hasta el bucle.
 function Outcome(const App: IVclApplication): string;
@@ -110,6 +114,7 @@ end;
 
 procedure TRefusingStop.Stop;
 begin
+  Inc(RefusedStops);
   raise Exception.Create('la parada fallo');
 end;
 
@@ -293,12 +298,15 @@ Feature La variante VCL de la familia @vcl @application-family
 .Rule('Lo que falla al parar no sale del destructor')
 
   .Scenario('Soltar una aplicacion que ya no es la actual, cuyo servicio alojado falla al parar')
-    .Given('una aplicacion VCL con un servicio alojado que falla al parar, y otra construida despues',
+    .Given('una aplicacion VCL arrancada con un servicio alojado que falla al parar, y otra construida despues',
       procedure(W: TVclWorld)
       begin
+        RefusedStops := 0;
         var Earlier := TVclApplication.CreateBuilder;
         Hosting.AddHostedService(Earlier.Services, TRefusingStop);
         W.Earlier := Earlier.Build;
+        // Arrancada: solo la parada de un host que empezo a arrancar llega a sus servicios.
+        W.Earlier.StartUpTo(TSpecForm);
         W.Builder := TVclApplication.CreateBuilder;
         W.App := W.Builder.Build;
         // Lo que el escenario supone: la actual es la segunda, asi que a la primera solo la sostiene
@@ -325,10 +333,10 @@ Feature La variante VCL de la familia @vcl @application-family
             BootstrapLog.AddSink(Sink);
         end;
       end)
-    .&Then('la liberacion termina sin error',
+    .&Then('la parada llega a su servicio, y la liberacion termina sin error',
       procedure(W: TVclWorld)
       begin
-        Expect(W.Report).ToEqual('<sin excepcion>');
+        Expect(Format('paradas=%d %s', [RefusedStops, W.Report])).ToEqual('paradas=1 <sin excepcion>');
       end);
 
 end.

@@ -51,8 +51,8 @@ var Builder := THost.CreateBuilder;
 Builder.Services.AddSingleton<IMyService, TMyService>;
 
 var Host := Builder.Build;
-Host.Start;
 try
+  Host.Start;
   Host.WaitForShutdown; // bloquea hasta la señal de parada
 finally
   StopAndNil(Host);
@@ -337,8 +337,8 @@ Lifetime.StopApplication;
 
 ```pascal
 var Host := Builder.Build;
-Host.Start;
 try
+  Host.Start;
   // Acceder a servicios desde fuera del grafo DI
   var Svc := Host.Services.GetRequiredService<IMyService>;
   Svc.Execute;
@@ -389,6 +389,11 @@ La copia se suelta en `ApplicationStopped`, que llega con el host todavía vivo 
 
 Liberar un host que no se paró ejecuta la misma secuencia una vez. Lo que falle ahí se informa, y el
 destructor no lo lanza.
+
+`Stop` llega a todos los servicios alojados de un host cuyo `Start` empezó, también a los que no
+llegaron a arrancar o cuyo `Start` lanzó, así que el `Stop` de un servicio tolera que su `Start` no
+corriera. Un host que no llegó a arrancar notifica la parada y cierra el contenedor sin llamar al
+`Stop` de ningún servicio, así que `Host.Start` va dentro del `try`, como en los ejemplos de arriba.
 
 `WaitForShutdown` se integra con el manejador de señales del SO mediante `TShutdownHook`.
 

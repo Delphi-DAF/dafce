@@ -190,6 +190,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - **Hosting**: Freeing a host that was never stopped freed it twice, with `EInvalidPointer`. It now stops it and frees it once
 - **Hosting**: A lifetime callback that raised —on `ApplicationStarted`, `ApplicationStopping` or `ApplicationStopped`— made `Start`, `Stop` or `StopApplication` raise; it is now reported and the host carries on, as in .NET
 - **Hosting**: An environment name that is not one of the four known ones —`QA`, say— ran as `Production`, so the host loaded `appsettings.Production.json`
+- **Hosting**: Stopping or freeing a host that was never started called its hosted services' `Stop`; it now notifies the shutdown and closes the container without them, as `Host.StopAsync` does in .NET
 - **NNLog**: A rule's `enabled` and `name` were silently ignored: a missing `enabled` now means **enabled** and `name` really filters. Only the literal `true`, in any case, keeps a rule enabled; any other value disables it. **Observable change**: a config with any rule whose `name` is not `*` stops receiving everything
 - **NNLog**: `TFileTarget` could reach a state where every later write failed for the rest of the process: a failed open left the path set with no stream, and the guard then refused to reopen. It retries instead
 - **NNLog**: The rotated file's name doubled the dot before the extension (`app_<mark>..log`) and carried the moment of rotation instead of the date of the content it archives

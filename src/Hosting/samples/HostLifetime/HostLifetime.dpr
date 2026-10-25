@@ -37,8 +37,8 @@ begin
 
   var Diagnostics := THostDiagnostics.Create(Host);
   try
-    Host.Start;
     try
+      Host.Start;
       Writeln(Diagnostics.Describe);
       // Lo mismo que un Ctrl+C: WaitForShutdown vuelve en cuanto se pide la parada.
       Lifetime.StopApplication;

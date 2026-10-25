@@ -34,8 +34,8 @@ Builder.Services.AddSingleton<IMyService, TMyService>;
 Builder.Services.AddHostedService<TMyWorker>; // IHostedService
 
 var Host := Builder.Build;
-Host.Start;
 try
+  Host.Start;
   Host.WaitForShutdown;
 finally
   StopAndNil(Host);

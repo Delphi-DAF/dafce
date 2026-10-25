@@ -232,8 +232,8 @@ Builder.Services.AddSingleton<IMyOptions>(
   TMyOptions.Create(Builder.Configuration as IConfiguration));
 
 var Host := Builder.Build;
-Host.Start;
 try
+  Host.Start;
   Host.WaitForShutdown;
 finally
   StopAndNil(Host);

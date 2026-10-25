@@ -68,6 +68,8 @@ type
     // Estado de este host, no del proceso: con class var, dos hosts en un mismo proceso
     // se pisaban el "ya parado" el uno al otro.
     FStopped: Boolean;
+    // Como Host.StopAsync de .NET: solo un host cuyo Start llego a empezar para sus servicios.
+    FStartBegan: Boolean;
     FReleased: Boolean;
     procedure SetServiceProvider(const Services: IServiceProvider);
   public
@@ -384,6 +386,7 @@ end;
 
 procedure THost.Start;
 begin
+  FStartBegan := True;
   try
     // Fase 2 del arranque, en orden: primero las tareas de inicializacion, porque un
     // servicio alojado puede depender del estado que preparan; despues los servicios
@@ -455,12 +458,13 @@ begin
 
     // LIFO, el mismo orden en que cierra el contenedor: un servicio arrancado despues puede
     // estar usando lo que suelta al parar uno arrancado antes.
-    for var Idx := FHostedServices.Count - 1 downto 0 do
-      try
-        FHostedServices[Idx].Stop;
-      except
-        on E: Exception do Collect(E);
-      end;
+    if FStartBegan then
+      for var Idx := FHostedServices.Count - 1 downto 0 do
+        try
+          FHostedServices[Idx].Stop;
+        except
+          on E: Exception do Collect(E);
+        end;
     FHostedServices.Clear;
 
     if Assigned(Lifetime) then

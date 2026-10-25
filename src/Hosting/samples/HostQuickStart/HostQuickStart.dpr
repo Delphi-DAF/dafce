@@ -18,8 +18,8 @@ begin
   Builder.Services.AddHostedService<TGreetingWorker>;
 
   var Host := Builder.Build;
-  Host.Start;
   try
+    Host.Start;
     Writeln('El host esta arrancado');
   finally
     StopAndNil(Host);

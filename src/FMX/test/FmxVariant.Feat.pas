@@ -40,7 +40,7 @@ type
     destructor Destroy; override;
   end;
 
-  /// Falla al pararse: es lo que pone a prueba la liberacion de una aplicacion sin parar.
+  /// Falla al pararse, y cuenta en RefusedStops las veces que se le llamo a Stop.
   TRefusingStop = class(TInterfacedObject, IHostedService)
   public
     procedure Start;
@@ -55,6 +55,10 @@ uses
   System.StrUtils,
   Daf.MiniSpec,
   Daf.Extensions.Logging;
+
+var
+  // Las veces que se llamo a Stop de un TRefusingStop.
+  RefusedStops: Integer;
 
 constructor TFmxWorld.Create;
 begin
@@ -98,6 +102,7 @@ end;
 
 procedure TRefusingStop.Stop;
 begin
+  Inc(RefusedStops);
   raise Exception.Create('la parada fallo');
 end;
 
@@ -246,12 +251,13 @@ Feature La variante FMX de la familia @fmx @application-family
         Expect(DafApp = nil).ToBeTrue;
       end)
 
-.Rule('Lo que falla al parar no sale del destructor')
+.Rule('Soltar una aplicacion que no se arranco no para sus servicios alojados')
 
-  .Scenario('Soltar una aplicacion que ya no es la actual, cuyo servicio alojado falla al parar')
-    .Given('una aplicacion FMX con un servicio alojado que falla al parar, y otra construida despues',
+  .Scenario('Soltar una aplicacion sin arrancar, que ya no es la actual')
+    .Given('una aplicacion FMX sin arrancar con un servicio alojado que anota su Stop, y otra construida despues',
       procedure(W: TFmxWorld)
       begin
+        RefusedStops := 0;
         var Earlier := TFmxApplication.CreateBuilder;
         Hosting.AddHostedService(Earlier.Services, TRefusingStop);
         W.Earlier := Earlier.Build;
@@ -281,10 +287,10 @@ Feature La variante FMX de la familia @fmx @application-family
             BootstrapLog.AddSink(Sink);
         end;
       end)
-    .&Then('la liberacion termina sin error',
+    .&Then('su servicio alojado no recibio Stop, y la liberacion termina sin error',
       procedure(W: TFmxWorld)
       begin
-        Expect(W.Report).ToEqual('<sin excepcion>');
+        Expect(Format('paradas=%d %s', [RefusedStops, W.Report])).ToEqual('paradas=0 <sin excepcion>');
       end);
 
 end.
