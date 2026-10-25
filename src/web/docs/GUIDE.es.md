@@ -320,6 +320,10 @@ El servidor todavía no es un `IHostedService` — ver la nota del [README](../R
 
 Cada petición tiene su propio scope, y el controlador se construye dentro de él a partir de `IServiceProvider`, se invoca y se libera una vez escrita la respuesta. Todo lo scoped vive y muere, por tanto, con la petición.
 
+Las peticiones se atienden a la vez: dos pueden ejecutar la misma acción al mismo tiempo. Lo que tiene
+un controlador o un servicio Scoped es de su petición; un Singleton, o cualquier estado que un
+controlador alcance fuera de su petición, se comparte entre hilos y tiene que ser seguro para ellos.
+
 La clase del controlador **no** hace falta registrarla: la construye `TActivatorUtilities`, que elige el constructor cuyos parámetros puede satisfacer el contenedor. Lo que sí hay que registrar es lo que el controlador pide.
 
 ```pascal

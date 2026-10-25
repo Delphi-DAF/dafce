@@ -320,6 +320,10 @@ The server is not an `IHostedService` yet — see the note in the [README](../RE
 
 Each request gets its own scope, and the controller is built inside it from `IServiceProvider`, called, and freed once the response is written. Anything scoped therefore lives and dies with the request.
 
+Requests are served at once: two of them can run the same action at the same time. What a controller
+or a Scoped service holds belongs to its request; a Singleton, or any state a controller reaches
+outside its request, is shared between threads and has to be safe for them.
+
 The controller class itself does **not** need registering: it is constructed by `TActivatorUtilities`, which picks the constructor whose parameters the container can satisfy. What must be registered is what the controller asks for.
 
 ```pascal

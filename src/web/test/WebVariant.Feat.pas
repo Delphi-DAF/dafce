@@ -712,6 +712,34 @@ Feature La variante Web de la familia @web @application-family
       procedure(W: TWebVariantWorld)
       begin
         Expect(Format('paradas=%d %s', [RefusedStops, W.Report])).ToEqual('paradas=0 <sin excepcion>');
+      end)
+
+.Rule('Una aplicacion web ejecutada no da acceso a un host parado')
+
+  .Scenario('Leer los servicios despues de Run')
+    .Given('una aplicacion web ejecutada hasta que su Run volvio',
+      procedure(W: TWebVariantWorld)
+      begin
+        W.WebBuilder := W.WebOnFreePort;
+        W.App := W.WebBuilder.Build;
+        W.RunQuietly;
+        Expect(Format('%s %d', [W.Report, W.ExitCode])).ToEqual('<no lanzo> 0');
+      end)
+    .When('se leen Services y Server',
+      procedure(W: TWebVariantWorld)
+      begin
+        try
+          W.Report := Format('services=%s server=%s', [BoolToStr(W.App.Services = nil, True),
+            BoolToStr(W.App.Server = nil, True)]);
+        except
+          on E: Exception do
+            W.Report := E.ClassName + ': ' + E.Message;
+        end;
+      end)
+    .&Then('los dos valen nil, y leerlos no falla',
+      procedure(W: TWebVariantWorld)
+      begin
+        Expect(W.Report).ToEqual('services=True server=True');
       end);
 
 end.

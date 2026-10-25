@@ -836,6 +836,13 @@ for var Token in Tokens do
 - **Qué rompe**: una acción que guarda el objeto más allá de la petición, en un campo, una lista o un
   servicio. Copia lo que necesita.
 
+### 36. Web: las peticiones se atienden a la vez
+
+- **El router deja de serializar las peticiones.** En 1.6 las atendía de una en una tras un cerrojo,
+  así que el estado compartido entre peticiones nunca veía dos hilos a la vez.
+- **Qué rompe**: un Singleton, o un campo que un controlador alcanza fuera de su petición, que no es
+  seguro entre hilos. Se hace seguro, o se registra como Scoped para que cada petición tenga el suyo.
+
 ## Cómo hacerlo
 
 1. Compila. Lo que falte sale como error del compilador, no como comportamiento raro en
@@ -851,6 +858,6 @@ for var Token in Tokens do
    resolverlo: se resuelve desde un ámbito que abre el trabajo, `Services.CreateScope`. También un
    Scoped que resuelve un Singleton: el Singleton lo resuelve en un ámbito que abre con
    `IServiceScopeFactory`.
-6. Las secciones 2, de la 6 a la 13 y de la 15 a la 35 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
+6. Las secciones 2, de la 6 a la 13 y de la 15 a la 36 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
    contra tu propia composición — la vida de los ámbitos, los registros repetidos, las reglas de
    logging y los ajustes del host.

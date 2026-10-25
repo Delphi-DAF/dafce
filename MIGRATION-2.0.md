@@ -829,6 +829,13 @@ for var Token in Tokens do
 - **What breaks**: an action that keeps the object past the request, in a field, a list or a service.
   It copies what it needs.
 
+### 36. Web: requests are served at once
+
+- **The router no longer serializes requests.** In 1.6 it served them one at a time behind a lock, so
+  state shared between requests never saw two threads at once.
+- **What breaks**: a Singleton, or a field a controller reaches outside its request, that is not safe
+  across threads. It becomes thread-safe, or it is registered Scoped so each request has its own.
+
 ## How to do it
 
 1. Compile. Whatever is missing comes out as a compiler error, not as odd behaviour at run time.
@@ -842,6 +849,6 @@ for var Token in Tokens do
    A Scoped service asked of the root provider is rejected too, when it is resolved: resolve it from a
    scope the work opens, `Services.CreateScope`. So is a Scoped a Singleton resolves: the Singleton
    resolves it in a scope it opens through `IServiceScopeFactory`.
-6. Sections 2, 6 to 13 and 15 to 35 carry **run-time** changes: the compiler says nothing about them. Read them
+6. Sections 2, 6 to 13 and 15 to 36 carry **run-time** changes: the compiler says nothing about them. Read them
    against your own composition — scope lifetimes, duplicate registrations, logging rules and
    host settings.

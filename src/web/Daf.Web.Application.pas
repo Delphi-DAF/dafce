@@ -314,14 +314,19 @@ begin
   FFailures := Failures;
 end;
 
+// Without a host -- after Run, which stops and releases it -- there is nothing to answer, as in the
+// other variants.
 function TWebApplication.GetServices: IServiceProvider;
 begin
-  Result := FHost.Services;
+  if Assigned(FHost) then
+    Result := FHost.Services
+  else
+    Result := nil;
 end;
 
 function TWebApplication.GetServer: IDafHttpServer;
 begin
-  if not Assigned(FServer) then
+  if not Assigned(FServer) and Assigned(FHost) then
     FServer := FHost.Services.GetRequiredService<IDafHttpServer>;
   Result := FServer;
 end;

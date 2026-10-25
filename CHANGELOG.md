@@ -249,6 +249,8 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - **Web**: Route and query values convert with the invariant culture: `/price/1.5` failed in a process with a decimal comma, and a `[FromQuery]` parameter that was not a string failed every request
 - **Web**: A route or query value that does not convert answers 400 naming the parameter; it used to fail the request
 - **Web**: A route value with `%2F` reaches the action with the slash still encoded; the route used to miss
+- **Web**: The router served requests one at a time, so a slow action held every other one; they are now served at once
+- **Web**: Reading `Services` or `Server` of a web application after its `Run` raised an access violation; they answer `nil`, as in the other variants
 
 ## [1.6.0] - 2026-07-20
 

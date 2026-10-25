@@ -248,6 +248,8 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - **Web**: los valores de ruta y de consulta se convierten con la cultura invariante: `/price/1.5` fallaba en un proceso con coma decimal, y un parámetro `[FromQuery]` que no fuera una cadena hacía fallar toda petición
 - **Web**: un valor de ruta o de consulta que no convierte responde 400 nombrando el parámetro; antes hacía fallar la petición
 - **Web**: un valor de ruta con `%2F` llega a la acción con la barra aún codificada; antes la ruta no casaba
+- **Web**: el router atendía las peticiones de una en una, así que una acción lenta retenía a todas las demás; ahora se atienden a la vez
+- **Web**: leer `Services` o `Server` de una aplicación web después de su `Run` daba una violación de acceso; ahora responden `nil`, como en las demás variantes
 
 ## [1.6.0] - 2026-07-20
 

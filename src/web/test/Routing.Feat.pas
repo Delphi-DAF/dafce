@@ -59,6 +59,15 @@ type
     function Search: IActionResult;
   end;
 
+  /// Waits, up to five seconds, for a second request to reach the same action: only two requests
+  /// served at once both answer with their own value.
+  [WebRoutePrefix('/spec/meet')]
+  TMeetingController = class(TWebController)
+  public
+    [WebRoute(mtGet, '/{Tag}')]
+    function Meet(const Tag: string): IActionResult;
+  end;
+
   TRoutingWorld = class
   public
     Services: IServiceCollection;
@@ -69,6 +78,9 @@ type
     Response: TSpecWebResponse;
     Handled: Boolean;
     Controller: TGreetController;
+    /// What each of two concurrent requests answered.
+    FirstReport: string;
+    SecondReport: string;
     constructor Create;
     destructor Destroy; override;
     procedure DispatchRequest(const AMethod, APath: string);
@@ -85,7 +97,13 @@ implementation
 uses
   System.SysUtils,
   System.IOUtils,
+  System.Classes,
+  System.SyncObjs,
   Daf.MiniSpec;
+
+var
+  Arrivals: Integer;
+  BothArrived: TEvent;
 
 { TGreeter }
 
@@ -130,6 +148,18 @@ begin
   Result := Ok('search');
 end;
 
+{ TMeetingController }
+
+function TMeetingController.Meet(const Tag: string): IActionResult;
+begin
+  if TInterlocked.Increment(Arrivals) = 2 then
+    BothArrived.SetEvent;
+  if BothArrived.WaitFor(5000) = wrSignaled then
+    Result := Ok(Tag)
+  else
+    Result := Ok('alone:' + Tag);
+end;
+
 { TRoutingWorld }
 
 constructor TRoutingWorld.Create;
@@ -146,6 +176,7 @@ end;
 
 destructor TRoutingWorld.Destroy;
 begin
+  FreeAndNil(BothArrived);
   Controller.Free;
   Response.Free;
   Request.Free;
@@ -293,6 +324,60 @@ Feature Attribute routing @routing
       procedure(W: TRoutingWorld)
       begin
         Expect(Assigned(W.Controller)).ToEqual(True);
+      end)
+
+.Rule('Requests are served at once')
+
+  .Scenario('Two requests at once')
+    .Given('an action that waits, with a deadline, for another request to reach it',
+      procedure(W: TRoutingWorld)
+      begin
+        Arrivals := 0;
+        BothArrived := TEvent.Create(nil, True, False, '');
+      end)
+    .When('two requests arrive from two threads, each with its own route value',
+      procedure(W: TRoutingWorld)
+      begin
+        var Serve :=
+          function(const Tag: string): TProc
+          begin
+            Result :=
+              procedure
+              begin
+                var Request := TSpecWebRequest.Create('GET', '/spec/meet/' + Tag);
+                var Response := TSpecWebResponse.Create(Request);
+                try
+                  var Handled := False;
+                  W.Router.WebDispatch(nil, Request, Response, Handled);
+                  var Answer := Format('answered %d [%s]', [Response.StatusCode, Response.Content]);
+                  if Tag = 'a' then
+                    W.FirstReport := Answer
+                  else
+                    W.SecondReport := Answer;
+                finally
+                  Response.Free;
+                  Request.Free;
+                end;
+              end;
+          end;
+        var First := TThread.CreateAnonymousThread(Serve('a'));
+        var Second := TThread.CreateAnonymousThread(Serve('b'));
+        First.FreeOnTerminate := False;
+        Second.FreeOnTerminate := False;
+        try
+          First.Start;
+          Second.Start;
+          First.WaitFor;
+          Second.WaitFor;
+        finally
+          First.Free;
+          Second.Free;
+        end;
+      end)
+    .&Then('both answer 200 within the deadline, each with its own route value',
+      procedure(W: TRoutingWorld)
+      begin
+        Expect(W.FirstReport + ' | ' + W.SecondReport).ToEqual('answered 200 [a] | answered 200 [b]');
       end);
 
 end.

@@ -53,7 +53,6 @@ type
 
   TRouteParameter = record
     Name: string;
-    Value: string;
   end;
 
   IWebRouter = interface(IInvokable)
@@ -108,13 +107,13 @@ type
     function GetPathPattern: string;
     function BuildRegexFromRoute(const RouteTemplate: string): string;
     function ExtractRouteParams(const RouteTemplate: string): TArray<TRouteParameter>;
-    procedure GetRouteParamValues(const Path: string);
+    function GetRouteParamValues(const Path: string): TArray<string>;
     function GetBodyValue(Param: TRttiParameter; const Request: TWebRequest; const Owned: TObjectList<TObject>): TValue;
     function GetServiceValue(Param: TRttiParameter; const Services: IServiceProvider): TValue;
     function GetQueryValue(const Param: TRttiParameter; const Request: TWebRequest): TValue;
     function BindParams(Services: IServiceProvider; Request: TWebRequest; Response: TWebResponse;
       const Owned: TObjectList<TObject>): TArray<TValue>;
-    function GetRouteValue(Param: TRttiParameter): TValue;
+    function GetRouteValue(Param: TRttiParameter; const Values: TArray<string>): TValue;
   public
     constructor Create(const ControllerType: TRttiInstanceType; const ControllerMethod: TRttiMethod;
       const PrefixAttr: WebRoutePrefixAttribute; const RouteAttr: WebRouteAttribute);
@@ -413,14 +412,17 @@ begin
   raise EBadRequest.CreateFmt('The value "%s" for "%s" is not a valid %s', [Raw, Param.Name, Param.ParamType.Name]);
 end;
 
-procedure TWebRouteMatcher.GetRouteParamValues(const Path: string);
+// The values of this request, by the position of their segment in the template. Requests are served
+// at once, so they live in the request and not in the matcher.
+function TWebRouteMatcher.GetRouteParamValues(const Path: string): TArray<string>;
 begin
+  SetLength(Result, Length(FRouteParameters));
   var Regex := TRegEx.Create(FRegexPattern, [roIgnoreCase]);
   var Match := Regex.Match(Path);
   if not Match.Success then
     Exit;
   for var i := 1 to Match.Groups.Count - 1 do
-    FRouteParameters[i - 1].Value := Match.Groups[i].Value;
+    Result[i - 1] := Match.Groups[i].Value;
 end;
 
 // An absent key arrives as its type's default, and deciding whether that is an error is the action's.
@@ -493,11 +495,11 @@ begin
   TValue.Make(@Intf, Param.ParamType.Handle, Result);
 end;
 
-function TWebRouteMatcher.GetRouteValue(Param: TRttiParameter): TValue;
+function TWebRouteMatcher.GetRouteValue(Param: TRttiParameter; const Values: TArray<string>): TValue;
 begin
-  for var RouteParam in FRouteParameters do
-    if SameText(RouteParam.Name, Param.Name) then
-      Result := ConvertValue(Param, DecodeRouteValue(RouteParam.Value));
+  for var Index := 0 to High(FRouteParameters) do
+    if SameText(FRouteParameters[Index].Name, Param.Name) then
+      Result := ConvertValue(Param, DecodeRouteValue(Values[Index]));
 end;
 
 // The values of this request, in a local array: the objects it creates for them go to Owned, which
@@ -505,7 +507,7 @@ end;
 function TWebRouteMatcher.BindParams(Services: IServiceProvider; Request: TWebRequest; Response: TWebResponse;
   const Owned: TObjectList<TObject>): TArray<TValue>;
 begin
-  GetRouteParamValues(RoutePath(Request));
+  var RouteValues := GetRouteParamValues(RoutePath(Request));
 
   SetLength(Result, Length(FBoundParams));
   for var P in FBoundParams do
@@ -520,7 +522,7 @@ begin
       bkQuery:
         Result[P.Index] := GetQueryValue(P.Param, Request);
       bkRoute:
-          Result[P.Index] := GetRouteValue(P.Param);
+          Result[P.Index] := GetRouteValue(P.Param, RouteValues);
       else
           raise Exception.CreateFmt('Missing route param "%s"', [P.Name]);
     end;
@@ -707,33 +709,30 @@ begin
   end;
 end;
 
+// Requests are served at once: what they share here -- the matchers, already sorted, and the root --
+// is read-only, and each request keeps its own state.
 procedure TWebRouter.WebDispatch(Sender: TObject; Request: TWebRequest; Response: TWebResponse; var Handled: Boolean);
 begin
-  TMonitor.Enter(Self);
-  try
-    Handled := True;
-    Logger.LogInformation('[%s] %s?%s', [Request.Method, Request.PathInfo, Request.Query]);
-    var StaticFilePath := StaticFileUnder(FRootDirectory, Request.PathInfo);
-    if StaticFilePath <> '' then
-    begin
-      Response.ContentType := TMimeTypes.GetContentType(StaticFilePath);
-      Response.ContentStream := TFileStream.Create(StaticFilePath, fmOpenRead or fmShareDenyWrite);
-      Exit;
-    end;
-
-    for var Matcher in FMatchers do
-    begin
-      if not Matcher.Accept(Request) then Continue;
-      // WebRouter es singleton, la request debe ser scoped:
-      var Scope := Self.ScopeFactory.CreateScope;
-      Matcher.WebDispatch(Scope.ServiceProvider, Request, Response);
-      Exit;
-    end;
-    Handled := False;
-    Logger.LogDebug('[%s] %s?%s d''ont match any route', [Request.Method, Request.PathInfo, Request.Query]);
-  finally
-    TMonitor.Exit(Self);
+  Handled := True;
+  Logger.LogInformation('[%s] %s?%s', [Request.Method, Request.PathInfo, Request.Query]);
+  var StaticFilePath := StaticFileUnder(FRootDirectory, Request.PathInfo);
+  if StaticFilePath <> '' then
+  begin
+    Response.ContentType := TMimeTypes.GetContentType(StaticFilePath);
+    Response.ContentStream := TFileStream.Create(StaticFilePath, fmOpenRead or fmShareDenyWrite);
+    Exit;
   end;
+
+  for var Matcher in FMatchers do
+  begin
+    if not Matcher.Accept(Request) then Continue;
+    // WebRouter es singleton, la request debe ser scoped:
+    var Scope := Self.ScopeFactory.CreateScope;
+    Matcher.WebDispatch(Scope.ServiceProvider, Request, Response);
+    Exit;
+  end;
+  Handled := False;
+  Logger.LogDebug('[%s] %s?%s d''ont match any route', [Request.Method, Request.PathInfo, Request.Query]);
 end;
 
 end.
