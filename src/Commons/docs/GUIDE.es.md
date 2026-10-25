@@ -384,15 +384,23 @@ var PorEdad := TNullableComparers.Ordinal<Integer>;
 
 | Punto de entrada | Responde |
 |------------------|----------|
-| `TValueComparers.Ordinal` | `IComparer<TValue>`: NULL por debajo de todo valor no NULL, NULL iguales |
-| `TValueComparers.Equality` | `IEqualityComparer<TValue>`: iguales por contenido, NULL iguales |
+| `TValueComparers.Ordinal` | `IComparer<TValue>`: NULL por debajo de todo valor no NULL, NULL iguales; dos valores de familias distintas lanzan `EArgumentException` |
+| `TValueComparers.Equality` | `IEqualityComparer<TValue>`: dos valores de familias distintas nunca son iguales, los NULL sí, y los valores iguales comparten hash |
 | `TNullableComparers.Ordinal<T>` | El mismo orden sobre `TNullable<T>` |
 | `TNullableComparers.Equality<T>` | Dos valores ausentes son iguales |
-| `IsNullValue(V)` | Si un `TValue` representa el NULL de SQL: vacío, o un Variant con `Null`/`Unassigned` |
+| `IsNullValue(V)` | Si un `TValue` representa el NULL de SQL: vacío, un Variant con `Null`/`Unassigned`, o un `TNullable` ausente |
 | `CompareValuesNullSmallest(L, R)` | La comparación en sí, sin pasar por un comparador |
 
-Sobre `TValue`, el NULL de SQL se modela como un `TValue` **vacío**, o uno de clase Variant con
-`Null` o `Unassigned`. Es sobre esto que `SQLCute.InMemory` construye su semántica ANSI de NULL —
+Todo valor no NULL pertenece a una familia: lógico, número, fecha, texto u otro. Un valor de una
+familia nunca es igual a uno de otra: el texto `'1'` no es el número `1`, como en .NET. Dos números son
+iguales cuando valen lo mismo, sea cual sea su tipo: `1` y `1.0` son iguales, como en SQL; en .NET,
+`1.Equals(1.0)` es falso. Ordenar dos valores de familias distintas lanza `EArgumentException`, como el
+`Comparer<object>` de .NET. Dentro de una familia, el texto se ordena por ordinal, `False` va antes que
+`True`, y las fechas y los números, por su valor.
+
+Sobre `TValue`, el NULL de SQL se modela como un `TValue` **vacío**, uno de clase Variant con `Null` o
+`Unassigned`, o un `TNullable` ausente; un `TNullable` presente cuenta como el valor que guarda. Es
+sobre esto que `SQLCute.InMemory` construye su semántica ANSI de NULL —
 ver [SQLCute.InMemory](../../SQLCute.InMemory/README.es.md).
 
 ---

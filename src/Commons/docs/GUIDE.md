@@ -381,15 +381,23 @@ var ByAge := TNullableComparers.Ordinal<Integer>;
 
 | Entry point | Answers |
 |-------------|---------|
-| `TValueComparers.Ordinal` | `IComparer<TValue>`: NULL below every non-NULL value, NULLs equal |
-| `TValueComparers.Equality` | `IEqualityComparer<TValue>`: equal by content, NULLs equal |
+| `TValueComparers.Ordinal` | `IComparer<TValue>`: NULL below every non-NULL value, NULLs equal; two values of different families raise `EArgumentException` |
+| `TValueComparers.Equality` | `IEqualityComparer<TValue>`: values of different families are never equal, NULLs are equal, and equal values share their hash |
 | `TNullableComparers.Ordinal<T>` | The same order over `TNullable<T>` |
 | `TNullableComparers.Equality<T>` | Two absent values are equal |
-| `IsNullValue(V)` | Whether a `TValue` represents SQL NULL: empty, or a `Null`/`Unassigned` Variant |
+| `IsNullValue(V)` | Whether a `TValue` represents SQL NULL: empty, a `Null`/`Unassigned` Variant, or an absent `TNullable` |
 | `CompareValuesNullSmallest(L, R)` | The comparison itself, without going through a comparer |
 
-Over `TValue`, SQL NULL is modelled as an **empty** `TValue`, or a Variant-kind one holding `Null`
-or `Unassigned`. This is what `SQLCute.InMemory` builds its ANSI NULL semantics on — see
+Every non-NULL value belongs to a family: Boolean, number, date, text or other. A value of one
+family is never equal to one of another: the text `'1'` is not the number `1`, as in .NET. Two
+numbers are equal when they are worth the same, whatever their type: `1` and `1.0` are equal, as in
+SQL; in .NET, `1.Equals(1.0)` is false. Ordering two values of different families raises
+`EArgumentException`, like .NET's `Comparer<object>`. Within a family, text orders ordinally, `False`
+comes before `True`, and dates and numbers order by value.
+
+Over `TValue`, SQL NULL is modelled as an **empty** `TValue`, a Variant-kind one holding `Null` or
+`Unassigned`, or an absent `TNullable`; a present `TNullable` counts as the value it holds. This is
+what `SQLCute.InMemory` builds its ANSI NULL semantics on — see
 [SQLCute.InMemory](../../SQLCute.InMemory/README.md).
 
 ---

@@ -17,6 +17,8 @@ type
     NCmp: IComparer<TNullable<Integer>>;
     NEq: IEqualityComparer<TNullable<Integer>>;
     Report: string;
+    /// Compara con el orden de valores y deja el signo, o la excepcion que lanzo.
+    function OrderOf(const L, R: TValue): string;
   end;
 
 implementation
@@ -27,6 +29,15 @@ uses
   System.Generics.Collections,
   Daf.MiniSpec,
   Daf.Comparers;
+
+function TComparersWorld.OrderOf(const L, R: TValue): string;
+begin
+  try
+    Result := IntToStr(Sign(TValueComparers.Ordinal.Compare(L, R)));
+  except
+    on E: Exception do Result := E.ClassName;
+  end;
+end;
 
 initialization
 
@@ -150,6 +161,118 @@ Feature Comparers @comparers @commons
       procedure(W: TComparersWorld)
       begin
         Expect(W.Report).ToEqual('-1 1 True True False');
+      end)
+
+.Rule('Value equality is coherent with its hash')
+
+  .Scenario('A string does not equal the number it writes')
+    .When('value equality compares ''1'' with 1',
+      procedure(W: TComparersWorld)
+      begin
+        W.Report := BoolToStr(TValueComparers.Equality.Equals(TValue.From<string>('1'), TValue.From<Integer>(1)), True);
+      end)
+    .&Then('they are not equal',
+      procedure(W: TComparersWorld)
+      begin
+        Expect(W.Report).ToEqual('False');
+      end)
+
+  .Scenario('An integer and a real of the same value are equal and share their hash')
+    .When('value equality compares 1 (Integer) with 1.0 (Double)',
+      procedure(W: TComparersWorld)
+      begin
+        var Eq := TValueComparers.Equality;
+        var L := TValue.From<Integer>(1);
+        var R := TValue.From<Double>(1.0);
+        W.Report := Format('equal=%s, same hash=%s',
+          [BoolToStr(Eq.Equals(L, R), True), BoolToStr(Eq.GetHashCode(L) = Eq.GetHashCode(R), True)]);
+      end)
+    .&Then('they are equal and their hashes match',
+      procedure(W: TComparersWorld)
+      begin
+        Expect(W.Report).ToEqual('equal=True, same hash=True');
+      end)
+
+  .Scenario('Deduplicating with equality leaves one entry per value')
+    .When('[1, ''1'', 1.0, NULL, NULL] are deduplicated in a dictionary that uses value equality',
+      procedure(W: TComparersWorld)
+      begin
+        var Src: TArray<TValue> := [TValue.From<Integer>(1), TValue.From<string>('1'), TValue.From<Double>(1.0),
+                                    TValue.Empty, TValue.Empty];
+        var Seen := TDictionary<TValue, Byte>.Create(TValueComparers.Equality);
+        try
+          for var V in Src do
+            Seen.AddOrSetValue(V, 0);
+          W.Report := Format('entries=%d, has 1=%s, has ''1''=%s, has NULL=%s',
+            [Seen.Count, BoolToStr(Seen.ContainsKey(TValue.From<Integer>(1)), True),
+             BoolToStr(Seen.ContainsKey(TValue.From<string>('1')), True),
+             BoolToStr(Seen.ContainsKey(TValue.Empty), True)]);
+        finally
+          Seen.Free;
+        end;
+      end)
+    .&Then('three entries remain: 1, ''1'' and NULL',
+      procedure(W: TComparersWorld)
+      begin
+        Expect(W.Report).ToEqual('entries=3, has 1=True, has ''1''=True, has NULL=True');
+      end)
+
+.Rule('Ordering values of types that do not compare raises')
+
+  .Scenario('A string against a number raises')
+    .When('value ordering compares ''abc'' with 1, and ''1'' with 1',
+      procedure(W: TComparersWorld)
+      begin
+        W.Report := W.OrderOf(TValue.From<string>('abc'), TValue.From<Integer>(1)) + ' '
+          + W.OrderOf(TValue.From<string>('1'), TValue.From<Integer>(1));
+      end)
+    .&Then('both comparisons raise EArgumentException',
+      procedure(W: TComparersWorld)
+      begin
+        Expect(W.Report).ToEqual('EArgumentException EArgumentException');
+      end)
+
+  .Scenario('Within a family and against NULL it orders')
+    .When('value ordering compares 1 (Integer) with 1.0 (Double), and NULL with ''abc''',
+      procedure(W: TComparersWorld)
+      begin
+        W.Report := W.OrderOf(TValue.From<Integer>(1), TValue.From<Double>(1.0)) + ' '
+          + W.OrderOf(TValue.Empty, TValue.From<string>('abc'));
+      end)
+    .&Then('the first gives 0 and the second a negative number',
+      procedure(W: TComparersWorld)
+      begin
+        Expect(W.Report).ToEqual('0 -1');
+      end)
+
+.Rule('A TNullable inside a value counts as NULL or as its value')
+
+  .Scenario('An absent TNullable is NULL')
+    .When('IsNullValue is asked about a TValue that holds TNullable<Integer>.Null',
+      procedure(W: TComparersWorld)
+      begin
+        W.Report := BoolToStr(IsNullValue(TValue.From<TNullable<Integer>>(TNullable<Integer>.Null)), True);
+      end)
+    .&Then('it answers True',
+      procedure(W: TComparersWorld)
+      begin
+        Expect(W.Report).ToEqual('True');
+      end)
+
+  .Scenario('A present TNullable compares as its value')
+    .When('value equality compares a TValue holding TNullable<Integer>.From(5) with one holding the integer 5',
+      procedure(W: TComparersWorld)
+      begin
+        var Eq := TValueComparers.Equality;
+        var L := TValue.From<TNullable<Integer>>(TNullable<Integer>.From(5));
+        var R := TValue.From<Integer>(5);
+        W.Report := Format('equal=%s, same hash=%s',
+          [BoolToStr(Eq.Equals(L, R), True), BoolToStr(Eq.GetHashCode(L) = Eq.GetHashCode(R), True)]);
+      end)
+    .&Then('they are equal and their hashes match',
+      procedure(W: TComparersWorld)
+      begin
+        Expect(W.Report).ToEqual('equal=True, same hash=True');
       end);
 
 end.
