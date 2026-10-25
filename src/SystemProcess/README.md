@@ -153,6 +153,9 @@ A deadline or a token bound that wait too, as the `timeout` of `RunAndCaptureTex
 When either is met with a captured stream still open, the child is killed if it is alive, the
 handlers get what is already in the pipe, and the result is `Timeout` or `Canceled`.
 
+The end notifications — `OnCompleted`, `OnKilled`, `OnCancelled` — run once that wait is over, so the
+captured output is complete when they arrive.
+
 Two differences from .NET: `RunAndCaptureText` throws `TimeoutException` or
 `OperationCanceledException` and loses the text it read, whereas here an expired deadline is a
 `Timeout` result and what the handlers received stays received; and nothing is delivered after

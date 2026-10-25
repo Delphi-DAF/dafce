@@ -152,6 +152,9 @@ Un plazo o un token acotan también esa espera, como el `timeout` de `RunAndCapt
 Si se cumplen con un flujo capturado aún abierto, el hijo muere si vive, los manejadores reciben lo
 que ya está en la tubería, y el resultado es `Timeout` o `Canceled`.
 
+Las notificaciones del final —`OnCompleted`, `OnKilled`, `OnCancelled`— corren cuando esa espera ha
+terminado, así que la salida capturada está completa cuando llegan.
+
 Dos diferencias con .NET: `RunAndCaptureText` lanza `TimeoutException` u
 `OperationCanceledException` y pierde el texto leído, mientras que aquí un plazo vencido es un
 resultado `Timeout` y lo que los manejadores recibieron queda recibido; y no se entrega nada después

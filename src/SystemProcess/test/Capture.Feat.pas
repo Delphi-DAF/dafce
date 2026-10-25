@@ -28,9 +28,15 @@ type
     Future: IFuture<TProcessResult>;
     Source: ICancellationTokenSource;
     Captured: string;
+    /// Lo capturado cuando llego la notificacion del final.
+    Notified: string;
     ElapsedMS: Int64;
     destructor Destroy; override;
     function Capture: TProcessOutputProc;
+    /// Un manejador que tarda DelayMS en anotar cada lectura.
+    function SlowCapture(DelayMS: Cardinal): TProcessOutputProc;
+    /// Una notificacion que anota lo capturado hasta ese momento.
+    function NoteCaptured: TProcessNotifyProc;
     function WithGrandchildProc(TimeoutMS: Cardinal): ISystemProcess;
   end;
 
@@ -68,6 +74,31 @@ begin
       TMonitor.Enter(Self);
       try
         Captured := Captured + Text;
+      finally
+        TMonitor.Exit(Self);
+      end;
+    end;
+end;
+
+function TCaptureWorld.SlowCapture(DelayMS: Cardinal): TProcessOutputProc;
+begin
+  var Inner := Capture();
+  Result :=
+    procedure(Text: string)
+    begin
+      Sleep(DelayMS);
+      Inner(Text);
+    end;
+end;
+
+function TCaptureWorld.NoteCaptured: TProcessNotifyProc;
+begin
+  Result :=
+    procedure(R: TProcessResult)
+    begin
+      TMonitor.Enter(Self);
+      try
+        Notified := Captured.Trim;
       finally
         TMonitor.Exit(Self);
       end;
@@ -180,6 +211,56 @@ Feature Cuando termina la espera de lo capturado @systemprocess @capture
       procedure(W: TCaptureWorld)
       begin
         Expect(W.Captured).ToContain('hola');
+      end)
+
+.Rule('Las notificaciones del final llegan despues de la salida capturada')
+
+  .Scenario('OnCompleted ve toda la salida capturada')
+    .Given('un hijo que escribe hola y termina, con la salida capturada por un manejador lento, y un OnCompleted que anota lo capturado',
+      procedure(W: TCaptureWorld)
+      begin
+        W.Proc := TSystemProcess.Builder
+          .Command('cmd /c echo hola')
+          .StandardOutput(TProcessOutput.Capture(W.SlowCapture(1000)))
+          .StandardError(TProcessOutput.Discard)
+          .HideWindow(True)
+          .OnCompleted(W.NoteCaptured())
+          .Build;
+      end)
+    .When('se ejecuta',
+      procedure(W: TCaptureWorld)
+      begin
+        W.Result := W.Proc.Execute;
+      end)
+    .&Then('lo que anoto OnCompleted es hola',
+      procedure(W: TCaptureWorld)
+      begin
+        Expect(Format('%s anotado=%s', [StatusText(W.Result.Status), W.Notified])).ToEqual('Completed anotado=hola');
+      end)
+
+  .Scenario('OnKilled ve toda la salida capturada')
+    .Given('un hijo que escribe hola y sigue vivo, con la salida capturada por un manejador mas lento que el plazo, un plazo corto y un OnKilled que anota lo capturado',
+      procedure(W: TCaptureWorld)
+      begin
+        // El manejador tarda mas que el plazo.
+        W.Proc := TSystemProcess.Builder
+          .Command('cmd /c echo hola & ping -n 10 127.0.0.1 >nul')
+          .StandardOutput(TProcessOutput.Capture(W.SlowCapture(4000)))
+          .StandardError(TProcessOutput.Discard)
+          .HideWindow(True)
+          .Timeout(3000)
+          .OnKilled(W.NoteCaptured())
+          .Build;
+      end)
+    .When('se ejecuta',
+      procedure(W: TCaptureWorld)
+      begin
+        W.Result := W.Proc.Execute;
+      end)
+    .&Then('el resultado es Timeout, y lo que anoto OnKilled es hola',
+      procedure(W: TCaptureWorld)
+      begin
+        Expect(Format('%s anotado=%s capturado=%s', [StatusText(W.Result.Status), W.Notified, W.Captured.Trim])).ToEqual('Timeout anotado=hola capturado=hola');
       end);
 
 end.

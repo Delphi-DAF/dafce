@@ -232,9 +232,12 @@ type
     procedure DoOutput(const Text: string; IsError: Boolean);
     // El hijo terminó: Killed si lo mató Kill, Completed si no, con su código de salida.
     procedure DoProcessEnded(var Result: TProcessResult);
-    procedure DoProcessFailed(var Result: TProcessResult; ErrorCode: DWORD; const Detail: string = '');
+    procedure DoProcessFailed(var Result: TProcessResult; ErrorCode: DWORD; const Detail: string = '';
+      Notify: Boolean = True);
     // La cancelación o el plazo cortan al hijo; si ya había terminado, el resultado es el suyo.
     procedure DoProcessCut(var Result: TProcessResult; Status: TProcessResult.TStatus);
+    // La notificación del final que corresponde al resultado.
+    procedure NotifyEnd(const Result: TProcessResult);
     procedure DoProcessIdle(var Result: TProcessResult);
 
     function TryCreateProcess(var ProcessResult: TProcessResult): Boolean;
@@ -1003,20 +1006,31 @@ begin
   GetExitCodeProcess(FProcessInfo.hProcess, Result.ExitCode);
   Result.Duration := FStopWatch.Elapsed;
   if Killed then
-  begin
-    Result.Status := TProcessResult.TStatus.Killed;
-    if Assigned(FOnKilled) then
-      FOnKilled(Result);
-  end
+    Result.Status := TProcessResult.TStatus.Killed
   else
-  begin
     Result.Status := TProcessResult.TStatus.Completed;
-    if Assigned(FOnCompleted) then
-      FOnCompleted(Result);
+end;
+
+procedure TSystemProcess.NotifyEnd(const Result: TProcessResult);
+begin
+  case Result.Status of
+    TProcessResult.TStatus.Completed:
+      if Assigned(FOnCompleted) then
+        FOnCompleted(Result);
+    TProcessResult.TStatus.Killed, TProcessResult.TStatus.Timeout:
+      if Assigned(FOnKilled) then
+        FOnKilled(Result);
+    TProcessResult.TStatus.Canceled:
+      if Assigned(FOnCancelled) then
+        FOnCancelled(Result);
+    TProcessResult.TStatus.Failed:
+      if Assigned(FOnFailed) then
+        FOnFailed(Result);
   end;
 end;
 
-procedure TSystemProcess.DoProcessFailed(var Result: TProcessResult; ErrorCode: DWORD; const Detail: string);
+procedure TSystemProcess.DoProcessFailed(var Result: TProcessResult; ErrorCode: DWORD; const Detail: string;
+  Notify: Boolean);
 begin
   Result.ExitCode := ErrorCode;
   Result.Status := TProcessResult.TStatus.Failed;
@@ -1024,8 +1038,8 @@ begin
   Result.LastError := SysErrorMessage(ErrorCode);
   if Detail <> '' then
     Result.LastError := Detail + ': ' + Result.LastError;
-  if Assigned(FOnFailed) then
-    OnFailed(Result);
+  if Notify and Assigned(FOnFailed) then
+    FOnFailed(Result);
 end;
 
 procedure TSystemProcess.DoProcessCut(var Result: TProcessResult; Status: TProcessResult.TStatus);
@@ -1043,20 +1057,13 @@ begin
     toAlreadyExited:
       DoProcessEnded(Result);
     toFailed:
-      DoProcessFailed(Result, ErrorCode);
+      DoProcessFailed(Result, ErrorCode, '', False);
   else
     // TerminateProcess no espera: el código de salida es el de matarlo cuando el hijo ya no corre.
     WaitForSingleObject(FProcessInfo.hProcess, 5000);
     GetExitCodeProcess(FProcessInfo.hProcess, Result.ExitCode);
     Result.Status := Status;
     Result.Duration := FStopWatch.Elapsed;
-    if Status = TProcessResult.TStatus.Canceled then
-    begin
-      if Assigned(FOnCancelled) then
-        FOnCancelled(Result);
-    end
-    else if Assigned(FOnKilled) then
-      FOnKilled(Result);
   end;
 end;
 
@@ -1180,7 +1187,7 @@ begin
 
       if WaitRes <> WAIT_TIMEOUT then
       begin
-        DoProcessFailed(ProcessResult, GetLastError);
+        DoProcessFailed(ProcessResult, GetLastError, '', False);
         Break;
       end;
 
@@ -1202,6 +1209,8 @@ begin
   finally
     Release;
   end;
+  // Con la captura ya entregada y todo cerrado salvo el proceso del hijo.
+  NotifyEnd(ProcessResult);
 end;
 
 procedure TSystemProcess.Release;
