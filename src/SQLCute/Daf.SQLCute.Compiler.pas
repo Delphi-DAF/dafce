@@ -66,6 +66,11 @@ type
     /// included. ANSI: <c> AS </c>.
     /// </summary>
     function AliasKeyword: string; virtual;
+    /// <summary>
+    /// The literal a logical comparison compares with. ANSI: <c>true</c> and
+    /// <c>false</c>.
+    /// </summary>
+    function BooleanLiteral(const Value: Boolean): string; virtual;
     /// <summary>A name, the alias keyword and the quoted alias.</summary>
     function WithAlias(const Expr, Alias: string): string;
     /// <summary>A name split at each dot, each part quoted but a bare <c>*</c>.</summary>
@@ -195,6 +200,14 @@ end;
 function TAnsiSqlCompiler.AliasKeyword: string;
 begin
   Result := ' AS ';
+end;
+
+function TAnsiSqlCompiler.BooleanLiteral(const Value: Boolean): string;
+begin
+  if Value then
+    Result := 'true'
+  else
+    Result := 'false';
 end;
 
 function TAnsiSqlCompiler.WithAlias(const Expr, Alias: string): string;
@@ -418,7 +431,9 @@ begin
 
   // --- TWhereClause: op-dispatch ---
   W := TWhereClause(Clause);
-  if W.IsColumnValue then
+  if W.IsBoolLiteral then
+    Result := WrapColumn(W.Column) + ' = ' + BooleanLiteral(W.Value)
+  else if W.IsColumnValue then
     Result := WrapColumn(W.Column) + ' ' + OperatorSymbol(W.Op) + ' ' + WrapColumn(VarToStr(W.Value))
   else
     case W.Op of

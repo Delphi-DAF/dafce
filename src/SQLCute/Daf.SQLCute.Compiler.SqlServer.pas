@@ -10,6 +10,7 @@ uses
 type
   TSqlServerCompiler = class(TAnsiSqlCompiler)
   protected
+    function BooleanLiteral(const Value: Boolean): string; override;
     function WrapIdentifier(const Name: string): string; override;
     function FormatPlaceholder(const Index: Integer): string; override;
     function CompileSelect(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string; override;
@@ -135,6 +136,14 @@ begin
       ColExpr := 'DATEPART(' + DatePartName[Clause.DatePart] + ', ' + WrapColumn(Clause.Column) + ')';
   end;
   Result := ColExpr + ' ' + OperatorSymbol(Clause.Op) + ' ?';
+end;
+
+function TSqlServerCompiler.BooleanLiteral(const Value: Boolean): string;
+begin
+  if Value then
+    Result := 'cast(1 as bit)'
+  else
+    Result := 'cast(0 as bit)';
 end;
 
 end.

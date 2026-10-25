@@ -66,8 +66,15 @@ Pasar `Null` directamente a `Where`, `OrWhere`, `WhereNot` u `OrWhereNot` compar
 ## Abreviatura Booleana
 
 ```pascal
-.WhereTrue('activo')    // → WHERE activo = TRUE
-.WhereFalse('bloqueado') // → WHERE bloqueado = FALSE
+.WhereTrue('activo')     // → WHERE activo = true
+.WhereFalse('bloqueado') // → WHERE bloqueado = false
+```
+
+La comparación es con el literal del dialecto, sin enlace: `true` y `false` en ANSI, Postgres, MySQL y Oracle, `1` y `0` en SQLite y Firebird, y `cast(1 as bit)` y `cast(0 as bit)` en SQL Server —ver [Compiladores de dialecto](dialects.es.md)—. `Where`, `OrWhere`, `WhereNot` y `OrWhereNot` con un valor lógico emiten lo mismo: con `=` o sin operador, la comparación con el literal; con cualquier otro operador, su negación, que se suma a la de `WhereNot`:
+
+```pascal
+.Where('activo', True)          // → WHERE activo = true
+.Where('activo', '<>', False)   // → WHERE NOT (activo = false)
 ```
 
 ---

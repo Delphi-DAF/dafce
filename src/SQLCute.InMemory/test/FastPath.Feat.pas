@@ -39,9 +39,21 @@ type
     property B: Integer read FB write FB;
   end;
 
+  /// <summary>A user with a logical column, for the WhereTrue scenario.</summary>
+  TActiveUser = class
+  private
+    FName: string;
+    FActive: Boolean;
+  public
+    constructor Create(const AName: string; const AActive: Boolean);
+    property Name: string read FName write FName;
+    property Active: Boolean read FActive write FActive;
+  end;
+
   TFastPathWorld = class
   public
     People: TObjectList<TPerson>;
+    Users: TObjectList<TActiveUser>;
     Names: TArray<string>;
     Count: Integer;
     SecondCount: Integer;
@@ -73,6 +85,13 @@ end;
 
 { TRow2 }
 
+constructor TActiveUser.Create(const AName: string; const AActive: Boolean);
+begin
+  inherited Create;
+  FName := AName;
+  FActive := AActive;
+end;
+
 constructor TRow2.Create(const AA, AB: Integer);
 begin
   inherited Create;
@@ -96,6 +115,7 @@ end;
 
 destructor TFastPathWorld.Destroy;
 begin
+  Users.Free;
   People.Free;
   inherited;
 end;
@@ -485,6 +505,30 @@ Feature SQLCute in-memory fast path @inmemory @fastpath
       procedure(W: TFastPathWorld)
       begin
         Expect(string.Join(',', W.Names)).ToEqual('Dan,Gus');
+      end)
+
+.Rule('WhereTrue still selects the true rows in memory')
+
+  .Scenario('In memory WhereTrue still selects the true ones')
+    .Given('a list of users with Active True in two of them',
+      procedure(W: TFastPathWorld)
+      begin
+        W.Users := TObjectList<TActiveUser>.Create(True);
+        W.Users.Add(TActiveUser.Create('Ann', True));
+        W.Users.Add(TActiveUser.Create('Bob', False));
+        W.Users.Add(TActiveUser.Create('Cara', True));
+      end)
+    .When('From(''users'').WhereTrue(''Active'') runs in memory',
+      procedure(W: TFastPathWorld)
+      begin
+        W.Names := nil;
+        for var U in TInMemory.Elements<TActiveUser>(TQuery.New.From('users').WhereTrue('Active'), W.Users) do
+          W.Names := W.Names + [U.Name];
+      end)
+    .&Then('it selects exactly those two',
+      procedure(W: TFastPathWorld)
+      begin
+        Expect(string.Join(',', W.Names)).ToEqual('Ann,Cara');
       end);
 
 end.

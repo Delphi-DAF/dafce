@@ -211,8 +211,8 @@ TQuery — JOIN / GROUP BY / CTE @unit @sqlcute
   .Scenario('JoinWithNestedGroup: JOIN ON with nested OR group @f4')
     .Given('a JOIN callback query with a nested group condition')
     .When('I compile with ANSI')
-    .&Then('SQL is "SELECT * FROM t INNER JOIN u ON (t.id = u.id AND (t.active = ? OR u.role = ?))"')
-    .&Then('has 2 bindings')
+    .&Then('SQL is "SELECT * FROM t INNER JOIN u ON (t.id = u.id AND (t.active = true OR u.role = ?))"')
+    .&Then('has 1 binding')
 
 // -------------------------------------------------------------------------
 

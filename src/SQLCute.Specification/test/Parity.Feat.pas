@@ -108,7 +108,7 @@ Feature One specification, two back-ends @expressions @parity
         Expect(W.Sql).ToContain('ORDER BY');
         Expect(W.Sql).ToContain('DESC');
         Expect(W.Placeholders).ToEqual(W.Bindings);
-        Expect(W.Bindings).ToEqual(2);
+        Expect(W.Bindings).ToEqual(1);
       end)
     .&Then('the in-memory lane returned the declared row set',
       procedure(W: TSpecParityWorld)

@@ -10,6 +10,7 @@ uses
 type
   TSQLiteCompiler = class(TAnsiSqlCompiler)
   protected
+    function BooleanLiteral(const Value: Boolean): string; override;
     function WrapIdentifier(const Name: string): string; override;
     function CompileDateWhere(const C: TSqlCompilation; const Clause: TDateWhereClause): string; override;
   end;
@@ -41,6 +42,14 @@ begin
       ColExpr := 'strftime(''' + StrftimeFmt[Clause.DatePart] + ''', ' + WrapColumn(Clause.Column) + ')';
   end;
   Result := ColExpr + ' ' + OperatorSymbol(Clause.Op) + ' ?';
+end;
+
+function TSQLiteCompiler.BooleanLiteral(const Value: Boolean): string;
+begin
+  if Value then
+    Result := '1'
+  else
+    Result := '0';
 end;
 
 end.

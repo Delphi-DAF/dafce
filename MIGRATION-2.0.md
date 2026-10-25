@@ -732,6 +732,17 @@ end;
   on any engine.
 - **What breaks**: code that counted that binding, or relied on the condition matching nothing.
 
+### 30. SQLCute: a logical value is compared with the dialect's literal
+
+- **`WhereTrue('active')` and `Where('active', True)` emit `active = true`**, with no binding. The
+  literal is `true` and `false` in ANSI, Postgres, MySQL and Oracle, `1` and `0` in SQLite and
+  Firebird, and `cast(1 as bit)` and `cast(0 as bit)` in SQL Server. With an operator other than `=`
+  the comparison is negated: `Where('active', '<>', False)` emits `NOT (active = false)`. In 1.6 the
+  value was bound to `active = ?`.
+- **Oracle understands `true` from Oracle 23, and a Firebird `BOOLEAN` column rejects `= 1`**: on
+  either, write the condition with `WhereRaw`.
+- **What breaks**: code that counted the bindings, or relied on the binding being typed as a Boolean.
+
 ## How to do it
 
 1. Compile. Whatever is missing comes out as a compiler error, not as odd behaviour at run time.
@@ -745,6 +756,6 @@ end;
    A Scoped service asked of the root provider is rejected too, when it is resolved: resolve it from a
    scope the work opens, `Services.CreateScope`. So is a Scoped a Singleton resolves: the Singleton
    resolves it in a scope it opens through `IServiceScopeFactory`.
-6. Sections 2, 6 to 13 and 15 to 29 carry **run-time** changes: the compiler says nothing about them. Read them
+6. Sections 2, 6 to 13 and 15 to 30 carry **run-time** changes: the compiler says nothing about them. Read them
    against your own composition — scope lifetimes, duplicate registrations, logging rules and
    host settings.

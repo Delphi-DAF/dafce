@@ -49,8 +49,8 @@ TQuery — DML @unit @sqlcute
   .Scenario('INSERT FROM SELECT')
     .Given('an INSERT FROM SELECT query')
     .When('I compile with ANSI')
-    .&Then('SQL is "INSERT INTO archive (id, name) SELECT id, name FROM users WHERE active = ?"')
-    .&Then('has 1 binding')
+    .&Then('SQL is "INSERT INTO archive (id, name) SELECT id, name FROM users WHERE active = true"')
+    .&Then('has 0 bindings')
 
 // -------------------------------------------------------------------------
 

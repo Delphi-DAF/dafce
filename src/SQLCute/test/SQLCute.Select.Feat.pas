@@ -174,8 +174,8 @@ TQuery — SELECT @unit @sqlcute
   .Scenario('Select with WHERE and LIMIT')
     .Given('a combined SELECT WHERE LIMIT query')
     .When('I compile with ANSI')
-    .&Then('SQL is "SELECT id, name FROM users WHERE active = ? LIMIT 10"')
-    .&Then('has 1 binding')
+    .&Then('SQL is "SELECT id, name FROM users WHERE active = true LIMIT 10"')
+    .&Then('has 0 bindings')
 
 // -------------------------------------------------------------------------
 

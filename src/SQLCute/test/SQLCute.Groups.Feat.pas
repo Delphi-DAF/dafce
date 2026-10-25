@@ -36,8 +36,8 @@ TQuery — WHERE groups, WhereColumns, When @unit @sqlcute @f2
   .Scenario('Single AND group at top level needs no redundant parentheses')
     .Given('a WHERE group query')
     .When('I compile with ANSI')
-    .&Then('SQL is "SELECT * FROM users WHERE age > ? AND active = ?"')
-    .&Then('has 2 bindings')
+    .&Then('SQL is "SELECT * FROM users WHERE age > ? AND active = true"')
+    .&Then('has 1 binding')
 
   .Scenario('Outer condition AND group keeps correct connectors')
     .Given('a WHERE group with outer AND condition')
@@ -54,8 +54,8 @@ TQuery — WHERE groups, WhereColumns, When @unit @sqlcute @f2
   .Scenario('OrWhere(callback) connects the group with OR')
     .Given('an OR WHERE group query')
     .When('I compile with ANSI')
-    .&Then('SQL is "SELECT * FROM users WHERE vip = ? OR (age > ? AND active = ?)"')
-    .&Then('has 3 bindings')
+    .&Then('SQL is "SELECT * FROM users WHERE vip = true OR (age > ? AND active = true)"')
+    .&Then('has 1 binding')
 
 // -------------------------------------------------------------------------
 
@@ -124,8 +124,8 @@ TQuery — WHERE groups, WhereColumns, When @unit @sqlcute @f2
   .Scenario('WhereColumns combined with a value WHERE')
     .Given('a WhereColumns combined with WHERE query')
     .When('I compile with ANSI')
-    .&Then('SQL is "SELECT * FROM products WHERE active = ? AND price > min_price"')
-    .&Then('has 1 binding')
+    .&Then('SQL is "SELECT * FROM products WHERE active = true AND price > min_price"')
+    .&Then('has 0 bindings')
 
 // -------------------------------------------------------------------------
 
@@ -134,8 +134,8 @@ TQuery — WHERE groups, WhereColumns, When @unit @sqlcute @f2
   .Scenario('When condition is true — branch is applied')
     .Given('a When true query')
     .When('I compile with ANSI')
-    .&Then('SQL is "SELECT * FROM users WHERE active = ?"')
-    .&Then('has 1 binding')
+    .&Then('SQL is "SELECT * FROM users WHERE active = true"')
+    .&Then('has 0 bindings')
 
   .Scenario('When condition is false — branch is skipped')
     .Given('a When false query')
@@ -146,8 +146,8 @@ TQuery — WHERE groups, WhereColumns, When @unit @sqlcute @f2
   .Scenario('When condition is false — false callback is applied')
     .Given('a When with false callback query')
     .When('I compile with ANSI')
-    .&Then('SQL is "SELECT * FROM users WHERE archived = ?"')
-    .&Then('has 1 binding')
+    .&Then('SQL is "SELECT * FROM users WHERE archived = true"')
+    .&Then('has 0 bindings')
 
 ;
 

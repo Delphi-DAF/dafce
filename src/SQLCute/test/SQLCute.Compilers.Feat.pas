@@ -10,7 +10,11 @@ interface
 implementation
 
 uses
+  System.SysUtils,
   Daf.MiniSpec,
+  Daf.SQLCute,
+  Daf.SQLCute.Compiler.SqlServer,
+  Daf.SQLCute.Compiler.SQLite,
   SQLCute.SpecHelpers;
 
 initialization
@@ -186,6 +190,52 @@ TQuery — Dialect Compilers @unit @sqlcute
     .When('compiled with the "SqlServer" dialect')
     .&Then('SQL is "SELECT * FROM [people] ORDER BY [age] ASC"')
     .&Then('SQL does not contain "CASE"')
+
+// -------------------------------------------------------------------------
+
+.Rule('WhereTrue and Where with a logical value emit the dialect literal')
+
+  .Scenario('WhereTrue in SQL Server')
+    .When('query calls From(''users'').WhereTrue(''active''), compiled with TSqlServerCompiler',
+      procedure(W: TSQLCuteWorld)
+      begin
+        W.Compiler := TSqlServerCompiler.Create;
+        W.LastResult := W.Compiler.Compile(TQuery.New.From('users').WhereTrue('active'));
+      end)
+    .&Then('SQL is SELECT * FROM [users] WHERE [active] = cast(1 as bit) with 0 bindings',
+      procedure(W: TSQLCuteWorld)
+      begin
+        Expect(Format('%s | %d', [W.LastResult.SQL, Length(W.LastResult.Bindings)]))
+          .ToEqual('SELECT * FROM [users] WHERE [active] = cast(1 as bit) | 0');
+      end)
+
+  .Scenario('WhereTrue in SQLite')
+    .When('query calls From(''users'').WhereTrue(''active''), compiled with TSQLiteCompiler',
+      procedure(W: TSQLCuteWorld)
+      begin
+        W.Compiler := TSQLiteCompiler.Create;
+        W.LastResult := W.Compiler.Compile(TQuery.New.From('users').WhereTrue('active'));
+      end)
+    .&Then('SQL is SELECT * FROM "users" WHERE "active" = 1 with 0 bindings',
+      procedure(W: TSQLCuteWorld)
+      begin
+        Expect(Format('%s | %d', [W.LastResult.SQL, Length(W.LastResult.Bindings)]))
+          .ToEqual('SELECT * FROM "users" WHERE "active" = 1 | 0');
+      end)
+
+  .Scenario('Where with True in SQL Server')
+    .When('query calls From(''users'').Where(''active'', True), compiled with TSqlServerCompiler',
+      procedure(W: TSQLCuteWorld)
+      begin
+        W.Compiler := TSqlServerCompiler.Create;
+        W.LastResult := W.Compiler.Compile(TQuery.New.From('users').Where('active', True));
+      end)
+    .&Then('SQL is SELECT * FROM [users] WHERE [active] = cast(1 as bit) with 0 bindings',
+      procedure(W: TSQLCuteWorld)
+      begin
+        Expect(Format('%s | %d', [W.LastResult.SQL, Length(W.LastResult.Bindings)]))
+          .ToEqual('SELECT * FROM [users] WHERE [active] = cast(1 as bit) | 0');
+      end)
 
 ;
 

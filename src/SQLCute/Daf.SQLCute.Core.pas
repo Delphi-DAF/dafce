@@ -288,8 +288,18 @@ function TQueryImpl.AddWhereClause(const Column: string; Op: TWhereOp;
   const Value: Variant; Conn: TBoolOp; IsNot: Boolean): IQuery;
 var
   W: TWhereClause;
+  BoolLiteral: Boolean;
 begin
   Op := NullAwareOp(Op, Value);
+  // A logical value compares with the dialect literal, as SqlKata does: = keeps the comparison, any
+  // other operator negates it, and that negation adds to the one of WhereNot.
+  BoolLiteral := (VarType(Value) = varBoolean) and not (Op in [TWhereOp.IsNull, TWhereOp.IsNotNull]);
+  if BoolLiteral then
+  begin
+    if Op <> TWhereOp.Equal then
+      IsNot := not IsNot;
+    Op := TWhereOp.Equal;
+  end;
   // IN by operator name goes the WhereIn way: one bound parameter per value, never the value
   // written into the SQL text.
   if Op in [TWhereOp.&In, TWhereOp.NotIn] then
@@ -301,6 +311,7 @@ begin
   W.Connector     := Conn;
   W.IsNot         := IsNot;
   W.CaseSensitive := True;  // raw LIKE via Where(col,'LIKE',val) is always case-sensitive
+  W.IsBoolLiteral := BoolLiteral;
   FClauses.Add(W);
   Result := Self;
 end;

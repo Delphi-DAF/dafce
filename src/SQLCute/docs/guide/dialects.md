@@ -32,6 +32,8 @@ The default `TAnsiSqlCompiler` generates generic ANSI SQL with `?` placeholders 
 
 A quoting dialect quotes each part of a qualified name on its own — `"public"."users"`, `[users].[id]` — leaves a trailing `*` bare, and doubles its closing character inside a name. A column written `name as alias` is split: `Select('users.name as n')` compiles to `SELECT "users"."name" AS "n"` in Postgres. Oracle writes its aliases without `AS`: `FROM "USERS" "U"`.
 
+A logical comparison — `WhereTrue`, `WhereFalse`, or `Where` with a logical value — compares with the dialect's literal, with no binding: `true` and `false` in ANSI, Postgres, MySQL and Oracle, `1` and `0` in SQLite and Firebird, and `cast(1 as bit)` and `cast(0 as bit)` in SQL Server. Oracle understands `true` from Oracle 23. In Firebird, `= 1` suits a `SMALLINT` flag column, and a `BOOLEAN` column (Firebird 3 and later) rejects it with a conversion error: for one, write the condition with `WhereRaw`.
+
 All dialect compilers ship in the `Daf.SQLCute` package, alongside the `TAnsiSqlCompiler` they extend. Requiring `Daf.SQLCute` is enough — there is no separate compilers package to add.
 
 ---
@@ -56,13 +58,13 @@ uses
 
 var Q := TQuery.New
   .From('users')
-  .Where('active', True)
+  .Where('status', 'open')
   .OrderBy('name');
 
 var Compiler: IQueryCompiler := TPostgresCompiler.Create;
 var R := Compiler.Compile(Q);
-// R.SQL      → 'SELECT * FROM "users" WHERE "active" = $1 ORDER BY "name"'
-// R.Bindings → [True]
+// R.SQL      → 'SELECT * FROM "users" WHERE "status" = $1 ORDER BY "name"'
+// R.Bindings → ['open']
 ```
 
 Or use the shorthand `Q.Compile(Compiler)`:

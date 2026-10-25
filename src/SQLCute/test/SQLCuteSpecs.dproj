@@ -125,6 +125,7 @@
         <DCCReference Include="SQLCute.Reentrancy.Feat.pas"/>
         <DCCReference Include="SQLCute.Identifiers.Feat.pas"/>
         <DCCReference Include="SQLCute.Operators.Validation.Feat.pas"/>
+        <DCCReference Include="SQLCute.Booleans.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>

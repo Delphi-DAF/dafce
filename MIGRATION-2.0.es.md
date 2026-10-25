@@ -736,6 +736,18 @@ end;
 - **Qué rompe**: el código que contaba ese enlace, o que contaba con que la condición no casara con
   nada.
 
+### 30. SQLCute: un valor lógico se compara con el literal del dialecto
+
+- **`WhereTrue('activo')` y `Where('activo', True)` emiten `activo = true`**, sin enlace. El literal es
+  `true` y `false` en ANSI, Postgres, MySQL y Oracle, `1` y `0` en SQLite y Firebird, y
+  `cast(1 as bit)` y `cast(0 as bit)` en SQL Server. Con un operador distinto de `=` la comparación se
+  niega: `Where('activo', '<>', False)` emite `NOT (activo = false)`. En 1.6 el valor se ligaba a
+  `activo = ?`.
+- **Oracle entiende `true` desde Oracle 23, y una columna `BOOLEAN` de Firebird rechaza `= 1`**: en
+  cualquiera de los dos, la condición se escribe con `WhereRaw`.
+- **Qué rompe**: el código que contaba los enlaces, o que contaba con que ese enlace fuera de tipo
+  lógico.
+
 ## Cómo hacerlo
 
 1. Compila. Lo que falte sale como error del compilador, no como comportamiento raro en
@@ -751,6 +763,6 @@ end;
    resolverlo: se resuelve desde un ámbito que abre el trabajo, `Services.CreateScope`. También un
    Scoped que resuelve un Singleton: el Singleton lo resuelve en un ámbito que abre con
    `IServiceScopeFactory`.
-6. Las secciones 2, de la 6 a la 13 y de la 15 a la 29 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
+6. Las secciones 2, de la 6 a la 13 y de la 15 a la 30 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
    contra tu propia composición — la vida de los ámbitos, los registros repetidos, las reglas de
    logging y los ajustes del host.

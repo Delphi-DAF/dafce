@@ -96,8 +96,8 @@ TQuery — WHERE @unit @sqlcute
   .Scenario('WHERE column = value')
     .Given('a query from "users" where "active" = True')
     .When('I compile with ANSI')
-    .&Then('SQL is "SELECT * FROM users WHERE active = ?"')
-    .&Then('has 1 binding')
+    .&Then('SQL is "SELECT * FROM users WHERE active = true"')
+    .&Then('has 0 bindings')
 
   .Scenario('WHERE column = integer value')
     .Given('a query from "users" where "age" = 30')
@@ -152,8 +152,8 @@ TQuery — WHERE @unit @sqlcute
   .Scenario('Two WHERE calls use AND by default')
     .Given('a query from "users" with two AND conditions')
     .When('I compile with ANSI')
-    .&Then('SQL is "SELECT * FROM users WHERE active = ? AND age > ?"')
-    .&Then('has 2 bindings')
+    .&Then('SQL is "SELECT * FROM users WHERE active = true AND age > ?"')
+    .&Then('has 1 binding')
 
   .Scenario('OR WHERE inserts an OR connector')
     .Given('a query from "roles" with two OR conditions')
@@ -194,8 +194,8 @@ TQuery — WHERE @unit @sqlcute
   .Scenario('WhereIn chained with another WHERE')
     .Given('a WhereIn combined with WHERE')
     .When('I compile with ANSI')
-    .&Then('SQL is "SELECT * FROM users WHERE role IN (?, ?) AND active = ?"')
-    .&Then('has 3 bindings')
+    .&Then('SQL is "SELECT * FROM users WHERE role IN (?, ?) AND active = true"')
+    .&Then('has 2 bindings')
 
   .Scenario('WhereNotIn with a list of strings')
     .Given('a WhereNotIn query')
@@ -210,14 +210,14 @@ TQuery — WHERE @unit @sqlcute
   .Scenario('OrWhereIn appends with OR')
     .Given('an OrWhereIn query')
     .When('I compile with ANSI')
-    .&Then('SQL is "SELECT * FROM users WHERE active = ? OR id IN (?, ?)"')
-    .&Then('has 3 bindings')
+    .&Then('SQL is "SELECT * FROM users WHERE active = true OR id IN (?, ?)"')
+    .&Then('has 2 bindings')
 
   .Scenario('OrWhereNotIn appends with OR')
     .Given('an OrWhereNotIn query')
     .When('I compile with ANSI')
-    .&Then('SQL is "SELECT * FROM users WHERE active = ? OR status NOT IN (?, ?)"')
-    .&Then('has 3 bindings')
+    .&Then('SQL is "SELECT * FROM users WHERE active = true OR status NOT IN (?, ?)"')
+    .&Then('has 2 bindings')
 
 // -------------------------------------------------------------------------
 
@@ -239,8 +239,8 @@ TQuery — WHERE @unit @sqlcute
   .Scenario('not in is bound the same way')
     .Given('an OrWhere with the not in operator and an array')
     .When('I compile with ANSI')
-    .&Then('SQL is "SELECT * FROM users WHERE active = ? OR id NOT IN (?, ?)"')
-    .&Then('has 3 bindings')
+    .&Then('SQL is "SELECT * FROM users WHERE active = true OR id NOT IN (?, ?)"')
+    .&Then('has 2 bindings')
 
 // -------------------------------------------------------------------------
 
@@ -286,19 +286,19 @@ TQuery — WHERE @unit @sqlcute
 
 // -------------------------------------------------------------------------
 
-.Rule('WhereTrue and WhereFalse bind boolean values')
+.Rule('WhereTrue and WhereFalse emit the dialect literal')
 
-  .Scenario('WhereTrue produces column = ? with binding True')
+  .Scenario('WhereTrue in ANSI')
     .Given('a WhereTrue query')
     .When('I compile with ANSI')
-    .&Then('SQL is "SELECT * FROM users WHERE active = ?"')
-    .&Then('has 1 binding')
+    .&Then('SQL is "SELECT * FROM users WHERE active = true"')
+    .&Then('has 0 bindings')
 
-  .Scenario('WhereFalse produces column = ? with binding False')
+  .Scenario('WhereFalse in ANSI')
     .Given('a WhereFalse query')
     .When('I compile with ANSI')
-    .&Then('SQL is "SELECT * FROM users WHERE active = ?"')
-    .&Then('has 1 binding')
+    .&Then('SQL is "SELECT * FROM users WHERE active = false"')
+    .&Then('has 0 bindings')
 
 // -------------------------------------------------------------------------
 
@@ -313,8 +313,8 @@ TQuery — WHERE @unit @sqlcute
   .Scenario('OrWhereNot appends with OR NOT')
     .Given('an OrWhereNot query')
     .When('I compile with ANSI')
-    .&Then('SQL is "SELECT * FROM users WHERE status = ? OR NOT (archived = ?)"')
-    .&Then('has 2 bindings')
+    .&Then('SQL is "SELECT * FROM users WHERE status = ? OR NOT (archived = true)"')
+    .&Then('has 1 binding')
 
   .Scenario('WhereNot with operator wraps condition in NOT')
     .Given('a WhereNot with operator query')
@@ -325,8 +325,8 @@ TQuery — WHERE @unit @sqlcute
   .Scenario('OrWhereNot with operator appends with OR NOT')
     .Given('an OrWhereNot with operator query')
     .When('I compile with ANSI')
-    .&Then('SQL is "SELECT * FROM users WHERE active = ? OR NOT (score < ?)"')
-    .&Then('has 2 bindings')
+    .&Then('SQL is "SELECT * FROM users WHERE active = true OR NOT (score < ?)"')
+    .&Then('has 1 binding')
 
 // -------------------------------------------------------------------------
 
@@ -347,8 +347,8 @@ TQuery — WHERE @unit @sqlcute
   .Scenario('OrWhereNotBetween appends with OR NOT BETWEEN')
     .Given('an OrWhereNotBetween query')
     .When('I compile with ANSI')
-    .&Then('SQL is "SELECT * FROM users WHERE active = ? OR score NOT BETWEEN ? AND ?"')
-    .&Then('has 3 bindings')
+    .&Then('SQL is "SELECT * FROM users WHERE active = true OR score NOT BETWEEN ? AND ?"')
+    .&Then('has 2 bindings')
 
 // -------------------------------------------------------------------------
 
@@ -357,14 +357,14 @@ TQuery — WHERE @unit @sqlcute
   .Scenario('OrWhereExists appends with OR EXISTS')
     .Given('an OrWhereExists query')
     .When('I compile with ANSI')
-    .&Then('SQL is "SELECT * FROM users WHERE active = ? OR EXISTS (SELECT * FROM orders WHERE user_id = ?)"')
-    .&Then('has 2 bindings')
+    .&Then('SQL is "SELECT * FROM users WHERE active = true OR EXISTS (SELECT * FROM orders WHERE user_id = ?)"')
+    .&Then('has 1 binding')
 
   .Scenario('OrWhereNotExists appends with OR NOT EXISTS')
     .Given('an OrWhereNotExists query')
     .When('I compile with ANSI')
-    .&Then('SQL is "SELECT * FROM users WHERE active = ? OR NOT EXISTS (SELECT * FROM orders WHERE user_id = ?)"')
-    .&Then('has 2 bindings')
+    .&Then('SQL is "SELECT * FROM users WHERE active = true OR NOT EXISTS (SELECT * FROM orders WHERE user_id = ?)"')
+    .&Then('has 1 binding')
 
 // -------------------------------------------------------------------------
 
@@ -379,8 +379,8 @@ TQuery — WHERE @unit @sqlcute
   .Scenario('OrWhereInQuery appends with OR IN (subquery)')
     .Given('an OrWhereInQuery query')
     .When('I compile with ANSI')
-    .&Then('SQL is "SELECT * FROM users WHERE active = ? OR id IN (SELECT id FROM vip)"')
-    .&Then('has 1 binding')
+    .&Then('SQL is "SELECT * FROM users WHERE active = true OR id IN (SELECT id FROM vip)"')
+    .&Then('has 0 bindings')
 
   .Scenario('WhereInQuery produces IN (subquery)')
     .Given('a WhereInQuery query')
@@ -391,8 +391,8 @@ TQuery — WHERE @unit @sqlcute
   .Scenario('OrWhereNotInQuery appends with OR NOT IN (subquery)')
     .Given('an OrWhereNotInQuery query')
     .When('I compile with ANSI')
-    .&Then('SQL is "SELECT * FROM users WHERE active = ? OR id NOT IN (SELECT user_id FROM banned)"')
-    .&Then('has 1 binding')
+    .&Then('SQL is "SELECT * FROM users WHERE active = true OR id NOT IN (SELECT user_id FROM banned)"')
+    .&Then('has 0 bindings')
 
 // -------------------------------------------------------------------------
 // The empty value set. `x IN (a, b)` is `x = a OR x = b`, so an empty list is
@@ -474,7 +474,7 @@ TQuery — WHERE @unit @sqlcute
       procedure(W: TSQLCuteWorld)
       begin
         Expect(W.LastResult.SQL).ToEqual(
-          'SELECT * FROM products WHERE active = ? OR (price IS NULL AND price IS NOT NULL)');
+          'SELECT * FROM products WHERE active = true OR (price IS NULL AND price IS NOT NULL)');
       end)
     .&Then('and it carries the connector as the enum the normalizer reads on a group',
       procedure(W: TSQLCuteWorld)

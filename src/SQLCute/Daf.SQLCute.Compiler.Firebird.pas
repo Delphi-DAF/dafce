@@ -10,6 +10,7 @@ uses
 type
   TFirebirdCompiler = class(TAnsiSqlCompiler)
   protected
+    function BooleanLiteral(const Value: Boolean): string; override;
     function CompileLimit(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string; override;
     function CompileOffset(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string; override;
     function CompileDateWhere(const C: TSqlCompilation; const Clause: TDateWhereClause): string; override;
@@ -90,6 +91,14 @@ begin
       ColExpr := 'EXTRACT(' + ExtractPart[Clause.DatePart] + ' FROM ' + WrapColumn(Clause.Column) + ')';
   end;
   Result := ColExpr + ' ' + OperatorSymbol(Clause.Op) + ' ?';
+end;
+
+function TFirebirdCompiler.BooleanLiteral(const Value: Boolean): string;
+begin
+  if Value then
+    Result := '1'
+  else
+    Result := '0';
 end;
 
 end.

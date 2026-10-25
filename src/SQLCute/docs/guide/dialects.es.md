@@ -32,6 +32,8 @@ El `TAnsiSqlCompiler` por defecto genera SQL ANSI genérico con marcadores `?` y
 
 Un dialecto que entrecomilla entrecomilla por separado cada parte de un nombre cualificado —`"public"."users"`, `[users].[id]`—, deja sin comillas un `*` final y duplica dentro de un nombre su carácter de cierre. Una columna escrita `nombre as alias` se separa: `Select('users.name as n')` compila a `SELECT "users"."name" AS "n"` en Postgres. Oracle escribe sus alias sin `AS`: `FROM "USERS" "U"`.
 
+Una comparación lógica —`WhereTrue`, `WhereFalse`, o `Where` con un valor lógico— compara con el literal del dialecto, sin enlace: `true` y `false` en ANSI, Postgres, MySQL y Oracle, `1` y `0` en SQLite y Firebird, y `cast(1 as bit)` y `cast(0 as bit)` en SQL Server. Oracle entiende `true` desde Oracle 23. En Firebird, `= 1` sirve a una columna `SMALLINT` que hace de indicador, y una columna `BOOLEAN` (Firebird 3 en adelante) lo rechaza con un error de conversión: para ella, la condición se escribe con `WhereRaw`.
+
 Todos los compiladores de dialecto viven en el paquete `Daf.SQLCute`, junto al `TAnsiSqlCompiler` del que extienden. Basta con requerir `Daf.SQLCute`: no hay un paquete de compiladores aparte que añadir.
 
 ---
@@ -56,13 +58,13 @@ uses
 
 var Q := TQuery.New
   .From('usuarios')
-  .Where('activo', True)
+  .Where('estado', 'abierto')
   .OrderBy('nombre');
 
 var Compilador: IQueryCompiler := TPostgresCompiler.Create;
 var R := Compilador.Compile(Q);
-// R.SQL      → 'SELECT * FROM "usuarios" WHERE "activo" = $1 ORDER BY "nombre"'
-// R.Bindings → [True]
+// R.SQL      → 'SELECT * FROM "usuarios" WHERE "estado" = $1 ORDER BY "nombre"'
+// R.Bindings → ['abierto']
 ```
 
 O usa el atajo `Q.Compile(Compilador)`:

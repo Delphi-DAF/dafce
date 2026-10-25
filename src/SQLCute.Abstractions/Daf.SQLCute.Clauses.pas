@@ -145,6 +145,9 @@ type
     /// When False (default), the compiler wraps the column in LOWER() and
     /// lower-cases the binding value to achieve case-insensitive matching.
     CaseSensitive: Boolean;
+    /// When True, Value is a Boolean and the condition compares the column with
+    /// the dialect's literal for it, with no binding.
+    IsBoolLiteral: Boolean;
     function Clone: TAbstractClause; override;
   end;
 
@@ -464,6 +467,7 @@ begin
   C.SubQuery      := SubQuery;
   C.IsColumnValue := IsColumnValue;
   C.CaseSensitive := CaseSensitive;
+  C.IsBoolLiteral := IsBoolLiteral;
   Result := C;
 end;
 
