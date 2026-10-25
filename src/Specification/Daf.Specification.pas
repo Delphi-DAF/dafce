@@ -972,11 +972,35 @@ end;
 
 { ExprToText }
 
+// A floating-point number in invariant format, with 15 significant digits when
+// they read back as the same value and 17 otherwise, so two values that differ
+// never share a text.
+function FloatText(const D: Double): string;
+var
+  Back: Double;
+begin
+  Result := FloatToStrF(D, ffGeneral, 15, 0, TFormatSettings.Invariant);
+  if not (TryStrToFloat(Result, Back, TFormatSettings.Invariant) and (Back = D)) then
+    Result := FloatToStrF(D, ffGeneral, 17, 0, TFormatSettings.Invariant);
+end;
+
 // A value's rendering carries its Variant type as well as its text, so 100 and
 // '100' are not silently the same key.
 function ValueText(const V: Variant): string;
+var
+  Text: string;
 begin
-  Result := Format('%s#%d', [VarToStrDef(V, 'null'), VarType(V)]);
+  case VarType(V) and varTypeMask of
+    varSingle, varDouble:
+      Text := FloatText(V);
+    varDate:
+      Text := FloatText(VarToDateTime(V));
+    varCurrency:
+      Text := CurrToStr(V, TFormatSettings.Invariant);
+  else
+    Text := VarToStrDef(V, 'null');
+  end;
+  Result := Format('%s#%d', [Text, VarType(V)]);
 end;
 
 function ExprToText(const Node: IExpr): string;

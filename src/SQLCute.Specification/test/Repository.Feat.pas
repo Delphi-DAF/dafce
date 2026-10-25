@@ -47,6 +47,10 @@ type
     Specs: TArray<TSpecification<TProduct>>;
     Expected: TArray<string>;
     Failures: TArray<string>;
+    /// A repository over one product priced 0.3, and the two answers it gave.
+    Thirty: TObjectList<TProduct>;
+    PriceRepo: TInMemoryRepository<TProduct>;
+    PricePort: IRepository<TProduct>;
     constructor Create;
     destructor Destroy; override;
     procedure Race;
@@ -72,9 +76,16 @@ end;
 
 destructor TRepositoryWorld.Destroy;
 begin
+  PricePort := nil;
+  Thirty.Free;
   Port := nil;
   Products.Free;
   inherited;
+end;
+
+function DoubleFromBits(const Bits: Int64): Double;
+begin
+  PInt64(@Result)^ := Bits;
 end;
 
 function NamesFrom(const Items: TArray<TProduct>): TArray<string>;
@@ -253,6 +264,33 @@ Feature In-memory repository adapter @expressions @repository
         // Translatable is not the same as in-memory-executable. The failure above
         // is the lane's, not the emission's — and it is loud at plan-compile time.
         Expect(W.Sql).ToContain('EXISTS');
+      end)
+
+.Rule('The repository answers each specification with its own plan')
+
+  .Scenario('Two Doubles that differ in their last digits get two plans')
+    .Given('an in-memory repository with one product priced 0.3',
+      procedure(W: TRepositoryWorld)
+      begin
+        W.Thirty := TObjectList<TProduct>.Create(True);
+        W.Thirty.Add(TProduct.Create('Washer', DoubleFromBits($3FD3333333333333), True));
+        W.PriceRepo := TInMemoryRepository<TProduct>.Create(W.Thirty);
+        W.PricePort := W.PriceRepo;
+      end)
+    .When('it is asked for Price < 0.30000000000000004 and then for Price < 0.3',
+      procedure(W: TRepositoryWorld)
+      begin
+        W.Cheap := NamesFrom(W.PricePort.List(
+          TSpecification<TProduct>.New.Where(Prop('Price') < DoubleFromBits($3FD3333333333334))));
+        W.Expensive := NamesFrom(W.PricePort.List(
+          TSpecification<TProduct>.New.Where(Prop('Price') < DoubleFromBits($3FD3333333333333))));
+      end)
+    .&Then('the first returns the product, the second does not, and the repository compiled two plans',
+      procedure(W: TRepositoryWorld)
+      begin
+        Expect(string.Join(',', W.Cheap)).ToEqual('Washer');
+        Expect(Length(W.Expensive)).ToEqual(0);
+        Expect(W.PriceRepo.Compiled).ToEqual(2);
       end)
 
 .Rule('An in-memory repository serves several threads')

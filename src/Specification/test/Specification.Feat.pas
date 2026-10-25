@@ -56,11 +56,21 @@ type
     KeyC: string;
   end;
 
+/// <summary>The Double whose IEEE 754 bits are <c>Bits</c>.</summary>
+function DoubleFromBits(const Bits: Int64): Double;
+
 implementation
 
 uses
   System.SysUtils,
+  System.DateUtils,
+  System.Variants,
   Daf.MiniSpec;
+
+function DoubleFromBits(const Bits: Int64): Double;
+begin
+  PInt64(@Result)^ := Bits;
+end;
 
 { TStubRepository<T> }
 
@@ -144,6 +154,48 @@ Feature Specifications and the repository port @expressions @specification
       begin
         Expect(W.KeyA).ToEqual(W.KeyB);
         Expect(W.KeyA).ToNotEqual(W.KeyC);
+      end)
+
+.Rule('The key tells apart values that differ')
+
+  .Scenario('A millisecond changes the key')
+    .Given('two specifications filtering CreatedAt by two dates a millisecond apart',
+      procedure(W: TSpecificationWorld)
+      begin
+        W.SpecA := TSpecification<TProduct>.New.Where(
+          Prop('CreatedAt') > VarFromDateTime(EncodeDateTime(2026, 1, 1, 10, 0, 0, 0)));
+        W.SpecB := TSpecification<TProduct>.New.Where(
+          Prop('CreatedAt') > VarFromDateTime(EncodeDateTime(2026, 1, 1, 10, 0, 0, 1)));
+      end)
+    .When('each one is asked for its key',
+      procedure(W: TSpecificationWorld)
+      begin
+        W.KeyA := W.SpecA.Key;
+        W.KeyB := W.SpecB.Key;
+      end)
+    .&Then('the two keys differ',
+      procedure(W: TSpecificationWorld)
+      begin
+        Expect(W.KeyA).ToNotEqual(W.KeyB);
+      end)
+
+  .Scenario('The last digits of a Double change the key')
+    .Given('two specifications filtering Price < 0.30000000000000004 and Price < 0.3, two distinct Doubles',
+      procedure(W: TSpecificationWorld)
+      begin
+        W.SpecA := TSpecification<TProduct>.New.Where(Prop('Price') < DoubleFromBits($3FD3333333333334));
+        W.SpecB := TSpecification<TProduct>.New.Where(Prop('Price') < DoubleFromBits($3FD3333333333333));
+      end)
+    .When('each one is asked for its key',
+      procedure(W: TSpecificationWorld)
+      begin
+        W.KeyA := W.SpecA.Key;
+        W.KeyB := W.SpecB.Key;
+      end)
+    .&Then('the two keys differ',
+      procedure(W: TSpecificationWorld)
+      begin
+        Expect(W.KeyA).ToNotEqual(W.KeyB);
       end)
 
 .Rule('The port imposes no base class, and no SQL')
