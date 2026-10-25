@@ -288,7 +288,8 @@ Set environment via OS variable before launching:
 DAF_ENVIRONMENT=Development
 ```
 
-Accepted shorthands: `deve`, `stag`, `prod`, `test` (case-insensitive).
+Any other name, such as `QA`, is one more environment, with its own `appsettings.QA.json`. The `Is…`
+questions compare the name without regard to case.
 
 In `Development` the host also validates the container when it builds it: a registration whose
 dependencies cannot be satisfied, or a Singleton that captures a Scoped, stops `Build` with every

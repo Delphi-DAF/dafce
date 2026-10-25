@@ -798,6 +798,19 @@ for var Token in Tokens do
   Token.Register(procedure begin Linked.Cancel; end);
 ```
 
+### 33. Hosting: el nombre de entorno se conserva tal cual
+
+- **`EnvironmentName` es el nombre tal como se escribe**, recortado. `IsDevelopment`, `IsStaging`,
+  `IsProduction` e `IsTesting` lo comparan sin distinguir mayúsculas, así que `development` sigue
+  respondiendo a `IsDevelopment`.
+- **`deve`, `stag`, `prod` y `test` son nombres como cualquier otro.** `DAF_ENVIRONMENT=prod` es un
+  entorno llamado `prod`: `IsProduction` responde `False`, y el host carga `appsettings.prod.json` y no
+  `appsettings.Production.json`.
+- **Un nombre propio es un entorno más.** En 1.6, un nombre que no era uno de los cuatro conocidos ni
+  una de sus abreviaturas se ejecutaba como `Production`.
+- **Qué rompe**: una abreviatura en `DAF_ENVIRONMENT` o en `--environment`, y un nombre propio que
+  contaba con cargar `appsettings.Production.json`. Escribe el nombre completo.
+
 ## Cómo hacerlo
 
 1. Compila. Lo que falte sale como error del compilador, no como comportamiento raro en
@@ -813,6 +826,6 @@ for var Token in Tokens do
    resolverlo: se resuelve desde un ámbito que abre el trabajo, `Services.CreateScope`. También un
    Scoped que resuelve un Singleton: el Singleton lo resuelve en un ámbito que abre con
    `IServiceScopeFactory`.
-6. Las secciones 2, de la 6 a la 13 y de la 15 a la 32 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
+6. Las secciones 2, de la 6 a la 13 y de la 15 a la 33 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
    contra tu propia composición — la vida de los ámbitos, los registros repetidos, las reglas de
    logging y los ajustes del host.

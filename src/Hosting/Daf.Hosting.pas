@@ -256,7 +256,9 @@ constructor THostEnvironment.Create(const HostConfiguration: IConfiguration);
 begin
   Assert(Assigned(HostConfiguration), 'THostEnvironment needs the host configuration to derive from');
 
-  TEnvironmentName.TryParse(HostConfiguration[THostDefaults.EnvironmentKey], FEnvironmentName);
+  // Como en .NET: el nombre se toma tal cual, y cualquiera que no sea uno de los conocidos es un
+  // entorno mas.
+  EnvironmentName := HostConfiguration[THostDefaults.EnvironmentKey];
   if EnvironmentName.IsEmpty then
     EnvironmentName := TEnvironments.Production;
 

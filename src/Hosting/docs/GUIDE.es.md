@@ -288,7 +288,8 @@ Establece el entorno mediante variable de OS antes de lanzar:
 DAF_ENVIRONMENT=Development
 ```
 
-Abreviaturas aceptadas: `deve`, `stag`, `prod`, `test` (sin distinción de mayúsculas).
+Cualquier otro nombre, como `QA`, es un entorno más, con su propio `appsettings.QA.json`. Las preguntas
+`Is…` comparan el nombre sin distinguir mayúsculas.
 
 En `Development` el host además valida el contenedor al construirlo: un registro cuyas dependencias
 no se pueden satisfacer, o un Singleton que captura un Scoped, detiene `Build` con todos los hallazgos

@@ -19,6 +19,8 @@ type
     Builder: IGenericHostBuilder;
     /// Lo que el host acabo leyendo para la clave de la spec, o que no la tiene.
     Report: string;
+    /// El nombre de entorno del host y sus respuestas a las preguntas por los entornos conocidos.
+    EnvReport: string;
     constructor Create;
     destructor Destroy; override;
     procedure WriteJson(const FileName, Server: string);
@@ -100,6 +102,9 @@ begin
         Report := Config[Key]
       else
         Report := '<ausente>';
+      var Env := Host.Services.GetRequiredService<IHostEnvironment>;
+      EnvReport := Format('%s production=%s staging=%s development=%s', [Env.EnvironmentName,
+        BoolToStr(Env.IsProduction, True), BoolToStr(Env.IsStaging, True), BoolToStr(Env.IsDevelopment, True)]);
     finally
       // Parar es lo que suelta lo que el host retiene; sin esto se queda vivo.
       Host.Stop;
@@ -323,6 +328,55 @@ Feature Fuentes de configuracion por defecto @hosting @defaultsources
       procedure(W: TDefaultSourcesWorld)
       begin
         Expect(W.Report).ToEqual('from-json');
+      end)
+
+.Rule('El nombre de entorno se conserva tal cual')
+
+  .Scenario('Un entorno QA carga su propio fichero')
+    .Given('un appsettings.QA.json y un appsettings.Production.json en el content root, con valores distintos para la misma clave',
+      procedure(W: TDefaultSourcesWorld)
+      begin
+        W.WriteJson('appsettings.QA.json', 'from-qa');
+        W.WriteJson('appsettings.Production.json', 'from-production');
+      end)
+    .When('se construye el host con el entorno QA',
+      procedure(W: TDefaultSourcesWorld)
+      begin
+        W.BuildHost(['--environment=QA']);
+      end)
+    .&Then('el entorno es QA, y no es Production',
+      procedure(W: TDefaultSourcesWorld)
+      begin
+        Expect(W.EnvReport).ToEqual('QA production=False staging=False development=False');
+      end)
+    .&And('la clave tiene el valor de appsettings.QA.json',
+      procedure(W: TDefaultSourcesWorld)
+      begin
+        Expect(W.Report).ToEqual('from-qa');
+      end)
+
+  .Scenario('Una abreviatura es un nombre como otro')
+    .When('se construye el host con el entorno stag',
+      procedure(W: TDefaultSourcesWorld)
+      begin
+        W.BuildHost(['--environment=stag']);
+      end)
+    .&Then('el entorno es stag, y no es Staging',
+      procedure(W: TDefaultSourcesWorld)
+      begin
+        Expect(W.EnvReport).ToEqual('stag production=False staging=False development=False');
+      end)
+
+  .Scenario('Un nombre conocido en otras mayusculas')
+    .When('se construye el host con el entorno development',
+      procedure(W: TDefaultSourcesWorld)
+      begin
+        W.BuildHost(['--environment=development']);
+      end)
+    .&Then('el entorno es development, y es Development',
+      procedure(W: TDefaultSourcesWorld)
+      begin
+        Expect(W.EnvReport).ToEqual('development production=False staging=False development=True');
       end);
 
 end.

@@ -87,10 +87,13 @@ command line, or the `DAF_ENVIRONMENT` variable — and defaults to `Production`
 
 | Value | IsDevelopment | IsStaging | IsProduction | IsTesting |
 |-------|:---:|:---:|:---:|:---:|
-| `Development` / `deve` | ✅ | | | |
-| `Staging` / `stag` | | ✅ | | |
-| `Production` / `prod` | | | ✅ | |
-| `Testing` / `test` | | | | ✅ |
+| `Development` | ✅ | | | |
+| `Staging` | | ✅ | | |
+| `Production` | | | ✅ | |
+| `Testing` | | | | ✅ |
+
+The questions compare the name without regard to case. Any other name is one more environment:
+`QA` loads `appsettings.QA.json`, and the four questions answer `False`.
 
 ```pascal
 var Env := Host.Services.GetRequiredService<IHostEnvironment>;

@@ -790,6 +790,19 @@ for var Token in Tokens do
   Token.Register(procedure begin Linked.Cancel; end);
 ```
 
+### 33. Hosting: the environment name is kept as given
+
+- **`EnvironmentName` is the name as it is written**, trimmed. `IsDevelopment`, `IsStaging`,
+  `IsProduction` and `IsTesting` compare it without regard to case, so `development` still answers
+  `IsDevelopment`.
+- **`deve`, `stag`, `prod` and `test` are names like any other.** `DAF_ENVIRONMENT=prod` is an
+  environment called `prod`: `IsProduction` answers `False`, and the host loads `appsettings.prod.json`
+  and not `appsettings.Production.json`.
+- **A name of your own is one more environment.** In 1.6 a name that was not one of the four known
+  ones, nor one of their abbreviations, ran as `Production`.
+- **What breaks**: an abbreviation in `DAF_ENVIRONMENT` or `--environment`, and a name of your own that
+  relied on loading `appsettings.Production.json`. Write the full name.
+
 ## How to do it
 
 1. Compile. Whatever is missing comes out as a compiler error, not as odd behaviour at run time.
@@ -803,6 +816,6 @@ for var Token in Tokens do
    A Scoped service asked of the root provider is rejected too, when it is resolved: resolve it from a
    scope the work opens, `Services.CreateScope`. So is a Scoped a Singleton resolves: the Singleton
    resolves it in a scope it opens through `IServiceScopeFactory`.
-6. Sections 2, 6 to 13 and 15 to 32 carry **run-time** changes: the compiler says nothing about them. Read them
+6. Sections 2, 6 to 13 and 15 to 33 carry **run-time** changes: the compiler says nothing about them. Read them
    against your own composition — scope lifetimes, duplicate registrations, logging rules and
    host settings.
