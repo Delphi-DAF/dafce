@@ -141,6 +141,22 @@ la RTL, y una creada con `TEncoding.GetEncoding` la libera quien la creó, despu
 
 `System.Diagnostics.Process` decodifica siempre con la página de salida de la consola del padre.
 
+### Cuándo termina la espera del texto capturado
+
+Un flujo capturado se lee hasta que se cierra, y un proceso que lo herede del hijo —un nieto que
+queda corriendo en segundo plano— lo mantiene abierto. Sin plazo ni token, `Execute` vuelve cuando
+el hijo ha terminado y todos sus flujos capturados se han cerrado, como `WaitForExit()` en .NET: ese
+descendiente retiene la ejecución hasta que cierra el flujo, y lo que escriba llega al manejador.
+
+Un plazo o un token acotan también esa espera, como el `timeout` de `RunAndCaptureText` en .NET 11.
+Si se cumplen con un flujo capturado aún abierto, el hijo muere si vive, los manejadores reciben lo
+que ya está en la tubería, y el resultado es `Timeout` o `Canceled`.
+
+Dos diferencias con .NET: `RunAndCaptureText` lanza `TimeoutException` u
+`OperationCanceledException` y pierde el texto leído, mientras que aquí un plazo vencido es un
+resultado `Timeout` y lo que los manejadores recibieron queda recibido; y no se entrega nada después
+de que `Execute` vuelva, como sí hacen los eventos de .NET tras `WaitForExit(ms)`.
+
 ### La consola del hijo
 
 `HideWindow(False)`, el valor por defecto, corre el hijo en la consola del padre; `HideWindow(True)` lo

@@ -90,6 +90,12 @@ if Proc.IsRunning then
   Proc.Kill;
 ```
 
+With a deadline, a descendant that inherits a captured stream —a grandchild left running in the
+background— no longer holds `Execute` past it: when the deadline expires with the stream still
+open, the result is `Timeout`, where it used to wait for the descendant and come back `Completed`.
+A cancellation token bounds that wait the same way. With neither, `Execute` still waits for the
+stream to close.
+
 ### 3. `Daf.CmdLn.Parser` is gone
 
 The unit 1.6.0 shipped inside `Daf.Commons` **is no longer distributed**. Its replacement is

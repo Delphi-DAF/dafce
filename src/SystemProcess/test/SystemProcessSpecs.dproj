@@ -99,6 +99,7 @@
         <DCCReference Include="Launch.Feat.pas"/>
         <DCCReference Include="Process.Feat.pas"/>
         <DCCReference Include="StandardStreams.Feat.pas"/>
+        <DCCReference Include="Capture.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>

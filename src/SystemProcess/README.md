@@ -141,6 +141,23 @@ belong to the RTL, and one made with `TEncoding.GetEncoding` is freed by whoever
 
 `System.Diagnostics.Process` decodes with the output code page of the parent's console in every case.
 
+### When the wait for captured text ends
+
+A captured stream is read until it closes, and a process that inherits it from the child — a
+grandchild left running in the background — keeps it open. With no deadline and no token, `Execute`
+returns when the child has exited and every captured stream has closed, as `WaitForExit()` does in
+.NET: such a descendant holds the run until it closes the stream, and what it writes reaches the
+handler.
+
+A deadline or a token bound that wait too, as the `timeout` of `RunAndCaptureText` does in .NET 11.
+When either is met with a captured stream still open, the child is killed if it is alive, the
+handlers get what is already in the pipe, and the result is `Timeout` or `Canceled`.
+
+Two differences from .NET: `RunAndCaptureText` throws `TimeoutException` or
+`OperationCanceledException` and loses the text it read, whereas here an expired deadline is a
+`Timeout` result and what the handlers received stays received; and nothing is delivered after
+`Execute` returns, as .NET's events are after `WaitForExit(ms)`.
+
 ### The child's console
 
 `HideWindow(False)`, the default, runs the child in the parent's console; `HideWindow(True)` runs it

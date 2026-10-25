@@ -91,6 +91,12 @@ if Proc.IsRunning then
   Proc.Kill;
 ```
 
+Con plazo, un descendiente que hereda un flujo capturado —un nieto que queda corriendo en segundo
+plano— ya no retiene `Execute` más allá de él: si el plazo vence con el flujo aún abierto, el
+resultado es `Timeout`, donde antes se esperaba al descendiente y volvía como `Completed`. Un token
+de cancelación acota esa espera igual. Sin ninguno de los dos, `Execute` sigue esperando a que el
+flujo se cierre.
+
 ### 3. `Daf.CmdLn.Parser` ya no está
 
 La unit que 1.6.0 traía dentro de `Daf.Commons` **ya no se distribuye**. Su sustituto es

@@ -128,6 +128,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - ⚠️ **SystemProcess**: `ExecuteAsync` **lanza al hijo antes de volver**, en el hilo de quien lo llama, y solo la espera va a la tarea. El `OnFailed` de un lanzamiento que falla corre en el hilo de quien llamó, ya no en la tarea
 - ⚠️ **SystemProcess**: `Kill` sin un hijo lanzado —antes de ejecutar, o tras un lanzamiento que falló— **lanza `EInvalidOpException`**, como `Id`. **Rompe** un gancho de parada que mata sin mirar: se pregunta antes por `IsRunning`
 - **SystemProcess**: Un hijo al que se mata —con `Kill`, el plazo o la cancelación— sale con el código `-1` (`$FFFFFFFF`), como en .NET, y `TProcessResult.ExitCode` lleva el código real del hijo siempre que terminó; antes era 0
+- ⚠️ **SystemProcess**: Con plazo o con token, un descendiente que mantiene abierto un flujo capturado más allá de ellos termina la ejecución como `Timeout` o `Canceled`, con lo ya leído entregado; antes se le esperaba, y la ejecución volvía como `Completed`
 
 ### Deprecated
 
@@ -211,6 +212,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - **SystemProcess**: Un `ExecuteAsync` cuyo `ISystemProcess` se soltaba antes de que terminara el hijo seguía usando la instancia liberada, y sus notificaciones no llegaban
 - **SystemProcess**: Matar a un hijo que acababa de terminar lanzaba `EOSError`; un `Kill` sin hijo vivo cortaba la ejecución siguiente sin matar a nadie, y después del final mataba por un identificador que podía ser de otro proceso
 - **SystemProcess**: El hijo de un lanzamiento podía heredar la tubería o el fichero de otro hecho a la vez, y retenerlos mientras vivía
+- **SystemProcess**: El plazo y la cancelación no acotaban la espera de lo capturado, así que un descendiente que heredaba la tubería retenía `Execute` mientras vivía
 - **Web**: Un segmento literal de ruta se prueba antes que un parámetro en la misma posición; antes ganaba la acción declarada primero, así que `/items/search` podía caer en `/items/{Id}`
 - **Web**: Un parámetro `[FromServices]` recibe su servicio. Con el servicio registrado la petición fallaba con `EInvalidCast`, y sin él la acción recibía `nil` sin aviso; ese caso hace fallar ahora la petición nombrando el servicio
 - **Web**: Destruir un `TDafHttpServer` libera los módulos web que WebBroker guardaba para reutilizarlos; un servidor posterior en el mismo proceso recibía los que se construyeron para el anterior

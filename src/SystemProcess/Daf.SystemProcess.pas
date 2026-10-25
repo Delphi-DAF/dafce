@@ -213,6 +213,8 @@ type
     FChildIn, FChildOut, FChildErr: THandle;
     FStdOutRead, FStdErrRead: THandle;
     [volatile] FKillRequested: Boolean;
+    // Pide a los lectores que entreguen lo que queda en su tubería y paren.
+    [volatile] FStopReading: Boolean;
     FReadTasks: array of ITask;
     procedure CleanupHandles;
     function OpenStreams(var ProcessResult: TProcessResult): Boolean;
@@ -223,6 +225,9 @@ type
     procedure SetupStartupInfo(var SI: TStartupInfo);
     procedure StartReadingPipes;
     procedure WaitForReaders;
+    procedure StopReaders;
+    // Con el hijo terminado o cortado, espera a que se cierren sus flujos capturados.
+    procedure WaitForCapture(CancellationToken: ICancellationToken; var ProcessResult: TProcessResult);
 
     procedure DoOutput(const Text: string; IsError: Boolean);
     // El hijo terminó: Killed si lo mató Kill, Completed si no, con su código de salida.
@@ -303,6 +308,9 @@ begin
     CloseHandle(Handle);
   Handle := 0;
 end;
+
+function CancelPendingIo(hFile: THandle; lpOverlapped: POverlapped): BOOL; stdcall;
+  external kernel32 name 'CancelIoEx';
 
 const
   PROCESS_QUERY_LIMITED_INFORMATION = $1000;
@@ -856,18 +864,35 @@ procedure TSystemProcess.StartReadingPipes;
     Result := TTask.Run(
       procedure
       var
-        BytesRead: DWORD;
+        BytesRead, Available: DWORD;
         Buffer, Data, Pending: TBytes;
         Complete: Integer;
-      begin
-        SetLength(Buffer, BUF_SIZE);
-        while ReadFile(Pipe, Buffer[0], BUF_SIZE, BytesRead, nil) and (BytesRead > 0) do
+
+        procedure Deliver;
         begin
           Data := Pending + Copy(Buffer, 0, BytesRead);
           Complete := CompleteLength(Encoding, Data);
           if Complete > 0 then
             DoOutput(Decode(Encoding, Data, Complete), IsError);
           Pending := Copy(Data, Complete, Length(Data) - Complete);
+        end;
+
+      begin
+        SetLength(Buffer, BUF_SIZE);
+        while True do
+        begin
+          if FStopReading then
+          begin
+            // Lo que ya está en la tubería se entrega; lo que llegue después, no.
+            while PeekNamedPipe(Pipe, nil, 0, nil, @Available, nil) and (Available > 0)
+              and ReadFile(Pipe, Buffer[0], BUF_SIZE, BytesRead, nil) and (BytesRead > 0) do
+              Deliver;
+            Break;
+          end;
+          if ReadFile(Pipe, Buffer[0], BUF_SIZE, BytesRead, nil) and (BytesRead > 0) then
+            Deliver
+          else if GetLastError <> ERROR_OPERATION_ABORTED then
+            Break;
         end;
         if Length(Pending) > 0 then
           DoOutput(Decode(Encoding, Pending, Length(Pending)), IsError);
@@ -882,6 +907,7 @@ procedure TSystemProcess.StartReadingPipes;
       Result := FConsoleEncoding;
   end;
 begin
+  FStopReading := False;
   if IsValidHandle(FStdOutRead) or IsValidHandle(FStdErrRead) then
   begin
     // La página de la consola en que corre el hijo: la del padre si la comparte, y la OEM si tiene una
@@ -909,6 +935,47 @@ procedure TSystemProcess.WaitForReaders;
 begin
   TTask.WaitForAll(FReadTasks);
   SetLength(FReadTasks, 0);
+end;
+
+// Una cancelación que cae entre la mirada del lector al indicador y su ReadFile no encuentra nada
+// pendiente; por eso se repite hasta que los lectores acaban.
+procedure TSystemProcess.StopReaders;
+begin
+  FStopReading := True;
+  repeat
+    if IsValidHandle(FStdOutRead) then
+      CancelPendingIo(FStdOutRead, nil);
+    if IsValidHandle(FStdErrRead) then
+      CancelPendingIo(FStdErrRead, nil);
+  until TTask.WaitForAll(FReadTasks, 50);
+end;
+
+// Sin plazo ni token se espera sin límite, como WaitForExit() de .NET: un descendiente que herede un
+// flujo capturado retiene la ejecución hasta que lo cierra. Con ellos, al cumplirse con un flujo aún
+// abierto, la captura termina con lo que ya hay en las tuberías y el resultado es Timeout o Canceled,
+// como RunAndCaptureText.
+procedure TSystemProcess.WaitForCapture(CancellationToken: ICancellationToken;
+  var ProcessResult: TProcessResult);
+begin
+  if (Length(FReadTasks) = 0) or ((FTimeoutMS = INFINITE) and (CancellationToken = nil)) then
+    Exit;
+  while not TTask.WaitForAll(FReadTasks, 250) do
+  begin
+    var Canceled := (CancellationToken <> nil) and CancellationToken.IsCancellationRequested;
+    var Expired := (FTimeoutMS <> INFINITE) and (FStopWatch.ElapsedMilliseconds >= FTimeoutMS);
+    if not (Canceled or Expired) then
+      Continue;
+    StopReaders;
+    if ProcessResult.Status in [TProcessResult.TStatus.Completed, TProcessResult.TStatus.Killed] then
+    begin
+      if Canceled then
+        ProcessResult.Status := TProcessResult.TStatus.Canceled
+      else
+        ProcessResult.Status := TProcessResult.TStatus.Timeout;
+      ProcessResult.Duration := FStopWatch.Elapsed;
+    end;
+    Break;
+  end;
 end;
 
 procedure TSystemProcess.BuildEnvBuffer(var EnvBuffer: PWideChar);
@@ -1131,6 +1198,7 @@ begin
 
       DoProcessIdle(ProcessResult);
     until False;
+    WaitForCapture(CancellationToken, ProcessResult);
   finally
     Release;
   end;
