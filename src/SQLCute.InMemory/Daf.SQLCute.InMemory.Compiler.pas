@@ -49,7 +49,7 @@ type
   /// <summary>
   ///   Evaluates a subquery WHERE leaf (IN / NOT IN / EXISTS / NOT EXISTS) against
   ///   execution-time state. Supplied by the multi-source engine (which owns the
-  ///   context); the compiler captures it while building the predicate.
+  ///   context) to <c>CompileMulti</c>; the built predicate captures it.
   /// </summary>
   TSubqueryResolver = reference to function(const Clause: TWhereClause;
     const Get: TColumnGetter): TTriState;
@@ -114,8 +114,11 @@ type
     /// <summary>
     ///   Same extraction without the single-source veto — for the general
     ///   multi-source lane, where FROM/JOIN resolution is handled separately.
+    ///   Subquery WHERE leaves evaluate through <c>Resolver</c>; without one
+    ///   they raise.
     /// </summary>
-    class function CompileMulti(const Query: IQuery): TCompiledQuery; static;
+    class function CompileMulti(const Query: IQuery;
+      const Resolver: TSubqueryResolver = nil): TCompiledQuery; static;
   end;
 
 // --- Three-valued logic combinators ---------------------------
@@ -142,30 +145,16 @@ function CompareOp(Op: TWhereOp; const L, R: TValue): TTriState;
 /// <summary>
 ///   Builds a tri-state predicate from a flat WHERE/ON clause list via the shared
 ///   <c>Daf.SQLCute.WhereTree</c> (nil when there are no conditions). Reused by the
-///   multi-source engine for JOIN ON callbacks.
+///   multi-source engine for JOIN ON callbacks. Subquery leaves evaluate through
+///   <c>Resolver</c>, and raise without one.
 /// </summary>
-function WherePredicate(const Clauses: TArray<TAbstractClause>): TValuePredicate;
-/// <summary>
-///   Installs the subquery resolver used while building the next predicate(s);
-///   pass <c>nil</c> to clear (subquery WHERE leaves then fail fast). Set by the
-///   engine around <c>CompileMulti</c>; the built predicate captures it.
-/// </summary>
-procedure UseSubqueryResolver(const Resolver: TSubqueryResolver);
+function WherePredicate(const Clauses: TArray<TAbstractClause>;
+  const Resolver: TSubqueryResolver = nil): TValuePredicate;
 
 implementation
 
 uses
   Daf.Comparers;   // IsNullValue
-
-var
-  // Subquery resolver in effect while a predicate is being built (see
-  // UseSubqueryResolver). Captured by subquery leaves; not read at run time.
-  FSubqueryResolver: TSubqueryResolver = nil;
-
-procedure UseSubqueryResolver(const Resolver: TSubqueryResolver);
-begin
-  FSubqueryResolver := Resolver;
-end;
 
 { ---- Three-valued logic ---- }
 
@@ -595,7 +584,7 @@ begin
     end;
 end;
 
-function BuildLeaf(Clause: TAbstractClause): TValuePredicate;
+function BuildLeaf(Clause: TAbstractClause; const Resolver: TSubqueryResolver): TValuePredicate;
 begin
   if Clause is TWhereInClause then
     Exit(BuildIn(TWhereInClause(Clause)));
@@ -657,14 +646,14 @@ begin
       TWhereOp.Raw:
         raise EInMemoryQueryError.Create('Raw WHERE fragments cannot be evaluated in memory.');
       TWhereOp.&In, TWhereOp.NotIn, TWhereOp.&Exists, TWhereOp.NotExists:
-        if (W.SubQuery <> nil) and Assigned(FSubqueryResolver) then
+        if (W.SubQuery <> nil) and Assigned(Resolver) then
         begin
-          var Resolver: TSubqueryResolver := FSubqueryResolver;   // explicit type: assign, don't invoke
+          var Resolve: TSubqueryResolver := Resolver;   // explicit type: assign, don't invoke
           var WC := W;
           Exit(
             function(const Get: TColumnGetter): TTriState
             begin
-              Result := Resolver(WC, Get);
+              Result := Resolve(WC, Get);
             end);
         end
         else
@@ -679,23 +668,24 @@ end;
 
 { ---- Tree walk (precedence from the shared WhereTree) ---- }
 
-function BuildNode(Node: TWhereNode): TValuePredicate; forward;
+function BuildNode(Node: TWhereNode; const Resolver: TSubqueryResolver): TValuePredicate; forward;
 
-function BuildChildren(const Children: TArray<TWhereNode>): TArray<TValuePredicate>;
+function BuildChildren(const Children: TArray<TWhereNode>;
+  const Resolver: TSubqueryResolver): TArray<TValuePredicate>;
 begin
   SetLength(Result, Length(Children));
   for var I := 0 to High(Children) do
-    Result[I] := BuildNode(Children[I]);
+    Result[I] := BuildNode(Children[I], Resolver);
 end;
 
-function BuildNode(Node: TWhereNode): TValuePredicate;
+function BuildNode(Node: TWhereNode; const Resolver: TSubqueryResolver): TValuePredicate;
 begin
   case Node.Kind of
     TWhereNodeKind.Leaf:
-      Result := BuildLeaf(Node.Clause);
+      Result := BuildLeaf(Node.Clause, Resolver);
     TWhereNodeKind.Neg:
       begin
-        var Child := BuildNode(Node.Children[0]);
+        var Child := BuildNode(Node.Children[0], Resolver);
         Result :=
           function(const Get: TColumnGetter): TTriState
           begin
@@ -704,7 +694,7 @@ begin
       end;
     TWhereNodeKind.Conjunction:
       begin
-        var Kids := BuildChildren(Node.Children);
+        var Kids := BuildChildren(Node.Children, Resolver);
         Result :=
           function(const Get: TColumnGetter): TTriState
           begin
@@ -715,7 +705,7 @@ begin
       end;
     TWhereNodeKind.Disjunction:
       begin
-        var Kids := BuildChildren(Node.Children);
+        var Kids := BuildChildren(Node.Children, Resolver);
         Result :=
           function(const Get: TColumnGetter): TTriState
           begin
@@ -729,14 +719,15 @@ begin
   end;
 end;
 
-function WherePredicate(const Clauses: TArray<TAbstractClause>): TValuePredicate;
+function WherePredicate(const Clauses: TArray<TAbstractClause>;
+  const Resolver: TSubqueryResolver): TValuePredicate;
 begin
   var Root := TWhereTree.Build(Clauses);
   try
     if Root = nil then
       Result := nil
     else
-      Result := BuildNode(Root);   // extracted data captured; the tree is freed below
+      Result := BuildNode(Root, Resolver);   // extracted data captured; the tree is freed below
   finally
     Root.Free;
   end;
@@ -750,7 +741,7 @@ begin
     if Root = nil then
       Result := nil
     else
-      Result := BuildNode(Root);
+      Result := BuildNode(Root, nil);
   finally
     Root.Free;
   end;
@@ -939,11 +930,11 @@ end;
 
 // Shared extraction: WHERE predicate, ORDER BY, projection, DISTINCT, LIMIT/OFFSET.
 // Source shape (single vs multi) is vetoed by the callers, not here.
-function Populate(const Clauses: TArray<TAbstractClause>): TCompiledQuery;
+function Populate(const Clauses: TArray<TAbstractClause>; const Resolver: TSubqueryResolver): TCompiledQuery;
 begin
   Result := TCompiledQuery.Create;
   try
-    Result.Predicate := WherePredicate(Clauses);
+    Result.Predicate := WherePredicate(Clauses, Resolver);
     Result.Orders := ExtractOrders(Clauses);
     Result.Projection := ExtractProjection(Clauses);
     ResolveOrderAliases(Result.Orders, Result.Projection);
@@ -964,13 +955,14 @@ end;
 class function TInMemoryCompiler.Compile(const Query: IQuery): TCompiledQuery;
 begin
   EnsureSingleSource(Query);          // fail fast before allocating the plan
-  Result := Populate(Query.Clauses);
+  Result := Populate(Query.Clauses, nil);
 end;
 
-class function TInMemoryCompiler.CompileMulti(const Query: IQuery): TCompiledQuery;
+class function TInMemoryCompiler.CompileMulti(const Query: IQuery;
+  const Resolver: TSubqueryResolver): TCompiledQuery;
 begin
   // No single-source veto: FROM/JOIN resolution is the engine's job.
-  Result := Populate(Query.Clauses);
+  Result := Populate(Query.Clauses, Resolver);
 end;
 
 end.

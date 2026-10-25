@@ -17,6 +17,8 @@
 interface
 
 uses
+  System.SysUtils,
+  System.SyncObjs,
   System.Generics.Collections,
   Daf.SQLCute,
   Daf.Specification,
@@ -41,14 +43,19 @@ type
     Scoped: IRepository<TProduct>;
     Outcome: string;
     Sql: string;
+    /// Three rules, what each answers alone, and what the threads reported.
+    Specs: TArray<TSpecification<TProduct>>;
+    Expected: TArray<string>;
+    Failures: TArray<string>;
     constructor Create;
     destructor Destroy; override;
+    procedure Race;
   end;
 
 implementation
 
 uses
-  System.SysUtils,
+  System.Classes,
   Daf.MiniSpec,
   Daf.SQLCute.InMemory.Compiler,   // EInMemoryQueryError
   Daf.SQLCute.Compiler;
@@ -75,6 +82,51 @@ begin
   Result := nil;
   for var P in Items do
     Result := Result + [P.Name];
+end;
+
+const
+  RaceThreads = 4;
+  RaceRounds = 200;
+
+// The index comes in as a parameter: a captured loop variable is shared by every thread.
+function RaceBody(W: TRepositoryWorld; const Idx: Integer; const Done: TCountdownEvent): TProc;
+begin
+  Result :=
+    procedure
+    begin
+      try
+        for var Round := 1 to RaceRounds do
+          for var S := 0 to High(W.Specs) do
+          begin
+            var Got := string.Join(',', NamesFrom(W.Port.List(W.Specs[S])));
+            if (Got <> W.Expected[S]) and (W.Failures[Idx] = '') then
+              W.Failures[Idx] := Format('thread %d: %s', [Idx, Got]);
+          end;
+      except
+        on E: Exception do W.Failures[Idx] := Format('thread %d: %s', [Idx, E.ClassName]);
+      end;
+      Done.Signal;
+    end;
+end;
+
+procedure TRepositoryWorld.Race;
+begin
+  SetLength(Failures, RaceThreads);
+  var Done := TCountdownEvent.Create(RaceThreads);
+  try
+    for var T := 0 to RaceThreads - 1 do
+      TThread.CreateAnonymousThread(RaceBody(Self, T, Done)).Start;
+    if Done.WaitFor(60000) <> wrSignaled then
+      Failures := Failures + ['TIMEOUT'];
+  finally
+    Done.Free;
+  end;
+  Outcome := '';
+  for var F in Failures do
+    if F <> '' then
+      Outcome := Outcome + F + ' ';
+  if Outcome = '' then
+    Outcome := '<all match>';
 end;
 
 initialization
@@ -201,6 +253,34 @@ Feature In-memory repository adapter @expressions @repository
         // Translatable is not the same as in-memory-executable. The failure above
         // is the lane's, not the emission's — and it is loud at plan-compile time.
         Expect(W.Sql).ToContain('EXISTS');
+      end)
+
+.Rule('An in-memory repository serves several threads')
+
+  .Scenario('Four threads share a repository')
+    .Given('an in-memory repository and three distinct specifications, resolved one by one beforehand',
+      procedure(W: TRepositoryWorld)
+      begin
+        W.Specs := [
+          TSpecification<TProduct>.New.Where(Prop('Active') = True).OrderBy('Name'),
+          TSpecification<TProduct>.New.Where(Prop('Price') > 5).OrderByDesc('Price'),
+          TSpecification<TProduct>.New.Where(Prop('Price') < 100).OrderBy('Name')];
+        // Resolved on a repository of their own, so the shared one starts with no plan.
+        var Alone: IRepository<TProduct> := TInMemoryRepository<TProduct>.Create(W.Products);
+        W.Expected := nil;
+        for var S in W.Specs do
+          W.Expected := W.Expected + [string.Join(',', NamesFrom(Alone.List(S)))];
+      end)
+    .When('four threads ask for the three many times at once', procedure(W: TRepositoryWorld) begin W.Race; end)
+    .&Then('every answer matches its specification resolved alone, and no thread gets an exception',
+      procedure(W: TRepositoryWorld)
+      begin
+        Expect(W.Outcome).ToEqual('<all match>');
+      end)
+    .&Then('and the repository holds three plans',
+      procedure(W: TRepositoryWorld)
+      begin
+        Expect(W.Repo.Compiled).ToEqual(3);
       end);
 
 end.

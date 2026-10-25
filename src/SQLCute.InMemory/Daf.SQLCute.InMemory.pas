@@ -43,9 +43,10 @@ type
   end;
 
   /// <summary>
-  ///   Cached RTTI column accessors for element type <c>T</c>: resolves a
-  ///   (optionally qualified) column name to a readable property/field once and
-  ///   reads it as a <c>TValue</c> — the fast lane's zero-wrapper value access.
+  ///   RTTI column accessors for element type <c>T</c>: every member is resolved
+  ///   once, when the accessors are built, and a (optionally qualified) column
+  ///   name is read as a <c>TValue</c> — the fast lane's zero-wrapper value access.
+  ///   Nothing changes after construction, so a plan can run on several threads.
   /// </summary>
   TRttiAccessors<T> = class(TInterfacedObject, IRttiAccessors<T>)
   private
@@ -54,7 +55,6 @@ type
     FIsObject: Boolean;
     FCache: TDictionary<string, TRttiMember>;
     FAllColumns: TArray<string>;
-    FAllResolved: Boolean;
     function Resolve(const Column: string): TRttiMember;
   public
     constructor Create;
@@ -257,6 +257,23 @@ begin
   FType := FCtx.GetType(TypeInfo(T));
   FIsObject := (FType <> nil) and (FType.TypeKind = tkClass);
   FCache := TDictionary<string, TRttiMember>.Create;
+  if FType = nil then
+    Exit;
+  // Keyed by NormalizeName (snake_case ↔ PascalCase); a property wins over a
+  // field of the same key, and the first of either wins over a later one.
+  for var P in FType.GetProperties do
+    FCache.TryAdd(NormalizeName(P.Name), P);
+  for var F in FType.GetFields do
+    FCache.TryAdd(NormalizeName(F.Name), F);
+  if FIsObject then
+  begin
+    for var P in FType.GetProperties do
+      if P.IsReadable and (P.Visibility in [mvPublic, mvPublished]) then
+        FAllColumns := FAllColumns + [P.Name];
+  end
+  else
+    for var F in FType.GetFields do
+      FAllColumns := FAllColumns + [F.Name];
 end;
 
 destructor TRttiAccessors<T>.Destroy;
@@ -267,31 +284,9 @@ begin
 end;
 
 function TRttiAccessors<T>.Resolve(const Column: string): TRttiMember;
-var
-  M: TRttiMember;
 begin
-  var Key := NormalizeName(Column);   // snake_case ↔ PascalCase bridge
-  if FCache.TryGetValue(Key, M) then
-    Exit(M);
-  M := nil;
-  if FType <> nil then
-  begin
-    for var P in FType.GetProperties do
-      if NormalizeName(P.Name) = Key then
-      begin
-        M := P;
-        Break;
-      end;
-    if M = nil then
-      for var F in FType.GetFields do
-        if NormalizeName(F.Name) = Key then
-        begin
-          M := F;
-          Break;
-        end;
-  end;
-  FCache.AddOrSetValue(Key, M);
-  Result := M;
+  if not FCache.TryGetValue(NormalizeName(Column), Result) then
+    Result := nil;
 end;
 
 function TRttiAccessors<T>.Has(const Column: string): Boolean;
@@ -331,23 +326,6 @@ end;
 
 function TRttiAccessors<T>.AllColumns: TArray<string>;
 begin
-  if not FAllResolved then
-  begin
-    FAllColumns := nil;
-    if FType <> nil then
-    begin
-      if FIsObject then
-      begin
-        for var P in FType.GetProperties do
-          if P.IsReadable and (P.Visibility in [mvPublic, mvPublished]) then
-            FAllColumns := FAllColumns + [P.Name];
-      end
-      else
-        for var F in FType.GetFields do
-          FAllColumns := FAllColumns + [F.Name];
-    end;
-    FAllResolved := True;
-  end;
   Result := FAllColumns;
 end;
 
@@ -1205,15 +1183,8 @@ begin
       Sides := Sides + [Side];
     end;
 
-  // Build the predicate with a subquery resolver in scope; the built predicate
-  // captures it, so the global is cleared right after compilation.
-  UseSubqueryResolver(MakeSubqueryResolver(Context));
-  var Cq: TCompiledQuery;
-  try
-    Cq := TInMemoryCompiler.CompileMulti(Query);
-  finally
-    UseSubqueryResolver(nil);
-  end;
+  // The predicate captures the resolver of this context, and of no other.
+  var Cq := TInMemoryCompiler.CompileMulti(Query, MakeSubqueryResolver(Context));
   try
     var Q: TQuery<IRow>;
     if Length(Cq.GroupBy) > 0 then

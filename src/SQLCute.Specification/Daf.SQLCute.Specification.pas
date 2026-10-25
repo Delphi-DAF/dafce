@@ -167,7 +167,7 @@ type
     function List(const Spec: TSpecification<T>): TArray<T>;
 
     /// <summary>
-    ///   How many plans this repository has compiled. Observable so that "the
+    ///   How many plans this repository holds. Observable so that "the
     ///   collection is not reloaded, and the plan is not recompiled" is a spec
     ///   rather than a claim.
     /// </summary>
@@ -537,18 +537,35 @@ begin
     Result := TQuery.New;
 end;
 
+// Looked up and stored under a lock, compiled outside it. When another thread
+// stored the same plan in the meantime, that one is kept and used.
 function TInMemoryRepository<T>.PlanFor(const Spec: TSpecification<T>): IInMemoryPlan<T>;
+var
+  Stored: IInMemoryPlan<T>;
 begin
   var K := Spec.Key;
-  if FPlans.TryGetValue(K, Result) then
-    Exit;
+  TMonitor.Enter(FPlans);
+  try
+    if FPlans.TryGetValue(K, Result) then
+      Exit;
+  finally
+    TMonitor.Exit(FPlans);
+  end;
 
   var Q := TExprEmitter.Apply<T>(NewQuery, Spec, FResolver);
   // Compile is where the lane checks what it can execute, and where it raises if
   // it cannot. Deliberately uncaught.
   Result := TInMemory.Compile<T>(Q);
-  Inc(FCompiled);
-  FPlans.Add(K, Result);
+
+  TMonitor.Enter(FPlans);
+  try
+    if FPlans.TryGetValue(K, Stored) then
+      Exit(Stored);
+    FPlans.Add(K, Result);
+    Inc(FCompiled);
+  finally
+    TMonitor.Exit(FPlans);
+  end;
 end;
 
 function TInMemoryRepository<T>.List(const Spec: TSpecification<T>): TArray<T>;
