@@ -706,7 +706,7 @@ Una suite que estaba en verde puede salir con escenarios Pending o Undefined, o 
   parámetro**, un `TSqlCompilation`, y le añaden sus enlaces con `C.AddBinding`. Escriben cada marcador
   como `?`: `ParamPlaceholder` desaparece, y un dialecto que numera sus marcadores sobreescribe
   `FormatPlaceholder(Index)`, que recibe la posición contando desde 0.
-- **Un `?` de una expresión en bruto es un marcador en todos los dialectos**, numerado con los demás.
+- **Un `?` de una expresión en bruto es un marcador en todos los dialectos**, y cuenta con los demás.
   Un signo de interrogación literal, como el operador `?` de Postgres sobre `jsonb`, se escribe `\?`.
 - **Qué rompe**: un compilador derivado de `TAnsiSqlCompiler` que sobreescriba un método que emite o
   `ParamPlaceholder`, al compilar y en ese método; y una expresión en bruto con un `?` literal en
@@ -766,7 +766,7 @@ end;
 
 - **`Having` entrecomilla su columna** como cualquier otra columna del dialecto: nombra una columna
   agrupada o el alias de una columna de salida. `Having('count(*)', '>', 5)`, la forma que enseñaba la
-  guía en 1.6, emite `"count(*)" > $1` en Postgres, y esa columna no existe.
+  guía en 1.6, emite `"count(*)" > ?` en Postgres, y esa columna no existe.
 - **Un agregado va por `HavingRaw`**: `HavingRaw('count(*) > 5')`, que aceptan todos los motores. Un
   alias de salida en `HAVING` lo rechazan Postgres, SQL Server y Firebird.
 - **Qué rompe**: un `Having` cuya columna es una expresión de agregado, en un dialecto que entrecomilla.
@@ -863,6 +863,24 @@ procedure TMyForm.ServerError(Sender: TObject; const Error: Exception);
 - **Qué rompe**: una configuración con un valor que no convierte, que ahora se para al enlazar, y un
   decimal escrito con coma.
 
+### 39. SQLCute: todos los compiladores escriben `?`
+
+- **Todos los compiladores escriben `?` por cada enlace**, en todos los dialectos: el marcador que
+  FireDAC liga en cualquier motor y traduce al del motor. En 1.6 los compiladores de Postgres, SQL
+  Server y Oracle escribían `$1`, `@p0` y `:p1`.
+- **Un `\?` sale como `??`**, el `?` literal de FireDAC, fuera de una cadena entre comillas simples, y
+  como `?` dentro de una.
+- **El estilo nativo recupera los marcadores del motor**, y escribe `\?` como `?`. Se fija antes de que
+  la instancia compile; `TPlaceholderStyle` vive en `Daf.SQLCute.Compiler`:
+
+```pascal
+var Postgres := TPostgresCompiler.Create;
+Postgres.Placeholders := TPlaceholderStyle.Native;
+var Compilador: IQueryCompiler := Postgres;
+```
+
+- **Qué rompe**: el SQL de esos tres compiladores ejecutado con algo que espera `$1`, `@p0` o `:p1`.
+
 ## Cómo hacerlo
 
 1. Compila. Lo que falte sale como error del compilador, no como comportamiento raro en
@@ -878,6 +896,6 @@ procedure TMyForm.ServerError(Sender: TObject; const Error: Exception);
    resolverlo: se resuelve desde un ámbito que abre el trabajo, `Services.CreateScope`. También un
    Scoped que resuelve un Singleton: el Singleton lo resuelve en un ámbito que abre con
    `IServiceScopeFactory`.
-6. Las secciones 2, de la 6 a la 13 y de la 15 a la 38 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
+6. Las secciones 2, de la 6 a la 13 y de la 15 a la 39 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
    contra tu propia composición — la vida de los ámbitos, los registros repetidos, las reglas de
    logging y los ajustes del host.

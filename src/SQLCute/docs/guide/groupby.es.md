@@ -52,7 +52,7 @@ TQuery.New.From('pedidos')
 
 ```pascal
 .Having('num_pedidos', '>', 5)
-// Postgres → HAVING "num_pedidos" > $1
+// Postgres → HAVING "num_pedidos" > ?
 ```
 
 Conector OR:

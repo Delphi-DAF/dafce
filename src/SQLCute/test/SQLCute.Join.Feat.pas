@@ -265,10 +265,10 @@ TQuery — JOIN / GROUP BY / CTE @unit @sqlcute
         W.LastResult := W.Compiler.Compile(
           TQuery.New.From('orders').SelectCount('*', 'n').GroupBy('customer_id').Having('n', '>', 5));
       end)
-    .&Then('SQL is SELECT COUNT(*) AS n FROM "orders" GROUP BY "customer_id" HAVING "n" > $1',
+    .&Then('SQL is SELECT COUNT(*) AS n FROM "orders" GROUP BY "customer_id" HAVING "n" > ?',
       procedure(W: TSQLCuteWorld)
       begin
-        Expect(W.LastResult.SQL).ToEqual('SELECT COUNT(*) AS n FROM "orders" GROUP BY "customer_id" HAVING "n" > $1');
+        Expect(W.LastResult.SQL).ToEqual('SELECT COUNT(*) AS n FROM "orders" GROUP BY "customer_id" HAVING "n" > ?');
       end)
 
   .Scenario('An aggregate goes raw')

@@ -78,7 +78,7 @@ uses Daf.SQLCute, Daf.SQLCute.Compiler.Postgres;
 var Compiler: IQueryCompiler := TPostgresCompiler.Create;  // contado por referencia: ha de tener dueño
 var R := Compiler.Compile(
   TQuery.New.From('t').WhereDate('d', '2024-01-01'));
-// → WHERE "d"::date = $1
+// → WHERE "d"::date = ?
 ```
 
 ### Ejemplo MySQL

@@ -27,7 +27,7 @@ var R := Compiler.Compile(Q);
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `SQL` | `string` | The compiled SQL string with `?` placeholders (dialect compilers may use `$1`, `:p1`, `@p0`) |
+| `SQL` | `string` | The compiled SQL string with `?` placeholders (in the native style, dialect compilers write `$1`, `:p1`, `@p0`) |
 | `Bindings` | `TArray<Variant>` | Positional values matching the placeholders |
 
 Pass `R.SQL` and `R.Bindings` to your database driver — SQLCute never executes queries itself.
@@ -99,14 +99,14 @@ SQLCute follows the builder and the compilers of [SqlKata](https://sqlkata.com/)
 | Case | SqlKata | SQLCute |
 |------|---------|---------|
 | Case-insensitive LIKE on Postgres | `ILIKE` | `LOWER(column) LIKE ?`, as in every dialect |
-| Placeholders | `@p0`, `@p1`… in every dialect, and `:p0`… on Oracle | `$1`… on Postgres, `@p0`… on SQL Server, `:p1`… on Oracle, `?` in the others |
+| Placeholders | `@p0`, `@p1`… in every dialect, and `:p0`… on Oracle | `?` in every dialect; in the native style, `$1`… on Postgres, `@p0`… on SQL Server, `:p1`… on Oracle, `?` in the others |
 | Base compiler | quotes identifiers with `"` | `TAnsiSqlCompiler` quotes nothing; each dialect compiler quotes with its own character |
 | `WhereIn` with an empty set | `1 = 0` | `col IS NULL AND col IS NOT NULL`, which names the column |
 | `Where(col, 'in', values)` | rejected | binds the values, like `WhereIn` |
 | `WhereNot` with `Null` or a logical value | drops the negation | keeps it: `NOT (col IS NULL)` |
 | A negated comparison with a logical value | `col != true` | `NOT (col = true)` |
 | Escape character of the LIKE family | any character | a single quote or a `?` raise `EArgumentException` |
-| `\?` in a raw expression | stays `\?` in the SQL | becomes a literal `?` |
+| `\?` in a raw expression | stays `\?` in the SQL | becomes `??`, FireDAC's literal `?`, outside a string, and `?` inside one and in the native style |
 | A SQL Server page on a `Distinct` query with no `OrderBy` | `ORDER BY (SELECT 0)`, which SQL Server rejects under `DISTINCT` | `ORDER BY 1` |
 
 ---

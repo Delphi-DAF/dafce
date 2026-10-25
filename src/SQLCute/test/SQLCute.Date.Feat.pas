@@ -36,12 +36,12 @@ TQuery — Date / Time WHERE operations @unit @sqlcute @f7
   .Scenario('SQL Server wraps column in CAST AS date @f7')
     .Given('a date query from "orders" wheredate "created_at" equals "2024-01-15"')
     .When('compiled with the "SqlServer" dialect')
-    .&Then('SQL is "SELECT * FROM [orders] WHERE CAST([created_at] AS date) = @p0"')
+    .&Then('SQL is "SELECT * FROM [orders] WHERE CAST([created_at] AS date) = ?"')
 
   .Scenario('Postgres uses cast-shorthand ::date @f7')
     .Given('a date query from "orders" wheredate "created_at" equals "2024-01-15"')
     .When('compiled with the "Postgres" dialect')
-    .&Then('SQL is "SELECT * FROM "orders" WHERE "created_at"::date = $1"')
+    .&Then('SQL is "SELECT * FROM "orders" WHERE "created_at"::date = ?"')
 
   .Scenario('MySQL uses DATE() function @f7')
     .Given('a date query from "orders" wheredate "created_at" equals "2024-01-15"')
@@ -60,12 +60,12 @@ TQuery — Date / Time WHERE operations @unit @sqlcute @f7
   .Scenario('SQL Server wraps column in CAST AS time @f7')
     .Given('a date query from "logs" wheretime "happened_at" ">" "08:00:00"')
     .When('compiled with the "SqlServer" dialect')
-    .&Then('SQL contains "CAST([happened_at] AS time) > @p0"')
+    .&Then('SQL contains "CAST([happened_at] AS time) > ?"')
 
   .Scenario('Postgres uses cast-shorthand ::time @f7')
     .Given('a date query from "logs" wheretime "happened_at" ">" "08:00:00"')
     .When('compiled with the "Postgres" dialect')
-    .&Then('SQL contains ""happened_at"::time > $1"')
+    .&Then('SQL contains ""happened_at"::time > ?"')
 
 // -------------------------------------------------------------------------
 
@@ -74,12 +74,12 @@ TQuery — Date / Time WHERE operations @unit @sqlcute @f7
   .Scenario('SQL Server uses DATEPART for year extraction @f7')
     .Given('a date query from "t" wheredatepart "dpYear" "created_at" equals 2024')
     .When('compiled with the "SqlServer" dialect')
-    .&Then('SQL contains "DATEPART(year, [created_at]) = @p0"')
+    .&Then('SQL contains "DATEPART(year, [created_at]) = ?"')
 
   .Scenario('Postgres uses DATE_PART for month extraction @f7')
     .Given('a date query from "t" wheredatepart "dpMonth" "created_at" equals 6')
     .When('compiled with the "Postgres" dialect')
-    .&Then('SQL contains "DATE_PART(''month'', "created_at") = $1"')
+    .&Then('SQL contains "DATE_PART(''month'', "created_at") = ?"')
 
   .Scenario('MySQL uses DAY() function for day extraction @f7')
     .Given('a date query from "t" wheredatepart "dpDay" "dt" equals 15')
@@ -94,7 +94,7 @@ TQuery — Date / Time WHERE operations @unit @sqlcute @f7
   .Scenario('Oracle uses EXTRACT for year extraction @f7')
     .Given('a date query from "t" wheredatepart "dpYear" "dt" equals 2024')
     .When('compiled with the "Oracle" dialect')
-    .&Then('SQL contains "EXTRACT(YEAR FROM "DT") = :p1"')
+    .&Then('SQL contains "EXTRACT(YEAR FROM "DT") = ?"')
 
   .Scenario('Firebird uses EXTRACT for year extraction @f7')
     .Given('a date query from "t" wheredatepart "dpYear" "dt" equals 2024')
@@ -108,7 +108,7 @@ TQuery — Date / Time WHERE operations @unit @sqlcute @f7
   .Scenario('Postgres OrWhereDate connects conditions with OR @f7')
     .Given('a date query from "t" wheredate "d" equals "2024-01-01" orwheredate "d" equals "2024-12-31"')
     .When('compiled with the "Postgres" dialect')
-    .&Then('SQL contains ""d"::date = $1 OR "d"::date = $2"')
+    .&Then('SQL contains ""d"::date = ? OR "d"::date = ?"')
 
 ;
 

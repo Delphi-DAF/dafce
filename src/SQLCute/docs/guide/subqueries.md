@@ -45,7 +45,7 @@ With bindings:
 .FromRaw('fn_get_events(?, ?) AS e', [StartDate, EndDate])
 ```
 
-Its `?` are numbered with the placeholders of the rest of the query, and its bindings take that same place: in Postgres, `$1` and `$2` here, and the next one in the query `$3`.
+Its `?` count with the placeholders of the rest of the query, and its bindings take that same place: in the native style of Postgres, `$1` and `$2` here, and the next one in the query `$3`.
 
 ---
 

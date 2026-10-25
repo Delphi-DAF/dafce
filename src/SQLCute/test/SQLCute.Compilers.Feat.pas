@@ -13,6 +13,8 @@ uses
   System.SysUtils,
   Daf.MiniSpec,
   Daf.SQLCute,
+  Daf.SQLCute.Compiler,
+  Daf.SQLCute.Compiler.Postgres,
   Daf.SQLCute.Compiler.SqlServer,
   Daf.SQLCute.Compiler.SQLite,
   SQLCute.SpecHelpers;
@@ -23,17 +25,18 @@ Feature('''
 TQuery — Dialect Compilers @unit @sqlcute
 
   Each dialect compiler inherits TAnsiSqlCompiler and overrides only the
-  parts that differ: identifier quoting, parameter placeholders, and pagination.
+  parts that differ: identifier quoting, the parameter placeholders of the
+  native style, and pagination.
 ''')
 .UseWorld<TSQLCuteWorld>
 
 // -------------------------------------------------------------------------
 
-.Rule('SQL Server: bracket quoting, @pN params, TOP / OFFSET-FETCH pagination @f6')
+.Rule('SQL Server: bracket quoting, @pN params in native style, TOP / OFFSET-FETCH pagination @f6')
 
-  .Scenario('SQL Server wraps identifiers with brackets and uses @pN params @f6')
+  .Scenario('SQL Server wraps identifiers with brackets and uses @pN params in native style @f6')
     .Given('a dialect query selecting "id, name" from "users" where "active" equals 1')
-    .When('compiled with the "SqlServer" dialect')
+    .When('compiled with the "SqlServer" dialect in native style')
     .&Then('SQL is "SELECT [id], [name] FROM [users] WHERE [active] = @p0"')
     .&Then('has 1 binding')
 
@@ -59,11 +62,11 @@ TQuery — Dialect Compilers @unit @sqlcute
 
 // -------------------------------------------------------------------------
 
-.Rule('Postgres: double-quote quoting, $N params, standard LIMIT/OFFSET @f6')
+.Rule('Postgres: double-quote quoting, $N params in native style, standard LIMIT/OFFSET @f6')
 
-  .Scenario('Postgres wraps identifiers with double quotes and uses $N params @f6')
+  .Scenario('Postgres wraps identifiers with double quotes and uses $N params in native style @f6')
     .Given('a dialect query selecting "id, name" from "users" where "active" equals 1')
-    .When('compiled with the "Postgres" dialect')
+    .When('compiled with the "Postgres" dialect in native style')
     .&Then('SQL is "SELECT "id", "name" FROM "users" WHERE "active" = $1"')
     .&Then('has 1 binding')
 
@@ -94,11 +97,11 @@ TQuery — Dialect Compilers @unit @sqlcute
 
 // -------------------------------------------------------------------------
 
-.Rule('Oracle: uppercase double-quote quoting, :pN params, FETCH FIRST / OFFSET-FETCH @f6')
+.Rule('Oracle: uppercase double-quote quoting, :pN params in native style, FETCH FIRST / OFFSET-FETCH @f6')
 
-  .Scenario('Oracle wraps identifiers in uppercase with double quotes and uses :pN params @f6')
+  .Scenario('Oracle wraps identifiers in uppercase with double quotes and uses :pN params in native style @f6')
     .Given('a dialect query selecting "id, name" from "users" where "active" equals 1')
-    .When('compiled with the "Oracle" dialect')
+    .When('compiled with the "Oracle" dialect in native style')
     .&Then('SQL is "SELECT "ID", "NAME" FROM "USERS" WHERE "ACTIVE" = :p1"')
     .&Then('has 1 binding')
 
@@ -131,6 +134,68 @@ TQuery — Dialect Compilers @unit @sqlcute
     .Given('a dialect query from "orders" limited to 10 offset 20')
     .When('compiled with the "Firebird" dialect')
     .&Then('SQL is "SELECT * FROM orders ROWS 21 TO 30"')
+
+// -------------------------------------------------------------------------
+
+.Rule('A new compiler writes ? for every binding, in every dialect')
+
+  .Scenario('PostgreSQL writes ?')
+    .Given('a dialect query from "t" where "a" equals 1 and "b" equals 2')
+    .When('compiled with the "Postgres" dialect')
+    .&Then('SQL is "SELECT * FROM "t" WHERE "a" = ? AND "b" = ?"')
+    .&Then('bindings in order are "1, 2"')
+
+  .Scenario('SQL Server writes ?')
+    .Given('a dialect query from "t" where "a" equals 1 and "b" equals 2')
+    .When('compiled with the "SqlServer" dialect')
+    .&Then('SQL is "SELECT * FROM [t] WHERE [a] = ? AND [b] = ?"')
+
+  .Scenario('Oracle writes ?')
+    .Given('a dialect query from "t" where "a" equals 1 and "b" equals 2')
+    .When('compiled with the "Oracle" dialect')
+    .&Then('SQL is "SELECT * FROM "T" WHERE "A" = ? AND "B" = ?"')
+
+// -------------------------------------------------------------------------
+
+.Rule('A literal ? comes out with the FireDAC escape')
+
+  .Scenario('The PostgreSQL JSON operator')
+    .When('query calls From(''docs'').WhereRaw(''data \? ''''tag'''''').Where(''id'', 1), compiled with a new TPostgresCompiler',
+      procedure(W: TSQLCuteWorld)
+      begin
+        W.Compiler := TPostgresCompiler.Create;
+        W.LastResult := W.Compiler.Compile(TQuery.New.From('docs').WhereRaw('data \? ''tag''').Where('id', 1));
+      end)
+    .&Then('SQL is "SELECT * FROM "docs" WHERE data ?? ''tag'' AND "id" = ?"')
+
+  .Scenario('Inside a string')
+    .When('query calls From(''notes'').WhereRaw(''body = ''''what\?'''''').Where(''id'', 1), compiled with a new TPostgresCompiler',
+      procedure(W: TSQLCuteWorld)
+      begin
+        W.Compiler := TPostgresCompiler.Create;
+        W.LastResult := W.Compiler.Compile(TQuery.New.From('notes').WhereRaw('body = ''what\?''').Where('id', 1));
+      end)
+    .&Then('SQL is "SELECT * FROM "notes" WHERE body = ''what?'' AND "id" = ?"')
+
+// -------------------------------------------------------------------------
+
+.Rule('The native style writes the engine placeholder')
+
+  .Scenario('PostgreSQL in native style')
+    .Given('a dialect query from "t" where "a" equals 1 and "b" equals 2')
+    .When('compiled with the "Postgres" dialect in native style')
+    .&Then('SQL is "SELECT * FROM "t" WHERE "a" = $1 AND "b" = $2"')
+
+  .Scenario('An escaped ? in native style')
+    .When('query calls From(''docs'').WhereRaw(''data \? ''''tag'''''').Where(''id'', 1), compiled with a TPostgresCompiler in native style',
+      procedure(W: TSQLCuteWorld)
+      begin
+        var Compiler := TPostgresCompiler.Create;
+        Compiler.Placeholders := TPlaceholderStyle.Native;
+        W.Compiler := Compiler;
+        W.LastResult := W.Compiler.Compile(TQuery.New.From('docs').WhereRaw('data \? ''tag''').Where('id', 1));
+      end)
+    .&Then('SQL is "SELECT * FROM "docs" WHERE data ? ''tag'' AND "id" = $1"')
 
 // -------------------------------------------------------------------------
 

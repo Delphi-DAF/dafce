@@ -167,10 +167,10 @@ TQuery — identifier quoting @unit @sqlcute
       begin
         CompileWith(W, TOracleCompiler.Create, TQuery.New.From('users', 'u').Where('u.active', 1));
       end)
-    .&Then('SQL is SELECT * FROM "USERS" "U" WHERE "U"."ACTIVE" = :p1',
+    .&Then('SQL is SELECT * FROM "USERS" "U" WHERE "U"."ACTIVE" = ?',
       procedure(W: TSQLCuteWorld)
       begin
-        Expect(W.LastResult.SQL).ToEqual('SELECT * FROM "USERS" "U" WHERE "U"."ACTIVE" = :p1');
+        Expect(W.LastResult.SQL).ToEqual('SELECT * FROM "USERS" "U" WHERE "U"."ACTIVE" = ?');
       end)
 
   .Scenario('A column alias without AS')

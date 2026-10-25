@@ -35,15 +35,35 @@ type
   end;
 
   /// <summary>
+  /// What a compiler writes for each binding, and for the escaped '\?' of a raw
+  /// expression.
+  /// </summary>
+  TPlaceholderStyle = (
+    /// <summary>
+    /// '?' for every binding, in every dialect: the marker FireDAC binds on any
+    /// engine and translates to the engine's own. A '\?' comes out as '??',
+    /// FireDAC's literal '?', outside a string between single quotes, and as '?'
+    /// inside one, where FireDAC looks for no parameter.
+    /// </summary>
+    FireDAC,
+    /// <summary>
+    /// The engine's own marker, by position: '$1'… in PostgreSQL, '@p0'… in SQL
+    /// Server, ':p1'… in Oracle and '?' in the other dialects. A '\?' comes out
+    /// as '?'.
+    /// </summary>
+    Native);
+
+  /// <summary>
   /// ANSI SQL compiler — baseline implementation of IQueryCompiler.
   /// Every method that emits SQL writes its placeholders as '?'; a final pass
-  /// replaces each '?' not preceded by '\' with the placeholder of its position
-  /// (<see cref="FormatPlaceholder"/>) and each '\?' with a literal '?'. So the
-  /// '?' of a raw expression are numbered with the others.
+  /// writes each '?' not preceded by '\', and each '\?', in the style of
+  /// <see cref="Placeholders"/>. So the '?' of a raw expression count with the
+  /// others.
   /// All dialect compilers extend this class and override virtual methods.
   /// </summary>
   TAnsiSqlCompiler = class(TInterfacedObject, IQueryCompiler)
   private
+    FPlaceholders: TPlaceholderStyle;
     function CompileSubQuery(const C: TSqlCompilation; const Query: IQuery): string;
     function CompileStatement(const C: TSqlCompilation; const Query: IQuery): string;
     function NumberPlaceholders(const SQL: string): string;
@@ -76,8 +96,8 @@ type
     /// <summary>A name split at each dot, each part quoted but a bare <c>*</c>.</summary>
     function WrapQualified(const Name: string): string;
     /// <summary>
-    /// The placeholder for the binding at <c>Index</c>, counted from 0 in the
-    /// order of the text. ANSI: '?'.
+    /// The placeholder of the native style for the binding at <c>Index</c>,
+    /// counted from 0 in the order of the text. ANSI: '?'.
     /// </summary>
     function FormatPlaceholder(const Index: Integer): string; virtual;
     function OperatorSymbol(Op: TWhereOp): string; virtual;
@@ -135,6 +155,12 @@ type
     function EmitNode(const C: TSqlCompilation; const Node: TWhereNode): string;
   public
     function Compile(const Query: IQuery): TSQLResult;
+    /// <summary>
+    /// The placeholder style of every compilation: <c>TPlaceholderStyle.FireDAC</c>
+    /// on a new instance. Set it before the instance compiles; changing it while
+    /// another thread compiles with the same instance is not supported.
+    /// </summary>
+    property Placeholders: TPlaceholderStyle read FPlaceholders write FPlaceholders;
   end;
 
 implementation
@@ -224,20 +250,28 @@ function TAnsiSqlCompiler.NumberPlaceholders(const SQL: string): string;
 var
   Sb: TStringBuilder;
   I, Index: Integer;
+  InString: Boolean;
 begin
   Sb := TStringBuilder.Create;
   try
     Index := 0;
+    InString := False;
     I := 1;
     while I <= Length(SQL) do
     begin
       if (SQL[I] = '\') and (I < Length(SQL)) and (SQL[I + 1] = '?') then
       begin
-        Sb.Append('?');
+        if (FPlaceholders = TPlaceholderStyle.FireDAC) and not InString then
+          Sb.Append('??')
+        else
+          Sb.Append('?');
         Inc(I, 2);
         Continue;
       end;
-      if SQL[I] = '?' then
+      // A doubled quote inside a string toggles twice, so the string stays open.
+      if SQL[I] = '''' then
+        InString := not InString;
+      if (SQL[I] = '?') and (FPlaceholders = TPlaceholderStyle.Native) then
       begin
         Sb.Append(FormatPlaceholder(Index));
         Inc(Index);

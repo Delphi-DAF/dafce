@@ -108,7 +108,7 @@ uses Daf.SQLCute, Daf.SQLCute.Compiler.Postgres;
 
 var Compiler: IQueryCompiler := TPostgresCompiler.Create;  // contado por referencia: ha de tener dueño
 var R := Compiler.Compile(Q);
-// identificadores entrecomillados con "", marcadores $1 $2 …
+// identificadores entrecomillados con "", marcadores ?
 ```
 
 ---

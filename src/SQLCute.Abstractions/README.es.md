@@ -27,7 +27,7 @@ Las dos units son `{$SCOPEDENUMS ON}`, así que cada valor de enumerado va cuali
 | `IQuery` | Builder fluido — cada método devuelve `IQuery`, con conteo de referencias, sin `Free` |
 | `IQueryCompiler` | `function Compile(const Query: IQuery): TSQLResult` — un método, nada más |
 
-`TSQLResult` es un record con `SQL: string` y `Bindings: TArray<Variant>`. Los marcadores `?` de `SQL` corresponden por posición a los elementos de `Bindings`; un compilador de dialecto puede emitir `$1` o `:p1` y mantener el mismo orden. `TSQLResult.Empty` es el valor cero.
+`TSQLResult` es un record con `SQL: string` y `Bindings: TArray<Variant>`. Los marcadores `?` de `SQL` corresponden por posición a los elementos de `Bindings`; un compilador de dialecto, en su estilo de marcador nativo, emite en su lugar `$1` o `:p1`, en el mismo orden. `TSQLResult.Empty` es el valor cero.
 
 ---
 

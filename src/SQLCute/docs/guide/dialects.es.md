@@ -11,7 +11,7 @@
 El `TAnsiSqlCompiler` por defecto genera SQL ANSI genérico con marcadores `?` y sin entrecomillado de identificadores. Los compiladores de dialecto lo extienden para manejar:
 
 - **Entrecomillado de identificadores** — envolver nombres de tabla/columna para evitar conflictos con palabras reservadas
-- **Marcadores de parámetros** — `?`, `$1`, `:p1`, `@p0`, etc.
+- **Marcadores de parámetros** — `?` por defecto, y el del motor (`$1`, `:p1`, `@p0`) en el estilo nativo
 - **Cast de fechas** — expresiones específicas del dialecto para `WhereDate`/`WhereDatePart`
 - **Paginación** — `LIMIT/OFFSET` vs `FETCH NEXT … ROWS ONLY` vs `ROWS m TO n`
 - **Emisión de la ordenación de NULL** — `NULLS FIRST/LAST` nativo, o una emulación donde el dialecto no tiene esa sintaxis
@@ -20,7 +20,9 @@ El `TAnsiSqlCompiler` por defecto genera SQL ANSI genérico con marcadores `?` y
 
 ## Matriz de Dialectos
 
-| Clase del compilador | Comillas | Marcador | Unidad del paquete |
+Todos los compiladores escriben `?` por defecto. La columna del marcador es lo que escribe cada uno en el [estilo nativo](#estilos-de-marcador).
+
+| Clase del compilador | Comillas | Marcador del estilo nativo | Unidad del paquete |
 |---------------------|---------|---------|-------------------|
 | `TAnsiSqlCompiler` | ninguna | `?` | `Daf.SQLCute.Compiler` |
 | `TPostgresCompiler` | `"` | `$1`, `$2`… | `Daf.SQLCute.Compiler.Postgres` |
@@ -38,13 +40,46 @@ Todos los compiladores de dialecto viven en el paquete `Daf.SQLCute`, junto al `
 
 ---
 
+## Estilos de Marcador
+
+La propiedad `Placeholders` de un compilador fija lo que escribe por cada enlace, y por un `\?` de una expresión en bruto:
+
+| `TPlaceholderStyle` | Cada enlace | `\?` |
+|---|---|---|
+| `FireDAC`, el de por defecto | `?`, en todos los dialectos | `??` fuera de una cadena, `?` dentro de una |
+| `Native` | el del dialecto: `$1`… en Postgres, `@p0`… en SQL Server, `:p1`… en Oracle, `?` en los demás | `?` |
+
+FireDAC ejecuta el estilo por defecto tal cual, en cualquier motor: liga `?` y lo traduce al marcador del motor, lee `??` como un `?` literal, y no busca parámetros dentro de una cadena.
+
+Una cadena es lo que va entre comillas simples, y un `''` dentro de ella no la cierra. Otras formas de cadena, como `$$…$$` y `E'…'` de Postgres, no se siguen: un `\?` dentro de una sale como `??`. El estilo nativo escribe ahí `?`.
+
+Para el estilo nativo, fija la propiedad antes de que la instancia compile. El compilador cuenta referencias, así que guárdalo en un `IQueryCompiler`:
+
+```pascal
+uses
+  Daf.SQLCute,
+  Daf.SQLCute.Compiler,
+  Daf.SQLCute.Compiler.Postgres;
+
+var Postgres := TPostgresCompiler.Create;
+Postgres.Placeholders := TPlaceholderStyle.Native;
+var Compilador: IQueryCompiler := Postgres;
+var R := Compilador.Compile(TQuery.New.From('usuarios').Where('estado', 'abierto'));
+// R.SQL → 'SELECT * FROM "usuarios" WHERE "estado" = $1'
+```
+
+`TPlaceholderStyle` vive en `Daf.SQLCute.Compiler`. Cambiar `Placeholders` mientras otro hilo compila con la misma instancia no está soportado.
+
+---
+
 ## Marcadores en Expresiones en Bruto
 
-Cada `?` de una expresión en bruto —`WhereRaw`, `FromRaw`, `WithRaw` y las demás formas `Raw`— es un marcador, numerado con los que genera la consulta, y su enlace ocupa ese mismo lugar. Para un signo de interrogación literal, como el operador `?` de Postgres sobre `jsonb`, se escribe `\?`:
+Cada `?` de una expresión en bruto —`WhereRaw`, `FromRaw`, `WithRaw` y las demás formas `Raw`— es un marcador, cuenta con los que genera la consulta, y su enlace ocupa ese mismo lugar; el estilo nativo lo numera con ellos. Para un signo de interrogación literal, como el operador `?` de Postgres sobre `jsonb`, se escribe `\?`:
 
 ```pascal
 TQuery.New.From('docs').WhereRaw('data \? ''tag''').Where('id', 1)
-// Postgres → SELECT * FROM "docs" WHERE data ? 'tag' AND "id" = $1
+// Postgres                  → SELECT * FROM "docs" WHERE data ?? 'tag' AND "id" = ?
+// Postgres, estilo nativo   → SELECT * FROM "docs" WHERE data ? 'tag' AND "id" = $1
 ```
 
 ---
@@ -63,7 +98,7 @@ var Q := TQuery.New
 
 var Compilador: IQueryCompiler := TPostgresCompiler.Create;
 var R := Compilador.Compile(Q);
-// R.SQL      → 'SELECT * FROM "usuarios" WHERE "estado" = $1 ORDER BY "nombre"'
+// R.SQL      → 'SELECT * FROM "usuarios" WHERE "estado" = ? ORDER BY "nombre"'
 // R.Bindings → ['abierto']
 ```
 
@@ -100,6 +135,8 @@ begin
 end;
 ```
 
+Un compilador registrado por su tipo compila en el estilo por defecto. Para el estilo nativo, registra una instancia preparada como en [Estilos de Marcador](#estilos-de-marcador): `Services.AddSingleton<IQueryCompiler>(Compilador)`.
+
 ---
 
 ## Implementar un Compilador Personalizado
@@ -129,7 +166,7 @@ end;
 
 `WrapIdentifier` entrecomilla un solo nombre. `WrapColumn` y `WrapTable` separan un alias y parten un nombre cualificado por cada punto, y lo llaman para cada parte; `AliasKeyword` es lo que une un nombre con su alias.
 
-Cada método que emite SQL —de `CompileSelect` a `CompileDelete`, `CompileWhereList`, `CompileDateWhere`, `CompileOrderByColumn`— recibe la compilación, un `TSqlCompilation`, como primer parámetro, le añade sus enlaces con `AddBinding` y escribe cada marcador como `?`. Una pasada final sustituye el `?` de cada posición por lo que devuelve para ella `FormatPlaceholder`, contando desde 0.
+Cada método que emite SQL —de `CompileSelect` a `CompileDelete`, `CompileWhereList`, `CompileDateWhere`, `CompileOrderByColumn`— recibe la compilación, un `TSqlCompilation`, como primer parámetro, le añade sus enlaces con `AddBinding` y escribe cada marcador como `?`. En el estilo nativo, una pasada final sustituye el `?` de cada posición por lo que devuelve para ella `FormatPlaceholder`, contando desde 0.
 
 ---
 

@@ -36,6 +36,9 @@ type
     [Given('a dialect query selecting "([\w, ]+)" from "(\w+)" where "(\w+)" equals (\d+)')]
     procedure GivenSelectWhereEq(W: TSQLCuteWorld; Cols, Table, Col: string; Val: Integer);
 
+    [Given('a dialect query from "(\w+)" where "(\w+)" equals (\d+) and "(\w+)" equals (\d+)')]
+    procedure GivenWhereTwoEq(W: TSQLCuteWorld; Table, Col1: string; Val1: Integer; Col2: string; Val2: Integer);
+
     [Given('a dialect query from "(\w+)" limited to (\d+)$')]
     procedure GivenFromLimit(W: TSQLCuteWorld; Table: string; Lim: Integer);
 
@@ -76,6 +79,9 @@ type
     [When('compiled with the "(\w+)" dialect')]
     procedure WhenCompiledWithDialect(W: TSQLCuteWorld; Dialect: string);
 
+    [When('compiled with the "(\w+)" dialect in native style')]
+    procedure WhenCompiledWithDialectNative(W: TSQLCuteWorld; Dialect: string);
+
     // -----------------------------------------------------------------------
     //  THEN — assertions
     // -----------------------------------------------------------------------
@@ -115,6 +121,12 @@ begin
     .Select(Trimmed)
     .From(Table)
     .Where(Col, Val);
+end;
+
+procedure TSQLCuteCompilersSteps.GivenWhereTwoEq(W: TSQLCuteWorld;
+  Table, Col1: string; Val1: Integer; Col2: string; Val2: Integer);
+begin
+  W.Query := TQuery.New.From(Table).Where(Col1, Val1).Where(Col2, Val2);
 end;
 
 procedure TSQLCuteCompilersSteps.GivenFromLimit(W: TSQLCuteWorld;
@@ -171,25 +183,41 @@ end;
 //  WHEN implementations
 // -----------------------------------------------------------------------
 
+function NewCompiler(const Dialect: string): TAnsiSqlCompiler;
+begin
+  if Dialect = 'ANSI' then
+    Result := TAnsiSqlCompiler.Create
+  else if Dialect = 'SqlServer' then
+    Result := TSqlServerCompiler.Create
+  else if Dialect = 'Postgres' then
+    Result := TPostgresCompiler.Create
+  else if Dialect = 'MySQL' then
+    Result := TMySqlCompiler.Create
+  else if Dialect = 'SQLite' then
+    Result := TSQLiteCompiler.Create
+  else if Dialect = 'Oracle' then
+    Result := TOracleCompiler.Create
+  else if Dialect = 'Firebird' then
+    Result := TFirebirdCompiler.Create
+  else
+    raise Exception.CreateFmt('Unknown dialect: %s', [Dialect]);
+end;
+
 procedure TSQLCuteCompilersSteps.WhenCompiledWithDialect(W: TSQLCuteWorld;
   Dialect: string);
 begin
-  if Dialect = 'ANSI' then
-    W.Compiler := TAnsiSqlCompiler.Create
-  else if Dialect = 'SqlServer' then
-    W.Compiler := TSqlServerCompiler.Create
-  else if Dialect = 'Postgres' then
-    W.Compiler := TPostgresCompiler.Create
-  else if Dialect = 'MySQL' then
-    W.Compiler := TMySqlCompiler.Create
-  else if Dialect = 'SQLite' then
-    W.Compiler := TSQLiteCompiler.Create
-  else if Dialect = 'Oracle' then
-    W.Compiler := TOracleCompiler.Create
-  else if Dialect = 'Firebird' then
-    W.Compiler := TFirebirdCompiler.Create
-  else
-    raise Exception.CreateFmt('Unknown dialect: %s', [Dialect]);
+  W.Compiler := NewCompiler(Dialect);
+  W.LastResult := W.Query.Compile(W.Compiler);
+end;
+
+procedure TSQLCuteCompilersSteps.WhenCompiledWithDialectNative(W: TSQLCuteWorld;
+  Dialect: string);
+var
+  Compiler: TAnsiSqlCompiler;
+begin
+  Compiler := NewCompiler(Dialect);
+  Compiler.Placeholders := TPlaceholderStyle.Native;
+  W.Compiler := Compiler;
   W.LastResult := W.Query.Compile(W.Compiler);
 end;
 

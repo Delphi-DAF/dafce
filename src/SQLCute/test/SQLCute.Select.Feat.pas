@@ -13,6 +13,7 @@ uses
   System.Variants,
   Daf.MiniSpec,
   Daf.SQLCute,
+  Daf.SQLCute.Compiler,
   Daf.SQLCute.Compiler.Postgres,
   Daf.SQLCute.Compiler.SqlServer,
   SQLCute.SpecHelpers;
@@ -23,6 +24,12 @@ begin
   Result := R.SQL + ' |';
   for var B in R.Bindings do
     Result := Result + ' ' + VarToStr(B);
+end;
+
+function Native(const Compiler: TAnsiSqlCompiler): IQueryCompiler;
+begin
+  Compiler.Placeholders := TPlaceholderStyle.Native;
+  Result := Compiler;
 end;
 
 initialization
@@ -269,11 +276,24 @@ TQuery — SELECT @unit @sqlcute
 
 .Rule('The placeholders of a raw expression are numbered with the others')
 
-  .Scenario('A raw FROM in Postgres')
-    .When('query calls FromRaw(''fn_events(?, ?) AS e'', [1, 2]).Where(''kind'', 3), compiled with TPostgresCompiler',
+  .Scenario('A raw FROM with the default style')
+    .When('query calls FromRaw(''fn_events(?, ?) AS e'', [1, 2]).Where(''kind'', 3), compiled with a new TPostgresCompiler',
       procedure(W: TSQLCuteWorld)
       begin
         W.Compiler := TPostgresCompiler.Create;
+        W.LastResult := W.Compiler.Compile(TQuery.New.FromRaw('fn_events(?, ?) AS e', [1, 2]).Where('kind', 3));
+      end)
+    .&Then('SQL is "SELECT * FROM fn_events(?, ?) AS e WHERE "kind" = ?", and the bindings in order are 1, 2, 3',
+      procedure(W: TSQLCuteWorld)
+      begin
+        Expect(Described(W.LastResult)).ToEqual('SELECT * FROM fn_events(?, ?) AS e WHERE "kind" = ? | 1 2 3');
+      end)
+
+  .Scenario('A raw FROM in Postgres')
+    .When('query calls FromRaw(''fn_events(?, ?) AS e'', [1, 2]).Where(''kind'', 3), compiled with a TPostgresCompiler in native style',
+      procedure(W: TSQLCuteWorld)
+      begin
+        W.Compiler := Native(TPostgresCompiler.Create);
         W.LastResult := W.Compiler.Compile(TQuery.New.FromRaw('fn_events(?, ?) AS e', [1, 2]).Where('kind', 3));
       end)
     .&Then('SQL is "SELECT * FROM fn_events($1, $2) AS e WHERE "kind" = $3", and the bindings in order are 1, 2, 3',
@@ -283,10 +303,10 @@ TQuery — SELECT @unit @sqlcute
       end)
 
   .Scenario('A raw CTE in SQL Server')
-    .When('query calls WithRaw(''legacy'', ''SELECT id FROM old WHERE flag = ?'', [1]).From(''legacy'').Where(''id'', 2)',
+    .When('query calls WithRaw(''legacy'', ''SELECT id FROM old WHERE flag = ?'', [1]).From(''legacy'').Where(''id'', 2), compiled with a TSqlServerCompiler in native style',
       procedure(W: TSQLCuteWorld)
       begin
-        W.Compiler := TSqlServerCompiler.Create;
+        W.Compiler := Native(TSqlServerCompiler.Create);
         W.LastResult := W.Compiler.Compile(
           TQuery.New.WithRaw('legacy', 'SELECT id FROM old WHERE flag = ?', [1]).From('legacy').Where('id', 2));
       end)
@@ -298,10 +318,10 @@ TQuery — SELECT @unit @sqlcute
       end)
 
   .Scenario('An escaped question mark stays literal')
-    .When('query calls From(''docs'').WhereRaw(''data \? ''''tag'''''').Where(''id'', 1), compiled with TPostgresCompiler',
+    .When('query calls From(''docs'').WhereRaw(''data \? ''''tag'''''').Where(''id'', 1), compiled with a TPostgresCompiler in native style',
       procedure(W: TSQLCuteWorld)
       begin
-        W.Compiler := TPostgresCompiler.Create;
+        W.Compiler := Native(TPostgresCompiler.Create);
         W.LastResult := W.Compiler.Compile(TQuery.New.From('docs').WhereRaw('data \? ''tag''').Where('id', 1));
       end)
     .&Then('SQL is "SELECT * FROM "docs" WHERE data ? ''tag'' AND "id" = $1"',

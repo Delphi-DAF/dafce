@@ -37,7 +37,7 @@ type
     /// El SQL y los enlaces de un resultado, en una linea.
     class function Describe(const R: TSQLResult): string; static;
     /// Un juego de consultas con un numero distinto de enlaces cada una, y lo que da cada una
-    /// compilada sola con un TPostgresCompiler nuevo.
+    /// compilada sola con un TPostgresCompiler nuevo en estilo nativo.
     procedure PrepareQuerySet;
     /// Cuatro hilos compilan muchas veces el juego sobre Compiler; deja en Report los resultados
     /// que no coinciden con los de cada consulta sola.
@@ -56,6 +56,14 @@ uses
 const
   Threads = 4;
   Rounds = 500;
+
+// En estilo nativo los marcadores se numeran: la numeracion es el estado que se veria si una
+// compilacion dejara algo en la instancia.
+function Native(const Compiler: TAnsiSqlCompiler): IQueryCompiler;
+begin
+  Compiler.Placeholders := TPlaceholderStyle.Native;
+  Result := Compiler;
+end;
 
 { TNestingCompiler }
 
@@ -90,7 +98,7 @@ begin
     TQuery.New.From('c').WhereIn('id', [1, 2, 3, 4, 5]).Where('k', 6),
     TQuery.New.From('d')];
   SetLength(Expected, Length(Queries));
-  var Alone: IQueryCompiler := TPostgresCompiler.Create;
+  var Alone := Native(TPostgresCompiler.Create);
   for var I := 0 to High(Queries) do
     Expected[I] := Describe(Alone.Compile(Queries[I]));
 end;
@@ -151,10 +159,10 @@ Feature A compiler instance keeps no state between compilations @unit @sqlcute
 .Rule('A compiler instance serves successive compilations')
 
   .Scenario('The second Postgres query starts at $1')
-    .Given('a TPostgresCompiler held as IQueryCompiler that already compiled one query',
+    .Given('a TPostgresCompiler in native style held as IQueryCompiler that already compiled one query',
       procedure(W: TReentrancyWorld)
       begin
-        W.Compiler := TPostgresCompiler.Create;
+        W.Compiler := Native(TPostgresCompiler.Create);
         W.Compiler.Compile(TQuery.New.From('t').Where('a', 1));
       end)
     .When('it compiles From(''t'').Where(''b'', 2)',
@@ -169,11 +177,11 @@ Feature A compiler instance keeps no state between compilations @unit @sqlcute
       end)
 
   .Scenario('SQL Server and Oracle restart their numbering')
-    .Given('a TSqlServerCompiler and a TOracleCompiler held as IQueryCompiler, each with a query already compiled',
+    .Given('a TSqlServerCompiler and a TOracleCompiler in native style held as IQueryCompiler, each with a query already compiled',
       procedure(W: TReentrancyWorld)
       begin
-        W.Compiler := TSqlServerCompiler.Create;
-        W.Other := TOracleCompiler.Create;
+        W.Compiler := Native(TSqlServerCompiler.Create);
+        W.Other := Native(TOracleCompiler.Create);
         W.Compiler.Compile(TQuery.New.From('t').Where('a', 1));
         W.Other.Compile(TQuery.New.From('t').Where('a', 1));
       end)
@@ -192,16 +200,16 @@ Feature A compiler instance keeps no state between compilations @unit @sqlcute
 .Rule('A nested compilation does not alter the one that contains it')
 
   .Scenario('Compiling from an overridden method')
-    .Given('a derived compiler whose table quoting compiles another query with the same instance',
+    .Given('a derived compiler in native style whose table quoting compiles another query with the same instance',
       procedure(W: TReentrancyWorld)
       begin
-        W.Compiler := TNestingCompiler.Create;
+        W.Compiler := Native(TNestingCompiler.Create);
       end)
     .When('it compiles From(''t'').Where(''a'', 1).Where(''b'', 2)',
       procedure(W: TReentrancyWorld)
       begin
         var Query := TQuery.New.From('t').Where('a', 1).Where('b', 2);
-        var Alone: IQueryCompiler := TPostgresCompiler.Create;
+        var Alone := Native(TPostgresCompiler.Create);
         var Plain := TReentrancyWorld.Describe(Alone.Compile(Query));
         try
           W.Report := TReentrancyWorld.Describe(W.Compiler.Compile(Query));
@@ -220,10 +228,10 @@ Feature A compiler instance keeps no state between compilations @unit @sqlcute
 .Rule('A compiler instance serves concurrent compilations')
 
   .Scenario('Four threads share a compiler')
-    .Given('a shared TPostgresCompiler and a set of queries with a different number of bindings each, compiled alone before',
+    .Given('a shared TPostgresCompiler in native style and a set of queries with a different number of bindings each, compiled alone before',
       procedure(W: TReentrancyWorld)
       begin
-        W.Compiler := TPostgresCompiler.Create;
+        W.Compiler := Native(TPostgresCompiler.Create);
         W.PrepareQuerySet;
       end)
     .When('four threads compile the set many times at once on that instance',

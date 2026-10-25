@@ -27,7 +27,7 @@ Both units are `{$SCOPEDENUMS ON}`, so every enum value is qualified: `TWhereOp.
 | `IQuery` | Fluent builder — every method returns `IQuery`, ref-counted, no `Free` |
 | `IQueryCompiler` | `function Compile(const Query: IQuery): TSQLResult` — one method, nothing else |
 
-`TSQLResult` is a record with `SQL: string` and `Bindings: TArray<Variant>`. The `?` placeholders in `SQL` map positionally to `Bindings`; a dialect compiler may emit `$1` or `:p1` and keep the same ordering. `TSQLResult.Empty` is the zero value.
+`TSQLResult` is a record with `SQL: string` and `Bindings: TArray<Variant>`. The `?` placeholders in `SQL` map positionally to `Bindings`; a dialect compiler in its native placeholder style emits `$1` or `:p1` instead, in the same order. `TSQLResult.Empty` is the zero value.
 
 ---
 

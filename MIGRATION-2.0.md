@@ -703,7 +703,7 @@ suite that was green can come out with scenarios Pending or Undefined, or red.
   parameter**, a `TSqlCompilation`, and add their bindings to it with `C.AddBinding`. They write every
   placeholder as `?`: `ParamPlaceholder` is gone, and a dialect that numbers its placeholders
   overrides `FormatPlaceholder(Index)`, which receives the position counted from 0.
-- **A `?` in a raw expression is a placeholder in every dialect**, numbered with the others. A literal
+- **A `?` in a raw expression is a placeholder in every dialect**, counted with the others. A literal
   question mark, such as the `?` operator of Postgres on `jsonb`, is written `\?`.
 - **What breaks**: a compiler derived from `TAnsiSqlCompiler` that overrides an emitting method or
   `ParamPlaceholder`, at compile time and in that method; and a raw expression with a literal `?` on
@@ -761,7 +761,7 @@ end;
 
 - **`Having` quotes its column** like any other column of the dialect: it names a grouped column or
   the alias of an output column. `Having('count(*)', '>', 5)`, the form the guide showed in 1.6, emits
-  `"count(*)" > $1` in Postgres, and no such column exists.
+  `"count(*)" > ?` in Postgres, and no such column exists.
 - **An aggregate goes through `HavingRaw`**: `HavingRaw('count(*) > 5')`, which every engine accepts.
   An output alias in `HAVING` is rejected by Postgres, SQL Server and Firebird.
 - **What breaks**: a `Having` whose column is an aggregate expression, in a dialect that quotes.
@@ -857,6 +857,25 @@ procedure TMyForm.ServerError(Sender: TObject; const Error: Exception);
 - **What breaks**: a configuration with a value that does not convert, which now stops at binding, and
   a decimal written with a comma.
 
+### 39. SQLCute: every compiler writes `?`
+
+- **Every compiler writes `?` for each binding**, in every dialect: the placeholder FireDAC binds on any
+  engine and translates into the engine's own. In 1.6 the Postgres, SQL Server and Oracle compilers
+  wrote `$1`, `@p0` and `:p1`.
+- **A `\?` comes out as `??`**, FireDAC's literal `?`, outside a string between single quotes, and as
+  `?` inside one.
+- **The native style brings the engine's placeholders back**, and writes `\?` as `?`. Set it before the
+  instance compiles; `TPlaceholderStyle` lives in `Daf.SQLCute.Compiler`:
+
+```pascal
+var Postgres := TPostgresCompiler.Create;
+Postgres.Placeholders := TPlaceholderStyle.Native;
+var Compiler: IQueryCompiler := Postgres;
+```
+
+- **What breaks**: the SQL of those three compilers run through something that expects `$1`, `@p0` or
+  `:p1`.
+
 ## How to do it
 
 1. Compile. Whatever is missing comes out as a compiler error, not as odd behaviour at run time.
@@ -870,6 +889,6 @@ procedure TMyForm.ServerError(Sender: TObject; const Error: Exception);
    A Scoped service asked of the root provider is rejected too, when it is resolved: resolve it from a
    scope the work opens, `Services.CreateScope`. So is a Scoped a Singleton resolves: the Singleton
    resolves it in a scope it opens through `IServiceScopeFactory`.
-6. Sections 2, 6 to 13 and 15 to 38 carry **run-time** changes: the compiler says nothing about them. Read them
+6. Sections 2, 6 to 13 and 15 to 39 carry **run-time** changes: the compiler says nothing about them. Read them
    against your own composition — scope lifetimes, duplicate registrations, logging rules and
    host settings.

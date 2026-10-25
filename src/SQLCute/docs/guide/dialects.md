@@ -11,7 +11,7 @@
 The default `TAnsiSqlCompiler` generates generic ANSI SQL with `?` placeholders and no identifier quoting. Dialect compilers extend it to handle:
 
 - **Identifier quoting** — wrapping table/column names to avoid keyword conflicts
-- **Parameter placeholders** — `?`, `$1`, `:p1`, `@p0`, etc.
+- **Parameter placeholders** — `?` by default, and the engine's own (`$1`, `:p1`, `@p0`) in the native style
 - **Date casting** — dialect-specific expressions for `WhereDate`/`WhereDatePart`
 - **Pagination** — `LIMIT/OFFSET` vs `FETCH NEXT … ROWS ONLY` vs `ROWS m TO n`
 - **NULL-ordering emission** — native `NULLS FIRST/LAST`, or an emulation where the dialect has no such syntax
@@ -20,7 +20,9 @@ The default `TAnsiSqlCompiler` generates generic ANSI SQL with `?` placeholders 
 
 ## Dialect Matrix
 
-| Dialect class | Quote char | Placeholder | Package unit |
+Every compiler writes `?` by default. The placeholder column is what each one writes in the [native style](#placeholder-styles).
+
+| Dialect class | Quote char | Native-style placeholder | Package unit |
 |---------------|-----------|-------------|-------------|
 | `TAnsiSqlCompiler` | none | `?` | `Daf.SQLCute.Compiler` |
 | `TPostgresCompiler` | `"` | `$1`, `$2`, … | `Daf.SQLCute.Compiler.Postgres` |
@@ -38,13 +40,46 @@ All dialect compilers ship in the `Daf.SQLCute` package, alongside the `TAnsiSql
 
 ---
 
+## Placeholder Styles
+
+The `Placeholders` property of a compiler sets what it writes for each binding, and for a `\?` in a raw expression:
+
+| `TPlaceholderStyle` | Each binding | `\?` |
+|---|---|---|
+| `FireDAC`, the default | `?`, in every dialect | `??` outside a string, `?` inside one |
+| `Native` | the dialect's own: `$1`… on Postgres, `@p0`… on SQL Server, `:p1`… on Oracle, `?` in the others | `?` |
+
+FireDAC executes the default style as it is, on any engine: it binds `?` and translates it into the engine's own placeholder, reads `??` as a literal `?`, and looks for no parameter inside a string.
+
+A string is what goes between single quotes, and a `''` inside it does not close it. Other string forms, such as `$$…$$` and `E'…'` on Postgres, are not followed: a `\?` inside one comes out as `??`. The native style writes `?` there.
+
+For the native style, set the property before the instance compiles. The compiler is reference counted, so hold it in an `IQueryCompiler`:
+
+```pascal
+uses
+  Daf.SQLCute,
+  Daf.SQLCute.Compiler,
+  Daf.SQLCute.Compiler.Postgres;
+
+var Postgres := TPostgresCompiler.Create;
+Postgres.Placeholders := TPlaceholderStyle.Native;
+var Compiler: IQueryCompiler := Postgres;
+var R := Compiler.Compile(TQuery.New.From('users').Where('status', 'open'));
+// R.SQL → 'SELECT * FROM "users" WHERE "status" = $1'
+```
+
+`TPlaceholderStyle` lives in `Daf.SQLCute.Compiler`. Changing `Placeholders` while another thread compiles with the same instance is not supported.
+
+---
+
 ## Placeholders in Raw Expressions
 
-Every `?` in a raw expression — `WhereRaw`, `FromRaw`, `WithRaw` and the other `Raw` forms — is a placeholder, numbered with those the query generates, and its binding takes that same place. Write `\?` for a literal question mark, such as the `?` operator of Postgres on `jsonb`:
+Every `?` in a raw expression — `WhereRaw`, `FromRaw`, `WithRaw` and the other `Raw` forms — is a placeholder, counted with those the query generates, and its binding takes that same place; the native style numbers it with them. Write `\?` for a literal question mark, such as the `?` operator of Postgres on `jsonb`:
 
 ```pascal
 TQuery.New.From('docs').WhereRaw('data \? ''tag''').Where('id', 1)
-// Postgres → SELECT * FROM "docs" WHERE data ? 'tag' AND "id" = $1
+// Postgres               → SELECT * FROM "docs" WHERE data ?? 'tag' AND "id" = ?
+// Postgres, native style → SELECT * FROM "docs" WHERE data ? 'tag' AND "id" = $1
 ```
 
 ---
@@ -63,7 +98,7 @@ var Q := TQuery.New
 
 var Compiler: IQueryCompiler := TPostgresCompiler.Create;
 var R := Compiler.Compile(Q);
-// R.SQL      → 'SELECT * FROM "users" WHERE "status" = $1 ORDER BY "name"'
+// R.SQL      → 'SELECT * FROM "users" WHERE "status" = ? ORDER BY "name"'
 // R.Bindings → ['open']
 ```
 
@@ -100,6 +135,8 @@ begin
 end;
 ```
 
+A compiler registered by its type compiles in the default style. For the native style, register an instance set up as in [Placeholder Styles](#placeholder-styles): `Services.AddSingleton<IQueryCompiler>(Compiler)`.
+
 ---
 
 ## Implementing a Custom Compiler
@@ -129,7 +166,7 @@ end;
 
 `WrapIdentifier` quotes a single name. `WrapColumn` and `WrapTable` split off an alias and split a qualified name at each dot, and call it for each part; `AliasKeyword` is what joins a name with its alias.
 
-Every method that emits SQL — `CompileSelect` to `CompileDelete`, `CompileWhereList`, `CompileDateWhere`, `CompileOrderByColumn` — receives the compilation, a `TSqlCompilation`, as its first parameter, adds its bindings to it with `AddBinding`, and writes each placeholder as `?`. A final pass replaces the `?` at each position with what `FormatPlaceholder` returns for it, counted from 0.
+Every method that emits SQL — `CompileSelect` to `CompileDelete`, `CompileWhereList`, `CompileDateWhere`, `CompileOrderByColumn` — receives the compilation, a `TSqlCompilation`, as its first parameter, adds its bindings to it with `AddBinding`, and writes each placeholder as `?`. In the native style, a final pass replaces the `?` at each position with what `FormatPlaceholder` returns for it, counted from 0.
 
 ---
 

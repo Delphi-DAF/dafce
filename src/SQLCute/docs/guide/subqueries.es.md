@@ -45,7 +45,7 @@ Con bindings:
 .FromRaw('fn_obtener_eventos(?, ?) AS e', [FechaInicio, FechaFin])
 ```
 
-Sus `?` se numeran con los marcadores del resto de la consulta, y sus enlaces ocupan ese mismo lugar: en Postgres, `$1` y `$2` aquí, y el siguiente de la consulta `$3`.
+Sus `?` cuentan con los marcadores del resto de la consulta, y sus enlaces ocupan ese mismo lugar: en el estilo nativo de Postgres, `$1` y `$2` aquí, y el siguiente de la consulta `$3`.
 
 ---
 
