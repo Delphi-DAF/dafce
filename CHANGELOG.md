@@ -207,6 +207,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - **SystemProcess**: Captured text turned non-ASCII characters into others —`ñ` from `cmd` arrived as `¤`— and broke a character split between two reads; it is decoded with the code page of the console the child runs in
 - **SystemProcess**: `ExecuteAsyncAndFree` never launched the child, and called neither `OnCompleted` nor `OnFailed`. It now runs the child to the end before freeing it
 - **SystemProcess**: `ExecuteAndFree` and `ExecuteAsyncAndFree` leaked their builder on every call
+- **SystemProcess**: An `ExecuteAsync` whose `ISystemProcess` was released before the child finished went on using the freed instance, and its notifications never arrived
 - **Web**: A literal route segment is tried before a parameter in the same position; the action declared first used to win, so `/items/search` could land on `/items/{Id}`
 - **Web**: A `[FromServices]` parameter receives its service. With the service registered the request failed with `EInvalidCast`, and without it the action received `nil` with no warning; that case now fails the request naming the service
 - **Web**: Destroying a `TDafHttpServer` frees the web modules WebBroker kept for reuse; a later server in the same process was handed the ones built for the previous one

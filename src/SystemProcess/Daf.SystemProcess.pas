@@ -1186,11 +1186,20 @@ begin
     Result.Wait;
     Exit;
   end;
+  // La tarea sostiene la instancia hasta que termina la espera. Una instancia que se maneja como
+  // objeto tiene la cuenta a cero, y una referencia tomada ahí la liberaría debajo de su dueño.
+  var Keep: ISystemProcess := nil;
+  if RefCount > 0 then
+    Keep := Self;
   Result := TTask.Future<TProcessResult>(
     function: TProcessResult
     begin
-      Result := Launched;
-      WaitForChild(CancellationToken, Result);
+      try
+        Result := Launched;
+        WaitForChild(CancellationToken, Result);
+      finally
+        Keep := nil;
+      end;
     end);
 end;
 

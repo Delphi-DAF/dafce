@@ -29,6 +29,7 @@ type
     Report: string;
     Threads: string;
     Pid: Cardinal;
+    Notified: string;
     CallerThread: TThreadID;
     FailedThread: TThreadID;
     destructor Destroy; override;
@@ -63,14 +64,14 @@ end;
 
 destructor TLaunchWorld.Destroy;
 begin
-  // La tarea de ExecuteAsync usa la instancia sin sostenerla: tiene que acabar antes de soltarla, o
-  // un escenario que falla a medias rompe al siguiente. Kill vale aunque el hijo no se haya lanzado
-  // todavia: la espera lo ve en cuanto empieza.
+  // Un escenario que falla a medias puede dejar un hijo vivo: se mata y se espera a su tarea, para que
+  // no llegue al siguiente.
   if Assigned(Future) and not (Future.Status in [TTaskStatus.Completed, TTaskStatus.Canceled,
     TTaskStatus.Exception]) then
   begin
-    Proc.Kill;
     try
+      if Assigned(Proc) and Proc.IsRunning then
+        Proc.Kill;
       Future.Wait(30000);
     except
       on Exception do;
@@ -98,6 +99,28 @@ begin
         W.Report := StatusText(R.Status);
         W.Done.SetEvent;
       end);
+end;
+
+/// Lanza con ExecuteAsync un hijo que tarda un momento y devuelve solo la tarea: la referencia al
+/// proceso muere al volver. OnCompleted anota el estado en Notified y avisa por Done.
+function LaunchUnheld(W: TLaunchWorld): IFuture<TProcessResult>;
+begin
+  W.Done := TEvent.Create(nil, True, False, '');
+  Result := TSystemProcess.Builder
+    .Command('ping')
+    .CmdArgs(['-n', '2', '127.0.0.1'])
+    .StandardOutput(TProcessOutput.Discard)
+    .StandardError(TProcessOutput.Discard)
+    .HideWindow(True)
+    .Timeout(60000)
+    .OnCompleted(
+      procedure(R: TProcessResult)
+      begin
+        W.Notified := StatusText(R.Status);
+        W.Done.SetEvent;
+      end)
+    .Build
+    .ExecuteAsync;
 end;
 
 function TLaunchWorld.Slow(Seconds: Integer): ISystemProcess;
@@ -276,6 +299,33 @@ Feature Lo que se sabe de un hijo desde que se lanza @systemprocess @launch
       procedure(W: TLaunchWorld)
       begin
         Expect(W.Report).ToEqual('Canceled corre=False');
+      end)
+
+.Rule('ExecuteAsync sostiene la instancia hasta que el hijo termina')
+
+  .Scenario('Un proceso que nadie sostiene termina igual')
+    .Given('un hijo que tarda un momento en terminar, y un OnCompleted que anota el resultado',
+      procedure(W: TLaunchWorld)
+      begin
+        W.Notified := '';
+      end)
+    .When('se lanza con ExecuteAsync, se suelta el ISystemProcess y se espera a la tarea',
+      procedure(W: TLaunchWorld)
+      begin
+        W.Future := LaunchUnheld(W);
+        try
+          W.Report := StatusText(W.Future.Value.Status);
+        except
+          on E: Exception do
+            W.Report := E.ClassName + ': ' + E.Message;
+        end;
+        if W.Done.WaitFor(5000) <> wrSignaled then
+          W.Notified := 'sin OnCompleted';
+      end)
+    .&Then('la tarea termina con Completed, y OnCompleted recibe Completed',
+      procedure(W: TLaunchWorld)
+      begin
+        Expect(Format('tarea=%s aviso=%s', [W.Report, W.Notified])).ToEqual('tarea=Completed aviso=Completed');
       end)
 
 .Rule('Lanzar y liberar en segundo plano espera al hijo')
