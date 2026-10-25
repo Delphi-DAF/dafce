@@ -176,12 +176,13 @@ type
 
   THostApplicationLifetime = class(TInterfacedObject, IHostApplicationLifetime)
   private
-  private
+    FServices: IServiceProviderImpl;
     FStartedCTS: ICancellationTokenSource;
     FStoppingCTS: ICancellationTokenSource;
     FStoppedCTS: ICancellationTokenSource;
+    procedure Notify(const Source: ICancellationTokenSource; const Failure: string);
   public
-    constructor Create;
+    constructor Create(const Services: IServiceProvider);
     destructor Destroy; override;
 
     function ApplicationStarted: ICancellationToken;
@@ -444,11 +445,11 @@ begin
     var Lifetime: IHostApplicationLifetime := nil;
     try
       Lifetime := GetServices.GetService<IHostApplicationLifetime>;
-      if Assigned(Lifetime) then
-        (Lifetime as THostApplicationLifetime).NotifyStopping;
     except
       on E: Exception do Collect(E);
     end;
+    if Assigned(Lifetime) then
+      (Lifetime as THostApplicationLifetime).NotifyStopping;
 
     // LIFO, el mismo orden en que cierra el contenedor: un servicio arrancado despues puede
     // estar usando lo que suelta al parar uno arrancado antes.
@@ -460,12 +461,8 @@ begin
       end;
     FHostedServices.Clear;
 
-    try
-      if Assigned(Lifetime) then
-        (Lifetime as THostApplicationLifetime).NotifyStopped;
-    except
-      on E: Exception do Collect(E);
-    end;
+    if Assigned(Lifetime) then
+      (Lifetime as THostApplicationLifetime).NotifyStopped;
 
     try
       FServices := nil;
@@ -789,9 +786,10 @@ end;
 
 { THostApplicationLifetime }
 
-constructor THostApplicationLifetime.Create;
+constructor THostApplicationLifetime.Create(const Services: IServiceProvider);
 begin
-  inherited;
+  inherited Create;
+  FServices := Services;
   FStartedCTS := CreateCancellationTokenSource;
   FStoppingCTS := CreateCancellationTokenSource;
   FStoppedCTS := CreateCancellationTokenSource;end;
@@ -816,24 +814,40 @@ begin
   Result := FStoppedCTS.Token;
 end;
 
+// Como ApplicationLifetime de .NET: lo que lanza un callback se informa y no sale de aqui, asi que no
+// interrumpe el arranque ni la parada. Cada excepcion de la agregada va en su propia entrada, porque el
+// mensaje de la agregada no nombra el fallo de ningun callback.
+procedure THostApplicationLifetime.Notify(const Source: ICancellationTokenSource; const Failure: string);
+begin
+  try
+    Source.Cancel;
+  except
+    on E: EAggregateException do
+      for var I := 0 to E.Count - 1 do
+        ReportLogger(FServices, ClassName).LogCritical(E.InnerExceptions[I], Failure);
+    on E: Exception do
+      ReportLogger(FServices, ClassName).LogCritical(E, Failure);
+  end;
+end;
+
 procedure THostApplicationLifetime.StopApplication;
 begin
-  FStoppingCTS.Cancel;
+  Notify(FStoppingCTS, 'An error occurred stopping the application');
 end;
 
 procedure THostApplicationLifetime.NotifyStarted;
 begin
-  FStartedCTS.Cancel;
+  Notify(FStartedCTS, 'An error occurred starting the application');
 end;
 
 procedure THostApplicationLifetime.NotifyStopping;
 begin
-  FStoppingCTS.Cancel;
+  Notify(FStoppingCTS, 'An error occurred stopping the application');
 end;
 
 procedure THostApplicationLifetime.NotifyStopped;
 begin
-  FStoppedCTS.Cancel;
+  Notify(FStoppedCTS, 'An error occurred stopping the application');
 end;
 
 end.
