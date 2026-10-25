@@ -811,6 +811,20 @@ for var Token in Tokens do
 - **Qué rompe**: una abreviatura en `DAF_ENVIRONMENT` o en `--environment`, y un nombre propio que
   contaba con cargar `appsettings.Production.json`. Escribe el nombre completo.
 
+### 34. Commons: un programa sin host vuelve a terminar con Ctrl+C
+
+- **El manejador de consola está instalado mientras hay un oyente** de
+  `TShutdownHook.OnShutdownRequested`, que el host asigna al arrancar y suelta al parar. En 1.6 se
+  instalaba al cargarse la unit, así que todo proceso que enlazaba Commons se quedaba con todo evento
+  de consola.
+- **Sin oyente, Ctrl+C y Ctrl+Break se dejan al sistema**, que termina el proceso. En 1.6 un proceso
+  sin host sobrevivía a ellos.
+- **Con host, cada Ctrl+C y cada Ctrl+Break piden la parada.** En 1.6 solo lo hacía el primer Ctrl+C.
+- **El cierre de la ventana de consola se deja al sistema**, con host o sin él: el proceso termina sin
+  parar el host, como en .NET.
+- **Qué rompe**: un programa sin host que contaba con sobrevivir a un Ctrl+C. Asigna un oyente a
+  `TShutdownHook.OnShutdownRequested` mientras tenga que retener la señal.
+
 ## Cómo hacerlo
 
 1. Compila. Lo que falte sale como error del compilador, no como comportamiento raro en
@@ -826,6 +840,6 @@ for var Token in Tokens do
    resolverlo: se resuelve desde un ámbito que abre el trabajo, `Services.CreateScope`. También un
    Scoped que resuelve un Singleton: el Singleton lo resuelve en un ámbito que abre con
    `IServiceScopeFactory`.
-6. Las secciones 2, de la 6 a la 13 y de la 15 a la 33 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
+6. Las secciones 2, de la 6 a la 13 y de la 15 a la 34 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
    contra tu propia composición — la vida de los ámbitos, los registros repetidos, las reglas de
    logging y los ajustes del host.

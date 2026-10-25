@@ -71,6 +71,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - **Commons**: `VersionTag` takes a template of `${...}` markers, with `VersionTemplate` and `VersionTemplateWithBuild` as its two defaults. The marker list, in the GUIDE
 - **Commons**: `TMacrosList.MissingMacroPolicy` and `OnMissingMacro` decide what a reference to a macro that is not registered becomes: kept as written, a fallback value, or `EMacroNotFound`. With nothing configured it still resolves to empty
 - **Commons**: `TShutdownHook.RequestShutdown` — asking for the shutdown the way Ctrl+C does. A request made while no host is listening is delivered to the next one that starts
+- **Commons**: `TShutdownHook.HandleConsoleSignal` — what the console handler does with each event, and whether it takes it
 - **SystemProcess**: `TProcessResult.TStatus.Killed` — an explicit `Kill` and an expired deadline stop sharing the `Timeout` value, so a result says which of the two cut the run short
 - **SystemProcess**: `StandardOutput` and `StandardError` give each stream of the child its destination, a `TProcessOutput`: captured, inherited from the parent, discarded or written to a file
 - **SystemProcess**: `StandardOutputEncoding` and `StandardErrorEncoding` — the encoding of what is captured
@@ -125,6 +126,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - **NNLog**: A layout token with no renderer behind it is left unsubstituted instead of becoming the empty string, so a misspelled `${mesage}` shows up in the line
 - ⚠️ **Commons**: `VersionTag`'s `WithCompiledMeta` flag is now a template parameter, and `TVersionInfo.Debug` is read-only and declared by the binary — a fourth argument to `[Version(...)]` or `TVersionInfo.Create`, `False` when omitted; it used to report how DAF itself was compiled. **Breaks** whoever passed the flag or assigned `Debug`
 - ⚠️ **Commons**: `Cancel` runs the callbacks **last registered first**, as in .NET, and what they raise comes out together in an `EAggregateException` once all have run, also when only one raised. **Breaks** whoever relied on registration order, or caught a callback's own exception around `Cancel`
+- ⚠️ **Commons**: The console handler is installed only while `TShutdownHook.OnShutdownRequested` has a listener, as in .NET, and what it does not take is left to the system: without a host, Ctrl+C ends the process again. **Breaks** a program without a host that relied on surviving a Ctrl+C
 - ⚠️ **SystemProcess**: A stream with no declared destination **inherits the parent's**, so a child launched without handlers writes where the calling process writes. `TProcessOutput.Discard` on both streams keeps it quiet
 - ⚠️ **SystemProcess**: A second destination for the same stream —`OnStdOut` twice, or `OnStdOut` and `StandardOutput`— **raises `EInvalidOpException`**; it used to replace the first
 - ⚠️ **SystemProcess**: `HideWindow(False)`, the default, **no longer opens a console of its own**: the child runs in the parent's console
@@ -214,6 +216,8 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - **Commons**: A tag carrying its own build metadata produced two `+` sections, which SemVer does not admit; what the tag declares and what the compiler saw now share the one section
 - **Commons**: A callback that raised during `Cancel` left the ones after it unrun, and cancelling again ran the earlier ones a second time
 - **Commons**: Releasing a source from `CreateCancellationTokenSourceWithTimeout` before its deadline left its timer thread alive until the deadline
+- **Commons**: With a host listening, Ctrl+Break and every Ctrl+C after the first asked for nothing; they now ask for the shutdown
+- **Commons**: A listener of `OnShutdownRequested` that raised let its exception out of the console handler; it now goes to the error output
 - **SystemProcess**: An explicit `Kill` reported `Timeout`, and killed the child twice — once when asked and again when the wait loop noticed. It now reports `Killed` and kills once
 - **SystemProcess**: A child that wrote more than 4 KB to a stream with no handler blocked until its deadline and reported `Timeout`; with no deadline, `Execute` never returned
 - **SystemProcess**: Captured text turned non-ASCII characters into others —`ñ` from `cmd` arrived as `¤`— and broke a character split between two reads; it is decoded with the code page of the console the child runs in

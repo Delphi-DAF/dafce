@@ -388,20 +388,12 @@ procedure THost.Start;
 begin
   FStartBegan := True;
   try
-    // Fase 2 del arranque, en orden: primero las tareas de inicializacion, porque un
-    // servicio alojado puede depender del estado que preparan; despues los servicios
-    // alojados; y solo entonces se declara arrancada la aplicacion. Si una tarea lanza,
-    // la excepcion sale de aqui y no se arranca nada.
-    for var StartupTask in GetServices.GetServices<IStartupTask> do
-      StartupTask.Run;
-    for var HostedService in FHostedServices do
-      HostedService.Start;
     var Lifetime := GetServices.GetRequiredService<IHostApplicationLifetime>;
-    if Assigned(Lifetime) then
-      (Lifetime as THostApplicationLifetime).NotifyStarted;
 
     // UNA sola señal de apagado: el manejador de consola pide la parada por el mismo camino
     // que la pide el codigo --StopApplication--, y quien la espera observa ApplicationStopping.
+    // Se suscribe lo primero, asi que una señal durante el arranque cancela ApplicationStopping en
+    // el acto.
     //
     // El TProc es de clase, asi que con dos hosts vivos a la vez el ultimo en arrancar atiende
     // la señal y el primero en pararse la libera. Un proceso con dos hosts es cosa de un arnes
@@ -411,6 +403,16 @@ begin
       begin
         Lifetime.StopApplication;
       end;
+
+    // Fase 2 del arranque, en orden: primero las tareas de inicializacion, porque un
+    // servicio alojado puede depender del estado que preparan; despues los servicios
+    // alojados; y solo entonces se declara arrancada la aplicacion. Si una tarea lanza,
+    // la excepcion sale de aqui y no se arranca nada.
+    for var StartupTask in GetServices.GetServices<IStartupTask> do
+      StartupTask.Run;
+    for var HostedService in FHostedServices do
+      HostedService.Start;
+    (Lifetime as THostApplicationLifetime).NotifyStarted;
   except
     on E: Exception do
     begin

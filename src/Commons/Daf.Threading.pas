@@ -54,21 +54,26 @@ type
     function IsCancellationRequested: Boolean;
   end;
 
+  /// <summary>The console events TShutdownHook receives, whatever the platform.</summary>
+  TConsoleSignal = (csInterrupt, csBreak, csClose, csLogoff, csShutdown);
+
   TShutdownHook = class
   private
-    class var FCtrlHandlerEntered: Boolean;
     class var FTerminated: Boolean;
     class var FEvent: TEvent;
     class var FLock: TCriticalSection;
+    // Orders the installs and removals of the console handler; handling a signal never takes it.
+    class var FHookLock: TCriticalSection;
+    class var FHookInstalled: Boolean;
     class var FOnShutdownRequested: TProc;
     // A request made while nobody listened, waiting for the next one who subscribes.
     class var FPending: Boolean;
     class procedure SetOnShutdownRequested(const Value: TProc); static;
+    class procedure SyncHook; static;
+    class procedure InstallHook; static;
+    class procedure UninstallHook; static;
     {$IFDEF MSWINDOWS}
     class function WinHandleSignal(dwCtrlType: DWORD): BOOL; static; stdcall;
-    {$ENDIF}
-    {$IFDEF POSIX}
-    class procedure HandleSignal(SigNum: Integer); static;
     {$ENDIF}
   public
     // You can translate this message on app start
@@ -79,11 +84,17 @@ type
     class property Terminated: Boolean read FTerminated;
     /// <summary>
     ///   Who hears a shutdown request. A request made while nobody listened is delivered to the
-    ///   next listener on assignment, once.
+    ///   next listener on assignment, once. The console handler is installed with the first
+    ///   listener and removed when it is released.
     /// </summary>
     class property OnShutdownRequested: TProc read FOnShutdownRequested write SetOnShutdownRequested;
     /// <summary>Asks for the shutdown the way the console signal does.</summary>
     class procedure RequestShutdown; static;
+    /// <summary>
+    ///   What a console event does: whether it asks for the shutdown, and whether the handler takes
+    ///   it, which keeps it from the system.
+    /// </summary>
+    class function HandleConsoleSignal(Signal: TConsoleSignal): Boolean; static;
     class procedure CreateHook;
   end;
 
@@ -420,6 +431,75 @@ begin
   Cancel;
 end;
 
+{$IFDEF POSIX}
+var
+  SignalPipe: TPipeDescriptors;
+  SignalReader: TThread;
+
+const
+  WatchedSignals: array[0..2] of Integer = (SIGINT, SIGQUIT, SIGTERM);
+
+// As PosixSignalRegistration in .NET: a signal handler may only make async-signal-safe calls, so it
+// writes the signal number to a pipe, and the reader thread is the one that handles it.
+procedure SignalArrived(SigNum: Integer); cdecl;
+var
+  Signal: Byte;
+begin
+  Signal := Byte(SigNum);
+  __write(SignalPipe.WriteDes, @Signal, 1);
+end;
+
+procedure SetSignalHandler(SigNum: Integer; Handler: TSignalHandler);
+var
+  Action: sigaction_t;
+begin
+  FillChar(Action, SizeOf(Action), 0);
+  Action._u.sa_handler := Handler;
+  sigemptyset(Action.sa_mask);
+  sigaction(SigNum, @Action, nil);
+end;
+
+procedure InstallSignalWatch;
+begin
+  pipe(SignalPipe);
+  SignalReader := TThread.CreateAnonymousThread(
+    procedure
+    var
+      Signal: Byte;
+    begin
+      // The read answers 0 once the write end is closed, and that ends the thread.
+      while __read(SignalPipe.ReadDes, @Signal, 1) = 1 do
+        case Signal of
+          SIGINT: TShutdownHook.HandleConsoleSignal(csInterrupt);
+          SIGQUIT: TShutdownHook.HandleConsoleSignal(csBreak);
+          SIGTERM: TShutdownHook.HandleConsoleSignal(csShutdown);
+        end;
+    end);
+  SignalReader.FreeOnTerminate := False;
+  SignalReader.Start;
+  for var SigNum in WatchedSignals do
+    SetSignalHandler(SigNum, SignalArrived);
+end;
+
+procedure RemoveSignalWatch;
+begin
+  // A nil handler is SIG_DFL.
+  for var SigNum in WatchedSignals do
+    SetSignalHandler(SigNum, nil);
+  __close(SignalPipe.WriteDes);
+  // From the reader itself -- a listener that releases the hook -- it cannot wait for itself.
+  if SignalReader.ThreadID = TThread.CurrentThread.ThreadID then
+    SignalReader.FreeOnTerminate := True
+  else
+  begin
+    SignalReader.WaitFor;
+    SignalReader.Free;
+  end;
+  SignalReader := nil;
+  __close(SignalPipe.ReadDes);
+end;
+{$ENDIF}
+
 { TShutdownHook }
 
 class constructor TShutdownHook.Create;
@@ -427,18 +507,26 @@ begin
   PresCtlCMsg := 'Press Ctrl+C to exit...';
   FEvent := TEvent.Create(nil, True, False, '');
   FLock := TCriticalSection.Create;
-  CreateHook;
+  FHookLock := TCriticalSection.Create;
 end;
 
 class destructor TShutdownHook.Destroy;
 begin
+  FHookLock.Acquire;
+  try
+    UninstallHook;
+  finally
+    FHookLock.Release;
+  end;
+  FHookLock.Free;
   FLock.Free;
   FEvent.Free;
 end;
 
 class procedure TShutdownHook.SetOnShutdownRequested(const Value: TProc);
+var
+  Deliver: Boolean;
 begin
-  var Deliver := False;
   FLock.Acquire;
   try
     FOnShutdownRequested := Value;
@@ -448,9 +536,60 @@ begin
   finally
     FLock.Release;
   end;
+  SyncHook;
   // Outside the lock, as in RequestShutdown: the listener runs whatever hangs on the shutdown.
   if Deliver then
     Value();
+end;
+
+// As ConsoleLifetime registers its signals when the host starts and releases them when it is
+// disposed, the console handler is installed while there is a listener. Each assignment leaves the
+// hook as the listener it finds, so the last one to get here decides.
+class procedure TShutdownHook.SyncHook;
+var
+  Wanted: Boolean;
+begin
+  FHookLock.Acquire;
+  try
+    FLock.Acquire;
+    try
+      Wanted := Assigned(FOnShutdownRequested);
+    finally
+      FLock.Release;
+    end;
+    if Wanted then
+      InstallHook
+    else
+      UninstallHook;
+  finally
+    FHookLock.Release;
+  end;
+end;
+
+class procedure TShutdownHook.InstallHook;
+begin
+  if FHookInstalled then
+    Exit;
+  {$IFDEF MSWINDOWS}
+  SetConsoleCtrlHandler(@WinHandleSignal, True);
+  {$ENDIF}
+  {$IFDEF POSIX}
+  InstallSignalWatch;
+  {$ENDIF}
+  FHookInstalled := True;
+end;
+
+class procedure TShutdownHook.UninstallHook;
+begin
+  if not FHookInstalled then
+    Exit;
+  {$IFDEF MSWINDOWS}
+  SetConsoleCtrlHandler(@WinHandleSignal, False);
+  {$ENDIF}
+  {$IFDEF POSIX}
+  RemoveSignalWatch;
+  {$ENDIF}
+  FHookInstalled := False;
 end;
 
 class procedure TShutdownHook.RequestShutdown;
@@ -477,40 +616,61 @@ end;
 {$IFDEF MSWINDOWS}
 class function TShutdownHook.WinHandleSignal(dwCtrlType: DWORD): BOOL;
 begin
-  if (dwCtrlType = CTRL_C_EVENT) and not FCtrlHandlerEntered then
-  begin
-    FCtrlHandlerEntered := True;
-    RequestShutdown;
+  case dwCtrlType of
+    CTRL_C_EVENT: Result := HandleConsoleSignal(csInterrupt);
+    CTRL_BREAK_EVENT: Result := HandleConsoleSignal(csBreak);
+    CTRL_CLOSE_EVENT: Result := HandleConsoleSignal(csClose);
+    CTRL_LOGOFF_EVENT: Result := HandleConsoleSignal(csLogoff);
+    CTRL_SHUTDOWN_EVENT: Result := HandleConsoleSignal(csShutdown);
+  else
+    Result := False;
+  end;
+end;
+{$ENDIF}
+
+// As ConsoleLifetime: an interrupt, a break or a termination asks for the shutdown each time it
+// arrives while somebody listens, and the handler takes it. Without a listener, and for the closing
+// of the console or of the session, it is left to the system, which ends the process. What the
+// listener raises goes to the error output, because Commons has no log channel, and does not leave
+// the signal thread.
+class function TShutdownHook.HandleConsoleSignal(Signal: TConsoleSignal): Boolean;
+var
+  Listener: TProc;
+begin
+  Result := False;
+  if not (Signal in [csInterrupt, csBreak, csShutdown]) then
+    Exit;
+  FLock.Acquire;
+  try
+    Listener := FOnShutdownRequested;
+    if Assigned(Listener) then
+    begin
+      FTerminated := True;
+      FEvent.SetEvent;
+    end;
+  finally
+    FLock.Release;
+  end;
+  if not Assigned(Listener) then
+    Exit;
+  try
+    Listener();
+  except
+    on E: Exception do
+      if IsConsole then
+        Writeln(ErrOutput, Format('The shutdown listener failed: %s: %s', [E.ClassName, E.Message]));
   end;
   Result := True;
 end;
-{$ENDIF}
-
-{$IFDEF POSIX}
-class procedure TShutdownHook.HandleSignal(SigNum: Integer);
-begin
-  if not FCtrlHandlerEntered then
-  begin
-    case SigNum of
-      SIGINT, SIGTERM:
-        begin
-          FCtrlHandlerEntered := True;
-          RequestShutdown;
-        end;
-    end;
-  end;
-end;
-{$ENDIF}
 
 class procedure TShutdownHook.CreateHook;
 begin
-  {$IFDEF MSWINDOWS}
-  SetConsoleCtrlHandler(@WinHandleSignal, True);
-  {$ENDIF}
-  {$IFDEF POSIX}
-  fpSignal(SIGINT, @HandleSignal);
-  fpSignal(SIGTERM, @HandleSignal);
-  {$ENDIF}
+  FHookLock.Acquire;
+  try
+    InstallHook;
+  finally
+    FHookLock.Release;
+  end;
 end;
 
 class procedure TShutdownHook.WaitForShutdown;

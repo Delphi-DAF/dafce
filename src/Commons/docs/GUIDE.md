@@ -86,7 +86,8 @@ Cts.Cancel;
 
 ### TShutdownHook
 
-Connect OS shutdown signals (Ctrl+C, SIGTERM) to application cleanup:
+Connects the console's shutdown signals to the application. The host subscribes on its own when it
+starts; assign the listener by hand only in a program without a host:
 
 ```pascal
 uses Daf.Threading;
@@ -97,6 +98,19 @@ begin
   App.Stop;
 end;
 ```
+
+The console handler is installed while there is a listener, as `ConsoleLifetime` does in .NET:
+
+| Event | With a listener | Without one |
+|---|---|---|
+| Ctrl+C, Ctrl+Break; SIGINT, SIGQUIT and SIGTERM outside Windows | asks for the shutdown, each time it arrives | left to the system, which ends the process |
+| Closing the console window, logging off | left to the system | left to the system |
+
+`TShutdownHook.HandleConsoleSignal(Signal)` is what the handler does with each event, and answers
+whether it takes it. What the listener raises goes to the error output and does not leave the
+handler. `RequestShutdown` asks for the shutdown from code; without a listener, the request waits for
+the next one that subscribes. A Windows system shutdown does not reach a Delphi console application,
+which loads `user32.dll`.
 
 ---
 

@@ -803,6 +803,21 @@ for var Token in Tokens do
 - **What breaks**: an abbreviation in `DAF_ENVIRONMENT` or `--environment`, and a name of your own that
   relied on loading `appsettings.Production.json`. Write the full name.
 
+### 34. Commons: a program without a host ends with Ctrl+C again
+
+- **The console handler is installed while there is a listener** of
+  `TShutdownHook.OnShutdownRequested`, which the host assigns when it starts and releases when it
+  stops. In 1.6 it was installed when the unit loaded, so every process that linked Commons took every
+  console event.
+- **Without a listener, Ctrl+C and Ctrl+Break are left to the system**, which ends the process. In 1.6
+  a process without a host survived them.
+- **With a host, every Ctrl+C and every Ctrl+Break ask for the shutdown.** In 1.6 only the first
+  Ctrl+C did.
+- **Closing the console window is left to the system**, with a host or without one: the process ends
+  without stopping the host, as in .NET.
+- **What breaks**: a program without a host that relied on surviving a Ctrl+C. It assigns a listener
+  to `TShutdownHook.OnShutdownRequested` for as long as it has to hold the signal.
+
 ## How to do it
 
 1. Compile. Whatever is missing comes out as a compiler error, not as odd behaviour at run time.
@@ -816,6 +831,6 @@ for var Token in Tokens do
    A Scoped service asked of the root provider is rejected too, when it is resolved: resolve it from a
    scope the work opens, `Services.CreateScope`. So is a Scoped a Singleton resolves: the Singleton
    resolves it in a scope it opens through `IServiceScopeFactory`.
-6. Sections 2, 6 to 13 and 15 to 33 carry **run-time** changes: the compiler says nothing about them. Read them
+6. Sections 2, 6 to 13 and 15 to 34 carry **run-time** changes: the compiler says nothing about them. Read them
    against your own composition — scope lifetimes, duplicate registrations, logging rules and
    host settings.

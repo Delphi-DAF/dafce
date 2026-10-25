@@ -70,6 +70,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - **Commons**: `VersionTag` toma una plantilla de marcadores `${...}`, con `VersionTemplate` y `VersionTemplateWithBuild` como sus dos plantillas por defecto. La lista de marcadores, en el GUIDE
 - **Commons**: `TMacrosList.MissingMacroPolicy` y `OnMissingMacro` deciden en qué se convierte una referencia a una macro que no está registrada: se queda como está escrita, toma un valor de reserva o lanza `EMacroNotFound`. Sin configurar nada sigue resolviéndose como vacía
 - **Commons**: `TShutdownHook.RequestShutdown` — pedir la parada como lo hace Ctrl+C. Una petición hecha sin ningún host escuchando la recibe el siguiente que arranca
+- **Commons**: `TShutdownHook.HandleConsoleSignal` — qué hace el manejador de consola con cada evento, y si lo da por atendido
 - **SystemProcess**: `TProcessResult.TStatus.Killed` — un `Kill` explícito y un plazo vencido dejan de compartir el valor `Timeout`, así que un resultado dice cuál de los dos cortó la ejecución
 - **SystemProcess**: `StandardOutput` y `StandardError` dan a cada flujo del hijo su destino, un `TProcessOutput`: capturado, heredado del padre, descartado o escrito en un fichero
 - **SystemProcess**: `StandardOutputEncoding` y `StandardErrorEncoding` — la codificación de lo capturado
@@ -124,6 +125,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - **NNLog**: Un token de layout sin renderer detrás se queda sin sustituir en vez de convertirse en cadena vacía, así que un `${mesage}` mal escrito sale en la línea
 - ⚠️ **Commons**: el flag `WithCompiledMeta` de `VersionTag` pasa a ser un parámetro de plantilla, y `TVersionInfo.Debug` es de solo lectura y lo declara el binario —un cuarto argumento de `[Version(...)]` o de `TVersionInfo.Create`, `False` si se omite—; antes informaba de cómo se compiló el propio DAF. **Rompe** a quien pasara el flag o asignara `Debug`
 - ⚠️ **Commons**: `Cancel` ejecuta los callbacks **del último registrado al primero**, como .NET, y lo que lancen sale junto en una `EAggregateException` cuando han corrido todos, también si lanzó uno solo. **Rompe** a quien contara con el orden de registro, o capturase alrededor de `Cancel` la excepción propia de un callback
+- ⚠️ **Commons**: El manejador de consola solo está instalado mientras `TShutdownHook.OnShutdownRequested` tiene oyente, como en .NET, y lo que no atiende se deja al sistema: sin host, Ctrl+C vuelve a terminar el proceso. **Rompe** a un programa sin host que contaba con sobrevivir a un Ctrl+C
 - ⚠️ **SystemProcess**: Un flujo sin destino declarado **hereda el del padre**, así que un hijo lanzado sin manejadores escribe donde escribe el proceso que lo lanza. `TProcessOutput.Discard` en los dos flujos lo calla
 - ⚠️ **SystemProcess**: Un segundo destino para el mismo flujo —`OnStdOut` dos veces, u `OnStdOut` y `StandardOutput`— **lanza `EInvalidOpException`**; antes sustituía al primero
 - ⚠️ **SystemProcess**: `HideWindow(False)`, el valor por defecto, **ya no abre una consola propia**: el hijo corre en la consola del padre
@@ -213,6 +215,8 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - **Commons**: un tag con sus propios metadatos de build producía dos secciones `+`, que SemVer no admite; lo que declara el tag y lo que vio el compilador comparten ya la única sección
 - **Commons**: un callback que lanzaba durante `Cancel` dejaba sin ejecutar los siguientes, y cancelar otra vez volvía a ejecutar los anteriores
 - **Commons**: liberar una fuente de `CreateCancellationTokenSourceWithTimeout` antes de su plazo dejaba vivo su hilo del temporizador hasta el plazo
+- **Commons**: con un host atendiendo, Ctrl+Break y cada Ctrl+C después del primero no pedían nada; ahora piden la parada
+- **Commons**: un oyente de `OnShutdownRequested` que lanzaba dejaba salir su excepción del manejador de consola; ahora se escribe en la salida de error
 - **SystemProcess**: un `Kill` explícito se informaba como `Timeout`, y mataba al hijo dos veces —una al pedirlo y otra cuando el bucle de espera se enteraba—. Ahora informa `Killed` y mata una vez
 - **SystemProcess**: un hijo que escribía más de 4 KB en un flujo sin manejador se bloqueaba hasta su plazo y acababa como `Timeout`; sin plazo, `Execute` no volvía nunca
 - **SystemProcess**: el texto capturado cambiaba los caracteres no ASCII por otros —una `ñ` de `cmd` llegaba como `¤`— y rompía un carácter partido entre dos lecturas; se decodifica con la página de la consola en que corre el hijo

@@ -86,7 +86,8 @@ Cts.Cancel;
 
 ### TShutdownHook
 
-Conecta las señales de apagado del OS (Ctrl+C, SIGTERM) a la limpieza de la aplicación:
+Conecta las señales de parada de la consola con la aplicación. El host se suscribe solo al arrancar;
+el oyente se asigna a mano únicamente en un programa sin host:
 
 ```pascal
 uses Daf.Threading;
@@ -97,6 +98,18 @@ begin
   App.Stop;
 end;
 ```
+
+El manejador de consola está instalado mientras hay un oyente, como hace `ConsoleLifetime` en .NET:
+
+| Evento | Con oyente | Sin oyente |
+|---|---|---|
+| Ctrl+C, Ctrl+Break; SIGINT, SIGQUIT y SIGTERM fuera de Windows | pide la parada, cada vez que llega | se deja al sistema, que termina el proceso |
+| Cierre de la ventana de consola, cierre de sesión | se deja al sistema | se deja al sistema |
+
+`TShutdownHook.HandleConsoleSignal(Signal)` es lo que el manejador hace con cada evento, y responde si
+lo da por atendido. Lo que lanza el oyente se escribe en la salida de error y no sale del manejador.
+`RequestShutdown` pide la parada desde código; sin oyente, la petición espera al siguiente que se
+suscriba. El apagado de Windows no llega a una aplicación de consola Delphi, que carga `user32.dll`.
 
 ---
 

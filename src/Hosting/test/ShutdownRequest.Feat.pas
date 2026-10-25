@@ -12,6 +12,14 @@ type
     procedure Run;
   end;
 
+  /// Entrega un Ctrl+C al manejador de consola mientras el host arranca, y anota si lo dio por
+  /// atendido.
+  TInterruptingTask = class(TInterfacedObject, IStartupTask)
+  public
+    class var Handled: string;
+    procedure Run;
+  end;
+
   /// El host vive aqui y no dentro de una funcion porque el escenario tiene que poder mirarlo
   /// entre fases: con el host encerrado en un callback, tanto la consulta como la peticion de
   /// parada tenian que ocurrir ahi dentro, que es donde estaba el Given.
@@ -20,7 +28,10 @@ type
     Host: IHost;
     Lifetime: IHostApplicationLifetime;
     Report: string;
+    /// El escenario asigno a mano un oyente de la peticion de parada, y el World lo suelta.
+    OwnsListener: Boolean;
     procedure BuildHost;
+    procedure BuildHostInterruptingAtStartup;
     procedure BuildHostRequestingStopAtStartup;
     procedure StartHost;
     procedure StopHost;
@@ -43,11 +54,26 @@ begin
   TShutdownHook.RequestShutdown;
 end;
 
+{ TInterruptingTask }
+
+procedure TInterruptingTask.Run;
+begin
+  Handled := BoolToStr(TShutdownHook.HandleConsoleSignal(csInterrupt), True);
+end;
+
 { TShutdownWorld }
 
 procedure TShutdownWorld.BuildHost;
 begin
   var Builder := THost.CreateBuilder;
+  Host := Builder.Build;
+end;
+
+procedure TShutdownWorld.BuildHostInterruptingAtStartup;
+begin
+  TInterruptingTask.Handled := '';
+  var Builder := THost.CreateBuilder;
+  Builder.Services.AddStartupTask<TInterruptingTask>;
   Host := Builder.Build;
 end;
 
@@ -75,6 +101,8 @@ begin
   // sin pasar por _Release: el finalizador del campo lo llamaria sobre memoria ya devuelta.
   if Host <> nil then
     StopHost;
+  if OwnsListener then
+    TShutdownHook.OnShutdownRequested := nil;
   inherited;
 end;
 
@@ -184,6 +212,173 @@ Feature Pedir la parada de la aplicacion @hosting @lifetime
       procedure(W: TShutdownWorld)
       begin
         Expect(W.Report).ToEqual('False');
+      end)
+
+  .Scenario('Una peticion desde codigo sin host queda pendiente')
+    .Given('ningun host atendiendo la señal, y una peticion hecha con TShutdownHook.RequestShutdown',
+      procedure(W: TShutdownWorld)
+      begin
+        Expect(Assigned(TShutdownHook.OnShutdownRequested)).ToBeFalse;
+        W.BuildHost;
+        TShutdownHook.RequestShutdown;
+      end)
+    .When('arranca un host',
+      procedure(W: TShutdownWorld)
+      begin
+        W.StartHost;
+        W.Lifetime := W.Host.Services.GetService<IHostApplicationLifetime>;
+        W.Report := BoolToStr(W.Lifetime.ApplicationStopping.IsCancellationRequested, True);
+      end)
+    .&Then('al terminar de arrancar, su ApplicationStopping esta cancelado',
+      procedure(W: TShutdownWorld)
+      begin
+        Expect(W.Report).ToEqual('True');
+      end)
+
+.Rule('Toda interrupcion de consola mientras hay un host pide la parada')
+
+  .Scenario('Una interrupcion durante el arranque')
+    .Given('un host con una tarea de arranque que entrega un Ctrl+C al manejador de consola',
+      procedure(W: TShutdownWorld)
+      begin
+        W.BuildHostInterruptingAtStartup;
+      end)
+    .When('se arranca',
+      procedure(W: TShutdownWorld)
+      begin
+        W.StartHost;
+        W.Lifetime := W.Host.Services.GetService<IHostApplicationLifetime>;
+      end)
+    .&Then('el manejador lo dio por atendido',
+      procedure(W: TShutdownWorld)
+      begin
+        Expect(TInterruptingTask.Handled).ToEqual('True');
+      end)
+    .&And('al terminar de arrancar, ApplicationStopping esta cancelado',
+      procedure(W: TShutdownWorld)
+      begin
+        Expect(BoolToStr(W.Lifetime.ApplicationStopping.IsCancellationRequested, True)).ToEqual('True');
+      end)
+
+  .Scenario('Ctrl+Break pide la parada')
+    .Given('un host arrancado',
+      procedure(W: TShutdownWorld)
+      begin
+        W.BuildHost;
+        W.StartHost;
+        W.Lifetime := W.Host.Services.GetService<IHostApplicationLifetime>;
+      end)
+    .When('el manejador de consola recibe un Ctrl+Break',
+      procedure(W: TShutdownWorld)
+      begin
+        W.Report := BoolToStr(TShutdownHook.HandleConsoleSignal(csBreak), True);
+      end)
+    .&Then('la da por atendida',
+      procedure(W: TShutdownWorld)
+      begin
+        Expect(W.Report).ToEqual('True');
+      end)
+    .&And('ApplicationStopping esta cancelado',
+      procedure(W: TShutdownWorld)
+      begin
+        Expect(BoolToStr(W.Lifetime.ApplicationStopping.IsCancellationRequested, True)).ToEqual('True');
+      end)
+
+  .Scenario('Un segundo Ctrl+C tambien se atiende')
+    .Given('un host arrancado que ya recibio un Ctrl+C',
+      procedure(W: TShutdownWorld)
+      begin
+        W.BuildHost;
+        W.StartHost;
+        TShutdownHook.HandleConsoleSignal(csInterrupt);
+      end)
+    .When('el manejador de consola recibe otro Ctrl+C',
+      procedure(W: TShutdownWorld)
+      begin
+        W.Report := BoolToStr(TShutdownHook.HandleConsoleSignal(csInterrupt), True);
+      end)
+    .&Then('tambien lo da por atendido',
+      procedure(W: TShutdownWorld)
+      begin
+        Expect(W.Report).ToEqual('True');
+      end)
+
+.Rule('Sin un host que atienda la señal, la interrupcion se deja al sistema')
+
+  .Scenario('Un Ctrl+C sin host')
+    .Given('ningun host atendiendo la señal',
+      procedure(W: TShutdownWorld)
+      begin
+        Expect(Assigned(TShutdownHook.OnShutdownRequested)).ToBeFalse;
+      end)
+    .When('el manejador de consola recibe un Ctrl+C',
+      procedure(W: TShutdownWorld)
+      begin
+        W.Report := 'atendida=' + BoolToStr(TShutdownHook.HandleConsoleSignal(csInterrupt), True);
+      end)
+    .&Then('no lo da por atendido, y no queda ninguna peticion de parada pendiente',
+      procedure(W: TShutdownWorld)
+      begin
+        // Una peticion pendiente solo se ve entregandola: el siguiente oyente que se asigna la recibe.
+        var Delivered := False;
+        TShutdownHook.OnShutdownRequested :=
+          procedure
+          begin
+            Delivered := True;
+          end;
+        TShutdownHook.OnShutdownRequested := nil;
+        Expect(W.Report + ' pendiente=' + BoolToStr(Delivered, True)).ToEqual('atendida=False pendiente=False');
+      end)
+
+.Rule('El cierre de la consola y el de sesion se dejan al sistema')
+
+  .Scenario('Cerrar la consola con un host arrancado')
+    .Given('un host arrancado',
+      procedure(W: TShutdownWorld)
+      begin
+        W.BuildHost;
+        W.StartHost;
+        W.Lifetime := W.Host.Services.GetService<IHostApplicationLifetime>;
+      end)
+    .When('el manejador de consola recibe el cierre de la consola',
+      procedure(W: TShutdownWorld)
+      begin
+        W.Report := BoolToStr(TShutdownHook.HandleConsoleSignal(csClose), True);
+      end)
+    .&Then('no lo da por atendido, y ApplicationStopping no esta cancelado',
+      procedure(W: TShutdownWorld)
+      begin
+        Expect(W.Report + ' stopping=' + BoolToStr(W.Lifetime.ApplicationStopping.IsCancellationRequested, True))
+          .ToEqual('False stopping=False');
+      end)
+
+.Rule('Lo que falla al atender una señal no sale del manejador de consola')
+
+  .Scenario('Un oyente que lanza')
+    .Given('un oyente de la peticion de parada asignado a mano, que lanza',
+      procedure(W: TShutdownWorld)
+      begin
+        W.OwnsListener := True;
+        TShutdownHook.OnShutdownRequested :=
+          procedure
+          begin
+            raise Exception.Create('el oyente fallo');
+          end;
+      end)
+    .When('el manejador de consola recibe un Ctrl+C',
+      procedure(W: TShutdownWorld)
+      begin
+        try
+          W.Report := 'atendida=' + BoolToStr(TShutdownHook.HandleConsoleSignal(csInterrupt), True);
+        except
+          on E: Exception do
+            W.Report := E.ClassName + ': ' + E.Message;
+        end;
+      end)
+    .&Then('el manejador vuelve sin lanzar y da la señal por atendida',
+      procedure(W: TShutdownWorld)
+      begin
+        Expect(W.Report).ToEqual('atendida=True');
       end);
 
 end.
