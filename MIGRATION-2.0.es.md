@@ -710,9 +710,22 @@ end;
 function TMiCompilador.CompileDateWhere(const C: TSqlCompilation; const Clause: TDateWhereClause): string;
 begin
   C.AddBinding(Clause.Value);
-  Result := 'CAST(' + WrapColumn(Clause.Column) + ' AS DATE) ' + Clause.Op + ' ?';
+  Result := 'CAST(' + WrapColumn(Clause.Column) + ' AS DATE) ' + OperatorSymbol(Clause.Op) + ' ?';
 end;
 ```
+
+### 28. SQLCute: un operador escrito como texto se valida
+
+- **`Having`, `WhereColumns` y `OrWhereColumns` rechazan `in` y `not in`** con `EArgumentException`;
+  antes emitían `=`. Un conjunto de valores va por `WhereIn`, y un `IN` sobre un agregado por
+  `HavingRaw`.
+- **El operador de `WhereTime`, `OrWhereTime` y de una unión por columnas se valida**: uno de `=`, `<>`,
+  `!=`, `<`, `<=`, `>`, `>=`, `like` y `not like`, y cualquier otro lanza `EArgumentException`. Antes se
+  escribía en el SQL tal como llegaba.
+- **En el AST, el `Op` de `TJoinClause` y `TDateWhereClause` es un `TWhereOp`**, no una cadena; un
+  compilador lo emite con `OperatorSymbol`.
+- **Qué rompe**: una llamada que pasaba `in` a esos métodos o un operador fuera de la lista, y el código
+  que lee ese `Op` como texto.
 
 ## Cómo hacerlo
 
@@ -729,6 +742,6 @@ end;
    resolverlo: se resuelve desde un ámbito que abre el trabajo, `Services.CreateScope`. También un
    Scoped que resuelve un Singleton: el Singleton lo resuelve en un ámbito que abre con
    `IServiceScopeFactory`.
-6. Las secciones 2, de la 6 a la 13 y de la 15 a la 27 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
+6. Las secciones 2, de la 6 a la 13 y de la 15 a la 28 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
    contra tu propia composición — la vida de los ámbitos, los registros repetidos, las reglas de
    logging y los ajustes del host.

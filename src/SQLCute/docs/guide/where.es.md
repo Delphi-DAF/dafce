@@ -21,6 +21,8 @@ Con operador explícito:
 // → WHERE precio > ? AND stock <= ?   Bindings: [100, 0]
 ```
 
+El operador es uno de `=`, `<>`, `!=`, `<`, `<=`, `>`, `>=`, `like`, `not like`, `in` y `not in`, en mayúsculas o minúsculas; cualquier otro lanza `EArgumentException`.
+
 Conector OR:
 
 ```pascal
@@ -308,6 +310,8 @@ Comparación columna a columna (sin binding — los valores se emiten literalmen
 
 .OrWhereColumns('precio', '=', 'precio_lista')
 ```
+
+Su operador es uno de `=`, `<>`, `!=`, `<`, `<=`, `>`, `>=`, `like` y `not like`; `in` y `not in` lanzan `EArgumentException`.
 
 > ⚠️ Pasa solo nombres de columnas controlados por el desarrollador a `WhereColumns`. Nunca pases input del usuario.
 

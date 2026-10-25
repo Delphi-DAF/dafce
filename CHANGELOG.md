@@ -89,6 +89,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - ⚠️ **Logging**: An entry's `Message` **no longer carries the scope**, which travels only in `TLogEntry.Scope`. **Breaks, with no compiler error,** a provider of its own that writes `Entry.Message`: it stops writing the scopes until it also writes `Entry.Scope`
 - ⚠️ **SQLCute**: A query **declares** which statement it is —`IQuery.Kind`, `Select` by default— instead of being inferred from its clauses; declaring two keeps the last one, where the first used to win. The new member **breaks** whoever implements `IQuery` on their own
 - ⚠️ **SQLCute**: The protected methods of `TAnsiSqlCompiler` that emit SQL receive the compilation, a `TSqlCompilation`, as their first parameter, and write every placeholder as `?`; `FormatPlaceholder(Index)` replaces `ParamPlaceholder`. **Breaks** a compiler derived from `TAnsiSqlCompiler` that overrides one of them
+- ⚠️ **SQLCute**: `Having`, `WhereColumns` and `OrWhereColumns` reject `in` and `not in` with `EArgumentException`, as SqlKata does; they used to emit `=`. In the AST, the `Op` of `TJoinClause` and `TDateWhereClause` is a `TWhereOp`. **Breaks** whoever passed `in` there, and whoever reads that `Op` as a string
 - ⚠️ **MiniSpec**: `[Inject]` is renamed to **`[MiniInject]`** and travels in the facade, so `uses Daf.MiniSpec` is enough to mark
 - ⚠️ **MiniSpec**: `TInjectorService` no longer takes loose services: it is an instance of the run with the three scopes, `Register(Scope, Instance)`. A collaborator that needs a scenario is built in the World
 - ⚠️ **MiniSpec**: When more than one context satisfies a `[MiniInject]`, the nearest to the step wins —scenario, feature, suite—, and an exact match beats any descendant
@@ -210,6 +211,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 ### Security
 
 - **SQLCute**: `Where(col, 'in', V)` and `'not in'`, also through `OrWhere`, `WhereNot` and `OrWhereNot`, bind their values like `WhereIn` instead of writing `V` into the SQL. A string with a list (`'1,2,3'`) is now a single value
+- **SQLCute**: The operator of `WhereTime`, `OrWhereTime` and of a join by columns is validated against the list `Where` accepts, and what is emitted is the recognised operator; it used to be written into the SQL as it came
 - **Web**: The router serves static files only once `RootDirectory` is declared, and only from inside it. With no root it served any file under the working directory, `appsettings.json` included; with one, `..` and absolute paths reached outside it
 
 ## [1.6.0] - 2026-07-20

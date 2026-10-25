@@ -676,11 +676,12 @@ function TQueryImpl.AddJoinClauseColumns(JoinType: TJoinType;
 var
   J: TJoinClause;
 begin
+  var Parsed := ParseComparisonOp(Op);
   J := TJoinClause.Create;
   J.JoinType := JoinType;
   J.Table    := Table;
   J.Col1     := Col1;
-  J.Op       := Op;
+  J.Op       := Parsed;
   J.Col2     := Col2;
   FClauses.Add(J);
   Result := Self;
@@ -916,7 +917,7 @@ end;
 
 function TQueryImpl.Having(const Column, Op: string; const Value: Variant): IQuery;
 begin
-  Result := AddHavingClause(Column, ParseWhereOp(Op), Value, TBoolOp.opAnd);
+  Result := AddHavingClause(Column, ParseComparisonOp(Op), Value, TBoolOp.opAnd);
 end;
 
 function TQueryImpl.HavingRaw(const Sql: string): IQuery;
@@ -1422,9 +1423,10 @@ function TQueryImpl.WhereColumns(const Col1, Op, Col2: string): IQuery;
 var
   W: TWhereClause;
 begin
+  var Parsed := ParseComparisonOp(Op);
   W := TWhereClause.Create;
   W.Column        := Col1;
-  W.Op            := ParseWhereOp(Op);
+  W.Op            := Parsed;
   W.Value         := Col2;
   W.Connector     := TBoolOp.opAnd;
   W.IsColumnValue := True;
@@ -1436,9 +1438,10 @@ function TQueryImpl.OrWhereColumns(const Col1, Op, Col2: string): IQuery;
 var
   W: TWhereClause;
 begin
+  var Parsed := ParseComparisonOp(Op);
   W := TWhereClause.Create;
   W.Column        := Col1;
-  W.Op            := ParseWhereOp(Op);
+  W.Op            := Parsed;
   W.Value         := Col2;
   W.Connector     := TBoolOp.opOr;
   W.IsColumnValue := True;
@@ -1574,10 +1577,11 @@ function TQueryImpl.AddDateWhereClause(Part: TDatePart; const Column, Op: string
 var
   C: TDateWhereClause;
 begin
+  var Parsed := ParseComparisonOp(Op);
   C           := TDateWhereClause.Create;
   C.DatePart  := Part;
   C.Column    := Column;
-  C.Op        := Op;
+  C.Op        := Parsed;
   C.Value     := Value;
   C.Connector := Conn;
   FClauses.Add(C);

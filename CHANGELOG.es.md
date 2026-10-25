@@ -88,6 +88,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - ⚠️ **Logging**: El `Message` de una entrada **deja de llevar el ámbito**, que viaja solo en `TLogEntry.Scope`. **Rompe, sin error de compilación,** a un proveedor propio que escriba `Entry.Message`: deja de escribir los ámbitos hasta que escriba también `Entry.Scope`
 - ⚠️ **SQLCute**: Una consulta **declara** qué sentencia es —`IQuery.Kind`, con `Select` por defecto— en vez de deducirse de sus cláusulas; declarar dos se queda con el último, donde antes ganaba el primero. El miembro nuevo **rompe** a quien implemente `IQuery` por su cuenta
 - ⚠️ **SQLCute**: Los métodos protegidos de `TAnsiSqlCompiler` que emiten SQL reciben la compilación, un `TSqlCompilation`, como primer parámetro, y escriben cada marcador como `?`; `FormatPlaceholder(Index)` sustituye a `ParamPlaceholder`. **Rompe** un compilador derivado de `TAnsiSqlCompiler` que sobreescriba alguno
+- ⚠️ **SQLCute**: `Having`, `WhereColumns` y `OrWhereColumns` rechazan `in` y `not in` con `EArgumentException`, como SqlKata; antes emitían `=`. En el AST, el `Op` de `TJoinClause` y `TDateWhereClause` es un `TWhereOp`. **Rompe** a quien pasaba `in` ahí, y a quien lee ese `Op` como texto
 - ⚠️ **MiniSpec**: `[Inject]` pasa a llamarse **`[MiniInject]`** y viaja en la facade, así que `uses Daf.MiniSpec` basta para marcar
 - ⚠️ **MiniSpec**: `TInjectorService` deja de admitir servicios sueltos: es una instancia de la ejecución con los tres ámbitos, `Register(Scope, Instance)`. El colaborador que necesite un escenario se construye en el World
 - ⚠️ **MiniSpec**: Cuando más de un contexto satisface un `[MiniInject]`, gana el más cercano al step —escenario, feature, suite—, y una coincidencia exacta gana a cualquier descendiente
@@ -209,6 +210,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 ### Security
 
 - **SQLCute**: `Where(col, 'in', V)` y `'not in'`, también por `OrWhere`, `WhereNot` y `OrWhereNot`, ligan sus valores como `WhereIn` en vez de escribir `V` en el SQL. Una cadena con una lista (`'1,2,3'`) es ahora un solo valor
+- **SQLCute**: El operador de `WhereTime`, `OrWhereTime` y de una unión por columnas se valida contra la lista que acepta `Where`, y lo que se emite es el operador reconocido; antes se escribía en el SQL tal como llegaba
 - **Web**: El router sirve ficheros estáticos solo cuando se declara `RootDirectory`, y solo de dentro de ella. Sin raíz servía cualquier fichero del directorio de trabajo, `appsettings.json` incluido; con ella, `..` y las rutas absolutas salían fuera
 
 ## [1.6.0] - 2026-07-20

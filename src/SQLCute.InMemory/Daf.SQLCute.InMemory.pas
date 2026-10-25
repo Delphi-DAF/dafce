@@ -663,7 +663,7 @@ begin
   end
   else if Jc.Col1 <> '' then
   begin
-    var Op := ParseWhereOp(Jc.Op);
+    var Op := Jc.Op;
     var C1 := Jc.Col1;
     var C2 := Jc.Col2;
     Result :=

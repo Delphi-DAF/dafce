@@ -33,7 +33,7 @@ Expresión cruda:
 
 ## HAVING
 
-`Having` filtra grupos tras la agregación. El argumento columna acepta cualquier expresión de agregado.
+`Having` filtra grupos tras la agregación. El argumento columna acepta cualquier expresión de agregado. Su operador es uno de `=`, `<>`, `!=`, `<`, `<=`, `>`, `>=`, `like` y `not like`; `in` y `not in` lanzan `EArgumentException`, y un `IN` sobre un agregado va por `HavingRaw`.
 
 ```pascal
 TQuery.New.From('pedidos')

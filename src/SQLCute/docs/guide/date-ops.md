@@ -33,7 +33,7 @@ TQuery.New.From('appointments')
 // ANSI: WHERE CAST(start_time AS TIME) >= ?
 ```
 
-OR variant: `OrWhereTime`.
+OR variant: `OrWhereTime`. The operator is one of `=`, `<>`, `!=`, `<`, `<=`, `>`, `>=`, `like` and `not like`; any other raises `EArgumentException` when the condition is added.
 
 ---
 

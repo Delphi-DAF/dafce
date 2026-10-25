@@ -21,6 +21,8 @@ With an explicit operator:
 // → WHERE price > ? AND stock <= ?   Bindings: [100, 0]
 ```
 
+The operator is one of `=`, `<>`, `!=`, `<`, `<=`, `>`, `>=`, `like`, `not like`, `in` and `not in`, in any case; any other raises `EArgumentException`.
+
 OR connector:
 
 ```pascal
@@ -306,6 +308,8 @@ Column-to-column comparison (no binding — values are emitted verbatim):
 
 .OrWhereColumns('price', '=', 'list_price')
 ```
+
+Its operator is one of `=`, `<>`, `!=`, `<`, `<=`, `>`, `>=`, `like` and `not like`; `in` and `not in` raise `EArgumentException`.
 
 > ⚠️ Only pass developer-controlled column names to `WhereColumns`. Never pass user input.
 

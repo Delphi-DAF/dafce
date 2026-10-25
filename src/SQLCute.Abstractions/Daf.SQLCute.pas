@@ -456,6 +456,13 @@ procedure RegisterIQueryFactory(const AFactory: TIQueryFactory);
 /// <summary>Converts an operator string ('=', '>', '<', etc.) to TWhereOp.</summary>
 function ParseWhereOp(const Op: string): TWhereOp;
 
+/// <summary>
+/// The same as <see cref="ParseWhereOp"/> but without <c>in</c> and <c>not in</c>,
+/// which are valid only in <c>Where</c>: a comparison between two columns, against
+/// an aggregate or on a date part. Raises <c>EArgumentException</c> otherwise.
+/// </summary>
+function ParseComparisonOp(const Op: string): TWhereOp;
+
 /// <summary>The name of a statement kind ('Select', 'Insert', …), so a guard
 /// can name the kind it received rather than describing it.</summary>
 function QueryKindName(const K: TQueryKind): string;
@@ -503,6 +510,14 @@ begin
   if I < 0 then
     raise EArgumentException.CreateFmt('Unknown SQL operator: "%s"', [Op]);
   Result := WhereOpValues[I];
+end;
+
+function ParseComparisonOp(const Op: string): TWhereOp;
+begin
+  Result := ParseWhereOp(Op);
+  if Result in [TWhereOp.&In, TWhereOp.NotIn] then
+    raise EArgumentException.CreateFmt(
+      'The operator "%s" is valid only in Where: use WhereIn for a set of values, or HavingRaw', [Op]);
 end;
 
 { QueryKindName }

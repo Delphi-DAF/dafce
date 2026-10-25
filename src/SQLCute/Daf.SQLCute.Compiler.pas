@@ -134,7 +134,8 @@ type
 
 implementation
 
-{ TAnsiSqlCompiler }
+uses
+  System.TypInfo;
 
 { TSqlCompilation }
 
@@ -159,6 +160,8 @@ function TSqlCompilation.Bindings: TArray<Variant>;
 begin
   Result := FBindings.ToArray;
 end;
+
+{ TAnsiSqlCompiler }
 
 function TAnsiSqlCompiler.WrapIdentifier(const Name: string): string;
 begin
@@ -248,7 +251,8 @@ begin
     TWhereOp.Like:           Result := 'LIKE';
     TWhereOp.NotLike:        Result := 'NOT LIKE';
   else
-    Result := '=';
+    raise ESQLCuteCompilerError.CreateFmt('Operator %s has no SQL symbol.',
+      [GetEnumName(TypeInfo(TWhereOp), Ord(Op))]);
   end;
 end;
 
@@ -402,7 +406,7 @@ begin
     else
       begin
         C.AddBinding(H.Value);
-        Result := H.Column + ' ' + OperatorSymbol(H.Op) + ' ' + '?';
+        Result := H.Column + ' ' + OperatorSymbol(H.Op) + ' ?';
       end;
     end;
     Exit;
@@ -426,13 +430,13 @@ begin
       begin
         C.AddBinding(W.Value);
         C.AddBinding(W.Value2);
-        Result := WrapColumn(W.Column) + ' BETWEEN ' + '?' + ' AND ' + '?';
+        Result := WrapColumn(W.Column) + ' BETWEEN ? AND ?';
       end;
       TWhereOp.NotBetween:
       begin
         C.AddBinding(W.Value);
         C.AddBinding(W.Value2);
-        Result := WrapColumn(W.Column) + ' NOT BETWEEN ' + '?' + ' AND ' + '?';
+        Result := WrapColumn(W.Column) + ' NOT BETWEEN ? AND ?';
       end;
       TWhereOp.&In:
       begin
@@ -441,7 +445,7 @@ begin
         else
         begin
           C.AddBinding(W.Value);
-          Result := WrapColumn(W.Column) + ' IN (' + '?' + ')';
+          Result := WrapColumn(W.Column) + ' IN (?)';
         end;
       end;
       TWhereOp.NotIn:
@@ -451,7 +455,7 @@ begin
         else
         begin
           C.AddBinding(W.Value);
-          Result := WrapColumn(W.Column) + ' NOT IN (' + '?' + ')';
+          Result := WrapColumn(W.Column) + ' NOT IN (?)';
         end;
       end;
       TWhereOp.Raw:
@@ -460,14 +464,14 @@ begin
       begin
         C.AddBinding(W.Value);
         if W.CaseSensitive then
-          Result := WrapColumn(W.Column) + ' ' + OperatorSymbol(W.Op) + ' ' + '?'
+          Result := WrapColumn(W.Column) + ' ' + OperatorSymbol(W.Op) + ' ?'
         else
-          Result := 'LOWER(' + WrapColumn(W.Column) + ') ' + OperatorSymbol(W.Op) + ' ' + '?';
+          Result := 'LOWER(' + WrapColumn(W.Column) + ') ' + OperatorSymbol(W.Op) + ' ?';
       end;
     else
       begin
         C.AddBinding(W.Value);
-        Result := WrapColumn(W.Column) + ' ' + OperatorSymbol(W.Op) + ' ' + '?';
+        Result := WrapColumn(W.Column) + ' ' + OperatorSymbol(W.Op) + ' ?';
       end;
     end;
 end;
@@ -765,7 +769,7 @@ begin
       if Length(J.ConditionClauses) > 0 then
         Sb.Append(' ON (' + CompileWhereList(C, J.ConditionClauses) + ')')
       else if J.Col1 <> '' then
-        Sb.Append(' ON ' + WrapColumn(J.Col1) + ' ' + J.Op + ' ' + WrapColumn(J.Col2))
+        Sb.Append(' ON ' + WrapColumn(J.Col1) + ' ' + OperatorSymbol(J.Op) + ' ' + WrapColumn(J.Col2))
       else if J.Condition <> '' then
         Sb.Append(' ON ' + J.Condition);
     end;
@@ -994,7 +998,7 @@ begin
         else
         begin
           C.AddBinding(US.Value);
-          SetParts.Add(WrapColumn(US.Column) + ' = ' + '?');
+          SetParts.Add(WrapColumn(US.Column) + ' = ?');
         end;
       end;
 
@@ -1037,7 +1041,7 @@ end;
 function TAnsiSqlCompiler.CompileDateWhere(const C: TSqlCompilation; const Clause: TDateWhereClause): string;
 begin
   C.AddBinding(Clause.Value);
-  Result := WrapColumn(Clause.Column) + ' ' + Clause.Op + ' ' + '?';
+  Result := WrapColumn(Clause.Column) + ' ' + OperatorSymbol(Clause.Op) + ' ?';
 end;
 
 end.

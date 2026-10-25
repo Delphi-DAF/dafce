@@ -52,7 +52,7 @@ const
 begin
   C.AddBinding(Clause.Value);
   Result := PartFunc[Clause.DatePart] + '(' + WrapColumn(Clause.Column) + ') ' +
-            Clause.Op + ' ' + '?';
+            OperatorSymbol(Clause.Op) + ' ?';
 end;
 
 end.

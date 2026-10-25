@@ -134,7 +134,7 @@ begin
     else
       ColExpr := 'DATEPART(' + DatePartName[Clause.DatePart] + ', ' + WrapColumn(Clause.Column) + ')';
   end;
-  Result := ColExpr + ' ' + Clause.Op + ' ' + '?';
+  Result := ColExpr + ' ' + OperatorSymbol(Clause.Op) + ' ?';
 end;
 
 end.

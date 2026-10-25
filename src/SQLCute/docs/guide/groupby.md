@@ -33,7 +33,7 @@ Raw expression:
 
 ## HAVING
 
-`Having` filters groups after aggregation. The column argument accepts any aggregate expression.
+`Having` filters groups after aggregation. The column argument accepts any aggregate expression. Its operator is one of `=`, `<>`, `!=`, `<`, `<=`, `>`, `>=`, `like` and `not like`; `in` and `not in` raise `EArgumentException`, and an `IN` on an aggregate goes through `HavingRaw`.
 
 ```pascal
 TQuery.New.From('orders')

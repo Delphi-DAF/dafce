@@ -104,7 +104,7 @@ begin
     else
       ColExpr := 'EXTRACT(' + ExtractPart[Clause.DatePart] + ' FROM ' + WrapColumn(Clause.Column) + ')';
   end;
-  Result := ColExpr + ' ' + Clause.Op + ' ' + '?';
+  Result := ColExpr + ' ' + OperatorSymbol(Clause.Op) + ' ?';
 end;
 
 end.

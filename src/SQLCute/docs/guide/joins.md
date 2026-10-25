@@ -8,7 +8,7 @@
 
 ## Basic Joins
 
-All join methods follow the same signature: `JoinType(table, col1, col2, op)`. The default operator is `=`.
+All join methods follow the same signature: `JoinType(table, col1, col2, op)`. The default operator is `=`, and it is one of `=`, `<>`, `!=`, `<`, `<=`, `>`, `>=`, `like` and `not like`; any other raises `EArgumentException`.
 
 ### INNER JOIN
 

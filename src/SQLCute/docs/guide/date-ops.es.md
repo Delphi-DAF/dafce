@@ -33,7 +33,7 @@ TQuery.New.From('citas')
 // ANSI: WHERE CAST(hora_inicio AS TIME) >= ?
 ```
 
-Variante OR: `OrWhereTime`.
+Variante OR: `OrWhereTime`. El operador es uno de `=`, `<>`, `!=`, `<`, `<=`, `>`, `>=`, `like` y `not like`; cualquier otro lanza `EArgumentException` al añadir la condición.
 
 ---
 

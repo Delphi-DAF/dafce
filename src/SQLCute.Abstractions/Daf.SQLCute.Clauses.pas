@@ -206,7 +206,7 @@ type
     /// Column-based ON: left column, operator, right column.
     /// When Col1 is non-empty these three fields take precedence over Condition.
     Col1: string;
-    Op: string;
+    Op: TWhereOp;
     Col2: string;
     /// Callback-specified ON conditions. When non-empty, takes precedence
     /// over Condition and Col1/Col2.
@@ -380,7 +380,7 @@ type
   public
     DatePart:  TDatePart;
     Column:    string;
-    Op:        string;     // '=', '>', '<', etc.
+    Op:        TWhereOp;
     Value:     Variant;
     Connector: TBoolOp;
     function Clone: TAbstractClause; override;

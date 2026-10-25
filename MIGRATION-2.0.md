@@ -707,9 +707,22 @@ end;
 function TMyCompiler.CompileDateWhere(const C: TSqlCompilation; const Clause: TDateWhereClause): string;
 begin
   C.AddBinding(Clause.Value);
-  Result := 'CAST(' + WrapColumn(Clause.Column) + ' AS DATE) ' + Clause.Op + ' ?';
+  Result := 'CAST(' + WrapColumn(Clause.Column) + ' AS DATE) ' + OperatorSymbol(Clause.Op) + ' ?';
 end;
 ```
+
+### 28. SQLCute: an operator written as text is validated
+
+- **`Having`, `WhereColumns` and `OrWhereColumns` reject `in` and `not in`** with `EArgumentException`;
+  they used to emit `=`. A set of values goes through `WhereIn`, and an `IN` on an aggregate through
+  `HavingRaw`.
+- **The operator of `WhereTime`, `OrWhereTime` and of a join by columns is validated**: one of `=`,
+  `<>`, `!=`, `<`, `<=`, `>`, `>=`, `like` and `not like`, and any other raises `EArgumentException`.
+  It used to be written into the SQL as it came.
+- **In the AST, the `Op` of `TJoinClause` and `TDateWhereClause` is a `TWhereOp`**, not a string; a
+  compiler emits it with `OperatorSymbol`.
+- **What breaks**: a call that passed `in` to those methods or an operator outside the list, and code
+  that reads that `Op` as a string.
 
 ## How to do it
 
@@ -724,6 +737,6 @@ end;
    A Scoped service asked of the root provider is rejected too, when it is resolved: resolve it from a
    scope the work opens, `Services.CreateScope`. So is a Scoped a Singleton resolves: the Singleton
    resolves it in a scope it opens through `IServiceScopeFactory`.
-6. Sections 2, 6 to 13 and 15 to 27 carry **run-time** changes: the compiler says nothing about them. Read them
+6. Sections 2, 6 to 13 and 15 to 28 carry **run-time** changes: the compiler says nothing about them. Read them
    against your own composition — scope lifetimes, duplicate registrations, logging rules and
    host settings.

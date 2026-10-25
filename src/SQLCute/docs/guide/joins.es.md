@@ -8,7 +8,7 @@
 
 ## Joins Básicos
 
-Todos los métodos de join siguen la misma firma: `TipoJoin(tabla, col1, col2, op)`. El operador por defecto es `=`.
+Todos los métodos de join siguen la misma firma: `TipoJoin(tabla, col1, col2, op)`. El operador por defecto es `=`, y es uno de `=`, `<>`, `!=`, `<`, `<=`, `>`, `>=`, `like` y `not like`; cualquier otro lanza `EArgumentException`.
 
 ### INNER JOIN
 
