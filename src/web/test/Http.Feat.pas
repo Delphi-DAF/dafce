@@ -19,6 +19,8 @@ type
   public
     [WebRoute(mtGet, '/ping')]
     function Ping: IActionResult;
+    [WebRoute(mtGet, '/greet/{Name}')]
+    function Greet(Name: string): IActionResult;
   end;
 
   THttpWorld = class
@@ -45,6 +47,11 @@ uses
 function THttpSpecController.Ping: IActionResult;
 begin
   Result := Ok('pong');
+end;
+
+function THttpSpecController.Greet(Name: string): IActionResult;
+begin
+  Result := Ok('[' + Name + ']');
 end;
 
 { THttpWorld }
@@ -146,6 +153,42 @@ Feature Serving requests over HTTP @http
       procedure(W: THttpWorld)
       begin
         Expect(W.Report).ToEqual('200 pong');
+      end)
+
+.Rule('A route value arrives decoded @socket')
+
+  .Scenario('An encoded space in the path')
+    .Given('a server listening on a free port',
+      procedure(W: THttpWorld)
+      begin
+        W.Serve;
+      end)
+    .When('a request reaches over the socket an action that answers its route value',
+      procedure(W: THttpWorld)
+      begin
+        W.Report := W.Get('/spec/http/greet/Ana%20Mar');
+      end)
+    .&Then('the action receives the value with its space',
+      procedure(W: THttpWorld)
+      begin
+        Expect(W.Report).ToEqual('200 [Ana Mar]');
+      end)
+
+  .Scenario('An encoded slash stays in its segment')
+    .Given('a server listening on a free port',
+      procedure(W: THttpWorld)
+      begin
+        W.Serve;
+      end)
+    .When('a request reaches over the socket an action that answers its route value, with %2F in it',
+      procedure(W: THttpWorld)
+      begin
+        W.Report := W.Get('/spec/http/greet/a%2Fb');
+      end)
+    .&Then('the action receives the slash still encoded',
+      procedure(W: THttpWorld)
+      begin
+        Expect(W.Report).ToEqual('200 [a%2Fb]');
       end);
 
 end.

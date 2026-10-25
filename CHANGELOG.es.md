@@ -115,6 +115,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - ⚠️ **Hosting**: El nombre de entorno se conserva tal cual, como en .NET: `deve`, `stag`, `prod` y `test` dejan de nombrar los entornos conocidos, y `development` sigue siendo `development`, que responde a `IsDevelopment`. **Rompe** a quien fije una abreviatura en `DAF_ENVIRONMENT`, o un nombre propio que contaba con ejecutarse como `Production`
 - ⚠️ **Web**: `TDafHttpServer.Start` sobre un puerto ocupado **lanza una excepción que nombra el puerto**, después del evento `OnError`. Antes terminaba con `Abort`: un `except on EAbort` alrededor de `Start` deja de capturarla
 - ⚠️ **Web**: Un objeto `[FromBody]` vive lo que la petición: el router lo libera después de ejecutar el resultado de la acción, donde antes fugaba. **Rompe** a una acción que lo guardara
+- ⚠️ **Web**: Un valor booleano de ruta o de consulta es `true` o `false`, en cualquier caja; `1` y `0` dejan de convertir, y responden 400. **Rompe** a un cliente que los enviara
 - **Logging**: Componer el pipeline sin un solo proveedor **falla al construir el host**, con `ELoggingCompositionError`, en vez de entregar un `ILogger` que acepta todo y no escribe nada. El silencio deliberado se declara con `AddNullProvider`
 - **Samples**: Cada sample se archiva bajo el módulo que declara lo que usa: `ConsoleSample` a `src/Cli/samples/`, `TicTacToeApp` a `src/VCL/samples/`, y `HostedService` a `src/samples/`
 
@@ -244,6 +245,9 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - **SQLCute**: El operador de `WhereTime`, `OrWhereTime` y de una unión por columnas se valida contra la lista que acepta `Where`, y lo que se emite es el operador reconocido; antes se escribía en el SQL tal como llegaba
 - **Web**: El router sirve ficheros estáticos solo cuando se declara `RootDirectory`, y solo de dentro de ella. Sin raíz servía cualquier fichero del directorio de trabajo, `appsettings.json` incluido; con ella, `..` y las rutas absolutas salían fuera
 - **Web**: un parámetro `[FromBody]` se saltaba su constructor, y el JSON analizado fugaba en cada petición; un cuerpo que no es un objeto JSON responde ahora 400 sin invocar la acción
+- **Web**: los valores de ruta y de consulta se convierten con la cultura invariante: `/price/1.5` fallaba en un proceso con coma decimal, y un parámetro `[FromQuery]` que no fuera una cadena hacía fallar toda petición
+- **Web**: un valor de ruta o de consulta que no convierte responde 400 nombrando el parámetro; antes hacía fallar la petición
+- **Web**: un valor de ruta con `%2F` llega a la acción con la barra aún codificada; antes la ruta no casaba
 
 ## [1.6.0] - 2026-07-20
 

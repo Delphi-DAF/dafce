@@ -111,7 +111,7 @@ type
     procedure GetRouteParamValues(const Path: string);
     function GetBodyValue(Param: TRttiParameter; const Request: TWebRequest; const Owned: TObjectList<TObject>): TValue;
     function GetServiceValue(Param: TRttiParameter; const Services: IServiceProvider): TValue;
-    function GetQueryValue(const Param: TRttiParameter; const Request: TWebRequest): string;
+    function GetQueryValue(const Param: TRttiParameter; const Request: TWebRequest): TValue;
     function BindParams(Services: IServiceProvider; Request: TWebRequest; Response: TWebResponse;
       const Owned: TObjectList<TObject>): TArray<TValue>;
     function GetRouteValue(Param: TRttiParameter): TValue;
@@ -133,6 +133,7 @@ implementation
 
 uses
   System.Generics.Defaults,
+  System.DateUtils,
   System.IOUtils,
   System.JSON,
   REST.Json,
@@ -324,6 +325,94 @@ begin
 end;
 
 
+// The path as it came on the wire, without its query: Indy decodes PathInfo, %2F included, and an
+// encoded slash would split its segment in two.
+function RoutePath(const Request: TWebRequest): string;
+begin
+  Result := Request.RawPathInfo;
+  var Query := Result.IndexOf('?');
+  if Query >= 0 then
+    Result := Result.Substring(0, Query);
+end;
+
+// As ASP.NET Core decodes a route value: every escape but %2F, and a '+' is a plus sign in a path.
+function DecodeRouteValue(const Raw: string): string;
+var
+  Bytes: TBytes;
+  Hex, I: Integer;
+begin
+  if Raw.IndexOf('%') < 0 then
+    Exit(Raw);
+  Bytes := nil;
+  I := 1;
+  while I <= Length(Raw) do
+  begin
+    if (Raw[I] = '%') and (I + 2 <= Length(Raw)) and not SameText(Copy(Raw, I + 1, 2), '2F')
+      and TryStrToInt('$' + Copy(Raw, I + 1, 2), Hex) then
+    begin
+      Bytes := Bytes + [Byte(Hex)];
+      Inc(I, 3);
+    end
+    else
+    begin
+      Bytes := Bytes + TEncoding.UTF8.GetBytes(string(Raw[I]));
+      Inc(I);
+    end;
+  end;
+  Result := TEncoding.UTF8.GetString(Bytes);
+end;
+
+// As ASP.NET Core binds a simple type: with the invariant culture, dates in ISO 8601 or the invariant
+// format, booleans as true or false, enumerations by name or by number. What does not convert is the
+// client's mistake, and it answers 400.
+function ConvertValue(const Param: TRttiParameter; const Raw: string): TValue;
+var
+  Int: Integer;
+  Int64Value: Int64;
+  Float: Extended;
+  Date: TDateTime;
+begin
+  var Info := Param.ParamType.Handle;
+  case Param.ParamType.TypeKind of
+    tkString, tkUString, tkLString, tkWString:
+      Exit(Raw);
+    tkInteger:
+      if TryStrToInt(Raw, Int) then
+        Exit(TValue.FromOrdinal(Info, Int));
+    tkInt64:
+      if TryStrToInt64(Raw, Int64Value) then
+        Exit(Int64Value);
+    tkFloat:
+      if (Info = TypeInfo(TDateTime)) or (Info = TypeInfo(TDate)) or (Info = TypeInfo(TTime)) then
+      begin
+        if TryISO8601ToDate(Raw, Date, False) or TryStrToDateTime(Raw, Date, TFormatSettings.Invariant) then
+          Exit(TValue.From<TDateTime>(Date).Cast(Info));
+      end
+      else if TryStrToFloat(Raw, Float, TFormatSettings.Invariant) then
+        Exit(TValue.From<Extended>(Float).Cast(Info));
+    tkEnumeration:
+      if Info = TypeInfo(Boolean) then
+      begin
+        if SameText(Raw, 'true') then
+          Exit(True);
+        if SameText(Raw, 'false') then
+          Exit(False);
+      end
+      else
+      begin
+        Int := GetEnumValue(Info, Raw);
+        if (Int < 0) and TryStrToInt(Raw, Int) and
+          ((Int < GetTypeData(Info).MinValue) or (Int > GetTypeData(Info).MaxValue)) then
+          Int := -1;
+        if Int >= 0 then
+          Exit(TValue.FromOrdinal(Info, Int));
+      end;
+  else
+    raise Exception.CreateFmt('Unsupported parameter type for "%s"', [Param.Name]);
+  end;
+  raise EBadRequest.CreateFmt('The value "%s" for "%s" is not a valid %s', [Raw, Param.Name, Param.ParamType.Name]);
+end;
+
 procedure TWebRouteMatcher.GetRouteParamValues(const Path: string);
 begin
   var Regex := TRegEx.Create(FRegexPattern, [roIgnoreCase]);
@@ -334,9 +423,14 @@ begin
     FRouteParameters[i - 1].Value := Match.Groups[i].Value;
 end;
 
-function TWebRouteMatcher.GetQueryValue(const Param: TRttiParameter; const Request: TWebRequest): string;
+// An absent key arrives as its type's default, and deciding whether that is an error is the action's.
+function TWebRouteMatcher.GetQueryValue(const Param: TRttiParameter; const Request: TWebRequest): TValue;
 begin
-  Result := Request.QueryFields.Values[Param.Name];
+  var Index := Request.QueryFields.IndexOfName(Param.Name);
+  if Index < 0 then
+    TValue.Make(nil, Param.ParamType.Handle, Result)
+  else
+    Result := ConvertValue(Param, Request.QueryFields.ValueFromIndex[Index]);
 end;
 
 // As an ASP.NET Core API controller: the object is built by its constructor and filled from a body
@@ -402,29 +496,8 @@ end;
 function TWebRouteMatcher.GetRouteValue(Param: TRttiParameter): TValue;
 begin
   for var RouteParam in FRouteParameters do
-  begin
     if SameText(RouteParam.Name, Param.Name) then
-    case Param.ParamType.TypeKind of
-      tkString, tkUString, tkLString, tkWString:
-        Result := RouteParam.Value;
-      tkInteger:
-        Result := StrToInt(RouteParam.Value);
-      tkInt64:
-        Result := StrToInt64(RouteParam.Value);
-      tkFloat:
-        if Param.ParamType.Handle = TypeInfo(TDateTime) then
-          Result := StrToDateTime(RouteParam.Value)
-        else
-          Result := StrToFloat(RouteParam.Value);
-      tkEnumeration:
-        if Param.ParamType.Handle = TypeInfo(Boolean) then
-          Result := SameText(RouteParam.Value, 'true') or (RouteParam.Value = '1')
-        else
-          Result := GetEnumValue(Param.ParamType.Handle, RouteParam.Value);
-    else
-      raise Exception.CreateFmt('Unsupported parameter type for "%s"', [Param.Name]);
-    end;
-  end;
+      Result := ConvertValue(Param, DecodeRouteValue(RouteParam.Value));
 end;
 
 // The values of this request, in a local array: the objects it creates for them go to Owned, which
@@ -432,7 +505,7 @@ end;
 function TWebRouteMatcher.BindParams(Services: IServiceProvider; Request: TWebRequest; Response: TWebResponse;
   const Owned: TObjectList<TObject>): TArray<TValue>;
 begin
-  GetRouteParamValues(Request.PathInfo);
+  GetRouteParamValues(RoutePath(Request));
 
   SetLength(Result, Length(FBoundParams));
   for var P in FBoundParams do
@@ -464,7 +537,7 @@ begin
     Exit;
 
   Regex := TRegEx.Create(FRegexPattern, [roIgnoreCase]);
-  Match := Regex.Match(Request.PathInfo);
+  Match := Regex.Match(RoutePath(Request));
   Result := Match.Success;
 end;
 

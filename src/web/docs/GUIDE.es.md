@@ -141,6 +141,14 @@ que no rellena la clase responde `400 Bad Request` nombrando el parámetro, y la
 objeto vive lo que la petición: el router lo libera después de ejecutar el resultado de la acción, así
 que una acción que tiene que guardar algo lo copia.
 
+Un valor de ruta o de `[FromQuery]` se convierte al tipo de su parámetro con la cultura invariante,
+como en ASP.NET Core: enteros, decimales con punto sea cual sea el locale del proceso, fechas en ISO
+8601 o en el formato invariante, booleanos como `true` o `false` en cualquier caja, y enumerados por
+nombre o por número. Un valor que no convierte responde `400 Bad Request` nombrando el parámetro, y la
+acción no se invoca. Una clave de consulta que la petición no trae llega como el valor por defecto de
+su tipo: vacío, cero o falso. Un valor de ruta llega decodificado, salvo `%2F`, que se queda codificado
+y dentro de su segmento.
+
 ---
 
 ## Referencia de action results

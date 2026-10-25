@@ -141,6 +141,13 @@ that does not fill the class, answers `400 Bad Request` naming the parameter, an
 invoked. The object lives as long as the request: the router frees it after executing the action's
 result, so an action that has to keep something copies it.
 
+A route or `[FromQuery]` value converts to its parameter's type with the invariant culture, as in
+ASP.NET Core: integers, decimals with a point whatever the process locale, dates in ISO 8601 or the
+invariant format, booleans as `true` or `false` in any case, and enumerations by name or by number. A
+value that does not convert answers `400 Bad Request` naming the parameter, and the action is not
+invoked. A query key the request does not carry arrives as its type's default: empty, zero or false.
+A route value arrives decoded, except `%2F`, which stays encoded and inside its segment.
+
 ---
 
 ## Action results reference
