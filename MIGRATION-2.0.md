@@ -771,6 +771,25 @@ end;
   An output alias in `HAVING` is rejected by Postgres, SQL Server and Firebird.
 - **What breaks**: a `Having` whose column is an aggregate expression, in a dialect that quotes.
 
+### 32. Commons: cancelling runs every callback, last registered first, and the linked source is gone
+
+- **`Cancel` runs the callbacks last registered first**, as in .NET, and runs all of them even when
+  one raises. What they raise comes out together in an `EAggregateException` (`System.Threading`)
+  once all have run, also when only one raised: its `InnerExceptions[I]`, from `0` to `Count - 1`, are
+  the callbacks' exceptions. Each callback runs once, so cancelling again runs nothing.
+- **`CreateLinkedCancellationTokenSource` is gone.** A source that is cancelled when any of several
+  tokens is cancelled is built by hand, registering on each token a callback that cancels it. The
+  callback stays on each token until that token is cancelled, and keeps the source alive until then.
+- **What breaks**: code that relied on registration order; an `except on E: EMyError` around
+  `Cancel`, which now receives the `EAggregateException`; and every call to
+  `CreateLinkedCancellationTokenSource`.
+
+```pascal
+var Linked := CreateCancellationTokenSource;
+for var Token in Tokens do
+  Token.Register(procedure begin Linked.Cancel; end);
+```
+
 ## How to do it
 
 1. Compile. Whatever is missing comes out as a compiler error, not as odd behaviour at run time.
@@ -784,6 +803,6 @@ end;
    A Scoped service asked of the root provider is rejected too, when it is resolved: resolve it from a
    scope the work opens, `Services.CreateScope`. So is a Scoped a Singleton resolves: the Singleton
    resolves it in a scope it opens through `IServiceScopeFactory`.
-6. Sections 2, 6 to 13 and 15 to 31 carry **run-time** changes: the compiler says nothing about them. Read them
+6. Sections 2, 6 to 13 and 15 to 32 carry **run-time** changes: the compiler says nothing about them. Read them
    against your own composition — scope lifetimes, duplicate registrations, logging rules and
    host settings.

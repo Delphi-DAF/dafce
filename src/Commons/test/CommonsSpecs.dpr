@@ -16,7 +16,8 @@ uses
   Rtti.Feat in 'Rtti.Feat.pas',
   PropertyAssign.Feat in 'PropertyAssign.Feat.pas',
   Version.Feat in 'Version.Feat.pas',
-  EnvVars.Feat in 'EnvVars.Feat.pas';
+  EnvVars.Feat in 'EnvVars.Feat.pas',
+  Cancellation.Feat in 'Cancellation.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

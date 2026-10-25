@@ -777,6 +777,27 @@ end;
   alias de salida en `HAVING` lo rechazan Postgres, SQL Server y Firebird.
 - **Qué rompe**: un `Having` cuya columna es una expresión de agregado, en un dialecto que entrecomilla.
 
+### 32. Commons: cancelar ejecuta todos los callbacks, del último registrado al primero, y la fuente enlazada desaparece
+
+- **`Cancel` ejecuta los callbacks del último registrado al primero**, como .NET, y los ejecuta todos
+  aunque alguno lance. Lo que lancen sale junto en una `EAggregateException` (`System.Threading`)
+  cuando han corrido todos, también si lanzó uno solo: sus `InnerExceptions[I]`, de `0` a `Count - 1`,
+  son las excepciones de los callbacks. Cada callback se ejecuta una vez, así que cancelar otra vez no
+  ejecuta nada.
+- **`CreateLinkedCancellationTokenSource` desaparece.** Una fuente que se cancela cuando se cancela
+  cualquiera de varios tokens se construye a mano, registrando en cada token un callback que la
+  cancela. El callback se queda en cada token hasta que ese token se cancela, y mantiene viva la fuente
+  hasta entonces.
+- **Qué rompe**: el código que contaba con el orden de registro; un `except on E: EMiError` alrededor
+  de `Cancel`, que ahora recibe la `EAggregateException`; y cada llamada a
+  `CreateLinkedCancellationTokenSource`.
+
+```pascal
+var Linked := CreateCancellationTokenSource;
+for var Token in Tokens do
+  Token.Register(procedure begin Linked.Cancel; end);
+```
+
 ## Cómo hacerlo
 
 1. Compila. Lo que falte sale como error del compilador, no como comportamiento raro en
@@ -792,6 +813,6 @@ end;
    resolverlo: se resuelve desde un ámbito que abre el trabajo, `Services.CreateScope`. También un
    Scoped que resuelve un Singleton: el Singleton lo resuelve en un ámbito que abre con
    `IServiceScopeFactory`.
-6. Las secciones 2, de la 6 a la 13 y de la 15 a la 31 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
+6. Las secciones 2, de la 6 a la 13 y de la 15 a la 32 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
    contra tu propia composición — la vida de los ámbitos, los registros repetidos, las reglas de
    logging y los ajustes del host.

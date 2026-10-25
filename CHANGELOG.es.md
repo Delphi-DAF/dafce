@@ -122,6 +122,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - ⚠️ **NNLog**: `${message}` deja de llevar el ámbito, y `${scope}` es el único token que lo escribe. **Rompe, sin error de compilación,** un layout con `${message}` y sin `${scope}`, el de por defecto incluido: deja de mostrar los ámbitos. Uno con los dos deja de escribirlos dos veces
 - **NNLog**: Un token de layout sin renderer detrás se queda sin sustituir en vez de convertirse en cadena vacía, así que un `${mesage}` mal escrito sale en la línea
 - ⚠️ **Commons**: el flag `WithCompiledMeta` de `VersionTag` pasa a ser un parámetro de plantilla, y `TVersionInfo.Debug` es de solo lectura y lo declara el binario —un cuarto argumento de `[Version(...)]` o de `TVersionInfo.Create`, `False` si se omite—; antes informaba de cómo se compiló el propio DAF. **Rompe** a quien pasara el flag o asignara `Debug`
+- ⚠️ **Commons**: `Cancel` ejecuta los callbacks **del último registrado al primero**, como .NET, y lo que lancen sale junto en una `EAggregateException` cuando han corrido todos, también si lanzó uno solo. **Rompe** a quien contara con el orden de registro, o capturase alrededor de `Cancel` la excepción propia de un callback
 - ⚠️ **SystemProcess**: Un flujo sin destino declarado **hereda el del padre**, así que un hijo lanzado sin manejadores escribe donde escribe el proceso que lo lanza. `TProcessOutput.Discard` en los dos flujos lo calla
 - ⚠️ **SystemProcess**: Un segundo destino para el mismo flujo —`OnStdOut` dos veces, u `OnStdOut` y `StandardOutput`— **lanza `EInvalidOpException`**; antes sustituía al primero
 - ⚠️ **SystemProcess**: `HideWindow(False)`, el valor por defecto, **ya no abre una consola propia**: el hijo corre en la consola del padre
@@ -152,6 +153,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
   - `&If.Exp<T>`, el ternario escrito como función: evaluaba las **dos** ramas, así que no cortocircuitaba. El operador ternario de Delphi 13 lo sustituye
   - `TBooleanExpresion`
   - La unidad `Daf.Expression`, disuelta en `Daf.FilterSpec` y `Daf.Types`
+- ⚠️ **Commons**: `CreateLinkedCancellationTokenSource` y `TLinkedCancellationSource`. **Rompe** a quien la llamara: `MIGRATION-2.0.md` enseña cómo enlazar una fuente a varios tokens
 - ⚠️ **SystemProcess**: `KillAfterTimeout`, de `ISystemProcess` y del builder. El plazo mata siempre, que es lo único que el flag llegó a hacer: `Execute` es dueño de la ejecución desde las tuberías hasta el desmontaje, así que es él quien lo hace valer. **Rompe** a quien llamara a `.KillAfterTimeout(...)`
 
 ### Fixed
@@ -205,6 +207,8 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - **Docs**: El ejemplo de Scenario Outline de la guía de MiniSpec en inglés comparaba el resultado consigo mismo, así que copiado tal cual no podía fallar nunca
 - **Commons**: un tag de versión que no es SemVer se informaba como `0.0.0`; ahora el texto declarado sobrevive
 - **Commons**: un tag con sus propios metadatos de build producía dos secciones `+`, que SemVer no admite; lo que declara el tag y lo que vio el compilador comparten ya la única sección
+- **Commons**: un callback que lanzaba durante `Cancel` dejaba sin ejecutar los siguientes, y cancelar otra vez volvía a ejecutar los anteriores
+- **Commons**: liberar una fuente de `CreateCancellationTokenSourceWithTimeout` antes de su plazo dejaba vivo su hilo del temporizador hasta el plazo
 - **SystemProcess**: un `Kill` explícito se informaba como `Timeout`, y mataba al hijo dos veces —una al pedirlo y otra cuando el bucle de espera se enteraba—. Ahora informa `Killed` y mata una vez
 - **SystemProcess**: un hijo que escribía más de 4 KB en un flujo sin manejador se bloqueaba hasta su plazo y acababa como `Timeout`; sin plazo, `Execute` no volvía nunca
 - **SystemProcess**: el texto capturado cambiaba los caracteres no ASCII por otros —una `ñ` de `cmd` llegaba como `¤`— y rompía un carácter partido entre dos lecturas; se decodifica con la página de la consola en que corre el hijo

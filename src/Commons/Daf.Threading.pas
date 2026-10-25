@@ -24,9 +24,11 @@ type
     FThread: TThread;
     FEnabled: Boolean;
     FLock: TCriticalSection;
+    // Despierta al hilo antes de su plazo: es lo que lo para.
+    FWake: TEvent;
     FOnTimer: TTimerProc;
     procedure StartTimerThread;
-    procedure StopTimerThread;
+    function DetachTimerThread: TThread;
   public
     constructor Create(TimeoutMs: Cardinal; const OnTimer: TTimerProc);
     destructor Destroy; override;
@@ -118,7 +120,6 @@ type
 function CreateCancellationTokenSource: ICancellationTokenSource;
 function CreateCanceledCancellationTokenSource: ICancellationTokenSource;
 function CreateCancellationTokenSourceWithTimeout(Timeout: Cardinal): ICancellationTokenSource;
-function CreateLinkedCancellationTokenSource(const Tokens: array of ICancellationToken): ICancellationTokenSource;
 
 implementation
 
@@ -156,15 +157,6 @@ type
     destructor Destroy; override;
   end;
 
-  TLinkedCancellationSource = class(TCancellationTokenSource)
-  private
-    FRegistrations: TObjectList<TThread>;
-    procedure MonitorToken(const Token: ICancellationToken);
-  public
-    constructor Create(const Tokens: array of ICancellationToken);
-    destructor Destroy; override;
-  end;
-
 { Factory Functions }
 
 function CreateCanceledCancellationTokenSource: ICancellationTokenSource;
@@ -176,11 +168,6 @@ end;
 function CreateCancellationTokenSourceWithTimeout(Timeout: Cardinal): ICancellationTokenSource;
 begin
   Result := TTimeoutCancellationSource.Create(Timeout);
-end;
-
-function CreateLinkedCancellationTokenSource(const Tokens: array of ICancellationToken): ICancellationTokenSource;
-begin
-  Result := TLinkedCancellationSource.Create(Tokens);
 end;
 
 function CreateCancellationTokenSource: ICancellationTokenSource;
@@ -195,88 +182,118 @@ constructor TThreadTimer.Create(TimeoutMs: Cardinal; const OnTimer: TTimerProc);
 begin
   inherited Create;
   FLock := TCriticalSection.Create;
+  FWake := TEvent.Create(nil, True, False, '');
   FInterval := TimeoutMs;
   FOnTimer := OnTimer;
 end;
 
+// Espera a un hilo ya despertado y lo libera, fuera del cerrojo: dentro, el hilo no podría tomarlo
+// para decidir si dispara. Desde el propio hilo —un callback que para el temporizador— no puede
+// esperarse a sí mismo, así que el hilo se libera solo al terminar.
+procedure JoinTimerThread(Thread: TThread);
+begin
+  if Thread = nil then
+    Exit;
+  if Thread.ThreadID = TThread.CurrentThread.ThreadID then
+    Thread.FreeOnTerminate := True
+  else
+  begin
+    Thread.WaitFor;
+    Thread.Free;
+  end;
+end;
+
 destructor TThreadTimer.Destroy;
 begin
+  // Parar espera al hilo: al volver, nada del temporizador se ejecuta ya.
   SetEnabled(False);
+  FWake.Free;
   FLock.Free;
   inherited;
 end;
 
+// Con FLock tomado y sin hilo vivo, que es lo que garantiza que nadie espera ya en FWake.
 procedure TThreadTimer.StartTimerThread;
 begin
-  FLock.Enter;
-  try
-    if Assigned(FThread) then
-      Exit;
-
-    FThread := TThread.CreateAnonymousThread(
-      procedure
-      begin
-        TThread.Sleep(FInterval);
-        FLock.Enter;
-        try
-          if Assigned(FOnTimer) and FEnabled then
-            OnTimer();
-        finally
-          FLock.Leave;
-        end;
-      end
-    );
-    FThread.FreeOnTerminate := True;
-    FThread.Start;
-  finally
-    FLock.Leave;
-  end;
+  if Assigned(FThread) then
+    Exit;
+  FWake.ResetEvent;
+  var Wake := FWake;
+  var Interval := FInterval;
+  FThread := TThread.CreateAnonymousThread(
+    procedure
+    var
+      Fire: Boolean;
+    begin
+      if Wake.WaitFor(Interval) <> wrTimeout then
+        Exit;
+      FLock.Enter;
+      try
+        Fire := FEnabled and Assigned(FOnTimer);
+      finally
+        FLock.Leave;
+      end;
+      // El callback puede parar o liberar el temporizador: después ya no se toca nada suyo.
+      if Fire then
+        FOnTimer();
+    end);
+  FThread.FreeOnTerminate := False;
+  FThread.Start;
 end;
 
-procedure TThreadTimer.StopTimerThread;
+// Con FLock tomado: despierta al hilo y lo entrega para esperarlo fuera; nil si no hay.
+function TThreadTimer.DetachTimerThread: TThread;
 begin
-  FLock.Enter;
-  try
-    if Assigned(FThread) then
-    begin
-      FThread.Terminate;
-      FThread := nil;
-    end;
-  finally
-    FLock.Leave;
-  end;
+  Result := FThread;
+  FThread := nil;
+  if Assigned(Result) then
+    FWake.SetEvent;
 end;
 
 procedure TThreadTimer.SetEnabled(Value: Boolean);
+var
+  Stopped: TThread;
 begin
+  Stopped := nil;
   FLock.Enter;
   try
     if FEnabled = Value then
       Exit;
-
     FEnabled := Value;
-
     if FEnabled then
       StartTimerThread
     else
-      StopTimerThread;
+      Stopped := DetachTimerThread;
   finally
     FLock.Leave;
   end;
+  JoinTimerThread(Stopped);
 end;
 
 procedure TThreadTimer.SetInterval(Value: Cardinal);
+var
+  Stopped: TThread;
+  Restart: Boolean;
 begin
   FLock.Enter;
   try
     FInterval := Value;
-    if FEnabled then
-    begin
-      StopTimerThread;
-      StartTimerThread;
-    end;
+    Restart := FEnabled;
+    Stopped := DetachTimerThread;
   finally
     FLock.Leave;
+  end;
+  // El hilo viejo termina antes de que el nuevo vuelva a armar FWake.
+  JoinTimerThread(Stopped);
+  if Restart then
+  begin
+    FLock.Enter;
+    try
+      if FEnabled then
+        StartTimerThread;
+    finally
+      FLock.Leave;
+    end;
   end;
 end;
 
@@ -324,17 +341,31 @@ begin
   Result := TCancellationToken.Create(Self);
 end;
 
+// Como Cancel() de .NET: los callbacks se sacan de la lista bajo el cerrojo, así que ninguno corre dos
+// veces, y se ejecutan fuera de él, del último registrado al primero. Uno que falla no deja sin ejecutar
+// a los demás: sus excepciones salen juntas en una EAggregateException, también si es una sola.
 procedure TCancellationTokenSource.Cancel;
+var
+  Pending: TArray<TProc>;
+  Errors: TArray<Exception>;
 begin
-  FEvent.SetEvent;
   TMonitor.Enter(FCallbacks);
   try
-    for var Callback in FCallbacks do
-      Callback();
+    FEvent.SetEvent;
+    Pending := FCallbacks.ToArray;
     FCallbacks.Clear;
   finally
     TMonitor.Exit(FCallbacks);
   end;
+  Errors := nil;
+  for var I := High(Pending) downto 0 do
+    try
+      Pending[I]();
+    except
+      Errors := Errors + [Exception(AcquireExceptionObject)];
+    end;
+  if Errors <> nil then
+    raise EAggregateException.Create(Errors);
 end;
 
 function TCancellationTokenSource.IsCancellationRequested: Boolean;
@@ -342,19 +373,22 @@ begin
   Result := FEvent.WaitFor(0) = wrSignaled;
 end;
 
+// Mirar el estado y añadir comparten el cerrojo de Cancel: un callback registrado a la vez que se
+// cancela lo ejecuta la cancelación o, si llegó tarde, el registro, y nunca ninguno de los dos.
 procedure TCancellationTokenSource.Register(const Callback: TProc);
+var
+  AlreadyCanceled: Boolean;
 begin
- if IsCancellationRequested then
-    Callback()
-  else
-  begin
-    TMonitor.Enter(FCallbacks);
-    try
+  TMonitor.Enter(FCallbacks);
+  try
+    AlreadyCanceled := IsCancellationRequested;
+    if not AlreadyCanceled then
       FCallbacks.Add(Callback);
-    finally
-      TMonitor.Exit(FCallbacks);
-    end;
+  finally
+    TMonitor.Exit(FCallbacks);
   end;
+  if AlreadyCanceled then
+    Callback();
 end;
 
 function TCancellationTokenSource.WaitFor(Timeout: Cardinal): TWaitResult;
@@ -378,41 +412,12 @@ begin
   inherited;
 end;
 
+// El temporizador se para antes de cancelar: un callback de la cancelación puede liberar la fuente, y
+// después de Cancel ya no se toca nada suyo.
 procedure TTimeoutCancellationSource.OnTimer;
 begin
-  Cancel;
   FTimer.Enabled := False;
-end;
-
-{ TLinkedCancellationSource }
-
-constructor TLinkedCancellationSource.Create(const Tokens: array of ICancellationToken);
-begin
-  inherited Create;
-  FRegistrations := TObjectList<TThread>.Create(True);
-  for var Token in Tokens do
-    if Assigned(Token) then
-      MonitorToken(Token);
-end;
-
-destructor TLinkedCancellationSource.Destroy;
-begin
-  FRegistrations.Free;
-  inherited;
-end;
-
-procedure TLinkedCancellationSource.MonitorToken(const Token: ICancellationToken);
-begin
-  var MonitorThread := TThread.CreateAnonymousThread(
-    procedure
-    begin
-      Token.WaitFor(INFINITE);
-      Cancel;
-    end
-  );
-  MonitorThread.FreeOnTerminate := True;
-  FRegistrations.Add(MonitorThread);
-  MonitorThread.Start;
+  Cancel;
 end;
 
 { TShutdownHook }

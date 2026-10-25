@@ -123,6 +123,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - ⚠️ **NNLog**: `${message}` no longer carries the scope, and `${scope}` is the only token that writes it. **Breaks, with no compiler error,** a layout with `${message}` and no `${scope}`, the default one included: it stops showing the scopes. One with both stops writing them twice
 - **NNLog**: A layout token with no renderer behind it is left unsubstituted instead of becoming the empty string, so a misspelled `${mesage}` shows up in the line
 - ⚠️ **Commons**: `VersionTag`'s `WithCompiledMeta` flag is now a template parameter, and `TVersionInfo.Debug` is read-only and declared by the binary — a fourth argument to `[Version(...)]` or `TVersionInfo.Create`, `False` when omitted; it used to report how DAF itself was compiled. **Breaks** whoever passed the flag or assigned `Debug`
+- ⚠️ **Commons**: `Cancel` runs the callbacks **last registered first**, as in .NET, and what they raise comes out together in an `EAggregateException` once all have run, also when only one raised. **Breaks** whoever relied on registration order, or caught a callback's own exception around `Cancel`
 - ⚠️ **SystemProcess**: A stream with no declared destination **inherits the parent's**, so a child launched without handlers writes where the calling process writes. `TProcessOutput.Discard` on both streams keeps it quiet
 - ⚠️ **SystemProcess**: A second destination for the same stream —`OnStdOut` twice, or `OnStdOut` and `StandardOutput`— **raises `EInvalidOpException`**; it used to replace the first
 - ⚠️ **SystemProcess**: `HideWindow(False)`, the default, **no longer opens a console of its own**: the child runs in the parent's console
@@ -153,6 +154,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
   - `&If.Exp<T>`, the ternary written as a function: it evaluated **both** branches, so it did not short-circuit. Delphi 13's ternary operator replaces it
   - `TBooleanExpresion`
   - The `Daf.Expression` unit, dissolved into `Daf.FilterSpec` and `Daf.Types`
+- ⚠️ **Commons**: `CreateLinkedCancellationTokenSource` and `TLinkedCancellationSource`. **Breaks** whoever called it: `MIGRATION-2.0.md` shows how to link a source to several tokens
 - ⚠️ **SystemProcess**: `KillAfterTimeout`, from `ISystemProcess` and from the builder. The deadline always kills, which is the only thing the flag ever did: `Execute` owns the run from the pipes to the teardown, so it is what enforces it. **Breaks** whoever called `.KillAfterTimeout(...)`
 
 ### Fixed
@@ -206,6 +208,8 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - **Docs**: The Scenario Outline example in the English MiniSpec guide compared the result with itself, so copied as it was it could never fail
 - **Commons**: A version tag that is not SemVer was reported as `0.0.0`; the declared text now survives
 - **Commons**: A tag carrying its own build metadata produced two `+` sections, which SemVer does not admit; what the tag declares and what the compiler saw now share the one section
+- **Commons**: A callback that raised during `Cancel` left the ones after it unrun, and cancelling again ran the earlier ones a second time
+- **Commons**: Releasing a source from `CreateCancellationTokenSourceWithTimeout` before its deadline left its timer thread alive until the deadline
 - **SystemProcess**: An explicit `Kill` reported `Timeout`, and killed the child twice — once when asked and again when the wait loop noticed. It now reports `Killed` and kills once
 - **SystemProcess**: A child that wrote more than 4 KB to a stream with no handler blocked until its deadline and reported `Timeout`; with no deadline, `Execute` never returned
 - **SystemProcess**: Captured text turned non-ASCII characters into others —`ñ` from `cmd` arrived as `¤`— and broke a character split between two reads; it is decoded with the code page of the console the child runs in
