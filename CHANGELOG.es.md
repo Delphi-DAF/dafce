@@ -217,6 +217,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - **SystemProcess**: `OnCompleted`, `OnKilled` y `OnCancelled` podían correr antes de que los manejadores de captura recibieran lo último de la salida
 - **SystemProcess**: Un manejador de captura que lanzaba dejaba su tubería sin leer: el hijo se bloqueaba escribiendo hasta que el plazo lo mataba, y `Execute` lanzaba una `EAggregateException`. Ahora la ejecución se aborta en el acto y lanza la excepción del manejador
 - **SystemProcess**: Un `OnIdle` que lanzaba retenía `Execute` hasta que el hijo cerraba sus flujos capturados, mientras el hijo viviera
+- **SystemProcess**: `TProcess.HasExited` respondía `True` para un proceso vivo que no podía abrir con todos los permisos de consulta, y `False` para siempre para uno que salió con el código 259
 - **Web**: Un segmento literal de ruta se prueba antes que un parámetro en la misma posición; antes ganaba la acción declarada primero, así que `/items/search` podía caer en `/items/{Id}`
 - **Web**: Un parámetro `[FromServices]` recibe su servicio. Con el servicio registrado la petición fallaba con `EInvalidCast`, y sin él la acción recibía `nil` sin aviso; ese caso hace fallar ahora la petición nombrando el servicio
 - **Web**: Destruir un `TDafHttpServer` libera los módulos web que WebBroker guardaba para reutilizarlos; un servidor posterior en el mismo proceso recibía los que se construyeron para el anterior

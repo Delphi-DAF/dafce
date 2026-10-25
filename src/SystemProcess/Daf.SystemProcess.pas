@@ -304,6 +304,7 @@ type
 implementation
 uses
   System.IOUtils,
+  Winapi.TlHelp32,
   Daf.Types;
 
 function IsValidHandle(Handle: THandle): Boolean;
@@ -419,19 +420,46 @@ begin
   Result := HasExited(ProcessInfo.dwProcessId);
 end;
 
+// Si el identificador está en la lista de procesos del sistema.
+function ProcessListed(PID: Cardinal): Boolean;
+var
+  Entry: TProcessEntry32;
+begin
+  Result := False;
+  var Snapshot := CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+  if Snapshot = INVALID_HANDLE_VALUE then
+    Exit;
+  try
+    Entry.dwSize := SizeOf(Entry);
+    if Process32First(Snapshot, Entry) then
+      repeat
+        if Entry.th32ProcessID = PID then
+          Exit(True);
+      until not Process32Next(Snapshot, Entry);
+  finally
+    CloseHandle(Snapshot);
+  end;
+end;
+
+// Con los permisos mínimos, que concede también un proceso protegido. El código de salida dice si
+// terminó salvo cuando vale STILL_ACTIVE, que es también un código válido: entonces decide si el
+// handle está señalado. Sin handle, solo ERROR_INVALID_PARAMETER dice que no existe; cualquier otro
+// fallo se contrasta con la lista de procesos.
 class function TProcess.HasExited(PID: Cardinal): Boolean;
 var
-  hProcess: THandle;
   ExitCode: DWORD;
 begin
-  hProcess := OpenProcess(PROCESS_QUERY_INFORMATION, False, PID);
+  var hProcess := OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION or SYNCHRONIZE, False, PID);
   if hProcess = 0 then
-    Exit(True);
-
-  try
-    if not GetExitCodeProcess(hProcess, ExitCode) then
+  begin
+    if GetLastError = ERROR_INVALID_PARAMETER then
       Exit(True);
-    Result := ExitCode <> STILL_ACTIVE;
+    Exit(not ProcessListed(PID));
+  end;
+  try
+    if GetExitCodeProcess(hProcess, ExitCode) and (ExitCode <> STILL_ACTIVE) then
+      Exit(True);
+    Result := WaitForSingleObject(hProcess, 0) = WAIT_OBJECT_0;
   finally
     CloseHandle(hProcess);
   end;

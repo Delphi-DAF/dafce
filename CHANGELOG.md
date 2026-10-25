@@ -218,6 +218,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - **SystemProcess**: `OnCompleted`, `OnKilled` and `OnCancelled` could run before the capture handlers had received the last of the output
 - **SystemProcess**: A capture handler that raised left its pipe unread: the child blocked writing until the deadline killed it, and `Execute` raised an `EAggregateException`. The run now aborts at once and raises the handler's exception
 - **SystemProcess**: An `OnIdle` that raised held `Execute` until the child closed its captured streams, for as long as the child lived
+- **SystemProcess**: `TProcess.HasExited` answered `True` for a live process it could not open with full query rights, and `False` for ever for one that exited with code 259
 - **Web**: A literal route segment is tried before a parameter in the same position; the action declared first used to win, so `/items/search` could land on `/items/{Id}`
 - **Web**: A `[FromServices]` parameter receives its service. With the service registered the request failed with `EInvalidCast`, and without it the action received `nil` with no warning; that case now fails the request naming the service
 - **Web**: Destroying a `TDafHttpServer` frees the web modules WebBroker kept for reuse; a later server in the same process was handed the ones built for the previous one

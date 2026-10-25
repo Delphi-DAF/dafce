@@ -566,6 +566,51 @@ Feature El resultado dice por que se corto la ejecucion @systemprocess @process
       begin
         Expect(Format('avisos=%s corre=%s', [W.EndNotes.Trim, BoolToStr(W.Proc.IsRunning, True)]))
           .ToEqual('avisos= corre=True');
+      end)
+
+.Rule('HasExited responde por el proceso, como .NET')
+
+  .Scenario('Un proceso vivo protegido sigue vivo')
+    .Given('el identificador de un proceso del sistema vivo que el runner no puede abrir con todos los permisos de consulta',
+      procedure(W: TProcessWorld)
+      begin
+        // El proceso System: niega PROCESS_QUERY_INFORMATION y concede la consulta limitada.
+        W.Report := '';
+      end)
+    .When('se llama a TProcess.HasExited con ese identificador',
+      procedure(W: TProcessWorld)
+      begin
+        W.Report := 'terminado=' + BoolToStr(TProcess.HasExited(4), True);
+      end)
+    .&Then('devuelve False',
+      procedure(W: TProcessWorld)
+      begin
+        Expect(W.Report).ToEqual('terminado=False');
+      end)
+
+  .Scenario('Un proceso que salio con 259 ha terminado')
+    .Given('un hijo que termino con el codigo 259, cuyo proceso sigue existiendo porque el escenario mantiene abierto un handle suyo',
+      procedure(W: TProcessWorld)
+      begin
+        W.Proc := TSystemProcess.Builder
+          .Command('cmd /c exit 259')
+          .StandardOutput(TProcessOutput.Discard)
+          .StandardError(TProcessOutput.Discard)
+          .HideWindow(True)
+          .Build;
+        W.Future := W.Proc.ExecuteAsync;
+        W.HoldChild;
+        W.Future.Wait;
+      end)
+    .When('se llama a TProcess.HasExited con su identificador',
+      procedure(W: TProcessWorld)
+      begin
+        W.Report := 'terminado=' + BoolToStr(TProcess.HasExited(W.Proc.Id), True);
+      end)
+    .&Then('devuelve True',
+      procedure(W: TProcessWorld)
+      begin
+        Expect(W.Report).ToEqual('terminado=True');
       end);
 
 end.
