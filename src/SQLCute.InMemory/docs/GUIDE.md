@@ -152,6 +152,8 @@ The caller owns materialized instances — collect them into a `TObjectList<TRes
 
 SQL NULL surfaces in three places, and the engine handles all three consistently — that consistency is what keeps the two back-ends in agreement.
 
+A member reads as NULL when it is a `Variant` holding `Null` or an absent `TNullable<T>`; a present `TNullable<T>` reads as its value. That holds in WHERE, ORDER BY, DISTINCT, GROUP BY and the aggregates.
+
 ### Three-valued logic
 
 Predicate evaluation is three-valued. A comparison with a NULL operand is *unknown*, not false, and a row is kept only when the predicate evaluates to *true*.

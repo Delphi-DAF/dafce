@@ -222,7 +222,8 @@ uses
   System.Variants,         // VarToStr / Variant coercion (group keys, aggregates)
   Daf.SQLCute.Clauses,     // TFromClause / TJoinClause / TJoinType (multi-source engine)
   Daf.Comparers,           // TValueComparers, IsNullValue
-  Daf.Rtti;                // TRttiProperty smart SetValue + CoerceForAssign (shared coercion)
+  Daf.Rtti,                // TRttiProperty smart SetValue + CoerceForAssign (shared coercion)
+  Daf.Nullable;            // TNullableRtti
 
 // Assigns a column value to a result-class member. A NULL source leaves the
 // member at its default (a TNullable member stays IsNull). Coercion (incl.
@@ -313,6 +314,10 @@ begin
     Result := TRttiField(M).GetValue(Instance)
   else
     Result := TValue.Empty;
+  // A TNullable member is NULL when absent and its value when present.
+  var Inner: TValue;
+  if TNullableRtti.TryUnwrap(Result, Inner) then
+    Result := Inner;
 end;
 
 function TRttiAccessors<T>.AllColumns: TArray<string>;

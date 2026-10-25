@@ -152,6 +152,8 @@ Las instancias materializadas pertenecen a quien llama — recógelas en un `TOb
 
 El NULL de SQL aparece en tres sitios, y el motor los trata de forma coherente — esa coherencia es lo que mantiene de acuerdo a los dos back-ends.
 
+Un miembro se lee como NULL cuando es un `Variant` que guarda `Null` o un `TNullable<T>` ausente; un `TNullable<T>` presente se lee como su valor. Vale en WHERE, ORDER BY, DISTINCT, GROUP BY y los agregados.
+
 ### Lógica de tres valores
 
 La evaluación de predicados es de tres valores. Una comparación con un operando NULL es *desconocida*, no falsa, y una fila se conserva solo cuando el predicado resulta *verdadero*.
