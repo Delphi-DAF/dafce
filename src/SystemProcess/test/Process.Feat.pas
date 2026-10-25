@@ -8,6 +8,7 @@ uses
   Winapi.Windows,
   System.SysUtils,
   System.Classes,
+  System.Diagnostics,
   System.Threading,
   Daf.MiniSpec,
   Daf.Threading,
@@ -17,6 +18,9 @@ const
   PROCESS_QUERY_LIMITED_INFORMATION = $1000;
 
 type
+  /// La excepcion que lanza el OnIdle del escenario: ninguna otra pieza la produce.
+  EIdleSpecError = class(Exception);
+
   TProcessWorld = class
   public
     Proc: ISystemProcess;
@@ -26,6 +30,10 @@ type
     /// Un handle del hijo que abre el escenario, para que su proceso siga existiendo al terminar.
     ChildHandle: THandle;
     Report: string;
+    Captured: string;
+    /// Las notificaciones del final que corrieron.
+    EndNotes: string;
+    ElapsedMS: Int64;
     destructor Destroy; override;
     /// Un hijo que dura mas que cualquier plazo corto: sirve para que quien corte la ejecucion
     /// sea la causa que el escenario monta y no el propio hijo terminando.
@@ -51,6 +59,12 @@ begin
     except
       on Exception do;
     end;
+  end;
+  try
+    if Assigned(Proc) and Proc.IsRunning then
+      Proc.Kill;
+  except
+    on Exception do;
   end;
   if ChildHandle <> 0 then
     CloseHandle(ChildHandle);
@@ -490,6 +504,68 @@ Feature El resultado dice por que se corto la ejecucion @systemprocess @process
       procedure(W: TProcessWorld)
       begin
         Expect(W.Report).ToEqual('Killed $FFFFFFFF');
+      end)
+
+.Rule('Un OnIdle que lanza no retiene la ejecucion')
+
+  .Scenario('Un OnIdle que falla no espera al hijo')
+    .Given('un hijo que escribe hola y vive varios segundos, con la salida estandar capturada y un OnIdle que lanza en su primera llamada',
+      procedure(W: TProcessWorld)
+      begin
+        var Note :=
+          function(const Name: string): TProcessNotifyProc
+          begin
+            Result :=
+              procedure(R: TProcessResult)
+              begin
+                W.EndNotes := W.EndNotes + Name + ' ';
+              end;
+          end;
+        W.Proc := TSystemProcess.Builder
+          .Command('cmd /c echo hola & ping -n 10 127.0.0.1 >nul')
+          .StandardOutput(TProcessOutput.Capture(
+            procedure(Text: string)
+            begin
+              W.Captured := W.Captured + Text;
+            end))
+          .StandardError(TProcessOutput.Discard)
+          .HideWindow(True)
+          .Timeout(60000)
+          .OnIdle(
+            procedure(R: TProcessResult)
+            begin
+              raise EIdleSpecError.Create('OnIdle falla');
+            end)
+          .OnCompleted(Note('OnCompleted'))
+          .OnKilled(Note('OnKilled'))
+          .OnCancelled(Note('OnCancelled'))
+          .OnFailed(Note('OnFailed'))
+          .Build;
+      end)
+    .When('se ejecuta',
+      procedure(W: TProcessWorld)
+      begin
+        var Watch := TStopwatch.StartNew;
+        try
+          W.Proc.Execute;
+          W.Report := 'sin excepcion';
+        except
+          on E: Exception do
+            W.Report := E.ClassName + ': ' + E.Message;
+        end;
+        W.ElapsedMS := Watch.ElapsedMilliseconds;
+      end)
+    .&Then('Execute lanza la excepcion de OnIdle antes de que el hijo termine',
+      procedure(W: TProcessWorld)
+      begin
+        Expect(Format('%s antes-del-hijo=%s', [W.Report, BoolToStr(W.ElapsedMS < 5000, True)]))
+          .ToEqual('EIdleSpecError: OnIdle falla antes-del-hijo=True');
+      end)
+    .&And('ninguna notificacion del final ha corrido, e IsRunning es cierto',
+      procedure(W: TProcessWorld)
+      begin
+        Expect(Format('avisos=%s corre=%s', [W.EndNotes.Trim, BoolToStr(W.Proc.IsRunning, True)]))
+          .ToEqual('avisos= corre=True');
       end);
 
 end.

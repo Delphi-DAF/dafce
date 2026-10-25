@@ -1245,7 +1245,14 @@ begin
         Break;
       end;
 
-      DoProcessIdle(ProcessResult);
+      try
+        DoProcessIdle(ProcessResult);
+      except
+        // Como un manejador de captura que lanza: se aborta sin notificar el final ni matar al hijo.
+        StopReaders;
+        ClosePipes;
+        raise;
+      end;
     until False;
     WaitForCapture(CancellationToken, ProcessResult);
   finally

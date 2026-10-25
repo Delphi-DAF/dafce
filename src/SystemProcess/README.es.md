@@ -177,6 +177,10 @@ end;
 En .NET la excepción de un manejador de `OutputDataReceived` termina el proceso entero; aquí la
 aplicación sigue viva y la excepción sale de `Execute`.
 
+Una excepción de `OnIdle` sigue la misma regla: la ejecución se aborta en el acto, las capturas paran,
+no corre ninguna notificación del final, `Execute` la lanza, y el hijo sigue vivo en la instancia.
+.NET no tiene equivalente, porque no llama a código del usuario mientras espera.
+
 Dos diferencias con .NET: `RunAndCaptureText` lanza `TimeoutException` u
 `OperationCanceledException` y pierde el texto leído, mientras que aquí un plazo vencido es un
 resultado `Timeout` y lo que los manejadores recibieron queda recibido; y no se entrega nada después

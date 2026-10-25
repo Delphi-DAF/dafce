@@ -177,6 +177,10 @@ end;
 In .NET the exception of an `OutputDataReceived` handler terminates the whole process; here the
 application stays alive and the exception comes out of `Execute`.
 
+An exception raised by `OnIdle` follows the same rule: the run aborts at once, the captures stop, no
+end notification runs, `Execute` raises it, and the child stays alive in the instance. .NET has no
+equivalent, since it runs no user code while it waits.
+
 Two differences from .NET: `RunAndCaptureText` throws `TimeoutException` or
 `OperationCanceledException` and loses the text it read, whereas here an expired deadline is a
 `Timeout` result and what the handlers received stays received; and nothing is delivered after
