@@ -80,6 +80,7 @@ implementation
 
 uses
   System.SysUtils,
+  System.DateUtils,
   System.Rtti,
   System.Variants,
   Daf.MiniSpec,
@@ -195,6 +196,20 @@ begin
       else
         W.Outcome := string(V.TypeInfo.Name) + ' ' + FloatToStr(V.AsExtended, TFormatSettings.Invariant);
     end;
+  except
+    on E: Exception do
+      W.Outcome := E.ClassName + ': ' + E.Message;
+  end;
+end;
+
+// The number of groups the world's query returns, or the exception it raised.
+procedure CountGroups(W: TGroupingWorld);
+begin
+  try
+    var N := 0;
+    for var R in TInMemory.Rows(W.Query, W.Ctx) do
+      Inc(N);
+    W.Outcome := Format('%d groups', [N]);
   except
     on E: Exception do
       W.Outcome := E.ClassName + ': ' + E.Message;
@@ -447,6 +462,59 @@ Feature SQLCute in-memory grouping @inmemory @grouping
       procedure(W: TGroupingWorld)
       begin
         Expect(W.Outcome).ToEqual('1=350,2=120,3=300');
+      end)
+
+.Rule('GROUP BY groups by value equality')
+
+  .Scenario('A millisecond separates two groups')
+    .Given('two rows whose timestamps differ by one millisecond',
+      procedure(W: TGroupingWorld)
+      begin
+        W.Ctx.Map('events', [
+          TDictRow.Make(['at'], [EncodeDateTime(2026, 1, 1, 10, 0, 0, 0)]),
+          TDictRow.Make(['at'], [EncodeDateTime(2026, 1, 1, 10, 0, 0, 1)])]);
+        W.Query := TQuery.New.From('events').Select('at').SelectCount('*', 'n').GroupBy('at');
+      end)
+    .When('they are grouped in memory by that column', CountGroups)
+    .&Then('there are two groups',
+      procedure(W: TGroupingWorld)
+      begin
+        Expect(W.Outcome).ToEqual('2 groups');
+      end)
+
+  .Scenario('A string and a number do not merge')
+    .Given('dynamic rows whose code is ''1'' in some and 1 in others',
+      procedure(W: TGroupingWorld)
+      begin
+        W.Ctx.Map('codes', [
+          TDictRow.Make(['code'], ['1']),
+          TDictRow.Make(['code'], [1]),
+          TDictRow.Make(['code'], ['1']),
+          TDictRow.Make(['code'], [1])]);
+        W.Query := TQuery.New.From('codes').Select('code').SelectCount('*', 'n').GroupBy('code');
+      end)
+    .When('they are grouped in memory by code', CountGroups)
+    .&Then('there are two groups',
+      procedure(W: TGroupingWorld)
+      begin
+        Expect(W.Outcome).ToEqual('2 groups');
+      end)
+
+  .Scenario('The text of NULL is not NULL')
+    .Given('dynamic rows whose tag is NULL in some and, in others, a string that spells a NULL marker',
+      procedure(W: TGroupingWorld)
+      begin
+        W.Ctx.Map('tags', [
+          TDictRow.Make(['tag'], [Null]),
+          TDictRow.Make(['tag'], ['<null>']),
+          TDictRow.Make(['tag'], [Null])]);
+        W.Query := TQuery.New.From('tags').Select('tag').SelectCount('*', 'n').GroupBy('tag');
+      end)
+    .When('they are grouped in memory by tag', CountGroups)
+    .&Then('there are two groups',
+      procedure(W: TGroupingWorld)
+      begin
+        Expect(W.Outcome).ToEqual('2 groups');
       end);
 
 end.

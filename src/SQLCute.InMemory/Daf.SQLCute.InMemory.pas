@@ -1008,18 +1008,25 @@ begin
   end;
 end;
 
-// Canonical group key: a NULL sentinel keeps all NULL keys in one group.
-function GroupKey(const R: IRow; const Cols: TArray<string>): string;
+// Group keys compare as tuples of values with the equality DISTINCT uses: NULLs
+// are equal, so all NULL keys are one group.
+function GroupKeyEquality: IEqualityComparer<TArray<TValue>>;
 begin
-  Result := '';
-  for var C in Cols do
-  begin
-    var V := ReadColumn(R, C);
-    if IsNullValue(V) then
-      Result := Result + #0 + '<null>' + #1
-    else
-      Result := Result + #0 + VarToStr(V.AsVariant) + #1;
-  end;
+  var VE := TValueComparers.Equality;
+  Result := TEqualityComparer<TArray<TValue>>.Construct(
+    function(const A, B: TArray<TValue>): Boolean
+    begin
+      for var I := 0 to High(A) do
+        if not VE.Equals(A[I], B[I]) then
+          Exit(False);
+      Result := True;
+    end,
+    function(const K: TArray<TValue>): Integer
+    begin
+      Result := 17;
+      for var V in K do
+        Result := CombineHash(Result, VE.GetHashCode(V));
+    end);
 end;
 
 // Groups rows by the GROUP BY columns, computes aggregates over each group's
@@ -1030,11 +1037,14 @@ end;
 function GroupAndAggregate(const Rows: TArray<IRow>; const C: TCompiledQuery): TArray<IRow>;
 begin
   var Cols := C.GroupBy;
-  var Groups := Linq.From<IRow>(Rows).GroupBy<string>(
-    function(R: IRow): string
+  var Groups := Linq.From<IRow>(Rows).GroupBy<TArray<TValue>>(
+    function(R: IRow): TArray<TValue>
     begin
-      Result := GroupKey(R, Cols);   // NULL sentinel: all NULL keys are one group
-    end);
+      SetLength(Result, Length(Cols));
+      for var I := 0 to High(Cols) do
+        Result[I] := ReadColumn(R, Cols[I]);
+    end,
+    GroupKeyEquality);
 
   Result := nil;
   for var G in Groups do             // key order preserved by GroupBy
