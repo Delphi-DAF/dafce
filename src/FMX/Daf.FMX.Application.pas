@@ -285,11 +285,19 @@ begin
   end;
 end;
 
+// Los formularios antes que el host, y antes de dejar de ser la aplicacion actual: uno que use
+// servicios al destruirse los encuentra vivos. Todos los que posee la aplicacion de la plataforma, y no
+// solo el principal, porque cualquiera puede retener servicios. Solo los libera la aplicacion que
+// arranco la interfaz.
 procedure TFmxApplication.Stop;
 begin
+  if Assigned(FMainForm) then
+    for var I := FMX.Forms.Application.ComponentCount - 1 downto 0 do
+      if FMX.Forms.Application.Components[I] is TCommonCustomForm then
+        FMX.Forms.Application.Components[I].Free;
+  FMainForm := nil;
   if CurrentApp = (Self as IFmxApplication) then
     CurrentApp := nil;
-  FMainForm := nil;
   if Assigned(FHost) then
     StopAndNil(FHost);
 end;

@@ -42,6 +42,9 @@ They are two lifecycle contracts, not four overrides of one `Execute`.
 platform and creates the main form, and returns. `Run` is `StartUpTo` plus the loop, so it does not
 return until the loop ends, and it stops the host on the way out.
 
+Stopping — `Stop`, or `Run` on its way out — frees the forms `Vcl.Forms.Application` owns before it
+stops the host, so a form that uses services while it is destroyed finds them alive.
+
 ---
 
 ## A single instance

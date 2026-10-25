@@ -285,11 +285,19 @@ begin
   end;
 end;
 
+// Los formularios antes que el host, y antes de dejar de ser la aplicacion actual: uno que use
+// servicios al destruirse los encuentra vivos. Todos los que posee la aplicacion de la plataforma, y no
+// solo el principal, porque cualquiera puede retener servicios. Solo los libera la aplicacion que
+// arranco la interfaz.
 procedure TVclApplication.Stop;
 begin
+  if Assigned(FMainForm) then
+    for var I := Vcl.Forms.Application.ComponentCount - 1 downto 0 do
+      if Vcl.Forms.Application.Components[I] is TCustomForm then
+        Vcl.Forms.Application.Components[I].Free;
+  FMainForm := nil;
   if CurrentApp = (Self as IVclApplication) then
     CurrentApp := nil;
-  FMainForm := nil;
   if Assigned(FHost) then
     StopAndNil(FHost);
 end;

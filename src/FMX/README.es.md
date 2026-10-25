@@ -27,6 +27,9 @@ App.Run(TMainForm);          // crea el formulario, y a partir de ahí manda FMX
 
 Este `Run` **no** es el de la CLI. En CLI y en Web DAF es dueño del proceso: `Run` arranca, trabaja y para, y el `.dpr` acaba cuando él acaba. Aquí el message loop ya existe y es de `FMX.Forms.Application`; la variante crea el formulario principal y delega. Son dos contratos de ciclo de vida, no cuatro variaciones de uno.
 
+Parar —`Stop`, o `Run` al salir— libera los formularios que posee `FMX.Forms.Application` antes de
+parar el host, así que un formulario que usa servicios al destruirse los encuentra vivos.
+
 ### El global `DafApp`
 
 `DafApp` devuelve la aplicación en curso. Existe solo en las variantes VCL y FMX — para el código de formulario que la plataforma construye por su cuenta, al que nadie le puede inyectar nada. En CLI y en Web no hay tal global, y .NET tampoco lo tiene.

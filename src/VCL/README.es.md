@@ -41,6 +41,9 @@ Son dos contratos de ciclo de vida, no cuatro sobreescrituras de un mismo `Execu
 plataforma y crea el formulario principal, y vuelve. `Run` es `StartUpTo` más el bucle, así que no
 vuelve hasta que el bucle termina, y al salir para el host.
 
+Parar —`Stop`, o `Run` al salir— libera los formularios que posee `Vcl.Forms.Application` antes de
+parar el host, así que un formulario que usa servicios al destruirse los encuentra vivos.
+
 ---
 
 ## Una sola instancia

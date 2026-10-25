@@ -73,6 +73,31 @@ uses
 var
   // Las veces que se llamo a Stop de un TRefusingStop.
   RefusedStops: Integer;
+  // Lo que dejo escrito el destructor de un TServiceAwareForm.
+  FormTrace: string;
+
+type
+  /// Hereda el .dfm de TSpecForm. Al destruirse resuelve un servicio de la aplicacion actual y deja
+  /// constancia de lo que obtuvo.
+  TServiceAwareForm = class(TSpecForm)
+  public
+    destructor Destroy; override;
+  end;
+
+destructor TServiceAwareForm.Destroy;
+begin
+  try
+    var App := DafApp;
+    if App = nil then
+      FormTrace := FormTrace + 'destruido sin-aplicacion;'
+    else
+      FormTrace := FormTrace + 'destruido resolvio=' + App.Services.GetRequiredService<IDesktopService>.Name + ';';
+  except
+    on E: Exception do
+      FormTrace := FormTrace + 'destruido error=' + E.ClassName + ';';
+  end;
+  inherited;
+end;
 
 /// Lo que se ve de una aplicacion de escritorio despues de arrancarla hasta el bucle.
 function Outcome(const App: IVclApplication): string;
@@ -337,6 +362,31 @@ Feature La variante VCL de la familia @vcl @application-family
       procedure(W: TVclWorld)
       begin
         Expect(Format('paradas=%d %s', [RefusedStops, W.Report])).ToEqual('paradas=1 <sin excepcion>');
+      end)
+
+.Rule('Los formularios de escritorio se liberan antes de cerrar el contenedor')
+
+  .Scenario('El formulario se destruye con los servicios todavia vivos')
+    .Given('una aplicacion VCL arrancada hasta un formulario principal que, al destruirse, resuelve un servicio',
+      procedure(W: TVclWorld)
+      begin
+        FormTrace := '';
+        W.Builder := TVclApplication.CreateBuilder;
+        W.Builder.Services.AddSingleton<IDesktopService, TDesktopService>;
+        W.App := W.Builder.Build;
+        W.App.StartUpTo(TServiceAwareForm);
+        Expect(W.App.MainForm is TServiceAwareForm).ToBeTrue;
+      end)
+    .When('se para la aplicacion',
+      procedure(W: TVclWorld)
+      begin
+        W.App.Stop;
+        W.Report := FormTrace;
+      end)
+    .&Then('el formulario se destruyo durante la parada, y su destructor resolvio el servicio sin error',
+      procedure(W: TVclWorld)
+      begin
+        Expect(W.Report).ToEqual('destruido resolvio=desktop;');
       end);
 
 end.
