@@ -116,6 +116,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - ⚠️ **Web**: `TDafHttpServer.Start` sobre un puerto ocupado **lanza una excepción que nombra el puerto**, después del evento `OnError`. Antes terminaba con `Abort`: un `except on EAbort` alrededor de `Start` deja de capturarla
 - ⚠️ **Web**: Un objeto `[FromBody]` vive lo que la petición: el router lo libera después de ejecutar el resultado de la acción, donde antes fugaba. **Rompe** a una acción que lo guardara
 - ⚠️ **Web**: Un valor booleano de ruta o de consulta es `true` o `false`, en cualquier caja; `1` y `0` dejan de convertir, y responden 400. **Rompe** a un cliente que los enviara
+- ⚠️ **Web**: `IDafHttpServer.OnError` es un `TServerErrorEvent`, `procedure(Sender: TObject; const Error: Exception) of object`, con el servidor como emisor. Era un `TNotifyEvent` cuyo `Sender` era la excepción, así que un manejador que la liberaba liberaba lo que `Start` lanzaba después. **Rompe** todo manejador de `OnError`, que deja de compilar
 - **Logging**: Componer el pipeline sin un solo proveedor **falla al construir el host**, con `ELoggingCompositionError`, en vez de entregar un `ILogger` que acepta todo y no escribe nada. El silencio deliberado se declara con `AddNullProvider`
 - **Samples**: Cada sample se archiva bajo el módulo que declara lo que usa: `ConsoleSample` a `src/Cli/samples/`, `TicTacToeApp` a `src/VCL/samples/`, y `HostedService` a `src/samples/`
 

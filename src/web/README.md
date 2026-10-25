@@ -69,7 +69,9 @@ above, overrides it. Composing through the application variant instead of by han
 you — see the [guide](docs/GUIDE.md#the-web-application-variant).
 
 A port already in use makes `Start` fire `OnError` and then raise an exception that names the port:
-`Cannot start: port 8080 is in use`.
+`Cannot start: port 8080 is in use`. `OnError` is a `TServerErrorEvent`, `procedure(Sender: TObject;
+const Error: Exception) of object`, with the server as `Sender`: the handler reads the exception, which
+`Start` raises next, and neither frees nor keeps it. ASP.NET Core has no such event.
 
 ---
 

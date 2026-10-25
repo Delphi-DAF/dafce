@@ -290,6 +290,10 @@ end;
 
 `Create` reads the port from `Config['Port']`. `Start` refuses to bind a port already in use: it fires `OnError` and then raises an exception that names the port, before touching the socket. `CanBindPort` answers the same question ahead of time, and releases whatever it bound.
 
+`OnError` is a `TServerErrorEvent`, `procedure(Sender: TObject; const Error: Exception) of object`, with
+the server as `Sender`. The exception stays its raiser's: the handler reads it, and neither frees nor
+keeps it. ASP.NET Core has no equivalent event.
+
 ### Driving it yourself
 
 `WebApp.AddHttpServer` registers it for you, and that is the route to take. Building one by hand is for

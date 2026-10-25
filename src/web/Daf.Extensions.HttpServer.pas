@@ -6,6 +6,12 @@ uses
   System.SysUtils;
 
 type
+  /// <summary>
+  ///   What the server reports when it fails, with the server as emitter. The exception stays its
+  ///   raiser's: the handler reads it, and neither frees nor keeps it.
+  /// </summary>
+  TServerErrorEvent = procedure(Sender: TObject; const Error: Exception) of object;
+
   /// <remarks>
   /// There is deliberately no member here reporting a version. What a caller
   /// actually wants — which pieces the platform is made of, and at which
@@ -29,8 +35,8 @@ type
     procedure SetOnStopping(const Value: TNotifyEvent);
     function GetOnStopped: TNotifyEvent;
     procedure SetOnStopped(const Value: TNotifyEvent);
-    function GetOnError: TNotifyEvent;
-    procedure SetOnError(const Value: TNotifyEvent);
+    function GetOnError: TServerErrorEvent;
+    procedure SetOnError(const Value: TServerErrorEvent);
     function GetOnDestroy: TNotifyEvent;
     procedure SetOnDestroy(const Value: TNotifyEvent);
 
@@ -41,7 +47,7 @@ type
     property OnStarted: TNotifyEvent read GetOnStarted write SetOnStarted;
     property OnStopping: TNotifyEvent read GetOnStopping write SetOnStopping;
     property OnStopped: TNotifyEvent read GetOnStopped write SetOnStopped;
-    property OnError: TNotifyEvent read GetOnError write SetOnError;
+    property OnError: TServerErrorEvent read GetOnError write SetOnError;
     property OnDestroy: TNotifyEvent read GetOnDestroy write SetOnDestroy;
   end;
 

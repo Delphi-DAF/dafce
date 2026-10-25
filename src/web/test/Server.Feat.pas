@@ -13,6 +13,7 @@
 interface
 
 uses
+  System.SysUtils,
   Daf.Extensions.HttpServer,
   Web.Doubles;
 
@@ -27,6 +28,8 @@ type
     HeldAnswer: Boolean;
     BindableAfterStop: Boolean;
     LibraryNamedMembers: string;
+    /// The emitter and the message the error handler received.
+    ErrorSeen: string;
     destructor Destroy; override;
     procedure NewServerOn(const APort: Word);
     procedure WireEvents;
@@ -34,12 +37,12 @@ type
     procedure Started(Sender: TObject);
     procedure Stopping(Sender: TObject);
     procedure Stopped(Sender: TObject);
+    procedure ServerError(Sender: TObject; const Error: Exception);
   end;
 
 implementation
 
 uses
-  System.SysUtils,
   System.Rtti,
   System.TypInfo,
   System.Generics.Collections,
@@ -96,6 +99,11 @@ end;
 procedure TServerWorld.Stopped(Sender: TObject);
 begin
   Trace := Trace + 'stopped,';
+end;
+
+procedure TServerWorld.ServerError(Sender: TObject; const Error: Exception);
+begin
+  ErrorSeen := Sender.ClassName + ' | ' + Error.Message;
 end;
 
 initialization
@@ -227,6 +235,36 @@ Feature HTTP server @httpserver
       procedure(W: TServerWorld)
       begin
         Expect(W.Server.Active).ToEqual(False);
+      end)
+
+  .Scenario('Starting on a held port with an error handler')
+    .Given('another socket listening on the port, and a server on it whose error handler notes its emitter and message',
+      procedure(W: TServerWorld)
+      begin
+        W.Held := THeldPort.Create(FindFreePort);
+        W.NewServerOn(W.Held.Port);
+        W.Server.OnError := W.ServerError;
+      end)
+    .When('the server is started',
+      procedure(W: TServerWorld)
+      begin
+        try
+          W.Server.Start;
+          W.Trace := '<started>';
+        except
+          on E: Exception do
+            W.Trace := E.ClassName + ': ' + E.Message;
+        end;
+      end)
+    .&Then('the handler received the server as its emitter and an exception that names the port',
+      procedure(W: TServerWorld)
+      begin
+        Expect(W.ErrorSeen).ToEqual(Format('TDafHttpServer | Cannot start: port %d is in use', [W.Port]));
+      end)
+    .&And('the start raises an exception with that same message',
+      procedure(W: TServerWorld)
+      begin
+        Expect(W.Trace).ToEqual(Format('Exception: Cannot start: port %d is in use', [W.Port]));
       end)
 
 .Rule('The contract does not name its implementation''s library')

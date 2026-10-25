@@ -843,6 +843,21 @@ for var Token in Tokens do
 - **Qué rompe**: un Singleton, o un campo que un controlador alcanza fuera de su petición, que no es
   seguro entre hilos. Se hace seguro, o se registra como Scoped para que cada petición tenga el suyo.
 
+### 37. Web: el evento de error del servidor recibe la excepción como argumento
+
+- **`IDafHttpServer.OnError` es un `TServerErrorEvent`**: `Sender` es el servidor, y la excepción
+  llega en `Error`. En 1.6 era un `TNotifyEvent` cuyo `Sender` era la excepción.
+- **La excepción sigue siendo de quien la lanza**: `Start` la lanza justo después del evento, así que
+  el manejador la lee y ni la libera ni la guarda.
+- **Qué rompe**: todo manejador de `OnError`, que deja de compilar hasta que toma la firma nueva.
+
+```pascal
+// before
+procedure TMyForm.ServerError(Sender: TObject);
+// now
+procedure TMyForm.ServerError(Sender: TObject; const Error: Exception);
+```
+
 ## Cómo hacerlo
 
 1. Compila. Lo que falte sale como error del compilador, no como comportamiento raro en
@@ -858,6 +873,6 @@ for var Token in Tokens do
    resolverlo: se resuelve desde un ámbito que abre el trabajo, `Services.CreateScope`. También un
    Scoped que resuelve un Singleton: el Singleton lo resuelve en un ámbito que abre con
    `IServiceScopeFactory`.
-6. Las secciones 2, de la 6 a la 13 y de la 15 a la 36 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
+6. Las secciones 2, de la 6 a la 13 y de la 15 a la 37 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
    contra tu propia composición — la vida de los ámbitos, los registros repetidos, las reglas de
    logging y los ajustes del host.

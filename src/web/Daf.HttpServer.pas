@@ -17,7 +17,7 @@ type
     FOnStarting: TNotifyEvent;
     FOnStarted: TNotifyEvent;
     FOnStopped: TNotifyEvent;
-    FOnError: TNotifyEvent;
+    FOnError: TServerErrorEvent;
     FOnDestroy: TNotifyEvent;
     FLogger: ILogger;
     function GetPort: Word;
@@ -36,8 +36,8 @@ type
     function CanBindPort: Boolean;overload;
     function CanBindPort(const APort: Integer): Boolean; overload;
     function GetSessionID: string;
-    function GetOnError: TNotifyEvent;
-    procedure SetOnError(const Value: TNotifyEvent);
+    function GetOnError: TServerErrorEvent;
+    procedure SetOnError(const Value: TServerErrorEvent);
     procedure FireOnError(const E: Exception);
     function GetOnDestroy: TNotifyEvent;
     procedure SetOnDestroy(const Value: TNotifyEvent);
@@ -55,7 +55,7 @@ type
     property OnStarted: TNotifyEvent read GetOnStarted write SetOnStarted;
     property OnStopping: TNotifyEvent read GetOnStopping write SetOnStopping;
     property OnStopped: TNotifyEvent read GetOnStopped write SetOnStopped;
-    property OnError: TNotifyEvent read GetOnError write SetOnError;
+    property OnError: TServerErrorEvent read GetOnError write SetOnError;
     property OnDestroy: TNotifyEvent read GetOnDestroy write SetOnDestroy;
   end;
 
@@ -102,7 +102,7 @@ end;
 procedure TDafHttpServer.FireOnError(const E: Exception);
 begin
   if Assigned(FOnError) then
-    FOnError(E);
+    FOnError(Self, E);
 end;
 
 function TDafHttpServer.GetActive: Boolean;
@@ -125,7 +125,7 @@ begin
   Result := FOnDestroy;
 end;
 
-function TDafHttpServer.GetOnError: TNotifyEvent;
+function TDafHttpServer.GetOnError: TServerErrorEvent;
 begin
   Result := FOnError;
 end;
@@ -140,7 +140,7 @@ begin
   FOnDestroy := Value;
 end;
 
-procedure TDafHttpServer.SetOnError(const Value: TNotifyEvent);
+procedure TDafHttpServer.SetOnError(const Value: TServerErrorEvent);
 begin
   FOnError := Value;
 end;

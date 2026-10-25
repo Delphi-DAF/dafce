@@ -70,7 +70,9 @@ lo sustituye. Componer por la variante de aplicación en vez de a mano siembra e
 la [guía](docs/GUIDE.es.md#la-variante-de-aplicación-web)—.
 
 Con el puerto ocupado, `Start` dispara `OnError` y después lanza una excepción que nombra el puerto:
-`Cannot start: port 8080 is in use`.
+`Cannot start: port 8080 is in use`. `OnError` es un `TServerErrorEvent`, `procedure(Sender: TObject;
+const Error: Exception) of object`, con el servidor como `Sender`: el manejador lee la excepción, que
+`Start` lanza a continuación, y ni la libera ni la guarda. ASP.NET Core no tiene este evento.
 
 ---
 

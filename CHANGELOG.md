@@ -117,6 +117,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - ⚠️ **Web**: `TDafHttpServer.Start` on a port already in use **raises an exception that names the port**, after the `OnError` event. It used to end with `Abort`: an `except on EAbort` around `Start` no longer catches it
 - ⚠️ **Web**: A `[FromBody]` object lives as long as the request: the router frees it after executing the action's result, where it used to leak. **Breaks** an action that kept it
 - ⚠️ **Web**: A Boolean route or query value is `true` or `false`, in any case; `1` and `0` no longer convert, and answer 400. **Breaks** a client that sent them
+- ⚠️ **Web**: `IDafHttpServer.OnError` is a `TServerErrorEvent`, `procedure(Sender: TObject; const Error: Exception) of object`, with the server as emitter. It was a `TNotifyEvent` whose `Sender` was the exception, so a handler that freed it freed what `Start` raised next. **Breaks** every `OnError` handler, which stops compiling
 - **Logging**: Composing the pipeline without a single provider **fails at host build time**, with `ELoggingCompositionError`, instead of handing out an `ILogger` that accepts everything and writes nothing. Deliberate silence is declared with `AddNullProvider`
 - **Samples**: Every sample is filed under the module that declares what it uses: `ConsoleSample` to `src/Cli/samples/`, `TicTacToeApp` to `src/VCL/samples/`, and `HostedService` to `src/samples/`
 

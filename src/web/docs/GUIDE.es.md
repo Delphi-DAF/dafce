@@ -291,6 +291,10 @@ end;
 
 `Create` lee el puerto de `Config['Port']`. `Start` se niega a arrancar sobre un puerto ocupado: dispara `OnError` y después lanza una excepción que nombra el puerto, antes de tocar el socket. `CanBindPort` responde a lo mismo por adelantado, y suelta lo que haya reservado.
 
+`OnError` es un `TServerErrorEvent`, `procedure(Sender: TObject; const Error: Exception) of object`, con
+el servidor como `Sender`. La excepción sigue siendo de quien la lanza: el manejador la lee, y ni la
+libera ni la guarda. ASP.NET Core no tiene un evento equivalente.
+
 ### Manejarlo tú
 
 `WebApp.AddHttpServer` lo registra por ti, y esa es la vía. Construirlo a mano es para un proceso que no

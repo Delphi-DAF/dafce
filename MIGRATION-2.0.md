@@ -836,6 +836,21 @@ for var Token in Tokens do
 - **What breaks**: a Singleton, or a field a controller reaches outside its request, that is not safe
   across threads. It becomes thread-safe, or it is registered Scoped so each request has its own.
 
+### 37. Web: the server's error event receives the exception as an argument
+
+- **`IDafHttpServer.OnError` is a `TServerErrorEvent`**: `Sender` is the server, and the exception
+  comes in `Error`. In 1.6 it was a `TNotifyEvent` whose `Sender` was the exception.
+- **The exception stays its raiser's**: `Start` raises it right after the event, so the handler reads
+  it and neither frees nor keeps it.
+- **What breaks**: every `OnError` handler, which stops compiling until it takes the new signature.
+
+```pascal
+// before
+procedure TMyForm.ServerError(Sender: TObject);
+// now
+procedure TMyForm.ServerError(Sender: TObject; const Error: Exception);
+```
+
 ## How to do it
 
 1. Compile. Whatever is missing comes out as a compiler error, not as odd behaviour at run time.
@@ -849,6 +864,6 @@ for var Token in Tokens do
    A Scoped service asked of the root provider is rejected too, when it is resolved: resolve it from a
    scope the work opens, `Services.CreateScope`. So is a Scoped a Singleton resolves: the Singleton
    resolves it in a scope it opens through `IServiceScopeFactory`.
-6. Sections 2, 6 to 13 and 15 to 36 carry **run-time** changes: the compiler says nothing about them. Read them
+6. Sections 2, 6 to 13 and 15 to 37 carry **run-time** changes: the compiler says nothing about them. Read them
    against your own composition — scope lifetimes, duplicate registrations, logging rules and
    host settings.
