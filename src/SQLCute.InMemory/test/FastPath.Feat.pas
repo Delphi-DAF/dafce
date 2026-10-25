@@ -50,10 +50,22 @@ type
     property Active: Boolean read FActive write FActive;
   end;
 
+  /// <summary>A code and a name, for the LIKE scenarios.</summary>
+  TTagged = class
+  private
+    FCode: string;
+    FName: string;
+  public
+    constructor Create(const ACode, AName: string);
+    property Code: string read FCode write FCode;
+    property Name: string read FName write FName;
+  end;
+
   TFastPathWorld = class
   public
     People: TObjectList<TPerson>;
     Users: TObjectList<TActiveUser>;
+    Items: TObjectList<TTagged>;
     Names: TArray<string>;
     Count: Integer;
     SecondCount: Integer;
@@ -85,6 +97,13 @@ end;
 
 { TRow2 }
 
+constructor TTagged.Create(const ACode, AName: string);
+begin
+  inherited Create;
+  FCode := ACode;
+  FName := AName;
+end;
+
 constructor TActiveUser.Create(const AName: string; const AActive: Boolean);
 begin
   inherited Create;
@@ -115,6 +134,7 @@ end;
 
 destructor TFastPathWorld.Destroy;
 begin
+  Items.Free;
   Users.Free;
   People.Free;
   inherited;
@@ -529,6 +549,73 @@ Feature SQLCute in-memory fast path @inmemory @fastpath
       procedure(W: TFastPathWorld)
       begin
         Expect(string.Join(',', W.Names)).ToEqual('Ann,Cara');
+      end)
+
+.Rule('LIKE keeps the wildcards of the value unless they are escaped')
+
+  .Scenario('Without an escape character the wildcards of the value stay active')
+    .Given('a list with the codes A_1 and AB1',
+      procedure(W: TFastPathWorld)
+      begin
+        W.Items := TObjectList<TTagged>.Create(True);
+        W.Items.Add(TTagged.Create('A_1', ''));
+        W.Items.Add(TTagged.Create('AB1', ''));
+      end)
+    .When('From(''items'').WhereStarts(''code'', ''A_'') runs in memory',
+      procedure(W: TFastPathWorld)
+      begin
+        W.Names := nil;
+        for var T in TInMemory.Elements<TTagged>(TQuery.New.From('items').WhereStarts('code', 'A_'), W.Items) do
+          W.Names := W.Names + [T.Code];
+      end)
+    .&Then('it selects both',
+      procedure(W: TFastPathWorld)
+      begin
+        Expect(string.Join(',', W.Names)).ToEqual('A_1,AB1');
+      end)
+
+  .Scenario('In memory the escaped character is literal')
+    .Given('a list with the codes A_1 and AB1',
+      procedure(W: TFastPathWorld)
+      begin
+        W.Items := TObjectList<TTagged>.Create(True);
+        W.Items.Add(TTagged.Create('A_1', ''));
+        W.Items.Add(TTagged.Create('AB1', ''));
+      end)
+    .When('From(''items'').WhereStarts(''code'', ''A!_'', False, ''!'') runs in memory',
+      procedure(W: TFastPathWorld)
+      begin
+        W.Names := nil;
+        for var T in TInMemory.Elements<TTagged>(TQuery.New.From('items').WhereStarts('code', 'A!_', False, '!'), W.Items) do
+          W.Names := W.Names + [T.Code];
+      end)
+    .&Then('it selects only A_1',
+      procedure(W: TFastPathWorld)
+      begin
+        Expect(string.Join(',', W.Names)).ToEqual('A_1');
+      end)
+
+.Rule('The case-insensitive comparison folds the case of all Unicode')
+
+  .Scenario('In memory a non-ASCII uppercase letter matches its lowercase')
+    .Given('a list with the names Ñandú and Nata',
+      procedure(W: TFastPathWorld)
+      begin
+        W.Items := TObjectList<TTagged>.Create(True);
+        W.Items.Add(TTagged.Create('', 'Ñandú'));
+        W.Items.Add(TTagged.Create('', 'Nata'));
+      end)
+    .When('From(''animals'').WhereStarts(''name'', ''ñan'') runs in memory',
+      procedure(W: TFastPathWorld)
+      begin
+        W.Names := nil;
+        for var T in TInMemory.Elements<TTagged>(TQuery.New.From('animals').WhereStarts('name', 'ñan'), W.Items) do
+          W.Names := W.Names + [T.Name];
+      end)
+    .&Then('it selects only Ñandú',
+      procedure(W: TFastPathWorld)
+      begin
+        Expect(string.Join(',', W.Names)).ToEqual('Ñandú');
       end);
 
 end.

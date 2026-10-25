@@ -74,6 +74,8 @@ The LIKE family is case-insensitive by default, matching SQLCute. Pass `True` fo
 Prop('Name').Like('%son%', True)
 ```
 
+`StartsWith`, `EndsWith` and `Contains` leave the wildcards `%` and `_` of the value active, as SQLCute does: `Prop('Code').Contains('50%')` matches any code that contains `50`. A specification has no escape character, so it cannot search for a literal `%` or `_`.
+
 ---
 
 ## Values

@@ -52,6 +52,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
   - Orden de NULL por columna — `OrderBy` / `OrderByDesc` con `TNullsOrder`, y `NullsFirst` / `NullsLast`
   - Un alias escrito en el nombre de una columna —`Select('users.name as n')`— se separa y se entrecomilla, también en memoria
   - `OrHaving` — una condición HAVING unida a la anterior con OR
+  - `EscapeChar` en la familia LIKE — hace literal el `%` o el `_` que precede, con `ESCAPE '<c>'` en el SQL
 - **Commons**: Utilidades nuevas
   - `TNullable<T>` en `Daf.Nullable`
   - `TDeferredEnumerable<T>` y `TGeneratorEnumerator<T>` en `Daf.Enumerable`
@@ -190,6 +191,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - **SQLCute**: `WhereIn` con un conjunto de valores **vacío** emitía `col IN ()`, inválido en casi cualquier motor; ahora no casa ninguna fila y `WhereNotIn` las casa todas. Afecta también a `OrWhereIn` / `OrWhereNotIn`
 - **SQLCute**: Una instancia de compilador se puede reutilizar y compartir entre hilos: a través de `IQueryCompiler`, los compiladores de Postgres, SQL Server y Oracle numeraban desde donde había acabado la compilación anterior, y dos compilaciones a la vez mezclaban sus enlaces. Los `?` de `FromRaw`, `WithRaw` y las demás formas en bruto se numeran con los demás; `\?` escribe uno literal
 - **SQLCute**: Un dialecto que entrecomilla entrecomilla por separado cada parte de un nombre cualificado —`"public"."users"`, `[users].[id]`— en vez del nombre entero con su punto, deja sin comillas un `*` final y duplica dentro de un nombre su carácter de cierre. Oracle escribe sus alias sin `AS`, que rechaza delante del alias de una tabla
+- **SQLCute**: Un LIKE insensible a mayúsculas solo pasaba a minúsculas las letras ASCII del patrón, así que `WhereStarts('nombre', 'ÑAN')` enlazaba `'Ñan%'` y no casaba con ningún `Ñandú`; ahora el patrón se pliega en todo Unicode
 - **Commons**: `TVersionInfo.Tag` estaba **siempre vacío**, y `GetFrom` sobre una clase sin atributo devolvía lo que hubiera en la memoria del destino
 - **Configuration**: El enlace ya no escribe un miembro cuya clave no menciona ninguna fuente: un defecto puesto en el constructor sobrevive al enlace, y un segundo enlace no borra lo que trajo el primero. Una clave presente con valor vacío se sigue escribiendo
 - **Configuration**: Una clave encadenada cuyo valor **es** la cadena vacía ya no desaparece al atravesar la cadena: `TChainedConfigurationProvider` pregunta la presencia en vez de deducirla del valor

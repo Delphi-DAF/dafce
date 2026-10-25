@@ -68,6 +68,8 @@ Three fields decide how a node is read, and they appear across the tree:
 - **`Connector: TBoolOp`** (`TWhereClause`, `THavingClause`, `TNestedWhereClause`, `TDateWhereClause`) — how this condition joins the *previous* sibling. ⚠️ `TWhereInClause.Connector` is a `string`, `'AND'` or `'OR'`.
 - **`SubQuery`** — a nested query, typed `IInterface` (see below).
 
+A LIKE condition is a `TWhereClause` whose `Op` is `Like` or `NotLike`. With `CaseSensitive = False` its `Value` holds the pattern already lower-cased, and `EscapeChar` is `#0` when the call declared no escape character.
+
 `TJoinClause` carries three ways to express its ON condition, with a precedence: `ConditionClauses` (from a callback) wins, then `Col1`/`Op`/`Col2`, then the raw `Condition` string.
 
 ### Sub-queries are typed `IInterface`

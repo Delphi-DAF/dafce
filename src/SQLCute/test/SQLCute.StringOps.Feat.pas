@@ -175,6 +175,29 @@ TQuery — String / LIKE operations @unit @sqlcute @f3
     .&Then('SQL is "SELECT * FROM t WHERE active = true OR LOWER(name) LIKE ?"')
     .&Then('bindings in order are "super%"')
 
+// -------------------------------------------------------------------------
+
+.Rule('An optional escape character makes literal what it escapes')
+
+  .Scenario('The escape character is emitted')
+    .Given('a WhereContains query with "!" as escape character')
+    .When('I compile with ANSI')
+    .&Then('SQL is "SELECT * FROM t WHERE LOWER(code) LIKE ? ESCAPE ''!''"')
+    .&Then('bindings in order are "%50!%%"')
+
+  .Scenario('A quote is not valid as an escape character')
+    .When('a WhereLike is built with a quote as escape character')
+    .&Then('the call raises EArgumentException')
+
+// -------------------------------------------------------------------------
+
+.Rule('The case-insensitive comparison folds the case of all Unicode')
+
+  .Scenario('The binding carries the lowercase of a non-ASCII letter')
+    .Given('a WhereLike query with a non-ASCII pattern')
+    .When('I compile with ANSI')
+    .&Then('bindings in order are "ñandú%"')
+
 ;
 
 end.

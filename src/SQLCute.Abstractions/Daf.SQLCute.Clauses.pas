@@ -148,6 +148,8 @@ type
     /// When True, Value is a Boolean and the condition compares the column with
     /// the dialect's literal for it, with no binding.
     IsBoolLiteral: Boolean;
+    /// For LIKE / NOT LIKE: the escape character, or #0 for none.
+    EscapeChar: Char;
     function Clone: TAbstractClause; override;
   end;
 
@@ -468,6 +470,7 @@ begin
   C.IsColumnValue := IsColumnValue;
   C.CaseSensitive := CaseSensitive;
   C.IsBoolLiteral := IsBoolLiteral;
+  C.EscapeChar    := EscapeChar;
   Result := C;
 end;
 

@@ -53,6 +53,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
   - Per-column NULL ordering — `OrderBy` / `OrderByDesc` with `TNullsOrder`, and `NullsFirst` / `NullsLast`
   - An alias written in a column name —`Select('users.name as n')`— is split off and quoted, also in memory
   - `OrHaving` — a HAVING condition joined to the previous one with OR
+  - `EscapeChar` in the LIKE family — makes literal the `%` or `_` it precedes, with `ESCAPE '<c>'` in the SQL
 - **Commons**: New utilities
   - `TNullable<T>` in `Daf.Nullable`
   - `TDeferredEnumerable<T>` and `TGeneratorEnumerator<T>` in `Daf.Enumerable`
@@ -191,6 +192,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - **SQLCute**: `WhereIn` with an **empty** set of values emitted `col IN ()`, invalid on almost any engine; it now matches no row and `WhereNotIn` matches them all. It also affects `OrWhereIn` / `OrWhereNotIn`
 - **SQLCute**: A compiler instance can be reused and shared between threads: through `IQueryCompiler`, the Postgres, SQL Server and Oracle compilers started numbering where the previous compilation had ended, and two compilations at once mixed their bindings. The `?` of `FromRaw`, `WithRaw` and the other raw forms are numbered with the rest; `\?` writes a literal one
 - **SQLCute**: A quoting dialect quotes each part of a qualified name on its own —`"public"."users"`, `[users].[id]`— instead of the whole name with its dot, leaves a trailing `*` bare, and doubles its closing character inside a name. Oracle writes its aliases without `AS`, which it rejects before a table alias
+- **SQLCute**: A case-insensitive LIKE lower-cased only the ASCII letters of the pattern, so `WhereStarts('name', 'ÑAN')` bound `'Ñan%'` and matched no `Ñandú`; the pattern now folds across Unicode
 - **Commons**: `TVersionInfo.Tag` was **always empty**, and `GetFrom` on a class with no attribute returned whatever was in the target's memory
 - **Configuration**: Binding no longer writes a member whose key no source mentions: a default set in the constructor survives the bind, and a second bind does not erase what the first one brought. A key present with an empty value is still written
 - **Configuration**: A chained key whose value **is** the empty string no longer disappears on its way through the chain: `TChainedConfigurationProvider` asks for presence instead of inferring it from the value

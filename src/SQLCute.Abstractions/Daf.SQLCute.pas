@@ -144,42 +144,62 @@ type
 
     // --- WHERE (string / LIKE operations) --------------------------------
 
+    // The LIKE family. The wildcards of the value stay active. EscapeChar, when
+    // given, makes literal the character that follows it in the pattern, and the
+    // SQL adds ESCAPE '<c>'; a single quote or a '?' raise EArgumentException.
+
     /// <summary>Adds WHERE col LIKE pattern. If CaseSensitive=False (default),
     /// emits LOWER(col) LIKE lower(pattern).</summary>
-    function WhereLike(const Column, Pattern: string; CaseSensitive: Boolean = False): IQuery;
+    function WhereLike(const Column, Pattern: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
     /// <summary>Adds WHERE col NOT LIKE pattern.</summary>
-    function WhereNotLike(const Column, Pattern: string; CaseSensitive: Boolean = False): IQuery;
+    function WhereNotLike(const Column, Pattern: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
     /// <summary>Adds OR WHERE col LIKE pattern.</summary>
-    function OrWhereLike(const Column, Pattern: string; CaseSensitive: Boolean = False): IQuery;
+    function OrWhereLike(const Column, Pattern: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
     /// <summary>Adds OR WHERE col NOT LIKE pattern.</summary>
-    function OrWhereNotLike(const Column, Pattern: string; CaseSensitive: Boolean = False): IQuery;
+    function OrWhereNotLike(const Column, Pattern: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
 
     /// <summary>Adds WHERE col LIKE 'pattern%' (starts with).</summary>
-    function WhereStarts(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
+    function WhereStarts(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
     /// <summary>Adds WHERE col NOT LIKE 'pattern%'.</summary>
-    function WhereNotStarts(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
+    function WhereNotStarts(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
     /// <summary>Adds OR WHERE col LIKE 'pattern%'.</summary>
-    function OrWhereStarts(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
+    function OrWhereStarts(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
     /// <summary>Adds OR WHERE col NOT LIKE 'pattern%'.</summary>
-    function OrWhereNotStarts(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
+    function OrWhereNotStarts(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
 
     /// <summary>Adds WHERE col LIKE '%pattern' (ends with).</summary>
-    function WhereEnds(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
+    function WhereEnds(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
     /// <summary>Adds WHERE col NOT LIKE '%pattern'.</summary>
-    function WhereNotEnds(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
+    function WhereNotEnds(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
     /// <summary>Adds OR WHERE col LIKE '%pattern'.</summary>
-    function OrWhereEnds(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
+    function OrWhereEnds(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
     /// <summary>Adds OR WHERE col NOT LIKE '%pattern'.</summary>
-    function OrWhereNotEnds(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
+    function OrWhereNotEnds(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
 
     /// <summary>Adds WHERE col LIKE '%pattern%' (contains).</summary>
-    function WhereContains(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
+    function WhereContains(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
     /// <summary>Adds WHERE col NOT LIKE '%pattern%'.</summary>
-    function WhereNotContains(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
+    function WhereNotContains(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
     /// <summary>Adds OR WHERE col LIKE '%pattern%'.</summary>
-    function OrWhereContains(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
+    function OrWhereContains(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
     /// <summary>Adds OR WHERE col NOT LIKE '%pattern%'.</summary>
-    function OrWhereNotContains(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
+    function OrWhereNotContains(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
 
     // --- WHERE (date / time operations) ---------------------------------
 

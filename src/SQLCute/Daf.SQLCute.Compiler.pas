@@ -486,6 +486,8 @@ begin
           Result := WrapColumn(W.Column) + ' ' + OperatorSymbol(W.Op) + ' ?'
         else
           Result := 'LOWER(' + WrapColumn(W.Column) + ') ' + OperatorSymbol(W.Op) + ' ?';
+        if W.EscapeChar <> #0 then
+          Result := Result + ' ESCAPE ''' + W.EscapeChar + '''';
       end;
     else
       begin

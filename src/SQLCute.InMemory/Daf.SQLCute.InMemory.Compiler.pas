@@ -281,32 +281,69 @@ begin
     Result := -Result;
 end;
 
-function SqlLikeMatch(const S, P: string): Boolean;
+type
+  TLikeTokenKind = (Literal, One, Run);
+  TLikeToken = record
+    Kind: TLikeTokenKind;
+    C: Char;
+  end;
+
+// The pattern as tokens: '%' any run, '_' one character, anything else itself. With an escape
+// character, the character that follows it is itself whatever it is.
+function LikeTokens(const P: string; const Escape: Char): TArray<TLikeToken>;
 var
-  Si, Pi, Star, Mark: Integer;
+  I: Integer;
+  T: TLikeToken;
 begin
-  // Classic backtracking wildcard matcher: '%' = any run, '_' = one char.
-  Si := 1; Pi := 1; Star := 0; Mark := 0;
+  Result := nil;
+  I := 1;
+  while I <= Length(P) do
+  begin
+    T.C := P[I];
+    if (Escape <> #0) and (P[I] = Escape) and (I < Length(P)) then
+    begin
+      T.Kind := TLikeTokenKind.Literal;
+      T.C := P[I + 1];
+      Inc(I);
+    end
+    else if P[I] = '%' then
+      T.Kind := TLikeTokenKind.Run
+    else if P[I] = '_' then
+      T.Kind := TLikeTokenKind.One
+    else
+      T.Kind := TLikeTokenKind.Literal;
+    Result := Result + [T];
+    Inc(I);
+  end;
+end;
+
+function SqlLikeMatch(const S, P: string; const Escape: Char = #0): Boolean;
+var
+  Si, Ti, Star, Mark: Integer;
+begin
+  // Classic backtracking wildcard matcher over the tokens of the pattern.
+  var T := LikeTokens(P, Escape);
+  Si := 1; Ti := 0; Star := -1; Mark := 0;
   while Si <= Length(S) do
   begin
-    if (Pi <= Length(P)) and ((P[Pi] = '_') or (P[Pi] = S[Si])) then
+    if (Ti <= High(T)) and ((T[Ti].Kind = TLikeTokenKind.One) or ((T[Ti].Kind = TLikeTokenKind.Literal) and (T[Ti].C = S[Si]))) then
     begin
-      Inc(Si); Inc(Pi);
+      Inc(Si); Inc(Ti);
     end
-    else if (Pi <= Length(P)) and (P[Pi] = '%') then
+    else if (Ti <= High(T)) and (T[Ti].Kind = TLikeTokenKind.Run) then
     begin
-      Star := Pi; Mark := Si; Inc(Pi);
+      Star := Ti; Mark := Si; Inc(Ti);
     end
-    else if Star <> 0 then
+    else if Star >= 0 then
     begin
-      Pi := Star + 1; Inc(Mark); Si := Mark;
+      Ti := Star + 1; Inc(Mark); Si := Mark;
     end
     else
       Exit(False);
   end;
-  while (Pi <= Length(P)) and (P[Pi] = '%') do
-    Inc(Pi);
-  Result := Pi > Length(P);
+  while (Ti <= High(T)) and (T[Ti].Kind = TLikeTokenKind.Run) do
+    Inc(Ti);
+  Result := Ti > High(T);
 end;
 
 { ---- Leaf comparison ---- }
@@ -393,6 +430,7 @@ begin
   // The builder already lower-cased the pattern when CaseSensitive = False.
   var Pattern := VarToStr(W.Value);
   var CaseSensitive := W.CaseSensitive;
+  var Escape := W.EscapeChar;
   var Negate := (W.Op = TWhereOp.NotLike);
   Result :=
     function(const Get: TColumnGetter): TTriState
@@ -402,8 +440,8 @@ begin
         Exit(TTriState.Unknown);
       var S := VarToStr(V.AsVariant);
       if not CaseSensitive then
-        S := LowerCase(S);
-      var M := SqlLikeMatch(S, Pattern);
+        S := S.ToLowerInvariant;
+      var M := SqlLikeMatch(S, Pattern, Escape);
       if Negate then
         Result := BoolToTri(not M)
       else

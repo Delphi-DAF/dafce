@@ -58,7 +58,7 @@ type
       Negated: Boolean; Conn: TBoolOp): IQuery;
     procedure SelectAggregateRaw(const AggFunc, Column, Alias: string);
     function AddWhereLikeClause(const Column, Pattern: string;
-      Op: TWhereOp; Conn: TBoolOp; CaseSensitive: Boolean): IQuery;
+      Op: TWhereOp; Conn: TBoolOp; CaseSensitive: Boolean; const EscapeChar: Char): IQuery;
     function AddDateWhereClause(Part: TDatePart; const Column, Op: string;
       const Value: Variant; Conn: TBoolOp): IQuery;
     function AddOrderByClause(const Column: string; Dir: TSortDir;
@@ -183,22 +183,38 @@ type
       const TrueCallback: TQueryBuilderCallback;
       const FalseCallback: TQueryBuilderCallback): IQuery; overload;
     // IQuery — string / LIKE operations
-    function WhereLike(const Column, Pattern: string; CaseSensitive: Boolean = False): IQuery;
-    function WhereNotLike(const Column, Pattern: string; CaseSensitive: Boolean = False): IQuery;
-    function OrWhereLike(const Column, Pattern: string; CaseSensitive: Boolean = False): IQuery;
-    function OrWhereNotLike(const Column, Pattern: string; CaseSensitive: Boolean = False): IQuery;
-    function WhereStarts(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
-    function WhereNotStarts(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
-    function OrWhereStarts(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
-    function OrWhereNotStarts(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
-    function WhereEnds(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
-    function WhereNotEnds(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
-    function OrWhereEnds(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
-    function OrWhereNotEnds(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
-    function WhereContains(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
-    function WhereNotContains(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
-    function OrWhereContains(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
-    function OrWhereNotContains(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
+    function WhereLike(const Column, Pattern: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
+    function WhereNotLike(const Column, Pattern: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
+    function OrWhereLike(const Column, Pattern: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
+    function OrWhereNotLike(const Column, Pattern: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
+    function WhereStarts(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
+    function WhereNotStarts(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
+    function OrWhereStarts(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
+    function OrWhereNotStarts(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
+    function WhereEnds(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
+    function WhereNotEnds(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
+    function OrWhereEnds(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
+    function OrWhereNotEnds(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
+    function WhereContains(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
+    function WhereNotContains(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
+    function OrWhereContains(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
+    function OrWhereNotContains(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
     // IQuery — date / time operations
     function WhereDate(const Column: string; const Value: Variant): IQuery;
     function OrWhereDate(const Column: string; const Value: Variant): IQuery;
@@ -1502,103 +1518,125 @@ end;
 // --- string / LIKE operations ---
 
 function TQueryImpl.AddWhereLikeClause(const Column, Pattern: string;
-  Op: TWhereOp; Conn: TBoolOp; CaseSensitive: Boolean): IQuery;
+  Op: TWhereOp; Conn: TBoolOp; CaseSensitive: Boolean;
+  const EscapeChar: Char): IQuery;
 var
   W: TWhereClause;
   ActualPattern: string;
 begin
+  // The escape character goes into the SQL text: a quote would close the literal, and a '?' would
+  // be numbered as a placeholder.
+  if CharInSet(EscapeChar, ['''', '?']) then
+    raise EArgumentException.CreateFmt('"%s" cannot be the escape character of a LIKE', [EscapeChar]);
   if CaseSensitive then
     ActualPattern := Pattern
   else
-    ActualPattern := LowerCase(Pattern);
+    ActualPattern := Pattern.ToLowerInvariant;
   W := TWhereClause.Create;
   W.Column        := Column;
   W.Op            := Op;
   W.Value         := ActualPattern;
   W.Connector     := Conn;
   W.CaseSensitive := CaseSensitive;
+  W.EscapeChar    := EscapeChar;
   FClauses.Add(W);
   Result := Self;
 end;
 
-function TQueryImpl.WhereLike(const Column, Pattern: string; CaseSensitive: Boolean): IQuery;
+function TQueryImpl.WhereLike(const Column, Pattern: string; CaseSensitive: Boolean;
+  const EscapeChar: Char): IQuery;
 begin
-  Result := AddWhereLikeClause(Column, Pattern, TWhereOp.Like, TBoolOp.opAnd, CaseSensitive);
+  Result := AddWhereLikeClause(Column, Pattern, TWhereOp.Like, TBoolOp.opAnd, CaseSensitive, EscapeChar);
 end;
 
-function TQueryImpl.WhereNotLike(const Column, Pattern: string; CaseSensitive: Boolean): IQuery;
+function TQueryImpl.WhereNotLike(const Column, Pattern: string; CaseSensitive: Boolean;
+  const EscapeChar: Char): IQuery;
 begin
-  Result := AddWhereLikeClause(Column, Pattern, TWhereOp.NotLike, TBoolOp.opAnd, CaseSensitive);
+  Result := AddWhereLikeClause(Column, Pattern, TWhereOp.NotLike, TBoolOp.opAnd, CaseSensitive, EscapeChar);
 end;
 
-function TQueryImpl.OrWhereLike(const Column, Pattern: string; CaseSensitive: Boolean): IQuery;
+function TQueryImpl.OrWhereLike(const Column, Pattern: string; CaseSensitive: Boolean;
+  const EscapeChar: Char): IQuery;
 begin
-  Result := AddWhereLikeClause(Column, Pattern, TWhereOp.Like, TBoolOp.opOr, CaseSensitive);
+  Result := AddWhereLikeClause(Column, Pattern, TWhereOp.Like, TBoolOp.opOr, CaseSensitive, EscapeChar);
 end;
 
-function TQueryImpl.OrWhereNotLike(const Column, Pattern: string; CaseSensitive: Boolean): IQuery;
+function TQueryImpl.OrWhereNotLike(const Column, Pattern: string; CaseSensitive: Boolean;
+  const EscapeChar: Char): IQuery;
 begin
-  Result := AddWhereLikeClause(Column, Pattern, TWhereOp.NotLike, TBoolOp.opOr, CaseSensitive);
+  Result := AddWhereLikeClause(Column, Pattern, TWhereOp.NotLike, TBoolOp.opOr, CaseSensitive, EscapeChar);
 end;
 
-function TQueryImpl.WhereStarts(const Column, Value: string; CaseSensitive: Boolean): IQuery;
+function TQueryImpl.WhereStarts(const Column, Value: string; CaseSensitive: Boolean;
+  const EscapeChar: Char): IQuery;
 begin
-  Result := WhereLike(Column, Value + '%', CaseSensitive);
+  Result := WhereLike(Column, Value + '%', CaseSensitive, EscapeChar);
 end;
 
-function TQueryImpl.WhereNotStarts(const Column, Value: string; CaseSensitive: Boolean): IQuery;
+function TQueryImpl.WhereNotStarts(const Column, Value: string; CaseSensitive: Boolean;
+  const EscapeChar: Char): IQuery;
 begin
-  Result := WhereNotLike(Column, Value + '%', CaseSensitive);
+  Result := WhereNotLike(Column, Value + '%', CaseSensitive, EscapeChar);
 end;
 
-function TQueryImpl.OrWhereStarts(const Column, Value: string; CaseSensitive: Boolean): IQuery;
+function TQueryImpl.OrWhereStarts(const Column, Value: string; CaseSensitive: Boolean;
+  const EscapeChar: Char): IQuery;
 begin
-  Result := OrWhereLike(Column, Value + '%', CaseSensitive);
+  Result := OrWhereLike(Column, Value + '%', CaseSensitive, EscapeChar);
 end;
 
-function TQueryImpl.OrWhereNotStarts(const Column, Value: string; CaseSensitive: Boolean): IQuery;
+function TQueryImpl.OrWhereNotStarts(const Column, Value: string; CaseSensitive: Boolean;
+  const EscapeChar: Char): IQuery;
 begin
-  Result := OrWhereNotLike(Column, Value + '%', CaseSensitive);
+  Result := OrWhereNotLike(Column, Value + '%', CaseSensitive, EscapeChar);
 end;
 
-function TQueryImpl.WhereEnds(const Column, Value: string; CaseSensitive: Boolean): IQuery;
+function TQueryImpl.WhereEnds(const Column, Value: string; CaseSensitive: Boolean;
+  const EscapeChar: Char): IQuery;
 begin
-  Result := WhereLike(Column, '%' + Value, CaseSensitive);
+  Result := WhereLike(Column, '%' + Value, CaseSensitive, EscapeChar);
 end;
 
-function TQueryImpl.WhereNotEnds(const Column, Value: string; CaseSensitive: Boolean): IQuery;
+function TQueryImpl.WhereNotEnds(const Column, Value: string; CaseSensitive: Boolean;
+  const EscapeChar: Char): IQuery;
 begin
-  Result := WhereNotLike(Column, '%' + Value, CaseSensitive);
+  Result := WhereNotLike(Column, '%' + Value, CaseSensitive, EscapeChar);
 end;
 
-function TQueryImpl.OrWhereEnds(const Column, Value: string; CaseSensitive: Boolean): IQuery;
+function TQueryImpl.OrWhereEnds(const Column, Value: string; CaseSensitive: Boolean;
+  const EscapeChar: Char): IQuery;
 begin
-  Result := OrWhereLike(Column, '%' + Value, CaseSensitive);
+  Result := OrWhereLike(Column, '%' + Value, CaseSensitive, EscapeChar);
 end;
 
-function TQueryImpl.OrWhereNotEnds(const Column, Value: string; CaseSensitive: Boolean): IQuery;
+function TQueryImpl.OrWhereNotEnds(const Column, Value: string; CaseSensitive: Boolean;
+  const EscapeChar: Char): IQuery;
 begin
-  Result := OrWhereNotLike(Column, '%' + Value, CaseSensitive);
+  Result := OrWhereNotLike(Column, '%' + Value, CaseSensitive, EscapeChar);
 end;
 
-function TQueryImpl.WhereContains(const Column, Value: string; CaseSensitive: Boolean): IQuery;
+function TQueryImpl.WhereContains(const Column, Value: string; CaseSensitive: Boolean;
+  const EscapeChar: Char): IQuery;
 begin
-  Result := WhereLike(Column, '%' + Value + '%', CaseSensitive);
+  Result := WhereLike(Column, '%' + Value + '%', CaseSensitive, EscapeChar);
 end;
 
-function TQueryImpl.WhereNotContains(const Column, Value: string; CaseSensitive: Boolean): IQuery;
+function TQueryImpl.WhereNotContains(const Column, Value: string; CaseSensitive: Boolean;
+  const EscapeChar: Char): IQuery;
 begin
-  Result := WhereNotLike(Column, '%' + Value + '%', CaseSensitive);
+  Result := WhereNotLike(Column, '%' + Value + '%', CaseSensitive, EscapeChar);
 end;
 
-function TQueryImpl.OrWhereContains(const Column, Value: string; CaseSensitive: Boolean): IQuery;
+function TQueryImpl.OrWhereContains(const Column, Value: string; CaseSensitive: Boolean;
+  const EscapeChar: Char): IQuery;
 begin
-  Result := OrWhereLike(Column, '%' + Value + '%', CaseSensitive);
+  Result := OrWhereLike(Column, '%' + Value + '%', CaseSensitive, EscapeChar);
 end;
 
-function TQueryImpl.OrWhereNotContains(const Column, Value: string; CaseSensitive: Boolean): IQuery;
+function TQueryImpl.OrWhereNotContains(const Column, Value: string; CaseSensitive: Boolean;
+  const EscapeChar: Char): IQuery;
 begin
-  Result := OrWhereNotLike(Column, '%' + Value + '%', CaseSensitive);
+  Result := OrWhereNotLike(Column, '%' + Value + '%', CaseSensitive, EscapeChar);
 end;
 
 // --- date / time operations ---

@@ -68,6 +68,8 @@ Tres campos deciden cómo se lee un nodo, y aparecen repartidos por el árbol:
 - **`Connector: TBoolOp`** (`TWhereClause`, `THavingClause`, `TNestedWhereClause`, `TDateWhereClause`) — cómo enlaza esta condición con la *anterior*. ⚠️ `TWhereInClause.Connector` es un `string`, `'AND'` o `'OR'`.
 - **`SubQuery`** — una consulta anidada, de tipo `IInterface` (ver más abajo).
 
+Una condición LIKE es un `TWhereClause` cuyo `Op` es `Like` o `NotLike`. Con `CaseSensitive = False` su `Value` lleva el patrón ya en minúsculas, y `EscapeChar` vale `#0` cuando la llamada no declaró carácter de escape.
+
 `TJoinClause` lleva tres formas de expresar su condición ON, con una precedencia: manda `ConditionClauses` (venida de un callback), luego `Col1`/`Op`/`Col2`, y por último la cadena `Condition`.
 
 ### Las subconsultas son de tipo `IInterface`

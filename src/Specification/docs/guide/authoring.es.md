@@ -74,6 +74,8 @@ La familia LIKE es insensible a mayúsculas por defecto, igual que SQLCute. Pasa
 Prop('Name').Like('%son%', True)
 ```
 
+`StartsWith`, `EndsWith` y `Contains` dejan activos los comodines `%` y `_` del valor, igual que SQLCute: `Prop('Code').Contains('50%')` casa con cualquier código que contenga `50`. Una especificación no tiene carácter de escape, así que no puede buscar un `%` o un `_` literal.
+
 ---
 
 ## Valores

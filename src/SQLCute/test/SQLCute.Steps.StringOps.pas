@@ -73,6 +73,18 @@ type
     [Given('an OrWhereNotContains query')]
     procedure GivenOrWhereNotContains(W: TSQLCuteWorld);
 
+    [Given('a WhereContains query with "!" as escape character')]
+    procedure GivenWhereContainsEscaped(W: TSQLCuteWorld);
+
+    [When('a WhereLike is built with a quote as escape character')]
+    procedure WhenWhereLikeQuoteEscape(W: TSQLCuteWorld);
+
+    [ThenAttribute('the call raises (\w+)')]
+    procedure ThenTheCallRaises(W: TSQLCuteWorld; ExpectedClass: string);
+
+    [Given('a WhereLike query with a non-ASCII pattern')]
+    procedure GivenWhereLikeNonAscii(W: TSQLCuteWorld);
+
   end;
 
 // -----------------------------------------------------------------------
@@ -167,6 +179,31 @@ end;
 procedure TSQLCuteStepsStringOps.GivenOrWhereNotContains(W: TSQLCuteWorld);
 begin
   W.Query := TQuery.New.From('t').Where('active', True).OrWhereNotContains('title', 'SPAM');
+end;
+
+procedure TSQLCuteStepsStringOps.GivenWhereContainsEscaped(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('t').WhereContains('code', '50!%', False, '!');
+end;
+
+procedure TSQLCuteStepsStringOps.WhenWhereLikeQuoteEscape(W: TSQLCuteWorld);
+begin
+  W.Outcome := 'no exception';
+  try
+    W.Query.From('t').WhereLike('code', 'a%', False, '''');
+  except
+    on E: Exception do W.Outcome := E.ClassName;
+  end;
+end;
+
+procedure TSQLCuteStepsStringOps.ThenTheCallRaises(W: TSQLCuteWorld; ExpectedClass: string);
+begin
+  Expect(W.Outcome).ToEqual(ExpectedClass);
+end;
+
+procedure TSQLCuteStepsStringOps.GivenWhereLikeNonAscii(W: TSQLCuteWorld);
+begin
+  W.Query := TQuery.New.From('t').WhereLike('name', 'ÑANDÚ%');
 end;
 
 

@@ -8,7 +8,9 @@
 
 ## Overview
 
-All string-match methods wrap the value in `LIKE` patterns. By default (`CaseSensitive = False`) SQLCute wraps the column in `LOWER(…)` and lower-cases the pattern, which travels as a binding. Pass `True` as the last argument to emit a plain `LIKE` with the pattern as you wrote it.
+All string-match methods wrap the value in `LIKE` patterns. By default (`CaseSensitive = False`) SQLCute wraps the column in `LOWER(…)` and lower-cases the pattern, which travels as a binding. Pass `True` as `CaseSensitive`, the argument after the value, to emit a plain `LIKE` with the pattern as you wrote it.
+
+The wildcards `%` and `_` inside the value stay active in every method: `WhereContains('code', '50%')` matches any code that contains `50`. To match them literally, declare an [escape character](#escape-character).
 
 ---
 
@@ -63,6 +65,21 @@ Variants: `WhereNotContains`, `OrWhereContains`, `OrWhereNotContains`.
 
 ---
 
+## Escape Character
+
+Every method of the family takes an optional escape character after `CaseSensitive`. The character that follows it in the value is literal, and the SQL adds `ESCAPE '<c>'`:
+
+```pascal
+.WhereContains('code', '50!%', False, '!')
+// → WHERE LOWER(code) LIKE ? ESCAPE '!'   binding: '%50!%%'
+```
+
+SQLCute escapes nothing on its own: the wildcards it adds around the value stay wildcards, and only what the escape character precedes is literal. A single quote or a `?` as escape character raise `EArgumentException`.
+
+With `CaseSensitive = False` the pattern is lower-cased and the escape character is not, so pick one with no case, such as `!`. The in-memory back-end reads the escape character the same way.
+
+---
+
 ## Combining String Filters
 
 ```pascal
@@ -84,14 +101,16 @@ Chaining the two `OR` terms without that group means something else: a flat list
 
 ## Dialect Notes on Case Sensitivity
 
-> The `LOWER`-wrapping approach works reliably across all SQL dialects, but each database has its own native LIKE behavior:
+The pattern is lower-cased across all of Unicode, so `WhereLike('name', 'ÑANDÚ%')` binds `'ñandú%'`. The column is lower-cased by the engine's `LOWER`, and SQLite's folds only ASCII letters: on SQLite, `WhereStarts('name', 'ñan')` does not match a stored `Ñandú`. The in-memory back-end folds both sides across Unicode.
+
+Each database also has its own native LIKE behavior:
 
 | Dialect | LIKE case-sensitive? | Notes |
 |---------|---------------------|-------|
 | ANSI / ANSI SQL | Yes | Standard behavior |
 | PostgreSQL | Yes | Use `ILIKE` natively; SQLCute uses `LOWER(…)` instead |
 | MySQL | No (by default) | `LOWER` wrapping is harmless |
-| SQLite | No for ASCII | Unicode chars are case-sensitive unless ICU extension enabled |
+| SQLite | No for ASCII | Non-ASCII letters are case-sensitive, and its `LOWER` folds only ASCII, unless the ICU extension is loaded |
 | SQL Server | Depends on collation | `Latin1_General_CI_AS` → case-insensitive |
 | Oracle | Yes | `LOWER` wrapping recommended |
 | Firebird | Yes | `LOWER` wrapping recommended |

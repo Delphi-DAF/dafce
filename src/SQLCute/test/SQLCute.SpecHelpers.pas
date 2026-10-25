@@ -16,6 +16,8 @@ type
     Query: IQuery;
     LastResult: TSQLResult;
     Compiler: IQueryCompiler;
+    /// The class of the exception a building step raised, or empty.
+    Outcome: string;
     constructor Create;
   end;
 
