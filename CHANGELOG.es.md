@@ -214,6 +214,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - **SystemProcess**: El hijo de un lanzamiento podía heredar la tubería o el fichero de otro hecho a la vez, y retenerlos mientras vivía
 - **SystemProcess**: El plazo y la cancelación no acotaban la espera de lo capturado, así que un descendiente que heredaba la tubería retenía `Execute` mientras vivía
 - **SystemProcess**: `OnCompleted`, `OnKilled` y `OnCancelled` podían correr antes de que los manejadores de captura recibieran lo último de la salida
+- **SystemProcess**: Un manejador de captura que lanzaba dejaba su tubería sin leer: el hijo se bloqueaba escribiendo hasta que el plazo lo mataba, y `Execute` lanzaba una `EAggregateException`. Ahora la ejecución se aborta en el acto y lanza la excepción del manejador
 - **Web**: Un segmento literal de ruta se prueba antes que un parámetro en la misma posición; antes ganaba la acción declarada primero, así que `/items/search` podía caer en `/items/{Id}`
 - **Web**: Un parámetro `[FromServices]` recibe su servicio. Con el servicio registrado la petición fallaba con `EInvalidCast`, y sin él la acción recibía `nil` sin aviso; ese caso hace fallar ahora la petición nombrando el servicio
 - **Web**: Destruir un `TDafHttpServer` libera los módulos web que WebBroker guardaba para reutilizarlos; un servidor posterior en el mismo proceso recibía los que se construyeron para el anterior

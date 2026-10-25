@@ -215,6 +215,9 @@ type
     [volatile] FKillRequested: Boolean;
     // Pide a los lectores que entreguen lo que queda en su tubería y paren.
     [volatile] FStopReading: Boolean;
+    // Lo que lanzó el manejador de cada flujo; un lector que lo captura deja de leer y avisa.
+    FStdOutError, FStdErrError: Exception;
+    [volatile] FCaptureFailed: Boolean;
     FReadTasks: array of ITask;
     procedure CleanupHandles;
     function OpenStreams(var ProcessResult: TProcessResult): Boolean;
@@ -226,6 +229,9 @@ type
     procedure StartReadingPipes;
     procedure WaitForReaders;
     procedure StopReaders;
+    // Para la captura, cierra sus tuberías y lanza lo que lanzó el manejador, sin notificar el final
+    // ni matar al hijo.
+    procedure AbortCapture;
     // Con el hijo terminado o cortado, espera a que se cierren sus flujos capturados.
     procedure WaitForCapture(CancellationToken: ICancellationToken; var ProcessResult: TProcessResult);
 
@@ -635,6 +641,8 @@ begin
   ClosePipes;
   CleanupHandles;
   FreeAndNil(FConsoleEncoding);
+  FStdOutError.Free;
+  FStdErrError.Free;
   FLock.Free;
   inherited;
 end;
@@ -882,23 +890,32 @@ procedure TSystemProcess.StartReadingPipes;
 
       begin
         SetLength(Buffer, BUF_SIZE);
-        while True do
-        begin
-          if FStopReading then
+        try
+          while True do
           begin
-            // Lo que ya está en la tubería se entrega; lo que llegue después, no.
-            while PeekNamedPipe(Pipe, nil, 0, nil, @Available, nil) and (Available > 0)
-              and ReadFile(Pipe, Buffer[0], BUF_SIZE, BytesRead, nil) and (BytesRead > 0) do
-              Deliver;
-            Break;
+            if FStopReading then
+            begin
+              // Lo que ya está en la tubería se entrega; lo que llegue después, no.
+              while PeekNamedPipe(Pipe, nil, 0, nil, @Available, nil) and (Available > 0)
+                and ReadFile(Pipe, Buffer[0], BUF_SIZE, BytesRead, nil) and (BytesRead > 0) do
+                Deliver;
+              Break;
+            end;
+            if ReadFile(Pipe, Buffer[0], BUF_SIZE, BytesRead, nil) and (BytesRead > 0) then
+              Deliver
+            else if GetLastError <> ERROR_OPERATION_ABORTED then
+              Break;
           end;
-          if ReadFile(Pipe, Buffer[0], BUF_SIZE, BytesRead, nil) and (BytesRead > 0) then
-            Deliver
-          else if GetLastError <> ERROR_OPERATION_ABORTED then
-            Break;
+          if Length(Pending) > 0 then
+            DoOutput(Decode(Encoding, Pending, Length(Pending)), IsError);
+        except
+          // El manejador no vuelve a recibir nada, y la espera lo ve en su próxima vuelta.
+          if IsError then
+            FStdErrError := Exception(AcquireExceptionObject)
+          else
+            FStdOutError := Exception(AcquireExceptionObject);
+          FCaptureFailed := True;
         end;
-        if Length(Pending) > 0 then
-          DoOutput(Decode(Encoding, Pending, Length(Pending)), IsError);
       end);
   end;
 
@@ -911,6 +928,7 @@ procedure TSystemProcess.StartReadingPipes;
   end;
 begin
   FStopReading := False;
+  FCaptureFailed := False;
   if IsValidHandle(FStdOutRead) or IsValidHandle(FStdErrRead) then
   begin
     // La página de la consola en que corre el hijo: la del padre si la comparte, y la OEM si tiene una
@@ -960,10 +978,12 @@ end;
 procedure TSystemProcess.WaitForCapture(CancellationToken: ICancellationToken;
   var ProcessResult: TProcessResult);
 begin
-  if (Length(FReadTasks) = 0) or ((FTimeoutMS = INFINITE) and (CancellationToken = nil)) then
+  if Length(FReadTasks) = 0 then
     Exit;
   while not TTask.WaitForAll(FReadTasks, 250) do
   begin
+    if FCaptureFailed then
+      AbortCapture;
     var Canceled := (CancellationToken <> nil) and CancellationToken.IsCancellationRequested;
     var Expired := (FTimeoutMS <> INFINITE) and (FStopWatch.ElapsedMilliseconds >= FTimeoutMS);
     if not (Canceled or Expired) then
@@ -979,6 +999,24 @@ begin
     end;
     Break;
   end;
+  if FCaptureFailed then
+    AbortCapture;
+end;
+
+procedure TSystemProcess.AbortCapture;
+begin
+  StopReaders;
+  ClosePipes;
+  // Si lanzan los dos manejadores, sale el de la salida estándar.
+  var Error := FStdOutError;
+  if Error = nil then
+    Error := FStdErrError
+  else
+    FStdErrError.Free;
+  FStdOutError := nil;
+  FStdErrError := nil;
+  FCaptureFailed := False;
+  raise Error;
 end;
 
 procedure TSystemProcess.BuildEnvBuffer(var EnvBuffer: PWideChar);
@@ -1177,6 +1215,9 @@ begin
   try
     repeat
       var WaitRes := WaitForSingleObject(FProcessInfo.hProcess, 250);
+
+      if FCaptureFailed then
+        AbortCapture;
 
       // Un hijo que ya terminó no se mata: ni la cancelación ni el plazo llegan a tiempo.
       if WaitRes = WAIT_OBJECT_0 then

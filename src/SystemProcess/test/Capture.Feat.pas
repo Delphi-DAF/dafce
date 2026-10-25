@@ -5,8 +5,10 @@ interface
 implementation
 
 uses
+  Winapi.Windows,
   System.SysUtils,
   System.Classes,
+  System.IOUtils,
   System.Diagnostics,
   System.Threading,
   Daf.MiniSpec,
@@ -21,6 +23,9 @@ const
   GrandchildMS = 4000;
 
 type
+  /// La excepcion que lanza el manejador del escenario: ninguna otra pieza la produce.
+  ECaptureSpecError = class(Exception);
+
   TCaptureWorld = class
   public
     Proc: ISystemProcess;
@@ -30,6 +35,11 @@ type
     Captured: string;
     /// Lo capturado cuando llego la notificacion del final.
     Notified: string;
+    /// Las notificaciones del final que corrieron.
+    EndNotes: string;
+    Calls: Integer;
+    Report: string;
+    BigFile: string;
     ElapsedMS: Int64;
     destructor Destroy; override;
     function Capture: TProcessOutputProc;
@@ -56,6 +66,12 @@ end;
 
 destructor TCaptureWorld.Destroy;
 begin
+  if BigFile <> '' then
+    try
+      TFile.Delete(BigFile);
+    except
+      on Exception do;
+    end;
   // La tarea de un escenario que falla a medias se espera, para que su nieto no llegue al siguiente.
   if Assigned(Future) then
     try
@@ -261,6 +277,79 @@ Feature Cuando termina la espera de lo capturado @systemprocess @capture
       procedure(W: TCaptureWorld)
       begin
         Expect(Format('%s anotado=%s capturado=%s', [StatusText(W.Result.Status), W.Notified, W.Captured.Trim])).ToEqual('Timeout anotado=hola capturado=hola');
+      end)
+
+.Rule('Un manejador de captura que lanza aborta la ejecucion')
+
+  .Scenario('Un manejador que falla aborta la ejecucion sin matar al hijo')
+    .Given('un hijo que escribe un megabyte, con la salida capturada por un manejador que lanza en su primera llamada, y un plazo de diez segundos',
+      procedure(W: TCaptureWorld)
+      begin
+        W.BigFile := TPath.Combine(TPath.GetTempPath, 'daf-capture-' + TGUID.NewGuid.ToString.Trim(['{', '}']) + '.txt');
+        TFile.WriteAllText(W.BigFile, StringOfChar('x', 1024 * 1024), TEncoding.ANSI);
+        var Note :=
+          function(const Name: string): TProcessNotifyProc
+          begin
+            Result :=
+              procedure(R: TProcessResult)
+              begin
+                W.EndNotes := W.EndNotes + Name + ' ';
+              end;
+          end;
+        W.Proc := TSystemProcess.Builder
+          .Command('cmd /c type "' + W.BigFile + '"')
+          .StandardOutput(TProcessOutput.Capture(
+            procedure(Text: string)
+            begin
+              Inc(W.Calls);
+              raise ECaptureSpecError.Create('el manejador falla');
+            end))
+          .StandardError(TProcessOutput.Discard)
+          .HideWindow(True)
+          .Timeout(10000)
+          .OnCompleted(Note('OnCompleted'))
+          .OnKilled(Note('OnKilled'))
+          .OnCancelled(Note('OnCancelled'))
+          .OnFailed(Note('OnFailed'))
+          .Build;
+      end)
+    .When('se ejecuta',
+      procedure(W: TCaptureWorld)
+      begin
+        var Watch := TStopwatch.StartNew;
+        try
+          W.Proc.Execute;
+          W.Report := 'sin excepcion';
+        except
+          on E: Exception do
+            W.Report := E.ClassName + ': ' + E.Message;
+        end;
+        W.ElapsedMS := Watch.ElapsedMilliseconds;
+      end)
+    .&Then('Execute lanza la excepcion del manejador antes de que venza el plazo',
+      procedure(W: TCaptureWorld)
+      begin
+        Expect(Format('%s antes-del-plazo=%s', [W.Report, BoolToStr(W.ElapsedMS < 10000, True)]))
+          .ToEqual('ECaptureSpecError: el manejador falla antes-del-plazo=True');
+      end)
+    .&And('el manejador recibio una sola llamada, y ninguna notificacion del final ha corrido',
+      procedure(W: TCaptureWorld)
+      begin
+        Expect(Format('llamadas=%d avisos=%s', [W.Calls, W.EndNotes.Trim])).ToEqual('llamadas=1 avisos=');
+      end)
+    .&And('el hijo termina por si mismo, con un codigo de salida distinto de $FFFFFFFF',
+      procedure(W: TCaptureWorld)
+      begin
+        var H := OpenProcess($1000 or SYNCHRONIZE, False, W.Proc.Id);
+        var Code: DWORD := 0;
+        var Ended := (H <> 0) and (WaitForSingleObject(H, 10000) = WAIT_OBJECT_0);
+        if H <> 0 then
+        begin
+          GetExitCodeProcess(H, Code);
+          CloseHandle(H);
+        end;
+        Expect(Format('termina=%s muerto=%s', [BoolToStr(Ended, True), BoolToStr(Code = $FFFFFFFF, True)]))
+          .ToEqual('termina=True muerto=False');
       end);
 
 end.

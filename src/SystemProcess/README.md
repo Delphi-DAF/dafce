@@ -156,6 +156,27 @@ handlers get what is already in the pipe, and the result is `Timeout` or `Cancel
 The end notifications — `OnCompleted`, `OnKilled`, `OnCancelled` — run once that wait is over, so the
 captured output is complete when they arrive.
 
+### A capture handler that raises
+
+An exception raised by `OnStdOut` or `OnStdErr` aborts the run at once: the handler receives nothing
+more, both captures stop and their pipes close — so the child is not left blocked writing to them —,
+no end notification runs, and `Execute` raises that same exception, with its class and message; with
+`ExecuteAsync`, inside the task's `EAggregateException`. The child is not killed, and the instance
+keeps it: ask `IsRunning`, or kill it in your `except`:
+
+```pascal
+try
+  Proc.Execute;
+except
+  if Proc.IsRunning then
+    Proc.Kill;
+  raise;
+end;
+```
+
+In .NET the exception of an `OutputDataReceived` handler terminates the whole process; here the
+application stays alive and the exception comes out of `Execute`.
+
 Two differences from .NET: `RunAndCaptureText` throws `TimeoutException` or
 `OperationCanceledException` and loses the text it read, whereas here an expired deadline is a
 `Timeout` result and what the handlers received stays received; and nothing is delivered after

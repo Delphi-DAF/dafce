@@ -155,6 +155,28 @@ que ya está en la tubería, y el resultado es `Timeout` o `Canceled`.
 Las notificaciones del final —`OnCompleted`, `OnKilled`, `OnCancelled`— corren cuando esa espera ha
 terminado, así que la salida capturada está completa cuando llegan.
 
+### Un manejador de captura que lanza
+
+Una excepción de `OnStdOut` u `OnStdErr` aborta la ejecución en el acto: el manejador no recibe nada
+más, las dos capturas paran y sus tuberías se cierran —así que el hijo no se queda bloqueado
+escribiendo en ellas—, no corre ninguna notificación del final, y `Execute` lanza esa misma
+excepción, con su clase y su mensaje; con `ExecuteAsync`, dentro de la `EAggregateException` de la
+tarea. El hijo no muere, y la instancia lo conserva: se puede preguntar por `IsRunning`, o matarlo en
+el `except`:
+
+```pascal
+try
+  Proc.Execute;
+except
+  if Proc.IsRunning then
+    Proc.Kill;
+  raise;
+end;
+```
+
+En .NET la excepción de un manejador de `OutputDataReceived` termina el proceso entero; aquí la
+aplicación sigue viva y la excepción sale de `Execute`.
+
 Dos diferencias con .NET: `RunAndCaptureText` lanza `TimeoutException` u
 `OperationCanceledException` y pierde el texto leído, mientras que aquí un plazo vencido es un
 resultado `Timeout` y lo que los manejadores recibieron queda recibido; y no se entrega nada después
