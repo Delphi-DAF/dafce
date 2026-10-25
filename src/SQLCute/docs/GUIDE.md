@@ -13,14 +13,14 @@ uses Daf.SQLCute, Daf.SQLCute.Compiler;
 
 var Q := TQuery.New          // IQuery — ref-counted, no Free needed
   .From('products')
-  .Where('active', True)
+  .Where('status', 'active')
   .OrderBy('name')
   .Limit(50);
 
 var Compiler: IQueryCompiler := TAnsiSqlCompiler.Create;  // ref-counted: it needs an owner
 var R := Compiler.Compile(Q);
-// R.SQL      → 'SELECT * FROM products WHERE active = ? ORDER BY name LIMIT 50'
-// R.Bindings → [True]
+// R.SQL      → 'SELECT * FROM products WHERE status = ? ORDER BY name LIMIT 50'
+// R.Bindings → ['active']
 ```
 
 `TSQLResult` always contains:
@@ -83,11 +83,11 @@ var Shipped  := Base.Clone.Where('status', 'shipped');
 
 ## Null Safety
 
-All `Where*` methods that take a `Variant` accept `Null` values. When the value is `Null`, the generated SQL uses `IS NULL` (or `IS NOT NULL` for negated variants).
+All `Where*` methods that take a `Variant` accept `Null` values. When the value is `Null`, the generated SQL uses `IS NULL` with `=` or no operator, and `IS NOT NULL` with any other, with no binding; `WhereNot` keeps its negation.
 
 ```pascal
 .Where('deleted_at', Null)      // → WHERE deleted_at IS NULL
-.WhereNot('deleted_at', Null)   // → WHERE deleted_at IS NOT NULL
+.WhereNot('deleted_at', Null)   // → WHERE NOT (deleted_at IS NULL)
 ```
 
 ---

@@ -48,7 +48,7 @@ var Sub := TQuery.New.From('usuarios_temp')
 TQuery.New.From('usuarios')
   .AsInsertFrom(['nombre', 'email'], Sub)
 // → INSERT INTO usuarios (nombre, email)
-//   SELECT nombre, email FROM usuarios_temp WHERE importado = ?
+//   SELECT nombre, email FROM usuarios_temp WHERE importado = true
 ```
 
 ---
@@ -75,7 +75,7 @@ TQuery.New.From('productos')
 TQuery.New.From('sesiones')
   .Where('expirado', True)
   .AsDelete
-// → DELETE FROM sesiones WHERE expirado = ?
+// → DELETE FROM sesiones WHERE expirado = true
 ```
 
 Patrón de borrado lógico usando UPDATE:

@@ -48,7 +48,7 @@ var Sub := TQuery.New.From('temp_users')
 TQuery.New.From('users')
   .AsInsertFrom(['name', 'email'], Sub)
 // → INSERT INTO users (name, email)
-//   SELECT name, email FROM temp_users WHERE imported = ?
+//   SELECT name, email FROM temp_users WHERE imported = true
 ```
 
 ---
@@ -75,7 +75,7 @@ TQuery.New.From('products')
 TQuery.New.From('sessions')
   .Where('expired', True)
   .AsDelete
-// → DELETE FROM sessions WHERE expired = ?
+// → DELETE FROM sessions WHERE expired = true
 ```
 
 Soft-delete pattern using UPDATE:

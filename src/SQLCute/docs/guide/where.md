@@ -149,7 +149,7 @@ var ActiveUsers := TQuery.New.From('users').Select('id').Where('active', True);
 
 TQuery.New.From('orders')
   .WhereInQuery('customer_id', ActiveUsers)
-// → WHERE customer_id IN (SELECT id FROM users WHERE active = ?)
+// → WHERE customer_id IN (SELECT id FROM users WHERE active = true)
 ```
 
 ---
@@ -176,7 +176,7 @@ TQuery.New.From('products')
       Result := Q.Where('stock', '>', 0)
                  .OrWhere('backorder_allowed', True);
     end)
-// → WHERE active = ? AND (stock > ? OR backorder_allowed = ?)
+// → WHERE active = true AND (stock > ? OR backorder_allowed = true)
 ```
 
 OR-connected group:
@@ -204,7 +204,7 @@ TQuery.New.From('orders')
       Result := Q.Where('status', 'cancelled')
                  .Where('refunded', True);
     end)
-// → WHERE active = ? AND NOT (status = ? AND refunded = ?)
+// → WHERE active = true AND NOT (status = ? AND refunded = true)
 ```
 
 OR-connected group:
@@ -214,11 +214,11 @@ OR-connected group:
   begin
     Result := Q.Where('role', 'guest').OrWhere('banned', True);
   end)
-// → OR NOT (role = ? OR banned = ?)
+// → OR NOT (role = ? OR banned = true)
 ```
 
 > ⚠️ **The negation applies to the group as a whole, not to each condition.**
-> `NOT (status = ? AND refunded = ?)` matches whenever *either* inner condition
+> `NOT (status = ? AND refunded = true)` matches whenever *either* inner condition
 > fails — a cancelled order that was never refunded still matches. If you meant
 > "neither of them", negate each condition instead:
 > `.WhereNot('status', 'cancelled').WhereNot('refunded', True)`.
@@ -268,7 +268,7 @@ Query.From('users')
   .Where('active', '=', True)
   .Where('age', '>', 18)
   .OrWhere('role', '=', 'admin')
-// -> WHERE (active = ? AND age > ?) OR role = ?
+// -> WHERE (active = true AND age > ?) OR role = ?
 ```
 
 The parentheses in that SQL are **emitted**, not assumed. Each condition carries the connector that
@@ -336,7 +336,7 @@ TQuery.New.From('users')
     begin
       Result := Q.Where('active', True);
     end)
-// → WHERE active = ?   (only when IncludeInactive is False)
+// → WHERE active = true   (only when IncludeInactive is False)
 ```
 
 With an else branch:

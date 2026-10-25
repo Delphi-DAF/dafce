@@ -150,7 +150,7 @@ var UsuariosActivos := TQuery.New.From('usuarios').Select('id').Where('activo', 
 
 TQuery.New.From('pedidos')
   .WhereInQuery('cliente_id', UsuariosActivos)
-// → WHERE cliente_id IN (SELECT id FROM usuarios WHERE activo = ?)
+// → WHERE cliente_id IN (SELECT id FROM usuarios WHERE activo = true)
 ```
 
 ---
@@ -177,7 +177,7 @@ TQuery.New.From('productos')
       Result := Q.Where('stock', '>', 0)
                  .OrWhere('pedido_pendiente_permitido', True);
     end)
-// → WHERE activo = ? AND (stock > ? OR pedido_pendiente_permitido = ?)
+// → WHERE activo = true AND (stock > ? OR pedido_pendiente_permitido = true)
 ```
 
 Grupo con conector OR:
@@ -205,7 +205,7 @@ TQuery.New.From('pedidos')
       Result := Q.Where('estado', 'cancelado')
                  .Where('reembolsado', True);
     end)
-// → WHERE activo = ? AND NOT (estado = ? AND reembolsado = ?)
+// → WHERE activo = true AND NOT (estado = ? AND reembolsado = true)
 ```
 
 Grupo con conector OR:
@@ -215,11 +215,11 @@ Grupo con conector OR:
   begin
     Result := Q.Where('rol', 'invitado').OrWhere('bloqueado', True);
   end)
-// → OR NOT (rol = ? OR bloqueado = ?)
+// → OR NOT (rol = ? OR bloqueado = true)
 ```
 
 > ⚠️ **La negación se aplica al grupo entero, no a cada condición.**
-> `NOT (estado = ? AND reembolsado = ?)` se cumple cuando falla *cualquiera* de
+> `NOT (estado = ? AND reembolsado = true)` se cumple cuando falla *cualquiera* de
 > las condiciones internas — un pedido cancelado pero no reembolsado sigue
 > cumpliendo. Si lo que querías es "ninguna de las dos", niega cada condición:
 > `.WhereNot('estado', 'cancelado').WhereNot('reembolsado', True)`.
@@ -269,7 +269,7 @@ Query.From('users')
   .Where('active', '=', True)
   .Where('age', '>', 18)
   .OrWhere('role', '=', 'admin')
-// -> WHERE (active = ? AND age > ?) OR role = ?
+// -> WHERE (active = true AND age > ?) OR role = ?
 ```
 
 Los paréntesis de ese SQL se **emiten**, no se dan por supuestos. Cada condición lleva el conector
@@ -338,7 +338,7 @@ TQuery.New.From('usuarios')
     begin
       Result := Q.Where('activo', True);
     end)
-// → WHERE activo = ?   (solo cuando IncluirInactivos es False)
+// → WHERE activo = true   (solo cuando IncluirInactivos es False)
 ```
 
 Con rama else:
