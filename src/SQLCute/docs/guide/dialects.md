@@ -144,7 +144,7 @@ SQLCute emits `LIMIT … OFFSET …` by default. The SQL Server, Oracle and Fire
 | Oracle | `OFFSET m ROWS FETCH NEXT n ROWS ONLY` |
 | Firebird | `ROWS m+1 TO m+n` |
 
-> SQL Server requires an `ORDER BY` clause when using `OFFSET/FETCH`. Add `.OrderBy(…)` before calling `.ForPage(…)` with `TSqlServerCompiler`.
+> SQL Server requires an `ORDER BY` with `OFFSET/FETCH`. When the query has none, `TSqlServerCompiler` adds `ORDER BY (SELECT 0)` —`ORDER BY 1` on a `Distinct` query—, so the page compiles; which rows it holds is only stable with an `.OrderBy(…)` of your own.
 
 ---
 

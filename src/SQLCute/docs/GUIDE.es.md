@@ -107,6 +107,7 @@ SQLCute sigue el constructor y los compiladores de [SqlKata](https://sqlkata.com
 | Una comparación negada con un valor lógico | `col != true` | `NOT (col = true)` |
 | Carácter de escape de la familia LIKE | cualquier carácter | una comilla simple o un `?` lanzan `EArgumentException` |
 | `\?` en una expresión en bruto | queda `\?` en el SQL | pasa a ser un `?` literal |
+| Una página de SQL Server sobre una consulta `Distinct` sin `OrderBy` | `ORDER BY (SELECT 0)`, que SQL Server rechaza con `DISTINCT` | `ORDER BY 1` |
 
 ---
 

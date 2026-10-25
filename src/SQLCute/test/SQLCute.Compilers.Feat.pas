@@ -42,10 +42,20 @@ TQuery — Dialect Compilers @unit @sqlcute
     .When('compiled with the "SqlServer" dialect')
     .&Then('SQL is "SELECT TOP (10) * FROM [orders]"')
 
-  .Scenario('SQL Server uses OFFSET-FETCH for limit with offset @f6')
+  .Scenario('SQL Server uses OFFSET-FETCH for limit with offset, ordered by (SELECT 0) when the query has no order @f6')
     .Given('a dialect query from "orders" limited to 10 offset 20')
     .When('compiled with the "SqlServer" dialect')
-    .&Then('SQL is "SELECT * FROM [orders] OFFSET 20 ROWS FETCH NEXT 10 ROWS ONLY"')
+    .&Then('SQL is "SELECT * FROM [orders] ORDER BY (SELECT 0) OFFSET 20 ROWS FETCH NEXT 10 ROWS ONLY"')
+
+  .Scenario('SQL Server keeps the query order in front of OFFSET-FETCH @f6')
+    .Given('a dialect query from "orders" ordered by "id" limited to 10 offset 20')
+    .When('compiled with the "SqlServer" dialect')
+    .&Then('SQL is "SELECT * FROM [orders] ORDER BY [id] ASC OFFSET 20 ROWS FETCH NEXT 10 ROWS ONLY"')
+
+  .Scenario('SQL Server orders a DISTINCT page by its first column @f6')
+    .Given('a distinct dialect query selecting "name" from "orders" limited to 10 offset 20')
+    .When('compiled with the "SqlServer" dialect')
+    .&Then('SQL is "SELECT DISTINCT [name] FROM [orders] ORDER BY 1 OFFSET 20 ROWS FETCH NEXT 10 ROWS ONLY"')
 
 // -------------------------------------------------------------------------
 

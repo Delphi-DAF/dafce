@@ -42,6 +42,12 @@ type
     [Given('a dialect query from "(\w+)" limited to (\d+) offset (\d+)')]
     procedure GivenFromLimitOffset(W: TSQLCuteWorld; Table: string; Lim, Off: Integer);
 
+    [Given('a dialect query from "(\w+)" ordered by "(\w+)" limited to (\d+) offset (\d+)')]
+    procedure GivenFromOrderByLimitOffset(W: TSQLCuteWorld; Table, Col: string; Lim, Off: Integer);
+
+    [Given('a distinct dialect query selecting "(\w+)" from "(\w+)" limited to (\d+) offset (\d+)')]
+    procedure GivenDistinctLimitOffset(W: TSQLCuteWorld; Col, Table: string; Lim, Off: Integer);
+
     [Given('a dialect query from "(\w+)" ordered by "(\w+)"$')]
     procedure GivenFromOrderBy(W: TSQLCuteWorld; Table, Col: string);
 
@@ -121,6 +127,18 @@ procedure TSQLCuteCompilersSteps.GivenFromLimitOffset(W: TSQLCuteWorld;
   Table: string; Lim, Off: Integer);
 begin
   W.Query := TQuery.New.From(Table).Limit(Lim).Offset(Off);
+end;
+
+procedure TSQLCuteCompilersSteps.GivenFromOrderByLimitOffset(W: TSQLCuteWorld;
+  Table, Col: string; Lim, Off: Integer);
+begin
+  W.Query := TQuery.New.From(Table).OrderBy(Col).Limit(Lim).Offset(Off);
+end;
+
+procedure TSQLCuteCompilersSteps.GivenDistinctLimitOffset(W: TSQLCuteWorld;
+  Col, Table: string; Lim, Off: Integer);
+begin
+  W.Query := TQuery.New.Select([Col]).Distinct.From(Table).Limit(Lim).Offset(Off);
 end;
 
 procedure TSQLCuteCompilersSteps.GivenFromOrderBy(W: TSQLCuteWorld;

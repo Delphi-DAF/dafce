@@ -96,9 +96,11 @@ function TSqlServerCompiler.CompileOffset(const C: TSqlCompilation; const Clause
 var
   Clause: TAbstractClause;
   OffsetVal, LimitVal: Integer;
-  HasOffset: Boolean;
+  HasOffset, HasOrder, IsDistinct: Boolean;
 begin
-  HasOffset := False;
+  HasOffset  := False;
+  HasOrder   := False;
+  IsDistinct := False;
   OffsetVal := 0;
   LimitVal  := 2147483647;
   for Clause in Clauses do
@@ -112,11 +114,21 @@ begin
     begin
       LimitVal := TLimitClause(Clause).Value;
     end;
+    if Clause is TOrderByClause then
+      HasOrder := True;
+    if Clause is TDistinctClause then
+      IsDistinct := True;
   end;
   if not HasOffset then
-    Result := ''
-  else
-    Result := 'OFFSET ' + IntToStr(OffsetVal) + ' ROWS FETCH NEXT ' + IntToStr(LimitVal) + ' ROWS ONLY';
+    Exit('');
+  Result := 'OFFSET ' + IntToStr(OffsetVal) + ' ROWS FETCH NEXT ' + IntToStr(LimitVal) + ' ROWS ONLY';
+  // OFFSET-FETCH is only valid after an ORDER BY. (SELECT 0) orders by nothing, but under DISTINCT
+  // every ORDER BY item must be in the select list, so there it is the first column.
+  if not HasOrder then
+    if IsDistinct then
+      Result := 'ORDER BY 1 ' + Result
+    else
+      Result := 'ORDER BY (SELECT 0) ' + Result;
 end;
 
 function TSqlServerCompiler.CompileDateWhere(const C: TSqlCompilation; const Clause: TDateWhereClause): string;
