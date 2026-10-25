@@ -81,6 +81,15 @@ your console. There is no option that brings the separate window back.
 wait runs in the task. A launch that fails calls `OnFailed` on that same thread, before
 `ExecuteAsync` returns: a handler that counted on running in the background no longer does.
 
+`Kill` with no child launched —before running, or after a launch that failed— now raises
+`EInvalidOpException`; it used to do nothing visible and cut the next run short. A call that can
+arrive before the launch or after the end, such as one from a shutdown hook, asks `IsRunning` first:
+
+```pascal
+if Proc.IsRunning then
+  Proc.Kill;
+```
+
 ### 3. `Daf.CmdLn.Parser` is gone
 
 The unit 1.6.0 shipped inside `Daf.Commons` **is no longer distributed**. Its replacement is

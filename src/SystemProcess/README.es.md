@@ -40,7 +40,8 @@ var Future := Proc.ExecuteAsync; // o asíncrono
 
 `Timeout` fija un plazo en milisegundos, y no hay ninguno mientras no se llame. **Al vencer, el
 proceso muere** y el resultado vuelve como `Timeout`. `Timeout(0)` es un plazo de cero: mata el
-proceso en el primer sondeo, a los 250 ms.
+proceso en el primer sondeo, a los 250 ms; un hijo que ya terminó para entonces vuelve como
+`Completed`.
 
 `System.Diagnostics.Process` lo escribe en dos pasos —`WaitForExit(ms)` devuelve `false` y el
 `Kill()` es cosa tuya—, y .NET 11 los junta en `SafeProcessHandle.WaitForExitOrKillOnTimeout`. Aquí
@@ -71,6 +72,16 @@ WriteLn('Started PID ', Proc.Id);
 `Process.Id` en .NET es un `int`. Aquí `Id` es un `Cardinal`, el tipo que reciben
 `TProcess.KillById` y `TProcess.HasExited`, así que `TProcess.KillById(Proc.Id)` no necesita
 conversión.
+
+`Kill` termina al hijo que lanzó la instancia, con el código de salida `-1` (`$FFFFFFFF`), como .NET,
+y esa ejecución vuelve como `Killed`. Sobre un hijo que ya terminó no hace nada. Sin un hijo lanzado
+—antes de ejecutar, o tras un lanzamiento que falló— lanza `EInvalidOpException` con el mismo mensaje
+que `Id`.
+
+La instancia conserva el proceso de su hijo hasta el siguiente lanzamiento o hasta liberarse, como
+`Process` hasta `Dispose`: mientras tanto `Id` no puede pasar a otro proceso, y un `Kill` después
+del final encuentra al mismo hijo, ya terminado. `TProcess.KillById` también mata con `-1`, y
+devuelve `False` para un proceso que ya terminó.
 
 ## Adónde va cada flujo
 
@@ -141,7 +152,7 @@ hijo una consola propia en los dos casos, y los flujos que hereda escriben en el
 | Campo | Tipo | Descripción |
 |-------|------|-------------|
 | `Status` | `TStatus` | `Failed`, `Timeout`, `Running`, `Completed`, `Canceled`, `Killed` — ver abajo |
-| `ExitCode` | `DWORD` | El código de salida del proceso si `Completed`; `GetLastError` si `Failed`; 0 en el resto |
+| `ExitCode` | `DWORD` | El código de salida del proceso siempre que el hijo terminó —`Completed`, `Killed`, `Timeout` o `Canceled`—, `$FFFFFFFF` (-1) si se le mató; `GetLastError` si `Failed`; 0 mientras `Running` |
 | `Duration` | `TTimeSpan` | Tiempo de ejecución de reloj |
 | `LastError` | `string` | Descripción del error. Solo `Failed` lo rellena |
 | `Succeeded` | `function: Boolean` | `Status = Completed` y `ExitCode = 0` |
@@ -155,7 +166,7 @@ hijo una consola propia en los dos casos, y los flujos que hereda escriben en el
 | `Failed` | no se pudo lanzar, o la espera acabó sin que el proceso señalizara |
 | `Timeout` | venció el plazo y el proceso murió |
 | `Killed` | se llamó a `Kill`; el plazo no tuvo nada que ver |
-| `Canceled` | el token de cancelación se señalizó y el proceso muere. `Failed` si matarlo no sale bien |
+| `Canceled` | el token de cancelación se señalizó y el proceso muere. Un hijo que ya había terminado vuelve como `Completed`; `Failed` si matarlo no sale bien |
 
 Las tres formas de acabar sin que el hijo salga por su pie —plazo, `Kill` y cancelación— tienen
 valor propio, así que un resultado dice **por qué** y no solo que se cortó.
@@ -163,12 +174,14 @@ valor propio, así que un resultado dice **por qué** y no solo que se cortó.
 ## Cooperar con el apagado
 
 `Daf.Threading` aporta el hook; matar el proceso desde ahí evita que un hijo de larga duración
-sobreviva a la aplicación.
+sobreviva a la aplicación. La petición puede llegar antes de que el hijo se lance o después de que
+termine, y `Kill` lanza sin un hijo lanzado, así que primero se pregunta por `IsRunning`:
 
 ```pascal
 TShutdownHook.OnShutdownRequested := procedure
 begin
-  Proc.Kill;
+  if Proc.IsRunning then
+    Proc.Kill;
 end;
 ```
 

@@ -9,6 +9,7 @@ uses
   System.Threading,
   System.TimeSpan,
   System.Diagnostics,
+  System.SyncObjs,
   Winapi.Windows,
   Winapi.Messages,
   Daf.Threading;
@@ -202,7 +203,11 @@ type
     FOnKilled: TProcessNotifyProc;
 
     FStopWatch: TStopwatch;
+    // El proceso del último hijo se conserva hasta el siguiente lanzamiento o la destrucción, para
+    // que Kill actúe sobre él y su identificador no pase a otro proceso.
     FProcessInfo: TProcessInformation;
+    // Cubre matar al hijo, preguntar si corre y decidir el resultado de la espera.
+    FLock: TCriticalSection;
     FLaunchError: DWORD;
     // Lo que recibe el hijo, y el extremo de lectura de cada flujo que se captura.
     FChildIn, FChildOut, FChildErr: THandle;
@@ -220,10 +225,11 @@ type
     procedure WaitForReaders;
 
     procedure DoOutput(const Text: string; IsError: Boolean);
-    procedure DoProcessCompleted(var Result: TProcessResult);
+    // El hijo terminó: Killed si lo mató Kill, Completed si no, con su código de salida.
+    procedure DoProcessEnded(var Result: TProcessResult);
     procedure DoProcessFailed(var Result: TProcessResult; ErrorCode: DWORD; const Detail: string = '');
-    procedure DoProcessCanceled(var Result: TProcessResult);
-    procedure DoProcessKilled(var Result: TProcessResult; const AStatus: TProcessResult.TStatus);
+    // La cancelación o el plazo cortan al hijo; si ya había terminado, el resultado es el suyo.
+    procedure DoProcessCut(var Result: TProcessResult; Status: TProcessResult.TStatus);
     procedure DoProcessIdle(var Result: TProcessResult);
 
     function TryCreateProcess(var ProcessResult: TProcessResult): Boolean;
@@ -296,6 +302,29 @@ begin
   if IsValidHandle(Handle) then
     CloseHandle(Handle);
   Handle := 0;
+end;
+
+const
+  PROCESS_QUERY_LIMITED_INFORMATION = $1000;
+  // El código de salida con que .NET termina un proceso.
+  KilledExitCode = $FFFFFFFF;
+
+type
+  TTerminateOutcome = (toTerminated, toAlreadyExited, toFailed);
+
+// Termina un proceso por su handle con el código -1. Un proceso que ya terminó no se mata:
+// TerminateProcess falla con acceso denegado, y su código de salida ya no es STILL_ACTIVE.
+function TerminateByHandle(Handle: THandle; out ErrorCode: DWORD): TTerminateOutcome;
+var
+  Code: DWORD;
+begin
+  ErrorCode := 0;
+  if TerminateProcess(Handle, KilledExitCode) then
+    Exit(toTerminated);
+  ErrorCode := GetLastError;
+  if (ErrorCode = ERROR_ACCESS_DENIED) and GetExitCodeProcess(Handle, Code) and (Code <> STILL_ACTIVE) then
+    Exit(toAlreadyExited);
+  Result := toFailed;
 end;
 
 function InheritableAttributes: TSecurityAttributes;
@@ -386,23 +415,24 @@ begin
 end;
 
 class function TProcess.KillById(PID: Cardinal; TimeoutMS: Cardinal = 5000): Boolean;
+var
+  ErrorCode: DWORD;
 begin
-  var hProcess: THandle := OpenProcess(PROCESS_TERMINATE or SYNCHRONIZE, false, PID);
+  var hProcess: THandle := OpenProcess(PROCESS_TERMINATE or SYNCHRONIZE or PROCESS_QUERY_LIMITED_INFORMATION,
+    False, PID);
   if hProcess = 0 then
     Exit(False);
+  Result := False;
   try
-    if TerminateProcess(hProcess, 0) then
-    begin
-      if WaitForSingleObject(hProcess, TimeoutMS) = WAIT_OBJECT_0 then
-        Exit(True);
-    end
-    else
-      RaiseLastOSError;
+    case TerminateByHandle(hProcess, ErrorCode) of
+      toTerminated:
+        Result := WaitForSingleObject(hProcess, TimeoutMS) = WAIT_OBJECT_0;
+      toFailed:
+        RaiseLastOSError(ErrorCode);
+    end;
   finally
     CloseHandle(hProcess);
   end;
-
-  Result := False;
 end;
 
 { TBuilder }
@@ -572,6 +602,7 @@ begin
   inherited Create;
   FTimeoutMS := INFINITE;
   FCustomEnvVars := TEnvironmentVariables.Create;
+  FLock := TCriticalSection.Create;
 end;
 
 destructor TSystemProcess.Destroy;
@@ -579,7 +610,9 @@ begin
   FCustomEnvVars.Free;
   CloseChildHandles;
   ClosePipes;
+  CleanupHandles;
   FreeAndNil(FConsoleEncoding);
+  FLock.Free;
   inherited;
 end;
 
@@ -880,13 +913,30 @@ begin
   end;
 end;
 
-procedure TSystemProcess.DoProcessCompleted(var Result: TProcessResult);
+procedure TSystemProcess.DoProcessEnded(var Result: TProcessResult);
+var
+  Killed: Boolean;
 begin
+  FLock.Enter;
+  try
+    Killed := FKillRequested;
+  finally
+    FLock.Leave;
+  end;
   GetExitCodeProcess(FProcessInfo.hProcess, Result.ExitCode);
-  Result.Status := TProcessResult.TStatus.Completed;
   Result.Duration := FStopWatch.Elapsed;
-  if Assigned(FOnCompleted) then
-    OnCompleted(Result);
+  if Killed then
+  begin
+    Result.Status := TProcessResult.TStatus.Killed;
+    if Assigned(FOnKilled) then
+      FOnKilled(Result);
+  end
+  else
+  begin
+    Result.Status := TProcessResult.TStatus.Completed;
+    if Assigned(FOnCompleted) then
+      FOnCompleted(Result);
+  end;
 end;
 
 procedure TSystemProcess.DoProcessFailed(var Result: TProcessResult; ErrorCode: DWORD; const Detail: string);
@@ -901,30 +951,36 @@ begin
     OnFailed(Result);
 end;
 
-procedure TSystemProcess.DoProcessCanceled(var Result: TProcessResult);
+procedure TSystemProcess.DoProcessCut(var Result: TProcessResult; Status: TProcessResult.TStatus);
+var
+  ErrorCode: DWORD;
+  Outcome: TTerminateOutcome;
 begin
-  Result.ExitCode := 0;
-  Result.Status := TProcessResult.TStatus.Canceled;
-  Result.Duration := FStopWatch.Elapsed;
-
-  if not TProcess.KillById(FProcessInfo) then
-    Result.Status := TProcessResult.TStatus.Failed;
-
-  if Assigned(FOnCancelled) then
-    OnCancelled(Result);
-end;
-
-procedure TSystemProcess.DoProcessKilled(var Result: TProcessResult;
-  const AStatus: TProcessResult.TStatus);
-begin
-  Result.ExitCode := 0;
-  Result.Status := AStatus;
-  Result.Duration := FStopWatch.Elapsed;
-  // Un Kill explicito ya mato al pedirlo; repetirlo aqui solo encontraria un muerto.
-  if not FKillRequested then
-    TProcess.KillById(FProcessInfo);
-  if Assigned(FOnKilled) then
-    OnKilled(Result);
+  FLock.Enter;
+  try
+    Outcome := TerminateByHandle(FProcessInfo.hProcess, ErrorCode);
+  finally
+    FLock.Leave;
+  end;
+  case Outcome of
+    toAlreadyExited:
+      DoProcessEnded(Result);
+    toFailed:
+      DoProcessFailed(Result, ErrorCode);
+  else
+    // TerminateProcess no espera: el código de salida es el de matarlo cuando el hijo ya no corre.
+    WaitForSingleObject(FProcessInfo.hProcess, 5000);
+    GetExitCodeProcess(FProcessInfo.hProcess, Result.ExitCode);
+    Result.Status := Status;
+    Result.Duration := FStopWatch.Elapsed;
+    if Status = TProcessResult.TStatus.Canceled then
+    begin
+      if Assigned(FOnCancelled) then
+        FOnCancelled(Result);
+    end
+    else if Assigned(FOnKilled) then
+      FOnKilled(Result);
+  end;
 end;
 
 procedure TSystemProcess.DoProcessIdle(var Result: TProcessResult);
@@ -953,7 +1009,8 @@ begin
   var
     StartInfo: TStartupInfo;
   SetupStartupInfo(StartInfo);
-  FillChar(FProcessInfo, SizeOf(FProcessInfo), 0);
+  var ProcessInfo: TProcessInformation;
+  FillChar(ProcessInfo, SizeOf(ProcessInfo), 0);
 
   var EnvBuffer: PWideChar := nil;
   BuildEnvBuffer(EnvBuffer);
@@ -969,8 +1026,17 @@ begin
 
   try
     Result := CreateProcessW(nil, PWideChar(FCommandLine), nil, nil, True, Flags,
-      EnvBuffer, WorkDir, StartInfo, FProcessInfo);
-    if not Result then
+      EnvBuffer, WorkDir, StartInfo, ProcessInfo);
+    if Result then
+    begin
+      FLock.Enter;
+      try
+        FProcessInfo := ProcessInfo;
+      finally
+        FLock.Leave;
+      end;
+    end
+    else
       FLaunchError := GetLastError;
   finally
     FreeMem(EnvBuffer);
@@ -980,9 +1046,16 @@ end;
 function TSystemProcess.Launch(var ProcessResult: TProcessResult): Boolean;
 begin
   FStopWatch := TStopwatch.Create;
-  // Sin hijo, dwProcessId a cero es lo que hace que Id lance: también cuando falla abrir un flujo,
-  // antes de llegar a CreateProcessW.
-  FillChar(FProcessInfo, SizeOf(FProcessInfo), 0);
+  // Lanzar suelta el proceso del hijo anterior. Sin hijo, FProcessInfo a cero es lo que hace que Id y
+  // Kill lancen: también cuando falla abrir un flujo, antes de llegar a CreateProcessW.
+  FLock.Enter;
+  try
+    CleanupHandles;
+    FillChar(FProcessInfo, SizeOf(FProcessInfo), 0);
+    FKillRequested := False;
+  finally
+    FLock.Leave;
+  end;
   Result := False;
   try
     if not OpenStreams(ProcessResult) then
@@ -1011,43 +1084,36 @@ procedure TSystemProcess.WaitForChild(CancellationToken: ICancellationToken;
   var ProcessResult: TProcessResult);
 begin
   try
-    var WaitRes: DWord;
     repeat
-      WaitRes := WaitForSingleObject(FProcessInfo.hProcess, 250);
+      var WaitRes := WaitForSingleObject(FProcessInfo.hProcess, 250);
 
-      if (CancellationToken <> nil) and CancellationToken.IsCancellationRequested then
+      // Un hijo que ya terminó no se mata: ni la cancelación ni el plazo llegan a tiempo.
+      if WaitRes = WAIT_OBJECT_0 then
       begin
-        DoProcessCanceled(ProcessResult);
+        DoProcessEnded(ProcessResult);
         Break;
       end;
 
-      if FKillRequested then
+      if WaitRes <> WAIT_TIMEOUT then
       begin
-        DoProcessKilled(ProcessResult, TProcessResult.TStatus.Killed);
+        DoProcessFailed(ProcessResult, GetLastError);
+        Break;
+      end;
+
+      if (CancellationToken <> nil) and CancellationToken.IsCancellationRequested then
+      begin
+        DoProcessCut(ProcessResult, TProcessResult.TStatus.Canceled);
         Break;
       end;
 
       if (FTimeoutMS <> INFINITE) and (FStopWatch.ElapsedMilliseconds >= FTimeoutMS) then
       begin
-        DoProcessKilled(ProcessResult, TProcessResult.TStatus.Timeout);
+        DoProcessCut(ProcessResult, TProcessResult.TStatus.Timeout);
         Break;
       end;
 
       DoProcessIdle(ProcessResult);
-
-    until (WaitRes = WAIT_OBJECT_0);
-
-    if ProcessResult.Status = TProcessResult.TStatus.Running then
-    begin
-      if FKillRequested then
-         DoProcessKilled(ProcessResult, TProcessResult.TStatus.Killed)
-      else
-      if WaitRes = WAIT_OBJECT_0 then
-        DoProcessCompleted(ProcessResult)
-      else
-        DoProcessFailed(ProcessResult, GetLastError);
-    end;
-
+    until False;
   finally
     Release;
   end;
@@ -1056,7 +1122,6 @@ end;
 procedure TSystemProcess.Release;
 begin
   FStopWatch.Stop;
-  CleanupHandles;
   CloseChildHandles;
   try
     ClosePipes;
@@ -1090,8 +1155,12 @@ end;
 
 function TSystemProcess.GetIsRunning: Boolean;
 begin
-  if FProcessInfo.hProcess = 0 then Exit(False);
-  Result := not TProcess.HasExited(FProcessInfo);
+  FLock.Enter;
+  try
+    Result := (FProcessInfo.hProcess <> 0) and (WaitForSingleObject(FProcessInfo.hProcess, 0) = WAIT_TIMEOUT);
+  finally
+    FLock.Leave;
+  end;
 end;
 
 function TSystemProcess.GetOnCancelled: TProcessNotifyProc;
@@ -1166,9 +1235,22 @@ begin
 end;
 
 procedure TSystemProcess.Kill;
+var
+  ErrorCode: DWORD;
 begin
-  FKillRequested := True;
-  TProcess.KillById(Self.FProcessInfo);
+  FLock.Enter;
+  try
+    if FProcessInfo.hProcess = 0 then
+      raise EInvalidOpException.Create('No process is associated with this object.');
+    case TerminateByHandle(FProcessInfo.hProcess, ErrorCode) of
+      toTerminated:
+        FKillRequested := True;
+      toFailed:
+        RaiseLastOSError(ErrorCode);
+    end;
+  finally
+    FLock.Leave;
+  end;
 end;
 
 function TSystemProcess.ExecuteAsync(const CancellationToken: ICancellationToken = nil): IFuture<TProcessResult>;

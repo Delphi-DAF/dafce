@@ -81,6 +81,16 @@ en tu consola. No hay opción que devuelva la ventana aparte.
 en la tarea. Un lanzamiento que falla llama a `OnFailed` en ese mismo hilo, antes de que
 `ExecuteAsync` vuelva: un manejador que contaba con correr en segundo plano ya no lo hace.
 
+`Kill` sin un hijo lanzado —antes de ejecutar, o tras un lanzamiento que falló— ahora lanza
+`EInvalidOpException`; antes no hacía nada visible y cortaba la ejecución siguiente. Una llamada que
+puede llegar antes del lanzamiento o después del final, como la de un gancho de parada, pregunta
+antes por `IsRunning`:
+
+```pascal
+if Proc.IsRunning then
+  Proc.Kill;
+```
+
 ### 3. `Daf.CmdLn.Parser` ya no está
 
 La unit que 1.6.0 traía dentro de `Daf.Commons` **ya no se distribuye**. Su sustituto es

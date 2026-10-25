@@ -127,6 +127,8 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - ⚠️ **SystemProcess**: A second destination for the same stream —`OnStdOut` twice, or `OnStdOut` and `StandardOutput`— **raises `EInvalidOpException`**; it used to replace the first
 - ⚠️ **SystemProcess**: `HideWindow(False)`, the default, **no longer opens a console of its own**: the child runs in the parent's console
 - ⚠️ **SystemProcess**: `ExecuteAsync` **launches the child before it returns**, on the calling thread, and only the wait goes to the task. The `OnFailed` of a launch that fails runs on the calling thread, no longer in the task
+- ⚠️ **SystemProcess**: `Kill` with no child launched —before running, or after a launch that failed— **raises `EInvalidOpException`**, as `Id` does. **Breaks** a shutdown hook that kills unconditionally: ask `IsRunning` first
+- **SystemProcess**: A killed child —by `Kill`, the deadline or the cancellation— exits with code `-1` (`$FFFFFFFF`), as in .NET, and `TProcessResult.ExitCode` carries the child's real exit code whenever it has exited; it used to be 0
 
 ### Deprecated
 
@@ -208,6 +210,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - **SystemProcess**: `ExecuteAsyncAndFree` never launched the child, and called neither `OnCompleted` nor `OnFailed`. It now runs the child to the end before freeing it
 - **SystemProcess**: `ExecuteAndFree` and `ExecuteAsyncAndFree` leaked their builder on every call
 - **SystemProcess**: An `ExecuteAsync` whose `ISystemProcess` was released before the child finished went on using the freed instance, and its notifications never arrived
+- **SystemProcess**: Killing a child that had just finished raised `EOSError`; a `Kill` with no child alive cut the next run short without killing anybody, and after the end it killed by an identifier that could belong to another process
 - **Web**: A literal route segment is tried before a parameter in the same position; the action declared first used to win, so `/items/search` could land on `/items/{Id}`
 - **Web**: A `[FromServices]` parameter receives its service. With the service registered the request failed with `EInvalidCast`, and without it the action received `nil` with no warning; that case now fails the request naming the service
 - **Web**: Destroying a `TDafHttpServer` frees the web modules WebBroker kept for reuse; a later server in the same process was handed the ones built for the previous one

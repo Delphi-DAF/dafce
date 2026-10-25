@@ -55,7 +55,9 @@ begin
 
   TShutdownHook.OnShutdownRequested := procedure
   begin
-    Process.Kill;
+    // The request can come before the child is launched or after it ends.
+    if Process.IsRunning then
+      Process.Kill;
   end;
 
   var token := CreateCancellationTokenSource;
