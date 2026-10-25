@@ -271,11 +271,25 @@ begin
     Result := Result + [Value[I]];
 end;
 
+// Comparing with Null asks about NULL, as SqlKata does: = gives IS NULL and any other operator
+// IS NOT NULL, with no binding.
+function NullAwareOp(const Op: TWhereOp; const Value: Variant): TWhereOp;
+begin
+  Result := Op;
+  if not VarIsNull(Value) or (Op in [TWhereOp.IsNull, TWhereOp.IsNotNull]) then
+    Exit;
+  if Op = TWhereOp.Equal then
+    Result := TWhereOp.IsNull
+  else
+    Result := TWhereOp.IsNotNull;
+end;
+
 function TQueryImpl.AddWhereClause(const Column: string; Op: TWhereOp;
   const Value: Variant; Conn: TBoolOp; IsNot: Boolean): IQuery;
 var
   W: TWhereClause;
 begin
+  Op := NullAwareOp(Op, Value);
   // IN by operator name goes the WhereIn way: one bound parameter per value, never the value
   // written into the SQL text.
   if Op in [TWhereOp.&In, TWhereOp.NotIn] then
@@ -908,7 +922,7 @@ var
 begin
   H := THavingClause.Create;
   H.Column    := Column;
-  H.Op        := Op;
+  H.Op        := NullAwareOp(Op, Value);
   H.Value     := Value;
   H.Connector := Conn;
   FClauses.Add(H);

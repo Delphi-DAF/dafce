@@ -53,10 +53,12 @@ Conector OR:
 .OrWhereNull('archivado_en')     // → OR archivado_en IS NULL
 ```
 
-Pasar `Null` directamente a `Where` también genera `IS NULL`:
+Pasar `Null` directamente a `Where`, `OrWhere`, `WhereNot` u `OrWhereNot` compara con NULL como SqlKata: con `=` o sin operador emite `IS NULL`, y con cualquier otro operador `IS NOT NULL`, sin enlace. `WhereNot` conserva su negación, que SqlKata pierde:
 
 ```pascal
-.Where('eliminado_en', Null)     // → WHERE eliminado_en IS NULL
+.Where('eliminado_en', Null)         // → WHERE eliminado_en IS NULL
+.Where('eliminado_en', '<>', Null)   // → WHERE eliminado_en IS NOT NULL
+.WhereNot('eliminado_en', Null)      // → WHERE NOT (eliminado_en IS NULL)
 ```
 
 ---

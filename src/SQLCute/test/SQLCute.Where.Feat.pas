@@ -10,7 +10,9 @@ interface
 implementation
 
 uses
+  System.SysUtils,
   System.StrUtils,
+  System.Variants,
   Daf.MiniSpec,
   Daf.SQLCute,
   Daf.SQLCute.Clauses,
@@ -516,6 +518,62 @@ TQuery — WHERE @unit @sqlcute
       procedure(W: TSQLCuteWorld)
       begin
         Expect(FirstInClause(W.Query).Connector).ToEqual('OR');
+      end)
+
+// -------------------------------------------------------------------------
+
+.Rule('Comparing with Null emits IS NULL or IS NOT NULL')
+
+  .Scenario('Where with Null emits IS NULL')
+    .When('query calls From(''t'').Where(''deleted_at'', Null)',
+      procedure(W: TSQLCuteWorld)
+      begin
+        W.LastResult := W.Compiler.Compile(TQuery.New.From('t').Where('deleted_at', Null));
+      end)
+    .&Then('SQL is SELECT * FROM t WHERE deleted_at IS NULL with 0 bindings',
+      procedure(W: TSQLCuteWorld)
+      begin
+        Expect(Format('%s | %d', [W.LastResult.SQL, Length(W.LastResult.Bindings)]))
+          .ToEqual('SELECT * FROM t WHERE deleted_at IS NULL | 0');
+      end)
+
+  .Scenario('The distinct operator emits IS NOT NULL')
+    .When('query calls From(''t'').Where(''active'', 1).OrWhere(''deleted_at'', ''<>'', Null)',
+      procedure(W: TSQLCuteWorld)
+      begin
+        W.LastResult := W.Compiler.Compile(TQuery.New.From('t').Where('active', 1).OrWhere('deleted_at', '<>', Null));
+      end)
+    .&Then('SQL is SELECT * FROM t WHERE active = ? OR deleted_at IS NOT NULL with 1 binding',
+      procedure(W: TSQLCuteWorld)
+      begin
+        Expect(Format('%s | %d', [W.LastResult.SQL, Length(W.LastResult.Bindings)]))
+          .ToEqual('SELECT * FROM t WHERE active = ? OR deleted_at IS NOT NULL | 1');
+      end)
+
+  .Scenario('Any other operator also emits IS NOT NULL')
+    .When('query calls From(''t'').Where(''age'', ''>'', Null)',
+      procedure(W: TSQLCuteWorld)
+      begin
+        W.LastResult := W.Compiler.Compile(TQuery.New.From('t').Where('age', '>', Null));
+      end)
+    .&Then('SQL is SELECT * FROM t WHERE age IS NOT NULL with 0 bindings',
+      procedure(W: TSQLCuteWorld)
+      begin
+        Expect(Format('%s | %d', [W.LastResult.SQL, Length(W.LastResult.Bindings)]))
+          .ToEqual('SELECT * FROM t WHERE age IS NOT NULL | 0');
+      end)
+
+  .Scenario('WhereNot keeps its negation')
+    .When('query calls From(''t'').WhereNot(''deleted_at'', Null)',
+      procedure(W: TSQLCuteWorld)
+      begin
+        W.LastResult := W.Compiler.Compile(TQuery.New.From('t').WhereNot('deleted_at', Null));
+      end)
+    .&Then('SQL is SELECT * FROM t WHERE NOT (deleted_at IS NULL) with 0 bindings',
+      procedure(W: TSQLCuteWorld)
+      begin
+        Expect(Format('%s | %d', [W.LastResult.SQL, Length(W.LastResult.Bindings)]))
+          .ToEqual('SELECT * FROM t WHERE NOT (deleted_at IS NULL) | 0');
       end)
 
 ;

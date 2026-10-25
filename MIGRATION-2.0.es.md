@@ -727,6 +727,15 @@ end;
 - **Qué rompe**: una llamada que pasaba `in` a esos métodos o un operador fuera de la lista, y el código
   que lee ese `Op` como texto.
 
+### 29. SQLCute: comparar con Null pregunta por NULL
+
+- **`Where(col, Null)` emite `col IS NULL`**, sin enlace, y con cualquier operador distinto de `=` emite
+  `col IS NOT NULL`; lo mismo en `OrWhere`, `WhereNot`, `OrWhereNot` y `Having`. `WhereNot` conserva su
+  negación: `NOT (col IS NULL)`. En 1.6 ligaban `Null` a `col = ?`, que no casa con ninguna fila en
+  ningún motor.
+- **Qué rompe**: el código que contaba ese enlace, o que contaba con que la condición no casara con
+  nada.
+
 ## Cómo hacerlo
 
 1. Compila. Lo que falte sale como error del compilador, no como comportamiento raro en
@@ -742,6 +751,6 @@ end;
    resolverlo: se resuelve desde un ámbito que abre el trabajo, `Services.CreateScope`. También un
    Scoped que resuelve un Singleton: el Singleton lo resuelve en un ámbito que abre con
    `IServiceScopeFactory`.
-6. Las secciones 2, de la 6 a la 13 y de la 15 a la 28 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
+6. Las secciones 2, de la 6 a la 13 y de la 15 a la 29 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
    contra tu propia composición — la vida de los ámbitos, los registros repetidos, las reglas de
    logging y los ajustes del host.

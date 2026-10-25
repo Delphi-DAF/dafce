@@ -724,6 +724,14 @@ end;
 - **What breaks**: a call that passed `in` to those methods or an operator outside the list, and code
   that reads that `Op` as a string.
 
+### 29. SQLCute: comparing with Null asks about NULL
+
+- **`Where(col, Null)` emits `col IS NULL`**, with no binding, and with any operator other than `=` it
+  emits `col IS NOT NULL`; the same in `OrWhere`, `WhereNot`, `OrWhereNot` and `Having`. `WhereNot`
+  keeps its negation: `NOT (col IS NULL)`. In 1.6 they bound `Null` to `col = ?`, which matches no row
+  on any engine.
+- **What breaks**: code that counted that binding, or relied on the condition matching nothing.
+
 ## How to do it
 
 1. Compile. Whatever is missing comes out as a compiler error, not as odd behaviour at run time.
@@ -737,6 +745,6 @@ end;
    A Scoped service asked of the root provider is rejected too, when it is resolved: resolve it from a
    scope the work opens, `Services.CreateScope`. So is a Scoped a Singleton resolves: the Singleton
    resolves it in a scope it opens through `IServiceScopeFactory`.
-6. Sections 2, 6 to 13 and 15 to 28 carry **run-time** changes: the compiler says nothing about them. Read them
+6. Sections 2, 6 to 13 and 15 to 29 carry **run-time** changes: the compiler says nothing about them. Read them
    against your own composition — scope lifetimes, duplicate registrations, logging rules and
    host settings.

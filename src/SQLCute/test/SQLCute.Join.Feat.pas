@@ -10,7 +10,10 @@ interface
 implementation
 
 uses
+  System.SysUtils,
+  System.Variants,
   Daf.MiniSpec,
+  Daf.SQLCute,
   SQLCute.SpecHelpers;
 
 initialization
@@ -229,6 +232,25 @@ TQuery — JOIN / GROUP BY / CTE @unit @sqlcute
     .Given('a JOIN callback query with two AND conditions')
     .When('I clone the query and compile the clone')
     .&Then('SQL is "SELECT * FROM orders INNER JOIN users ON (orders.user_id = users.id AND orders.tenant = users.tenant)"')
+
+// -------------------------------------------------------------------------
+
+.Rule('Having with Null emits IS NULL or IS NOT NULL')
+
+  .Scenario('Having with Null')
+    .When('query calls From(''tickets'').SelectMax(''closed_at'', '
+      + '''last_closed'').GroupBy(''team'').Having(''last_closed'', ''='', Null)',
+      procedure(W: TSQLCuteWorld)
+      begin
+        W.LastResult := W.Compiler.Compile(
+          TQuery.New.From('tickets').SelectMax('closed_at', 'last_closed').GroupBy('team').Having('last_closed', '=', Null));
+      end)
+    .&Then('SQL is SELECT MAX(closed_at) AS last_closed FROM tickets GROUP BY team HAVING last_closed IS NULL with 0 bindings',
+      procedure(W: TSQLCuteWorld)
+      begin
+        Expect(Format('%s | %d', [W.LastResult.SQL, Length(W.LastResult.Bindings)]))
+          .ToEqual('SELECT MAX(closed_at) AS last_closed FROM tickets GROUP BY team HAVING last_closed IS NULL | 0');
+      end)
 
 ;
 

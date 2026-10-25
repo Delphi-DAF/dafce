@@ -403,6 +403,10 @@ begin
     case H.Op of
       TWhereOp.Raw:
         Result := H.RawSql;
+      TWhereOp.IsNull:
+        Result := H.Column + ' IS NULL';
+      TWhereOp.IsNotNull:
+        Result := H.Column + ' IS NOT NULL';
     else
       begin
         C.AddBinding(H.Value);

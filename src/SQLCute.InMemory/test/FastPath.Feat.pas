@@ -466,6 +466,25 @@ Feature SQLCute in-memory fast path @inmemory @fastpath
       procedure(W: TFastPathWorld)
       begin
         Expect(W.Outcome).ToStartWith('EInMemoryQueryError');
+      end)
+
+.Rule('Comparing with Null selects the rows whose value is NULL')
+
+  .Scenario('In memory it selects the rows with NULL')
+    .Given('a list of people in which two have their age at NULL',
+      procedure(W: TFastPathWorld)
+      begin
+        W.People.Add(TPerson.Create('Gus', Null, 'US'));
+      end)
+    .When('From(''people'').Where(''age'', Null) runs in memory',
+      procedure(W: TFastPathWorld)
+      begin
+        W.Names := RunNames(W, TQuery.New.From('people').Where('age', Null));
+      end)
+    .&Then('it selects exactly those two',
+      procedure(W: TFastPathWorld)
+      begin
+        Expect(string.Join(',', W.Names)).ToEqual('Dan,Gus');
       end);
 
 end.

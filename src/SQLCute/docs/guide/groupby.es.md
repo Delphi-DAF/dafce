@@ -55,6 +55,8 @@ Expresión HAVING cruda:
 .HavingRaw('AVG(tiempo_respuesta) < 200')
 ```
 
+`Having` con `Null` compara igual que `Where`: `IS NULL` con `=` e `IS NOT NULL` con cualquier otro operador, sin enlace.
+
 ---
 
 ## Combinando con WHERE

@@ -63,6 +63,8 @@ Raw HAVING expression:
 .HavingRaw('AVG(response_time) < 200')
 ```
 
+`Having` with `Null` compares the same way as `Where`: `IS NULL` for `=` and `IS NOT NULL` for any other operator, with no binding.
+
 ---
 
 ## Combining with WHERE

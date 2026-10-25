@@ -452,6 +452,12 @@ begin
       raise EInMemoryQueryError.Create('Raw HAVING expressions cannot be evaluated in memory.');
     var HCol := H.Column;
     var HOp := H.Op;
+    if HOp in [TWhereOp.IsNull, TWhereOp.IsNotNull] then
+      Exit(
+        function(const Get: TColumnGetter): TTriState
+        begin
+          Result := BoolToTri(IsNullValue(Get(HCol)) = (HOp = TWhereOp.IsNull));
+        end);
     var HBound := VariantToValue(H.Value);
     Exit(
       function(const Get: TColumnGetter): TTriState
