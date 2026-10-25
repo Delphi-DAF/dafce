@@ -1117,8 +1117,9 @@ end;
 
 function TSystemProcess.TryCreateProcess(var ProcessResult: TProcessResult): Boolean;
 const
-  DefaultFlags = CREATE_NEW_PROCESS_GROUP or NORMAL_PRIORITY_CLASS or
-                 CREATE_SUSPENDED or CREATE_UNICODE_ENVIRONMENT;
+  // Sin CREATE_NEW_PROCESS_GROUP, que desactiva el Ctrl+C del hijo: uno que comparte la consola lo
+  // recibe, como el padre.
+  DefaultFlags = NORMAL_PRIORITY_CLASS or CREATE_SUSPENDED or CREATE_UNICODE_ENVIRONMENT;
 begin
   ProcessResult.Status := TProcessResult.TStatus.Failed;
   ProcessResult.ExitCode := 0;

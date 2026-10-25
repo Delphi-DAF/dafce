@@ -188,6 +188,9 @@ Two differences from .NET: `RunAndCaptureText` throws `TimeoutException` or
 with no window, in a console of its own. A parent with no console — a windowed application — gives the
 child a console of its own either way, and the streams it inherits write to that console.
 
+A child that shares the console receives its Ctrl+C, as the parent does, and ends with it unless it
+handles it; one launched with `HideWindow(True)` runs in a console of its own and does not receive it.
+
 ## TProcessResult
 
 | Field | Type | Description |
@@ -225,6 +228,10 @@ begin
     Proc.Kill;
 end;
 ```
+
+A Ctrl+C reaches a child that shares the console as well as the application, so the child may
+already be ending when the hook runs: `IsRunning` covers that too, and a `Kill` on a child that has
+just exited does nothing.
 
 ---
 

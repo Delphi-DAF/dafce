@@ -8,6 +8,7 @@ uses
   System.SysUtils,
   System.Classes,
   System.IOUtils,
+  System.Diagnostics,
   System.Generics.Collections,
   System.Threading,
   Winapi.Windows,
@@ -23,6 +24,13 @@ const
 
 function GetConsoleProcessList(lpdwProcessList: PDWORD; dwProcessCount: DWORD): DWORD; stdcall;
   external kernel32 name 'GetConsoleProcessList';
+
+// Reclama el Ctrl+C de la consola: registrado encima del de TShutdownHook, el runner no lo toma por
+// una peticion de parada.
+function ClaimCtrlC(CtrlType: DWORD): BOOL; stdcall;
+begin
+  Result := CtrlType = CTRL_C_EVENT;
+end;
 
 // Cuantos procesos hay conectados a la consola del runner.
 function ConsoleProcesses: Integer;
@@ -51,6 +59,9 @@ type
     /// El hilo que lanza hijos sin pausa, y la orden de parar; espera a sus hijos antes de acabar.
     Launcher: TThread;
     [volatile] StopLaunching: Boolean;
+    CtrlCClaimed: Boolean;
+    Future: IFuture<TProcessResult>;
+    ElapsedMS: Int64;
     constructor Create;
     destructor Destroy; override;
     function PathOf(const Name: string): string;
@@ -100,6 +111,16 @@ end;
 
 destructor TStreamsWorld.Destroy;
 begin
+  if Assigned(Future) then
+    try
+      if Proc.IsRunning then
+        Proc.Kill;
+      Future.Wait(30000);
+    except
+      on Exception do;
+    end;
+  if CtrlCClaimed then
+    SetConsoleCtrlHandler(@ClaimCtrlC, False);
   if Assigned(Launcher) then
   begin
     StopLaunching := True;
@@ -752,6 +773,68 @@ Feature Cada flujo del hijo va adonde se declara @systemprocess @process @stream
       procedure(W: TStreamsWorld)
       begin
         Expect(W.ReadText(W.PathOf('padre.txt'))).ToEqual('hola');
+      end)
+
+.Rule('Un hijo que comparte la consola recibe su Ctrl+C')
+
+  .Scenario('El Ctrl+C de la consola llega al hijo que la comparte')
+    .Given('un hijo que dura varios segundos, lanzado sin HideWindow',
+      procedure(W: TStreamsWorld)
+      begin
+        W.Proc := TSystemProcess.Builder
+          .Command('ping')
+          .CmdArgs(['-n', '10', '127.0.0.1'])
+          .StandardOutput(TProcessOutput.Discard)
+          .StandardError(TProcessOutput.Discard)
+          .Timeout(60000)
+          .Build;
+      end)
+    .When('llega un Ctrl+C a la consola del padre mientras el hijo corre',
+      procedure(W: TStreamsWorld)
+      begin
+        // Por SSH el runner hereda el Ctrl+C desactivado; restaurarlo antes de lanzar lo hereda el hijo.
+        SetConsoleCtrlHandler(nil, False);
+        W.CtrlCClaimed := SetConsoleCtrlHandler(@ClaimCtrlC, True);
+        var Watch := TStopwatch.StartNew;
+        W.Future := W.Proc.ExecuteAsync;
+        Sleep(500);
+        GenerateConsoleCtrlEvent(CTRL_C_EVENT, 0);
+        W.Result := W.Future.Value;
+        W.ElapsedMS := Watch.ElapsedMilliseconds;
+      end)
+    .&Then('el hijo termina antes de su tiempo',
+      procedure(W: TStreamsWorld)
+      begin
+        Expect(Format('termino-antes=%s', [BoolToStr(W.ElapsedMS < 5000, True)])).ToEqual('termino-antes=True');
+      end)
+
+  .Scenario('El Ctrl+C de la consola no llega a un hijo oculto')
+    .Given('un hijo que dura varios segundos, lanzado con HideWindow(True) y un plazo de pocos segundos',
+      procedure(W: TStreamsWorld)
+      begin
+        W.Proc := TSystemProcess.Builder
+          .Command('ping')
+          .CmdArgs(['-n', '10', '127.0.0.1'])
+          .StandardOutput(TProcessOutput.Discard)
+          .StandardError(TProcessOutput.Discard)
+          .HideWindow(True)
+          .Timeout(3000)
+          .Build;
+      end)
+    .When('llega un Ctrl+C a la consola del padre mientras el hijo corre',
+      procedure(W: TStreamsWorld)
+      begin
+        SetConsoleCtrlHandler(nil, False);
+        W.CtrlCClaimed := SetConsoleCtrlHandler(@ClaimCtrlC, True);
+        W.Future := W.Proc.ExecuteAsync;
+        Sleep(500);
+        GenerateConsoleCtrlEvent(CTRL_C_EVENT, 0);
+        W.Result := W.Future.Value;
+      end)
+    .&Then('el hijo sigue vivo hasta que vence el plazo, y el resultado es Timeout',
+      procedure(W: TStreamsWorld)
+      begin
+        Expect(W.Status).ToEqual('Timeout');
       end)
 
 .Rule('Un hijo no hereda los flujos de otro lanzamiento')

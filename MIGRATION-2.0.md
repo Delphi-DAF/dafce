@@ -77,6 +77,10 @@ A stream takes one declaration: `OnStdOut` twice, or `OnStdOut` and then `Standa
 `HideWindow(False)`, the default, no longer opens a console window of its own: the child runs in
 your console. There is no option that brings the separate window back.
 
+Sharing your console, the child also receives its Ctrl+C: the user's Ctrl+C now stops the child
+together with your application, where in 1.6.0 the child's own console kept it out. A child that has
+to outlive a Ctrl+C is launched with `HideWindow(True)`.
+
 `ExecuteAsync` now launches the child before it returns, on the thread that calls it, and only the
 wait runs in the task. A launch that fails calls `OnFailed` on that same thread, before
 `ExecuteAsync` returns: a handler that counted on running in the background no longer does.

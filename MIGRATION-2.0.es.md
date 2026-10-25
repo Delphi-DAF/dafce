@@ -77,6 +77,10 @@ lanza `EInvalidOpException`. Deja una por flujo.
 `HideWindow(False)`, el valor por defecto, ya no abre una ventana de consola propia: el hijo corre
 en tu consola. No hay opción que devuelva la ventana aparte.
 
+Al compartir tu consola, el hijo recibe también su Ctrl+C: el Ctrl+C del usuario para ahora al hijo
+junto con tu aplicación, donde en 1.6.0 la consola propia del hijo lo dejaba fuera. Un hijo que tenga
+que sobrevivir a un Ctrl+C se lanza con `HideWindow(True)`.
+
 `ExecuteAsync` lanza ahora al hijo antes de volver, en el hilo que lo llama, y solo la espera corre
 en la tarea. Un lanzamiento que falla llama a `OnFailed` en ese mismo hilo, antes de que
 `ExecuteAsync` vuelva: un manejador que contaba con correr en segundo plano ya no lo hace.

@@ -188,6 +188,9 @@ de que `Execute` vuelva, como sí hacen los eventos de .NET tras `WaitForExit(ms
 corre sin ventana, en una consola propia. Un padre sin consola —una aplicación de ventanas— le da al
 hijo una consola propia en los dos casos, y los flujos que hereda escriben en ella.
 
+Un hijo que comparte la consola recibe su Ctrl+C, como el padre, y termina con él salvo que lo
+atienda; uno lanzado con `HideWindow(True)` corre en una consola propia y no lo recibe.
+
 ## TProcessResult
 
 | Campo | Tipo | Descripción |
@@ -225,6 +228,10 @@ begin
     Proc.Kill;
 end;
 ```
+
+Un Ctrl+C llega a un hijo que comparte la consola además de a la aplicación, así que el hijo puede
+estar ya terminando cuando corre el hook: `IsRunning` cubre también eso, y un `Kill` sobre un hijo
+que acaba de terminar no hace nada.
 
 ---
 

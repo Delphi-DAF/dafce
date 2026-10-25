@@ -126,6 +126,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - ⚠️ **SystemProcess**: A stream with no declared destination **inherits the parent's**, so a child launched without handlers writes where the calling process writes. `TProcessOutput.Discard` on both streams keeps it quiet
 - ⚠️ **SystemProcess**: A second destination for the same stream —`OnStdOut` twice, or `OnStdOut` and `StandardOutput`— **raises `EInvalidOpException`**; it used to replace the first
 - ⚠️ **SystemProcess**: `HideWindow(False)`, the default, **no longer opens a console of its own**: the child runs in the parent's console
+- ⚠️ **SystemProcess**: A child that shares the parent's console **receives its Ctrl+C**, and ends with it unless it handles it, as in .NET. **Breaks** a child that had to outlive the user's Ctrl+C: launch it with `HideWindow(True)`
 - ⚠️ **SystemProcess**: `ExecuteAsync` **launches the child before it returns**, on the calling thread, and only the wait goes to the task. The `OnFailed` of a launch that fails runs on the calling thread, no longer in the task
 - ⚠️ **SystemProcess**: `Kill` with no child launched —before running, or after a launch that failed— **raises `EInvalidOpException`**, as `Id` does. **Breaks** a shutdown hook that kills unconditionally: ask `IsRunning` first
 - **SystemProcess**: A killed child —by `Kill`, the deadline or the cancellation— exits with code `-1` (`$FFFFFFFF`), as in .NET, and `TProcessResult.ExitCode` carries the child's real exit code whenever it has exited; it used to be 0

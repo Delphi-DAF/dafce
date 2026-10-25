@@ -125,6 +125,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - ⚠️ **SystemProcess**: Un flujo sin destino declarado **hereda el del padre**, así que un hijo lanzado sin manejadores escribe donde escribe el proceso que lo lanza. `TProcessOutput.Discard` en los dos flujos lo calla
 - ⚠️ **SystemProcess**: Un segundo destino para el mismo flujo —`OnStdOut` dos veces, u `OnStdOut` y `StandardOutput`— **lanza `EInvalidOpException`**; antes sustituía al primero
 - ⚠️ **SystemProcess**: `HideWindow(False)`, el valor por defecto, **ya no abre una consola propia**: el hijo corre en la consola del padre
+- ⚠️ **SystemProcess**: Un hijo que comparte la consola del padre **recibe su Ctrl+C**, y termina con él salvo que lo atienda, como en .NET. **Rompe** un hijo que tuviera que sobrevivir al Ctrl+C del usuario: se lanza con `HideWindow(True)`
 - ⚠️ **SystemProcess**: `ExecuteAsync` **lanza al hijo antes de volver**, en el hilo de quien lo llama, y solo la espera va a la tarea. El `OnFailed` de un lanzamiento que falla corre en el hilo de quien llamó, ya no en la tarea
 - ⚠️ **SystemProcess**: `Kill` sin un hijo lanzado —antes de ejecutar, o tras un lanzamiento que falló— **lanza `EInvalidOpException`**, como `Id`. **Rompe** un gancho de parada que mata sin mirar: se pregunta antes por `IsRunning`
 - **SystemProcess**: Un hijo al que se mata —con `Kill`, el plazo o la cancelación— sale con el código `-1` (`$FFFFFFFF`), como en .NET, y `TProcessResult.ExitCode` lleva el código real del hijo siempre que terminó; antes era 0
