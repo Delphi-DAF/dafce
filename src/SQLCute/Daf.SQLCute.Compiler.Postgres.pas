@@ -10,8 +10,7 @@ uses
 type
   TPostgresCompiler = class(TAnsiSqlCompiler)
   protected
-    function WrapColumn(const Col: string): string; override;
-    function WrapTable(const Table: string): string; override;
+    function WrapIdentifier(const Name: string): string; override;
     function FormatPlaceholder(const Index: Integer): string; override;
     function CompileDateWhere(const C: TSqlCompilation; const Clause: TDateWhereClause): string; override;
   end;
@@ -21,14 +20,9 @@ implementation
 uses
   SysUtils;
 
-function TPostgresCompiler.WrapColumn(const Col: string): string;
+function TPostgresCompiler.WrapIdentifier(const Name: string): string;
 begin
-  Result := '"' + Col + '"';
-end;
-
-function TPostgresCompiler.WrapTable(const Table: string): string;
-begin
-  Result := '"' + Table + '"';
+  Result := '"' + StringReplace(Name, '"', '""', [rfReplaceAll]) + '"';
 end;
 
 function TPostgresCompiler.FormatPlaceholder(const Index: Integer): string;

@@ -48,8 +48,28 @@ type
     function CompileStatement(const C: TSqlCompilation; const Query: IQuery): string;
     function NumberPlaceholders(const SQL: string): string;
   protected
+    /// <summary>
+    /// Quotes a single name, doubling inside it the character that closes the
+    /// quote. ANSI: the name as it is.
+    /// </summary>
+    function WrapIdentifier(const Name: string): string; virtual;
+    /// <summary>
+    /// A column: an alias written in it (<c>name as alias</c>) is split off, the
+    /// name is split at each dot, a <c>*</c> part stays bare, and every other
+    /// part and the alias go through <see cref="WrapIdentifier"/>.
+    /// </summary>
     function WrapColumn(const Col: string): string; virtual;
+    /// <summary>A table, quoted the way <see cref="WrapColumn"/> quotes a column.</summary>
     function WrapTable(const Table: string): string; virtual;
+    /// <summary>
+    /// What joins a column, a table or a subquery with its alias, spaces
+    /// included. ANSI: <c> AS </c>.
+    /// </summary>
+    function AliasKeyword: string; virtual;
+    /// <summary>A name, the alias keyword and the quoted alias.</summary>
+    function WithAlias(const Expr, Alias: string): string;
+    /// <summary>A name split at each dot, each part quoted but a bare <c>*</c>.</summary>
+    function WrapQualified(const Name: string): string;
     /// <summary>
     /// The placeholder for the binding at <c>Index</c>, counted from 0 in the
     /// order of the text. ANSI: '?'.
@@ -140,16 +160,43 @@ begin
   Result := FBindings.ToArray;
 end;
 
-function TAnsiSqlCompiler.WrapColumn(const Col: string): string;
+function TAnsiSqlCompiler.WrapIdentifier(const Name: string): string;
 begin
-  // ANSI: no quoting for plain identifiers.
-  // Sub-classes override (e.g. MySQL uses backticks, MSSQL uses brackets).
-  Result := Col;
+  Result := Name;
+end;
+
+function TAnsiSqlCompiler.WrapQualified(const Name: string): string;
+begin
+  var Parts := Name.Split(['.']);
+  for var I := 0 to High(Parts) do
+    if Parts[I] <> '*' then
+      Parts[I] := WrapIdentifier(Parts[I]);
+  Result := string.Join('.', Parts);
+end;
+
+function TAnsiSqlCompiler.WrapColumn(const Col: string): string;
+var
+  Name, Alias: string;
+begin
+  if SplitNameAlias(Col, Name, Alias) then
+    Result := WithAlias(WrapQualified(Name), Alias)
+  else
+    Result := WrapQualified(Col);
 end;
 
 function TAnsiSqlCompiler.WrapTable(const Table: string): string;
 begin
-  Result := Table;
+  Result := WrapColumn(Table);
+end;
+
+function TAnsiSqlCompiler.AliasKeyword: string;
+begin
+  Result := ' AS ';
+end;
+
+function TAnsiSqlCompiler.WithAlias(const Expr, Alias: string): string;
+begin
+  Result := Expr + AliasKeyword + WrapIdentifier(Alias);
 end;
 
 function TAnsiSqlCompiler.FormatPlaceholder(const Index: Integer): string;
@@ -241,7 +288,7 @@ begin
             Expr := WrapColumn(Col.Column);
 
           if Col.Alias <> '' then
-            Expr := Expr + ' AS ' + WrapColumn(Col.Alias);
+            Expr := WithAlias(Expr, Col.Alias);
 
           Parts.Add(Expr);
         end;
@@ -284,7 +331,7 @@ begin
     if Clause is TFromSubqueryClause then
     begin
       FSQ := TFromSubqueryClause(Clause);
-      Result := 'FROM (' + CompileSubQuery(C, FSQ.SubQuery) + ') ' + WrapTable(FSQ.Alias);
+      Result := 'FROM (' + CompileSubQuery(C, FSQ.SubQuery) + ') ' + WrapIdentifier(FSQ.Alias);
       Exit;
     end;
 
@@ -293,7 +340,7 @@ begin
       FRaw := TFromRawClause(Clause);
       TableExpr := FRaw.RawSql;
       if FRaw.Alias <> '' then
-        TableExpr := TableExpr + ' AS ' + WrapTable(FRaw.Alias);
+        TableExpr := WithAlias(TableExpr, FRaw.Alias);
       for B in FRaw.Bindings do
         C.AddBinding(B);
       Result := 'FROM ' + TableExpr;
@@ -308,7 +355,7 @@ begin
       else
         TableExpr := WrapTable(From.Table);
       if From.Alias <> '' then
-        TableExpr := TableExpr + ' AS ' + WrapTable(From.Alias);
+        TableExpr := WithAlias(TableExpr, From.Alias);
       Result := 'FROM ' + TableExpr;
       Exit;
     end;
@@ -693,7 +740,7 @@ begin
         JS := TJoinSubqueryClause(Clause);
         if Sb.Length > 0 then Sb.Append(' ');
         Sb.Append(JoinKeyword(JS.JoinType));
-        TableExpr := '(' + CompileSubQuery(C, JS.SubQuery as IQuery) + ') AS ' + WrapTable(JS.Alias);
+        TableExpr := WithAlias('(' + CompileSubQuery(C, JS.SubQuery as IQuery) + ')', JS.Alias);
         Sb.Append(TableExpr);
         if Length(JS.ConditionClauses) > 0 then
           Sb.Append(' ON (' + CompileWhereList(C, JS.ConditionClauses) + ')');
@@ -711,7 +758,7 @@ begin
       else
         TableExpr := WrapTable(J.Table);
       if J.Alias <> '' then
-        TableExpr := TableExpr + ' AS ' + WrapTable(J.Alias);
+        TableExpr := WithAlias(TableExpr, J.Alias);
 
       Sb.Append(TableExpr);
 

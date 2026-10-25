@@ -662,7 +662,7 @@ begin
         P.Source := Col.Column;
         if Col.Alias <> '' then
           P.Output := Col.Alias
-        else
+        else if not SplitNameAlias(Col.Column, P.Source, P.Output) then
           P.Output := Col.Column;
         Result := Result + [P];
       end;

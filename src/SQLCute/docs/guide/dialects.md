@@ -30,6 +30,8 @@ The default `TAnsiSqlCompiler` generates generic ANSI SQL with `?` placeholders 
 | `TOracleCompiler` | `"`, upper-cased | `:p1`, `:p2`, … | `Daf.SQLCute.Compiler.Oracle` |
 | `TFirebirdCompiler` | none | `?` | `Daf.SQLCute.Compiler.Firebird` |
 
+A quoting dialect quotes each part of a qualified name on its own — `"public"."users"`, `[users].[id]` — leaves a trailing `*` bare, and doubles its closing character inside a name. A column written `name as alias` is split: `Select('users.name as n')` compiles to `SELECT "users"."name" AS "n"` in Postgres. Oracle writes its aliases without `AS`: `FROM "USERS" "U"`.
+
 All dialect compilers ship in the `Daf.SQLCute` package, alongside the `TAnsiSqlCompiler` they extend. Requiring `Daf.SQLCute` is enough — there is no separate compilers package to add.
 
 ---
@@ -108,19 +110,13 @@ uses System.SysUtils, Daf.SQLCute, Daf.SQLCute.Compiler;
 type
   TMyDbCompiler = class(TAnsiSqlCompiler)
   protected
-    function WrapColumn(const Col: string): string; override;
-    function WrapTable(const Table: string): string; override;
+    function WrapIdentifier(const Name: string): string; override;
     function FormatPlaceholder(const Index: Integer): string; override;
   end;
 
-function TMyDbCompiler.WrapColumn(const Col: string): string;
+function TMyDbCompiler.WrapIdentifier(const Name: string): string;
 begin
-  Result := '[' + Col + ']';
-end;
-
-function TMyDbCompiler.WrapTable(const Table: string): string;
-begin
-  Result := '[' + Table + ']';
+  Result := '[' + StringReplace(Name, ']', ']]', [rfReplaceAll]) + ']';
 end;
 
 function TMyDbCompiler.FormatPlaceholder(const Index: Integer): string;
@@ -128,6 +124,8 @@ begin
   Result := ':' + IntToStr(Index + 1);
 end;
 ```
+
+`WrapIdentifier` quotes a single name. `WrapColumn` and `WrapTable` split off an alias and split a qualified name at each dot, and call it for each part; `AliasKeyword` is what joins a name with its alias.
 
 Every method that emits SQL — `CompileSelect` to `CompileDelete`, `CompileWhereList`, `CompileDateWhere`, `CompileOrderByColumn` — receives the compilation, a `TSqlCompilation`, as its first parameter, adds its bindings to it with `AddBinding`, and writes each placeholder as `?`. A final pass replaces the `?` at each position with what `FormatPlaceholder` returns for it, counted from 0.
 

@@ -10,21 +10,18 @@ uses
 type
   TSQLiteCompiler = class(TAnsiSqlCompiler)
   protected
-    function WrapColumn(const Col: string): string; override;
-    function WrapTable(const Table: string): string; override;
+    function WrapIdentifier(const Name: string): string; override;
     function CompileDateWhere(const C: TSqlCompilation; const Clause: TDateWhereClause): string; override;
   end;
 
 implementation
 
-function TSQLiteCompiler.WrapColumn(const Col: string): string;
-begin
-  Result := '"' + Col + '"';
-end;
+uses
+  System.SysUtils;
 
-function TSQLiteCompiler.WrapTable(const Table: string): string;
+function TSQLiteCompiler.WrapIdentifier(const Name: string): string;
 begin
-  Result := '"' + Table + '"';
+  Result := '"' + StringReplace(Name, '"', '""', [rfReplaceAll]) + '"';
 end;
 
 function TSQLiteCompiler.CompileDateWhere(const C: TSqlCompilation; const Clause: TDateWhereClause): string;

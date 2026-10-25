@@ -278,6 +278,23 @@ Feature SQLCute in-memory row model & projection @inmemory @projection
         Expect(W.Aliases[0].DisplayName).ToEqual('Ann');
       end)
 
+  .Scenario('An alias written in the column name names the row column')
+    .When('From(''people'').Select(''name as display'') runs in memory',
+      procedure(W: TProjWorld)
+      begin
+        W.Str1 := '';
+        for var R in TInMemory.Rows<TPerson>(TQuery.New.From('people').Select('name as display'), W.People) do
+          if R.Has('display') then
+            W.Str1 := W.Str1 + R.Get('display').AsString + ' '
+          else
+            W.Str1 := W.Str1 + '<no display> ';
+      end)
+    .&Then('every row has the column display with the name of the person',
+      procedure(W: TProjWorld)
+      begin
+        Expect(W.Str1).ToEqual('Ann Bob Dan ');
+      end)
+
   .Scenario('Materialization into a class with public fields populates the fields')
     .When('Project into a field-based class runs with a name and age projection',
       procedure(W: TProjWorld)

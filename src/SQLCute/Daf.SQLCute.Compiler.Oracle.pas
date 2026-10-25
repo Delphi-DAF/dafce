@@ -10,8 +10,8 @@ uses
 type
   TOracleCompiler = class(TAnsiSqlCompiler)
   protected
-    function WrapColumn(const Col: string): string; override;
-    function WrapTable(const Table: string): string; override;
+    function WrapIdentifier(const Name: string): string; override;
+    function AliasKeyword: string; override;
     function FormatPlaceholder(const Index: Integer): string; override;
     function CompileLimit(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string; override;
     function CompileOffset(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string; override;
@@ -23,14 +23,14 @@ implementation
 uses
   SysUtils;
 
-function TOracleCompiler.WrapColumn(const Col: string): string;
+function TOracleCompiler.WrapIdentifier(const Name: string): string;
 begin
-  Result := '"' + UpperCase(Col) + '"';
+  Result := '"' + UpperCase(StringReplace(Name, '"', '""', [rfReplaceAll])) + '"';
 end;
 
-function TOracleCompiler.WrapTable(const Table: string): string;
+function TOracleCompiler.AliasKeyword: string;
 begin
-  Result := '"' + UpperCase(Table) + '"';
+  Result := ' ';
 end;
 
 function TOracleCompiler.FormatPlaceholder(const Index: Integer): string;

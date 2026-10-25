@@ -386,7 +386,29 @@ type
     function Clone: TAbstractClause; override;
   end;
 
+/// <summary>
+/// Splits a name written with an alias, <c>name as alias</c>, at the last <c> as </c> of the text,
+/// case-insensitive. False, with <c>Name</c> the whole text, when it carries none.
+/// </summary>
+function SplitNameAlias(const Text: string; out Name, Alias: string): Boolean;
+
 implementation
+
+function SplitNameAlias(const Text: string; out Name, Alias: string): Boolean;
+begin
+  var P := LowerCase(Text).LastIndexOf(' as ');
+  Result := P >= 0;
+  if Result then
+  begin
+    Name := Trim(Text.Substring(0, P));
+    Alias := Trim(Text.Substring(P + 4));
+  end
+  else
+  begin
+    Name := Text;
+    Alias := '';
+  end;
+end;
 
 { TSelectClause }
 

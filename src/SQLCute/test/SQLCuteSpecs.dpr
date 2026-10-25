@@ -32,7 +32,8 @@ uses
   SQLCute.Compilers.Feat in 'SQLCute.Compilers.Feat.pas',
   SQLCute.Compilers.Steps in 'SQLCute.Compilers.Steps.pas',
   SQLCute.Date.Feat in 'SQLCute.Date.Feat.pas',
-  SQLCute.Reentrancy.Feat in 'SQLCute.Reentrancy.Feat.pas';
+  SQLCute.Reentrancy.Feat in 'SQLCute.Reentrancy.Feat.pas',
+  SQLCute.Identifiers.Feat in 'SQLCute.Identifiers.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

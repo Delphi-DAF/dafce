@@ -10,8 +10,6 @@ uses
 type
   TFirebirdCompiler = class(TAnsiSqlCompiler)
   protected
-    function WrapColumn(const Col: string): string; override;
-    function WrapTable(const Table: string): string; override;
     function CompileLimit(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string; override;
     function CompileOffset(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string; override;
     function CompileDateWhere(const C: TSqlCompilation; const Clause: TDateWhereClause): string; override;
@@ -21,16 +19,6 @@ implementation
 
 uses
   SysUtils;
-
-function TFirebirdCompiler.WrapColumn(const Col: string): string;
-begin
-  Result := Col;
-end;
-
-function TFirebirdCompiler.WrapTable(const Table: string): string;
-begin
-  Result := Table;
-end;
 
 function TFirebirdCompiler.CompileLimit(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string;
 var

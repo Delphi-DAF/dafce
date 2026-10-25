@@ -10,8 +10,7 @@ uses
 type
   TMySqlCompiler = class(TAnsiSqlCompiler)
   protected
-    function WrapColumn(const Col: string): string; override;
-    function WrapTable(const Table: string): string; override;
+    function WrapIdentifier(const Name: string): string; override;
     function CompileDateWhere(const C: TSqlCompilation; const Clause: TDateWhereClause): string; override;
     /// <summary>
     /// MySQL has no <c>NULLS FIRST/LAST</c>, so a requested placement is
@@ -24,14 +23,12 @@ type
 
 implementation
 
-function TMySqlCompiler.WrapColumn(const Col: string): string;
-begin
-  Result := '`' + Col + '`';
-end;
+uses
+  System.SysUtils;
 
-function TMySqlCompiler.WrapTable(const Table: string): string;
+function TMySqlCompiler.WrapIdentifier(const Name: string): string;
 begin
-  Result := '`' + Table + '`';
+  Result := '`' + StringReplace(Name, '`', '``', [rfReplaceAll]) + '`';
 end;
 
 function TMySqlCompiler.CompileOrderByColumn(const C: TSqlCompilation; const O: TOrderByClause): string;

@@ -10,8 +10,7 @@ uses
 type
   TSqlServerCompiler = class(TAnsiSqlCompiler)
   protected
-    function WrapColumn(const Col: string): string; override;
-    function WrapTable(const Table: string): string; override;
+    function WrapIdentifier(const Name: string): string; override;
     function FormatPlaceholder(const Index: Integer): string; override;
     function CompileSelect(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string; override;
     function CompileLimit(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string; override;
@@ -31,14 +30,9 @@ implementation
 uses
   SysUtils;
 
-function TSqlServerCompiler.WrapColumn(const Col: string): string;
+function TSqlServerCompiler.WrapIdentifier(const Name: string): string;
 begin
-  Result := '[' + Col + ']';
-end;
-
-function TSqlServerCompiler.WrapTable(const Table: string): string;
-begin
-  Result := '[' + Table + ']';
+  Result := '[' + StringReplace(Name, ']', ']]', [rfReplaceAll]) + ']';
 end;
 
 function TSqlServerCompiler.FormatPlaceholder(const Index: Integer): string;

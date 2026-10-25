@@ -30,6 +30,8 @@ El `TAnsiSqlCompiler` por defecto genera SQL ANSI genérico con marcadores `?` y
 | `TOracleCompiler` | `"`, en mayúsculas | `:p1`, `:p2`… | `Daf.SQLCute.Compiler.Oracle` |
 | `TFirebirdCompiler` | ninguna | `?` | `Daf.SQLCute.Compiler.Firebird` |
 
+Un dialecto que entrecomilla entrecomilla por separado cada parte de un nombre cualificado —`"public"."users"`, `[users].[id]`—, deja sin comillas un `*` final y duplica dentro de un nombre su carácter de cierre. Una columna escrita `nombre as alias` se separa: `Select('users.name as n')` compila a `SELECT "users"."name" AS "n"` en Postgres. Oracle escribe sus alias sin `AS`: `FROM "USERS" "U"`.
+
 Todos los compiladores de dialecto viven en el paquete `Daf.SQLCute`, junto al `TAnsiSqlCompiler` del que extienden. Basta con requerir `Daf.SQLCute`: no hay un paquete de compiladores aparte que añadir.
 
 ---
@@ -108,19 +110,13 @@ uses System.SysUtils, Daf.SQLCute, Daf.SQLCute.Compiler;
 type
   TMiDbCompilador = class(TAnsiSqlCompiler)
   protected
-    function WrapColumn(const Col: string): string; override;
-    function WrapTable(const Table: string): string; override;
+    function WrapIdentifier(const Name: string): string; override;
     function FormatPlaceholder(const Index: Integer): string; override;
   end;
 
-function TMiDbCompilador.WrapColumn(const Col: string): string;
+function TMiDbCompilador.WrapIdentifier(const Name: string): string;
 begin
-  Result := '[' + Col + ']';
-end;
-
-function TMiDbCompilador.WrapTable(const Table: string): string;
-begin
-  Result := '[' + Table + ']';
+  Result := '[' + StringReplace(Name, ']', ']]', [rfReplaceAll]) + ']';
 end;
 
 function TMiDbCompilador.FormatPlaceholder(const Index: Integer): string;
@@ -128,6 +124,8 @@ begin
   Result := ':' + IntToStr(Index + 1);
 end;
 ```
+
+`WrapIdentifier` entrecomilla un solo nombre. `WrapColumn` y `WrapTable` separan un alias y parten un nombre cualificado por cada punto, y lo llaman para cada parte; `AliasKeyword` es lo que une un nombre con su alias.
 
 Cada método que emite SQL —de `CompileSelect` a `CompileDelete`, `CompileWhereList`, `CompileDateWhere`, `CompileOrderByColumn`— recibe la compilación, un `TSqlCompilation`, como primer parámetro, le añade sus enlaces con `AddBinding` y escribe cada marcador como `?`. Una pasada final sustituye el `?` de cada posición por lo que devuelve para ella `FormatPlaceholder`, contando desde 0.
 
