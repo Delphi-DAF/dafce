@@ -134,6 +134,7 @@ type
     function GroupBy(const Columns: TArray<string>): IQuery; overload;
     function GroupByRaw(const Expression: string): IQuery;
     function Having(const Column, Op: string; const Value: Variant): IQuery;
+    function OrHaving(const Column, Op: string; const Value: Variant): IQuery;
     function HavingRaw(const Sql: string): IQuery;
     function Union(const Other: IQuery): IQuery;
     function UnionAll(const Other: IQuery): IQuery;
@@ -943,6 +944,11 @@ end;
 function TQueryImpl.Having(const Column, Op: string; const Value: Variant): IQuery;
 begin
   Result := AddHavingClause(Column, ParseComparisonOp(Op), Value, TBoolOp.opAnd);
+end;
+
+function TQueryImpl.OrHaving(const Column, Op: string; const Value: Variant): IQuery;
+begin
+  Result := AddHavingClause(Column, ParseComparisonOp(Op), Value, TBoolOp.opOr);
 end;
 
 function TQueryImpl.HavingRaw(const Sql: string): IQuery;

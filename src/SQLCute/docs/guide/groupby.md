@@ -33,28 +33,34 @@ Raw expression:
 
 ## HAVING
 
-`Having` filters groups after aggregation. The column argument accepts any aggregate expression. Its operator is one of `=`, `<>`, `!=`, `<`, `<=`, `>`, `>=`, `like` and `not like`; `in` and `not in` raise `EArgumentException`, and an `IN` on an aggregate goes through `HavingRaw`.
+A condition on an aggregate goes through `HavingRaw`, which every engine accepts:
 
 ```pascal
 TQuery.New.From('orders')
   .GroupBy('customer_id')
   .SelectCount('*', 'order_count')
   .SelectSum('total', 'revenue')
-  .Having('count(*)', '>', 5)
-  .Having('sum(total)', '>=', 1000)
+  .HavingRaw('count(*) > 5')
+  .HavingRaw('sum(total) >= 1000')
 // → SELECT COUNT(*) AS order_count, SUM(total) AS revenue
 //   FROM orders
 //   GROUP BY customer_id
-//   HAVING count(*) > ? AND sum(total) >= ?
-//   Bindings: [5, 1000]
+//   HAVING count(*) > 5 AND sum(total) >= 1000
+```
+
+`Having` compares a column with a bound value. The column names a grouped column or the alias of an output column, and is quoted like any other column of the dialect. Its operator is one of `=`, `<>`, `!=`, `<`, `<=`, `>`, `>=`, `like` and `not like`; `in` and `not in` raise `EArgumentException`, and an `IN` on an aggregate goes through `HavingRaw`. MySQL, SQLite and Oracle 23 accept the alias of an output column in `HAVING`; Postgres, SQL Server and Firebird reject it.
+
+```pascal
+.Having('order_count', '>', 5)
+// Postgres → HAVING "order_count" > $1
 ```
 
 OR connector:
 
 ```pascal
-.Having('count(*)', '>', 10)
-// not yet exposed as OrHaving — use HavingRaw for OR
-.HavingRaw('sum(amount) > 500 OR count(*) > 100')
+.Having('order_count', '>', 10)
+.OrHaving('revenue', '>=', 1000)
+// → HAVING order_count > ? OR revenue >= ?
 ```
 
 Raw HAVING expression:
@@ -76,9 +82,9 @@ TQuery.New.From('logs')
   .Where('level', 'error')          // applied before GROUP BY
   .GroupBy('service')
   .SelectCount('*', 'errors')
-  .Having('count(*)', '>', 50)      // applied after GROUP BY
+  .HavingRaw('count(*) > 50')       // applied after GROUP BY
 // → SELECT COUNT(*) AS errors FROM logs
 //   WHERE level = ?
 //   GROUP BY service
-//   HAVING count(*) > ?
+//   HAVING count(*) > 50
 ```

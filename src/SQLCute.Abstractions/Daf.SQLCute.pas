@@ -290,8 +290,14 @@ type
     function GroupBy(const Column: string): IQuery; overload;
     function GroupBy(const Columns: TArray<string>): IQuery; overload;
     function GroupByRaw(const Expression: string): IQuery;
-    /// <summary>Adds a HAVING condition. Column may be an aggregate expression.</summary>
+    /// <summary>
+    /// Adds a HAVING condition. Column names a grouped column or the alias of an
+    /// output column, and is quoted like any other; an aggregate goes through
+    /// HavingRaw.
+    /// </summary>
     function Having(const Column, Op: string; const Value: Variant): IQuery;
+    /// <summary>Adds a HAVING condition joined to the previous one with OR.</summary>
+    function OrHaving(const Column, Op: string; const Value: Variant): IQuery;
     function HavingRaw(const Sql: string): IQuery;
 
     // --- UNION / INTERSECT / EXCEPT -------------------------------------

@@ -47,6 +47,7 @@ type
   public
     People: TObjectList<TPerson>;
     Orders: TObjectList<TOrder>;
+    CustomerOrders: TObjectList<TOrder>;
     Names: TArray<string>;
     Count: Integer;
     FirstPerson: string;
@@ -115,6 +116,7 @@ begin
   // What the World holds, the World closes: the context outlives the Given now that the Given is
   // where it is built.
   Ctx.Free;
+  CustomerOrders.Free;
   Orders.Free;
   People.Free;
   inherited;
@@ -367,6 +369,35 @@ Feature SQLCute in-memory multi-source @inmemory @context
         for var N in W.Names do
           if N = 'Cara' then HasCara := True;
         Expect(HasCara).ToBeFalse;
+      end)
+
+.Rule('OrHaving adds a condition with OR')
+
+  .Scenario('OrHaving in memory')
+    .Given('a context with the orders of three customers: six cheap ones, one of 1000, and one of 10',
+      procedure(W: TCtxWorld)
+      begin
+        W.CustomerOrders := TObjectList<TOrder>.Create(True);
+        for var I := 1 to 6 do
+          W.CustomerOrders.Add(TOrder.Create(I, 1, 10));
+        W.CustomerOrders.Add(TOrder.Create(7, 2, 1000));
+        W.CustomerOrders.Add(TOrder.Create(8, 3, 10));
+        W.Ctx := TQueryContext.Create;
+        W.Ctx.Map<TOrder>('orders', W.CustomerOrders);
+      end)
+    .When('the query with Having(''n'', ''>'', 5).OrHaving(''revenue'', ''>='', 1000) runs in memory',
+      procedure(W: TCtxWorld)
+      begin
+        W.Names := nil;
+        for var R in TInMemory.Rows(
+          TQuery.New.From('orders').SelectCount('*', 'n').SelectSum('Total', 'revenue').GroupBy('UserId')
+            .Having('n', '>', 5).OrHaving('revenue', '>=', 1000), W.Ctx) do
+          W.Names := W.Names + [AsStr(R, 'UserId')];
+      end)
+    .&Then('the first two customers come out',
+      procedure(W: TCtxWorld)
+      begin
+        Expect(string.Join(',', W.Names)).ToEqual('1,2');
       end);
 
 end.

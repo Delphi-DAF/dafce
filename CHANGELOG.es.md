@@ -51,6 +51,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
   - `WhereNot(Callback)` y `OrWhereNot(Callback)` — grupos WHERE negados como una unidad, `NOT (…)`
   - Orden de NULL por columna — `OrderBy` / `OrderByDesc` con `TNullsOrder`, y `NullsFirst` / `NullsLast`
   - Un alias escrito en el nombre de una columna —`Select('users.name as n')`— se separa y se entrecomilla, también en memoria
+  - `OrHaving` — una condición HAVING unida a la anterior con OR
 - **Commons**: Utilidades nuevas
   - `TNullable<T>` en `Daf.Nullable`
   - `TDeferredEnumerable<T>` y `TGeneratorEnumerator<T>` en `Daf.Enumerable`
@@ -91,6 +92,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - ⚠️ **SQLCute**: `Having`, `WhereColumns` y `OrWhereColumns` rechazan `in` y `not in` con `EArgumentException`, como SqlKata; antes emitían `=`. En el AST, el `Op` de `TJoinClause` y `TDateWhereClause` es un `TWhereOp`. **Rompe** a quien pasaba `in` ahí, y a quien lee ese `Op` como texto
 - ⚠️ **SQLCute**: `Where`, `OrWhere`, `WhereNot`, `OrWhereNot` y `Having` con el valor `Null` emiten `IS NULL` con `=` e `IS NOT NULL` con cualquier otro operador, sin enlace, como SqlKata; antes ligaban `Null` a `col = ?`, que no casa con ninguna fila. **Rompe** a quien contaba ese enlace
 - ⚠️ **SQLCute**: `WhereTrue`, `WhereFalse`, y `Where`, `OrWhere`, `WhereNot` y `OrWhereNot` con un valor lógico comparan con el literal del dialecto —`true`, `1`, `cast(1 as bit)`— sin enlace, como SqlKata; antes ligaban el valor. Con un operador distinto de `=`, la comparación se niega. **Rompe** a quien contaba o tipaba ese enlace, y a Oracle anterior a 23
+- ⚠️ **SQLCute**: La columna de `Having` se entrecomilla como cualquier otra, como SqlKata: nombra una columna agrupada o un alias de salida, y un agregado va por `HavingRaw`. **Rompe** `Having('count(*)', …)` en los dialectos que entrecomillan, donde emite `"count(*)"`
 - ⚠️ **MiniSpec**: `[Inject]` pasa a llamarse **`[MiniInject]`** y viaja en la facade, así que `uses Daf.MiniSpec` basta para marcar
 - ⚠️ **MiniSpec**: `TInjectorService` deja de admitir servicios sueltos: es una instancia de la ejecución con los tres ámbitos, `Register(Scope, Instance)`. El colaborador que necesite un escenario se construye en el World
 - ⚠️ **MiniSpec**: Cuando más de un contexto satisface un `[MiniInject]`, gana el más cercano al step —escenario, feature, suite—, y una coincidencia exacta gana a cualquier descendiente

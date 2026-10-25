@@ -748,6 +748,15 @@ end;
 - **Qué rompe**: el código que contaba los enlaces, o que contaba con que ese enlace fuera de tipo
   lógico.
 
+### 31. SQLCute: la columna de `Having` es un identificador
+
+- **`Having` entrecomilla su columna** como cualquier otra columna del dialecto: nombra una columna
+  agrupada o el alias de una columna de salida. `Having('count(*)', '>', 5)`, la forma que enseñaba la
+  guía en 1.6, emite `"count(*)" > $1` en Postgres, y esa columna no existe.
+- **Un agregado va por `HavingRaw`**: `HavingRaw('count(*) > 5')`, que aceptan todos los motores. Un
+  alias de salida en `HAVING` lo rechazan Postgres, SQL Server y Firebird.
+- **Qué rompe**: un `Having` cuya columna es una expresión de agregado, en un dialecto que entrecomilla.
+
 ## Cómo hacerlo
 
 1. Compila. Lo que falte sale como error del compilador, no como comportamiento raro en
@@ -763,6 +772,6 @@ end;
    resolverlo: se resuelve desde un ámbito que abre el trabajo, `Services.CreateScope`. También un
    Scoped que resuelve un Singleton: el Singleton lo resuelve en un ámbito que abre con
    `IServiceScopeFactory`.
-6. Las secciones 2, de la 6 a la 13 y de la 15 a la 30 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
+6. Las secciones 2, de la 6 a la 13 y de la 15 a la 31 traen cambios **de ejecución**: el compilador no dice nada de ellos. Léelas
    contra tu propia composición — la vida de los ámbitos, los registros repetidos, las reglas de
    logging y los ajustes del host.

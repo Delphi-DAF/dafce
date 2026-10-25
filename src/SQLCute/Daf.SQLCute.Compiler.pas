@@ -409,7 +409,7 @@ begin
   if Clause is TDateWhereClause then
     Exit(CompileDateWhere(C, TDateWhereClause(Clause)));
 
-  // --- HAVING condition (raw, or col op ?; note: no WrapColumn) ---
+  // --- HAVING condition (raw, or col op ?, the column quoted like any other) ---
   if Clause is THavingClause then
   begin
     H := THavingClause(Clause);
@@ -417,13 +417,13 @@ begin
       TWhereOp.Raw:
         Result := H.RawSql;
       TWhereOp.IsNull:
-        Result := H.Column + ' IS NULL';
+        Result := WrapColumn(H.Column) + ' IS NULL';
       TWhereOp.IsNotNull:
-        Result := H.Column + ' IS NOT NULL';
+        Result := WrapColumn(H.Column) + ' IS NOT NULL';
     else
       begin
         C.AddBinding(H.Value);
-        Result := H.Column + ' ' + OperatorSymbol(H.Op) + ' ?';
+        Result := WrapColumn(H.Column) + ' ' + OperatorSymbol(H.Op) + ' ?';
       end;
     end;
     Exit;

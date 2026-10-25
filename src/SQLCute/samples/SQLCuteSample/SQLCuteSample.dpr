@@ -186,7 +186,7 @@ begin
       .Select('user_id')
       .SelectRaw('COUNT(*) AS cnt')
       .GroupBy('user_id')
-      .Having('COUNT(*)', '>', 5)
+      .HavingRaw('COUNT(*) > 5')
       .Compile(Compiler));
 
   PrintResult('GROUP BY RAW',

@@ -52,6 +52,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
   - `WhereNot(Callback)` and `OrWhereNot(Callback)` — WHERE groups negated as a unit, `NOT (…)`
   - Per-column NULL ordering — `OrderBy` / `OrderByDesc` with `TNullsOrder`, and `NullsFirst` / `NullsLast`
   - An alias written in a column name —`Select('users.name as n')`— is split off and quoted, also in memory
+  - `OrHaving` — a HAVING condition joined to the previous one with OR
 - **Commons**: New utilities
   - `TNullable<T>` in `Daf.Nullable`
   - `TDeferredEnumerable<T>` and `TGeneratorEnumerator<T>` in `Daf.Enumerable`
@@ -92,6 +93,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - ⚠️ **SQLCute**: `Having`, `WhereColumns` and `OrWhereColumns` reject `in` and `not in` with `EArgumentException`, as SqlKata does; they used to emit `=`. In the AST, the `Op` of `TJoinClause` and `TDateWhereClause` is a `TWhereOp`. **Breaks** whoever passed `in` there, and whoever reads that `Op` as a string
 - ⚠️ **SQLCute**: `Where`, `OrWhere`, `WhereNot`, `OrWhereNot` and `Having` with the value `Null` emit `IS NULL` for `=` and `IS NOT NULL` for any other operator, with no binding, as SqlKata does; they used to bind `Null` to `col = ?`, which matches no row. **Breaks** whoever counted that binding
 - ⚠️ **SQLCute**: `WhereTrue`, `WhereFalse`, and `Where`, `OrWhere`, `WhereNot` and `OrWhereNot` with a logical value compare with the dialect's literal —`true`, `1`, `cast(1 as bit)`— with no binding, as SqlKata does; they used to bind the value. With an operator other than `=`, the comparison is negated. **Breaks** whoever counted or typed that binding, and Oracle before 23
+- ⚠️ **SQLCute**: The column of `Having` is quoted like any other column, as SqlKata does: it names a grouped column or an output alias, and an aggregate goes through `HavingRaw`. **Breaks** `Having('count(*)', …)` in the dialects that quote, where it emits `"count(*)"`
 - ⚠️ **MiniSpec**: `[Inject]` is renamed to **`[MiniInject]`** and travels in the facade, so `uses Daf.MiniSpec` is enough to mark
 - ⚠️ **MiniSpec**: `TInjectorService` no longer takes loose services: it is an instance of the run with the three scopes, `Register(Scope, Instance)`. A collaborator that needs a scenario is built in the World
 - ⚠️ **MiniSpec**: When more than one context satisfies a `[MiniInject]`, the nearest to the step wins —scenario, feature, suite—, and an exact match beats any descendant

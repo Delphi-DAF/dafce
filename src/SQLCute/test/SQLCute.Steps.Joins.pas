@@ -99,7 +99,7 @@ begin
     .SelectCount('*', 'total')
     .Where('status', 'active')
     .GroupBy('user_id')
-    .Having('COUNT(*)', '>', 5)
+    .HavingRaw('COUNT(*) > 5')
     .OrderByDesc('total')
     .Limit(10);
 end;

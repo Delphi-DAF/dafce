@@ -79,7 +79,7 @@ begin
   W.Query := TQuery.New
     .From('orders')
     .GroupBy('user_id')
-    .Having('COUNT(*)', '>', 3);
+    .HavingRaw('COUNT(*) > 3');
 end;
 
 procedure TSQLCuteStepsAggregation.GivenCountFrom(W: TSQLCuteWorld; Table: string);

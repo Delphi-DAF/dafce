@@ -69,7 +69,7 @@ TQuery.New
   .GroupBy('product_id')
   .SelectCount('*', 'qty')
   .SelectSum('amount', 'total')
-  .Having('count(*)', '>', 10)
+  .HavingRaw('count(*) > 10')
 ```
 
 ### DML

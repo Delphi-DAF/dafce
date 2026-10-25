@@ -14,6 +14,7 @@ uses
   System.Variants,
   Daf.MiniSpec,
   Daf.SQLCute,
+  Daf.SQLCute.Compiler.Postgres,
   SQLCute.SpecHelpers;
 
 initialization
@@ -134,8 +135,8 @@ TQuery — JOIN / GROUP BY / CTE @unit @sqlcute
   .Scenario('Having with aggregate expression')
     .Given('a GROUP BY and HAVING query')
     .When('I compile with ANSI')
-    .&Then('SQL is "SELECT * FROM orders GROUP BY user_id HAVING COUNT(*) > ?"')
-    .&Then('has 1 binding')
+    .&Then('SQL is "SELECT * FROM orders GROUP BY user_id HAVING COUNT(*) > 3"')
+    .&Then('has 0 bindings')
 
 // -------------------------------------------------------------------------
 
@@ -181,8 +182,8 @@ TQuery — JOIN / GROUP BY / CTE @unit @sqlcute
   .Scenario('JOIN + GROUP BY + HAVING + ORDER BY + LIMIT')
     .Given('a combined JOIN GROUP HAVING ORDER LIMIT query')
     .When('I compile with ANSI')
-    .&Then('SQL is "SELECT user_id, COUNT(*) AS total FROM orders INNER JOIN users ON orders.user_id = users.id WHERE status = ? GROUP BY user_id HAVING COUNT(*) > ? ORDER BY total DESC LIMIT 10"')
-    .&Then('has 2 bindings')
+    .&Then('SQL is "SELECT user_id, COUNT(*) AS total FROM orders INNER JOIN users ON orders.user_id = users.id WHERE status = ? GROUP BY user_id HAVING COUNT(*) > 5 ORDER BY total DESC LIMIT 10"')
+    .&Then('has 1 binding')
 
 // -------------------------------------------------------------------------
 
@@ -250,6 +251,57 @@ TQuery — JOIN / GROUP BY / CTE @unit @sqlcute
       begin
         Expect(Format('%s | %d', [W.LastResult.SQL, Length(W.LastResult.Bindings)]))
           .ToEqual('SELECT MAX(closed_at) AS last_closed FROM tickets GROUP BY team HAVING last_closed IS NULL | 0');
+      end)
+
+// -------------------------------------------------------------------------
+
+.Rule('The column of Having is an identifier')
+
+  .Scenario('Postgres quotes the column of Having')
+    .When('query calls From(''orders'').SelectCount(''*'', ''n'').GroupBy(''customer_id'').Having(''n'', ''>'', 5) on Postgres',
+      procedure(W: TSQLCuteWorld)
+      begin
+        W.Compiler := TPostgresCompiler.Create;
+        W.LastResult := W.Compiler.Compile(
+          TQuery.New.From('orders').SelectCount('*', 'n').GroupBy('customer_id').Having('n', '>', 5));
+      end)
+    .&Then('SQL is SELECT COUNT(*) AS n FROM "orders" GROUP BY "customer_id" HAVING "n" > $1',
+      procedure(W: TSQLCuteWorld)
+      begin
+        Expect(W.LastResult.SQL).ToEqual('SELECT COUNT(*) AS n FROM "orders" GROUP BY "customer_id" HAVING "n" > $1');
+      end)
+
+  .Scenario('An aggregate goes raw')
+    .When('query calls From(''orders'').GroupBy(''customer_id'').HavingRaw(''count(*) > 5'') on Postgres',
+      procedure(W: TSQLCuteWorld)
+      begin
+        W.Compiler := TPostgresCompiler.Create;
+        W.LastResult := W.Compiler.Compile(TQuery.New.From('orders').GroupBy('customer_id').HavingRaw('count(*) > 5'));
+      end)
+    .&Then('SQL is SELECT * FROM "orders" GROUP BY "customer_id" HAVING count(*) > 5 with 0 bindings',
+      procedure(W: TSQLCuteWorld)
+      begin
+        Expect(Format('%s | %d', [W.LastResult.SQL, Length(W.LastResult.Bindings)]))
+          .ToEqual('SELECT * FROM "orders" GROUP BY "customer_id" HAVING count(*) > 5 | 0');
+      end)
+
+// -------------------------------------------------------------------------
+
+.Rule('OrHaving adds a condition with OR')
+
+  .Scenario('OrHaving in SQL')
+    .When('query calls Having(''n'', ''>'', 5).OrHaving(''revenue'', ''>='', 1000) over orders grouped by customer_id',
+      procedure(W: TSQLCuteWorld)
+      begin
+        W.LastResult := W.Compiler.Compile(
+          TQuery.New.From('orders').SelectCount('*', 'n').SelectSum('total', 'revenue').GroupBy('customer_id')
+            .Having('n', '>', 5).OrHaving('revenue', '>=', 1000));
+      end)
+    .&Then('SQL is ... HAVING n > ? OR revenue >= ? with 2 bindings',
+      procedure(W: TSQLCuteWorld)
+      begin
+        Expect(Format('%s | %d', [W.LastResult.SQL, Length(W.LastResult.Bindings)]))
+          .ToEqual('SELECT COUNT(*) AS n, SUM(total) AS revenue FROM orders GROUP BY customer_id HAVING n > ? OR revenue >= ? | 2');
       end)
 
 ;

@@ -33,20 +33,34 @@ Expresión cruda:
 
 ## HAVING
 
-`Having` filtra grupos tras la agregación. El argumento columna acepta cualquier expresión de agregado. Su operador es uno de `=`, `<>`, `!=`, `<`, `<=`, `>`, `>=`, `like` y `not like`; `in` y `not in` lanzan `EArgumentException`, y un `IN` sobre un agregado va por `HavingRaw`.
+Una condición sobre un agregado va por `HavingRaw`, que aceptan todos los motores:
 
 ```pascal
 TQuery.New.From('pedidos')
   .GroupBy('cliente_id')
   .SelectCount('*', 'num_pedidos')
   .SelectSum('total', 'ingresos')
-  .Having('count(*)', '>', 5)
-  .Having('sum(total)', '>=', 1000)
+  .HavingRaw('count(*) > 5')
+  .HavingRaw('sum(total) >= 1000')
 // → SELECT COUNT(*) AS num_pedidos, SUM(total) AS ingresos
 //   FROM pedidos
 //   GROUP BY cliente_id
-//   HAVING count(*) > ? AND sum(total) >= ?
-//   Bindings: [5, 1000]
+//   HAVING count(*) > 5 AND sum(total) >= 1000
+```
+
+`Having` compara una columna con un valor ligado. La columna nombra una columna agrupada o el alias de una columna de salida, y se entrecomilla como cualquier otra columna del dialecto. Su operador es uno de `=`, `<>`, `!=`, `<`, `<=`, `>`, `>=`, `like` y `not like`; `in` y `not in` lanzan `EArgumentException`, y un `IN` sobre un agregado va por `HavingRaw`. MySQL, SQLite y Oracle 23 aceptan el alias de una columna de salida en `HAVING`; Postgres, SQL Server y Firebird lo rechazan.
+
+```pascal
+.Having('num_pedidos', '>', 5)
+// Postgres → HAVING "num_pedidos" > $1
+```
+
+Conector OR:
+
+```pascal
+.Having('num_pedidos', '>', 10)
+.OrHaving('ingresos', '>=', 1000)
+// → HAVING num_pedidos > ? OR ingresos >= ?
 ```
 
 Expresión HAVING cruda:
@@ -68,9 +82,9 @@ TQuery.New.From('logs')
   .Where('nivel', 'error')         // aplicado antes de GROUP BY
   .GroupBy('servicio')
   .SelectCount('*', 'errores')
-  .Having('count(*)', '>', 50)     // aplicado después de GROUP BY
+  .HavingRaw('count(*) > 50')      // aplicado después de GROUP BY
 // → SELECT COUNT(*) AS errores FROM logs
 //   WHERE nivel = ?
 //   GROUP BY servicio
-//   HAVING count(*) > ?
+//   HAVING count(*) > 50
 ```

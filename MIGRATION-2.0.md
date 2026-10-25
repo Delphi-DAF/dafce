@@ -743,6 +743,15 @@ end;
   either, write the condition with `WhereRaw`.
 - **What breaks**: code that counted the bindings, or relied on the binding being typed as a Boolean.
 
+### 31. SQLCute: the column of `Having` is an identifier
+
+- **`Having` quotes its column** like any other column of the dialect: it names a grouped column or
+  the alias of an output column. `Having('count(*)', '>', 5)`, the form the guide showed in 1.6, emits
+  `"count(*)" > $1` in Postgres, and no such column exists.
+- **An aggregate goes through `HavingRaw`**: `HavingRaw('count(*) > 5')`, which every engine accepts.
+  An output alias in `HAVING` is rejected by Postgres, SQL Server and Firebird.
+- **What breaks**: a `Having` whose column is an aggregate expression, in a dialect that quotes.
+
 ## How to do it
 
 1. Compile. Whatever is missing comes out as a compiler error, not as odd behaviour at run time.
@@ -756,6 +765,6 @@ end;
    A Scoped service asked of the root provider is rejected too, when it is resolved: resolve it from a
    scope the work opens, `Services.CreateScope`. So is a Scoped a Singleton resolves: the Singleton
    resolves it in a scope it opens through `IServiceScopeFactory`.
-6. Sections 2, 6 to 13 and 15 to 30 carry **run-time** changes: the compiler says nothing about them. Read them
+6. Sections 2, 6 to 13 and 15 to 31 carry **run-time** changes: the compiler says nothing about them. Read them
    against your own composition — scope lifetimes, duplicate registrations, logging rules and
    host settings.
