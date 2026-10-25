@@ -52,6 +52,29 @@ type
     property Tags: TList<string> read FTags write FTags;
     property Aliases: TArray<string> read FAliases write FAliases;
   end;
+  /// <summary>Un elemento de lista que cuenta sus instancias vivas.</summary>
+  TCountedItem = class
+  private
+    FName: string;
+  public
+    class var Alive: Integer;
+    procedure AfterConstruction; override;
+    procedure BeforeDestruction; override;
+    property Name: string read FName write FName;
+  end;
+
+  /// <summary>
+  ///   Un diccionario y una lista de objetos que arrancan en nil, y un destructor que los libera.
+  /// </summary>
+  TCollectionSettings = class
+  private
+    FCounts: TDictionary<string, Integer>;
+    FItems: TObjectList<TCountedItem>;
+  public
+    destructor Destroy; override;
+    property Counts: TDictionary<string, Integer> read FCounts write FCounts;
+    property Items: TObjectList<TCountedItem> read FItems write FItems;
+  end;
   {$M-}
 
   TAbsenceWorld = class
@@ -59,6 +82,7 @@ type
     Config: IConfigurationRoot;
     Second: IConfigurationRoot;
     Settings: TServerSettings;
+    Collections: TCollectionSettings;
     Report: string;
     destructor Destroy; override;
   end;
@@ -98,11 +122,35 @@ begin
   inherited;
 end;
 
+{ TCountedItem }
+
+procedure TCountedItem.AfterConstruction;
+begin
+  inherited;
+  Inc(Alive);
+end;
+
+procedure TCountedItem.BeforeDestruction;
+begin
+  Dec(Alive);
+  inherited;
+end;
+
+{ TCollectionSettings }
+
+destructor TCollectionSettings.Destroy;
+begin
+  FCounts.Free;
+  FItems.Free;
+  inherited;
+end;
+
 { TAbsenceWorld }
 
 destructor TAbsenceWorld.Destroy;
 begin
   Settings.Free;
+  Collections.Free;
   inherited;
 end;
 
@@ -323,6 +371,67 @@ Feature Configuration binder absence @configuration @binder @absence
       procedure(W: TAbsenceWorld)
       begin
         Expect(W.Report).ToEqual('defecto=[por-defecto]/8080 tras-enlazar=[por-defecto]/8080');
+      end)
+
+.Rule('A dictionary and a list of objects are built too')
+
+  .Scenario('A dictionary at nil')
+    .Given('settings with a TDictionary<string, Integer> member at nil, and a configuration with two keys in its section',
+      procedure(W: TAbsenceWorld)
+      begin
+        W.Collections := TCollectionSettings.Create;
+        Expect(Assigned(W.Collections.Counts)).ToBeFalse;
+        W.Config := ConfigOf(['Counts:a', '1', 'Counts:b', '2']);
+      end)
+    .When('the configuration is bound',
+      procedure(W: TAbsenceWorld)
+      begin
+        try
+          TConfigurationBinder.Bind(W.Config, '', W.Collections, boProperties);
+          W.Report := Format('existe=%s entradas=%d', [BoolToStr(Assigned(W.Collections.Counts), True),
+            W.Collections.Counts.Count]);
+          W.Report := W.Report + Format(' a=%d b=%d', [W.Collections.Counts['a'], W.Collections.Counts['b']]);
+        except
+          on E: Exception do
+            W.Report := E.ClassName + ': ' + E.Message;
+        end;
+      end)
+    .&Then('the dictionary exists and holds the two entries',
+      procedure(W: TAbsenceWorld)
+      begin
+        Expect(W.Report).ToEqual('existe=True entradas=2 a=1 b=2');
+      end)
+
+  .Scenario('A list of objects at nil')
+    .Given('settings with a TObjectList<> member at nil of a class that counts its live instances, and a configuration with two elements in its section',
+      procedure(W: TAbsenceWorld)
+      begin
+        TCountedItem.Alive := 0;
+        W.Collections := TCollectionSettings.Create;
+        Expect(Assigned(W.Collections.Items)).ToBeFalse;
+        W.Config := ConfigOf(['Items:0:Name', 'uno', 'Items:1:Name', 'dos']);
+      end)
+    .When('the configuration is bound, and the settings are freed afterwards',
+      procedure(W: TAbsenceWorld)
+      begin
+        try
+          TConfigurationBinder.Bind(W.Config, '', W.Collections, boProperties);
+          W.Report := Format('elementos=%d', [W.Collections.Items.Count]);
+        except
+          on E: Exception do
+            W.Report := E.ClassName + ': ' + E.Message;
+        end;
+        FreeAndNil(W.Collections);
+      end)
+    .&Then('the list had the two elements',
+      procedure(W: TAbsenceWorld)
+      begin
+        Expect(W.Report).ToEqual('elementos=2');
+      end)
+    .&And('no instance of that class is left alive',
+      procedure(W: TAbsenceWorld)
+      begin
+        Expect(TCountedItem.Alive).ToEqual(0);
       end);
 
 end.
