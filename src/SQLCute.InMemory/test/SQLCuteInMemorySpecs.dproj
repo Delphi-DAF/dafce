@@ -107,6 +107,7 @@
         <DCCReference Include="Columns.Feat.pas"/>
         <DCCReference Include="Grouping.Feat.pas"/>
         <DCCReference Include="InMemoryConcurrency.Feat.pas"/>
+        <DCCReference Include="CorrelatedSubquery.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>

@@ -300,7 +300,15 @@ El `GroupBy` de la propia biblioteca de secuencias produce el `IGrouping<TKey, T
 
 ### Subconsultas y operaciones de conjuntos
 
-`WhereInQuery` / `WhereNotInQuery` y EXISTS / NOT EXISTS se evalúan contra el contexto; cada subconsulta no correlacionada se ejecuta una vez y se cachea. `Union`, `UnionAll`, `Intersect`, `Except` y las variantes `ALL` combinan conjuntos de resultados, comparando filas por el valor de sus columnas de salida con los NULL como iguales.
+`WhereInQuery` / `WhereNotInQuery` y EXISTS / NOT EXISTS se evalúan contra el contexto. En el WHERE de la subconsulta, un nombre cualificado con la tabla o el alias de la consulta de fuera se lee de la fila de fuera:
+
+```pascal
+TQuery.New.From('people').WhereExists(
+  TQuery.New.From('orders').WhereColumns('orders.user_id', '=', 'people.id'))
+// las personas con algún pedido
+```
+
+Una subconsulta que lee la fila de fuera se ejecuta una vez por cada fila de fuera; una que no la lee se ejecuta una vez y se cachea. `Union`, `UnionAll`, `Intersect`, `Except` y las variantes `ALL` combinan conjuntos de resultados, comparando filas por el valor de sus columnas de salida con los NULL como iguales.
 
 ---
 
@@ -318,7 +326,7 @@ Todo lo que el motor no puede ejecutar fielmente lanza `EInMemoryQueryError`, en
 | una consulta multi-fuente ejecutada con una sola lista | necesita un contexto |
 | una consulta con proyección vía `Elements<T>` | usa `Rows` o `Project` |
 
-Una columna que la fila no lleva lanza `EInMemoryQueryError` nombrándola al ejecutar la consulta, en SELECT, WHERE, ORDER BY, GROUP BY, HAVING o un agregado: una errata no se lee como NULL. Un nombre cualificado se lee solo del lado que nombra su prefijo, así que una subconsulta correlacionada —la que nombra una columna de la consulta de fuera— se rechaza igual.
+Una columna que la fila no lleva lanza `EInMemoryQueryError` nombrándola al ejecutar la consulta, en SELECT, WHERE, ORDER BY, GROUP BY, HAVING o un agregado: una errata no se lee como NULL. Un nombre cualificado se lee solo del lado que nombra su prefijo. En una subconsulta, un nombre sin cualificar se lee solo de sus propios lados: a diferencia de SQL, una columna de la consulta de fuera nombrada sin su prefijo lanza —escribe `people.age`, no `age`—. Una columna de la consulta de fuera en el SELECT, un JOIN, el GROUP BY, el HAVING o el ORDER BY de la subconsulta también lanza.
 
 Dos límites vienen de las fuentes de `IRow`, cuyas columnas no las declara un tipo:
 

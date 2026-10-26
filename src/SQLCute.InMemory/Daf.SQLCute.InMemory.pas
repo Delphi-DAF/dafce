@@ -1056,33 +1056,91 @@ begin
   end;
 end;
 
+// True when the prefix of a qualified name names one of the query's own sides.
+function NamesOwnSide(const Column: string; const Aliases: TArray<string>): Boolean;
+begin
+  for var A in Aliases do
+    if (Length(Column) > Length(A) + 1) and SameText(Copy(Column, 1, Length(A) + 1), A + '.') then
+      Exit(True);
+  Result := False;
+end;
+
+// The reader of the WHERE over one row. In a subquery, Outer reads the row of
+// the enclosing query, and a qualified name whose prefix names none of the
+// subquery's sides is read from it. Any other name is read from the row itself,
+// so an unqualified name never reaches the outer row.
+function WhereReader(const Row: IRow; const Aliases: TArray<string>;
+  const Outer: TColumnGetter): TColumnGetter;
+begin
+  Result :=
+    function(const Col: string): TValue
+    begin
+      if Assigned(Outer) and (Pos('.', Col) > 0) and not NamesOwnSide(Col, Aliases) then
+        Result := Outer(Col)
+      else
+        Result := ReadColumn(Row, Col);
+    end;
+end;
+
 // Eager WHERE filter — the grouping path must materialize before grouping.
-function FilterRows(const Rows: TArray<IRow>; const Pred: TValuePredicate): TArray<IRow>;
+function FilterRows(const Rows: TArray<IRow>; const Pred: TValuePredicate;
+  const Aliases: TArray<string>; const Outer: TColumnGetter): TArray<IRow>;
 begin
   if not Assigned(Pred) then
     Exit(Rows);
   Result := nil;
   for var R in Rows do
-    if Pred(
-      function(const Col: string): TValue
-      begin
-        Result := ReadColumn(R, Col);
-      end) = TTriState.Yes then
+    if Pred(WhereReader(R, Aliases, Outer)) = TTriState.Yes then
       Result := Result + [R];
 end;
 
-function ProjectedRows(const Query: IQuery; const Context: IQueryContext): IEnumerable<IRow>; forward;
+// Lazy WHERE filter, reading each row as FilterRows does.
+function WhereRowPredicate(const Pred: TValuePredicate; const Aliases: TArray<string>;
+  const Outer: TColumnGetter): TPredicate<IRow>;
+begin
+  Result :=
+    function(R: IRow): Boolean
+    begin
+      Result := Pred(WhereReader(R, Aliases, Outer)) = TTriState.Yes;
+    end;
+end;
+
+function ProjectedRows(const Query: IQuery; const Context: IQueryContext;
+  const Outer: TColumnGetter): IEnumerable<IRow>; forward;
 
 type
   TSubqueryResult = record
     Clause: Pointer;
+    Correlated: Boolean;
     Values: TArray<TValue>;
     NonEmpty: Boolean;
   end;
 
-// Resolves an uncorrelated subquery WHERE leaf against the context. Each subquery
-// is evaluated once and cached by clause identity; IN/NOT IN test membership in the
-// subquery's first output column, EXISTS/NOT EXISTS test non-emptiness (3VL).
+// Runs the subquery of a WHERE leaf, its WHERE reading the outer row through
+// Outer, and keeps what IN and EXISTS test: whether it returns a row, and the
+// values of its first output column.
+function EvaluateSubquery(const Clause: TWhereClause; const Context: IQueryContext;
+  const Outer: TColumnGetter): TSubqueryResult;
+begin
+  Result.Clause := Pointer(Clause);
+  Result.Correlated := False;
+  Result.Values := nil;
+  var SubRows := TQuery<IRow>(ProjectedRows(Clause.SubQuery as IQuery, Context, Outer)).ToArray;
+  Result.NonEmpty := Length(SubRows) > 0;
+  for var R in SubRows do
+  begin
+    var Cols := R.Columns;
+    if Length(Cols) > 0 then
+      Result.Values := Result.Values + [R.Get(Cols[0])];
+  end;
+end;
+
+// Resolves a subquery WHERE leaf against the context; the subquery reads the
+// outer row through Get. A subquery whose first evaluation reads nothing from
+// the outer row repeats the same steps for any other, so its result is cached by
+// clause identity; one that reads it is evaluated again for each outer row.
+// IN/NOT IN test membership in the subquery's first output column,
+// EXISTS/NOT EXISTS test non-emptiness (3VL).
 function MakeSubqueryResolver(const Context: IQueryContext): TSubqueryResolver;
 var
   Cache: TArray<TSubqueryResult>;   // captured by the closure (managed; freed with it)
@@ -1090,6 +1148,9 @@ begin
   Cache := nil;
   Result :=
     function(const Clause: TWhereClause; const Get: TColumnGetter): TTriState
+    var
+      Sub: TSubqueryResult;
+      ReadOuter: Boolean;
     begin
       var Idx := -1;
       for var I := 0 to High(Cache) do
@@ -1100,34 +1161,37 @@ begin
         end;
       if Idx < 0 then
       begin
-        var SR: TSubqueryResult;
-        SR.Clause := Pointer(Clause);
-        SR.Values := nil;
-        var SubRows := TQuery<IRow>(ProjectedRows(Clause.SubQuery as IQuery, Context)).ToArray;
-        SR.NonEmpty := Length(SubRows) > 0;
-        for var R in SubRows do
-        begin
-          var Cols := R.Columns;
-          if Length(Cols) > 0 then
-            SR.Values := SR.Values + [R.Get(Cols[0])];
-        end;
-        Cache := Cache + [SR];
-        Idx := High(Cache);
-      end;
+        ReadOuter := False;
+        Sub := EvaluateSubquery(Clause, Context,
+          function(const Column: string): TValue
+          begin
+            ReadOuter := True;
+            Result := Get(Column);
+          end);
+        var Entry := Sub;
+        Entry.Correlated := ReadOuter;
+        if ReadOuter then
+          Entry.Values := nil;
+        Cache := Cache + [Entry];
+      end
+      else if Cache[Idx].Correlated then
+        Sub := EvaluateSubquery(Clause, Context, Get)
+      else
+        Sub := Cache[Idx];
 
       if (Clause.Op = TWhereOp.&Exists) or (Clause.Op = TWhereOp.NotExists) then
-        Exit(BoolToTri(Cache[Idx].NonEmpty = (Clause.Op = TWhereOp.&Exists)));
+        Exit(BoolToTri(Sub.NonEmpty = (Clause.Op = TWhereOp.&Exists)));
 
       // IN / NOT IN — against an empty subquery no comparison can be unknown,
       // so the empty set decides before the value; otherwise 3VL membership.
-      if not Cache[Idx].NonEmpty then
+      if not Sub.NonEmpty then
         Exit(BoolToTri(Clause.Op = TWhereOp.NotIn));
       var ColVal := Get(Clause.Column);
       if IsNullValue(ColVal) then
         Exit(TTriState.Unknown);
       var Found := False;
       var AnyNull := False;
-      for var V in Cache[Idx].Values do
+      for var V in Sub.Values do
         if IsNullValue(V) then
           AnyNull := True
         else if CompareValues(ColVal, V) = 0 then
@@ -1142,9 +1206,11 @@ end;
 
 // Resolves FROM + JOINs into composite rows, then applies WHERE / (GROUP BY +
 // aggregates + HAVING) / DISTINCT / ORDER BY / paging. The SELECT projection is
-// returned via Proj for the caller to apply (dynamic IRow) or materialize.
+// returned via Proj for the caller to apply (dynamic IRow) or materialize. Outer
+// reads the row of the enclosing query in the WHERE of a subquery, and is nil
+// for the main query.
 function ExecuteMultiCore(const Query: IQuery; const Context: IQueryContext;
-  out Proj: TArray<TProjColumn>): IEnumerable<IRow>;
+  const Outer: TColumnGetter; out Proj: TArray<TProjColumn>): IEnumerable<IRow>;
 begin
   var Clauses := Query.Clauses;
   EnsureMultiSupported(Query);
@@ -1183,6 +1249,10 @@ begin
       Sides := Sides + [Side];
     end;
 
+  var Aliases: TArray<string> := nil;
+  for var S in Sides do
+    Aliases := Aliases + [S.Alias];
+
   // The predicate captures the resolver of this context, and of no other.
   var Cq := TInMemoryCompiler.CompileMulti(Query, MakeSubqueryResolver(Context));
   try
@@ -1190,14 +1260,14 @@ begin
     if Length(Cq.GroupBy) > 0 then
     begin
       // WHERE runs before grouping; the flat aggregate rows are the output.
-      Q := Linq.From<IRow>(GroupAndAggregate(FilterRows(Composite, Cq.Predicate), Cq));
+      Q := Linq.From<IRow>(GroupAndAggregate(FilterRows(Composite, Cq.Predicate, Aliases, Outer), Cq));
       Proj := nil;
     end
     else
     begin
       Q := Linq.From<IRow>(Composite);
       if Assigned(Cq.Predicate) then
-        Q := Q.Where(MakeRowPredicate(Cq.Predicate));
+        Q := Q.Where(WhereRowPredicate(Cq.Predicate, Aliases, Outer));
       Proj := Cq.Projection;
     end;
     if Cq.Distinct then
@@ -1214,11 +1284,13 @@ begin
   end;
 end;
 
-// The main query's final projected rows (FROM+JOINs+WHERE+GROUP BY, then SELECT).
-function ProjectedRows(const Query: IQuery; const Context: IQueryContext): IEnumerable<IRow>;
+// A query's final projected rows (FROM+JOINs+WHERE+GROUP BY, then SELECT). Outer
+// is the reader of the enclosing query's row for a subquery, nil for the main one.
+function ProjectedRows(const Query: IQuery; const Context: IQueryContext;
+  const Outer: TColumnGetter): IEnumerable<IRow>;
 begin
   var Proj: TArray<TProjColumn>;
-  var Q: TQuery<IRow> := ExecuteMultiCore(Query, Context, Proj);
+  var Q: TQuery<IRow> := ExecuteMultiCore(Query, Context, Outer, Proj);
   Result := Q.Select<IRow>(
     function(R: IRow): IRow
     begin
@@ -1362,7 +1434,7 @@ begin
       var U := TUnionClause(C);
       if U.SubQuery = nil then
         raise EInMemoryQueryError.Create('Raw set operations (CombineRaw) cannot be evaluated in memory.');
-      var Other := TQuery<IRow>(ProjectedRows(U.SubQuery as IQuery, Context)).ToArray;
+      var Other := TQuery<IRow>(ProjectedRows(U.SubQuery as IQuery, Context, nil)).ToArray;
       Acc := CombineSets(U.Kind, Acc, Other);
     end;
   Result := Linq.From<IRow>(Acc);
@@ -1370,7 +1442,7 @@ end;
 
 function ExecuteToRows(const Query: IQuery; const Context: IQueryContext): IEnumerable<IRow>;
 begin
-  Result := ApplyUnions(ProjectedRows(Query, Context), Query, Context);
+  Result := ApplyUnions(ProjectedRows(Query, Context, nil), Query, Context);
 end;
 
 class function TInMemory.MapToRows<T>(const Start: TQuery<T>): TQuery<IRow>;

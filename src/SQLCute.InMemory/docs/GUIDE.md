@@ -300,7 +300,15 @@ The sequence library's own `GroupBy` yields the richer `IGrouping<TKey, T>` — 
 
 ### Subqueries and set operations
 
-`WhereInQuery` / `WhereNotInQuery` and EXISTS / NOT EXISTS are evaluated against the context; each uncorrelated subquery runs once and is cached. `Union`, `UnionAll`, `Intersect`, `Except` and the `ALL` variants combine result sets, comparing rows by output column value with NULLs equal.
+`WhereInQuery` / `WhereNotInQuery` and EXISTS / NOT EXISTS are evaluated against the context. In the WHERE of the subquery, a name qualified with the table or alias of the outer query is read from the outer row:
+
+```pascal
+TQuery.New.From('people').WhereExists(
+  TQuery.New.From('orders').WhereColumns('orders.user_id', '=', 'people.id'))
+// people with at least one order
+```
+
+A subquery that reads the outer row runs once for each outer row; one that does not runs once and is cached. `Union`, `UnionAll`, `Intersect`, `Except` and the `ALL` variants combine result sets, comparing rows by output column value with NULLs equal.
 
 ---
 
@@ -318,7 +326,7 @@ Everything the engine cannot faithfully execute raises `EInMemoryQueryError` rat
 | a multi-source query run with a single list | needs a context |
 | a projecting query run through `Elements<T>` | use `Rows` or `Project` |
 
-A column the row does not carry raises `EInMemoryQueryError` naming it when the query runs, in SELECT, WHERE, ORDER BY, GROUP BY, HAVING or an aggregate: a typo is not read as NULL. A qualified name is read only from the side its prefix names, so a correlated subquery — one that names a column of the outer query — is rejected the same way.
+A column the row does not carry raises `EInMemoryQueryError` naming it when the query runs, in SELECT, WHERE, ORDER BY, GROUP BY, HAVING or an aggregate: a typo is not read as NULL. A qualified name is read only from the side its prefix names. In a subquery, an unqualified name is read only from the subquery's own sides: unlike SQL, a column of the outer query named without its prefix raises — write `people.age`, not `age`. A column of the outer query in the SELECT, a JOIN, the GROUP BY, the HAVING or the ORDER BY of the subquery raises as well.
 
 Two limits come from sources of `IRow`, whose columns are not declared by a type:
 

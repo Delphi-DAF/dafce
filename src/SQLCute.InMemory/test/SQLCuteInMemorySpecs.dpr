@@ -16,7 +16,8 @@ uses
   NullableMembers.Feat in 'NullableMembers.Feat.pas',
   Columns.Feat in 'Columns.Feat.pas',
   Grouping.Feat in 'Grouping.Feat.pas',
-  InMemoryConcurrency.Feat in 'InMemoryConcurrency.Feat.pas';
+  InMemoryConcurrency.Feat in 'InMemoryConcurrency.Feat.pas',
+  CorrelatedSubquery.Feat in 'CorrelatedSubquery.Feat.pas';
 
 begin
   ReportMemoryLeaksOnShutdown := True;

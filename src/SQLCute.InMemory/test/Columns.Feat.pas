@@ -163,7 +163,7 @@ Feature SQLCute in-memory column resolution @inmemory @columns
 
 .UseWorld<TColumnsWorld>
 
-.Rule('A column that does not resolve is an error')
+.Rule('A column the query does not resolve is an error')
 
   .Scenario('A typo in WHERE is rejected')
     .Given('a context with people',
@@ -196,21 +196,21 @@ Feature SQLCute in-memory column resolution @inmemory @columns
         Expect(W.Outcome).ToContain('orders.name');
       end)
 
-  .Scenario('A correlated subquery is rejected')
+  .Scenario('A name that resolves neither inside nor outside the subquery is rejected')
     .Given('a context with people and orders',
       procedure(W: TColumnsWorld)
       begin
         MapPeopleAndOrders(W);
         W.Query := TQuery.New.From('people').WhereExists(
-          TQuery.New.From('orders').WhereColumns('orders.user_id', '=', 'people.id'));
+          TQuery.New.From('orders').WhereColumns('orders.user_id', '=', 'persons.id'));
       end)
-    .When('people with an EXISTS over orders that compares orders.user_id with people.id runs in memory',
+    .When('people with an EXISTS over orders that compares orders.user_id with persons.id runs in memory',
       RunOverContext)
-    .&Then('it raises EInMemoryQueryError instead of returning an empty list',
+    .&Then('it raises EInMemoryQueryError naming persons.id',
       procedure(W: TColumnsWorld)
       begin
         Expect(W.Outcome).ToStartWith('EInMemoryQueryError');
-        Expect(W.Outcome).ToContain('people.id');
+        Expect(W.Outcome).ToContain('persons.id');
       end)
 
   .Scenario('The absent side of an outer join is still NULL')
