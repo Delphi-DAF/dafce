@@ -3,7 +3,6 @@
 interface
 
 uses
-  Winapi.Windows,
   System.SysUtils,
   System.Generics.Collections,
   Daf.Extensions.Configuration,
@@ -21,7 +20,8 @@ type
     FConvertDoubleUnderscore: Boolean;
   public
     /// <param name="APrefix">
-    ///   Prefijo que deben tener las variables de entorno para ser incluidas (opcional).
+    ///   Prefijo que deben tener las variables de entorno para ser incluidas (opcional). Se
+    ///   quita de la clave, como en .NET.
     /// </param>
     /// <param name="AConvertDoubleUnderscore">
     ///   Indica si se convierte '__' en ':' para simular sub-secciones (true por defecto).

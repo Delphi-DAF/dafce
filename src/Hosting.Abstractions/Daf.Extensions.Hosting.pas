@@ -9,7 +9,8 @@ uses
   System.Generics.Collections,
   System.Rtti,
   Daf.Threading,
-  DAF.Extensions.DependencyInjection,
+  Daf.Extensions.DependencyInjection,
+  Daf.Extensions.Logging,
   Daf.Extensions.Configuration;
 
 type
@@ -61,18 +62,78 @@ type
     procedure Stop;
   end;
 
-  TConfigureHostConfigAction = TProc<IConfigurationBuilder>;
-  TConfigureAppConfigAction = TProc<IHostBuilderContext, IConfigurationBuilder>;
-  TConfigureServicesAction = TProc<IHostBuilderContext, IServiceCollection>;
-  IHostBuilder = interface(IInvokable)
-    ['{3F62FA6D-9AC8-4C7A-8886-DFAFAC3AD663}']
+  /// <summary>
+  /// Codigo que se ejecuta una vez al arrancar, con el proveedor ya construido, y que no
+  /// tiene ciclo de vida: no hay nada que parar, y por eso no hay Stop.
+  /// </summary>
+  /// <remarks>
+  /// Divergencia deliberada de Microsoft.Extensions.*, que no trae este contrato. Su
+  /// consecuencia conocida es que se usa IHostedService como inicializador, con un StopAsync
+  /// vacio que miente sobre lo que el objeto es. DAF clona .NET por sus decisiones, no por
+  /// sus huecos. La regla en una frase: si tiene algo que parar es IHostedService; si solo
+  /// se ejecuta una vez, IStartupTask.
+  /// </remarks>
+  IStartupTask = interface(IInvokable)
+    ['{6F864468-A26C-4AEA-988D-C2E279A1DCF4}']
+    procedure Run;
+  end;
+
+  /// <summary>
+  /// El contrato que comparten los miembros de la familia de aplicaciones --CLI, Web, VCL y
+  /// FMX--, y lo que hace que sean una familia y no cuatro cosas parecidas.
+  /// </summary>
+  /// <remarks>
+  ///   <para>
+  ///   Es el estilo <b>inmediato</b>: todo lo que declara es una propiedad ya viva al volver
+  ///   del constructor, asi que lo registrado ocurre donde esta escrito. El estilo diferido
+  ///   --acumular acciones en listas y dispararlas cuando decida el builder-- no convive con
+  ///   este: dos formas de expresar lo mismo es el defecto, no la comodidad.
+  ///   </para>
+  ///   <para>
+  ///   <b>Build no esta aqui, y no es un olvido:</b> cada variante devuelve su propia clase de
+  ///   aplicacion, y una interfaz de Delphi no admite retorno covariante. Es tambien lo que
+  ///   hace .NET, donde IHostApplicationBuilder tampoco lo declara.
+  ///   </para>
+  ///   <para>
+  ///   <b>Dos miembros del linaje no se portan, y quedan declarados como divergencia:</b>
+  ///   Metrics, porque no hay pieza equivalente en DAF a la que apuntar; y
+  ///   ConfigureContainer, porque es un metodo generico y una interfaz de Delphi no los
+  ///   admite --no es que se descarte, es que no es expresable--.
+  ///   </para>
+  /// </remarks>
+  IHostApplicationBuilder = interface(IInvokable)
+    ['{8D8B3E08-3CC9-402A-86C3-188FE0682B08}']
+    function GetServices: IServiceCollection;
+    function GetConfiguration: IConfigurationManager;
+    function GetEnvironment: IHostEnvironment;
+    function GetLogging: ILoggingBuilder;
     function GetProperties: TDictionary<string, TValue>;
-    function ConfigureHostConfiguration(const ConfigAction: TProc<IConfigurationBuilder>): IHostBuilder;
-    function ConfigureAppConfiguration(const ConfigAction: TConfigureAppConfigAction): IHostBuilder;
-    function ConfigureServices(const ConfigAction: TProc<IHostBuilderContext, IServiceCollection>): IHostBuilder;
-    function UseProperty(const Key: string; const Value: TValue): IHostBuilder;
-    function Build: IHost;
+    function GetServiceProviderOptions: TServiceProviderOptions;
+    procedure SetServiceProviderOptions(const Value: TServiceProviderOptions);
+
+    /// <summary>Los registros de servicio de la aplicacion.</summary>
+    property Services: IServiceCollection read GetServices;
+    /// <summary>
+    /// Constructor y lectura a la vez: lo anadido se lee acto seguido, que es lo que permite
+    /// elegir una fuente a partir de lo ya configurado sin un callback diferido.
+    /// </summary>
+    property Configuration: IConfigurationManager read GetConfiguration;
+    /// <summary>Ya resuelto, y derivado de la configuracion de host.</summary>
+    property Environment: IHostEnvironment read GetEnvironment;
+    /// <summary>
+    /// Solo se compone si alguien la toca: componer sin proveedores es un error, asi que
+    /// tocarla por sistema romperia toda aplicacion que no configure logging.
+    /// </summary>
+    property Logging: ILoggingBuilder read GetLogging;
+    /// <summary>Datos que comparten entre si las piezas que componen el arranque.</summary>
     property Properties: TDictionary<string, TValue> read GetProperties;
+    /// <summary>
+    /// Las opciones con que se construira el contenedor. Sin fijarlas, ValidateOnBuild y
+    /// ValidateScopes valen Environment.IsDevelopment en el momento de leerlas; fijadas, ganan al
+    /// entorno. Se fija el record entero: devuelto por una propiedad, no se modifica en su sitio.
+    /// </summary>
+    property ServiceProviderOptions: TServiceProviderOptions read GetServiceProviderOptions
+      write SetServiceProviderOptions;
   end;
 
   IHostApplicationLifetime = interface(IInvokable)
@@ -91,10 +152,13 @@ type
     const Testing = 'Testing';
   end;
 
-  TDafEnvVars = record
-    const APP_ENV = 'DAF_APP_ENV';
-    const APP_NAME = 'DAF_APP_NAME';
-    const CONTENT_ROOT = 'DAF_CONTENT_ROOT';
+  /// Las claves de la configuracion de host de las que sale IHostEnvironment, con los nombres de
+  /// .NET. Se fijan por argumento (--environment Staging) o con una variable de entorno con DAF_
+  /// delante, que se lee sin el prefijo: DAF_ENVIRONMENT, DAF_APPLICATIONNAME, DAF_CONTENTROOT.
+  THostDefaults = record
+    const EnvironmentKey = 'environment';
+    const ApplicationKey = 'applicationName';
+    const ContentRootKey = 'contentRoot';
   end;
 
   TEnvironmentNameHelper = record Helper for TEnvironmentName
@@ -111,15 +175,64 @@ type
   IServiceCollectionHelper = record helper for IServiceCollection
   public
     procedure AddHostedService<T:IHostedService>;
+    procedure AddStartupTask<T:IStartupTask>;
   end;
 
+  // Por si el helper anterior queda ensombrecido: en Delphi solo hay un record helper
+  // visible por tipo, y quien haga uses de dos units que extiendan IServiceCollection
+  // solo vera uno.
+  Hosting = class
+  public
+    class procedure AddHostedService(const ServiceCollection: IServiceCollection; const TImpl: TClass);
+    class procedure AddStartupTask(const ServiceCollection: IServiceCollection; const TImpl: TClass);
+  end;
+
+/// <summary>
+/// Para el host y vacia la variable, como FreeAndNil con un objeto. Parar libera el host, y la
+/// variable queda vacia antes, tambien si la parada lanza; lo que lanza sale igual que de Stop.
+/// </summary>
+/// <remarks>
+/// Vacia esta variable, no sus copias: una copia guardada aparte se suelta al notificarse
+/// ApplicationStopped, cuando el host todavia existe.
+/// </remarks>
+procedure StopAndNil(var Host: IHost);
 
 implementation
-uses System.StrUtils;
+uses System.StrUtils, System.TypInfo;
 
 procedure IServiceCollectionHelper.AddHostedService<T>;
 begin
   AddSingleton<IHostedService, T>;
+end;
+
+procedure IServiceCollectionHelper.AddStartupTask<T>;
+begin
+  AddSingleton<IStartupTask, T>;
+end;
+
+{ Hosting }
+
+class procedure Hosting.AddHostedService(const ServiceCollection: IServiceCollection; const TImpl: TClass);
+begin
+  ServiceCollection.AddSingleton(TypeInfo(IHostedService), TImpl);
+end;
+
+class procedure Hosting.AddStartupTask(const ServiceCollection: IServiceCollection; const TImpl: TClass);
+begin
+  ServiceCollection.AddSingleton(TypeInfo(IStartupTask), TImpl);
+end;
+
+procedure StopAndNil(var Host: IHost);
+begin
+  // El host no cuenta referencias: vaciar la variable no lo libera, lo libera Stop, y a partir de
+  // ahi la copia apunta a memoria devuelta.
+  var Stopping := Host;
+  Host := nil;
+  try
+    Stopping.Stop;
+  finally
+    Pointer(Stopping) := nil;
+  end;
 end;
 
 { TEnvironmentNameHelper }

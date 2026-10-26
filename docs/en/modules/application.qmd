@@ -1,5 +1,0 @@
----
-sidebar: modules
----
-
-{{< include ../../../src/Application/README.md >}}

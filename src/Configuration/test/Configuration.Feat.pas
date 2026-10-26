@@ -1,4 +1,4 @@
-unit Configuration.Feat;
+﻿unit Configuration.Feat;
 
 interface
 
@@ -14,11 +14,23 @@ type
     property NamedProperty: string read FNamedProperty write SetNamedProperty;
   end;
 
+  TNumbersConfig = class
+  private
+    FNumbers: TArray<Integer>;
+  public
+    property Numbers: TArray<Integer> read FNumbers write FNumbers;
+  end;
+
   TConfigWorld = class
   public
     Builder: IConfigurationBuilder;
     Config: IConfigurationRoot;
     BoundObj: TMyConfig;
+    Path: string;
+    SectionKey: string;
+    ParentPath: string;
+    Report: string;
+    JsonFile: string;
     constructor Create;
     destructor Destroy; override;
   end;
@@ -27,11 +39,36 @@ implementation
 
 uses
   System.SysUtils,
+  System.IOUtils,
   System.Generics.Collections,
   Daf.MiniSpec,
   Daf.Configuration.Builder,
   Daf.Configuration.Memory,
+  Daf.Configuration.Json,
   Daf.Configuration.Binder;
+
+/// The keys of a section's children, in the order the section gives them.
+function ChildKeys(const Config: IConfiguration; const Path: string): string;
+begin
+  Result := '';
+  for var Child in Config.GetSection(Path).GetChildren do
+  begin
+    if Result <> '' then
+      Result := Result + ',';
+    Result := Result + Child.Key;
+  end;
+end;
+
+function Collection(const Pairs: array of string): TDictionary<string, string>;
+begin
+  Result := TDictionary<string, string>.Create;
+  var I := 0;
+  while I < High(Pairs) do
+  begin
+    Result.Add(Pairs[I], Pairs[I + 1]);
+    Inc(I, 2);
+  end;
+end;
 
 { TMyConfig }
 
@@ -51,6 +88,8 @@ end;
 destructor TConfigWorld.Destroy;
 begin
   BoundObj.Free;
+  if (JsonFile <> '') and TFile.Exists(JsonFile) then
+    TFile.Delete(JsonFile);
   inherited;
 end;
 
@@ -127,6 +166,35 @@ Feature Configuration @configuration
         Expect(Section.HasChildren).ToBeTrue;
       end)
 
+.Rule('TConfigurationPath')
+
+  // Not one ':' written by hand in this scenario: the key is composed with Combine and
+  // taken apart with GetSectionKey/GetParentPath. The day the declared delimiter and the
+  // one those functions use stop being the same, this is what turns red -- the alternative
+  // is producing keys that do not match, in silence.
+  .Scenario('Compose and decompose a key with the declared delimiter')
+    .Given('a path composed from two segments',
+      procedure(W: TConfigWorld)
+      begin
+        W.Path := TConfigurationPath.Combine(['parent', 'child']);
+      end)
+    .When('I take the path apart',
+      procedure(W: TConfigWorld)
+      begin
+        W.SectionKey := TConfigurationPath.GetSectionKey(W.Path);
+        W.ParentPath := TConfigurationPath.GetParentPath(W.Path);
+      end)
+    .&Then('the section key is the last segment',
+      procedure(W: TConfigWorld)
+      begin
+        Expect(W.SectionKey).ToEqual('child');
+      end)
+    .&And('the parent path is everything before it',
+      procedure(W: TConfigWorld)
+      begin
+        Expect(W.ParentPath).ToEqual('parent');
+      end)
+
 .Rule('ConfigurationBinder')
 
   .Scenario('Bind configuration to object properties')
@@ -149,6 +217,73 @@ Feature Configuration @configuration
       procedure(W: TConfigWorld)
       begin
         Expect(W.BoundObj.NamedProperty).ToEqual('bound value');
+      end)
+
+.Rule('A section''s children follow the order of .NET')
+
+  .Scenario('An array of twelve elements')
+    .Given('a configuration with a JSON array of twelve integers',
+      procedure(W: TConfigWorld)
+      begin
+        W.JsonFile := TPath.Combine(TPath.GetTempPath, 'daf-config-order-' + TGuid.NewGuid.ToString + '.json');
+        TFile.WriteAllText(W.JsonFile, '{ "Numbers": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] }');
+        JsonConfig.AddFile(W.Builder, W.JsonFile);
+        W.Config := W.Builder.Build;
+      end)
+    .When('it is bound to a TArray<Integer> member',
+      procedure(W: TConfigWorld)
+      begin
+        var Bound := TConfigurationBinder.Bind<TNumbersConfig>(W.Config);
+        try
+          for var N in Bound.Numbers do
+            W.Report := W.Report + IntToStr(N) + ',';
+        finally
+          Bound.Free;
+        end;
+      end)
+    .&Then('the array holds the twelve in the order of the file',
+      procedure(W: TConfigWorld)
+      begin
+        Expect(W.Report).ToEqual('1,2,3,4,5,6,7,8,9,10,11,12,');
+      end)
+
+  .Scenario('Numbers go by their value and before names')
+    .Given('a section with the keys 10, b, 2 and A',
+      procedure(W: TConfigWorld)
+      begin
+        MemoryConfig.AddCollection(W.Builder, Collection(['S:10', 'ten', 'S:b', 'bee', 'S:2', 'two', 'S:A', 'ay']));
+        W.Config := W.Builder.Build;
+      end)
+    .When('its children are read',
+      procedure(W: TConfigWorld)
+      begin
+        W.Report := ChildKeys(W.Config, 'S');
+      end)
+    .&Then('they come in the order 2, 10, A, b',
+      procedure(W: TConfigWorld)
+      begin
+        Expect(W.Report).ToEqual('2,10,A,b');
+      end)
+
+.Rule('The order of the children does not depend on which source brought each key')
+
+  .Scenario('An index the second source brings')
+    .Given('a first source with the elements 0 and 2 of an array, and a second one with the 1',
+      procedure(W: TConfigWorld)
+      begin
+        MemoryConfig.AddCollection(W.Builder, Collection(['Arr:0', 'zero', 'Arr:2', 'two']));
+        MemoryConfig.AddCollection(W.Builder, Collection(['Arr:1', 'one']));
+        W.Config := W.Builder.Build;
+      end)
+    .When('the array''s children are read',
+      procedure(W: TConfigWorld)
+      begin
+        W.Report := ChildKeys(W.Config, 'Arr');
+      end)
+    .&Then('they come in the order 0, 1, 2',
+      procedure(W: TConfigWorld)
+      begin
+        Expect(W.Report).ToEqual('0,1,2');
       end);
 
 end.

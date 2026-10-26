@@ -1,10 +1,12 @@
-unit Daf.Extensions.Configuration;
+﻿unit Daf.Extensions.Configuration;
 
 interface
 uses
   System.Generics.Collections,
+  System.Generics.Defaults,
   System.SysUtils,
-  System.Rtti;
+  System.Rtti,
+  Daf.Nullable;
 
 type
 
@@ -57,7 +59,7 @@ type
     function Build(const Builder: IConfigurationBuilder): IConfigurationProvider;
   end;
 
-  TConfigurationSourceOption = (csoOptional, csoReloadOnChange);
+  TConfigurationSourceOption = (csoOptional);
   TConfigurationSourceOptions = set of TConfigurationSourceOption;
 
 
@@ -103,6 +105,39 @@ type
     function GetItem(const Key: string): string;
     procedure SetItem(const Key: string; const Value: string);
     function GetChildren: IEnumerable<IConfigurationSection>;
+
+    /// <summary>
+    /// Whether the Key is present, no matter whether its Value is the empty string.
+    /// </summary>
+    /// <remarks>
+    ///   Literal parity with .NET's <c>IConfigurationSection.Exists()</c>, section
+    ///   semantics included: a section exists when it has a Value of its own <b>or</b>
+    ///   has keys underneath. A section that only groups — the one holding
+    ///   <c>Logging:Level</c> and its siblings — has no Value, and answering that it
+    ///   does not exist while its children are being read is a false answer.
+    /// </remarks>
+    function Exists(const Key: string): Boolean;
+
+    /// <summary>
+    /// Reads the Key reporting absence: presence and Value in a single lookup.
+    /// </summary>
+    /// <remarks>
+    ///   This is what carries what .NET expresses with the <c>?</c> of
+    ///   <c>string? this[string key]</c>, which a Delphi string cannot: it needs a
+    ///   member of its own. Naming it is what keeps the distinction from being lost —
+    ///   the presence can only be read by asking the type for it.
+    /// </remarks>
+    function Find(const Key: string): TNullable<string>;
+
+    /// <summary>
+    /// The Value for the Key, or the empty string when the Key is absent.
+    /// </summary>
+    /// <remarks>
+    ///   The indexer is typed as a plain string, so it cannot report absence: an
+    ///   absent Key and a Key with an empty value both read as the empty string, and
+    ///   <c>C['absent'] = ''</c> and <c>C['empty'] = ''</c> are both True. Use
+    ///   <see cref="Exists"/> or <see cref="Find"/> to tell the two apart.
+    /// </remarks>
     property Item[const Key: string]: string read GetItem write SetItem; default;
   end;
 
@@ -144,6 +179,35 @@ type
   end;
 
   /// <summary>
+  /// Configuration that is a builder and a reader at the same time: whatever is added is
+  /// readable straight away, with nothing built in between.
+  /// </summary>
+  /// <remarks>
+  ///   In .NET this is <c>IConfigurationManager : IConfigurationBuilder, IConfiguration</c>.
+  ///   <b>Delphi admits one parent per interface</b>, so the six members of
+  ///   <see cref="IConfiguration"/> are redeclared here instead of inherited.
+  ///   <para>
+  ///   <see cref="IConfigurationBuilder"/> is the parent, and the choice is not arbitrary:
+  ///   the calls a <b>user</b> writes at startup are the facade ones —
+  ///   <c>JsonConfig.AddFile(B.Configuration, ...)</c> and its five siblings — and with this
+  ///   parent they compile without a cast. Handing the configuration to the container is one
+  ///   internal line of the framework, and an <c>as IConfiguration</c> there bothers nobody.
+  ///   The implementation carries all three contracts on a single object, so that cast
+  ///   resolves through QueryInterface at no cost in design.
+  ///   </para>
+  /// </remarks>
+  IConfigurationManager = interface(IConfigurationBuilder)
+    ['{69B0B5A8-45B8-4200-B614-77950F15C11A}']
+    function GetSection(const Key: string): IConfigurationSection;
+    function GetItem(const Key: string): string;
+    procedure SetItem(const Key: string; const Value: string);
+    function GetChildren: IEnumerable<IConfigurationSection>;
+    function Exists(const Key: string): Boolean;
+    function Find(const Key: string): TNullable<string>;
+    property Item[const Key: string]: string read GetItem write SetItem; default;
+  end;
+
+  /// <summary>
   /// Utility methods and constants for manipulating Configuration paths
   /// </summary>
   TConfigurationPath = class
@@ -179,6 +243,20 @@ type
     class function GetParentPath(const Path: string): string;
   end;
 
+  /// <summary>
+  ///   The order of configuration keys, as ConfigurationKeyComparer in .NET: segment by segment, two
+  ///   numbers by their value, a number before a text, and two texts ordinal ignoring case. It is the
+  ///   order of a section's children, and so the order a binder fills an array in.
+  /// </summary>
+  TConfigurationKeyComparer = class(TInterfacedObject, IComparer<string>)
+  strict private
+    class var FInstance: IComparer<string>;
+  public
+    class constructor Create;
+    class function Instance: IComparer<string>; static;
+    function Compare(const Left, Right: string): Integer;
+  end;
+
   ConfigurationKeyNameAttribute = class(TCustomAttribute)
   strict private
     FName: string;
@@ -196,6 +274,69 @@ type
   end;
 
 implementation
+
+{ TConfigurationKeyComparer }
+
+class constructor TConfigurationKeyComparer.Create;
+begin
+  FInstance := TConfigurationKeyComparer.Create;
+end;
+
+class function TConfigurationKeyComparer.Instance: IComparer<string>;
+begin
+  Result := FInstance;
+end;
+
+// A whole number as int.TryParse reads it: digits with an optional sign, and no hexadecimal.
+function TryKeyNumber(const Part: string; out Value: Integer): Boolean;
+begin
+  var First := 1;
+  if (Part <> '') and CharInSet(Part[1], ['+', '-']) then
+    First := 2;
+  Result := Length(Part) >= First;
+  for var I := First to Length(Part) do
+    if not CharInSet(Part[I], ['0'..'9']) then
+      Exit(False);
+  Result := Result and TryStrToInt(Part, Value);
+end;
+
+function CompareKeyPart(const Left, Right: string): Integer;
+var
+  LeftValue, RightValue: Integer;
+begin
+  var LeftIsNumber := TryKeyNumber(Left, LeftValue);
+  var RightIsNumber := TryKeyNumber(Right, RightValue);
+  if LeftIsNumber and RightIsNumber then
+  begin
+    if LeftValue < RightValue then
+      Result := -1
+    else if LeftValue > RightValue then
+      Result := 1
+    else
+      Result := 0;
+  end
+  else if LeftIsNumber then
+    Result := -1
+  else if RightIsNumber then
+    Result := 1
+  else
+    Result := CompareText(Left, Right);
+end;
+
+function TConfigurationKeyComparer.Compare(const Left, Right: string): Integer;
+begin
+  var LeftParts := Left.Split([TConfigurationPath.KeyDelimiter]);
+  var RightParts := Right.Split([TConfigurationPath.KeyDelimiter]);
+  var I := 0;
+  while (I < Length(LeftParts)) and (I < Length(RightParts)) do
+  begin
+    Result := CompareKeyPart(LeftParts[I], RightParts[I]);
+    if Result <> 0 then
+      Exit;
+    Inc(I);
+  end;
+  Result := Length(LeftParts) - Length(RightParts);
+end;
 
 { TConfigurationPath }
 
@@ -215,7 +356,7 @@ begin
     Exit(Path);
 
   var
-  lastDelimiterIndex := Path.LastIndexOf(':');
+  lastDelimiterIndex := Path.LastIndexOf(KeyDelimiter);
 
   if lastDelimiterIndex < 0 then
     Exit(Path);
@@ -227,7 +368,7 @@ begin
   if Path.IsEmpty then
     Exit('');
   var
-  lastDelimiterIndex := Path.LastIndexOf(':');
+  lastDelimiterIndex := Path.LastIndexOf(KeyDelimiter);
 
   if lastDelimiterIndex < 0 then
     Exit('');

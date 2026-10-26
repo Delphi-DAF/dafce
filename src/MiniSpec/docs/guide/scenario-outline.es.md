@@ -12,11 +12,11 @@ Un solo ejemplo rara vez es suficiente. ¿Qué pasa con números negativos? ¿Co
 .ScenarioOutline('Sumar <A> y <B> debería dar <Resultado>')
   .When('sumo <A> y <B>', procedure(Ctx: TCalculatorWorld)
     begin
-      Ctx.Result := Ctx.Calculator.Add(Ctx.A, Ctx.B);
+      Ctx.Calculator.Add(Ctx.A, Ctx.B);
     end)
   .&Then('el resultado es <Resultado>', procedure(Ctx: TCalculatorWorld)
     begin
-      Expect(Ctx.Result).ToEqual(Ctx.Resultado);
+      Expect(Ctx.Calculator.Result).ToEqual(Ctx.Resultado);
     end)
   .Examples([
     ['A',   'B',   'Resultado'],  // Headers = nombres de campos del World
@@ -69,6 +69,15 @@ Un step definido sin lambda es display-only: aparece en el reporte pero se ejecu
 ```
 
 La línea `Given` aparece en la salida como contexto pero no ejecuta código. Si existe un step binding que coincide con la descripción sustituida, se ejecuta en su lugar.
+
+## Steps pendientes, y un outline sin Examples
+
+Un step declarado `.Pending` en el outline queda pendiente en cada fila: ninguna lo ejecuta, ni a los
+que le siguen, y cada fila cuenta como Pending.
+
+Un outline sin `.Examples` se ejecuta una vez, como un escenario: con su World y su Background, contado
+como un escenario e impreso con sus steps. Ahí un step sin lambda no es display-only: si no hay binding
+que case con él, es Undefined, como en un Scenario.
 
 ---
 

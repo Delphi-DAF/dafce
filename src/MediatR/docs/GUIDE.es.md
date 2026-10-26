@@ -12,7 +12,7 @@
 4. [API de IMediator](#api-de-imediator)
 5. [IMediatorHelper — respuestas ARC](#imediatorhelper--respuestas-arc)
 6. [Registrar handlers](#registrar-handlers)
-7. [Auto-escaneo con AddMediatR](#auto-escaneo-con-addmediatr)
+7. [Registro y auto-escaneo](#registro-y-auto-escaneo)
 8. [Atributo MediatorAbstract](#atributo-mediatorabstract)
 9. [Behaviors de pipeline](#behaviors-de-pipeline)
 10. [Referencia de clases base](#referencia-de-clases-base)
@@ -24,8 +24,8 @@
 | Interfaz | Clase base | Interfaz handler | Clase base handler |
 |----------|-----------|------------------|--------------------|
 | `IRequest` | `TRequest` | `IRequestHandler<T>` | `TRequestHandler<T>` |
-| `IRequest<TResponse>` | `TRequest<TResponse>` | `IResponseHandler<TRes,TReq>` | `TResponseHandler<TRes,TReq>` |
-| `INotification` | `TNotification` | `INotificationHandler<T>` | `TNotificacionHandler<T>` |
+| `IRequest<TResponse>` | `TRequest<TResponse>` | `IRequestHandler<TRes,TReq>` | `TResponseHandler<TRes,TReq>` |
+| `INotification` | `TNotification` | `INotificationHandler<T>` | `TNotificationHandler<T>` |
 
 ---
 
@@ -34,7 +34,7 @@
 ### Comando (sin valor de retorno)
 
 ```pascal
-uses Daf.MediatR.Abstractions;
+uses Daf.MediatR.Contracts;
 
 type
   TDeleteUserCommand = class(TRequest)
@@ -92,20 +92,23 @@ type
     FRepo: IUserRepository;
   public
     constructor Create(Repo: IUserRepository);
-    function Handle(Request: TGetUserQuery): TUserDTO; override;
+    procedure Handle(Request: TGetUserQuery; out Result: TUserDTO); override;
   end;
 
-function TGetUserHandler.Handle(Request: TGetUserQuery): TUserDTO;
+procedure TGetUserHandler.Handle(Request: TGetUserQuery; out Result: TUserDTO);
 begin
   Result := FRepo.FindById(Request.UserId);
 end;
 ```
 
+La respuesta sale por un parámetro `out`, no como resultado de la función — de ahí la recoge el
+mediador.
+
 ### Handler de notificación
 
 ```pascal
 type
-  TEmailOnUserDeleted = class(TNotificacionHandler<TUserDeletedEvent>)
+  TEmailOnUserDeleted = class(TNotificationHandler<TUserDeletedEvent>)
     procedure Handle(Notification: TUserDeletedEvent); override;
   end;
 
@@ -119,17 +122,20 @@ end;
 
 ## API de IMediator
 
+`IMediator` es un **record** que envuelve al `IMediatorImpl` registrado. Resuelve la implementación y
+asígnala: la conversión implícita te entrega el record.
+
 ```pascal
-IMediator = interface
+IMediator = record
   // Comando — sin valor de retorno
-  procedure Send<TRequest: IRequest>(Request: TRequest); overload;
+  procedure Send<TRequest: class, IRequest>(Request: TRequest); overload;
 
   // Consulta — con valor de retorno
-  function Send<TResponse; TRequest: IRequest<TResponse>>(
+  function Send<TResponse; TRequest: class, IRequest<TResponse>>(
     Request: TRequest): TResponse; overload;
 
   // Notificación — fan-out a todos los handlers registrados
-  procedure Publish<TNotification: INotification>(
+  procedure Publish<TNotification: class, INotification>(
     Notification: TNotification);
 end;
 ```
@@ -137,7 +143,7 @@ end;
 Uso:
 
 ```pascal
-var Mediator := Provider.GetRequiredService<IMediator>;
+var Mediator: IMediator := Provider.GetRequiredService<IMediatorImpl>;
 
 // Comando
 var Cmd := TDeleteUserCommand.Create;
@@ -159,19 +165,19 @@ Mediator.Publish<TUserDeletedEvent>(Evt);
 
 ## IMediatorHelper — respuestas ARC
 
-Cuando la respuesta es un objeto con conteo de referencias, usa `IMediatorHelper.SendARC` para recibirla envuelta en `ARC<TResponse>`:
+`IMediatorHelper` es un **record helper** de `IMediator`, así que `SendARC` está sobre el propio mediador y no hay nada que resolver. Envuelve una respuesta de **clase** en `ARC<TResponse>`, que se libera al salir del scope:
 
 ```pascal
-IMediatorHelper = interface(IMediator)
-  function SendARC<TResponse: IInterface; TRequest: IRequest<TResponse>>(
-    Request: TRequest): ARC<TResponse>;
+IMediatorHelper = record helper for IMediator
+  function SendARC<TResponse: class; TRequest: class, IRequest<TResponse>>(
+    const Request: TRequest): ARC<TResponse>;
 end;
 ```
 
 ```pascal
-var Helper := Provider.GetRequiredService<IMediatorHelper>;
-var ArcResult := Helper.SendARC<IOrderList, TGetOrdersQuery>(Q);
-// ArcResult es ARC<IOrderList> — liberado automáticamente al salir del scope
+var Q := TGetOrdersQuery.Create;
+var Orders := Mediator.SendARC<TOrderList, TGetOrdersQuery>(Q);
+// Orders es ARC<TOrderList> — la lista se libera al salir Orders del scope
 ```
 
 ---
@@ -185,7 +191,7 @@ Cada handler se registra como servicio transitorio en DI:
 Services.AddTransient<IRequestHandler<TDeleteUserCommand>, TDeleteUserHandler>;
 
 // Handler de consulta
-Services.AddTransient<IResponseHandler<TUserDTO, TGetUserQuery>, TGetUserHandler>;
+Services.AddTransient<IRequestHandler<TUserDTO, TGetUserQuery>, TGetUserHandler>;
 
 // Handler de notificación (se soportan múltiples handlers)
 Services.AddTransient<INotificationHandler<TUserDeletedEvent>, TEmailOnUserDeleted>;
@@ -194,21 +200,28 @@ Services.AddTransient<INotificationHandler<TUserDeletedEvent>, TAuditLogHandler>
 
 ---
 
-## Auto-escaneo con AddMediatR
+## Registro y auto-escaneo
 
 ```pascal
-uses Daf.MediatR.DependencyInjection;
+uses Daf.Rtti, Daf.MediatR.DependencyInjection;
 
-Services.AddMediatR;
+Services.AddMediatR;                                     // el mediador
+Services.AddMediatRClasses(_T.PackageOf<TMyHandler>);    // los handlers de ese paquete
+Services.AddMediatRBehaviors(_T.PackageOf<TMyHandler>);  // y sus behaviors de pipeline
 ```
 
-`AddMediatR` registra `IMediator` e `IMediatorHelper` como singletons y escanea todos los tipos registrados en busca de interfaces handler, registrándolos automáticamente. Los handlers deben estar ya en el contenedor DI para que el escaneo los detecte.
+`AddMediatR` registra **`IMediatorImpl` como transient**, y solo si no lo había registrado nadie antes. No escanea nada: el descubrimiento es `AddMediatRClasses(Package)`, que recorre el RTTI de ese paquete buscando interfaces handler y **registra lo que encuentra** — los handlers no tienen que estar antes en el contenedor.
+
+⚠️ Los tres son métodos de un `record helper` sobre `IServiceCollection`, y solo un helper por tipo está en alcance. Si otro `uses` lo ensombrece, la clase `MediatR` cubre los dos primeros —`MediatR.AddTo(Services)` y `MediatR.AddTo(Services, Package)`— y los behaviors van de uno en uno por `MediatR.AddBehavior(Services, TMiBehavior)`. No hay equivalente de clase para `AddMediatRBehaviors`.
 
 ---
 
 ## Atributo MediatorAbstract
 
-Marca las clases base de handler abstractas con `[MediatorAbstract]` para que el mediador no intente resolverlas:
+Marca las clases base de handler abstractas con `[MediatorAbstract]` para que el escaneo de DI
+las salte: `AddMediatRClasses` y `AddMediatRBehaviors` no registran nunca una clase que lo lleve,
+que es lo que evita pedirle al contenedor una clase abstracta. El registro a mano ignora el
+atributo — solo lo leen los escaneos.
 
 ```pascal
 [MediatorAbstract]
@@ -346,12 +359,16 @@ end;
 
 ```pascal
 // Auto-descubrimiento (omite clases marcadas [MediatorAbstract])
-MediatR.AddTo(ServiceCollection, _T.PackageOf<TMyClass>);
+ServiceCollection.AddMediatRBehaviors(_T.PackageOf<TMyClass>);
 
 // Manual
 MediatR.AddBehavior(ServiceCollection, TLoggingBehavior);
 MediatR.AddBehavior(ServiceCollection, TValidatePingBehavior);
 ```
+
+⚠️ El escaneo de behaviors es `AddMediatRBehaviors`, y `AddMediatRClasses` no lo es: este descubre
+solo handlers, así que un paquete registrado únicamente con él no aporta ningún behavior — y sin
+error que lo delate, porque una request sin behaviors registrados va directa a su handler.
 
 Los behaviors se ejecutan en orden de registro — el primero registrado es el más externo. Para behaviors que solo registras manualmente, márcalos con `[MediatorAbstract]` para excluirlos del auto-descubrimiento.
 
@@ -363,7 +380,7 @@ Los behaviors se ejecutan en orden de registro — el primero registrado es el m
 |------------|--------------|---------------------|
 | `TRequestHandler<TReq>` | `procedure Handle(Request: TReq)` | No |
 | `TResponseHandler<TRes, TReq>` | `procedure Handle(Request: TReq; out Result: TRes)` | No |
-| `TNotificacionHandler<TNot>` | `procedure Handle(Notification: TNot)` | No |
+| `TNotificationHandler<TNot>` | `procedure Handle(Notification: TNot)` | No |
 | `TRequest` | — | Hereda `IRequest` |
 | `TRequest<TResponse>` | — | Hereda `IRequest<TResponse>` |
 | `TNotification` | — | Hereda `INotification` |

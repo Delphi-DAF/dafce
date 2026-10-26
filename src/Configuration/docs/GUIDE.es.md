@@ -8,15 +8,16 @@
 
 1. [Construir una configuración](#construir-una-configuración)
 2. [Leer valores](#leer-valores)
-3. [Claves jerárquicas y secciones](#claves-jerárquicas-y-secciones)
-4. [Proveedor JSON](#proveedor-json)
-5. [Proveedor INI](#proveedor-ini)
-6. [Proveedor de variables de entorno](#proveedor-de-variables-de-entorno)
-7. [Proveedor en memoria](#proveedor-en-memoria)
-8. [Proveedor encadenado](#proveedor-encadenado)
-9. [Orden de capas y sobreescritura](#orden-de-capas-y-sobreescritura)
-10. [Binding a objetos](#binding-a-objetos)
-11. [Proveedores personalizados](#proveedores-personalizados)
+3. [Distinguir una clave ausente de una vacía](#distinguir-una-clave-ausente-de-una-vacía)
+4. [Claves jerárquicas y secciones](#claves-jerárquicas-y-secciones)
+5. [Proveedor JSON](#proveedor-json)
+6. [Proveedor INI](#proveedor-ini)
+7. [Proveedor de variables de entorno](#proveedor-de-variables-de-entorno)
+8. [Proveedor en memoria](#proveedor-en-memoria)
+9. [Proveedor encadenado](#proveedor-encadenado)
+10. [Orden de capas y sobreescritura](#orden-de-capas-y-sobreescritura)
+11. [Binding a objetos](#binding-a-objetos)
+12. [Proveedores personalizados](#proveedores-personalizados)
 
 ---
 
@@ -25,13 +26,21 @@
 ```pascal
 uses
   Daf.Configuration.Builder,
+  Daf.Configuration.Json,
+  Daf.Configuration.Env,
   Daf.Extensions.Configuration;
 
-var Config: IConfiguration := TConfigurationBuilder.Create
-  .AddJsonFile('appsettings.json')
-  .AddEnvironmentVariables
-  .Build;
+var Builder: IConfigurationBuilder := TConfigurationBuilder.Create;
+
+JsonConfig.AddFile(Builder, 'appsettings.json');
+Builder.Add(TEnvironmentVariablesConfigurationSource.Create);
+
+var Config: IConfiguration := Builder.Build;
 ```
+
+⚠️ **Sostén el builder en una variable `IConfigurationBuilder`.** `TConfigurationBuilder` lleva conteo
+de referencias, así que encadenar directamente sobre `TConfigurationBuilder.Create` deja el builder sin
+dueño y se pierde.
 
 `TConfigurationBuilder.Build` devuelve un `IConfigurationRoot`, que también implementa `IConfiguration`.
 
@@ -55,6 +64,40 @@ for var Child in Config.GetSection('Logging').GetChildren do
 ```
 
 Las rutas de clave usan `:` como separador de jerarquía. Los arrays usan sufijos numéricos desde cero: `Plugins:0`, `Plugins:1`, etc.
+
+`GetChildren` los devuelve en el orden de `ConfigurationKeyComparer` de .NET, también cuando las claves
+llegan de varias fuentes: las numéricas por su valor y antes que las demás, y el resto por su texto sin
+distinguir mayúsculas. Así un array se enlaza en el orden en que se escribió, también pasado su décimo
+elemento. `TConfigurationKeyComparer.Instance` es ese orden.
+
+---
+
+## Distinguir una clave ausente de una vacía
+
+`IConfiguration` responde a la presencia con dos miembros que .NET no tiene, porque **allí la
+distinción la lleva la anulabilidad** — el indexador es `string? this[key]`, con
+`null` para ausente y `''` para presente y vacía. Una cadena de Delphi no puede ser nula, así que
+lo que allí hace el `?` aquí necesita un miembro propio.
+
+```pascal
+if Config.Exists('Features:Beta') then ;              // la presencia, y nada más
+var Read := Config.Find('Features:Beta');             // presencia Y valor, una sola lectura
+if Read.HasValue and (Read.Value = 'on') then ;
+var Value := Config['Features:Beta'];                 // '' si no está Y si está vacía
+```
+
+`Exists` es paridad literal con el `IConfigurationSection.Exists()` de .NET, **semántica de sección
+incluida**: una sección existe cuando tiene valor propio **o** tiene claves por debajo. Una sección
+que solo agrupa —la que contiene `Logging:Level` y hermanas— no tiene valor propio, y contestar que
+no existe mientras se le leen los hijos es una respuesta falsa sobre la forma del documento.
+
+**El indexador devuelve `string`**, así que `C['ausente'] = ''` y `C['vacía'] = ''` dan las dos
+`True`. Que `Find` haya que nombrarlo es lo que cierra ese agujero: la presencia solo se puede leer
+preguntándosela al tipo.
+
+Esto muerde sobre todo mientras la configuración se está **componiendo**, porque una clave leída
+antes de añadir la fuente que la trae se lee exactamente igual que una clave con valor vacío —
+compila, se ejecuta, no lanza nada, y la funcionalidad no se activa jamás.
 
 ---
 
@@ -94,9 +137,8 @@ Db.Path         // 'Database'
 ```pascal
 uses Daf.Configuration.Json;
 
-Builder
-  .AddJsonFile('appsettings.json')                              // requerido
-  .AddJsonFile('appsettings.Development.json', {optional:} True) // opcional
+JsonConfig.AddFile(Builder, 'appsettings.json');                           // requerido
+JsonConfig.AddFile(Builder, 'appsettings.Development.json', [csoOptional]); // opcional
 ```
 
 Soporta objetos anidados y arrays. Las claves se aplanan con `:`.
@@ -108,7 +150,7 @@ Soporta objetos anidados y arrays. Las claves se aplanan con `:`.
 ```pascal
 uses Daf.Configuration.Ini;
 
-Builder.AddIniFile('config.ini');
+IniConfig.AddFile(Builder, 'config.ini');
 ```
 
 Formato INI:
@@ -127,9 +169,14 @@ Se accede como `Config['Database:Host']`.
 ```pascal
 uses Daf.Configuration.Env;
 
-Builder.AddEnvironmentVariables;               // todas las variables
-Builder.AddEnvironmentVariables('MYAPP_');     // filtradas por prefijo (el prefijo se elimina)
+Builder.Add(TEnvironmentVariablesConfigurationSource.Create);           // todas las variables
+Builder.Add(TEnvironmentVariablesConfigurationSource.Create('MYAPP_'));  // por prefijo (se elimina)
 ```
+
+`Daf.Configuration.Env` declara además `AddEnvironmentVariables` como class helper de
+`TConfigurationBuilder`. Solo aplica si el builder se sostiene como **clase**, no como
+`IConfigurationBuilder` — y sostenerlo como clase es justo lo que lo pierde, así que usa la forma de
+arriba.
 
 Con el prefijo `MYAPP_`, la variable `MYAPP_DATABASE__HOST` se convierte en `Database:Host` (doble `__` → `:`).
 
@@ -142,41 +189,59 @@ Con el prefijo `MYAPP_`, la variable `MYAPP_DATABASE__HOST` se convierte en `Dat
 ```pascal
 uses Daf.Configuration.Memory;
 
-Builder.AddInMemoryCollection([
-  TPair<string,string>.Create('Database:Host', 'localhost'),
-  TPair<string,string>.Create('Database:Port', '5432')
-]);
+var Data := TDictionary<string, string>.Create;   // la fuente se queda con la propiedad
+Data.Add('Database:Host', 'localhost');
+Data.Add('Database:Port', '5432');
+
+MemoryConfig.AddCollection(Builder, Data);
 ```
 
 ---
 
 ## Proveedor encadenado
 
-Envuelve un `IConfiguration` existente como fuente en un nuevo builder:
+Envuelve un `IConfiguration` **que ya existe** como fuente de otro builder. Es la única vía para
+sembrar un builder desde una configuración que te entregaron: la fuente en memoria toma un
+diccionario de cadenas, no un `IConfiguration`.
 
 ```pascal
-uses Daf.Configuration.Chained;
+uses Daf.Extensions.Configuration, Daf.Configuration.Builder, Daf.Configuration.Chained,
+     Daf.Configuration.Json;
 
-var HostConfig: IConfiguration := ...; // de ConfigureHostConfiguration
-var AppBuilder := TConfigurationBuilder.Create
-  .AddConfiguration(HostConfig)   // encadenar config previa
-  .AddJsonFile('appsettings.json')
-  .Build;
+// Una configuración que resolvió otro y te dio -- un anfitrión de plugins, un arnés de specs,
+// una librería que compone sus propios valores por defecto.
+var Given: IConfiguration := HostedBy.Configuration;
+
+var Builder: IConfigurationBuilder := TConfigurationBuilder.Create;
+AddChainedConfiguration(Builder, Given);              // lo que te dieron, primero
+JsonConfig.AddFile(Builder, 'appsettings.json');      // lo tuyo, encima
+
+var Config := Builder.Build;
 ```
 
-Así es como `THostBuilder` comparte los ajustes del host con el pipeline de configuración de la app.
+**La precedencia la decide quien compone**, no la fuente encadenada: no se arroga ninguna propia,
+así que gana o pierde solo por dónde se la añadió. Y encadenar una configuración no asignada falla
+en el acto en vez de en silencio — es una decisión del que compone, no un dato de entrada.
 
----
+Una clave cuyo valor es la **cadena vacía** sobrevive a la cadena: la fuente informa de la
+presencia preguntándosela a la configuración envuelta, y no infiriéndola de que el valor no esté
+vacío. Esa distinción es la que repuso la
+[consulta de presencia](#distinguir-una-clave-ausente-de-una-vacía).
+
+> Este proveedor ya no tiene llamador dentro del framework, y eso es un cambio de papel, no de
+> comportamiento. Era la costura que unía la configuración de host con la de aplicación; con un
+> solo estilo de builder hay una sola configuración y nada que unir. Se queda porque no tiene
+> sustituto, y .NET lo mantiene público por lo mismo.
 
 ## Orden de capas y sobreescritura
 
 Los proveedores se aplican **en orden de registro**. Un valor de un proveedor posterior sobreescribe la misma clave de uno anterior:
 
 ```pascal
-Builder
-  .AddJsonFile('appsettings.json')                         // valores base
-  .AddJsonFile('appsettings.Development.json', True)       // sobreescrituras de entorno
-  .AddEnvironmentVariables;                                // el SO sobreescribe todo
+JsonConfig.AddFile(Builder, 'appsettings.json');                            // valores base
+JsonConfig.AddFile(Builder, 'appsettings.Development.json', [csoOptional]); // entorno
+Builder.Add(TEnvironmentVariablesConfigurationSource.Create);               // el SO sobreescribe
+CommandLineConfig.AddArgs(Builder);                                         // y la línea de comandos gana
 ```
 
 Para recargar todos los proveedores (p. ej., tras un cambio de fichero):
@@ -189,7 +254,9 @@ Para recargar todos los proveedores (p. ej., tras un cambio de fichero):
 
 ## Binding a objetos
 
-`TConfigurationBinder` mapea las claves de una sección a los campos públicos de una clase mediante RTTI:
+`TConfigurationBinder` mapea las claves de una sección sobre una clase mediante RTTI. Qué miembros
+escribe lo dice el argumento `TBindOption`: `boProperties`, que es el de por defecto, lee
+propiedades publicadas; `boFields`, campos públicos — que es lo que tiene este ejemplo:
 
 ```pascal
 uses Daf.Configuration.Binder;
@@ -203,15 +270,141 @@ type
     MaxPoolSize: Integer;
   end;
 
-var Opts := TDatabaseOptions.Create;
-TConfigurationBinder.Bind(Config.GetSection('Database'), Opts);
+// La sobrecarga genérica construye el objeto y lo entrega; lo libera quien llama.
+var Opts := TConfigurationBinder.Bind<TDatabaseOptions>(Config, 'Database', boFields);
+
+// Para rellenar una instancia que ya tienes, la otra sobrecarga toma los cuatro argumentos:
+//   TConfigurationBinder.Bind(Config, 'Database', Opts, boFields);
 
 WriteLn(Opts.Host);         // 'localhost'
 WriteLn(Opts.Port);         // 5432
-WriteLn(Opts.MaxPoolSize);  // 0 si no está en la config
+WriteLn(Opts.MaxPoolSize);  // 0: esta clase no pone defecto y la config no la menciona
 ```
 
 La conversión de tipos desde `string` se gestiona automáticamente para `Integer`, `Boolean`, `Double` y `string`.
+
+### Un miembro puede nombrar la clave por la que se lee
+
+`ConfigurationKeyName` le da a un miembro la clave desde la que se enlaza, que es como una clave que
+el fichero escribe como `connection-string` llega a una propiedad que Delphi no puede llamar así:
+
+```pascal
+uses Daf.Extensions.Configuration, Daf.Configuration.Binder;
+
+type
+  TDbSettings = class
+  private
+    FConnectionString: string;
+    FTimeout: Integer;
+  public
+    [ConfigurationKeyName('connection-string')]
+    property ConnectionString: string read FConnectionString write FConnectionString;
+    property Timeout: Integer read FTimeout write FTimeout;
+  end;
+
+// Lee 'Database:connection-string' y 'Database:Timeout'.
+var Opts := TConfigurationBinder.Bind<TDbSettings>(Config, 'Database');
+```
+
+El atributo **sustituye** al nombre del miembro en vez de añadir un segundo sitio donde mirar: puesto
+el atributo, un valor bajo `Database:ConnectionString` ya no responde por ese miembro. Un miembro sin
+atributo se sigue leyendo por su propio nombre. Sobre un miembro de tipo objeto el atributo renombra
+la sección entera, así que sus hijos se leen debajo del nombre nuevo.
+
+### Una clave que la configuración no menciona no se escribe
+
+El enlace escribe lo que la configuración dice. Una clave que ninguna fuente menciona deja el
+miembro como estaba, con el valor que puso su constructor o el que dejó un enlace anterior:
+
+```pascal
+type
+  TServerOptions = class
+  public
+    Name: string;
+    Port: Integer;
+    constructor Create;
+  end;
+
+constructor TServerOptions.Create;
+begin
+  inherited Create;
+  Name := 'por-defecto';
+  Port := 8080;
+end;
+
+// Ninguna de las dos claves aparece en ninguna fuente:
+var Opts := TConfigurationBinder.Bind<TServerOptions>(Config, 'Server', boFields);
+
+WriteLn(Opts.Name);   // 'por-defecto'
+WriteLn(Opts.Port);   // 8080
+```
+
+Una clave que **sí** está con valor vacío se escribe: el miembro queda con la cadena vacía, porque
+la configuración lo dijo. `Exists` y `Find` contestan esa misma distinción en una lectura.
+
+Un miembro compuesto —una clase anidada, una lista, un diccionario o un array— se construye aunque
+su sección no aparezca en ninguna parte, así que leerlo nunca necesita comprobar `nil`. El límite
+que eso trae: para un compuesto, «la sección no está» y «la sección no tiene hijos» dan el mismo
+objeto, y quien los separa es `Config.Exists('Server')`. Un miembro de array se sustituye por uno
+nuevo, mientras que una colección que ya tenía elementos se reutiliza y el enlace añade sobre ella.
+
+### Un valor se convierte con la cultura invariante, o el enlace falla
+
+Un valor se convierte al tipo de su miembro como lo hace el enlace de .NET: con la cultura invariante,
+así que un decimal lleva punto sea cual sea el locale del proceso; fechas en ISO 8601 o en el formato
+invariante; booleanos como `true` o `false` en cualquier caja; y un enumerado por el nombre de uno de
+sus valores, en cualquier caja, o por su número. Un valor presente que no convierte hace fallar el
+enlace con `EConfigurationBindingError` (unit `Daf.Configuration.Binder`), cuyo mensaje nombra el
+valor, la clave y el tipo:
+
+```
+Failed to convert configuration value 'abc' at 'Server:Port' to type 'Integer'.
+```
+
+`TryConvert(Text, TypeInfo, Value)` es esa conversión por separado, y responde si pudo.
+
+### La clase de ajustes libera sus miembros objeto
+
+Un miembro de tipo objeto lo **construye** el enlazador, recursivamente —eso es lo que hace útil
+anidar una sección dentro de otra— y quien lo construye no se queda con él. Así que la regla es: **la
+clase de ajustes libera lo suyo.**
+
+```pascal
+type
+  TDbSection = class
+  public
+    Server: string;
+    Port: Integer;
+  end;
+
+  TAppConfig = class
+  public
+    Name: string;
+    Db: TDbSection;
+    destructor Destroy; override;   // <- y esto no es opcional
+  end;
+
+destructor TAppConfig.Destroy;
+begin
+  Db.Free;
+  inherited;
+end;
+```
+
+Sin ese destructor el objeto anidado se fuga, en silencio y a cuenta de quien posea la raíz.
+
+Dos cosas más sobre el enlace de anidados, y conviene saberlas antes de tropezar con ellas:
+
+- enlazar la misma sección por separado da una **instancia independiente**, no la que está anidada
+  dentro del padre — igual que en .NET
+- el enlazador **reutiliza** el objeto miembro que la clase ya construyó en su constructor, en vez de
+  sustituirlo, así que construirlo ahí y liberarlo en el destructor es la forma que funciona
+
+### Entregar la sección como unos ajustes con dueño
+
+Dentro de un contenedor, quien llama no tiene por qué ser dueño del objeto: `ConfigOptions.Bind` le
+da al contenedor el trabajo de construirlo, poseerlo y liberarlo, y el servicio pide sus ajustes por
+constructor. Ver [el README del módulo](../README.es.md).
 
 ---
 

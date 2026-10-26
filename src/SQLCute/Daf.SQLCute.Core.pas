@@ -1,4 +1,4 @@
-unit Daf.SQLCute.Core;
+﻿unit Daf.SQLCute.Core;
 
 {$SCOPEDENUMS ON}
 
@@ -27,6 +27,13 @@ type
   TQueryImpl = class(TInterfacedObject, IQuery)
   private
     FClauses: TObjectList<TAbstractClause>;
+    FKind: TQueryKind;
+    /// Sets the statement kind. When it differs from the current one, the
+    /// clauses that mark the outgoing DML kind are removed first, so the tree
+    /// never keeps a clause no compiler emits. The single point the DML facades
+    /// go through — AsInsert delegates to AsInsertRows, so only the latter calls
+    /// this, never both.
+    procedure ReplaceKind(K: TQueryKind);
     function AddWhereClause(const Column: string; Op: TWhereOp;
       const Value: Variant; Conn: TBoolOp; IsNot: Boolean = False): IQuery;
     function AddWhereClause2(const Column: string; Op: TWhereOp;
@@ -44,12 +51,19 @@ type
     function AddWithClause(const Name: string; const SubQuery: IQuery;
       IsRecursive: Boolean): IQuery;
     function AddNestedWhereGroup(const Callback: TQueryBuilderCallback;
+      Conn: TBoolOp; IsNot: Boolean = False): IQuery;
+    function AddEmptyInGroup(const Column: string; Negated: Boolean;
       Conn: TBoolOp): IQuery;
+    function AddInClause(const Column: string; const Values: TArray<Variant>;
+      Negated: Boolean; Conn: TBoolOp): IQuery;
     procedure SelectAggregateRaw(const AggFunc, Column, Alias: string);
     function AddWhereLikeClause(const Column, Pattern: string;
-      Op: TWhereOp; Conn: TBoolOp; CaseSensitive: Boolean): IQuery;
+      Op: TWhereOp; Conn: TBoolOp; CaseSensitive: Boolean; const EscapeChar: Char): IQuery;
     function AddDateWhereClause(Part: TDatePart; const Column, Op: string;
       const Value: Variant; Conn: TBoolOp): IQuery;
+    function AddOrderByClause(const Column: string; Dir: TSortDir;
+      Nulls: TNullsOrder): IQuery;
+    function QualifyLastOrderBy(Nulls: TNullsOrder; const Modifier: string): IQuery;
   public
     constructor Create;
     destructor Destroy; override;
@@ -79,9 +93,13 @@ type
     function OrWhereBetween(const Column: string; const Low, High: Variant): IQuery;
     function OrWhereNotBetween(const Column: string; const Low, High: Variant): IQuery;
     function WhereRaw(const Sql: string): IQuery;
-    function OrderBy(const Column: string): IQuery;
-    function OrderByDesc(const Column: string): IQuery;
+    function OrderBy(const Column: string): IQuery; overload;
+    function OrderBy(const Column: string; Nulls: TNullsOrder): IQuery; overload;
+    function OrderByDesc(const Column: string): IQuery; overload;
+    function OrderByDesc(const Column: string; Nulls: TNullsOrder): IQuery; overload;
     function OrderByRaw(const Expression: string): IQuery;
+    function NullsFirst: IQuery;
+    function NullsLast: IQuery;
     function Limit(const Value: Int64): IQuery;
     function Offset(const Value: Int64): IQuery;
     function Take(const Value: Int64): IQuery;
@@ -90,7 +108,8 @@ type
     function Clone: IQuery;
     function Compile(const Compiler: IQueryCompiler): TSQLResult;
     function Clauses: TArray<TAbstractClause>;
-    // IQuery — Phase 2
+    function Kind: TQueryKind;
+    // IQuery
     function Join(const Table, Col1, Col2: string; const Op: string = '='): IQuery; overload;
     function Join(const Table, Condition: string): IQuery; overload;
     function Join(const Table: string; const Callback: TQueryBuilderCallback): IQuery; overload;
@@ -115,6 +134,7 @@ type
     function GroupBy(const Columns: TArray<string>): IQuery; overload;
     function GroupByRaw(const Expression: string): IQuery;
     function Having(const Column, Op: string; const Value: Variant): IQuery;
+    function OrHaving(const Column, Op: string; const Value: Variant): IQuery;
     function HavingRaw(const Sql: string): IQuery;
     function Union(const Other: IQuery): IQuery;
     function UnionAll(const Other: IQuery): IQuery;
@@ -150,9 +170,11 @@ type
     function AsInsertFrom(const Columns: TArray<string>; const SubQuery: IQuery): IQuery;
     function AsUpdate(const Columns: TArray<string>; const Values: TArray<Variant>): IQuery;
     function AsDelete: IQuery;
-    // IQuery — F2: groups, columns, when
+    // IQuery — groups, columns, when
     function Where(const Callback: TQueryBuilderCallback): IQuery; overload;
     function OrWhere(const Callback: TQueryBuilderCallback): IQuery; overload;
+    function WhereNot(const Callback: TQueryBuilderCallback): IQuery; overload;
+    function OrWhereNot(const Callback: TQueryBuilderCallback): IQuery; overload;
     function WhereColumns(const Col1, Op, Col2: string): IQuery;
     function OrWhereColumns(const Col1, Op, Col2: string): IQuery;
     function When(const Condition: Boolean;
@@ -160,24 +182,40 @@ type
     function When(const Condition: Boolean;
       const TrueCallback: TQueryBuilderCallback;
       const FalseCallback: TQueryBuilderCallback): IQuery; overload;
-    // IQuery — F3: string / LIKE operations
-    function WhereLike(const Column, Pattern: string; CaseSensitive: Boolean = False): IQuery;
-    function WhereNotLike(const Column, Pattern: string; CaseSensitive: Boolean = False): IQuery;
-    function OrWhereLike(const Column, Pattern: string; CaseSensitive: Boolean = False): IQuery;
-    function OrWhereNotLike(const Column, Pattern: string; CaseSensitive: Boolean = False): IQuery;
-    function WhereStarts(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
-    function WhereNotStarts(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
-    function OrWhereStarts(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
-    function OrWhereNotStarts(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
-    function WhereEnds(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
-    function WhereNotEnds(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
-    function OrWhereEnds(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
-    function OrWhereNotEnds(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
-    function WhereContains(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
-    function WhereNotContains(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
-    function OrWhereContains(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
-    function OrWhereNotContains(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
-    // IQuery — F7: date / time operations
+    // IQuery — string / LIKE operations
+    function WhereLike(const Column, Pattern: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
+    function WhereNotLike(const Column, Pattern: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
+    function OrWhereLike(const Column, Pattern: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
+    function OrWhereNotLike(const Column, Pattern: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
+    function WhereStarts(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
+    function WhereNotStarts(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
+    function OrWhereStarts(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
+    function OrWhereNotStarts(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
+    function WhereEnds(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
+    function WhereNotEnds(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
+    function OrWhereEnds(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
+    function OrWhereNotEnds(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
+    function WhereContains(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
+    function WhereNotContains(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
+    function OrWhereContains(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
+    function OrWhereNotContains(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
+    // IQuery — date / time operations
     function WhereDate(const Column: string; const Value: Variant): IQuery;
     function OrWhereDate(const Column: string; const Value: Variant): IQuery;
     function WhereTime(const Column, Op: string; const Value: Variant): IQuery;
@@ -189,10 +227,27 @@ type
 
 { TQueryImpl }
 
+// The DML statement a clause marks, or Select for a clause that marks none
+// (the shared structural clauses: projection, source, conditions, ordering…).
+// This is the one place production classifies a clause on the statement axis;
+// the completeness spec keeps it exhaustive by failing on any clause type it
+// leaves out.
+function StatementKindOf(const C: TAbstractClause): TQueryKind;
+begin
+  if C is TInsertClause then
+    Exit(TQueryKind.Insert);
+  if C is TUpdateSetClause then
+    Exit(TQueryKind.Update);
+  if C is TDeleteClause then
+    Exit(TQueryKind.Delete);
+  Result := TQueryKind.Select;
+end;
+
 constructor TQueryImpl.Create;
 begin
   inherited Create;
   FClauses := TObjectList<TAbstractClause>.Create(True {owns objects});
+  FKind := TQueryKind.Select;
 end;
 
 destructor TQueryImpl.Destroy;
@@ -201,11 +256,71 @@ begin
   inherited;
 end;
 
+procedure TQueryImpl.ReplaceKind(K: TQueryKind);
+begin
+  if K = FKind then
+    Exit;
+  // Switching away from a DML kind: drop its marker clauses so the tree does not
+  // keep a clause no compiler emits. Never when leaving Select — its "marker" is
+  // every structural clause, none of which the incoming kind wants gone.
+  // FClauses owns its objects, so Delete frees; Extract would leak.
+  if FKind <> TQueryKind.Select then
+    for var I := FClauses.Count - 1 downto 0 do
+      if StatementKindOf(FClauses[I]) = FKind then
+        FClauses.Delete(I);
+  FKind := K;
+end;
+
+function TQueryImpl.Kind: TQueryKind;
+begin
+  Result := FKind;
+end;
+
+// The values of an IN, one per element when Value is an array and the whole Value otherwise.
+function InValues(const Value: Variant): TArray<Variant>;
+begin
+  if not VarIsArray(Value) then
+  begin
+    Result := [Value];
+    Exit;
+  end;
+  for var I := VarArrayLowBound(Value, 1) to VarArrayHighBound(Value, 1) do
+    Result := Result + [Value[I]];
+end;
+
+// Comparing with Null asks about NULL, as SqlKata does: = gives IS NULL and any other operator
+// IS NOT NULL, with no binding.
+function NullAwareOp(const Op: TWhereOp; const Value: Variant): TWhereOp;
+begin
+  Result := Op;
+  if not VarIsNull(Value) or (Op in [TWhereOp.IsNull, TWhereOp.IsNotNull]) then
+    Exit;
+  if Op = TWhereOp.Equal then
+    Result := TWhereOp.IsNull
+  else
+    Result := TWhereOp.IsNotNull;
+end;
+
 function TQueryImpl.AddWhereClause(const Column: string; Op: TWhereOp;
   const Value: Variant; Conn: TBoolOp; IsNot: Boolean): IQuery;
 var
   W: TWhereClause;
+  BoolLiteral: Boolean;
 begin
+  Op := NullAwareOp(Op, Value);
+  // A logical value compares with the dialect literal, as SqlKata does: = keeps the comparison, any
+  // other operator negates it, and that negation adds to the one of WhereNot.
+  BoolLiteral := (VarType(Value) = varBoolean) and not (Op in [TWhereOp.IsNull, TWhereOp.IsNotNull]);
+  if BoolLiteral then
+  begin
+    if Op <> TWhereOp.Equal then
+      IsNot := not IsNot;
+    Op := TWhereOp.Equal;
+  end;
+  // IN by operator name goes the WhereIn way: one bound parameter per value, never the value
+  // written into the SQL text.
+  if Op in [TWhereOp.&In, TWhereOp.NotIn] then
+    Exit(AddInClause(Column, InValues(Value), (Op = TWhereOp.NotIn) <> IsNot, Conn));
   W := TWhereClause.Create;
   W.Column        := Column;
   W.Op            := Op;
@@ -213,6 +328,7 @@ begin
   W.Connector     := Conn;
   W.IsNot         := IsNot;
   W.CaseSensitive := True;  // raw LIKE via Where(col,'LIKE',val) is always case-sensitive
+  W.IsBoolLiteral := BoolLiteral;
   FClauses.Add(W);
   Result := Self;
 end;
@@ -438,28 +554,38 @@ end;
 
 // --- ORDER BY ---
 
-function TQueryImpl.OrderBy(const Column: string): IQuery;
+function TQueryImpl.AddOrderByClause(const Column: string; Dir: TSortDir;
+  Nulls: TNullsOrder): IQuery;
 var
   O: TOrderByClause;
 begin
   O := TOrderByClause.Create;
   O.Column    := Column;
-  O.Direction := TSortDir.Asc;
+  O.Direction := Dir;
   O.IsRaw     := False;
+  O.Nulls     := Nulls;
   FClauses.Add(O);
   Result := Self;
 end;
 
-function TQueryImpl.OrderByDesc(const Column: string): IQuery;
-var
-  O: TOrderByClause;
+function TQueryImpl.OrderBy(const Column: string): IQuery;
 begin
-  O := TOrderByClause.Create;
-  O.Column    := Column;
-  O.Direction := TSortDir.Desc;
-  O.IsRaw     := False;
-  FClauses.Add(O);
-  Result := Self;
+  Result := AddOrderByClause(Column, TSortDir.Asc, TNullsOrder.Default);
+end;
+
+function TQueryImpl.OrderBy(const Column: string; Nulls: TNullsOrder): IQuery;
+begin
+  Result := AddOrderByClause(Column, TSortDir.Asc, Nulls);
+end;
+
+function TQueryImpl.OrderByDesc(const Column: string): IQuery;
+begin
+  Result := AddOrderByClause(Column, TSortDir.Desc, TNullsOrder.Default);
+end;
+
+function TQueryImpl.OrderByDesc(const Column: string; Nulls: TNullsOrder): IQuery;
+begin
+  Result := AddOrderByClause(Column, TSortDir.Desc, Nulls);
 end;
 
 function TQueryImpl.OrderByRaw(const Expression: string): IQuery;
@@ -471,6 +597,37 @@ begin
   O.IsRaw  := True;
   FClauses.Add(O);
   Result := Self;
+end;
+
+// The one place the builder rewrites an already-added clause: the NULL-ordering
+// modifiers qualify the ORDER BY column added last. Raw expressions are skipped
+// (they are emitted verbatim), and with nothing to qualify this fails fast
+// rather than dropping the caller's intent.
+function TQueryImpl.QualifyLastOrderBy(Nulls: TNullsOrder;
+  const Modifier: string): IQuery;
+begin
+  for var I := FClauses.Count - 1 downto 0 do
+    if FClauses[I] is TOrderByClause then
+    begin
+      var O := TOrderByClause(FClauses[I]);
+      if not O.IsRaw then
+      begin
+        O.Nulls := Nulls;
+        Exit(Self);
+      end;
+    end;
+  raise EInvalidOpException.CreateFmt(
+    '%s requires a preceding OrderBy/OrderByDesc column to qualify.', [Modifier]);
+end;
+
+function TQueryImpl.NullsFirst: IQuery;
+begin
+  Result := QualifyLastOrderBy(TNullsOrder.First, 'NullsFirst');
+end;
+
+function TQueryImpl.NullsLast: IQuery;
+begin
+  Result := QualifyLastOrderBy(TNullsOrder.Last, 'NullsLast');
 end;
 
 // --- LIMIT / OFFSET ---
@@ -524,6 +681,7 @@ var
   Cl: TAbstractClause;
 begin
   Copy := TQueryImpl.Create;
+  Copy.FKind := FKind;
   for Cl in FClauses do
     Copy.FClauses.Add(Cl.Clone);
   Result := Copy;
@@ -560,11 +718,12 @@ function TQueryImpl.AddJoinClauseColumns(JoinType: TJoinType;
 var
   J: TJoinClause;
 begin
+  var Parsed := ParseComparisonOp(Op);
   J := TJoinClause.Create;
   J.JoinType := JoinType;
   J.Table    := Table;
   J.Col1     := Col1;
-  J.Op       := Op;
+  J.Op       := Parsed;
   J.Col2     := Col2;
   FClauses.Add(J);
   Result := Self;
@@ -791,7 +950,7 @@ var
 begin
   H := THavingClause.Create;
   H.Column    := Column;
-  H.Op        := Op;
+  H.Op        := NullAwareOp(Op, Value);
   H.Value     := Value;
   H.Connector := Conn;
   FClauses.Add(H);
@@ -800,7 +959,12 @@ end;
 
 function TQueryImpl.Having(const Column, Op: string; const Value: Variant): IQuery;
 begin
-  Result := AddHavingClause(Column, ParseWhereOp(Op), Value, TBoolOp.opAnd);
+  Result := AddHavingClause(Column, ParseComparisonOp(Op), Value, TBoolOp.opAnd);
+end;
+
+function TQueryImpl.OrHaving(const Column, Op: string; const Value: Variant): IQuery;
+begin
+  Result := AddHavingClause(Column, ParseComparisonOp(Op), Value, TBoolOp.opOr);
 end;
 
 function TQueryImpl.HavingRaw(const Sql: string): IQuery;
@@ -970,56 +1134,66 @@ begin
   Result := Self;
 end;
 
-function TQueryImpl.WhereIn(const Column: string; const Values: TArray<Variant>): IQuery;
+// The empty value set, resolved here so no consumer downstream is ever handed a
+// TWhereInClause with nothing in it.
+//
+// `x IN (a, b)` is `x = a OR x = b`, so an empty list is the empty disjunction:
+// False without consulting the column, and True for the negated form. That rules
+// out every constant that reads the column — `col <> col`, `col = NULL`, a raw
+// `1 = 0` the in-memory lane refuses — and leaves IS NULL / IS NOT NULL, the only
+// two predicates in the model that never answer Unknown. Exactly one of them
+// holds for any value, so their conjunction is False for every row, NULL ones
+// included, and its negation is True for every row.
+//
+// Naming the column also keeps the emitted SQL traceable back to the call that
+// produced it, which `1 = 0` would not.
+function TQueryImpl.AddEmptyInGroup(const Column: string; Negated: Boolean;
+  Conn: TBoolOp): IQuery;
+begin
+  Result := AddNestedWhereGroup(
+    function(Sub: IQuery): IQuery
+    begin
+      Result := Sub.WhereNull(Column).WhereNotNull(Column);
+    end,
+    Conn, Negated);
+end;
+
+function TQueryImpl.AddInClause(const Column: string; const Values: TArray<Variant>;
+  Negated: Boolean; Conn: TBoolOp): IQuery;
+const
+  ConnectorText: array[TBoolOp] of string = ('AND', 'OR');
 var
   C: TWhereInClause;
 begin
+  if Length(Values) = 0 then
+    Exit(AddEmptyInGroup(Column, Negated, Conn));
   C           := TWhereInClause.Create;
   C.Column    := Column;
   C.Values    := Values;
-  C.Negated   := False;
-  C.Connector := 'AND';
+  C.Negated   := Negated;
+  C.Connector := ConnectorText[Conn];
   FClauses.Add(C);
   Result := Self;
+end;
+
+function TQueryImpl.WhereIn(const Column: string; const Values: TArray<Variant>): IQuery;
+begin
+  Result := AddInClause(Column, Values, False, TBoolOp.opAnd);
 end;
 
 function TQueryImpl.WhereNotIn(const Column: string; const Values: TArray<Variant>): IQuery;
-var
-  C: TWhereInClause;
 begin
-  C           := TWhereInClause.Create;
-  C.Column    := Column;
-  C.Values    := Values;
-  C.Negated   := True;
-  C.Connector := 'AND';
-  FClauses.Add(C);
-  Result := Self;
+  Result := AddInClause(Column, Values, True, TBoolOp.opAnd);
 end;
 
 function TQueryImpl.OrWhereIn(const Column: string; const Values: TArray<Variant>): IQuery;
-var
-  C: TWhereInClause;
 begin
-  C           := TWhereInClause.Create;
-  C.Column    := Column;
-  C.Values    := Values;
-  C.Negated   := False;
-  C.Connector := 'OR';
-  FClauses.Add(C);
-  Result := Self;
+  Result := AddInClause(Column, Values, False, TBoolOp.opOr);
 end;
 
 function TQueryImpl.OrWhereNotIn(const Column: string; const Values: TArray<Variant>): IQuery;
-var
-  C: TWhereInClause;
 begin
-  C           := TWhereInClause.Create;
-  C.Column    := Column;
-  C.Values    := Values;
-  C.Negated   := True;
-  C.Connector := 'OR';
-  FClauses.Add(C);
-  Result := Self;
+  Result := AddInClause(Column, Values, True, TBoolOp.opOr);
 end;
 
 // --- SELECT (aliases + aggregates) ---
@@ -1184,6 +1358,7 @@ function TQueryImpl.AsInsertRows(const Columns: TArray<string>;
 var
   IC: TInsertClause;
 begin
+  ReplaceKind(TQueryKind.Insert);
   IC := TInsertClause.Create;
   IC.Columns := Columns;
   IC.Rows    := Rows;
@@ -1196,6 +1371,8 @@ function TQueryImpl.AsInsert(const Columns: TArray<string>;
 var
   Rows: TArray<TArray<Variant>>;
 begin
+  // Delegates to AsInsertRows, which sets the kind — the guard lives there and
+  // only there, so a single AsInsert call does not fire it twice.
   SetLength(Rows, 1);
   Rows[0] := Values;
   Result := AsInsertRows(Columns, Rows);
@@ -1206,6 +1383,7 @@ function TQueryImpl.AsInsertFrom(const Columns: TArray<string>;
 var
   IC: TInsertClause;
 begin
+  ReplaceKind(TQueryKind.Insert);
   IC := TInsertClause.Create;
   IC.Columns  := Columns;
   IC.SubQuery := SubQuery;
@@ -1219,6 +1397,9 @@ var
   I: Integer;
   US: TUpdateSetClause;
 begin
+  // One clause per column; declaring UPDATE twice accumulates columns because
+  // the kind is unchanged, so ReplaceKind removes nothing on the second call.
+  ReplaceKind(TQueryKind.Update);
   for I := 0 to Min(High(Columns), High(Values)) do
   begin
     US := TUpdateSetClause.Create;
@@ -1231,14 +1412,15 @@ end;
 
 function TQueryImpl.AsDelete: IQuery;
 begin
+  ReplaceKind(TQueryKind.Delete);
   FClauses.Add(TDeleteClause.Create);
   Result := Self;
 end;
 
-// --- F2: WHERE groups, WhereColumns, When ---
+// --- WHERE groups, WhereColumns, When ---
 
 function TQueryImpl.AddNestedWhereGroup(const Callback: TQueryBuilderCallback;
-  Conn: TBoolOp): IQuery;
+  Conn: TBoolOp; IsNot: Boolean = False): IQuery;
 var
   Inner: IQuery;
   Nested: TNestedWhereClause;
@@ -1251,6 +1433,7 @@ begin
   InnerImpl := Inner as TQueryImpl;
   Nested := TNestedWhereClause.Create;
   Nested.Connector := Conn;
+  Nested.IsNot     := IsNot;
   SetLength(Nested.SubClauses, 0);
   for Cl in InnerImpl.FClauses do
     if (Cl is TWhereClause) or (Cl is TWhereInClause) or (Cl is TNestedWhereClause) or (Cl is TDateWhereClause) then
@@ -1273,13 +1456,24 @@ begin
   Result := AddNestedWhereGroup(Callback, TBoolOp.opOr);
 end;
 
+function TQueryImpl.WhereNot(const Callback: TQueryBuilderCallback): IQuery;
+begin
+  Result := AddNestedWhereGroup(Callback, TBoolOp.opAnd, True);
+end;
+
+function TQueryImpl.OrWhereNot(const Callback: TQueryBuilderCallback): IQuery;
+begin
+  Result := AddNestedWhereGroup(Callback, TBoolOp.opOr, True);
+end;
+
 function TQueryImpl.WhereColumns(const Col1, Op, Col2: string): IQuery;
 var
   W: TWhereClause;
 begin
+  var Parsed := ParseComparisonOp(Op);
   W := TWhereClause.Create;
   W.Column        := Col1;
-  W.Op            := ParseWhereOp(Op);
+  W.Op            := Parsed;
   W.Value         := Col2;
   W.Connector     := TBoolOp.opAnd;
   W.IsColumnValue := True;
@@ -1291,9 +1485,10 @@ function TQueryImpl.OrWhereColumns(const Col1, Op, Col2: string): IQuery;
 var
   W: TWhereClause;
 begin
+  var Parsed := ParseComparisonOp(Op);
   W := TWhereClause.Create;
   W.Column        := Col1;
-  W.Op            := ParseWhereOp(Op);
+  W.Op            := Parsed;
   W.Value         := Col2;
   W.Connector     := TBoolOp.opOr;
   W.IsColumnValue := True;
@@ -1320,119 +1515,142 @@ begin
   Result := Self;
 end;
 
-// --- F3: string / LIKE operations ---
+// --- string / LIKE operations ---
 
 function TQueryImpl.AddWhereLikeClause(const Column, Pattern: string;
-  Op: TWhereOp; Conn: TBoolOp; CaseSensitive: Boolean): IQuery;
+  Op: TWhereOp; Conn: TBoolOp; CaseSensitive: Boolean;
+  const EscapeChar: Char): IQuery;
 var
   W: TWhereClause;
   ActualPattern: string;
 begin
+  // The escape character goes into the SQL text: a quote would close the literal, and a '?' would
+  // be numbered as a placeholder.
+  if CharInSet(EscapeChar, ['''', '?']) then
+    raise EArgumentException.CreateFmt('"%s" cannot be the escape character of a LIKE', [EscapeChar]);
   if CaseSensitive then
     ActualPattern := Pattern
   else
-    ActualPattern := LowerCase(Pattern);
+    ActualPattern := Pattern.ToLowerInvariant;
   W := TWhereClause.Create;
   W.Column        := Column;
   W.Op            := Op;
   W.Value         := ActualPattern;
   W.Connector     := Conn;
   W.CaseSensitive := CaseSensitive;
+  W.EscapeChar    := EscapeChar;
   FClauses.Add(W);
   Result := Self;
 end;
 
-function TQueryImpl.WhereLike(const Column, Pattern: string; CaseSensitive: Boolean): IQuery;
+function TQueryImpl.WhereLike(const Column, Pattern: string; CaseSensitive: Boolean;
+  const EscapeChar: Char): IQuery;
 begin
-  Result := AddWhereLikeClause(Column, Pattern, TWhereOp.Like, TBoolOp.opAnd, CaseSensitive);
+  Result := AddWhereLikeClause(Column, Pattern, TWhereOp.Like, TBoolOp.opAnd, CaseSensitive, EscapeChar);
 end;
 
-function TQueryImpl.WhereNotLike(const Column, Pattern: string; CaseSensitive: Boolean): IQuery;
+function TQueryImpl.WhereNotLike(const Column, Pattern: string; CaseSensitive: Boolean;
+  const EscapeChar: Char): IQuery;
 begin
-  Result := AddWhereLikeClause(Column, Pattern, TWhereOp.NotLike, TBoolOp.opAnd, CaseSensitive);
+  Result := AddWhereLikeClause(Column, Pattern, TWhereOp.NotLike, TBoolOp.opAnd, CaseSensitive, EscapeChar);
 end;
 
-function TQueryImpl.OrWhereLike(const Column, Pattern: string; CaseSensitive: Boolean): IQuery;
+function TQueryImpl.OrWhereLike(const Column, Pattern: string; CaseSensitive: Boolean;
+  const EscapeChar: Char): IQuery;
 begin
-  Result := AddWhereLikeClause(Column, Pattern, TWhereOp.Like, TBoolOp.opOr, CaseSensitive);
+  Result := AddWhereLikeClause(Column, Pattern, TWhereOp.Like, TBoolOp.opOr, CaseSensitive, EscapeChar);
 end;
 
-function TQueryImpl.OrWhereNotLike(const Column, Pattern: string; CaseSensitive: Boolean): IQuery;
+function TQueryImpl.OrWhereNotLike(const Column, Pattern: string; CaseSensitive: Boolean;
+  const EscapeChar: Char): IQuery;
 begin
-  Result := AddWhereLikeClause(Column, Pattern, TWhereOp.NotLike, TBoolOp.opOr, CaseSensitive);
+  Result := AddWhereLikeClause(Column, Pattern, TWhereOp.NotLike, TBoolOp.opOr, CaseSensitive, EscapeChar);
 end;
 
-function TQueryImpl.WhereStarts(const Column, Value: string; CaseSensitive: Boolean): IQuery;
+function TQueryImpl.WhereStarts(const Column, Value: string; CaseSensitive: Boolean;
+  const EscapeChar: Char): IQuery;
 begin
-  Result := WhereLike(Column, Value + '%', CaseSensitive);
+  Result := WhereLike(Column, Value + '%', CaseSensitive, EscapeChar);
 end;
 
-function TQueryImpl.WhereNotStarts(const Column, Value: string; CaseSensitive: Boolean): IQuery;
+function TQueryImpl.WhereNotStarts(const Column, Value: string; CaseSensitive: Boolean;
+  const EscapeChar: Char): IQuery;
 begin
-  Result := WhereNotLike(Column, Value + '%', CaseSensitive);
+  Result := WhereNotLike(Column, Value + '%', CaseSensitive, EscapeChar);
 end;
 
-function TQueryImpl.OrWhereStarts(const Column, Value: string; CaseSensitive: Boolean): IQuery;
+function TQueryImpl.OrWhereStarts(const Column, Value: string; CaseSensitive: Boolean;
+  const EscapeChar: Char): IQuery;
 begin
-  Result := OrWhereLike(Column, Value + '%', CaseSensitive);
+  Result := OrWhereLike(Column, Value + '%', CaseSensitive, EscapeChar);
 end;
 
-function TQueryImpl.OrWhereNotStarts(const Column, Value: string; CaseSensitive: Boolean): IQuery;
+function TQueryImpl.OrWhereNotStarts(const Column, Value: string; CaseSensitive: Boolean;
+  const EscapeChar: Char): IQuery;
 begin
-  Result := OrWhereNotLike(Column, Value + '%', CaseSensitive);
+  Result := OrWhereNotLike(Column, Value + '%', CaseSensitive, EscapeChar);
 end;
 
-function TQueryImpl.WhereEnds(const Column, Value: string; CaseSensitive: Boolean): IQuery;
+function TQueryImpl.WhereEnds(const Column, Value: string; CaseSensitive: Boolean;
+  const EscapeChar: Char): IQuery;
 begin
-  Result := WhereLike(Column, '%' + Value, CaseSensitive);
+  Result := WhereLike(Column, '%' + Value, CaseSensitive, EscapeChar);
 end;
 
-function TQueryImpl.WhereNotEnds(const Column, Value: string; CaseSensitive: Boolean): IQuery;
+function TQueryImpl.WhereNotEnds(const Column, Value: string; CaseSensitive: Boolean;
+  const EscapeChar: Char): IQuery;
 begin
-  Result := WhereNotLike(Column, '%' + Value, CaseSensitive);
+  Result := WhereNotLike(Column, '%' + Value, CaseSensitive, EscapeChar);
 end;
 
-function TQueryImpl.OrWhereEnds(const Column, Value: string; CaseSensitive: Boolean): IQuery;
+function TQueryImpl.OrWhereEnds(const Column, Value: string; CaseSensitive: Boolean;
+  const EscapeChar: Char): IQuery;
 begin
-  Result := OrWhereLike(Column, '%' + Value, CaseSensitive);
+  Result := OrWhereLike(Column, '%' + Value, CaseSensitive, EscapeChar);
 end;
 
-function TQueryImpl.OrWhereNotEnds(const Column, Value: string; CaseSensitive: Boolean): IQuery;
+function TQueryImpl.OrWhereNotEnds(const Column, Value: string; CaseSensitive: Boolean;
+  const EscapeChar: Char): IQuery;
 begin
-  Result := OrWhereNotLike(Column, '%' + Value, CaseSensitive);
+  Result := OrWhereNotLike(Column, '%' + Value, CaseSensitive, EscapeChar);
 end;
 
-function TQueryImpl.WhereContains(const Column, Value: string; CaseSensitive: Boolean): IQuery;
+function TQueryImpl.WhereContains(const Column, Value: string; CaseSensitive: Boolean;
+  const EscapeChar: Char): IQuery;
 begin
-  Result := WhereLike(Column, '%' + Value + '%', CaseSensitive);
+  Result := WhereLike(Column, '%' + Value + '%', CaseSensitive, EscapeChar);
 end;
 
-function TQueryImpl.WhereNotContains(const Column, Value: string; CaseSensitive: Boolean): IQuery;
+function TQueryImpl.WhereNotContains(const Column, Value: string; CaseSensitive: Boolean;
+  const EscapeChar: Char): IQuery;
 begin
-  Result := WhereNotLike(Column, '%' + Value + '%', CaseSensitive);
+  Result := WhereNotLike(Column, '%' + Value + '%', CaseSensitive, EscapeChar);
 end;
 
-function TQueryImpl.OrWhereContains(const Column, Value: string; CaseSensitive: Boolean): IQuery;
+function TQueryImpl.OrWhereContains(const Column, Value: string; CaseSensitive: Boolean;
+  const EscapeChar: Char): IQuery;
 begin
-  Result := OrWhereLike(Column, '%' + Value + '%', CaseSensitive);
+  Result := OrWhereLike(Column, '%' + Value + '%', CaseSensitive, EscapeChar);
 end;
 
-function TQueryImpl.OrWhereNotContains(const Column, Value: string; CaseSensitive: Boolean): IQuery;
+function TQueryImpl.OrWhereNotContains(const Column, Value: string; CaseSensitive: Boolean;
+  const EscapeChar: Char): IQuery;
 begin
-  Result := OrWhereNotLike(Column, '%' + Value + '%', CaseSensitive);
+  Result := OrWhereNotLike(Column, '%' + Value + '%', CaseSensitive, EscapeChar);
 end;
 
-// --- F7: date / time operations ---
+// --- date / time operations ---
 
 function TQueryImpl.AddDateWhereClause(Part: TDatePart; const Column, Op: string;
   const Value: Variant; Conn: TBoolOp): IQuery;
 var
   C: TDateWhereClause;
 begin
+  var Parsed := ParseComparisonOp(Op);
   C           := TDateWhereClause.Create;
   C.DatePart  := Part;
   C.Column    := Column;
-  C.Op        := Op;
+  C.Op        := Parsed;
   C.Value     := Value;
   C.Connector := Conn;
   FClauses.Add(C);
@@ -1472,11 +1690,8 @@ end;
 
 { Factory registration }
 
-
-{ Factory registration }
-
 initialization
-  RegisterIQueryFactory(function: IQuery
+  TQuery.RegisterFactory(function: IQuery
     begin
       Result := TQueryImpl.Create;
     end);

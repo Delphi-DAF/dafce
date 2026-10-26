@@ -2,7 +2,7 @@
 
 **🌍 Language: English | [Español](README.es.md)**
 
-Cross-cutting utilities for DAFce applications — smart pointers, cancellation tokens, async futures, process execution, RTTI helpers, enumerable abstractions, command-line parsing, and more.
+Cross-cutting utilities for DAFce applications — smart pointers, cancellation tokens, async futures, RTTI helpers, enumerable abstractions, arrays and more. This is the floor every other DAF package stands on.
 
 [![Delphi 12+](https://img.shields.io/badge/Delphi-12%2B-red.svg)](https://www.embarcadero.com/products/delphi)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../legal/LICENSE.md)
@@ -15,14 +15,15 @@ Cross-cutting utilities for DAFce applications — smart pointers, cancellation 
 |------|-----------|
 | `Daf.MemUtils` | `ARC<T>` smart pointer (`reference to function: T`), `TFinalizer`, `TPurgatory` |
 | `Daf.Threading` | `ICancellationToken`, `ICancellationTokenSource` (factory: `CreateCancellationTokenSource`), `TShutdownHook` |
-| `Daf.Enumerable` | `ToIEnumerable<T>` adapter, `IInterfaceList<T>`, `TInterfaceList<T>` |
-| `Daf.SystemProcess` | `TSystemProcess` — async external process runner with events |
-| `Daf.CmdLn.Parser` | Command-line argument parser |
+| `Daf.Enumerable` | `ToIEnumerable<T>` adapter, `IInterfaceList<T>`, `TInterfaceList<T>`, `TDeferredEnumerable<T>` / `TGeneratorEnumerator<T>` (the deferred sequence) |
+| `Daf.Nullable` | `TNullable<T>` — an absent value told apart from a present default |
+| `Daf.Comparers` | `TValueComparers`, `TNullableComparers` — NULL-aware ordering and equality |
+| `Daf.Application.Version` | `TVersionInfo`, `VersionAttribute` — the application's SemVer version, and the platform it was compiled for |
 | `Daf.Rtti` | RTTI helpers — `_T.Extends`, type predicates |
 | `Daf.Activator` | Create class instances via RTTI |
 | `Daf.Arrays` | `TArrayHelper` (`Map`, `Trim`), `TSmartArray<T>` (LINQ-style: `Where`, `Select`, `Contains`, `Sort`, …) |
-| `Daf.Expression` | Simple expression evaluator |
-| `Daf.Types` | Common base types |
+| `Daf.FilterSpec` | `TFilterSpec<T>` — closure predicate, composable with `and` / `or` / `not` |
+| `Daf.Types` | `TDeferred<T>` (re-read on every access), `TMacrosList` (`${name}` substitution), `TEnvVars`, `Coalesce`, `Debugger` |
 
 ---
 
@@ -56,20 +57,26 @@ Sleep(5000);
 Cts.Cancel;
 ```
 
-### External process (async)
+---
 
-```pascal
-uses Daf.SystemProcess;
+## What belongs in Commons
 
-var Process := TSystemProcess.Builder
-  .Command('git')
-  .CmdArgs(['--version'])
-  .OnStdOut(procedure(Line: string) begin WriteLn(Line); end)
-  .OnCompleted(procedure(R: TProcessResult) begin WriteLn('Done, exit=', R.ExitCode); end)
-  .Build;
+One question decides it: **does this extend the runtime library, or is it an application utility?**
 
-Process.ExecuteAsync;
-```
+`Daf.MemUtils`, `Daf.Types`, `Daf.Threading`, `Daf.Enumerable`, `Daf.Rtti`, `Daf.Arrays`,
+`Daf.Comparers` and `Daf.Nullable` are things Delphi arguably should ship and does not. Every other
+package stands on this one, so anything that is *used by* an application rather than *missing from*
+the language belongs elsewhere — otherwise whoever wants a smart pointer ends up linking a process
+launcher too.
+
+Two units moved out under that rule. `Daf.SystemProcess` kept its unit and type names, so adding a
+reference to the new package is enough for existing `uses` clauses to keep compiling.
+`Daf.CmdLn.Parser` went out too and has since been **withdrawn**: the command line is
+[`Daf.CommandLine`](../CommandLine/README.md), a port of .NET's `System.CommandLine`.
+
+| Moved to | What it does |
+|---|---|
+| [`Daf.SystemProcess`](../SystemProcess/README.md) | `TSystemProcess` — async external process runner |
 
 ---
 

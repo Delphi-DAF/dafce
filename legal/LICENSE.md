@@ -29,5 +29,3 @@ in your documentation, about page, or README. Something like:
 > "Built with [DAF](https://github.com/Delphi-DAF/dafce)"
 
 This helps grow the Delphi community and supports the project's visibility.
-
-For commercial support, advanced features, and integrations, see [DAF Pro](https://github.com/Delphi-DAF/dafpro).

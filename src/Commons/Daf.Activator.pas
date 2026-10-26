@@ -1,4 +1,4 @@
-unit Daf.Activator;
+﻿unit Daf.Activator;
 
 interface
 

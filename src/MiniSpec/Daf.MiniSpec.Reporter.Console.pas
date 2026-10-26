@@ -1,4 +1,4 @@
-unit Daf.MiniSpec.Reporter.Console;
+﻿unit Daf.MiniSpec.Reporter.Console;
 
 interface
 
@@ -23,6 +23,9 @@ type
     function Level2Margin(const Level: Byte): string;
     function ResultSymbol(const AResult: TSpecRunResult): string;
     procedure OutputStep(const Context: IRunContext; const Item: ISpecItem);
+  protected
+    /// <summary>Writes a piece of the report, already indented, to the console.</summary>
+    procedure Emit(const Text: string); virtual;
   public
     function UseConsole: Boolean; override;
     procedure OnBeginSuite(const Context: IRunContext; const Suite: ISpecSuite); override;
@@ -90,7 +93,12 @@ begin
   OutputText := Regex.Replace(Text, ExtractValue);
   if Level = 0 then
     Margin := SLineBreak + Margin;
-  Write(Margin + OutputText);
+  Emit(Margin + OutputText);
+end;
+
+procedure TConsoleReporter.Emit(const Text: string);
+begin
+  Write(Text);
 end;
 
 procedure TConsoleReporter.OutputLn(const Level: Byte; const Text: string);
@@ -168,6 +176,11 @@ procedure TConsoleReporter.OnBeginSuite(const Context: IRunContext; const Suite:
 begin
   if not Suite.Title.IsEmpty then
     OutputLn(0, 'Suite: ' + Suite.Title);
+  // Un hook de la suite que lanza no tiene otro sitio donde salir, como el de una feature.
+  var ErrMsg := Context.GetErrorDetail(Suite.RunInfo);
+  if not ErrMsg.IsEmpty then
+    for var Line in ErrMsg.Split([sLineBreak]) do
+      OutputLn(1, 'ERROR: "' + Line + '"');
 end;
 
 procedure TConsoleReporter.OnBeginReport(const Context: IRunContext);
@@ -186,6 +199,12 @@ begin
     for var Line in Feature.Narrative.Split([#13, #10]) do
       if Line.Trim <> '' then
         OutputLn(1, Line.Trim);
+  // OnItem se salta las features, asi que un fallo de la feature misma --un hook Before que
+  // revienta-- no tiene otro sitio donde salir. Un escenario suyo que falla no deja mensaje
+  // aqui: lo lleva el step, y ese si lo imprime OnItem.
+  var ErrMsg := Context.GetErrorDetail(Feature.RunInfo);
+  if not ErrMsg.IsEmpty then
+    OutputLn(1, 'ERROR: "' + ErrMsg + '"');
 end;
 
 procedure TConsoleReporter.OnBeginScenario(const Context: IRunContext; const Scenario: IScenario);
@@ -196,6 +215,11 @@ begin
   if Assigned(FCurrentRule) then
     Inc(Level);
   OutputLn(Level, Scenario.KeyWord + ': ' + Scenario.Description);
+  // Lo que falla antes del primer step --el World que no se puede construir-- no lo lleva
+  // ningun step, asi que sin esto no se imprime en ningun sitio.
+  var ErrMsg := Context.GetErrorDetail(Scenario.RunInfo);
+  if not ErrMsg.IsEmpty then
+    OutputLn(Level + 1, 'ERROR: "' + ErrMsg + '"');
 end;
 
 procedure TConsoleReporter.OnBeginOutline(const Context: IRunContext; const Outline: IScenarioOutline);
@@ -302,6 +326,10 @@ begin
       end;
       var Symbol := ResultSymbol(Example.RunInfo.Result);
       OutputLn(BaseLevel + 2, Symbol + ' ' + Row + Format(' (%d ms)', [Example.RunInfo.ExecTimeMs]));
+      // Una fila no imprime sus steps: el motivo de su fallo solo sale aqui.
+      var Reason := ScenarioFailure(Context, Example);
+      if not Reason.IsEmpty then
+        OutputLn(BaseLevel + 3, 'ERROR: "' + Reason + '"');
     end;
   end;
 end;

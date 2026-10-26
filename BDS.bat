@@ -2,7 +2,7 @@
 setlocal enableextensions enabledelayedexpansion
 
 set SELF_NAME=%~n0
-set SELF_VS=4.3.0
+set SELF_VS=4.4.0
 
 :: Análisis de argumentos
 for %%A in (%*) do (
@@ -39,10 +39,6 @@ set "PRJ_DIR=%WORK_DIR%"
 set "PRJ_VENDOR_DIR=%PRJ_DIR%\vendor"
 set "PRJ_OUT_DIR=%PRJ_DIR%\out"
 
-for %%i IN ("%PRJ_DIR%") DO set "PRJ_NAME=%%~ni"
-
-set "PRJ_REG_KEY=%PRJ_ROOT_KEY%\%PRJ_NAME%"
-
 :: load .env if present (KEY=VALUE lines; # comments and blank lines are ignored)
 if exist "%WORK_DIR%\.env" (
   for /f "usebackq tokens=1,* delims== eol=#" %%K in ("%WORK_DIR%\.env") do (
@@ -64,10 +60,16 @@ for /R "%PRJ_DIR%" %%F in (*.dproj) do (
 )
 :found_prj
 
-if exist "%WORK_DIR%\%COMPUTERNAME%.project.cmd" (call "%WORK_DIR%\%COMPUTERNAME%.project.cmd" :on_init)
-
 :: load project specific settings so we can override defaults
 if exist "%WORK_DIR%\project.cmd" (call "%WORK_DIR%\project.cmd" :on_init)
+
+:: then the machine's, which override the project's
+if exist "%WORK_DIR%\%COMPUTERNAME%.project.cmd" (call "%WORK_DIR%\%COMPUTERNAME%.project.cmd" :on_init)
+
+:: the registry key is composed after both on_init, so the PRJ_ROOT_KEY they set applies;
+:: the folder's whole name, so dafce-2.0.0 and dafce-2.0.1 do not share a key
+for %%i IN ("%PRJ_DIR%") DO set "PRJ_NAME=%%~nxi"
+set "PRJ_REG_KEY=%PRJ_ROOT_KEY%\%PRJ_NAME%"
 
 :: Normalizar: --project: es alias de --path: (compatibilidad hacia atras)
 if not defined ARG_path (
@@ -160,38 +162,48 @@ call "%WORK_DIR%\project.cmd" :on_start
 call :BANNER
 
 :: select command
+rem The exit code of the selected command is this script's exit code. Swallowing it
+rem here made every build look successful to any caller, whatever msbuild said.
 call :%CMD% %*
-exit /B 0
+exit /B !ERRORLEVEL!
 goto :eof
 
-:: Error handling
+:: Error handling. Both exit with 2, as a missing RAD Studio bin does in MAKE, BUILD
+:: and CLEAN: nothing was built, which is a different failure from msbuild's 1.
 :ERR_PRJ_IDE_NOT_DEFINED
-echo ERROR: PRJ_IDE variable not defined
-echo.
-echo The PRJ_IDE variable must be set in project.cmd to specify the RAD Studio version.
-echo.
-echo Example values:
-echo   set "PRJ_IDE=D270"  for RAD Studio 11.0 Alexandria 
-echo   set "PRJ_IDE=D280"  for RAD Studio 11.3 Alexandria 
-echo   set "PRJ_IDE=D290"  for RAD Studio 12.0 Athens
-echo   set "PRJ_IDE=D370"  for RAD Studio 13.0 Florence
-echo etc.
-echo.
-echo Please use INIT command to create a valid project.cmd (or edit it manually) and add the appropriate PRJ_IDE setting.
-goto :eof
+echo ERROR: PRJ_IDE is not defined - nothing was built
+echo project.cmd sets it in its :on_init; "%SELF_NAME% init" creates a default project.cmd.
+call :LIST_INSTALLED
+exit /B 2
 
 :ERR_IDE_VS_NOT_FOUND
-echo ERROR: RAD Studio IDE version !IDE_VER! not found
+echo ERROR: RAD Studio !IDE_VER! [PRJ_IDE=%PRJ_IDE%] is not installed - nothing was built
+call :LIST_INSTALLED
+exit /B 2
+
+:: The installed RAD Studio versions, each with the PRJ_IDE that selects it, and the two
+:: ways of selecting one. The mapping is the inverse of the one that turns PRJ_IDE into
+:: a registry key above.
+:LIST_INSTALLED
 echo.
-echo The specified IDE version is not installed or not properly configured.
+set "_found="
+set "_example=D370"
+for /f "tokens=*" %%k in ('reg query "HKCU\Software\Embarcadero\BDS" 2^>nul') do (
+  reg query "%%k" /v App >nul 2>&1 && (
+    for /f "tokens=1 delims=." %%n in ("%%~nxk") do set /a "_n=%%n"
+    if !_n! LEQ 12 (set /a "_d=_n+7") else if !_n! LEQ 23 (set /a "_d=_n+6") else (set /a "_d=_n")
+    if not defined _found echo Installed RAD Studio versions:
+    set "_found=1"
+    set "_example=D!_d!0"
+    echo   PRJ_IDE=D!_d!0   RAD Studio %%~nxk
+  )
+)
+if not defined _found echo No RAD Studio version is installed for this user [HKCU\Software\Embarcadero\BDS].
 echo.
-echo Please check:
-echo   1. RAD Studio !IDE_VER! is installed
-echo   2. PRJ_IDE variable in project.cmd matches your installed version
-echo   3. Registry entries are properly configured
-echo.
-echo Current PRJ_IDE setting: %PRJ_IDE%
-goto :eof
+echo To select one without editing project.cmd, either:
+echo   - create %COMPUTERNAME%.project.cmd next to project.cmd, with the line  set "PRJ_IDE=!_example!"
+echo   - or run  set "PRJ_IDE=!_example!"  on its own line before %SELF_NAME% or buildall
+exit /B 0
 
 :CREATE_PROJECT_CMD
 echo Creating default project.cmd file...
@@ -220,7 +232,7 @@ goto :eof
 
 :: Show version banner
 :BANNER
-echo %SELF_NAME% v%SELF_VS% - Project build and management tool for EmbarcaderoRAD Studio
+echo %SELF_NAME% v%SELF_VS% - Project build and management tool for Embarcadero RAD Studio
 echo -- (c) j.cangas@pm.me ^| Use %SELF_NAME% help to see available commands --
 exit /B 0
 
@@ -346,12 +358,20 @@ if (%ARG_OUTPUT%) neq () (
 )
 set "MSB_VERBOSITY=quiet"
 if defined ARG_verbose set "MSB_VERBOSITY=%ARG_verbose%"
-if exist "%BDSbin%" ( 
-  call "%rsvars%" > nul
-  call msbuild "%PRJ_BUILD_FILE%" /t:Clean /verbosity:%MSB_VERBOSITY% /p:Platform=%ARG_PLATFORM% /p:Config=%ARG_CONFIG% /m:1
-  if !ERRORLEVEL!==0 echo Clean succeeded: %ARG_PLATFORM% %ARG_CONFIG%
+rem msbuild is the only thing that knows whether this worked, so its exit code is
+rem passed through. A missing toolchain builds nothing at all, which is a distinct
+rem failure from a build that ran and failed, and neither of them is success.
+if not exist "%BDSbin%" (
+  rem !BDSbin! and not %BDSbin%: the path holds "Program Files (x86)", whose closing
+  rem paren would end this if-block at parse time.
+  echo ERROR: RAD Studio bin not found [!BDSbin!] - nothing was built
+  exit /B 2
 )
-exit /B 0
+call "%rsvars%" > nul
+call msbuild "%PRJ_BUILD_FILE%" /t:Clean /verbosity:%MSB_VERBOSITY% /p:Platform=%ARG_PLATFORM% /p:Config=%ARG_CONFIG% /m:1
+set "_bds_rc=!ERRORLEVEL!"
+if !_bds_rc!==0 (echo Clean succeeded: %ARG_PLATFORM% %ARG_CONFIG%) else (echo Clean FAILED: %ARG_PLATFORM% %ARG_CONFIG% ^(msbuild rc=!_bds_rc!^))
+exit /B !_bds_rc!
 
 ::help>>
 :: MAKE: Build project using MSBuild (incremental)
@@ -376,12 +396,20 @@ if (%ARG_OUTPUT%) neq () (
 )
 set "MSB_VERBOSITY=quiet"
 if defined ARG_verbose set "MSB_VERBOSITY=%ARG_verbose%"
-if exist "%BDSbin%" ( 
-  call "%rsvars%" > nul
-  call msbuild "%PRJ_BUILD_FILE%" /t:make /verbosity:%MSB_VERBOSITY% /p:Platform=%ARG_PLATFORM% /p:Config=%ARG_CONFIG% /m:1
-  if !ERRORLEVEL!==0 echo Make succeeded: %ARG_PLATFORM% %ARG_CONFIG%
+rem msbuild is the only thing that knows whether this worked, so its exit code is
+rem passed through. A missing toolchain builds nothing at all, which is a distinct
+rem failure from a build that ran and failed, and neither of them is success.
+if not exist "%BDSbin%" (
+  rem !BDSbin! and not %BDSbin%: the path holds "Program Files (x86)", whose closing
+  rem paren would end this if-block at parse time.
+  echo ERROR: RAD Studio bin not found [!BDSbin!] - nothing was built
+  exit /B 2
 )
-exit /B 0
+call "%rsvars%" > nul
+call msbuild "%PRJ_BUILD_FILE%" /t:make /verbosity:%MSB_VERBOSITY% /p:Platform=%ARG_PLATFORM% /p:Config=%ARG_CONFIG% /m:1
+set "_bds_rc=!ERRORLEVEL!"
+if !_bds_rc!==0 (echo Make succeeded: %ARG_PLATFORM% %ARG_CONFIG%) else (echo Make FAILED: %ARG_PLATFORM% %ARG_CONFIG% ^(msbuild rc=!_bds_rc!^))
+exit /B !_bds_rc!
   
 ::help>>
 :: BUILD: Build project with full rebuild
@@ -406,12 +434,20 @@ if (%ARG_OUTPUT%) neq () (
 )
 set "MSB_VERBOSITY=quiet"
 if defined ARG_verbose set "MSB_VERBOSITY=%ARG_verbose%"
-if exist "%BDSbin%" ( 
-  call "%rsvars%" > nul
-  call msbuild "%PRJ_BUILD_FILE%" /t:Build /verbosity:%MSB_VERBOSITY% /p:Platform=%ARG_PLATFORM% /p:Config=%ARG_CONFIG% /m:1
-  if !ERRORLEVEL!==0 echo Build succeeded: %ARG_PLATFORM% %ARG_CONFIG%
+rem msbuild is the only thing that knows whether this worked, so its exit code is
+rem passed through. A missing toolchain builds nothing at all, which is a distinct
+rem failure from a build that ran and failed, and neither of them is success.
+if not exist "%BDSbin%" (
+  rem !BDSbin! and not %BDSbin%: the path holds "Program Files (x86)", whose closing
+  rem paren would end this if-block at parse time.
+  echo ERROR: RAD Studio bin not found [!BDSbin!] - nothing was built
+  exit /B 2
 )
-exit /B 0
+call "%rsvars%" > nul
+call msbuild "%PRJ_BUILD_FILE%" /t:Build /verbosity:%MSB_VERBOSITY% /p:Platform=%ARG_PLATFORM% /p:Config=%ARG_CONFIG% /m:1
+set "_bds_rc=!ERRORLEVEL!"
+if !_bds_rc!==0 (echo Build succeeded: %ARG_PLATFORM% %ARG_CONFIG%) else (echo Build FAILED: %ARG_PLATFORM% %ARG_CONFIG% ^(msbuild rc=!_bds_rc!^))
+exit /B !_bds_rc!
 
 ::help>>
 :: EXEC: Execute an .exe or .bat with the full project environment active
@@ -435,7 +471,8 @@ set "_exec_platform=%ARG_PLATFORM%"
 echo !_exec_target! | findstr /i "\\Win64\\" >nul && set "_exec_platform=Win64"
 echo !_exec_target! | findstr /i "\\Win32\\" >nul && set "_exec_platform=Win32"
 :: add project bin output to PATH so runtime DLLs/BPLs are found
-set "PATH=%PRJ_OUT_DIR%\%_exec_platform%\bin;%PATH%"
+if (%ARG_CONFIG%)==() set "ARG_CONFIG=Debug"
+set "PATH=%PRJ_OUT_DIR%\%_exec_platform%\%ARG_CONFIG%\bin;%PATH%"
 set "_exec_platform="
 call "!_exec_target!"
 exit /B %ERRORLEVEL%
@@ -590,11 +627,12 @@ set "_arl_proj=%~1"
 set "_arl_name=%~2"
 set "_arl_retry=0"
 set "_arl_log=%TEMP%\_bds_arl_%RANDOM%.log"
+set "_arl_libdir=%PRJ_OUT_DIR%\%ARG_PLATFORM%\%ARG_CONFIG%\lib"
 
 :AB_RETRY_LOOP_NEXT
 rem Capture newest file in lib output dir before make (progress marker)
 set "_arl_newest_before="
-for /f "usebackq tokens=*" %%N in (`dir /s /b /O:-D "%PRJ_OUT_DIR%\%ARG_PLATFORM%\lib" 2^>nul`) do (
+for /f "usebackq tokens=*" %%N in (`dir /s /b /O:-D "!_arl_libdir!" 2^>nul`) do (
   if not defined _arl_newest_before set "_arl_newest_before=%%N"
 )
 
@@ -626,8 +664,17 @@ if !ERRORLEVEL! neq 0 (
 
 rem Still ICE - check for progress
 set "_arl_newest_after="
-for /f "usebackq tokens=*" %%N in (`dir /s /b /O:-D "%PRJ_OUT_DIR%\%ARG_PLATFORM%\lib" 2^>nul`) do (
+for /f "usebackq tokens=*" %%N in (`dir /s /b /O:-D "!_arl_libdir!" 2^>nul`) do (
   if not defined _arl_newest_after set "_arl_newest_after=%%N"
+)
+
+rem An absent lib output yields the same empty marker as a stalled build, so the
+rem two are told apart here instead of both being reported as stuck.
+if not exist "!_arl_libdir!" (
+  echo  CANNOT MEASURE: lib output not found [!_arl_libdir!] - aborting [!_arl_name!]
+  if exist "!_arl_log!" del "!_arl_log!" 2>nul
+  set "AB_FAILED=!_arl_name! (no lib output to measure)"
+  exit /B 1
 )
 
 if "!_arl_newest_before!"=="!_arl_newest_after!" (
@@ -661,7 +708,7 @@ if /i "%CONFIRM%"=="y" (
   rmdir /s /q "%PRJ_OUT_DIR%"
   robocopy "%PRJ_DIR%\src\runenv\_shared" "%PRJ_OUT_DIR%" /E /NJH /NJS /NFL /NP /NDL
   robocopy "%PRJ_DIR%\src\runenv\%ARG_MODE%" "%PRJ_OUT_DIR%" /E /NJH /NJS /NFL /NP /NDL
-  set "DAF_APP_ENV=%ARG_MODE%"
+  set "DAF_ENVIRONMENT=%ARG_MODE%"
   echo environment established to %ARG_MODE%
 ) else (
   echo canceled

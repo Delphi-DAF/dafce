@@ -35,6 +35,25 @@ When `-f` is used, reporters only output features that have at least one execute
 
 Generates XML in JUnit format for CI/CD integration. Compatible with GitHub Actions, GitLab CI, Jenkins, Azure DevOps.
 
+Each scenario that ran, and each row of a Scenario Outline, is a test case. A failed or Undefined one
+carries a `<failure>`, and a Pending one a `<skipped>`, whose message names the step that left it
+so. A scenario that did not run, such as one the filter left out, is not listed.
+
+Each hook that raised, of the suite or of a feature, is a test case with a `<failure>` that carries
+the description of the hook and its message. Those of a feature go in its block, and those of the
+suite in a block named after the suite. The attributes count the cases listed: `failures` takes the
+failed and Undefined scenarios and the hooks, and `skipped` the Pending ones. `--allow-undefined`
+and `--strict-pending` change the exit code, not the report. Cucumber, since 6.11, reports a Pending
+scenario as a failure; MiniSpec keeps it as skipped, as its exit code does.
+
+## JSON Reporter
+
+Each scenario, each row of a Scenario Outline and each Background carries a `status`: `pass`, `fail`,
+`pending`, `undefined`, or `skip` when it did not run. Each step carries a `status` with the names of
+Cucumber's JSON formatter, `passed`, `failed`, `skipped`, `pending` and `undefined`, and `success`,
+true only for a step that passed. The root carries the totals: `passCount`, `failCount`, `skipCount`,
+`pendingCount` and `undefinedCount`.
+
 ## Live Reporter
 
 By default waits 3 seconds for browser connection. Use `wait=0` to disable.

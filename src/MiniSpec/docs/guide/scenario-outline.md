@@ -12,11 +12,11 @@ A single example is rarely enough. What about negative numbers? What about zero?
 .ScenarioOutline('Adding <A> and <B> should give <Result>')
   .When('I add <A> and <B>', procedure(Ctx: TCalculatorWorld)
     begin
-      Ctx.Result := Ctx.Calculator.Add(Ctx.A, Ctx.B);
+      Ctx.Calculator.Add(Ctx.A, Ctx.B);
     end)
   .&Then('the result is <Result>', procedure(Ctx: TCalculatorWorld)
     begin
-      Expect(Ctx.Result).ToEqual(Ctx.Result);
+      Expect(Ctx.Calculator.Result).ToEqual(Ctx.Result);
     end)
   .Examples([
     ['A',   'B',   'Result'],  // Headers = World field names
@@ -69,6 +69,15 @@ A step defined without a lambda is display-only: it appears in the report but ru
 ```
 
 The `Given` line appears in the output as context but does not execute any code. If a step binding matching the substituted description is registered, it runs instead.
+
+## Pending steps, and an outline without Examples
+
+A step declared `.Pending` in the outline is pending in every row: no row runs it or the steps after
+it, and each row counts as Pending.
+
+An outline with no `.Examples` runs once, as a scenario: with its World and its Background, counted as
+one scenario and printed with its steps. There a step without a lambda is not display-only: with no
+binding that matches it, it is Undefined, as in a Scenario.
 
 ---
 

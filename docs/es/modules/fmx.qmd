@@ -1,0 +1,6 @@
+---
+sidebar: modules-es
+lang: es
+---
+
+{{< include ../../../src/FMX/README.es.md >}}

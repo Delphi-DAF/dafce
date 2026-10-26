@@ -1,4 +1,4 @@
-# Inyección de Dependencias con [Inject]
+# Inyección de Dependencias con [MiniInject]
 
 **🌍 Idioma: [English](injection.md) | Español**
 
@@ -6,7 +6,8 @@
 
 ---
 
-MiniSpec incluye un sistema ligero de inyección de dependencias para propiedades marcadas con `[Inject]`.
+MiniSpec incluye un sistema ligero de inyección de dependencias para campos y propiedades marcados
+con `[MiniInject]`.
 
 ## Uso Básico
 
@@ -14,8 +15,7 @@ Inyección automática del FeatureContext:
 
 ```pascal
 uses
-  Daf.MiniSpec,
-  Daf.MiniSpec.Injection;  // Para el atributo [Inject]
+  Daf.MiniSpec;  // MiniInject viaja en la facade
 
 type
   TFeatureContext = class
@@ -25,7 +25,7 @@ type
 
   TWorld = class
   private
-    [Inject] FCtx: TFeatureContext;  // Inyectado automáticamente
+    [MiniInject] FCtx: TFeatureContext;  // Inyectado automáticamente
   public
     property Ctx: TFeatureContext read FCtx;
   end;
@@ -35,35 +35,50 @@ Feature('...')
   .UseWorld<TWorld>             // Al crear World, inyecta FCtx
 ```
 
-## Servicios Personalizados a Nivel de Suite
+## Dónde puede ir la marca
 
-```pascal
-MiniSpec
-  .Before('Setup services', procedure
-    begin
-      TInjectorService.Register(TDatabaseMock.Create);
-      TInjectorService.Register(THttpClientMock.Create);
-    end)
-  .After('Cleanup', procedure
-    begin
-      TInjectorService.Clear;  // Libera todos los servicios
-    end);
-```
+Sobre un **campo** o sobre una **propiedad**. Un campo se alcanza sea cual sea su visibilidad,
+`strict private` incluido; una propiedad solo si es public o published, que es lo que emite la RTTI
+por defecto de Delphi para propiedades. Marcar una propiedad privada no hace nada y no da error.
+
+`TInjectorService` exige además que la propiedad sea escribible. Un campo siempre lo es.
+
+## Los tres contextos, y cuál gana
+
+Un miembro `[MiniInject]` recibe cualquiera de los tres contextos vivos mientras corre un step: el
+World del propio escenario, el contexto de feature declarado con `UseFeatureContext<T>` y el
+contexto de suite declarado con `UseSuiteContext<T>`.
+
+Cuando más de uno satisface el tipo pedido, el que gana está declarado:
+
+1. Una coincidencia exacta de tipo, mirando escenario, luego feature y luego suite.
+2. Si no la hay, un descendiente del tipo pedido, en ese mismo orden.
+
+Así, una propiedad declarada con una clase base de la que descienden dos contextos recibe el más
+cercano al step, y una declarada con el tipo exacto del contexto de suite recibe ese aunque un
+contexto de feature descienda de él.
+
+El inyector es de la ejecución: lo que contiene son los contextos de la ejecución en curso, y no le
+sobrevive. Una ejecución anidada no ve los contextos de la que la lanzó.
 
 ## API del TInjectorService
 
 | Método | Descripción |
 |--------|-------------|
-| `Register(Instance)` | Registra un servicio (la clase del objeto es la clave) |
-| `Unregister(Instance)` | Elimina el registro de un servicio |
-| `Resolve(AClass)` | Obtiene el servicio registrado para esa clase |
+| `Register(Scope, Instance)` | Publica el contexto de un ámbito: `csScenario`, `csFeature`, `csSuite` |
+| `Unregister(Scope)` | Vacía un ámbito |
+| `Resolve(AClass)` | Obtiene el contexto vivo compatible con esa clase, por la precedencia de arriba |
 | `Resolve<T>` | Versión genérica de Resolve |
-| `InjectInto(Target)` | Inyecta servicios en propiedades marcadas con `[Inject]` |
-| `Clear` | Libera y elimina todos los servicios registrados |
+| `InjectInto(Target)` | Inyecta contextos en campos y propiedades marcados con `[MiniInject]` |
+| `Clear` | Vacía los tres ámbitos |
+
+El runner llama a `Register` y `Unregister` por su cuenta según se crea y se destruye cada contexto.
+No hay registro de servicios sueltos: el colaborador que necesite un escenario se construye en el
+World, o en el contexto de feature o de suite si hay que compartirlo.
 
 ## Errores de Inyección
 
-Si una propiedad marcada con `[Inject]` no puede ser inyectada, se lanza `EInjectionError`:
+Si un miembro marcado con `[MiniInject]` no puede ser inyectado, se lanza `EInjectionError`:
 
 - Propiedad no es de tipo clase
 - Propiedad no tiene setter

@@ -4,6 +4,8 @@
 
 This guide complements the [User Guide](GUIDE.md) by showing how to adapt BDD to different testing levels. Although BDD was born to capture business requirements, its expressive vocabulary is useful at any level of the test pyramid.
 
+⚠️ **The file names in this guide are a suggestion for your project, not DAF's own convention.** Here the suffix carries the test level: `.Spec.pas` for a class, `.Feat.pas` for a feature. DAF's own tree names every spec `[Feature].Feat.pas` and every step file `[Feature].Steps.pas`, whatever the level.
+
 ---
 
 ## Table of Contents
@@ -13,6 +15,7 @@ This guide complements the [User Guide](GUIDE.md) by showing how to adapt BDD to
 - [Unit Tests: Specifying Classes](#unit-tests-specifying-classes)
 - [Integration Tests: Specifying APIs](#integration-tests-specifying-apis)
 - [Organizing by Test Type](#organizing-by-test-type)
+- [Conclusion](#conclusion)
 
 ---
 
@@ -89,7 +92,7 @@ When the SUT is an **individual class**, BDD remains useful. Think of frameworks
 ### The Pattern: Feature = Class, Scenario = Method/Behavior
 
 ```pascal
-unit TStringBuilder.Spec.pas;
+unit TStringBuilder.Spec;
 
 interface
 
@@ -250,7 +253,7 @@ When the SUT is an **API** (REST, GraphQL, gRPC...), each **endpoint** or **oper
 ### The Pattern: Feature = Resource/Endpoint, Scenario = Operation
 
 ```pascal
-unit API.Users.Spec.pas;
+unit API.Users.Spec;
 
 interface
 
@@ -366,6 +369,51 @@ API: /users @integration @api
         Expect(W.ResponseJson.GetValue<string>('error')).ToContain('email');
       end)
 
+.Rule('GET /users/{id} - Fetch a user')
+
+  .Scenario('User exists')
+    .Given('an existing user', procedure(W: TApiWorld)
+      begin
+        // Create the user first
+        var Body := TJSONObject.Create;
+        Body.AddPair('name', 'Jane');
+        Body.AddPair('email', 'jane@example.com');
+        var Resp := W.Client.Post(
+          'http://localhost:3000/api/v1/users',
+          TStringStream.Create(Body.ToString)
+        );
+        var Json := TJSONObject.ParseJSONValue(Resp.ContentAsString) as TJSONObject;
+        W.UserId := Json.GetValue<string>('id');
+        Json.Free;
+        Body.Free;
+      end)
+    .When('GET /users/{id}', procedure(W: TApiWorld)
+      begin
+        W.Response := W.Client.Get(
+          'http://localhost:3000/api/v1/users/' + W.UserId);
+      end)
+    .&Then('responds 200 OK', procedure(W: TApiWorld)
+      begin
+        Expect(W.Response.StatusCode).ToEqual(200);
+      end)
+    .&And('returns the user data', procedure(W: TApiWorld)
+      begin
+        W.ResponseJson := TJSONObject.ParseJSONValue(
+          W.Response.ContentAsString) as TJSONObject;
+        Expect(W.ResponseJson.GetValue<string>('name')).ToEqual('Jane');
+      end)
+
+  .Scenario('User does not exist')
+    .When('GET /users/999999', procedure(W: TApiWorld)
+      begin
+        W.Response := W.Client.Get(
+          'http://localhost:3000/api/v1/users/999999');
+      end)
+    .&Then('responds 404 Not Found', procedure(W: TApiWorld)
+      begin
+        Expect(W.Response.StatusCode).ToEqual(404);
+      end)
+
 end.
 ```
 
@@ -378,6 +426,68 @@ end.
 | Scenario | Specific use case | `Create user with valid data` |
 | Tag | `@integration` or `@api` | `API: /users @integration @api` |
 
+### Using FeatureContext for Shared State
+
+API specs often need data created in one scenario to be available in another:
+
+```pascal
+type
+  TApiContext = class
+  public
+    BaseUrl: string;
+    AuthToken: string;
+    CreatedIds: TList<string>;
+    constructor Create;
+    destructor Destroy; override;
+  end;
+
+  TApiWorld = class
+  private
+    [MiniInject] FCtx: TApiContext;
+  public
+    Client: THTTPClient;
+    Response: IHTTPResponse;
+    property Ctx: TApiContext read FCtx;
+  end;
+
+Feature('API: /orders @integration')
+  .UseFeatureContext<TApiContext>
+  .UseWorld<TApiWorld>
+
+  .Before('Start test server', procedure
+    begin
+      TestServer.Start;
+    end)
+
+  .After('Clean up test data', procedure
+    begin
+      TestServer.CleanupTestData;
+      TestServer.Stop;
+    end)
+```
+
+### Common HTTP Status Codes
+
+To assert on HTTP responses:
+
+```pascal
+// Reusable helpers
+procedure ExpectSuccess(Response: IHTTPResponse);
+begin
+  Expect(Response.StatusCode).ToBeBetween(200, 299);
+end;
+
+procedure ExpectClientError(Response: IHTTPResponse);
+begin
+  Expect(Response.StatusCode).ToBeBetween(400, 499);
+end;
+
+procedure ExpectServerError(Response: IHTTPResponse);
+begin
+  Expect(Response.StatusCode).ToBeBetween(500, 599);
+end;
+```
+
 ---
 
 ## Organizing by Test Type
@@ -386,29 +496,65 @@ When you have unit, integration, and E2E tests in the same project, you need a s
 
 ### Option A: Single Executable with Tags (Recommended)
 
-All specs in a single project. Use tags to filter:
+Every spec in one project, filtered by tag at run time.
+
+```
+MyProject/
+├── src/                        # Production code
+├── specs/
+│   ├── AllSpecs.dpr           # Single executable
+│   ├── AllSpecs.groupproj
+│   │
+│   ├── unit/                  # Unit tests
+│   │   ├── TCalculator.Spec.pas
+│   │   ├── TStringBuilder.Spec.pas
+│   │   └── TValidator.Spec.pas
+│   │
+│   ├── integration/           # Integration tests
+│   │   ├── API.Users.Spec.pas
+│   │   ├── API.Orders.Spec.pas
+│   │   └── Database.Spec.pas
+│   │
+│   └── e2e/                   # End-to-end tests
+│       ├── Checkout.Feat.pas
+│       ├── Registration.Feat.pas
+│       └── Search.Feat.pas
+```
+
+**Tag every spec with its level:**
+
+```pascal
+// Unit test
+Feature('TCalculator @unit @math')
+
+// Integration test
+Feature('API: /users @integration @api')
+
+// E2E test
+Feature('Checkout process @e2e @checkout')
+```
+
+**Run by type:**
 
 ```bash
 # Only unit tests (fast)
-MySpecs.exe -f "@unit"
+AllSpecs.exe -f "@unit"
 
-# Only integration (require services)
-MySpecs.exe -f "@integration"
+# Only integration
+AllSpecs.exe -f "@integration"
 
-# Only E2E (slow, complete environment)
-MySpecs.exe -f "@e2e"
+# Only E2E
+AllSpecs.exe -f "@e2e"
 
-# Unit + integration
-MySpecs.exe -f "@unit,@integration"
+# Unit + integration — the comma is shorthand for `or`
+AllSpecs.exe -f "@unit,@integration"
 
-# Exclude slow ones
-MySpecs.exe -f "-@slow"
+# Exclude the slow ones — `~` negates
+AllSpecs.exe -f "~@slow"
+
+# Unit and integration, but not E2E
+AllSpecs.exe -f "(@unit or @integration) and ~@e2e"
 ```
-
-**Advantages:**
-- Single project to maintain
-- Easy to run everything at once
-- CI/CD can run different sets in stages
 
 **Tag conventions:**
 - `@unit` — unit tests (fast, no dependencies)
@@ -417,26 +563,128 @@ MySpecs.exe -f "-@slow"
 - `@slow` — slow tests (database, network)
 - `@pending` — not yet implemented
 
-### Option B: Separate Executables
-
-Separate projects for each type:
-
-```
-specs/
-├── UnitSpecs.dpr          # Only @unit
-├── IntegrationSpecs.dpr   # Only @integration
-└── E2ESpecs.dpr           # Only @e2e
-```
-
-**Advantages:**
-- Clear dependency separation
-- Different Delphi configurations
-- Smaller executables
-
-**Disadvantages:**
-- Multiple projects to maintain
-- Possible code duplication
+**Advantages:** one project, flexible filtering.
+**Disadvantages:** the executable links every dependency, E2E included.
 
 ---
+
+### Option B: One Executable per Level
+
+Each level gets its own `.dpr`. Worth it when the levels have very different dependencies, or for CI/CD pipelines that run them in parallel.
+
+```
+MyProject/
+├── src/                        # Production code
+├── specs/
+│   ├── Specs.groupproj        # Groups every spec project
+│   │
+│   ├── unit/
+│   │   ├── UnitSpecs.dpr      # Executable: unit tests only
+│   │   ├── UnitSpecs.dproj
+│   │   ├── TCalculator.Spec.pas
+│   │   ├── TStringBuilder.Spec.pas
+│   │   └── TValidator.Spec.pas
+│   │
+│   ├── integration/
+│   │   ├── IntegrationSpecs.dpr   # Executable: integration only
+│   │   ├── IntegrationSpecs.dproj
+│   │   ├── API.Users.Spec.pas
+│   │   ├── API.Orders.Spec.pas
+│   │   └── Database.Spec.pas
+│   │
+│   └── e2e/
+│       ├── E2ESpecs.dpr       # Executable: E2E only
+│       ├── E2ESpecs.dproj
+│       ├── Checkout.Feat.pas
+│       ├── Registration.Feat.pas
+│       └── Search.Feat.pas
+```
+
+**Each executable configures its own level:**
+
+```pascal
+// UnitSpecs.dpr - fast, no external dependencies
+program UnitSpecs;
+{$APPTYPE CONSOLE}
+uses
+  Daf.MiniSpec,
+  TCalculator.Spec in 'TCalculator.Spec.pas',
+  TStringBuilder.Spec in 'TStringBuilder.Spec.pas',
+  TValidator.Spec in 'TValidator.Spec.pas';
+begin
+  MiniSpec
+    .Category('Unit Tests')
+    .Run;
+end.
+
+// IntegrationSpecs.dpr - needs external services
+program IntegrationSpecs;
+{$APPTYPE CONSOLE}
+uses
+  Daf.MiniSpec,
+  TestServer in '..\common\TestServer.pas',
+  API.Users.Spec in 'API.Users.Spec.pas',
+  API.Orders.Spec in 'API.Orders.Spec.pas';
+begin
+  MiniSpec
+    .Category('Integration Tests')
+    .Before('Start test server', procedure
+      begin
+        TestServer.Start;
+      end)
+    .After('Stop test server', procedure
+      begin
+        TestServer.Stop;
+      end)
+    .Run;
+end.
+
+// E2ESpecs.dpr - the whole system
+program E2ESpecs;
+{$APPTYPE CONSOLE}
+uses
+  Daf.MiniSpec,
+  Checkout.Feat in 'Checkout.Feat.pas',
+  Registration.Feat in 'Registration.Feat.pas';
+begin
+  MiniSpec
+    .Category('E2E Tests')
+    .Before('Initialize full system', procedure
+      begin
+        TestEnvironment.Setup;
+      end)
+    .After('Cleanup', procedure
+      begin
+        TestEnvironment.Teardown;
+      end)
+    .Run;
+end.
+```
+
+**Advantages:** small executables, separated dependencies, easy to parallelise in CI.
+**Disadvantages:** more projects to maintain.
+
+### Summary: When to Use Each Level
+
+| Question | Unit | Integration | E2E |
+|----------|------|-------------|-----|
+| Is the SUT an isolated class? | ✓ | | |
+| Are you testing an API or a service? | | ✓ | |
+| Are you describing business requirements? | | | ✓ |
+| Do you need a real database? | | Sometimes | ✓ |
+| Must the test be very fast? | ✓ | | |
+| Will non-technical stakeholders read it? | | | ✓ |
+
+---
+
+## Conclusion
+
+BDD is not exclusive to E2E tests. MiniSpec's vocabulary — Feature, Rule, Scenario, Given/When/Then — gives a clear structure at **any testing level**:
+
+- **Unit tests**: Feature = class, Rule = method
+- **Integration tests**: Feature = API/resource, Rule = endpoint
+- **E2E tests**: Feature = business capability, Scenario = acceptance criterion
+
+What changes is the **vocabulary** and the **granularity**, never the underlying principle: **specify behaviour with concrete examples**.
 
 *For the complete guide, please refer to the [Spanish version](TESTING-PATTERNS.es.md) while we complete the English translation.*

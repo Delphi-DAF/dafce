@@ -6,6 +6,9 @@
         <Projects Include="Commons\Daf.Commons.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="SystemProcess\Daf.SystemProcess.dproj">
+            <Dependencies>Commons\Daf.Commons.dproj</Dependencies>
+        </Projects>
         <Projects Include="DependencyInjection.Abstractions\Daf.DependencyInjection.Abstractions.dproj">
             <Dependencies>Commons\Daf.Commons.dproj</Dependencies>
         </Projects>
@@ -16,7 +19,7 @@
             <Dependencies/>
         </Projects>
         <Projects Include="Hosting.Abstractions\Daf.Hosting.Abstractions.dproj">
-            <Dependencies>DependencyInjection.Abstractions\Daf.DependencyInjection.Abstractions.dproj;Configuration.Abstractions\Daf.Configuration.Abstractions.dproj</Dependencies>
+            <Dependencies>DependencyInjection.Abstractions\Daf.DependencyInjection.Abstractions.dproj;Configuration.Abstractions\Daf.Configuration.Abstractions.dproj;Logging.Abstractions\Daf.Logging.Abstractions.dproj</Dependencies>
         </Projects>
         <Projects Include="MediatR.Abstractions\Daf.MediatR.Abstractions.dproj">
             <Dependencies>DependencyInjection.Abstractions\Daf.DependencyInjection.Abstractions.dproj;Commons\Daf.Commons.dproj</Dependencies>
@@ -25,22 +28,19 @@
             <Dependencies>DependencyInjection.Abstractions\Daf.DependencyInjection.Abstractions.dproj</Dependencies>
         </Projects>
         <Projects Include="Configuration\Daf.Configuration.dproj">
-            <Dependencies>Commons\Daf.Commons.dproj;Configuration.Abstractions\Daf.Configuration.Abstractions.dproj</Dependencies>
-        </Projects>
-        <Projects Include="Hosting\Daf.Hosting.dproj">
-            <Dependencies>Hosting.Abstractions\Daf.Hosting.Abstractions.dproj;DependencyInjection\Daf.DependencyInjection.dproj;Configuration\Daf.Configuration.dproj</Dependencies>
+            <Dependencies>Commons\Daf.Commons.dproj;Configuration.Abstractions\Daf.Configuration.Abstractions.dproj;Logging.Abstractions\Daf.Logging.Abstractions.dproj;DependencyInjection.Abstractions\Daf.DependencyInjection.Abstractions.dproj</Dependencies>
         </Projects>
         <Projects Include="Logging\Daf.Logging.dproj">
             <Dependencies>DependencyInjection.Abstractions\Daf.DependencyInjection.Abstractions.dproj;Logging.Abstractions\Daf.Logging.Abstractions.dproj</Dependencies>
         </Projects>
-        <Projects Include="NNLog\Daf.NNlog.dproj">
+        <Projects Include="Hosting\Daf.Hosting.dproj">
+            <Dependencies>Hosting.Abstractions\Daf.Hosting.Abstractions.dproj;DependencyInjection\Daf.DependencyInjection.dproj;Configuration\Daf.Configuration.dproj;Logging\Daf.Logging.dproj</Dependencies>
+        </Projects>
+        <Projects Include="NNLog\Daf.NNLog.dproj">
             <Dependencies/>
         </Projects>
         <Projects Include="MediatR\Daf.MediatR.dproj">
             <Dependencies/>
-        </Projects>
-        <Projects Include="Application\Daf.Application.dproj">
-            <Dependencies>Hosting\Daf.Hosting.dproj</Dependencies>
         </Projects>
         <Projects Include="MiniSpec\Daf.MiniSpec.dproj">
             <Dependencies/>
@@ -51,8 +51,32 @@
         <Projects Include="SQLCute\Daf.SQLCute.dproj">
             <Dependencies>SQLCute.Abstractions\Daf.SQLCute.Abstractions.dproj</Dependencies>
         </Projects>
-        <Projects Include="SQLCute.Compilers\Daf.SQLCute.Compilers.dproj">
-            <Dependencies>SQLCute\Daf.SQLCute.dproj</Dependencies>
+        <Projects Include="Linq\Daf.Linq.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="CommandLine\Daf.CommandLine.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="Cli\Daf.Cli.dproj">
+            <Dependencies>Hosting\Daf.Hosting.dproj;CommandLine\Daf.CommandLine.dproj</Dependencies>
+        </Projects>
+        <Projects Include="SQLCute.InMemory\Daf.SQLCute.InMemory.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="Specification\Daf.Specification.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="SQLCute.Specification\Daf.SQLCute.Specification.dproj">
+            <Dependencies>Specification\Daf.Specification.dproj;SQLCute.InMemory\Daf.SQLCute.InMemory.dproj</Dependencies>
+        </Projects>
+        <Projects Include="web\Daf.Web.dproj">
+            <Dependencies>DependencyInjection.Abstractions\Daf.DependencyInjection.Abstractions.dproj;Configuration.Abstractions\Daf.Configuration.Abstractions.dproj;Logging.Abstractions\Daf.Logging.Abstractions.dproj</Dependencies>
+        </Projects>
+        <Projects Include="FMX\Daf.FMX.dproj">
+            <Dependencies>Logging.Abstractions\Daf.Logging.Abstractions.dproj</Dependencies>
+        </Projects>
+        <Projects Include="VCL\Daf.VCL.dproj">
+            <Dependencies>Hosting\Daf.Hosting.dproj</Dependencies>
         </Projects>
     </ItemGroup>
     <ProjectExtensions>
@@ -70,6 +94,15 @@
     </Target>
     <Target Name="Daf_Commons:Make">
         <MSBuild Projects="Commons\Daf.Commons.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Daf_SystemProcess">
+        <MSBuild Projects="SystemProcess\Daf.SystemProcess.dproj"/>
+    </Target>
+    <Target Name="Daf_SystemProcess:Clean">
+        <MSBuild Projects="SystemProcess\Daf.SystemProcess.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="Daf_SystemProcess:Make">
+        <MSBuild Projects="SystemProcess\Daf.SystemProcess.dproj" Targets="Make"/>
     </Target>
     <Target Name="Daf_DependencyInjection_Abstractions" DependsOnTargets="Daf.Commons">
         <MSBuild Projects="DependencyInjection.Abstractions\Daf.DependencyInjection.Abstractions.dproj"/>
@@ -125,13 +158,13 @@
     <Target Name="Daf_DependencyInjection:Make" DependsOnTargets="Daf.DependencyInjection.Abstractions:Make">
         <MSBuild Projects="DependencyInjection\Daf.DependencyInjection.dproj" Targets="Make"/>
     </Target>
-    <Target Name="Daf_Configuration" DependsOnTargets="Daf.Commons;Daf.Configuration.Abstractions">
+    <Target Name="Daf_Configuration" DependsOnTargets="Daf.Commons;Daf.Configuration.Abstractions;Daf.DependencyInjection.Abstractions">
         <MSBuild Projects="Configuration\Daf.Configuration.dproj"/>
     </Target>
-    <Target Name="Daf_Configuration:Clean" DependsOnTargets="Daf.Commons:Clean;Daf.Configuration.Abstractions:Clean">
+    <Target Name="Daf_Configuration:Clean" DependsOnTargets="Daf.Commons:Clean;Daf.Configuration.Abstractions:Clean;Daf.DependencyInjection.Abstractions:Clean">
         <MSBuild Projects="Configuration\Daf.Configuration.dproj" Targets="Clean"/>
     </Target>
-    <Target Name="Daf_Configuration:Make" DependsOnTargets="Daf.Commons:Make;Daf.Configuration.Abstractions:Make">
+    <Target Name="Daf_Configuration:Make" DependsOnTargets="Daf.Commons:Make;Daf.Configuration.Abstractions:Make;Daf.DependencyInjection.Abstractions:Make">
         <MSBuild Projects="Configuration\Daf.Configuration.dproj" Targets="Make"/>
     </Target>
     <Target Name="Daf_Hosting" DependsOnTargets="Daf.Hosting.Abstractions;Daf.DependencyInjection;Daf.Configuration">
@@ -152,14 +185,14 @@
     <Target Name="Daf_Logging:Make" DependsOnTargets="Daf.DependencyInjection.Abstractions:Make;Daf.Logging.Abstractions:Make">
         <MSBuild Projects="Logging\Daf.Logging.dproj" Targets="Make"/>
     </Target>
-    <Target Name="Daf_NNlog">
-        <MSBuild Projects="NNLog\Daf.NNlog.dproj"/>
+    <Target Name="Daf_NNLog">
+        <MSBuild Projects="NNLog\Daf.NNLog.dproj"/>
     </Target>
-    <Target Name="Daf_NNlog:Clean">
-        <MSBuild Projects="NNLog\Daf.NNlog.dproj" Targets="Clean"/>
+    <Target Name="Daf_NNLog:Clean">
+        <MSBuild Projects="NNLog\Daf.NNLog.dproj" Targets="Clean"/>
     </Target>
-    <Target Name="Daf_NNlog:Make">
-        <MSBuild Projects="NNLog\Daf.NNlog.dproj" Targets="Make"/>
+    <Target Name="Daf_NNLog:Make">
+        <MSBuild Projects="NNLog\Daf.NNLog.dproj" Targets="Make"/>
     </Target>
     <Target Name="Daf_MediatR">
         <MSBuild Projects="MediatR\Daf.MediatR.dproj"/>
@@ -169,15 +202,6 @@
     </Target>
     <Target Name="Daf_MediatR:Make">
         <MSBuild Projects="MediatR\Daf.MediatR.dproj" Targets="Make"/>
-    </Target>
-    <Target Name="Daf_Application" DependsOnTargets="Daf.Hosting">
-        <MSBuild Projects="Application\Daf.Application.dproj"/>
-    </Target>
-    <Target Name="Daf_Application:Clean" DependsOnTargets="Daf.Hosting:Clean">
-        <MSBuild Projects="Application\Daf.Application.dproj" Targets="Clean"/>
-    </Target>
-    <Target Name="Daf_Application:Make" DependsOnTargets="Daf.Hosting:Make">
-        <MSBuild Projects="Application\Daf.Application.dproj" Targets="Make"/>
     </Target>
     <Target Name="Daf_MiniSpec">
         <MSBuild Projects="MiniSpec\Daf.MiniSpec.dproj"/>
@@ -206,23 +230,95 @@
     <Target Name="Daf_SQLCute:Make" DependsOnTargets="Daf_SQLCute_Abstractions:Make">
         <MSBuild Projects="SQLCute\Daf.SQLCute.dproj" Targets="Make"/>
     </Target>
-    <Target Name="Daf_SQLCute_Compilers" DependsOnTargets="Daf_SQLCute">
-        <MSBuild Projects="SQLCute.Compilers\Daf.SQLCute.Compilers.dproj"/>
+    <Target Name="Daf_Linq">
+        <MSBuild Projects="Linq\Daf.Linq.dproj"/>
     </Target>
-    <Target Name="Daf_SQLCute_Compilers:Clean" DependsOnTargets="Daf_SQLCute:Clean">
-        <MSBuild Projects="SQLCute.Compilers\Daf.SQLCute.Compilers.dproj" Targets="Clean"/>
+    <Target Name="Daf_Linq:Clean">
+        <MSBuild Projects="Linq\Daf.Linq.dproj" Targets="Clean"/>
     </Target>
-    <Target Name="Daf_SQLCute_Compilers:Make" DependsOnTargets="Daf_SQLCute:Make">
-        <MSBuild Projects="SQLCute.Compilers\Daf.SQLCute.Compilers.dproj" Targets="Make"/>
+    <Target Name="Daf_Linq:Make">
+        <MSBuild Projects="Linq\Daf.Linq.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Daf_CommandLine">
+        <MSBuild Projects="CommandLine\Daf.CommandLine.dproj"/>
+    </Target>
+    <Target Name="Daf_CommandLine:Clean">
+        <MSBuild Projects="CommandLine\Daf.CommandLine.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="Daf_CommandLine:Make">
+        <MSBuild Projects="CommandLine\Daf.CommandLine.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Daf_Cli" DependsOnTargets="Daf_Hosting;Daf_CommandLine">
+        <MSBuild Projects="Cli\Daf.Cli.dproj"/>
+    </Target>
+    <Target Name="Daf_Cli:Clean" DependsOnTargets="Daf_Hosting:Clean;Daf_CommandLine:Clean">
+        <MSBuild Projects="Cli\Daf.Cli.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="Daf_Cli:Make" DependsOnTargets="Daf_Hosting:Make;Daf_CommandLine:Make">
+        <MSBuild Projects="Cli\Daf.Cli.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Daf_SQLCute_InMemory">
+        <MSBuild Projects="SQLCute.InMemory\Daf.SQLCute.InMemory.dproj"/>
+    </Target>
+    <Target Name="Daf_SQLCute_InMemory:Clean">
+        <MSBuild Projects="SQLCute.InMemory\Daf.SQLCute.InMemory.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="Daf_SQLCute_InMemory:Make">
+        <MSBuild Projects="SQLCute.InMemory\Daf.SQLCute.InMemory.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Daf_Specification">
+        <MSBuild Projects="Specification\Daf.Specification.dproj"/>
+    </Target>
+    <Target Name="Daf_Specification:Clean">
+        <MSBuild Projects="Specification\Daf.Specification.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="Daf_Specification:Make">
+        <MSBuild Projects="Specification\Daf.Specification.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Daf_SQLCute_Specification" DependsOnTargets="Daf_Specification;Daf_SQLCute_InMemory">
+        <MSBuild Projects="SQLCute.Specification\Daf.SQLCute.Specification.dproj"/>
+    </Target>
+    <Target Name="Daf_SQLCute_Specification:Clean" DependsOnTargets="Daf_Specification:Clean">
+        <MSBuild Projects="SQLCute.Specification\Daf.SQLCute.Specification.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="Daf_SQLCute_Specification:Make" DependsOnTargets="Daf_Specification:Make;Daf_SQLCute_InMemory:Make">
+        <MSBuild Projects="SQLCute.Specification\Daf.SQLCute.Specification.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Daf_Web" DependsOnTargets="Daf_DependencyInjection_Abstractions;Daf_Configuration_Abstractions;Daf_Logging_Abstractions">
+        <MSBuild Projects="web\Daf.Web.dproj"/>
+    </Target>
+    <Target Name="Daf_Web:Clean" DependsOnTargets="Daf_DependencyInjection_Abstractions:Clean;Daf_Configuration_Abstractions:Clean;Daf_Logging_Abstractions:Clean">
+        <MSBuild Projects="web\Daf.Web.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="Daf_Web:Make" DependsOnTargets="Daf_DependencyInjection_Abstractions:Make;Daf_Configuration_Abstractions:Make;Daf_Logging_Abstractions:Make">
+        <MSBuild Projects="web\Daf.Web.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Daf_FMX" DependsOnTargets="Daf_Logging_Abstractions">
+        <MSBuild Projects="FMX\Daf.FMX.dproj"/>
+    </Target>
+    <Target Name="Daf_FMX:Clean" DependsOnTargets="Daf_Logging_Abstractions:Clean">
+        <MSBuild Projects="FMX\Daf.FMX.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="Daf_FMX:Make" DependsOnTargets="Daf_Logging_Abstractions:Make">
+        <MSBuild Projects="FMX\Daf.FMX.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Daf_VCL" DependsOnTargets="Daf_Hosting">
+        <MSBuild Projects="VCL\Daf.VCL.dproj"/>
+    </Target>
+    <Target Name="Daf_VCL:Clean" DependsOnTargets="Daf_Hosting:Clean">
+        <MSBuild Projects="VCL\Daf.VCL.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="Daf_VCL:Make" DependsOnTargets="Daf_Hosting:Make">
+        <MSBuild Projects="VCL\Daf.VCL.dproj" Targets="Make"/>
     </Target>
     <Target Name="Build">
-        <CallTarget Targets="Daf_Commons;Daf_DependencyInjection_Abstractions;Daf_Configuration_Abstractions;Daf_Logging_Abstractions;Daf_Hosting_Abstractions;Daf_MediatR_Abstractions;Daf_DependencyInjection;Daf_Configuration;Daf_Hosting;Daf_Logging;Daf_NNlog;Daf_MediatR;Daf_Application;Daf_MiniSpec;Daf_SQLCute_Abstractions;Daf_SQLCute;Daf_SQLCute_Compilers"/>
+        <CallTarget Targets="Daf_Commons;Daf_SystemProcess;Daf_DependencyInjection_Abstractions;Daf_Configuration_Abstractions;Daf_Logging_Abstractions;Daf_Hosting_Abstractions;Daf_MediatR_Abstractions;Daf_DependencyInjection;Daf_Configuration;Daf_Logging;Daf_Hosting;Daf_NNLog;Daf_MediatR;Daf_MiniSpec;Daf_SQLCute_Abstractions;Daf_SQLCute;Daf_Linq;Daf_CommandLine;Daf_Cli;Daf_SQLCute_InMemory;Daf_Specification;Daf_SQLCute_Specification;Daf_Web;Daf_FMX;Daf_VCL"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="Daf_Commons:Clean;Daf_DependencyInjection_Abstractions:Clean;Daf_Configuration_Abstractions:Clean;Daf_Logging_Abstractions:Clean;Daf_Hosting_Abstractions:Clean;Daf_MediatR_Abstractions:Clean;Daf_DependencyInjection:Clean;Daf_Configuration:Clean;Daf_Hosting:Clean;Daf_Logging:Clean;Daf_NNlog:Clean;Daf_MediatR:Clean;Daf_Application:Clean;Daf_MiniSpec:Clean;Daf_SQLCute_Abstractions:Clean;Daf_SQLCute:Clean;Daf_SQLCute_Compilers:Clean"/>
+        <CallTarget Targets="Daf_Commons:Clean;Daf_SystemProcess:Clean;Daf_DependencyInjection_Abstractions:Clean;Daf_Configuration_Abstractions:Clean;Daf_Logging_Abstractions:Clean;Daf_Hosting_Abstractions:Clean;Daf_MediatR_Abstractions:Clean;Daf_DependencyInjection:Clean;Daf_Configuration:Clean;Daf_Logging:Clean;Daf_Hosting:Clean;Daf_NNLog:Clean;Daf_MediatR:Clean;Daf_MiniSpec:Clean;Daf_SQLCute_Abstractions:Clean;Daf_SQLCute:Clean;Daf_Linq:Clean;Daf_CommandLine:Clean;Daf_Cli:Clean;Daf_SQLCute_InMemory:Clean;Daf_Specification:Clean;Daf_SQLCute_Specification:Clean;Daf_Web:Clean;Daf_FMX:Clean;Daf_VCL:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="Daf_Commons:Make;Daf_DependencyInjection_Abstractions:Make;Daf_Configuration_Abstractions:Make;Daf_Logging_Abstractions:Make;Daf_Hosting_Abstractions:Make;Daf_MediatR_Abstractions:Make;Daf_DependencyInjection:Make;Daf_Configuration:Make;Daf_Hosting:Make;Daf_Logging:Make;Daf_NNlog:Make;Daf_MediatR:Make;Daf_Application:Make;Daf_MiniSpec:Make;Daf_SQLCute_Abstractions:Make;Daf_SQLCute:Make;Daf_SQLCute_Compilers:Make"/>
+        <CallTarget Targets="Daf_Commons:Make;Daf_SystemProcess:Make;Daf_DependencyInjection_Abstractions:Make;Daf_Configuration_Abstractions:Make;Daf_Logging_Abstractions:Make;Daf_Hosting_Abstractions:Make;Daf_MediatR_Abstractions:Make;Daf_DependencyInjection:Make;Daf_Configuration:Make;Daf_Logging:Make;Daf_Hosting:Make;Daf_NNLog:Make;Daf_MediatR:Make;Daf_MiniSpec:Make;Daf_SQLCute_Abstractions:Make;Daf_SQLCute:Make;Daf_Linq:Make;Daf_CommandLine:Make;Daf_Cli:Make;Daf_SQLCute_InMemory:Make;Daf_Specification:Make;Daf_SQLCute_Specification:Make;Daf_Web:Make;Daf_FMX:Make;Daf_VCL:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
     <ItemGroup Condition="'$(BuildGroup)'=='Debug'">
@@ -232,7 +328,7 @@
             <Platforms>Win32</Platforms>
             <Enabled>False</Enabled>
         </BuildGroupProject>
-        <BuildGroupProject Include="NNLog\Daf.NNlog.dproj">
+        <BuildGroupProject Include="NNLog\Daf.NNLog.dproj">
             <ProjectGuid>{F14570BD-81F7-4D28-A8FB-327CB0356102}</ProjectGuid>
             <Configurations>Debug</Configurations>
             <Platforms>Win32</Platforms>
@@ -282,12 +378,6 @@
         </BuildGroupProject>
         <BuildGroupProject Include="Hosting.Abstractions\Daf.Hosting.Abstractions.dproj">
             <ProjectGuid>{7AE0E470-84D4-438F-8293-DB38BC5AF1B0}</ProjectGuid>
-            <Configurations>Debug</Configurations>
-            <Platforms>Win32</Platforms>
-            <Enabled>False</Enabled>
-        </BuildGroupProject>
-        <BuildGroupProject Include="Application\Daf.Application.dproj">
-            <ProjectGuid>{A2BA094C-B976-4DA0-A597-F0DA4591471F}</ProjectGuid>
             <Configurations>Debug</Configurations>
             <Platforms>Win32</Platforms>
             <Enabled>False</Enabled>

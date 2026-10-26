@@ -1,4 +1,4 @@
-unit Daf.SQLCute.Compiler;
+﻿unit Daf.SQLCute.Compiler;
 
 {$SCOPEDENUMS ON}
 
@@ -9,79 +9,281 @@ uses
   System.Variants,
   System.Generics.Collections,
   Daf.SQLCute,
-  Daf.SQLCute.Clauses;
+  Daf.SQLCute.Clauses,
+  Daf.SQLCute.WhereTree;
 
 type
+  /// <summary>Raised when the compiler is handed a statement kind it has no
+  /// path for — so a future kind fails loud instead of silently compiling a
+  /// retrieval.</summary>
+  ESQLCuteCompilerError = class(Exception);
+
+  /// <summary>
+  /// The state of one compilation: the bindings, in the order their placeholders
+  /// are written. <c>Compile</c> creates it and hands it to every method that
+  /// emits SQL, so a compiler instance keeps nothing between compilations and
+  /// serves successive, nested and concurrent ones.
+  /// </summary>
+  TSqlCompilation = class
+  strict private
+    FBindings: TList<Variant>;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    procedure AddBinding(const Value: Variant);
+    function Bindings: TArray<Variant>;
+  end;
+
+  /// <summary>
+  /// What a compiler writes for each binding, and for the escaped '\?' of a raw
+  /// expression.
+  /// </summary>
+  TPlaceholderStyle = (
+    /// <summary>
+    /// '?' for every binding, in every dialect: the marker FireDAC binds on any
+    /// engine and translates to the engine's own. A '\?' comes out as '??',
+    /// FireDAC's literal '?', outside a string between single quotes, and as '?'
+    /// inside one, where FireDAC looks for no parameter.
+    /// </summary>
+    FireDAC,
+    /// <summary>
+    /// The engine's own marker, by position: '$1'… in PostgreSQL, '@p0'… in SQL
+    /// Server, ':p1'… in Oracle and '?' in the other dialects. A '\?' comes out
+    /// as '?'.
+    /// </summary>
+    Native);
+
   /// <summary>
   /// ANSI SQL compiler — baseline implementation of IQueryCompiler.
-  /// Produces standard SQL with '?' positional parameters.
+  /// Every method that emits SQL writes its placeholders as '?'; a final pass
+  /// writes each '?' not preceded by '\', and each '\?', in the style of
+  /// <see cref="Placeholders"/>. So the '?' of a raw expression count with the
+  /// others.
   /// All dialect compilers extend this class and override virtual methods.
   /// </summary>
   TAnsiSqlCompiler = class(TInterfacedObject, IQueryCompiler)
   private
-    FBindings: TList<Variant>;
-    function CompileSubQuery(const Query: IQuery): string;
+    FPlaceholders: TPlaceholderStyle;
+    function CompileSubQuery(const C: TSqlCompilation; const Query: IQuery): string;
+    function CompileStatement(const C: TSqlCompilation; const Query: IQuery): string;
+    function NumberPlaceholders(const SQL: string): string;
   protected
-    procedure AddBinding(const Value: Variant);
+    /// <summary>
+    /// Quotes a single name, doubling inside it the character that closes the
+    /// quote. ANSI: the name as it is.
+    /// </summary>
+    function WrapIdentifier(const Name: string): string; virtual;
+    /// <summary>
+    /// A column: an alias written in it (<c>name as alias</c>) is split off, the
+    /// name is split at each dot, a <c>*</c> part stays bare, and every other
+    /// part and the alias go through <see cref="WrapIdentifier"/>.
+    /// </summary>
     function WrapColumn(const Col: string): string; virtual;
+    /// <summary>A table, quoted the way <see cref="WrapColumn"/> quotes a column.</summary>
     function WrapTable(const Table: string): string; virtual;
-    function ParamPlaceholder: string; virtual;
+    /// <summary>
+    /// What joins a column, a table or a subquery with its alias, spaces
+    /// included. ANSI: <c> AS </c>.
+    /// </summary>
+    function AliasKeyword: string; virtual;
+    /// <summary>
+    /// The literal a logical comparison compares with. ANSI: <c>true</c> and
+    /// <c>false</c>.
+    /// </summary>
+    function BooleanLiteral(const Value: Boolean): string; virtual;
+    /// <summary>A name, the alias keyword and the quoted alias.</summary>
+    function WithAlias(const Expr, Alias: string): string;
+    /// <summary>A name split at each dot, each part quoted but a bare <c>*</c>.</summary>
+    function WrapQualified(const Name: string): string;
+    /// <summary>
+    /// The placeholder of the native style for the binding at <c>Index</c>,
+    /// counted from 0 in the order of the text. ANSI: '?'.
+    /// </summary>
+    function FormatPlaceholder(const Index: Integer): string; virtual;
     function OperatorSymbol(Op: TWhereOp): string; virtual;
-    function CompileSelect(const Clauses: TArray<TAbstractClause>): string; virtual;
-    function CompileFrom(const Clauses: TArray<TAbstractClause>): string; virtual;
-    function CompileJoin(const Clauses: TArray<TAbstractClause>): string; virtual;
-    function CompileWhere(const Clauses: TArray<TAbstractClause>): string; virtual;
-    function CompileGroupBy(const Clauses: TArray<TAbstractClause>): string; virtual;
-    function CompileHaving(const Clauses: TArray<TAbstractClause>): string; virtual;
-    function CompileOrderBy(const Clauses: TArray<TAbstractClause>): string; virtual;
-    function CompileLimit(const Clauses: TArray<TAbstractClause>): string; virtual;
-    function CompileOffset(const Clauses: TArray<TAbstractClause>): string; virtual;
-    function CompileWith(const Clauses: TArray<TAbstractClause>): string; virtual;
-    function CompileUnion(const Clauses: TArray<TAbstractClause>): string; virtual;
-    function CompileInsert(const Clauses: TArray<TAbstractClause>): string; virtual;
-    function CompileUpdate(const Clauses: TArray<TAbstractClause>): string; virtual;
-    function CompileDelete(const Clauses: TArray<TAbstractClause>): string; virtual;
+    function CompileSelect(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string; virtual;
+    function CompileFrom(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string; virtual;
+    function CompileJoin(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string; virtual;
+    function CompileWhere(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string; virtual;
+    function CompileGroupBy(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string; virtual;
+    function CompileHaving(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string; virtual;
+    function CompileOrderBy(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string; virtual;
+    /// <summary>
+    /// Emits one ordered column's whole contribution to the ORDER BY list —
+    /// including the NULL-ordering option, if any. A dialect without
+    /// <c>NULLS FIRST/LAST</c> overrides this to emulate the requested order,
+    /// which is why the hook returns the entire term (and may return several
+    /// comma-separated sort keys) rather than a suffix.
+    /// </summary>
+    function CompileOrderByColumn(const C: TSqlCompilation; const O: TOrderByClause): string; virtual;
+    /// <summary>
+    /// <c>ASC</c> / <c>DESC</c> for a sort direction. Shared by the ORDER BY hook
+    /// and by the dialects that emulate NULL placement with an extra sort key.
+    /// </summary>
+    function SortDirKeyword(Dir: TSortDir): string;
+    function CompileLimit(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string; virtual;
+    function CompileOffset(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string; virtual;
+    function CompileWith(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string; virtual;
+    function CompileUnion(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string; virtual;
+    function CompileInsert(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string; virtual;
+    function CompileUpdate(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string; virtual;
+    function CompileDelete(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string; virtual;
     function AssembleQuery(const Parts: TArray<string>): string; virtual;
     /// <summary>
     /// Compile a flat list of TWhereClause items into "cond1 AND cond2 …"
     /// without a leading WHERE keyword. Used by CompileWhere nested groups
     /// and CompileJoin ON (…) callback conditions.
     /// </summary>
-    function CompileWhereList(const Clauses: TArray<TAbstractClause>): string;
+    function CompileWhereList(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string;
     /// <summary>
     /// Generates the SQL fragment for a date/time WHERE condition.
     /// Override in dialect subclasses for dialect-specific date functions.
     /// ANSI fallback: emits <c>col op ?</c>.
     /// </summary>
-    function CompileDateWhere(const Clause: TDateWhereClause): string; virtual;
+    function CompileDateWhere(const C: TSqlCompilation; const Clause: TDateWhereClause): string; virtual;
+    /// <summary>
+    /// Emits the SQL for a single boolean leaf clause (comparison, IN/BETWEEN,
+    /// IS NULL, LIKE, EXISTS, raw, column-column, value-IN, date, or HAVING),
+    /// adding its bindings in order. NOT is NOT applied here — the tree's Neg
+    /// node wraps it (see EmitNode).
+    /// </summary>
+    function EmitLeafClause(const C: TSqlCompilation; const Clause: TAbstractClause): string;
+    /// <summary>
+    /// Walks a normalized WHERE/HAVING tree emitting SQL with explicit precedence
+    /// parentheses (OR-group inside AND, and AND-group inside OR, are wrapped).
+    /// </summary>
+    function EmitNode(const C: TSqlCompilation; const Node: TWhereNode): string;
   public
     function Compile(const Query: IQuery): TSQLResult;
+    /// <summary>
+    /// The placeholder style of every compilation: <c>TPlaceholderStyle.FireDAC</c>
+    /// on a new instance. Set it before the instance compiles; changing it while
+    /// another thread compiles with the same instance is not supported.
+    /// </summary>
+    property Placeholders: TPlaceholderStyle read FPlaceholders write FPlaceholders;
   end;
 
 implementation
 
-{ TAnsiSqlCompiler }
+uses
+  System.TypInfo;
 
-procedure TAnsiSqlCompiler.AddBinding(const Value: Variant);
+{ TSqlCompilation }
+
+constructor TSqlCompilation.Create;
+begin
+  inherited Create;
+  FBindings := TList<Variant>.Create;
+end;
+
+destructor TSqlCompilation.Destroy;
+begin
+  FBindings.Free;
+  inherited;
+end;
+
+procedure TSqlCompilation.AddBinding(const Value: Variant);
 begin
   FBindings.Add(Value);
 end;
 
-function TAnsiSqlCompiler.WrapColumn(const Col: string): string;
+function TSqlCompilation.Bindings: TArray<Variant>;
 begin
-  // ANSI: no quoting for plain identifiers.
-  // Sub-classes override (e.g. MySQL uses backticks, MSSQL uses brackets).
-  Result := Col;
+  Result := FBindings.ToArray;
+end;
+
+{ TAnsiSqlCompiler }
+
+function TAnsiSqlCompiler.WrapIdentifier(const Name: string): string;
+begin
+  Result := Name;
+end;
+
+function TAnsiSqlCompiler.WrapQualified(const Name: string): string;
+begin
+  var Parts := Name.Split(['.']);
+  for var I := 0 to High(Parts) do
+    if Parts[I] <> '*' then
+      Parts[I] := WrapIdentifier(Parts[I]);
+  Result := string.Join('.', Parts);
+end;
+
+function TAnsiSqlCompiler.WrapColumn(const Col: string): string;
+var
+  Name, Alias: string;
+begin
+  if SplitNameAlias(Col, Name, Alias) then
+    Result := WithAlias(WrapQualified(Name), Alias)
+  else
+    Result := WrapQualified(Col);
 end;
 
 function TAnsiSqlCompiler.WrapTable(const Table: string): string;
 begin
-  Result := Table;
+  Result := WrapColumn(Table);
 end;
 
-function TAnsiSqlCompiler.ParamPlaceholder: string;
+function TAnsiSqlCompiler.AliasKeyword: string;
+begin
+  Result := ' AS ';
+end;
+
+function TAnsiSqlCompiler.BooleanLiteral(const Value: Boolean): string;
+begin
+  if Value then
+    Result := 'true'
+  else
+    Result := 'false';
+end;
+
+function TAnsiSqlCompiler.WithAlias(const Expr, Alias: string): string;
+begin
+  Result := Expr + AliasKeyword + WrapIdentifier(Alias);
+end;
+
+function TAnsiSqlCompiler.FormatPlaceholder(const Index: Integer): string;
 begin
   Result := '?';
+end;
+
+function TAnsiSqlCompiler.NumberPlaceholders(const SQL: string): string;
+var
+  Sb: TStringBuilder;
+  I, Index: Integer;
+  InString: Boolean;
+begin
+  Sb := TStringBuilder.Create;
+  try
+    Index := 0;
+    InString := False;
+    I := 1;
+    while I <= Length(SQL) do
+    begin
+      if (SQL[I] = '\') and (I < Length(SQL)) and (SQL[I + 1] = '?') then
+      begin
+        if (FPlaceholders = TPlaceholderStyle.FireDAC) and not InString then
+          Sb.Append('??')
+        else
+          Sb.Append('?');
+        Inc(I, 2);
+        Continue;
+      end;
+      // A doubled quote inside a string toggles twice, so the string stays open.
+      if SQL[I] = '''' then
+        InString := not InString;
+      if (SQL[I] = '?') and (FPlaceholders = TPlaceholderStyle.Native) then
+      begin
+        Sb.Append(FormatPlaceholder(Index));
+        Inc(Index);
+      end
+      else
+        Sb.Append(SQL[I]);
+      Inc(I);
+    end;
+    Result := Sb.ToString;
+  finally
+    Sb.Free;
+  end;
 end;
 
 function TAnsiSqlCompiler.OperatorSymbol(Op: TWhereOp): string;
@@ -96,11 +298,12 @@ begin
     TWhereOp.Like:           Result := 'LIKE';
     TWhereOp.NotLike:        Result := 'NOT LIKE';
   else
-    Result := '=';
+    raise ESQLCuteCompilerError.CreateFmt('Operator %s has no SQL symbol.',
+      [GetEnumName(TypeInfo(TWhereOp), Ord(Op))]);
   end;
 end;
 
-function TAnsiSqlCompiler.CompileSelect(const Clauses: TArray<TAbstractClause>): string;
+function TAnsiSqlCompiler.CompileSelect(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string;
 var
   Parts: TList<string>;
   I: Integer;
@@ -127,7 +330,7 @@ begin
         for Col in Sel.Columns do
         begin
           if Col.SubQuery <> nil then
-            Expr := '(' + CompileSubQuery(Col.SubQuery as IQuery) + ')'
+            Expr := '(' + CompileSubQuery(C, Col.SubQuery as IQuery) + ')'
           else if Col.IsRaw then
             Expr := Col.Column
           else if Col.Column = '*' then
@@ -136,7 +339,7 @@ begin
             Expr := WrapColumn(Col.Column);
 
           if Col.Alias <> '' then
-            Expr := Expr + ' AS ' + WrapColumn(Col.Alias);
+            Expr := WithAlias(Expr, Col.Alias);
 
           Parts.Add(Expr);
         end;
@@ -164,7 +367,7 @@ begin
   end;
 end;
 
-function TAnsiSqlCompiler.CompileFrom(const Clauses: TArray<TAbstractClause>): string;
+function TAnsiSqlCompiler.CompileFrom(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string;
 var
   Clause: TAbstractClause;
   From: TFromClause;
@@ -179,7 +382,7 @@ begin
     if Clause is TFromSubqueryClause then
     begin
       FSQ := TFromSubqueryClause(Clause);
-      Result := 'FROM (' + CompileSubQuery(FSQ.SubQuery) + ') ' + WrapTable(FSQ.Alias);
+      Result := 'FROM (' + CompileSubQuery(C, FSQ.SubQuery) + ') ' + WrapIdentifier(FSQ.Alias);
       Exit;
     end;
 
@@ -188,9 +391,9 @@ begin
       FRaw := TFromRawClause(Clause);
       TableExpr := FRaw.RawSql;
       if FRaw.Alias <> '' then
-        TableExpr := TableExpr + ' AS ' + WrapTable(FRaw.Alias);
+        TableExpr := WithAlias(TableExpr, FRaw.Alias);
       for B in FRaw.Bindings do
-        AddBinding(B);
+        C.AddBinding(B);
       Result := 'FROM ' + TableExpr;
       Exit;
     end;
@@ -203,336 +406,224 @@ begin
       else
         TableExpr := WrapTable(From.Table);
       if From.Alias <> '' then
-        TableExpr := TableExpr + ' AS ' + WrapTable(From.Alias);
+        TableExpr := WithAlias(TableExpr, From.Alias);
       Result := 'FROM ' + TableExpr;
       Exit;
     end;
   end;
 end;
 
-function TAnsiSqlCompiler.CompileWhere(const Clauses: TArray<TAbstractClause>): string;
+function TAnsiSqlCompiler.EmitLeafClause(const C: TSqlCompilation; const Clause: TAbstractClause): string;
 var
-  Sb: TStringBuilder;
-  Clause: TAbstractClause;
   W: TWhereClause;
   WI: TWhereInClause;
-  WN: TNestedWhereClause;
-  First: Boolean;
-  Expr, Keyword, Placeholders, InnerSql: string;
+  H: THavingClause;
+  Placeholders: string;
   I: Integer;
-
-  function ConnectorStr(Conn: TBoolOp): string;
+begin
+  // --- WHERE IN / NOT IN (value-array variant) ---
+  if Clause is TWhereInClause then
   begin
-    case Conn of
-      TBoolOp.opAnd: Result := ' AND ';
-      TBoolOp.opOr:  Result := ' OR ';
+    WI := TWhereInClause(Clause);
+    Placeholders := '';
+    for I := 0 to High(WI.Values) do
+    begin
+      if I > 0 then Placeholders := Placeholders + ', ';
+      C.AddBinding(WI.Values[I]);
+      Placeholders := Placeholders + '?';
+    end;
+    if WI.Negated then
+      Result := WrapColumn(WI.Column) + ' NOT IN (' + Placeholders + ')'
     else
-      Result := ' AND ';
-    end;
+      Result := WrapColumn(WI.Column) + ' IN (' + Placeholders + ')';
+    Exit;
   end;
 
-  // Recursive compilation of a nested group's sub-clauses (no FBindings reset)
-  function CompileNestedGroup(const SubClauses: TArray<TAbstractClause>): string; forward;
+  // --- date/time portion filter ---
+  if Clause is TDateWhereClause then
+    Exit(CompileDateWhere(C, TDateWhereClause(Clause)));
 
-  function CompileNestedGroup(const SubClauses: TArray<TAbstractClause>): string;
+  // --- HAVING condition (raw, or col op ?, the column quoted like any other) ---
+  if Clause is THavingClause then
   begin
-    Result := CompileWhereList(SubClauses);
-  end;
-
-begin
-  Sb := TStringBuilder.Create;
-  try
-    First := True;
-    for Clause in Clauses do
-    begin
-      // --- NESTED GROUP (TNestedWhereClause must be checked BEFORE TWhereClause) ---
-      if Clause is TNestedWhereClause then
+    H := THavingClause(Clause);
+    case H.Op of
+      TWhereOp.Raw:
+        Result := H.RawSql;
+      TWhereOp.IsNull:
+        Result := WrapColumn(H.Column) + ' IS NULL';
+      TWhereOp.IsNotNull:
+        Result := WrapColumn(H.Column) + ' IS NOT NULL';
+    else
       begin
-        WN := TNestedWhereClause(Clause);
-        if First then
-          Sb.Append('WHERE ')
-        else
-          Sb.Append(ConnectorStr(WN.Connector));
-        First := False;
-        InnerSql := CompileNestedGroup(WN.SubClauses);
-        Sb.Append('(' + InnerSql + ')');
-        Continue;
+        C.AddBinding(H.Value);
+        Result := WrapColumn(H.Column) + ' ' + OperatorSymbol(H.Op) + ' ?';
       end;
-
-      // --- WHERE IN / NOT IN (value-array variant) ---
-      if Clause is TWhereInClause then
-      begin
-        WI := TWhereInClause(Clause);
-        if First then
-          Sb.Append('WHERE ')
-        else
-          Sb.Append(' ' + WI.Connector + ' ');
-        First := False;
-
-        Placeholders := '';
-        for I := 0 to High(WI.Values) do
-        begin
-          if I > 0 then Placeholders := Placeholders + ', ';
-          AddBinding(WI.Values[I]);
-          Placeholders := Placeholders + ParamPlaceholder;
-        end;
-        if WI.Negated then
-          Keyword := ' NOT IN ('
-        else
-          Keyword := ' IN (';
-        Sb.Append(WrapColumn(WI.Column) + Keyword + Placeholders + ')');
-        Continue;
-      end;
-
-      if Clause is TDateWhereClause then
-      begin
-        if First then Sb.Append('WHERE ')
-        else case TDateWhereClause(Clause).Connector of
-          TBoolOp.opAnd: Sb.Append(' AND ');
-          TBoolOp.opOr:  Sb.Append(' OR ');
-        end;
-        First := False;
-        Sb.Append(CompileDateWhere(TDateWhereClause(Clause)));
-        Continue;
-      end;
-
-      if not (Clause is TWhereClause) then Continue;
-      W := TWhereClause(Clause);
-
-      if First then
-        Sb.Append('WHERE ')
-      else
-        case W.Connector of
-          TBoolOp.opAnd: Sb.Append(' AND ');
-          TBoolOp.opOr:  Sb.Append(' OR ');
-        end;
-      First := False;
-
-      // --- column-column comparison (no binding) ---
-      if W.IsColumnValue then
-      begin
-        Expr := WrapColumn(W.Column) + ' ' + OperatorSymbol(W.Op) + ' ' + WrapColumn(VarToStr(W.Value));
-      end
-      else
-      case W.Op of
-        TWhereOp.IsNull:
-          Expr := WrapColumn(W.Column) + ' IS NULL';
-
-        TWhereOp.IsNotNull:
-          Expr := WrapColumn(W.Column) + ' IS NOT NULL';
-
-        TWhereOp.&Exists:
-          Expr := 'EXISTS (' + CompileSubQuery(W.SubQuery as IQuery) + ')';
-
-        TWhereOp.NotExists:
-          Expr := 'NOT EXISTS (' + CompileSubQuery(W.SubQuery as IQuery) + ')';
-
-        TWhereOp.&Between:
-        begin
-          AddBinding(W.Value);
-          AddBinding(W.Value2);
-          Expr := WrapColumn(W.Column) + ' BETWEEN ' + ParamPlaceholder + ' AND ' + ParamPlaceholder;
-        end;
-
-        TWhereOp.NotBetween:
-        begin
-          AddBinding(W.Value);
-          AddBinding(W.Value2);
-          Expr := WrapColumn(W.Column) + ' NOT BETWEEN ' + ParamPlaceholder + ' AND ' + ParamPlaceholder;
-        end;
-
-        TWhereOp.&In:
-        begin
-          if W.SubQuery <> nil then
-            Expr := WrapColumn(W.Column) + ' IN (' + CompileSubQuery(W.SubQuery as IQuery) + ')'
-          else
-            Expr := WrapColumn(W.Column) + ' IN (' + VarToStr(W.Value) + ')';
-        end;
-
-        TWhereOp.NotIn:
-        begin
-          if W.SubQuery <> nil then
-            Expr := WrapColumn(W.Column) + ' NOT IN (' + CompileSubQuery(W.SubQuery as IQuery) + ')'
-          else
-            Expr := WrapColumn(W.Column) + ' NOT IN (' + VarToStr(W.Value) + ')';
-        end;
-
-        TWhereOp.Raw:
-          Expr := W.RawSql;
-
-        TWhereOp.Like, TWhereOp.NotLike:
-        begin
-          AddBinding(W.Value);
-          if W.CaseSensitive then
-            Expr := WrapColumn(W.Column) + ' ' + OperatorSymbol(W.Op) + ' ' + ParamPlaceholder
-          else
-            Expr := 'LOWER(' + WrapColumn(W.Column) + ') ' + OperatorSymbol(W.Op) + ' ' + ParamPlaceholder;
-        end;
-
-        else
-        begin
-          AddBinding(W.Value);
-          Expr := WrapColumn(W.Column) + ' ' + OperatorSymbol(W.Op) + ' ' + ParamPlaceholder;
-        end;
-      end;
-
-      if W.IsNot then
-        Expr := 'NOT (' + Expr + ')';
-
-      Sb.Append(Expr);
     end;
-
-    Result := Sb.ToString;
-  finally
-    Sb.Free;
+    Exit;
   end;
+
+  // --- TWhereClause: op-dispatch ---
+  W := TWhereClause(Clause);
+  if W.IsBoolLiteral then
+    Result := WrapColumn(W.Column) + ' = ' + BooleanLiteral(W.Value)
+  else if W.IsColumnValue then
+    Result := WrapColumn(W.Column) + ' ' + OperatorSymbol(W.Op) + ' ' + WrapColumn(VarToStr(W.Value))
+  else
+    case W.Op of
+      TWhereOp.IsNull:
+        Result := WrapColumn(W.Column) + ' IS NULL';
+      TWhereOp.IsNotNull:
+        Result := WrapColumn(W.Column) + ' IS NOT NULL';
+      TWhereOp.&Exists:
+        Result := 'EXISTS (' + CompileSubQuery(C, W.SubQuery as IQuery) + ')';
+      TWhereOp.NotExists:
+        Result := 'NOT EXISTS (' + CompileSubQuery(C, W.SubQuery as IQuery) + ')';
+      TWhereOp.&Between:
+      begin
+        C.AddBinding(W.Value);
+        C.AddBinding(W.Value2);
+        Result := WrapColumn(W.Column) + ' BETWEEN ? AND ?';
+      end;
+      TWhereOp.NotBetween:
+      begin
+        C.AddBinding(W.Value);
+        C.AddBinding(W.Value2);
+        Result := WrapColumn(W.Column) + ' NOT BETWEEN ? AND ?';
+      end;
+      TWhereOp.&In:
+      begin
+        if W.SubQuery <> nil then
+          Result := WrapColumn(W.Column) + ' IN (' + CompileSubQuery(C, W.SubQuery as IQuery) + ')'
+        else
+        begin
+          C.AddBinding(W.Value);
+          Result := WrapColumn(W.Column) + ' IN (?)';
+        end;
+      end;
+      TWhereOp.NotIn:
+      begin
+        if W.SubQuery <> nil then
+          Result := WrapColumn(W.Column) + ' NOT IN (' + CompileSubQuery(C, W.SubQuery as IQuery) + ')'
+        else
+        begin
+          C.AddBinding(W.Value);
+          Result := WrapColumn(W.Column) + ' NOT IN (?)';
+        end;
+      end;
+      TWhereOp.Raw:
+        Result := W.RawSql;
+      TWhereOp.Like, TWhereOp.NotLike:
+      begin
+        C.AddBinding(W.Value);
+        if W.CaseSensitive then
+          Result := WrapColumn(W.Column) + ' ' + OperatorSymbol(W.Op) + ' ?'
+        else
+          Result := 'LOWER(' + WrapColumn(W.Column) + ') ' + OperatorSymbol(W.Op) + ' ?';
+        if W.EscapeChar <> #0 then
+          Result := Result + ' ESCAPE ''' + W.EscapeChar + '''';
+      end;
+    else
+      begin
+        C.AddBinding(W.Value);
+        Result := WrapColumn(W.Column) + ' ' + OperatorSymbol(W.Op) + ' ?';
+      end;
+    end;
 end;
 
-function TAnsiSqlCompiler.CompileWhereList(const Clauses: TArray<TAbstractClause>): string;
+function TAnsiSqlCompiler.EmitNode(const C: TSqlCompilation; const Node: TWhereNode): string;
+
+  // Emit a child, parenthesizing it when its kind would otherwise lose precedence.
+  function Wrapped(const Child: TWhereNode; ParenIf: TWhereNodeKind): string;
+  begin
+    Result := EmitNode(C, Child);
+    if Child.Kind = ParenIf then
+      Result := '(' + Result + ')';
+  end;
+
 var
-  Sb: TStringBuilder;
-  Sub: TAbstractClause;
-  SubW: TWhereClause;
-  SubWI: TWhereInClause;
-  SubWN: TNestedWhereClause;
-  First: Boolean;
-  SubExpr, SubPlaceholders: string;
-  J: Integer;
+  I: Integer;
 begin
-  Sb := TStringBuilder.Create;
-  try
-    First := True;
-    for Sub in Clauses do
+  case Node.Kind of
+    TWhereNodeKind.Leaf:
+      Result := EmitLeafClause(C, Node.Clause);
+    TWhereNodeKind.Neg:
+      Result := 'NOT (' + EmitNode(C, Node.Children[0]) + ')';
+    TWhereNodeKind.Conjunction:
     begin
-      if Sub is TNestedWhereClause then
+      Result := '';
+      for I := 0 to High(Node.Children) do
       begin
-        SubWN := TNestedWhereClause(Sub);
-        if not First then
-        begin
-          if SubWN.Connector = TBoolOp.opOr then
-            Sb.Append(' OR ')
-          else
-            Sb.Append(' AND ');
-        end;
-        First := False;
-        Sb.Append('(' + CompileWhereList(SubWN.SubClauses) + ')');
-        Continue;
+        if I > 0 then
+          Result := Result + ' AND ';
+        // An OR-group inside an AND must be parenthesized.
+        Result := Result + Wrapped(Node.Children[I], TWhereNodeKind.Disjunction);
       end;
-
-      if Sub is TWhereInClause then
-      begin
-        SubWI := TWhereInClause(Sub);
-        if not First then
-          Sb.Append(' ' + SubWI.Connector + ' ');
-        First := False;
-        SubPlaceholders := '';
-        for J := 0 to High(SubWI.Values) do
-        begin
-          if J > 0 then SubPlaceholders := SubPlaceholders + ', ';
-          AddBinding(SubWI.Values[J]);
-          SubPlaceholders := SubPlaceholders + ParamPlaceholder;
-        end;
-        if SubWI.Negated then
-          Sb.Append(WrapColumn(SubWI.Column) + ' NOT IN (' + SubPlaceholders + ')')
-        else
-          Sb.Append(WrapColumn(SubWI.Column) + ' IN (' + SubPlaceholders + ')');
-        Continue;
-      end;
-
-      if Sub is TDateWhereClause then
-      begin
-        if not First then
-        begin
-          if TDateWhereClause(Sub).Connector = TBoolOp.opOr then
-            Sb.Append(' OR ')
-          else
-            Sb.Append(' AND ');
-        end;
-        First := False;
-        Sb.Append(CompileDateWhere(TDateWhereClause(Sub)));
-        Continue;
-      end;
-
-      if not (Sub is TWhereClause) then Continue;
-      SubW := TWhereClause(Sub);
-
-      if not First then
-      begin
-        if SubW.Connector = TBoolOp.opOr then
-          Sb.Append(' OR ')
-        else
-          Sb.Append(' AND ');
-      end;
-      First := False;
-
-      if SubW.IsColumnValue then
-      begin
-        SubExpr := WrapColumn(SubW.Column) + ' ' + OperatorSymbol(SubW.Op) + ' ' + WrapColumn(VarToStr(SubW.Value));
-      end
-      else
-      case SubW.Op of
-        TWhereOp.IsNull:    SubExpr := WrapColumn(SubW.Column) + ' IS NULL';
-        TWhereOp.IsNotNull: SubExpr := WrapColumn(SubW.Column) + ' IS NOT NULL';
-        TWhereOp.&Exists:   SubExpr := 'EXISTS (' + CompileSubQuery(SubW.SubQuery as IQuery) + ')';
-        TWhereOp.NotExists: SubExpr := 'NOT EXISTS (' + CompileSubQuery(SubW.SubQuery as IQuery) + ')';
-        TWhereOp.&Between:
-        begin
-          AddBinding(SubW.Value);
-          AddBinding(SubW.Value2);
-          SubExpr := WrapColumn(SubW.Column) + ' BETWEEN ' + ParamPlaceholder + ' AND ' + ParamPlaceholder;
-        end;
-        TWhereOp.NotBetween:
-        begin
-          AddBinding(SubW.Value);
-          AddBinding(SubW.Value2);
-          SubExpr := WrapColumn(SubW.Column) + ' NOT BETWEEN ' + ParamPlaceholder + ' AND ' + ParamPlaceholder;
-        end;
-        TWhereOp.&In:
-        begin
-          if SubW.SubQuery <> nil then
-            SubExpr := WrapColumn(SubW.Column) + ' IN (' + CompileSubQuery(SubW.SubQuery as IQuery) + ')'
-          else
-            SubExpr := WrapColumn(SubW.Column) + ' IN (' + VarToStr(SubW.Value) + ')';
-        end;
-        TWhereOp.NotIn:
-        begin
-          if SubW.SubQuery <> nil then
-            SubExpr := WrapColumn(SubW.Column) + ' NOT IN (' + CompileSubQuery(SubW.SubQuery as IQuery) + ')'
-          else
-            SubExpr := WrapColumn(SubW.Column) + ' NOT IN (' + VarToStr(SubW.Value) + ')';
-        end;
-        TWhereOp.Raw: SubExpr := SubW.RawSql;
-        TWhereOp.Like, TWhereOp.NotLike:
-        begin
-          AddBinding(SubW.Value);
-          if SubW.CaseSensitive then
-            SubExpr := WrapColumn(SubW.Column) + ' ' + OperatorSymbol(SubW.Op) + ' ' + ParamPlaceholder
-          else
-            SubExpr := 'LOWER(' + WrapColumn(SubW.Column) + ') ' + OperatorSymbol(SubW.Op) + ' ' + ParamPlaceholder;
-        end;
-        else
-        begin
-          AddBinding(SubW.Value);
-          SubExpr := WrapColumn(SubW.Column) + ' ' + OperatorSymbol(SubW.Op) + ' ' + ParamPlaceholder;
-        end;
-      end;
-
-      if SubW.IsNot then
-        SubExpr := 'NOT (' + SubExpr + ')';
-      Sb.Append(SubExpr);
     end;
-    Result := Sb.ToString;
-  finally
-    Sb.Free;
+    TWhereNodeKind.Disjunction:
+    begin
+      Result := '';
+      for I := 0 to High(Node.Children) do
+      begin
+        if I > 0 then
+          Result := Result + ' OR ';
+        // AND-groups inside an OR get explicit parentheses (precedence-explicit).
+        Result := Result + Wrapped(Node.Children[I], TWhereNodeKind.Conjunction);
+      end;
+    end;
   end;
 end;
 
-function TAnsiSqlCompiler.CompileOrderBy(const Clauses: TArray<TAbstractClause>): string;
+function TAnsiSqlCompiler.CompileWhere(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string;
+begin
+  var Root := TWhereTree.Build(Clauses);
+  try
+    if Root = nil then
+      Result := ''
+    else
+      Result := 'WHERE ' + EmitNode(C, Root);
+  finally
+    Root.Free;
+  end;
+end;
+
+function TAnsiSqlCompiler.CompileWhereList(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string;
+begin
+  // Used by JOIN ON callback conditions — same tree, without the WHERE keyword.
+  var Root := TWhereTree.Build(Clauses);
+  try
+    if Root = nil then
+      Result := ''
+    else
+      Result := EmitNode(C, Root);
+  finally
+    Root.Free;
+  end;
+end;
+
+function TAnsiSqlCompiler.SortDirKeyword(Dir: TSortDir): string;
+begin
+  if Dir = TSortDir.Desc then
+    Result := 'DESC'
+  else
+    Result := 'ASC';
+end;
+
+function TAnsiSqlCompiler.CompileOrderByColumn(const C: TSqlCompilation; const O: TOrderByClause): string;
+begin
+  Result := WrapColumn(O.Column) + ' ' + SortDirKeyword(O.Direction);
+  // Default emits nothing: the database applies its own rule.
+  case O.Nulls of
+    TNullsOrder.First: Result := Result + ' NULLS FIRST';
+    TNullsOrder.Last:  Result := Result + ' NULLS LAST';
+  end;
+end;
+
+function TAnsiSqlCompiler.CompileOrderBy(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string;
 var
   Parts: TList<string>;
   Clause: TAbstractClause;
   O: TOrderByClause;
-  Expr: string;
   I: Integer;
 begin
   Result := '';
@@ -543,16 +634,9 @@ begin
       begin
         O := TOrderByClause(Clause);
         if O.IsRaw then
-          Expr := O.Column
+          Parts.Add(O.Column)          // a raw expression is emitted verbatim
         else
-        begin
-          Expr := WrapColumn(O.Column);
-          case O.Direction of
-            TSortDir.Asc:  Expr := Expr + ' ASC';
-            TSortDir.Desc: Expr := Expr + ' DESC';
-          end;
-        end;
-        Parts.Add(Expr);
+          Parts.Add(CompileOrderByColumn(C, O));
       end;
 
     if Parts.Count > 0 then
@@ -569,7 +653,7 @@ begin
   end;
 end;
 
-function TAnsiSqlCompiler.CompileLimit(const Clauses: TArray<TAbstractClause>): string;
+function TAnsiSqlCompiler.CompileLimit(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string;
 var
   Clause: TAbstractClause;
 begin
@@ -582,7 +666,7 @@ begin
     end;
 end;
 
-function TAnsiSqlCompiler.CompileOffset(const Clauses: TArray<TAbstractClause>): string;
+function TAnsiSqlCompiler.CompileOffset(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string;
 var
   Clause: TAbstractClause;
 begin
@@ -618,76 +702,38 @@ begin
 end;
 
 function TAnsiSqlCompiler.Compile(const Query: IQuery): TSQLResult;
-var
-  Clauses: TArray<TAbstractClause>;
-  Parts: TArray<string>;
-  WithPart, UnionPart, MainSQL: string;
-  Clause: TAbstractClause;
 begin
-  FBindings := TList<Variant>.Create;
+  var C := TSqlCompilation.Create;
   try
-    Clauses := Query.Clauses;
-
-    // Detect DML query kind first
-    for Clause in Clauses do
-    begin
-      if Clause is TDeleteClause then
-      begin
-        Result.SQL      := CompileDelete(Clauses);
-        Result.Bindings := FBindings.ToArray;
-        Exit;
-      end;
-      if Clause is TUpdateSetClause then
-      begin
-        Result.SQL      := CompileUpdate(Clauses);
-        Result.Bindings := FBindings.ToArray;
-        Exit;
-      end;
-      if Clause is TInsertClause then
-      begin
-        Result.SQL      := CompileInsert(Clauses);
-        Result.Bindings := FBindings.ToArray;
-        Exit;
-      end;
-    end;
-
-    // Default: SELECT
-    WithPart := CompileWith(Clauses);
-
-    SetLength(Parts, 9);
-    Parts[0] := CompileSelect(Clauses);
-    Parts[1] := CompileFrom(Clauses);
-    Parts[2] := CompileJoin(Clauses);
-    Parts[3] := CompileWhere(Clauses);
-    Parts[4] := CompileGroupBy(Clauses);
-    Parts[5] := CompileHaving(Clauses);
-    Parts[6] := CompileOrderBy(Clauses);
-    Parts[7] := CompileLimit(Clauses);
-    Parts[8] := CompileOffset(Clauses);
-
-    UnionPart := CompileUnion(Clauses);
-    MainSQL   := AssembleQuery(Parts);
-
-    if WithPart <> '' then
-      Result.SQL := WithPart + ' ' + MainSQL
-    else
-      Result.SQL := MainSQL;
-
-    if UnionPart <> '' then
-      Result.SQL := Result.SQL + ' ' + UnionPart;
-
-    Result.Bindings := FBindings.ToArray;
+    Result.SQL := NumberPlaceholders(CompileStatement(C, Query));
+    Result.Bindings := C.Bindings;
   finally
-    FBindings.Free;
-    FBindings := nil;
+    C.Free;
+  end;
+end;
+
+function TAnsiSqlCompiler.CompileStatement(const C: TSqlCompilation; const Query: IQuery): string;
+begin
+  // Route by the declared statement kind, not by which clauses are present.
+  // No mute branch: a kind with no path here raises rather than falling to
+  // SELECT — a future kind is a loud failure, not a silent retrieval.
+  case Query.Kind of
+    TQueryKind.Delete: Result := CompileDelete(C, Query.Clauses);
+    TQueryKind.Update: Result := CompileUpdate(C, Query.Clauses);
+    TQueryKind.Insert: Result := CompileInsert(C, Query.Clauses);
+    TQueryKind.Select: Result := CompileSubQuery(C, Query);
+  else
+    raise ESQLCuteCompilerError.CreateFmt(
+      'No SQL path for statement kind %s.', [QueryKindName(Query.Kind)]);
   end;
 end;
 
 // ---------------------------------------------------------------------------
-//  CompileSubQuery — recursive compilation reusing Self.FBindings
+//  CompileSubQuery — the SELECT assembly, shared by a whole query and by every
+//  subquery, all adding their bindings to the same compilation
 // ---------------------------------------------------------------------------
 
-function TAnsiSqlCompiler.CompileSubQuery(const Query: IQuery): string;
+function TAnsiSqlCompiler.CompileSubQuery(const C: TSqlCompilation; const Query: IQuery): string;
 var
   Clauses: TArray<TAbstractClause>;
   Parts: TArray<string>;
@@ -695,20 +741,20 @@ var
 begin
   Clauses := Query.Clauses;
 
-  WithPart := CompileWith(Clauses);
+  WithPart := CompileWith(C, Clauses);
 
   SetLength(Parts, 9);
-  Parts[0] := CompileSelect(Clauses);
-  Parts[1] := CompileFrom(Clauses);
-  Parts[2] := CompileJoin(Clauses);
-  Parts[3] := CompileWhere(Clauses);
-  Parts[4] := CompileGroupBy(Clauses);
-  Parts[5] := CompileHaving(Clauses);
-  Parts[6] := CompileOrderBy(Clauses);
-  Parts[7] := CompileLimit(Clauses);
-  Parts[8] := CompileOffset(Clauses);
+  Parts[0] := CompileSelect(C, Clauses);
+  Parts[1] := CompileFrom(C, Clauses);
+  Parts[2] := CompileJoin(C, Clauses);
+  Parts[3] := CompileWhere(C, Clauses);
+  Parts[4] := CompileGroupBy(C, Clauses);
+  Parts[5] := CompileHaving(C, Clauses);
+  Parts[6] := CompileOrderBy(C, Clauses);
+  Parts[7] := CompileLimit(C, Clauses);
+  Parts[8] := CompileOffset(C, Clauses);
 
-  UnionPart := CompileUnion(Clauses);
+  UnionPart := CompileUnion(C, Clauses);
   Result    := AssembleQuery(Parts);
 
   if WithPart <> '' then
@@ -718,10 +764,10 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-//  Phase-2 compile methods
+//  compile methods
 // ---------------------------------------------------------------------------
 
-function TAnsiSqlCompiler.CompileJoin(const Clauses: TArray<TAbstractClause>): string;
+function TAnsiSqlCompiler.CompileJoin(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string;
 var
   Sb: TStringBuilder;
   Clause: TAbstractClause;
@@ -753,10 +799,10 @@ begin
         JS := TJoinSubqueryClause(Clause);
         if Sb.Length > 0 then Sb.Append(' ');
         Sb.Append(JoinKeyword(JS.JoinType));
-        TableExpr := '(' + CompileSubQuery(JS.SubQuery as IQuery) + ') AS ' + WrapTable(JS.Alias);
+        TableExpr := WithAlias('(' + CompileSubQuery(C, JS.SubQuery as IQuery) + ')', JS.Alias);
         Sb.Append(TableExpr);
         if Length(JS.ConditionClauses) > 0 then
-          Sb.Append(' ON (' + CompileWhereList(JS.ConditionClauses) + ')');
+          Sb.Append(' ON (' + CompileWhereList(C, JS.ConditionClauses) + ')');
         Continue;
       end;
 
@@ -771,14 +817,14 @@ begin
       else
         TableExpr := WrapTable(J.Table);
       if J.Alias <> '' then
-        TableExpr := TableExpr + ' AS ' + WrapTable(J.Alias);
+        TableExpr := WithAlias(TableExpr, J.Alias);
 
       Sb.Append(TableExpr);
 
       if Length(J.ConditionClauses) > 0 then
-        Sb.Append(' ON (' + CompileWhereList(J.ConditionClauses) + ')')
+        Sb.Append(' ON (' + CompileWhereList(C, J.ConditionClauses) + ')')
       else if J.Col1 <> '' then
-        Sb.Append(' ON ' + WrapColumn(J.Col1) + ' ' + J.Op + ' ' + WrapColumn(J.Col2))
+        Sb.Append(' ON ' + WrapColumn(J.Col1) + ' ' + OperatorSymbol(J.Op) + ' ' + WrapColumn(J.Col2))
       else if J.Condition <> '' then
         Sb.Append(' ON ' + J.Condition);
     end;
@@ -788,7 +834,7 @@ begin
   end;
 end;
 
-function TAnsiSqlCompiler.CompileGroupBy(const Clauses: TArray<TAbstractClause>): string;
+function TAnsiSqlCompiler.CompileGroupBy(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string;
 var
   Parts: TList<string>;
   Clause: TAbstractClause;
@@ -821,51 +867,23 @@ begin
   end;
 end;
 
-function TAnsiSqlCompiler.CompileHaving(const Clauses: TArray<TAbstractClause>): string;
-var
-  Sb: TStringBuilder;
-  Clause: TAbstractClause;
-  H: THavingClause;
-  First: Boolean;
-  Expr: string;
+function TAnsiSqlCompiler.CompileHaving(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string;
 begin
-  Sb := TStringBuilder.Create;
+  // Built from the same shared normalizer as WHERE, so precedence (AND before
+  // OR) and parenthesization are identical. HAVING leaves emit their column
+  // verbatim (aggregate expressions like COUNT(*)) — see EmitLeafClause.
+  var Root := TWhereTree.BuildHaving(Clauses);
   try
-    First := True;
-    for Clause in Clauses do
-    begin
-      if not (Clause is THavingClause) then Continue;
-      H := THavingClause(Clause);
-
-      if First then
-        Sb.Append('HAVING ')
-      else
-        case H.Connector of
-          TBoolOp.opAnd: Sb.Append(' AND ');
-          TBoolOp.opOr:  Sb.Append(' OR ');
-        end;
-      First := False;
-
-      case H.Op of
-        TWhereOp.Raw:
-          Expr := H.RawSql;
-        else
-        begin
-          AddBinding(H.Value);
-          // HAVING column is always output verbatim (aggregate expressions like COUNT(*))
-          Expr := H.Column + ' ' + OperatorSymbol(H.Op) + ' ' + ParamPlaceholder;
-        end;
-      end;
-
-      Sb.Append(Expr);
-    end;
-    Result := Sb.ToString;
+    if Root = nil then
+      Result := ''
+    else
+      Result := 'HAVING ' + EmitNode(C, Root);
   finally
-    Sb.Free;
+    Root.Free;
   end;
 end;
 
-function TAnsiSqlCompiler.CompileWith(const Clauses: TArray<TAbstractClause>): string;
+function TAnsiSqlCompiler.CompileWith(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string;
 var
   Parts: TList<string>;
   Clause: TAbstractClause;
@@ -886,11 +904,11 @@ begin
         begin
           var B: Variant;
           for B in W.RawBindings do
-            AddBinding(B);
+            C.AddBinding(B);
           Parts.Add(W.Name + ' AS (' + W.RawSql + ')');
         end
         else
-          Parts.Add(W.Name + ' AS (' + CompileSubQuery(W.SubQuery as IQuery) + ')');
+          Parts.Add(W.Name + ' AS (' + CompileSubQuery(C, W.SubQuery as IQuery) + ')');
       end;
     if Parts.Count > 0 then
     begin
@@ -909,7 +927,7 @@ begin
   end;
 end;
 
-function TAnsiSqlCompiler.CompileUnion(const Clauses: TArray<TAbstractClause>): string;
+function TAnsiSqlCompiler.CompileUnion(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string;
 var
   Sb: TStringBuilder;
   Clause: TAbstractClause;
@@ -928,7 +946,7 @@ begin
         Sb.Append(U.RawSql);
         Continue;
       end;
-      SubSQL := CompileSubQuery(U.SubQuery as IQuery);
+      SubSQL := CompileSubQuery(C, U.SubQuery as IQuery);
       case U.Kind of
         TUnionKind.Union:        Sb.Append('UNION ' + SubSQL);
         TUnionKind.UnionAll:     Sb.Append('UNION ALL ' + SubSQL);
@@ -945,10 +963,10 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-//  Phase-3 DML compile methods
+//  DML compile methods
 // ---------------------------------------------------------------------------
 
-function TAnsiSqlCompiler.CompileInsert(const Clauses: TArray<TAbstractClause>): string;
+function TAnsiSqlCompiler.CompileInsert(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string;
 var
   IC: TInsertClause;
   Clause: TAbstractClause;
@@ -979,7 +997,7 @@ begin
   if IC.SubQuery <> nil then
   begin
     Result := 'INSERT INTO ' + TableName + ' (' + ColsStr + ') '
-            + CompileSubQuery(IC.SubQuery as IQuery);
+            + CompileSubQuery(C, IC.SubQuery as IQuery);
     Exit;
   end;
 
@@ -992,8 +1010,8 @@ begin
       for J := 0 to High(IC.Rows[I]) do
       begin
         if J > 0 then RowStr := RowStr + ', ';
-        AddBinding(IC.Rows[I][J]);
-        RowStr := RowStr + ParamPlaceholder;
+        C.AddBinding(IC.Rows[I][J]);
+        RowStr := RowStr + '?';
       end;
       RowsParts.Add(RowStr + ')');
     end;
@@ -1009,7 +1027,7 @@ begin
   end;
 end;
 
-function TAnsiSqlCompiler.CompileUpdate(const Clauses: TArray<TAbstractClause>): string;
+function TAnsiSqlCompiler.CompileUpdate(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string;
 var
   Clause: TAbstractClause;
   TableName: string;
@@ -1034,8 +1052,8 @@ begin
           SetParts.Add(US.RawSql)
         else
         begin
-          AddBinding(US.Value);
-          SetParts.Add(WrapColumn(US.Column) + ' = ' + ParamPlaceholder);
+          C.AddBinding(US.Value);
+          SetParts.Add(WrapColumn(US.Column) + ' = ?');
         end;
       end;
 
@@ -1046,7 +1064,7 @@ begin
       SetStr := SetStr + SetParts[I];
     end;
 
-    WherePart := CompileWhere(Clauses);
+    WherePart := CompileWhere(C, Clauses);
     Result := 'UPDATE ' + TableName + ' SET ' + SetStr;
     if WherePart <> '' then
       Result := Result + ' ' + WherePart;
@@ -1055,7 +1073,7 @@ begin
   end;
 end;
 
-function TAnsiSqlCompiler.CompileDelete(const Clauses: TArray<TAbstractClause>): string;
+function TAnsiSqlCompiler.CompileDelete(const C: TSqlCompilation; const Clauses: TArray<TAbstractClause>): string;
 var
   Clause: TAbstractClause;
   TableName, WherePart: string;
@@ -1065,7 +1083,7 @@ begin
     if (Clause is TFromClause) and (TableName = '') then
       TableName := WrapTable(TFromClause(Clause).Table);
 
-  WherePart := CompileWhere(Clauses);
+  WherePart := CompileWhere(C, Clauses);
   Result := 'DELETE FROM ' + TableName;
   if WherePart <> '' then
     Result := Result + ' ' + WherePart;
@@ -1075,10 +1093,10 @@ end;
 //  Date / time WHERE — ANSI fallback
 // ---------------------------------------------------------------------------
 
-function TAnsiSqlCompiler.CompileDateWhere(const Clause: TDateWhereClause): string;
+function TAnsiSqlCompiler.CompileDateWhere(const C: TSqlCompilation; const Clause: TDateWhereClause): string;
 begin
-  AddBinding(Clause.Value);
-  Result := WrapColumn(Clause.Column) + ' ' + Clause.Op + ' ' + ParamPlaceholder;
+  C.AddBinding(Clause.Value);
+  Result := WrapColumn(Clause.Column) + ' ' + OperatorSymbol(Clause.Op) + ' ?';
 end;
 
 end.

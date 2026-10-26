@@ -1,4 +1,4 @@
-unit Daf.MiniSpec.Reporter.Live;
+﻿unit Daf.MiniSpec.Reporter.Live;
 
 interface
 
@@ -184,7 +184,6 @@ begin
     StepObj.AddPair('ms', TJSONNumber.Create(Step.RunInfo.ExecTimeMs));
     if not Step.RunInfo.IsSuccess and (Step.RunInfo.ErrMsg <> '') then
       StepObj.AddPair('error', Step.RunInfo.ErrMsg);
-    // Add DataTable if present
     if Assigned(Step.DataTable) then
     begin
       TableArr := TJSONArray.Create;
@@ -193,7 +192,6 @@ begin
       for var H in Step.DataTable.Headers do
         RowArr.Add(H);
       TableArr.AddElement(RowArr);
-      // Add data rows
       for Row in Step.DataTable.Rows do
       begin
         RowArr := TJSONArray.Create;
@@ -409,7 +407,6 @@ begin
   Data := TJSONObject.Create;
   try
     Data.AddPair('name', Feature.Title);
-    // Use Feature.RunInfo instead of Counters parameter
     Data.AddPair('pass', TJSONNumber.Create(Feature.RunInfo.PassCount));
     Data.AddPair('fail', TJSONNumber.Create(Feature.RunInfo.FailCount));
     Data.AddPair('ms', TJSONNumber.Create(Feature.RunInfo.ExecTimeMs));
@@ -425,17 +422,20 @@ var
   StepsArray, TempArr: TJSONArray;
   IsSkipped: Boolean;
 begin
-  IsSkipped := False;  // Filtered scenarios no longer appear in runtime
+  IsSkipped := False;  // Filtered scenarios are never reported
 
   Data := TJSONObject.Create;
   try
     Data.AddPair('name', Scenario.Description);
     Data.AddPair('skipped', TJSONBool.Create(IsSkipped));
     Data.AddPair('success', TJSONBool.Create(Scenario.RunInfo.IsSuccess));
-    // Use Scenario.RunInfo instead of Counters parameter
     Data.AddPair('ms', TJSONNumber.Create(Scenario.RunInfo.ExecTimeMs));
-    if not IsSkipped and not Scenario.RunInfo.IsSuccess and (Scenario.RunInfo.ErrMsg <> '') then
-      Data.AddPair('error', Scenario.RunInfo.ErrMsg);
+    if not IsSkipped and not Scenario.RunInfo.IsSuccess then
+    begin
+      var Reason := ScenarioFailure(Context, Scenario);
+      if Reason <> '' then
+        Data.AddPair('error', Reason);
+    end;
 
     StepsArray := TJSONArray.Create;
     TempArr := StepsToJsonArray(Scenario.StepsGiven, 'Given');
@@ -499,7 +499,7 @@ begin
     begin
       if Example.RunInfo.State = srsFinished then
       begin
-        var IsSkipped := False;  // Filtered examples no longer appear in runtime
+        var IsSkipped := False;  // Filtered examples are never reported
 
         ExampleObj := TJSONObject.Create;
         RowArray := TJSONArray.Create;
@@ -512,13 +512,16 @@ begin
         else
           ExampleObj.AddPair('success', TJSONBool.Create(Example.RunInfo.IsSuccess));
         ExampleObj.AddPair('ms', TJSONNumber.Create(Example.RunInfo.ExecTimeMs));
-        if not IsSkipped and not Example.RunInfo.IsSuccess and (Example.RunInfo.ErrMsg <> '') then
-          ExampleObj.AddPair('error', Example.RunInfo.ErrMsg);
+        if not IsSkipped and not Example.RunInfo.IsSuccess then
+        begin
+          var Reason := ScenarioFailure(Context, Example);
+          if Reason <> '' then
+            ExampleObj.AddPair('error', Reason);
+        end;
         ExamplesArray.AddElement(ExampleObj);
       end;
     end;
     Data.AddPair('examples', ExamplesArray);
-    // Use Outline.RunInfo instead of Counters parameter
     Data.AddPair('pass', TJSONNumber.Create(Outline.RunInfo.PassCount));
     Data.AddPair('fail', TJSONNumber.Create(Outline.RunInfo.FailCount));
     Data.AddPair('success', TJSONBool.Create(Outline.RunInfo.IsSuccess));

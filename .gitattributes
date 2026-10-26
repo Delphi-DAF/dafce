@@ -67,7 +67,26 @@ C++ files
 *.txt       text eol=crlf
 *.md        text eol=crlf
 *.mdown     text eol=crlf
+*.qmd       text eol=crlf
 *.adoc      text eol=crlf
 *.json      text eol=lf
 *.xml       text eol=crlf
 *.ini       text eol=crlf
+
+########################################################
+# Tooling — cada uno en la convención de su ecosistema
+########################################################
+*.py        text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.js        text eol=lf
+*.lua       text eol=lf
+
+########################################################
+# Left out of the release archive (git archive, and the "Source code" zip
+# GitHub builds with it): the repository's tooling and the site's source.
+# Anchored at the root, so a module's own docs/ under src/ stays in.
+########################################################
+/.github    export-ignore
+/eng        export-ignore
+/docs       export-ignore

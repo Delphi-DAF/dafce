@@ -42,12 +42,12 @@ type
   // Live in this unit to access the MainForm global; pure domain concerns go
   // in MediatRSample.Notifications instead.
 
-  TFormCustomerAddedHandler = class(TNotificacionHandler<TCustomerAddedEvent>)
+  TFormCustomerAddedHandler = class(TNotificationHandler<TCustomerAddedEvent>)
   public
     procedure Handle(Notification: TCustomerAddedEvent); override;
   end;
 
-  TFormCustomerRemovedHandler = class(TNotificacionHandler<TCustomerRemovedEvent>)
+  TFormCustomerRemovedHandler = class(TNotificationHandler<TCustomerRemovedEvent>)
   public
     procedure Handle(Notification: TCustomerRemovedEvent); override;
   end;

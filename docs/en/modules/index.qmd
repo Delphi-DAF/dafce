@@ -4,19 +4,36 @@ sidebar: modules
 toc: false
 ---
 
-DAFce ships **10 modules** organized in independent packages. Each module has its own search path — add only what you need.
+DAFce ships **25 packages** in independent search paths — add only what you need. The table below lists the nineteen with a page of their own; the other six are the `.Abstractions` contract packages. Where a module ports a design from another community, the table says which.
 
 | Module | Package | Description |
 |--------|---------|-------------|
-| [Application](application.qmd) | `Daf.Application` | `IDafApplication` builder and runner |
-| [Commons](commons.qmd) | `Daf.Commons` | Smart pointers, RTTI, threading, arrays, CLI parser |
+| [Cli](cli.qmd) | `Daf.Cli` | The **CLI member** of the application family — ports the shape of .NET's `Host.CreateApplicationBuilder`, and `Run` returns the exit code |
+| [CommandLine](commandline.qmd) | `Daf.CommandLine` | A port of .NET's `System.CommandLine`, the library the `dotnet` CLI itself is built on: commands, subcommands, options and arguments |
+| [Commons](commons.qmd) | `Daf.Commons` | Smart pointers, RTTI, threading, arrays, nullable values |
 | [Configuration](configuration.qmd) | `Daf.Configuration` | JSON / env / in-memory config, typed binding |
 | [DependencyInjection](di.qmd) | `Daf.DependencyInjection` | Full DI container with scopes and lifetimes |
-| [Hosting](hosting.qmd) | `Daf.Hosting` | `IHost` / `IHostBuilder` lifecycle model |
+| [Hosting](hosting.qmd) | `Daf.Hosting` | `IHost` / `IHostApplicationBuilder` lifecycle model |
 | [Logging](logging.qmd) | `Daf.Logging` | Structured logging with scopes |
 | [MediatR](mediator.qmd) | `Daf.MediatR` | CQRS: commands, queries, notifications, pipelines |
 | [MiniSpec](minispec.qmd) | `Daf.MiniSpec` | BDD testing: Gherkin specs, expectations, live dashboard |
 | [NNLog](nnlog.qmd) | `Daf.NNLog` | NLog-inspired logging engine integrated with DAF |
-| [Web](web.qmd) | `Daf.Web` | Lightweight HTTP server and routing |
+| [SQLCute](sqlcute.qmd) | `Daf.SQLCute` | Fluent SQL builder after **SqlKata**: `IQuery` as a public AST, one compiler per dialect |
+| [SQLCute.InMemory](sqlcute-inmemory.qmd) | `Daf.SQLCute.InMemory` | A second back-end: runs the same `IQuery` over loaded collections, ANSI NULL semantics. **No analogue** — SqlKata only compiles to text |
+| [SQLCute.Specification](sqlcute-specification.qmd) | `Daf.SQLCute.Specification` | The seam: lowers a whole specification — filter, order and paging — onto an `IQuery` |
+| [Linq](linq.qmd) | `Daf.Linq` | **LINQ-to-Objects**: lazy sequences over `IEnumerable<T>`, closures, no SQL |
+| [Specification](specification.qmd) | `Daf.Specification` | **Specification pattern** — filter, order and paging over a deliberately bounded predicate tree, narrower than `System.Linq.Expressions` so that what cannot be translated is unrepresentable |
+| [Web](web.qmd) | `Daf.Web` | Lightweight HTTP server, attribute routing and action results — and no remoting stack: it links neither DataSnap nor DBX |
+| [VCL](vcl.qmd) | `Daf.VCL` | The **VCL member** of the application family: the same startup as the CLI and Web variants, up to the point where the platform takes over the loop |
+| [SystemProcess](systemprocess.qmd) | `Daf.SystemProcess` | `TSystemProcess` — run external processes synchronously or asynchronously, with callbacks for output, error, completion and failure. The .NET analogue is `System.Diagnostics.Process` |
+| [FMX](fmx.qmd) | `Daf.FMX` | What leans on FireMonkey, isolated so no other package links it: today the bootstrap destination that writes through the platform's own log service. It is there so the startup report is not lost in silence outside Windows — **not** platform support |
 
-Modules marked with **Abstractions** also ship a `Daf.X.Abstractions` package containing only interfaces, for cleaner compile-time dependencies.
+Six modules also ship a `Daf.X.Abstractions` package containing only interfaces, for cleaner compile-time dependencies: Configuration, DependencyInjection, Hosting, Logging, MediatR and SQLCute.
+
+## What depends on what
+
+Install only the modules you want — but a module brings the packages it requires, and some of them
+bring a runtime package from the RAD Studio installation. Both are below; the arrows read
+*requires*.
+
+{{< include ../../_partials/module-graph.en.md >}}

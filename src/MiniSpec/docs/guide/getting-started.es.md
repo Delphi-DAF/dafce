@@ -34,10 +34,12 @@ Imagina que estás desarrollando una calculadora. Antes de escribir código, des
 
 > *"Cuando sumo 2 y 3, el resultado debería ser 5"*
 
-Esta frase simple es una **especificación ejecutable**. Con MiniSpec, la escribes casi literalmente:
+Esta frase simple es una **especificación ejecutable**. Con MiniSpec, la escribes casi literalmente (el código del sample está en inglés):
+
+<!-- quickstart: src/MiniSpec/samples/FirstSpec/Addition.Feat.pas -->
 
 ```pascal
-unit Calculator.Add.Feat.pas;
+unit Addition.Feat;
 
 interface
 
@@ -45,13 +47,12 @@ implementation
 
 uses
   Daf.MiniSpec,
-  Calculator.Engine;  // Aquí está TCalculator, el sistema que especificamos
+  Calculator.Engine;  // Here's TCalculator, the system we're specifying
 
 type
   TCalculatorWorld = class
   public
-    Calculator: TCalculator;  // El SUT (System Under Test)
-    Result: Integer;
+    Calculator: TCalculator;  // The SUT (System Under Test)
     destructor Destroy; override;
   end;
 
@@ -63,45 +64,77 @@ end;
 
 initialization
 
-Feature('Calculadora - Suma')
+Feature('Calculator - Addition')
 
 .UseWorld<TCalculatorWorld>
 
 .Background
-  .Given('tengo una calculadora', procedure(Ctx: TCalculatorWorld)
+  .Given('I have a calculator', procedure(Ctx: TCalculatorWorld)
     begin
       Ctx.Calculator := TCalculator.Create;
     end)
 
-.Scenario('Sumar dos números positivos')
-  .When('sumo 2 y 3', procedure(Ctx: TCalculatorWorld)
+.Scenario('Add two positive numbers')
+  .When('I add 2 and 3', procedure(Ctx: TCalculatorWorld)
     begin
-      Ctx.Result := Ctx.Calculator.Add(2, 3);
+      Ctx.Calculator.Add(2, 3);
     end)
-  .&Then('el resultado es 5', procedure(Ctx: TCalculatorWorld)
+  .&Then('the result is 5', procedure(Ctx: TCalculatorWorld)
     begin
-      Expect(Ctx.Result).ToEqual(5);
+      Expect(Ctx.Calculator.Result).ToEqual(5);
     end)
 
 end.
 ```
 
-La especificación define el comportamiento de `TCalculator` — el **SUT** (*System Under Test*). No nos importa *cómo* está implementado, solo *qué* debe hacer. La implementación está en `Calculator.Engine.pas`:
+La especificación define el comportamiento de `TCalculator` — el **SUT** (*System Under Test*). No nos importa *cómo* está implementado, solo *qué* debe hacer. La implementación es `Calculator.Engine.pas`, del sample `samples/CalculatorSpecs/`:
+
+<!-- quickstart: src/MiniSpec/samples/CalculatorSpecs/Calculator.Engine.pas -->
 
 ```pascal
 unit Calculator.Engine;
 
 interface
 
+uses
+  System.SysUtils;
+
 type
   TCalculator = class
+  strict private
+    FResult: Integer;
   public
-    function Add(A, B: Integer): Integer;
-    // ... más operaciones
+    procedure Add(A, B: Integer);
+    procedure Subtract(A, B: Integer);
+    procedure Mult(A, B: Integer);
+    procedure Divide(A, B: Integer);
+    property Result: Integer read FResult;
   end;
 
 implementation
-  // La implementación que hace pasar la especificación
+
+procedure TCalculator.Add(A, B: Integer);
+begin
+  FResult := A + B;
+end;
+
+procedure TCalculator.Subtract(A, B: Integer);
+begin
+  FResult := A - B;
+end;
+
+procedure TCalculator.Mult(A, B: Integer);
+begin
+  FResult := A * B;
+end;
+
+procedure TCalculator.Divide(A, B: Integer);
+begin
+  if B = 0 then
+    raise EDivByZero.Create('Division by zero');
+  FResult := A div B;
+end;
+
 end.
 ```
 
@@ -120,16 +153,19 @@ end.
 
 ## Ejecutando la Especificación
 
-Para que la especificación sea ejecutable, necesitas un programa mínimo:
+Para que la especificación sea ejecutable, necesitas un programa mínimo. Junto con la feature de arriba, es el sample `samples/FirstSpec/`:
+
+<!-- quickstart: src/MiniSpec/samples/FirstSpec/FirstSpec.dpr -->
 
 ```pascal
-program CalculatorSpecs;
+program FirstSpec;
 
 {$APPTYPE CONSOLE}
 
 uses
   Daf.MiniSpec,
-  Calculator.Add.Feat in 'Calculator.Add.Feat.pas';
+  Calculator.Engine in '..\CalculatorSpecs\Calculator.Engine.pas',
+  Addition.Feat in 'Addition.Feat.pas';
 
 begin
   MiniSpec.Run;
@@ -139,14 +175,14 @@ end.
 Al ejecutar, verás en consola:
 
 ```
-Feature: Calculadora - Suma
-  Background:
-    ✓ Given una calculadora (0 ms)
-  Scenario: Sumar dos números positivos
-    ✓ When sumo 2 y 3 (0 ms)
-    ✓ Then el resultado es 5 (0 ms)
+Feature: Calculator - Addition
+  Background: 
+    ✓ Given I have a calculator (0 ms)
+  Scenario: Add two positive numbers
+      ✓ When I add 2 and 3 (0 ms)
+      ✓ Then the result is 5 (2 ms)
 
-Passed: 1 | Failed: 0 | Pending: 0 | Undefined: 0 | Skipped: 0 | Total: 1 Specs in 1 Features | 0 ms | at 2026-01-30T14:57:07
+Passed: 1 | Failed: 0 | Pending: 0 | Undefined: 0 | Skipped: 0 | Total: 1 Specs in 1 Features | 0 ms | at 2026-09-30T11:15:11
 ```
 
 **El ciclo es simple**: describes el comportamiento esperado → ejecutas → MiniSpec te dice si el código cumple la especificación.

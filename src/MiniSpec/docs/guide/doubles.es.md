@@ -224,7 +224,7 @@ Para coincidencia flexible de argumentos en stubs y mocks.
 uses Daf.MiniSpec.Doubles;
 
 // Coincidir cualquier valor
-.Setup('Process').WithArgs([Arg.Any<Integer>]).Returns(True)
+.Setup('Process').WithArgs([Arg.Any]).Returns(True)
 
 // Coincidir no-nulo/no-vacío
 .Setup('Save').WithArgs([Arg.NotNull]).Returns(True)
@@ -232,34 +232,37 @@ uses Daf.MiniSpec.Doubles;
 // Coincidir string que contiene substring
 .Setup('Log').WithArgs([Arg.Contains('error')]).Returns(nil)
 
-// Coincidir valor en rango
-.Setup('SetVolume').WithArgs([Arg.InRange<Integer>(0, 100)]).Returns(nil)
-
-// Predicado personalizado
-.Setup('Validate').WithArgs([
-  Arg.Matching<string>(
-    function(S: string): Boolean
-    begin
-      Result := Length(S) >= 5;
-    end)
-]).Returns(True)
+// Coincidir lo que acepte un predicado
+.Setup('Listen').WithArgs([Arg.Matching<Integer>(
+  function(Port: Integer): Boolean
+  begin
+    Result := (Port >= 1) and (Port <= 65535);
+  end)]).Returns(True)
 ```
 
+`Arg.Matching<T>` recibe la condición misma. El valor llega al predicado ya convertido a
+`T`, así que un rango es uno de estos y no un matcher aparte. Un argumento de otro tipo no
+casa, y al predicado no se le pregunta.
+
 ### Ejemplo con Matchers
+
+Los setups se resuelven **del último declarado hacia atrás**, y uno con matchers gana a uno
+sin ellos. Así que el más estrecho va **el último**: declararlo primero no lo protege de uno
+más amplio declarado después.
 
 ```pascal
 var EmailService := Stub<IEmailService>
   .Setup('Send')
-    .WithArgs([Arg.Contains('@admin'), Arg.Any<string>])
-    .Raises(ESecurityException.Create('No se puede enviar email a admins'))
-  .Setup('Send')
     .WithArgs([Arg.NotNull, Arg.NotNull])
     .Returns(True)
+  .Setup('Send')
+    .WithArgs([Arg.Contains('@admin'), Arg.Any])
+    .Raises(ESecurityException.Create('No se puede enviar email a admins'))
   .Instance;
 
 // EmailService.Send('admin@co.com', 'Hola') → lanza excepción
 // EmailService.Send('user@co.com', 'Hola') → True
-// EmailService.Send('', 'Hola') → False (NotNull falla)
+// EmailService.Send('', 'Hola') → False: no casó ninguno, así que vuelve el cero del tipo
 ```
 
 ---

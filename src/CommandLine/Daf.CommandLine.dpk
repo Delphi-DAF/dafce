@@ -1,0 +1,43 @@
+﻿package Daf.CommandLine;
+{$R *.res}
+{$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
+{$ALIGN 8}
+{$ASSERTIONS ON}
+{$BOOLEVAL OFF}
+{$DEBUGINFO OFF}
+{$EXTENDEDSYNTAX ON}
+{$IMPORTEDDATA ON}
+{$IOCHECKS ON}
+{$LOCALSYMBOLS ON}
+{$LONGSTRINGS ON}
+{$OPENSTRINGS ON}
+{$OPTIMIZATION OFF}
+{$OVERFLOWCHECKS OFF}
+{$RANGECHECKS OFF}
+{$REFERENCEINFO ON}
+{$SAFEDIVIDE ON}
+{$STACKFRAMES ON}
+{$TYPEDADDRESS OFF}
+{$VARSTRINGCHECKS ON}
+{$WRITEABLECONST OFF}
+{$MINENUMSIZE 1}
+{$IMAGEBASE $400000}
+{$DEFINE DEBUG}
+{$ENDIF IMPLICITBUILDING}
+{$RUNONLY}
+{$IMPLICITBUILD OFF}
+
+requires
+  rtl,
+  Daf.Commons;
+
+contains
+  Daf.CommandLine in 'Daf.CommandLine.pas',
+  Daf.CommandLine.Tokens in 'Daf.CommandLine.Tokens.pas',
+  Daf.CommandLine.Values in 'Daf.CommandLine.Values.pas',
+  Daf.CommandLine.Help in 'Daf.CommandLine.Help.pas',
+  Daf.CommandLine.Parsing in 'Daf.CommandLine.Parsing.pas',
+  Daf.CommandLine.Invocation in 'Daf.CommandLine.Invocation.pas',
+  Daf.CommandLine.Resources in 'Daf.CommandLine.Resources.pas';
+
+end.

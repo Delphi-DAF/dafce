@@ -1,0 +1,36 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{F2AE44D5-D50B-423B-B35D-C4FB9EC767E8}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="test\NNLogSpecs.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="NNLogSpecs">
+        <MSBuild Projects="test\NNLogSpecs.dproj"/>
+    </Target>
+    <Target Name="NNLogSpecs:Clean">
+        <MSBuild Projects="test\NNLogSpecs.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="NNLogSpecs:Make">
+        <MSBuild Projects="test\NNLogSpecs.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="NNLogSpecs"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="NNLogSpecs:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="NNLogSpecs:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

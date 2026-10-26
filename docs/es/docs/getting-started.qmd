@@ -6,42 +6,191 @@ lang: es
 
 ## Requisitos
 
-- **Delphi 12+ (Alexandria)** — necesario para variables inline, mejoras de genéricos y managed records
-- **Windows** — objetivo principal; Linux via FMX/FireMonkey es experimental
+- **Delphi 12+ (Athens)** — necesario para los literales de cadena multilínea (`'''`), que usan cinco units enviadas
+- **Windows** — Win32 y Win64. Ningún paquete declara un objetivo Linux
 
 ## Instalación
 
-DAF se distribuye como un conjunto de paquetes Delphi (`.dpk`). Clona el repo y abre el grupo de proyectos:
+DAF se distribuye como fuente: un conjunto de paquetes Delphi (`.dpk`). Cada release de GitHub lo
+trae en un zip, **Source code (zip)** en los *Assets* de la release:
+<https://github.com/Delphi-DAF/dafce/releases>. Descomprímelo donde quieras, también en una ruta con
+espacios, y ejecuta desde esa carpeta todo lo que sigue. O clona el repo:
 
 ```bash
 git clone https://github.com/Delphi-DAF/dafce.git
 ```
 
-Luego abre `src/DAFGroup.groupproj` en el IDE de Delphi y compila todos los paquetes.
+### Compilar los paquetes
 
-Alternativamente, añade directamente las rutas `src/[Module]/` que necesites al search path de tu proyecto — cada módulo es autocontenido.
+Cada proyecto toma sus rutas de salida de `src/paths.optset`, que las deriva todas de
+`PRJ_OUT_DIR`. `BDS.bat` fija esa variable a partir de su propia ubicación, así que el IDE se
+arranca a través de él:
+
+```cmd
+BDS start
+```
+
+Eso abre RAD Studio con el entorno del proyecto y carga `src/DAFGroup.groupproj`. Un IDE arrancado
+de cualquier otra forma deja `PRJ_OUT_DIR` sin definir, y todas las rutas de salida se construyen
+entonces sobre un valor vacío. `BDS inspect` imprime lo que hay fijado; las variables del proyecto
+viven en `project.cmd`, y los ajustes por máquina en un `%COMPUTERNAME%.project.cmd` al lado.
+
+`BDS.bat` guarda el perfil del IDE de cada carpeta bajo
+`HKCU\Software\Embarcadero\DAF\<nombre de la carpeta>`. Borrar la carpeta deja esa clave, y
+`reg delete "HKCU\Software\Embarcadero\DAF\<nombre de la carpeta>" /f` la quita.
+
+Desde la línea de comandos no hay nada que preparar — los dos scripts llaman a `BDS.bat` por su
+cuenta:
+
+```cmd
+buildall.bat all
+runtests.bat all
+```
+
+Sin opciones, `buildall.bat` compila el framework en Debug y Release, y después los samples y las
+specs en Debug. Estas opciones compilan solo una parte, y se combinan:
+
+| Opción | Compila |
+|---|---|
+| `--framework` | el framework, en Debug y Release |
+| `--samples` | el framework en Debug, y después los samples |
+| `--specs` | el framework en Debug, y después las specs |
+
+`runtests.bat` ejecuta todas las suites que declara el grupo de specs. Los dos aceptan `Win32`,
+`Win64` o `all`, y `buildall.bat` acepta además `--clean`, que borra `out/` antes de empezar.
+
+### Elegir la versión de Delphi
+
+`project.cmd` elige Delphi 13 (`PRJ_IDE=D370`). Delphi 12 es `PRJ_IDE=D290`, y cualquiera de estas
+dos formas lo elige sin editar `project.cmd`:
+
+- un `%COMPUTERNAME%.project.cmd` junto a `project.cmd`, con la línea `set "PRJ_IDE=D290"`;
+- `set "PRJ_IDE=D290"` en su propia línea en la consola, antes de lanzar `buildall.bat`.
+
+Con Delphi 12, `buildall.bat --framework --samples` compila el framework y los samples. Las specs
+del módulo VCL necesitan Delphi 13, así que `--specs`, y `buildall.bat` sin opciones, acaban en
+`BUILD FAILED`.
+
+Si la versión pedida no está instalada, `BDS.bat` no compila nada, sale con código 2 y lista las
+versiones instaladas con el `PRJ_IDE` de cada una.
+
+### Usar lo compilado
+
+Añade `out\Win32\Release\lib` o `out\Win64\Release\lib` al search path de tu proyecto, y las units
+de DAF que use tu programa compilan contra esa carpeta. `out\<Platform>\Debug\lib` tiene las mismas units
+compiladas en Debug, para depurar.
+
+### Usar el fuente directamente
+
+Añadir las rutas `src/[Module]/` que necesites al search path de tu propio proyecto compila esas
+units con las rutas de salida de tu proyecto, así que nada de lo anterior aplica. Cada módulo es
+autocontenido.
 
 ## Tu primera aplicación DAF
 
-El punto de entrada mínimo usa los módulos **Hosting** + **DependencyInjection**:
+Esto es el sample `QuickStart` tal cual — es el fichero que lee el compilador, y un check
+compara los dos, así que lo que copies de aquí es lo que compila:
+
+<!-- quickstart: src/Cli/samples/QuickStart/QuickStart.dpr -->
 
 ```pascal
-program MiApp;
+program QuickStart;
+
+{$APPTYPE CONSOLE}
 
 uses
-  Daf.Application.Builder;
+  Daf.Extensions.DependencyInjection,
+  Daf.CommandLine,
+  Daf.Configuration.CommandLine,
+  Daf.Cli;
 
+// El ejemplo de entrada de una herramienta de linea de comandos: el builder, la accion de la raiz
+// escrita en el sitio, los argumentos que recibe la gramatica, y el codigo de salida que devuelve
+// esa accion.
+//
+//   QuickStart         -> 0, saluda
+//   QuickStart --help  -> 0, la ayuda
+//
+// Como se anade un servicio esta en el sample ServiceWiring, que es el nivel siguiente.
 begin
-  TDafApplicationBuilder
-    .Create
-    .ConfigureServices(procedure(Services: IServiceCollection)
+  var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
+
+  B.SetAction(
+    function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
     begin
-      Services.AddSingleton<IMyService, TMyServiceImpl>;
-    end)
-    .Build
-    .Run;
+      Writeln('Hola desde DAF');
+      Result := TCliExit.Ok;
+    end);
+
+  B.ParseArgs(CommandLineConfig.ProcessArgs);
+  ExitCode := B.Build.Run;
 end.
 ```
+
+Tres cosas sobre la forma, y las tres se equivocan con facilidad:
+
+- El builder se sostiene en una variable, no en una cadena, y los registros ocurren donde están
+  escritos: no hay callback diferido `ConfigureServices`. `TCliApplication.CreateBuilder` devuelve un
+  `ICliApplicationBuilder`, cuyo `Build` devuelve el `ICliApplication` cuyo `Run` es el código de salida.
+- Los argumentos van a dos llamadas, y cada una alimenta a un lector: `CreateBuilder` los añade a la
+  configuración, y `ParseArgs` se los da a la gramática, que contesta `--help` sin ninguna opción
+  declarada. Sin `ParseArgs`, la gramática parsea una invocación vacía.
+- `Daf.Extensions.DependencyInjection` está en el `uses` aunque no se registre nada: la firma de
+  la acción nombra `IServiceProvider`, y Delphi exige que el tipo esté visible para escribirla.
+
+## Añadir un servicio
+
+El sample `ServiceWiring` es el mismo programa con un servicio registrado y resuelto:
+
+<!-- quickstart: src/Cli/samples/ServiceWiring/ServiceWiring.dpr -->
+
+```pascal
+program ServiceWiring;
+
+{$APPTYPE CONSOLE}
+{$STRONGLINKTYPES ON}
+
+uses
+  System.SysUtils,
+  Daf.Extensions.DependencyInjection,
+  Daf.CommandLine,
+  Daf.Configuration.CommandLine,
+  Daf.Cli,
+  ServiceWiring.Greeter in 'ServiceWiring.Greeter.pas';
+
+// Como entra un servicio en una herramienta de linea de comandos: se registra en el builder, que
+// ya esta vivo, y la accion lo resuelve del proveedor que recibe.
+//
+//   ServiceWiring  -> 0, saluda a traves del servicio
+begin
+  var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
+
+  B.Services.AddSingleton<IGreeter, TGreeter>;
+
+  B.SetAction(
+    function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
+    begin
+      Writeln(Services.GetRequiredService<IGreeter>.Greet);
+      Result := TCliExit.Ok;
+    end);
+
+  B.ParseArgs(CommandLineConfig.ProcessArgs);
+  ExitCode := B.Build.Run;
+end.
+```
+
+- `Services` responde antes de construir nada, así que el `AddSingleton` surte efecto donde está
+  escrito, y la acción que declara `SetAction` resuelve del proveedor que recibe.
+- El servicio vive en su propia unit. Un tipo declarado en el `.dpr` no está en la sección
+  `interface` de ninguna unit, y resolverlo falla en ejecución con `ENonPublicType`. Es también por
+  lo que el programa lleva `{$STRONGLINKTYPES ON}`: sin él el enlazador descarta la RTTI por la que
+  el contenedor resuelve.
+
+Hay un segundo punto de entrada, más abajo: `THostBuilder`, del módulo **Hosting**, para cuando
+quieres el host sin la capa de aplicación alrededor, con
+[`Hosting/samples/HostQuickStart`](https://github.com/Delphi-DAF/dafce/tree/main/src/Hosting/samples/HostQuickStart)
+como su propio ejemplo de entrada. La
+[guía de Application](../modules/application-guide.qmd) dice qué te da cada uno.
 
 ## Mapa de módulos
 

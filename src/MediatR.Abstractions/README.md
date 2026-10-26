@@ -4,6 +4,8 @@
 
 Core interfaces and base classes for the DAFce MediatR in-process messaging. Reference these from application code and handler implementations without taking a dependency on the concrete mediator.
 
+All types live in `Daf.MediatR.Contracts` — the package is `Daf.MediatR.Abstractions`, which is not a unit and cannot be used in a `uses` clause.
+
 ---
 
 ## Interfaces
@@ -38,46 +40,49 @@ end;
 ### IMediator
 
 ```pascal
-IMediator = interface
-  procedure Send<TRequest: IRequest>(Request: TRequest); overload;
-  function  Send<TResponse; TRequest: IRequest<TResponse>>(
+IMediator = record            // a record, not an interface: it wraps an IMediatorImpl
+  procedure Send<TRequest: class, IRequest>(Request: TRequest); overload;
+  function  Send<TResponse; TRequest: class, IRequest<TResponse>>(
               Request: TRequest): TResponse; overload;
-  procedure Publish<TNotification: INotification>(
+  procedure Publish<TNotification: class, INotification>(
               Notification: TNotification);
 end;
 ```
 
 ### IMediatorHelper
 
-Extends `IMediator` with `SendARC` — returns the response wrapped in `ARC<TResponse>` for safe reference-counted ownership.
+A **record helper** for `IMediator`, so `SendARC` sits on the mediator itself. Wraps a **class** response in `ARC<TResponse>`, released when it goes out of scope.
 
 ```pascal
-IMediatorHelper = interface(IMediator)
-  function SendARC<TResponse: IInterface; TRequest: IRequest<TResponse>>(
-             Request: TRequest): ARC<TResponse>;
+IMediatorHelper = record helper for IMediator
+  function SendARC<TResponse: class; TRequest: class, IRequest<TResponse>>(
+             const Request: TRequest): ARC<TResponse>;
 end;
 ```
 
 ### IRequestHandler\<TRequest\>
 
 ```pascal
-IRequestHandler<TRequest: IRequest> = interface
+IRequestHandler<TRequest: class, IRequest> = interface
   procedure Handle(Request: TRequest);
 end;
 ```
 
-### IResponseHandler\<TResponse, TRequest\>
+### IRequestHandler\<TResponse, TRequest\>
+
+The same name, two generic parameters: Delphi tells the two overloads apart by arity. The response
+comes back through an `out` parameter, not as the function result.
 
 ```pascal
-IResponseHandler<TResponse; TRequest: IRequest<TResponse>> = interface
-  function Handle(Request: TRequest): TResponse;
+IRequestHandler<TResponse; TRequest: class, IRequest<TResponse>> = interface
+  procedure Handle(Request: TRequest; out Result: TResponse);
 end;
 ```
 
 ### INotificationHandler\<TNotification\>
 
 ```pascal
-INotificationHandler<TNotification: INotification> = interface
+INotificationHandler<TNotification: class, INotification> = interface
   procedure Handle(Notification: TNotification);
 end;
 ```
@@ -93,7 +98,7 @@ end;
 | `TNotification` | Inherit to define an event |
 | `TRequestHandler<TReq>` | Inherit to handle a command — override `Handle` |
 | `TResponseHandler<TRes,TReq>` | Inherit to handle a query — override `Handle` |
-| `TNotificacionHandler<TNot>` | Inherit to handle an event — override `Handle` |
+| `TNotificationHandler<TNot>` | Inherit to handle an event — override `Handle` |
 
 ---
 
@@ -101,11 +106,13 @@ end;
 
 ### [MediatorAbstract]
 
-Apply to abstract handler base classes to prevent the mediator from resolving them directly:
+Apply to abstract handler base classes so the DI scan skips them: `AddMediatRClasses` and
+`AddMediatRBehaviors` never register a class carrying it, which is what keeps the container
+from being asked to instantiate an abstract class. Without a scan the attribute does nothing.
 
 ```pascal
 [MediatorAbstract]
-TBaseHandler<T: TRequest> = class(TRequestHandler<T>);
+TBaseOrderHandler<T: TRequest> = class(TRequestHandler<T>);
 ```
 
 ---

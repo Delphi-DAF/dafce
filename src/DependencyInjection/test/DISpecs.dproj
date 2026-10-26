@@ -98,6 +98,26 @@
         </DelphiCompile>
         <DCCReference Include="DependencyInjection.Feat.pas"/>
         <DCCReference Include="DependencyInjection.Steps.pas"/>
+        <DCCReference Include="DependencyInjection.Doubles.pas"/>
+        <DCCReference Include="Composition.Feat.pas"/>
+        <DCCReference Include="Decoration.Feat.pas"/>
+        <DCCReference Include="Modules.Feat.pas"/>
+        <DCCReference Include="RestrictedRtti.Feat.pas"/>
+        <DCCReference Include="PropertyInjection.Feat.pas"/>
+        <DCCReference Include="KeyedServices.Marks.pas"/>
+        <DCCReference Include="KeyedServices.Feat.pas"/>
+        <DCCReference Include="TrimmedRtti.Feat.pas"/>
+        <DCCReference Include="Validation.Feat.pas"/>
+        <DCCReference Include="GarbageCollection.Feat.pas"/>
+        <DCCReference Include="ContainerShutdown.Feat.pas"/>
+        <DCCReference Include="Concurrency.Feat.pas"/>
+        <DCCReference Include="ServiceIdentity.Feat.pas"/>
+        <DCCReference Include="RequestedType.Feat.pas"/>
+        <DCCReference Include="OpenGenerics.Feat.pas"/>
+        <DCCReference Include="Options.Feat.pas"/>
+        <DCCReference Include="ScopeLifetime.Feat.pas"/>
+        <DCCReference Include="LazyResolution.Feat.pas"/>
+        <DCCReference Include="ConstructorSelection.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>

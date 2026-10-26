@@ -1,4 +1,4 @@
-unit Daf.MiniSpec;
+﻿unit Daf.MiniSpec;
 
 interface
 
@@ -10,6 +10,7 @@ uses
   System.Rtti,
   System.Classes,
   Daf.MiniSpec.Types,
+  Daf.MiniSpec.Injection,
   Daf.MiniSpec.Builders,
   Daf.MiniSpec.Binding,
   Daf.MiniSpec.Runner,
@@ -25,14 +26,22 @@ type
   TRunMode = (rmRun, rmListTags, rmQuery, rmHelp, rmReporterHelp);
 {$SCOPEDENUMS Off}
 
+  /// <summary>
+  /// Reexportado de Daf.MiniSpec.Injection: marcar un miembro no exige un uses mas.
+  /// </summary>
+  /// <remarks>
+  /// Quien escriba [MiniInject] sin esa unit en el uses se lleva un W1074 Unknown custom
+  /// attribute, y en ejecucion el miembro no tiene atributo ninguno: no se inyecta, y nada lo dice.
+  /// </remarks>
+  MiniInjectAttribute = Daf.MiniSpec.Injection.MiniInjectAttribute;
+
   TMiniSpec = class
   public
     const Version = '1.3.0';
   strict private
-    FSuite: ISpecSuite;
-    FRunner: ISpecRunner;
-    FListeners: TList<ISpecListener>;
-    FOptions: TMiniSpecOptions;
+    /// El entorno de ejecucion raiz. TMiniSpec no ejecuta: le anade lo que solo tiene sentido una
+    /// vez por proceso --los argumentos, el .ini, el banner-- y es la unica que fija el ExitCode.
+    FRoot: TSpecRun;
     FRunMode: TRunMode;
     FQueryExpr: string;
     FConfigFile: string;
@@ -62,6 +71,8 @@ type
     function Pause(const Value: Boolean): TMiniSpec;overload;
     function DryRun: Boolean;overload;
     function DryRun(const Value: Boolean): TMiniSpec;overload;
+    function AllowUndefined: Boolean;overload;
+    function AllowUndefined(const Value: Boolean): TMiniSpec;overload;
     /// <summary>
     /// Sets the title/description of the test suite.
     /// </summary>
@@ -100,7 +111,10 @@ function ExpectException(const Capture: TCapturedRaise): TExpectException; overl
 /// Use in Then step: ExpectException(Raised).ToBe(EDivByZero)
 /// </summary>
 function Raised: TCapturedRaise;
-function Feature(const Description: string): TFeatureBuilder;
+function Feature(const Description: string): TFeatureBuilder;overload;
+/// Declara la feature en la suite indicada en vez de en la del proceso. Es la via por la que una
+/// spec monta un arbol para una ejecucion anidada sin que aparezca en la suite que la ejecuta.
+function Feature(const Description: string; const Suite: ISpecSuite): TFeatureBuilder;overload;
 function MiniSpec: TMiniSpec;inline;
 
 implementation
@@ -165,6 +179,11 @@ begin
   Result := TFeatureBuilder.Create(Description);
 end;
 
+function Feature(const Description: string; const Suite: ISpecSuite): TFeatureBuilder;
+begin
+  Result := TFeatureBuilder.Create(Description, Suite);
+end;
+
 { TMiniSpec }
 
 class function TMiniSpec.CreateSingleton: TMiniSpec;
@@ -182,20 +201,14 @@ end;
 constructor TMiniSpec.Create;
 begin
   inherited;
-  FSuite := TSpecSuite.Create;
-  FOptions := TMiniSpecOptions.Create;
-  FRunner := TSpecRunner.Create;
-  FListeners := TList<ISpecListener>.Create;
+  FRoot := TSpecRun.Create;
   FConfigFile := ExtractFilePath(ParamStr(0)) + 'MiniSpec.ini';
   FConfigExisted := FileExists(FConfigFile);
 end;
 
 destructor TMiniSpec.Destroy;
 begin
-  FRunner := nil;  // Release runner first, it has refs to listeners
-  FListeners.Free;
-  FOptions.Free;
-  FSuite := nil;  // Release via ARC
+  FRoot.Free;
   inherited;
 end;
 
@@ -206,50 +219,36 @@ end;
 
 function TMiniSpec.Suite: ISpecSuite;
 begin
-  Result := FSuite;
+  Result := FRoot.Suite;
 end;
 
 function TMiniSpec.Category(const Name: string): TMiniSpec;
 begin
   Result := Self;
-  FSuite.Title := Name;
+  FRoot.Suite.Title := Name;
 end;
 
 function TMiniSpec.Before(const Description: string; Hook: THookProc): TMiniSpec;
 begin
   Result := Self;
-  FSuite.AddBeforeHook(Description, Hook);
+  FRoot.Suite.AddBeforeHook(Description, Hook);
 end;
 
 function TMiniSpec.After(const Description: string; Hook: THookProc): TMiniSpec;
 begin
   Result := Self;
-  FSuite.AddAfterHook(Description, Hook);
+  FRoot.Suite.AddAfterHook(Description, Hook);
 end;
 
 function TMiniSpec.UseSuiteContext<T>: TMiniSpec;
-var
-  OldSuite: ISpecSuite;
-  NewSuite: TSpecSuite<T>;
 begin
   Result := Self;
-  // Crear nueva suite genérica que puede crear contexto de tipo T
-  NewSuite := TSpecSuite<T>.Create(FSuite.Title);
-  // Migrar features y hooks de la suite anterior
-  OldSuite := FSuite;
-  for var Feature in OldSuite.Features do
-    NewSuite.AddFeature(Feature);
-  for var Hook in OldSuite.BeforeHooks do
-    NewSuite.BeforeHooks.Add(Hook);
-  for var Hook in OldSuite.AfterHooks do
-    NewSuite.AfterHooks.Add(Hook);
-  // Reemplazar suite
-  FSuite := NewSuite;
+  FRoot.UseSuiteContext<T>;
 end;
 
 procedure TMiniSpec.Register(Feature: IFeature);
 begin
-  FSuite.AddFeature(Feature);
+  FRoot.Suite.AddFeature(Feature);
 end;
 
 class procedure TMiniSpec.ParseReporterSpec(const Spec: string; out Name: string; out Options: TRunnerOptions);
@@ -324,11 +323,11 @@ begin
   ParseReporterSpec(LowerCase(Spec), Name, Options);
   try
     Listener := CreateListener(Name, Options);
-    FListeners.Add(Listener);
-    // Guardar en FOptions para persistencia
-    FOptions.AddReporterName(Name);
+    FRoot.AddListener(Listener);
+    // Guardar en las opciones para persistencia
+    FRoot.Options.AddReporterName(Name);
     for Pair in Options do
-      FOptions.SetReporterOption(Name, Pair.Key, Pair.Value);
+      FRoot.Options.SetReporterOption(Name, Pair.Key, Pair.Value);
     // Check if reporter help was requested
     if Options.ContainsKey('help') and SameText(Options['help'], 'true') then
       FRunMode := TRunMode.rmReporterHelp;
@@ -339,39 +338,50 @@ end;
 
 function TMiniSpec.Runner: ISpecRunner;
 begin
-  Result := FRunner;
+  Result := FRoot.Runner;
 end;
 
 procedure TMiniSpec.Tags(const Value: string);
 begin
-  FOptions.Filter := Value;
+  FRoot.Options.Filter := Value;
 end;
 
 function TMiniSpec.Pause: Boolean;
 begin
-  Result := FOptions.Pause;
+  Result := FRoot.Options.Pause;
 end;
 
 function TMiniSpec.Pause(const Value: Boolean): TMiniSpec;
 begin
   Result := Self;
-  FOptions.Pause := Value;
+  FRoot.Options.Pause := Value;
 end;
 
 function TMiniSpec.Tags: string;
 begin
-  Result := FOptions.Filter;
+  Result := FRoot.Options.Filter;
 end;
 
 function TMiniSpec.DryRun: Boolean;
 begin
-  Result := FOptions.IsDryRun;
+  Result := FRoot.Options.IsDryRun;
 end;
 
 function TMiniSpec.DryRun(const Value: Boolean): TMiniSpec;
 begin
   Result := Self;
-  FOptions.IsDryRun := Value;
+  FRoot.Options.IsDryRun := Value;
+end;
+
+function TMiniSpec.AllowUndefined: Boolean;
+begin
+  Result := FRoot.Options.AllowUndefined;
+end;
+
+function TMiniSpec.AllowUndefined(const Value: Boolean): TMiniSpec;
+begin
+  Result := Self;
+  FRoot.Options.AllowUndefined := Value;
 end;
 {$ENDREGION}
 
@@ -379,7 +389,7 @@ procedure TMiniSpec.LoadConfig;
 begin
   // Solo cargar opciones desde archivo .ini si existe
   // No crear listeners aquí - se hace en Run() basándose en la config final
-  FOptions.LoadFromFile(FConfigFile);
+  FRoot.Options.LoadFromFile(FConfigFile);
 end;
 
 procedure TMiniSpec.ParseArgs;
@@ -417,25 +427,26 @@ begin
     else if (Param = '--help') or (Param = '-h') then
       FRunMode := TRunMode.rmHelp
     else if Param = '--dry-run' then
-      FOptions.IsDryRun := True
+      FRoot.Options.IsDryRun := True
     else if Param = '--pause' then
-      FOptions.Pause := True
+      FRoot.Options.Pause := True
     else if Param = '--stacktrace' then
-      FOptions.StackTrace := True
+      FRoot.Options.StackTrace := True
     else if Param = '--strict-pending' then
-      FOptions.StrictPending := True;
+      FRoot.Options.StrictPending := True
+    else if Param = '--allow-undefined' then
+      FRoot.Options.AllowUndefined := True;
   end;
 
   // Guardar config si el archivo no existía
   if not FConfigExisted then
-    FOptions.SaveToFile(FConfigFile);
+    FRoot.Options.SaveToFile(FConfigFile);
 end;
 
 procedure TMiniSpec.Run;
 var
   SpecFilter: TSpecFilter;
   Matcher: TSpecMatcher;
-  Listener: ISpecListener;
 begin
   ParseArgs;
 
@@ -450,7 +461,7 @@ begin
     begin
       ShowBanner;
       // Show help for the last reporter added
-      if (FListeners.Count > 0) and FListeners.Last.ShowHelp then
+      if (FRoot.Listeners.Count > 0) and FRoot.Listeners.Last.ShowHelp then
         Exit
       else
       begin
@@ -471,23 +482,19 @@ begin
   end;
 
   // Si no hay listeners explícitos, crear desde config o usar console por defecto
-  if FListeners.Count = 0 then
+  if FRoot.Listeners.Count = 0 then
   begin
-    if Length(FOptions.ReporterNames) > 0 then
+    if Length(FRoot.Options.ReporterNames) > 0 then
     begin
-      for var RepName in FOptions.ReporterNames do
+      for var RepName in FRoot.Options.ReporterNames do
       begin
-        var RepOpts := FOptions.GetReporterOptions(RepName);
-        FListeners.Add(CreateListener(RepName, RepOpts));
+        var RepOpts := FRoot.Options.GetReporterOptions(RepName);
+        FRoot.AddListener(CreateListener(RepName, RepOpts));
       end;
     end
     else
-      FListeners.Add(TConsoleReporter.Create);
+      FRoot.AddListener(TConsoleReporter.Create);
   end;
-
-  // Agregar todos los listeners al runner
-  for Listener in FListeners do
-    FRunner.AddListener(Listener);
 
   // Modo normal: ejecutar tests
   ShowBanner;
@@ -525,44 +532,23 @@ begin
                    Context := TSpecFilterContext.FromScenario(Scenario);
                    Result := SpecFilter.Matches(Context);
                  end;
-    FOptions.SpecMatcher := Matcher;
+    FRoot.Options.SpecMatcher := Matcher;
 
-    // Run suite-level Before hooks
-    FSuite.RunBeforeHooks;
-    try
-      // Ejecutar TODAS las Features - el conteo debe reflejar el total definido
-      // Cada Feature/Rule/Scenario decide si se ejecuta o marca como Skip
-      for var F in FSuite.Features do
-        F.Run(Matcher);
-    finally
-      // Run suite-level After hooks
-      FSuite.RunAfterHooks;
-    end;
-
-    // Usar el runner para reportar (notificará a todos los listeners)
-    FRunner.Report(FSuite, FOptions);
+    FRoot.Execute;
 
     WriteLn('');
     WriteLn(Format('Passed: %d | Failed: %d | Pending: %d | Undefined: %d | Skipped: %d | Total: %d Specs in %d Features | %d ms | at %s',
-      [FRunner.PassCount, FRunner.FailCount, FRunner.PendingCount, FRunner.UndefinedCount, FRunner.SkipCount,
-       FRunner.PassCount + FRunner.FailCount + FRunner.PendingCount + FRunner.UndefinedCount + FRunner.SkipCount,
-       FRunner.FeatureCount, FRunner.ElapsedMs,
-       FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', FRunner.CompletedAt)]));
+      [FRoot.PassCount, FRoot.FailCount, FRoot.PendingCount, FRoot.UndefinedCount, FRoot.SkipCount,
+       FRoot.TotalCount, FRoot.FeatureCount, FRoot.ElapsedMs,
+       FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', FRoot.Runner.CompletedAt)]));
 
-    // Exit code: failures and undefined always fail; pending only with --strict-pending
-    if (FRunner.FailCount > 0) or (FRunner.UndefinedCount > 0) then
-      ExitCode := 1
-    else if FRunner.PendingCount > 0 then
-    begin
-      if FOptions.StrictPending then
-        ExitCode := 1;
-    end;
+    // La ejecucion raiz es la unica que lleva su veredicto al proceso: una anidada calcula el suyo
+    // y se lo entrega a quien la lanzo.
+    ExitCode := FRoot.ExitCode;
 
     if Pause then
       OSShell.WaitForShutdown;
   finally
-    // Release suite to trigger destruction of entire spec tree
-    FSuite := nil;
     SpecFilter.Free;
   end;
 end;
@@ -592,7 +578,7 @@ begin
     FeatureCount := 0;
     ScenarioCount := 0;
 
-    for var F in FSuite.Features do
+    for var F in FRoot.Suite.Features do
     begin
       Inc(FeatureCount);
       CollectTags(F.Tags);
@@ -631,7 +617,7 @@ begin
     WriteLn(Format('Query: %s', [FQueryExpr]));
     WriteLn('');
 
-    for var F in FSuite.Features do
+    for var F in FRoot.Suite.Features do
     begin
       var FeatureShown := False;
 
@@ -689,6 +675,7 @@ begin
   WriteLn('  --pause                 Wait for keypress before closing console');
   WriteLn('  --stacktrace            Show full stack trace on errors');
   WriteLn('  --strict-pending        Treat pending specs as failures (exit code 1)');
+  WriteLn('  --allow-undefined       Undefined steps do not set the exit code (still reported)');
   WriteLn('');
   WriteLn('Reporters:');
   WriteLn('  console                 Console output (default)');

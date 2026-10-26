@@ -1,0 +1,12 @@
+---
+title: "Guías de migración"
+sidebar: migration-es
+lang: es
+---
+
+Una guía por versión mayor. Cada una recoge lo que rompe, al compilar y en ejecución, y el diff que
+lo arregla.
+
+| Salto | Guía |
+|---|---|
+| 1.x → 2.0 | [Migrar a DAF 2.0](2.0.qmd) |

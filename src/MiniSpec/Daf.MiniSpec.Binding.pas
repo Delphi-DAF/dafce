@@ -1,4 +1,4 @@
-unit Daf.MiniSpec.Binding;
+﻿unit Daf.MiniSpec.Binding;
 
 interface
 

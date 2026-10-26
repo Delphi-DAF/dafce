@@ -5,9 +5,17 @@ on:
     branches: [main]
     paths:
       - 'docs/**'
-      - 'src/**/README*.md'
-      - 'src/**/docs/GUIDE*.md'
-      - 'src/**/docs/TESTING-PATTERNS*.md'
+      # Cualquier .md de src/, no una lista de tres patrones: el sitio publica README, GUIDE,
+      # STARTUP-COMPOSITION y los capitulos de docs/guide/, y los tres patrones anteriores
+      # dejaban fuera a los dos ultimos -- una edicion suya no disparaba la publicacion.
+      - 'src/**/*.md'
+      # The dependency graph is generated from the requires clauses, so a package
+      # rewiring changes the site without any docs/ file being touched.
+      - 'src/**/*.dpk'
+      # The quick-start block is a verbatim copy of this sample, so the sample changing
+      # makes the site stale without any document being edited.
+      - 'src/Cli/samples/QuickStart/**'
+      - 'src/Cli/samples/ServiceWiring/**'
   workflow_dispatch:
 
 permissions:
@@ -26,12 +34,36 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Fails the build rather than publishing a graph that no longer matches the
+      # packages: a stale diagram still renders, so nothing else would catch it.
+      - name: Check the dependency graph is up to date
+        run: python3 docs/_gen/module-graph.py --check
+
+      - name: Check the documented startup is the compiled one
+        run: python3 eng/check-quickstart-snippet.py
+
+      # Quarto renderiza un id de sidebar que no existe en silencio: la pagina sale publicada sin
+      # su barra lateral, sin aviso y sin codigo de salida. No tiene enlace muerto y se llega a
+      # ella desde el navbar, asi que ni el mapa de enlaces ni el comprobador del sitio la ven.
+      - name: Check the front matter of every published page
+        run: python3 eng/check-frontmatter.py
+
+      # Los enlaces de un documento que el sitio publica por include estan escritos para el
+      # repositorio, donde GitHub los resuelve. El mapa los traduce al renderizar; si un documento
+      # gana un enlace y el mapa no lo sigue, el sitio publica un href muerto sin decir nada.
+      - name: Check the link map covers every published document
+        run: python3 docs/_gen/link-map.py --check
+
       - name: Setup Quarto
         uses: quarto-dev/quarto-actions/setup@v2
 
       - name: Render site
         run: quarto render docs --output-dir ../out/site
         working-directory: ${{ github.workspace }}
+
+      # quarto render sale 0 con el sitio lleno de enlaces muertos, y lo publica igual.
+      - name: Check every local link of the rendered site resolves
+        run: python3 eng/check-site-links.py out/site
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

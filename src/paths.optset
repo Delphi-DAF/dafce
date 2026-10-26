@@ -1,0 +1,26 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <!--
+      Lo que mas de una optset necesita, y solo eso. Las rutas de cada ambito estan
+      escritas en la optset de ese ambito: source, samples, test.
+
+      DAF_OUT: la raiz y la plataforma. Anadir una plataforma o mover el arbol es esta
+      linea y ninguna mas.
+
+      DAF_FW_LIB y DAF_FW_LIB_DEBUG van juntas porque su igualdad es un invariante:
+      samples y test enlazan el framework Debug, asi que su ruta es la que source
+      escribe cuando Config=Debug.
+    -->
+    <PropertyGroup>
+        <DAF_OUT>$(PRJ_OUT_DIR)\$(Platform)</DAF_OUT>
+        <DAF_FW_LIB>$(DAF_OUT)\$(Config)\lib</DAF_FW_LIB>
+        <DAF_FW_LIB_DEBUG>$(DAF_OUT)\Debug\lib</DAF_FW_LIB_DEBUG>
+    </PropertyGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Delphi.Personality.12</Borland.Personality>
+        <Borland.ProjectType>OptionSet</Borland.ProjectType>
+        <BorlandProject>
+            <Delphi.Personality/>
+        </BorlandProject>
+        <ProjectFileVersion>12</ProjectFileVersion>
+    </ProjectExtensions>
+</Project>

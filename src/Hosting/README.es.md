@@ -1,4 +1,4 @@
-# Hosting
+﻿# Hosting
 
 **🌍 Idioma: [English](README.md) | Español**
 
@@ -28,17 +28,18 @@ uses
   Daf.Extensions.Hosting,
   Daf.Extensions.DependencyInjection;
 
-var Host := THostBuilder.Create
-  .ConfigureServices(procedure(Context: IHostBuilderContext;
-                               Services: IServiceCollection)
-  begin
-    Services.AddSingleton<IMyService, TMyService>;
-    Services.AddHostedService<TMyWorker>; // IHostedService
-  end)
-  .Build;
+var Builder := THost.CreateBuilder;
 
-Host.Start;
-Host.WaitForShutdown;
+Builder.Services.AddSingleton<IMyService, TMyService>;
+Builder.Services.AddHostedService<TMyWorker>; // IHostedService
+
+var Host := Builder.Build;
+try
+  Host.Start;
+  Host.WaitForShutdown;
+finally
+  StopAndNil(Host);
+end;
 ```
 
 ---
@@ -73,18 +74,26 @@ Services.AddHostedService<TMyWorker>;
 Services.AddSingleton<IHostedService, TMyWorker>;
 ```
 
+Si un `Stop` lanza, el resto del apagado se ejecuta igual: los demás servicios paran y el contenedor
+se apaga. `Host.Stop` lanza lo que falló al final: la misma excepción, o una `EAggregateException`
+con todos los fallos dentro si fallaron varios pasos.
+
 ---
 
 ## Entorno
 
-El entorno se lee de la variable `DAF_APP_ENV` (por defecto `Production`):
+El entorno se lee del ajuste de host `environment` —`--environment Staging` en la línea de
+comandos, o la variable `DAF_ENVIRONMENT`— y por defecto es `Production`:
 
 | Valor | IsDevelopment | IsStaging | IsProduction | IsTesting |
 |-------|:---:|:---:|:---:|:---:|
-| `Development` / `deve` | ✅ | | | |
-| `Staging` / `stag` | | ✅ | | |
-| `Production` / `prod` | | | ✅ | |
-| `Testing` / `test` | | | | ✅ |
+| `Development` | ✅ | | | |
+| `Staging` | | ✅ | | |
+| `Production` | | | ✅ | |
+| `Testing` | | | | ✅ |
+
+Las preguntas comparan el nombre sin distinguir mayúsculas. Cualquier otro nombre es un entorno más:
+`QA` carga `appsettings.QA.json`, y las cuatro preguntas responden `False`.
 
 ```pascal
 var Env := Host.Services.GetRequiredService<IHostEnvironment>;
@@ -93,13 +102,38 @@ if Env.IsDevelopment then
 WriteLn(Env.ContentRootPath);
 ```
 
-Variables de entorno leídas al arrancar:
+Ajustes de host leídos al arrancar, como argumento o como variable —gana el argumento—:
 
-| Variable | Por defecto | Propósito |
-|----------|-------------|-----------|
-| `DAF_APP_ENV` | `Production` | Nombre del entorno |
-| `DAF_APP_NAME` | Nombre del ejecutable | Nombre de la aplicación |
-| `DAF_CONTENT_ROOT` | Ruta del binario | Directorio raíz de contenido |
+| Clave | Variable | Por defecto | Propósito |
+|-------|----------|-------------|-----------|
+| `environment` | `DAF_ENVIRONMENT` | `Production` | Nombre del entorno |
+| `applicationName` | `DAF_APPLICATIONNAME` | Nombre del ejecutable | Nombre de la aplicación |
+| `contentRoot` | `DAF_CONTENTROOT` | Directorio actual | Directorio raíz de contenido |
+
+Cuando el directorio actual es el del sistema, como en un servicio de Windows, el content root es
+en su lugar la carpeta del ejecutable. `Env.BinPath` es siempre esa carpeta.
+
+---
+
+## Validación del contenedor
+
+En el entorno `Development` el host construye el contenedor con `ValidateOnBuild` y
+`ValidateScopes`: un registro cuyas dependencias no se pueden satisfacer, o un Singleton que captura
+un Scoped, detiene `Build` con todos los hallazgos juntos. En cualquier otro entorno el contenedor se
+construye sin validar.
+
+`ServiceProviderOptions` en el builder dice las opciones que usará `Build`, y asignarla las fija sea
+cual sea el entorno:
+
+```pascal
+Builder.ServiceProviderOptions := TServiceProviderOptions.None;               // nunca valida
+Builder.ServiceProviderOptions := TServiceProviderOptions.Create(True, True); // valida siempre
+```
+
+La validación alcanza a los registros por clase; un registro por factory queda fuera. Con
+`ValidateScopes`, un servicio Scoped pedido al proveedor raíz, o por el proveedor que recibió un
+Singleton, también se rechaza al resolverlo. Los servicios alojados y las tareas de arranque son Singleton, así que lo que necesiten de un Scoped lo
+resuelven desde un ámbito propio, con un `IServiceScopeFactory` recibido por constructor.
 
 ---
 
@@ -122,28 +156,38 @@ Lifetime.StopApplication;
 
 ---
 
-## Usando TDafApplication (módulo Application)
+## Usar la familia de aplicaciones
 
-Para apps de consola, el módulo `Application` ofrece un wrapper de más alto nivel:
+Para un programa con línea principal, cada variante de la familia de aplicaciones —`Daf.Cli`,
+`Daf.Web`, `Daf.VCL` o `Daf.FMX`— envuelve este pipeline y añade `Run`. El builder es usable en
+cuanto se crea: `Services`,
+`Configuration` y `Environment` responden en cuanto se leen, así que los registros ocurren donde
+están escritos.
+`Build` devuelve la aplicación, y su `Run` da el código de salida.
 
 ```pascal
-uses DAF.Application.Builder;
+uses Daf.Cli, Daf.CommandLine, Daf.Configuration.CommandLine;
 
-TDafApplication.CreateHostBuilder
-  .ConfigureServices(procedure(Context: IHostBuilderContext;
-                               Services: IServiceCollection)
-  begin
-    Services.AddSingleton<IMyService, TMyService>;
-    Services.AddHostedService<TMyWorker>;
-  end)
-  .Build
-  .Run;
+var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
+
+B.Services.AddSingleton<IMyService, TMyService>;
+B.Services.AddHostedService<TMyWorker>;
+
+ExitCode := B.Build.Run;
 ```
 
-Consulta [Application](../Application/README.es.md) para la documentación completa del módulo Application.
+Consulta [La familia de aplicaciones](docs/APPLICATION-FAMILY.es.md) para saber cuál es tu punto de entrada y qué añade la capa sobre el host.
 
 ---
 
 ## Documentación
 
 - 📖 [Guía de uso](docs/GUIDE.es.md) — pipeline de configuración, servicios scoped, hosted services, hooks de ciclo de vida
+- 📖 [La familia de aplicaciones](docs/APPLICATION-FAMILY.es.md) — cuál es tu punto de entrada, qué añade la capa sobre el host y qué es en términos de .NET
+- 📖 [Composición del arranque](../DependencyInjection/docs/STARTUP-COMPOSITION.es.md) — `IStartupTask` frente a `IHostedService`, y las dos fases del arranque
+- 📁 [HostQuickStart](samples/HostQuickStart/README.md) — componer, construir, arrancar y parar, sin ninguna variante de aplicación alrededor
+- 📁 [StartupReport](samples/StartupReport/README.md) — dónde queda el registro del arranque, y qué enseña un arranque que no llega a completarse
+- 📁 [HostLifetime](samples/HostLifetime/README.md) — las tres notificaciones del ciclo de vida, y una copia del `IHost` que se suelta en `ApplicationStopped`
+- 📁 [ConsoleSample](../Cli/samples/ConsoleSample/README.md) — configuración y el patrón de opciones en un programa de consola
+- 📁 [HostedService](../samples/HostedService/) — workers en segundo plano con `AddHostedService`
+- 📁 [PackageInit](../Cli/samples/PackageInit/README.md) — un `IStartupTask` aportado desde un paquete, sin que el `.dpr` lo nombre

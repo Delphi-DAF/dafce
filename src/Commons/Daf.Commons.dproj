@@ -110,14 +110,15 @@
         <DCCReference Include="dbrtl.dcp"/>
         <DCCReference Include="Daf.MemUtils.pas"/>
         <DCCReference Include="Daf.Types.pas"/>
+        <DCCReference Include="Daf.Nullable.pas"/>
+        <DCCReference Include="Daf.Application.Version.pas"/>
+        <DCCReference Include="Daf.Comparers.pas"/>
         <DCCReference Include="Daf.Activator.pas"/>
-        <DCCReference Include="Daf.Expression.pas"/>
+        <DCCReference Include="Daf.FilterSpec.pas"/>
         <DCCReference Include="Daf.Rtti.pas"/>
-        <DCCReference Include="Daf.CmdLn.Parser.pas"/>
         <DCCReference Include="Daf.Arrays.pas"/>
         <DCCReference Include="Daf.Enumerable.pas"/>
         <DCCReference Include="Daf.Threading.pas"/>
-        <DCCReference Include="Daf.SystemProcess.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\source.optset</DependentOn>

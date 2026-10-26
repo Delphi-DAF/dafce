@@ -1,4 +1,4 @@
-unit MediatR.Feat;
+﻿unit MediatR.Feat;
 
 interface
 

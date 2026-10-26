@@ -17,8 +17,22 @@
 | `--dry-run` | List scenarios without executing |
 | `--stacktrace` | Show full stack trace on errors |
 | `--strict-pending` | Treat pending specs as failures (exit code 1) |
+| `--allow-undefined` | Undefined steps do not set the exit code (still counted and reported) |
 
 > 💡 `--stacktrace` requires a stack trace library (JclDebug, MadExcept, EurekaLog).
+
+### What sets the exit code
+
+A **failed** spec and an **undefined** step set it to 1; **pending** specs do not, unless you ask
+with `--strict-pending`. An undefined step is one whose description matched no binding — an
+unintentional omission, not work in progress — so it fails by default: otherwise renaming a step
+definition would leave the suite green while that step never runs.
+
+`--allow-undefined` is for a suite that marks a step undefined **on purpose**, which is the only way
+to check that the steps after it are skipped. It releases the exit code and nothing else: the summary
+line still counts the undefined steps and the reporter still marks them. A suite that needs it can
+declare it itself with `MiniSpec.AllowUndefined(True)`, instead of relying on whoever launches it to
+pass the flag.
 
 ## Examples
 
@@ -63,4 +77,4 @@ port=8080
 
 ---
 
-[← Reporters](reporters.md) | [Back to Guide →](../GUIDE.md)
+[← Reporters](reporters.md) | [Next: Nested Runs →](nested-runs.md)

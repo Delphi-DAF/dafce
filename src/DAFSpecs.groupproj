@@ -6,6 +6,9 @@
         <Projects Include="MiniSpec\test\MiniSpecSpecs.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="SystemProcess\test\SystemProcessSpecs.dproj">
+            <Dependencies/>
+        </Projects>
         <Projects Include="Commons\test\CommonsSpecs.dproj">
             <Dependencies/>
         </Projects>
@@ -18,10 +21,43 @@
         <Projects Include="MediatR\test\MediatRSpecs.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="SQLCute.Abstractions\test\SQLCuteSpecs.dproj">
+        <Projects Include="SQLCute\test\SQLCuteSpecs.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="SQLCute.Compilers\test\SQLCuteCompilersSpecs.dproj">
+        <Projects Include="Linq\test\LinqSpecs.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="CommandLine\test\CommandLineSpecs.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="SQLCute.InMemory\test\SQLCuteInMemorySpecs.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="Specification\test\SpecificationSpecs.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="SQLCute.Specification\test\SQLCuteSpecificationSpecs.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="Logging\test\LoggingSpecs.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="Hosting\test\HostingSpecs.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="Cli\test\CliSpecs.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="VCL\test\VCLSpecs.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="FMX\test\FMXSpecs.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="web\test\WebSpecs.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="NNLog\test\NNLogSpecs.dproj">
             <Dependencies/>
         </Projects>
     </ItemGroup>
@@ -40,6 +76,15 @@
     </Target>
     <Target Name="MiniSpecSpecs:Make">
         <MSBuild Projects="MiniSpec\test\MiniSpecSpecs.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="SystemProcessSpecs">
+        <MSBuild Projects="SystemProcess\test\SystemProcessSpecs.dproj"/>
+    </Target>
+    <Target Name="SystemProcessSpecs:Clean">
+        <MSBuild Projects="SystemProcess\test\SystemProcessSpecs.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="SystemProcessSpecs:Make">
+        <MSBuild Projects="SystemProcess\test\SystemProcessSpecs.dproj" Targets="Make"/>
     </Target>
     <Target Name="CommonsSpecs">
         <MSBuild Projects="Commons\test\CommonsSpecs.dproj"/>
@@ -78,31 +123,130 @@
         <MSBuild Projects="MediatR\test\MediatRSpecs.dproj" Targets="Make"/>
     </Target>
     <Target Name="SQLCuteSpecs">
-        <MSBuild Projects="SQLCute.Abstractions\test\SQLCuteSpecs.dproj"/>
+        <MSBuild Projects="SQLCute\test\SQLCuteSpecs.dproj"/>
     </Target>
     <Target Name="SQLCuteSpecs:Clean">
-        <MSBuild Projects="SQLCute.Abstractions\test\SQLCuteSpecs.dproj" Targets="Clean"/>
+        <MSBuild Projects="SQLCute\test\SQLCuteSpecs.dproj" Targets="Clean"/>
     </Target>
     <Target Name="SQLCuteSpecs:Make">
-        <MSBuild Projects="SQLCute.Abstractions\test\SQLCuteSpecs.dproj" Targets="Make"/>
+        <MSBuild Projects="SQLCute\test\SQLCuteSpecs.dproj" Targets="Make"/>
     </Target>
-    <Target Name="SQLCuteCompilersSpecs">
-        <MSBuild Projects="SQLCute.Compilers\test\SQLCuteCompilersSpecs.dproj"/>
+    <Target Name="LinqSpecs">
+        <MSBuild Projects="Linq\test\LinqSpecs.dproj"/>
     </Target>
-    <Target Name="SQLCuteCompilersSpecs:Clean">
-        <MSBuild Projects="SQLCute.Compilers\test\SQLCuteCompilersSpecs.dproj" Targets="Clean"/>
+    <Target Name="LinqSpecs:Clean">
+        <MSBuild Projects="Linq\test\LinqSpecs.dproj" Targets="Clean"/>
     </Target>
-    <Target Name="SQLCuteCompilersSpecs:Make">
-        <MSBuild Projects="SQLCute.Compilers\test\SQLCuteCompilersSpecs.dproj" Targets="Make"/>
+    <Target Name="LinqSpecs:Make">
+        <MSBuild Projects="Linq\test\LinqSpecs.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="CommandLineSpecs">
+        <MSBuild Projects="CommandLine\test\CommandLineSpecs.dproj"/>
+    </Target>
+    <Target Name="CommandLineSpecs:Clean">
+        <MSBuild Projects="CommandLine\test\CommandLineSpecs.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="CommandLineSpecs:Make">
+        <MSBuild Projects="CommandLine\test\CommandLineSpecs.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="SQLCuteInMemorySpecs">
+        <MSBuild Projects="SQLCute.InMemory\test\SQLCuteInMemorySpecs.dproj"/>
+    </Target>
+    <Target Name="SQLCuteInMemorySpecs:Clean">
+        <MSBuild Projects="SQLCute.InMemory\test\SQLCuteInMemorySpecs.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="SQLCuteInMemorySpecs:Make">
+        <MSBuild Projects="SQLCute.InMemory\test\SQLCuteInMemorySpecs.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="SpecificationSpecs">
+        <MSBuild Projects="Specification\test\SpecificationSpecs.dproj"/>
+    </Target>
+    <Target Name="SpecificationSpecs:Clean">
+        <MSBuild Projects="Specification\test\SpecificationSpecs.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="SpecificationSpecs:Make">
+        <MSBuild Projects="Specification\test\SpecificationSpecs.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="SQLCuteSpecificationSpecs">
+        <MSBuild Projects="SQLCute.Specification\test\SQLCuteSpecificationSpecs.dproj"/>
+    </Target>
+    <Target Name="SQLCuteSpecificationSpecs:Clean">
+        <MSBuild Projects="SQLCute.Specification\test\SQLCuteSpecificationSpecs.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="SQLCuteSpecificationSpecs:Make">
+        <MSBuild Projects="SQLCute.Specification\test\SQLCuteSpecificationSpecs.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="LoggingSpecs">
+        <MSBuild Projects="Logging\test\LoggingSpecs.dproj"/>
+    </Target>
+    <Target Name="LoggingSpecs:Clean">
+        <MSBuild Projects="Logging\test\LoggingSpecs.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="LoggingSpecs:Make">
+        <MSBuild Projects="Logging\test\LoggingSpecs.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="HostingSpecs">
+        <MSBuild Projects="Hosting\test\HostingSpecs.dproj"/>
+    </Target>
+    <Target Name="HostingSpecs:Clean">
+        <MSBuild Projects="Hosting\test\HostingSpecs.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="HostingSpecs:Make">
+        <MSBuild Projects="Hosting\test\HostingSpecs.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="CliSpecs">
+        <MSBuild Projects="Cli\test\CliSpecs.dproj"/>
+    </Target>
+    <Target Name="CliSpecs:Clean">
+        <MSBuild Projects="Cli\test\CliSpecs.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="CliSpecs:Make">
+        <MSBuild Projects="Cli\test\CliSpecs.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="VCLSpecs">
+        <MSBuild Projects="VCL\test\VCLSpecs.dproj"/>
+    </Target>
+    <Target Name="VCLSpecs:Clean">
+        <MSBuild Projects="VCL\test\VCLSpecs.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="VCLSpecs:Make">
+        <MSBuild Projects="VCL\test\VCLSpecs.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="FMXSpecs">
+        <MSBuild Projects="FMX\test\FMXSpecs.dproj"/>
+    </Target>
+    <Target Name="FMXSpecs:Clean">
+        <MSBuild Projects="FMX\test\FMXSpecs.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="FMXSpecs:Make">
+        <MSBuild Projects="FMX\test\FMXSpecs.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="WebSpecs">
+        <MSBuild Projects="web\test\WebSpecs.dproj"/>
+    </Target>
+    <Target Name="WebSpecs:Clean">
+        <MSBuild Projects="web\test\WebSpecs.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="WebSpecs:Make">
+        <MSBuild Projects="web\test\WebSpecs.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="NNLogSpecs">
+        <MSBuild Projects="NNLog\test\NNLogSpecs.dproj"/>
+    </Target>
+    <Target Name="NNLogSpecs:Clean">
+        <MSBuild Projects="NNLog\test\NNLogSpecs.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="NNLogSpecs:Make">
+        <MSBuild Projects="NNLog\test\NNLogSpecs.dproj" Targets="Make"/>
     </Target>
     <Target Name="Build">
-        <CallTarget Targets="MiniSpecSpecs;CommonsSpecs;ConfigurationSpecs;DISpecs;MediatRSpecs;SQLCuteSpecs;SQLCuteCompilersSpecs"/>
+        <CallTarget Targets="MiniSpecSpecs;SystemProcessSpecs;CommonsSpecs;ConfigurationSpecs;DISpecs;MediatRSpecs;SQLCuteSpecs;LinqSpecs;CommandLineSpecs;SQLCuteInMemorySpecs;SpecificationSpecs;SQLCuteSpecificationSpecs;LoggingSpecs;HostingSpecs;CliSpecs;VCLSpecs;FMXSpecs;WebSpecs;NNLogSpecs"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="MiniSpecSpecs:Clean;CommonsSpecs:Clean;ConfigurationSpecs:Clean;DISpecs:Clean;MediatRSpecs:Clean;SQLCuteSpecs:Clean;SQLCuteCompilersSpecs:Clean"/>
+        <CallTarget Targets="MiniSpecSpecs:Clean;SystemProcessSpecs:Clean;CommonsSpecs:Clean;ConfigurationSpecs:Clean;DISpecs:Clean;MediatRSpecs:Clean;SQLCuteSpecs:Clean;LinqSpecs:Clean;CommandLineSpecs:Clean;SQLCuteInMemorySpecs:Clean;SpecificationSpecs:Clean;SQLCuteSpecificationSpecs:Clean;LoggingSpecs:Clean;HostingSpecs:Clean;CliSpecs:Clean;VCLSpecs:Clean;FMXSpecs:Clean;WebSpecs:Clean;NNLogSpecs:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="MiniSpecSpecs:Make;CommonsSpecs:Make;ConfigurationSpecs:Make;DISpecs:Make;MediatRSpecs:Make;SQLCuteSpecs:Make;SQLCuteCompilersSpecs:Make"/>
+        <CallTarget Targets="MiniSpecSpecs:Make;SystemProcessSpecs:Make;CommonsSpecs:Make;ConfigurationSpecs:Make;DISpecs:Make;MediatRSpecs:Make;SQLCuteSpecs:Make;LinqSpecs:Make;CommandLineSpecs:Make;SQLCuteInMemorySpecs:Make;SpecificationSpecs:Make;SQLCuteSpecificationSpecs:Make;LoggingSpecs:Make;HostingSpecs:Make;CliSpecs:Make;VCLSpecs:Make;FMXSpecs:Make;WebSpecs:Make;NNLogSpecs:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

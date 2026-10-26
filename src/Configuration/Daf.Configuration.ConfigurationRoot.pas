@@ -5,6 +5,7 @@ interface
 uses
   System.SysUtils,
   System.Generics.Collections,
+  Daf.Nullable,
   Daf.Extensions.Configuration;
 
 type
@@ -26,6 +27,10 @@ type
     ///     an empty <see cref="IConfigurationSection"/> will be returned.
     /// </remarks>
     function GetSection(const Key: string): IConfigurationSection;
+    /// <summary>Presence of a child Key, answered against this section's own Path.</summary>
+    function Exists(const Key: string): Boolean;
+    /// <summary>Presence and Value of a child Key, answered against this section's own Path.</summary>
+    function Find(const Key: string): TNullable<string>;
     function GetKey: string;
     function GetValue: string;
     procedure SetValue(const Value: string);
@@ -44,19 +49,16 @@ type
     procedure NotifyChanged;
     class procedure SetConfiguration(const Providers: IEnumerable<IConfigurationProvider>; const Key: string; Value: string);
     class function GetConfiguration(const Providers: IEnumerable<IConfigurationProvider>; const Key: string): string;
+    class function FindConfiguration(const Providers: IEnumerable<IConfigurationProvider>; const Key: string): TNullable<string>;
     function InternalGetChildKeys(const Prefix: string): TArray<string>;
     function GetChildrenImplementation(const Path: string): IEnumerable<IConfigurationSection>;
-    /// <summary>
-    /// Returns a <see cref="IChangeToken"/> that can be used to observe when this configuration is reloaded.
-    /// </summary>
-    /// <returns>The <see cref="IChangeToken"/>.</returns>
-    // ToDo:
-    //procedure GetReloadToken(): IChangeToken;
 
   public
     constructor Create(const Providers: TList<IConfigurationProvider>);
     function GetItem(const Key: string): string;
     procedure SetItem(const Key, Value: string);
+    function Exists(const Key: string): Boolean;
+    function Find(const Key: string): TNullable<string>;
     function GetSection(const Key: string): IConfigurationSection;
     function GetProviders: IEnumerable<IConfigurationProvider>;
     function GetChildren: IEnumerable<IConfigurationSection>;
@@ -107,6 +109,16 @@ end;
 function TConfigurationSection.GetItem(const Key: string): string;
 begin
   Result := FRoot[TConfigurationPath.Combine([Path, Key])];
+end;
+
+function TConfigurationSection.Exists(const Key: string): Boolean;
+begin
+  Result := FRoot.Exists(TConfigurationPath.Combine([Path, Key]));
+end;
+
+function TConfigurationSection.Find(const Key: string): TNullable<string>;
+begin
+  Result := FRoot.Find(TConfigurationPath.Combine([Path, Key]));
 end;
 
 procedure TConfigurationSection.SetItem(const Key, Value: string);
@@ -169,10 +181,36 @@ end;
 
 class function TConfigurationRoot.GetConfiguration(const Providers: IEnumerable<IConfigurationProvider>; const Key: string): string;
 begin
-  Result := '';//nil;
+  Result := '';
   var Temp: string;
   for var Provider in Providers do
     if Provider.TryGet(key, Temp) then Result := Temp;
+end;
+
+class function TConfigurationRoot.FindConfiguration(const Providers: IEnumerable<IConfigurationProvider>; const Key: string): TNullable<string>;
+begin
+  // Same traversal as GetConfiguration: walking forward and keeping the last hit is
+  // walking backwards and taking the first one, so the winning provider is the same.
+  Result := TNullable<string>.Null;
+  if not Assigned(Providers) then Exit;
+
+  var Temp: string;
+  for var Provider in Providers do
+    if Provider.TryGet(Key, Temp) then
+      Result := TNullable<string>.From(Temp);
+end;
+
+function TConfigurationRoot.Find(const Key: string): TNullable<string>;
+begin
+  Result := FindConfiguration(FProviders, Key);
+end;
+
+function TConfigurationRoot.Exists(const Key: string): Boolean;
+begin
+  // .NET's IConfigurationSection.Exists(): a value of its own OR children. A section
+  // that only groups has no value, and answering that it is not there while its
+  // children are being read is a false answer about the shape of the document.
+  Result := FindConfiguration(FProviders, Key).HasValue or (Length(InternalGetChildKeys(Key)) > 0);
 end;
 
 class procedure TConfigurationRoot.SetConfiguration(const Providers: IEnumerable<IConfigurationProvider>; const Key: string; Value: string);
@@ -201,21 +239,25 @@ begin
   Result := ToIEnumerable<IConfigurationSection>(Aux);
 end;
 
+// As ConfigurationRoot in .NET: each provider receives what the ones before it gave and returns it
+// merged with its own keys, in order, so the children are the last answer without a key repeated in
+// another case.
 function TConfigurationRoot.InternalGetChildKeys(const Prefix: string): TArray<string>;
 begin
-  var AllKeys := TList<string>.Create(TIStringComparer.Ordinal);
-
-  // this owns the TList
-  var AllKeysEnum := ToIEnumerable<string>(AllKeys);
+  var Keys: IEnumerable<string> := nil;
   if Assigned(FProviders) then
-  for var Provider in FProviders do
-  begin
-    var ProviderKeys := ToIENumerable<string>(Provider.GetChildKeys(AllKeysEnum, Prefix)).ToArray;
-    for var ChildKey in ProviderKeys do
-      if not AllKeys.Contains(ChildKey) then
-        AllKeys.Add(ChildKey);
+    for var Provider in FProviders do
+      Keys := Provider.GetChildKeys(Keys, Prefix);
+  var Distinct := TList<string>.Create(TIStringComparer.Ordinal);
+  try
+    if Assigned(Keys) then
+      for var Key in ToIEnumerable<string>(Keys).ToArray do
+        if not Distinct.Contains(Key) then
+          Distinct.Add(Key);
+    Result := Distinct.ToArray;
+  finally
+    Distinct.Free;
   end;
-  Result := AllKeys.ToArray;
 end;
 
 end.

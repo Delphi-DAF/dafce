@@ -63,7 +63,7 @@ begin
 end.
 ```
 
-Los World de cada feature pueden inyectar este contexto con `[Inject]`.
+Los World de cada feature pueden inyectar este contexto con `[MiniInject]`.
 
 ### Opciones de Ejecución
 
@@ -97,8 +97,10 @@ type
     WriteLn('Scenario: ', SpecContext.Scenario.Description);
     WriteLn('Feature: ', SpecContext.Feature.Title);
 
-    // Rule puede ser nil si no hay Rule explícita
-    if Assigned(SpecContext.Rule) then
+    // Dentro de un escenario Rule siempre está asignada: uno declarado sin Rule explícita
+    // pertenece a una Rule implícita, cuya Description está vacía. Solo es nil fuera de un
+    // escenario — en un hook de suite o de feature.
+    if SpecContext.Rule.Description <> '' then
       WriteLn('Rule: ', SpecContext.Rule.Description);
     
     // DataTable del step actual (nil si no tiene)
@@ -113,10 +115,14 @@ type
 |-----------|-------------|
 | `Suite` | La Suite contenedora |
 | `Feature` | La Feature contenedora |
-| `Rule` | La Rule contenedora (nil si no hay) |
+| `Rule` | La Rule contenedora. Siempre asignada dentro de un escenario —implícita, con `Description` vacía, si no se declaró ninguna—; nil fuera de un escenario |
 | `Scenario` | El scenario (o Example) actual |
 | `Step` | El step que se está ejecutando |
 | `DataTable` | La tabla de datos del step (nil si no tiene) |
+| `SuiteContext` | El contexto de suite, o nil si no se declaró ninguno |
+| `FeatureContext` | El contexto de feature, o nil si no se declaró ninguno |
+| `ScenarioContext` | El World del escenario en curso |
+| `Injector` | El inyector de esta ejecución, para resolver un contexto por tipo |
 
 ---
 
@@ -134,7 +140,7 @@ type
 
   TScenarioWorld = class
   private
-    [Inject] FShared: TSharedContext;  // Inyectado automáticamente
+    [MiniInject] FShared: TSharedContext;  // Inyectado automáticamente
   public
     LocalData: string;
     property Shared: TSharedContext read FShared;

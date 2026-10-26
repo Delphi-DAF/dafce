@@ -1,4 +1,4 @@
-unit Daf.SQLCute;
+﻿unit Daf.SQLCute;
 
 {$SCOPEDENUMS ON}
 
@@ -22,6 +22,15 @@ type
     Bindings: TArray<Variant>;
     class function Empty: TSQLResult; static;
   end;
+
+  /// <summary>
+  /// The kind of statement a query has been built as. Stored on the query and
+  /// set by the DML facades, not deduced by walking the clauses: a back-end
+  /// consults this instead of guessing from which clauses are present.
+  /// Select is the default — in SQL there is no third state, a query with no
+  /// modification clause is a retrieval — so it needs no explicit initialiser.
+  /// </summary>
+  TQueryKind = (Select, Insert, Update, Delete);
 
   // ---------------------------------------------------------------------------
   //  IQuery  —  fluent query builder interface
@@ -112,6 +121,20 @@ type
     function OrWhere(const Callback: TQueryBuilderCallback): IQuery; overload;
 
     /// <summary>
+    /// Adds an AND-connected WHERE group wrapped in NOT (...).
+    /// The callback receives a fresh IQuery, adds conditions, and returns it.
+    /// The whole group is negated, not each condition: NOT (a = ? AND b = ?)
+    /// matches when *either* inner condition fails.
+    /// To negate a single condition prefer the leaf form WhereNot(column, value).
+    /// </summary>
+    function WhereNot(const Callback: TQueryBuilderCallback): IQuery; overload;
+    /// <summary>
+    /// Adds an OR-connected WHERE group wrapped in NOT (...).
+    /// The negation applies to this group's own conditions only.
+    /// </summary>
+    function OrWhereNot(const Callback: TQueryBuilderCallback): IQuery; overload;
+
+    /// <summary>
     /// Adds WHERE col1 op col2 (column-to-column comparison, no binding).
     /// NOTE: col1 and col2 are emitted verbatim — pass developer-controlled names only.
     /// </summary>
@@ -121,42 +144,62 @@ type
 
     // --- WHERE (string / LIKE operations) --------------------------------
 
+    // The LIKE family. The wildcards of the value stay active. EscapeChar, when
+    // given, makes literal the character that follows it in the pattern, and the
+    // SQL adds ESCAPE '<c>'; a single quote or a '?' raise EArgumentException.
+
     /// <summary>Adds WHERE col LIKE pattern. If CaseSensitive=False (default),
     /// emits LOWER(col) LIKE lower(pattern).</summary>
-    function WhereLike(const Column, Pattern: string; CaseSensitive: Boolean = False): IQuery;
+    function WhereLike(const Column, Pattern: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
     /// <summary>Adds WHERE col NOT LIKE pattern.</summary>
-    function WhereNotLike(const Column, Pattern: string; CaseSensitive: Boolean = False): IQuery;
+    function WhereNotLike(const Column, Pattern: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
     /// <summary>Adds OR WHERE col LIKE pattern.</summary>
-    function OrWhereLike(const Column, Pattern: string; CaseSensitive: Boolean = False): IQuery;
+    function OrWhereLike(const Column, Pattern: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
     /// <summary>Adds OR WHERE col NOT LIKE pattern.</summary>
-    function OrWhereNotLike(const Column, Pattern: string; CaseSensitive: Boolean = False): IQuery;
+    function OrWhereNotLike(const Column, Pattern: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
 
     /// <summary>Adds WHERE col LIKE 'pattern%' (starts with).</summary>
-    function WhereStarts(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
+    function WhereStarts(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
     /// <summary>Adds WHERE col NOT LIKE 'pattern%'.</summary>
-    function WhereNotStarts(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
+    function WhereNotStarts(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
     /// <summary>Adds OR WHERE col LIKE 'pattern%'.</summary>
-    function OrWhereStarts(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
+    function OrWhereStarts(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
     /// <summary>Adds OR WHERE col NOT LIKE 'pattern%'.</summary>
-    function OrWhereNotStarts(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
+    function OrWhereNotStarts(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
 
     /// <summary>Adds WHERE col LIKE '%pattern' (ends with).</summary>
-    function WhereEnds(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
+    function WhereEnds(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
     /// <summary>Adds WHERE col NOT LIKE '%pattern'.</summary>
-    function WhereNotEnds(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
+    function WhereNotEnds(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
     /// <summary>Adds OR WHERE col LIKE '%pattern'.</summary>
-    function OrWhereEnds(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
+    function OrWhereEnds(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
     /// <summary>Adds OR WHERE col NOT LIKE '%pattern'.</summary>
-    function OrWhereNotEnds(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
+    function OrWhereNotEnds(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
 
     /// <summary>Adds WHERE col LIKE '%pattern%' (contains).</summary>
-    function WhereContains(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
+    function WhereContains(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
     /// <summary>Adds WHERE col NOT LIKE '%pattern%'.</summary>
-    function WhereNotContains(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
+    function WhereNotContains(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
     /// <summary>Adds OR WHERE col LIKE '%pattern%'.</summary>
-    function OrWhereContains(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
+    function OrWhereContains(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
     /// <summary>Adds OR WHERE col NOT LIKE '%pattern%'.</summary>
-    function OrWhereNotContains(const Column, Value: string; CaseSensitive: Boolean = False): IQuery;
+    function OrWhereNotContains(const Column, Value: string; CaseSensitive: Boolean = False;
+      const EscapeChar: Char = #0): IQuery;
 
     // --- WHERE (date / time operations) ---------------------------------
 
@@ -190,11 +233,33 @@ type
     // --- ORDER BY -------------------------------------------------------
 
     /// <summary>Adds an ORDER BY column ASC clause.</summary>
-    function OrderBy(const Column: string): IQuery;
+    function OrderBy(const Column: string): IQuery; overload;
+    /// <summary>
+    /// Adds an ORDER BY column ASC clause placing NULLs as requested.
+    /// <c>TNullsOrder.Default</c> leaves the placement to the database.
+    /// </summary>
+    function OrderBy(const Column: string; Nulls: TNullsOrder): IQuery; overload;
     /// <summary>Adds an ORDER BY column DESC clause.</summary>
-    function OrderByDesc(const Column: string): IQuery;
+    function OrderByDesc(const Column: string): IQuery; overload;
+    /// <summary>
+    /// Adds an ORDER BY column DESC clause placing NULLs as requested.
+    /// </summary>
+    function OrderByDesc(const Column: string; Nulls: TNullsOrder): IQuery; overload;
     /// <summary>Adds a raw ORDER BY expression.</summary>
     function OrderByRaw(const Expression: string): IQuery;
+    /// <summary>
+    /// Places NULLs first in the ORDER BY column added last, e.g.
+    /// <c>OrderBy('age').NullsFirst</c>. Raises when there is no ordered column
+    /// to qualify — a raw ORDER BY expression does not count, since it is
+    /// emitted verbatim.
+    /// </summary>
+    function NullsFirst: IQuery;
+    /// <summary>
+    /// Places NULLs last in the ORDER BY column added last, e.g.
+    /// <c>OrderBy('age').NullsLast</c>. Raises when there is no ordered column
+    /// to qualify.
+    /// </summary>
+    function NullsLast: IQuery;
 
     // --- LIMIT / OFFSET -------------------------------------------------
 
@@ -245,8 +310,14 @@ type
     function GroupBy(const Column: string): IQuery; overload;
     function GroupBy(const Columns: TArray<string>): IQuery; overload;
     function GroupByRaw(const Expression: string): IQuery;
-    /// <summary>Adds a HAVING condition. Column may be an aggregate expression.</summary>
+    /// <summary>
+    /// Adds a HAVING condition. Column names a grouped column or the alias of an
+    /// output column, and is quoted like any other; an aggregate goes through
+    /// HavingRaw.
+    /// </summary>
     function Having(const Column, Op: string; const Value: Variant): IQuery;
+    /// <summary>Adds a HAVING condition joined to the previous one with OR.</summary>
+    function OrHaving(const Column, Op: string; const Value: Variant): IQuery;
     function HavingRaw(const Sql: string): IQuery;
 
     // --- UNION / INTERSECT / EXCEPT -------------------------------------
@@ -333,6 +404,13 @@ type
 
     /// <summary>Returns the ordered list of AST clause nodes.</summary>
     function Clauses: TArray<TAbstractClause>;
+
+    /// <summary>
+    /// The kind of statement this query has been built as. The DML facades set
+    /// it; back-ends consult it rather than deducing the statement from the
+    /// clauses present. Defaults to <c>TQueryKind.Select</c>.
+    /// </summary>
+    function Kind: TQueryKind;
   end;
 
   // ---------------------------------------------------------------------------
@@ -361,28 +439,40 @@ type
   end;
 
   // ---------------------------------------------------------------------------
-  //  TQuery  —  factory
+  //  TQuery  —  the factory, and the seam that feeds it
   // ---------------------------------------------------------------------------
-
-  /// <summary>
-  /// Factory class providing the TQuery.New entry point.
-  /// </summary>
-  TQuery = class
-  public
-    /// <summary>Creates a new, empty query builder (ref-counted).</summary>
-    class function New: IQuery; static;
-  end;
-
-// ---------------------------------------------------------------------------
-//  Query factory
-// ---------------------------------------------------------------------------
 
   /// <summary>Factory function type used to decouple IQuery creation from Abstractions.</summary>
   TIQueryFactory = reference to function: IQuery;
 
-/// <summary>Registers the factory function that TQuery.New delegates to.
-/// Called automatically by Daf.SQLCute.Core in its initialization section.</summary>
+  /// <summary>
+  /// Factory class providing the TQuery.New entry point, and the registration
+  /// that feeds it.
+  /// </summary>
+  /// <remarks>
+  /// Registering and creating are two halves of one thing, so they live on one
+  /// type and the factory is held here rather than in a unit variable — the
+  /// state belongs to whoever answers for it.
+  /// </remarks>
+  TQuery = class
+  strict private
+    class var FFactory: TIQueryFactory;
+  public
+    /// <summary>Creates a new, empty query builder (ref-counted).</summary>
+    class function New: IQuery; static;
+    /// <summary>Registers the factory function that TQuery.New delegates to.
+    /// Called automatically by Daf.SQLCute.Core in its initialization section.</summary>
+    class procedure RegisterFactory(const AFactory: TIQueryFactory); static;
+  end;
+
+/// <summary>Registers the factory function that TQuery.New delegates to.</summary>
+/// <remarks>
+/// Kept because it shipped: a consumer who registered an IQuery implementation of
+/// their own against v1.6.0 or earlier calls this. It forwards, so both entry
+/// points are indistinguishable, and it goes away in the next major.
+/// </remarks>
 procedure RegisterIQueryFactory(const AFactory: TIQueryFactory);
+  deprecated 'Use TQuery.RegisterFactory';
 
 
 // ---------------------------------------------------------------------------
@@ -392,11 +482,23 @@ procedure RegisterIQueryFactory(const AFactory: TIQueryFactory);
 /// <summary>Converts an operator string ('=', '>', '<', etc.) to TWhereOp.</summary>
 function ParseWhereOp(const Op: string): TWhereOp;
 
+/// <summary>
+/// The same as <see cref="ParseWhereOp"/> but without <c>in</c> and <c>not in</c>,
+/// which are valid only in <c>Where</c>: a comparison between two columns, against
+/// an aggregate or on a date part. Raises <c>EArgumentException</c> otherwise.
+/// </summary>
+function ParseComparisonOp(const Op: string): TWhereOp;
+
+/// <summary>The name of a statement kind ('Select', 'Insert', …), so a guard
+/// can name the kind it received rather than describing it.</summary>
+function QueryKindName(const K: TQueryKind): string;
+
 
 implementation
 
-var
-  FIQueryFactory: TIQueryFactory;
+uses
+  System.StrUtils,
+  System.TypInfo;
 
 { TSQLResult }
 
@@ -419,43 +521,60 @@ begin
 end;
 
 { ParseWhereOp }
+const
+  WhereOpValues: array[0..10] of TWhereOp = (
+    TWhereOp.Equal, TWhereOp.NotEqual, TWhereOp.NotEqual, TWhereOp.Less, TWhereOp.LessOrEqual,
+    TWhereOp.Greater, TWhereOp.GreaterOrEqual, TWhereOp.Like, TWhereOp.NotLike, TWhereOp.&In,
+    TWhereOp.NotIn);
+
+  WhereOpNames: array[Low(WhereOpValues)..High(WhereOpValues)] of string = (
+    '=', '<>', '!=', '<', '<=', '>', '>=', 'like', 'not like', 'in', 'not in');
 
 function ParseWhereOp(const Op: string): TWhereOp;
-var
-  S: string;
 begin
-  S := Trim(Op);
-  if S = '='  then Exit(TWhereOp.Equal);
-  if S = '<>' then Exit(TWhereOp.NotEqual);
-  if S = '!=' then Exit(TWhereOp.NotEqual);
-  if S = '<'  then Exit(TWhereOp.Less);
-  if S = '<=' then Exit(TWhereOp.LessOrEqual);
-  if S = '>'  then Exit(TWhereOp.Greater);
-  if S = '>=' then Exit(TWhereOp.GreaterOrEqual);
-  if SameText(S, 'like')     then Exit(TWhereOp.Like);
-  if SameText(S, 'not like') then Exit(TWhereOp.NotLike);
-  if SameText(S, 'in')       then Exit(TWhereOp.&In);
-  if SameText(S, 'not in')   then Exit(TWhereOp.NotIn);
-  raise EArgumentException.CreateFmt('Unknown SQL operator: "%s"', [Op]);
+  var I := IndexText(Trim(Op), WhereOpNames);
+  if I < 0 then
+    raise EArgumentException.CreateFmt('Unknown SQL operator: "%s"', [Op]);
+  Result := WhereOpValues[I];
 end;
 
-{ RegisterIQueryFactory }
-
-procedure RegisterIQueryFactory(const AFactory: TIQueryFactory);
+function ParseComparisonOp(const Op: string): TWhereOp;
 begin
-  if not Assigned(AFactory) then
-    raise EInvalidOpException.Create('Argument Factory cannot be nil');
-  FIQueryFactory := AFactory;
+  Result := ParseWhereOp(Op);
+  if Result in [TWhereOp.&In, TWhereOp.NotIn] then
+    raise EArgumentException.CreateFmt(
+      'The operator "%s" is valid only in Where: use WhereIn for a set of values, or HavingRaw', [Op]);
+end;
+
+{ QueryKindName }
+
+function QueryKindName(const K: TQueryKind): string;
+begin
+  Result := GetEnumName(TypeInfo(TQueryKind), Ord(K));
 end;
 
 { TQuery }
 
+class procedure TQuery.RegisterFactory(const AFactory: TIQueryFactory);
+begin
+  if not Assigned(AFactory) then
+    raise EInvalidOpException.Create('Argument Factory cannot be nil');
+  FFactory := AFactory;
+end;
+
 class function TQuery.New: IQuery;
 begin
-  if not Assigned(FIQueryFactory) then
+  if not Assigned(FFactory) then
     raise EInvalidOpException.Create(
       'IQuery factory not registered. Ensure Daf.SQLCute.Core is linked.');
-  Result := FIQueryFactory();
+  Result := FFactory();
+end;
+
+{ RegisterIQueryFactory — the deprecated forwarder }
+
+procedure RegisterIQueryFactory(const AFactory: TIQueryFactory);
+begin
+  TQuery.RegisterFactory(AFactory);
 end;
 
 end.

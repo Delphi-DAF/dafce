@@ -1,4 +1,4 @@
-# Dependency Injection with [Inject]
+# Dependency Injection with [MiniInject]
 
 **🌍 Language: English | [Español](injection.es.md)**
 
@@ -6,7 +6,8 @@
 
 ---
 
-MiniSpec includes a lightweight dependency injection system for properties marked with `[Inject]`.
+MiniSpec includes a lightweight dependency injection system for fields and properties marked with
+`[MiniInject]`.
 
 ## Basic Usage
 
@@ -14,8 +15,7 @@ Automatic injection of FeatureContext:
 
 ```pascal
 uses
-  Daf.MiniSpec,
-  Daf.MiniSpec.Injection;  // For the [Inject] attribute
+  Daf.MiniSpec;  // MiniInject travels in the facade
 
 type
   TFeatureContext = class
@@ -25,7 +25,7 @@ type
 
   TWorld = class
   private
-    [Inject] FCtx: TFeatureContext;  // Automatically injected
+    [MiniInject] FCtx: TFeatureContext;  // Automatically injected
   public
     property Ctx: TFeatureContext read FCtx;
   end;
@@ -35,39 +35,56 @@ Feature('...')
   .UseWorld<TWorld>             // When creating World, injects FCtx
 ```
 
-## Custom Services at Suite Level
+## Where the mark may go
 
-```pascal
-MiniSpec
-  .Before('Setup services', procedure
-    begin
-      TInjectorService.Register(TDatabaseMock.Create);
-      TInjectorService.Register(THttpClientMock.Create);
-    end)
-  .After('Cleanup', procedure
-    begin
-      TInjectorService.Clear;  // Frees all services
-    end);
-```
+On a **field** or on a **property**. A field is reached whatever its visibility, `strict private`
+included; a property is reached only when it is public or published, which is what Delphi's default
+RTTI emits for properties. Marking a private property has no effect and raises no error.
+
+`TInjectorService` also needs the property to be writable. A field always is.
+
+## The three contexts, and which one wins
+
+An `[MiniInject]` property receives any of the three contexts alive while a step runs: the scenario's
+own World, the feature context declared with `UseFeatureContext<T>`, and the suite context declared
+with `UseSuiteContext<T>`.
+
+When more than one of them satisfies the type asked for, the winner is declared:
+
+1. An exact type match, looking at scenario, then feature, then suite.
+2. Failing that, a descendant of the type asked for, in that same order.
+
+So a property declared with a base class two contexts descend from receives the one nearest to the
+step, and a property declared with the exact type of the suite context receives that one even when a
+feature context descends from it.
+
+The injector belongs to the run: what it holds are the contexts of the run in progress, and it does
+not outlive it. A nested run does not see the contexts of the one that launched it.
 
 ## TInjectorService API
 
 | Method | Description |
 |--------|-------------|
-| `Register(Instance)` | Registers a service (object's class is the key) |
-| `Unregister(Instance)` | Removes a service registration |
-| `Resolve(AClass)` | Gets registered service for that class |
+| `Register(Scope, Instance)` | Publishes the context of a scope: `csScenario`, `csFeature`, `csSuite` |
+| `Unregister(Scope)` | Empties a scope |
+| `Resolve(AClass)` | Gets the live context compatible with that class, by the precedence above |
 | `Resolve<T>` | Generic version of Resolve |
-| `InjectInto(Target)` | Injects services into `[Inject]` marked properties |
-| `Clear` | Frees and removes all registered services |
+| `InjectInto(Target)` | Injects contexts into `[MiniInject]` marked fields and properties |
+| `Clear` | Empties the three scopes |
+
+The runner calls `Register` and `Unregister` itself as each context is created and destroyed. There
+is no registry of loose services: a collaborator a scenario needs is built in the World, or in the
+feature or suite context if it has to be shared.
 
 ## Injection Errors
 
-If a property marked with `[Inject]` cannot be injected, `EInjectionError` is raised:
+If a member marked with `[MiniInject]` cannot be injected, `EInjectionError` is raised:
 
-- Property is not a class type
-- Property has no setter
+- The member is not a class type
+- The property has no setter
 - No registered service compatible with type
+
+The message names the member, its type and the class it belongs to.
 
 ---
 

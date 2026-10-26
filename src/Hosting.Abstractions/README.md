@@ -17,20 +17,13 @@ All types live in `Daf.Extensions.Hosting`.
 
 | Interface | Role |
 |-----------|------|
-| `IHostBuilder` | Fluent builder — configure and build the host |
+| `IHostApplicationBuilder` | The shared contract of the application family: `Services`, `Configuration`, `Environment`, `Logging`, `Properties`, `ServiceProviderOptions` |
+| `IStartupTask` | Runs once at startup with the provider already built: `Run`, and nothing to stop |
 | `IHost` | The running host: `Services`, `Start`, `Stop`, `WaitForShutdown` |
 | `IHostedService` | Background service contract: `Start` / `Stop` |
 | `IHostEnvironment` | Runtime environment: name, app name, paths, `IsDevelopment`, ... |
-| `IHostBuilderContext` | Context passed to configuration callbacks: `Environment` + `Configuration` |
+| `IHostBuilderContext` | Startup context, registered in the container: `Environment`, `Configuration`, `Properties` |
 | `IHostApplicationLifetime` | Lifetime signals: `ApplicationStarted`, `ApplicationStopping`, `ApplicationStopped`, `StopApplication` |
-
-### Delegate types
-
-```pascal
-TConfigureHostConfigAction = TProc<IConfigurationBuilder>;
-TConfigureAppConfigAction  = TProc<IHostBuilderContext, IConfigurationBuilder>;
-TConfigureServicesAction   = TProc<IHostBuilderContext, IServiceCollection>;
-```
 
 ### Environment constants
 
@@ -41,22 +34,30 @@ TEnvironments.Production    // 'Production'
 TEnvironments.Testing       // 'Testing'
 ```
 
-### DAF environment variables
+### Host settings
+
+The keys of the host configuration that `IHostEnvironment` is derived from, named as in .NET's
+`HostDefaults`. As environment variables they carry the `DAF_` prefix: `DAF_ENVIRONMENT`.
 
 ```pascal
-TDafEnvVars.APP_ENV       // 'DAF_APP_ENV'
-TDafEnvVars.APP_NAME      // 'DAF_APP_NAME'
-TDafEnvVars.CONTENT_ROOT  // 'DAF_CONTENT_ROOT'
+THostDefaults.EnvironmentKey   // 'environment'
+THostDefaults.ApplicationKey   // 'applicationName'
+THostDefaults.ContentRootKey   // 'contentRoot'
 ```
 
 ### Helper
 
-`IServiceCollectionHelper` adds `AddHostedService<T>` directly on `IServiceCollection`:
+`IServiceCollectionHelper` adds `AddHostedService<T>` and `AddStartupTask<T>` directly on
+`IServiceCollection`:
 
 ```pascal
-Services.AddHostedService<TMyWorker>;
-// equivalent to Services.AddSingleton<IHostedService, TMyWorker>
+Services.AddHostedService<TMyWorker>;   // = AddSingleton<IHostedService, TMyWorker>
+Services.AddStartupTask<TMySeeder>;     // = AddSingleton<IStartupTask, TMySeeder>
 ```
+
+Only one `record helper` per type is in scope in Delphi, so a unit bringing a second one for
+`IServiceCollection` hides this one. The `Hosting` class facade is the way through, and it takes the
+implementation as a metaclass: `Hosting.AddHostedService(Services, TMyWorker)`.
 
 ---
 
@@ -64,6 +65,8 @@ Services.AddHostedService<TMyWorker>;
 
 - `Daf.Extensions.DependencyInjection` (DependencyInjection.Abstractions)
 - `Daf.Extensions.Configuration` (Configuration.Abstractions)
-- Delphi RTL only
+- `Daf.Extensions.Logging` (Logging.Abstractions) — for the `ILoggingBuilder` the family contract
+  exposes as a property
+- `Daf.Commons`
 
 The implementation is in [`Hosting`](../Hosting/README.md).

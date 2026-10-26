@@ -1,4 +1,4 @@
-unit Daf.SQLCute.Clauses;
+﻿unit Daf.SQLCute.Clauses;
 
 {$SCOPEDENUMS ON}
 
@@ -31,6 +31,12 @@ type
   /// Direction for ORDER BY clauses.
   /// </summary>
   TSortDir = (Asc, Desc);
+
+  /// <summary>
+  /// Where NULLs land within one ORDER BY column. <c>Default</c> emits nothing
+  /// and leaves the placement to the database (each dialect has its own rule).
+  /// </summary>
+  TNullsOrder = (Default, First, Last);
 
   /// <summary>
   /// Kind of JOIN clause.
@@ -139,6 +145,11 @@ type
     /// When False (default), the compiler wraps the column in LOWER() and
     /// lower-cases the binding value to achieve case-insensitive matching.
     CaseSensitive: Boolean;
+    /// When True, Value is a Boolean and the condition compares the column with
+    /// the dialect's literal for it, with no binding.
+    IsBoolLiteral: Boolean;
+    /// For LIKE / NOT LIKE: the escape character, or #0 for none.
+    EscapeChar: Char;
     function Clone: TAbstractClause; override;
   end;
 
@@ -151,6 +162,9 @@ type
     Column: string;
     Direction: TSortDir;
     IsRaw: Boolean;
+    /// NULL placement for this column. Default = leave it to the database.
+    /// Meaningless (and ignored) when IsRaw, since a raw term is emitted verbatim.
+    Nulls: TNullsOrder;
     function Clone: TAbstractClause; override;
   end;
 
@@ -197,7 +211,7 @@ type
     /// Column-based ON: left column, operator, right column.
     /// When Col1 is non-empty these three fields take precedence over Condition.
     Col1: string;
-    Op: string;
+    Op: TWhereOp;
     Col2: string;
     /// Callback-specified ON conditions. When non-empty, takes precedence
     /// over Condition and Col1/Col2.
@@ -333,7 +347,8 @@ type
   /// A parenthesized group of WHERE clauses, produced by Where(callback) /
   /// OrWhere(callback). SubClauses holds the inner conditions; Connector
   /// controls how this group connects with the preceding sibling.
-  /// IsNot is reserved for future NOT (...) support.
+  /// IsNot wraps the whole group in NOT (...), as set by WhereNot(callback) /
+  /// OrWhereNot(callback).
   /// </summary>
   TNestedWhereClause = class(TAbstractClause)
   public
@@ -370,13 +385,35 @@ type
   public
     DatePart:  TDatePart;
     Column:    string;
-    Op:        string;     // '=', '>', '<', etc.
+    Op:        TWhereOp;
     Value:     Variant;
     Connector: TBoolOp;
     function Clone: TAbstractClause; override;
   end;
 
+/// <summary>
+/// Splits a name written with an alias, <c>name as alias</c>, at the last <c> as </c> of the text,
+/// case-insensitive. False, with <c>Name</c> the whole text, when it carries none.
+/// </summary>
+function SplitNameAlias(const Text: string; out Name, Alias: string): Boolean;
+
 implementation
+
+function SplitNameAlias(const Text: string; out Name, Alias: string): Boolean;
+begin
+  var P := LowerCase(Text).LastIndexOf(' as ');
+  Result := P >= 0;
+  if Result then
+  begin
+    Name := Trim(Text.Substring(0, P));
+    Alias := Trim(Text.Substring(P + 4));
+  end
+  else
+  begin
+    Name := Text;
+    Alias := '';
+  end;
+end;
 
 { TSelectClause }
 
@@ -432,6 +469,8 @@ begin
   C.SubQuery      := SubQuery;
   C.IsColumnValue := IsColumnValue;
   C.CaseSensitive := CaseSensitive;
+  C.IsBoolLiteral := IsBoolLiteral;
+  C.EscapeChar    := EscapeChar;
   Result := C;
 end;
 
@@ -445,6 +484,7 @@ begin
   C.Column    := Column;
   C.Direction := Direction;
   C.IsRaw     := IsRaw;
+  C.Nulls     := Nulls;
   Result := C;
 end;
 

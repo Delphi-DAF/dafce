@@ -1,4 +1,4 @@
-unit Daf.MiniSpec.Injection;
+﻿unit Daf.MiniSpec.Injection;
 
 interface
 
@@ -9,10 +9,15 @@ uses
 
 type
   /// <summary>
-  /// Marca una propiedad para inyección automática de contexto.
-  /// El tipo de la propiedad debe coincidir con un servicio registrado.
+  /// Marca un campo o una propiedad para inyección automática de contexto.
+  /// El tipo del miembro debe coincidir con un servicio registrado.
   /// </summary>
-  InjectAttribute = class(TCustomAttribute)
+  /// <remarks>
+  /// El prefijo no es decorativo: Inject a secas es un nombre que reclaman varias herramientas a
+  /// la vez, y dos units que exporten el mismo en el mismo uses no dan error -- gana la ultima, y
+  /// el barrido deja de ver los miembros marcados sin decir nada.
+  /// </remarks>
+  MiniInjectAttribute = class(TCustomAttribute)
   end;
 
   /// <summary>
@@ -21,128 +26,160 @@ type
   EInjectionError = class(Exception);
 
   /// <summary>
+  /// Los tres ambitos en los que puede vivir un contexto, del mas cercano al step al mas lejano.
+  /// </summary>
+  /// <remarks>
+  /// El orden de la enumeracion ES la precedencia declarada: Resolve la recorre en este orden, asi
+  /// que anadir un ambito en medio cambia la regla. No es una lista de nombres.
+  /// </remarks>
+  TContextScope = (csScenario, csFeature, csSuite);
+
+  /// <summary>
   /// Servicio de inyección IoC.
-  /// El Runner registra/desregistra instancias de contexto.
+  /// Cada ejecución posee el suyo: los contextos registrados son los de esa ejecución y no
+  /// sobreviven a su entorno, de modo que una ejecución anidada no hereda los de la exterior.
   /// Al crear un ScenarioContext, el Runner llama InjectInto para
-  /// completar las propiedades marcadas con [Inject].
+  /// completar los miembros marcados con [MiniInject].
   /// </summary>
   TInjectorService = class
-  private
-    class var FServices: TDictionary<TClass, TObject>;
-    class constructor Create;
-    class destructor Destroy;
+  strict private
+    FContexts: array[TContextScope] of TObject;
+    class function IsMarked(Member: TRttiMember): Boolean; static;
+    /// <summary>
+    /// La parte comun a un campo y a una propiedad: comprobar y resolver. AKind es el sustantivo
+    /// que llevan los tres mensajes de error, "Field" o "Property".
+    /// </summary>
+    function ResolveFor(Target: TObject; const AKind, AName: string; AType: TRttiType;
+      const AWritable: Boolean): TObject;
   public
     /// <summary>
-    /// Registra una instancia. Se indexa por su tipo real (ClassType).
-    /// Si ya existe una instancia del mismo tipo, se reemplaza.
+    /// Registra el contexto vivo de un ambito. Un segundo registro del mismo ambito reemplaza al
+    /// anterior; un nil deja el ambito vacio.
     /// </summary>
-    class procedure Register(Instance: TObject);
+    procedure Register(const Scope: TContextScope; Instance: TObject);
 
     /// <summary>
-    /// Desregistra una instancia por su tipo.
+    /// Vacia un ambito. Lo llama quien destruye el contexto de ese ambito.
     /// </summary>
-    class procedure Unregister(Instance: TObject); overload;
-    class procedure Unregister(AClass: TClass); overload;
+    procedure Unregister(const Scope: TContextScope);
 
     /// <summary>
-    /// Resuelve una instancia compatible con el tipo solicitado.
-    /// Busca primero coincidencia exacta, luego por herencia.
+    /// Resuelve el contexto vivo compatible con el tipo solicitado.
     /// </summary>
+    /// <remarks>
+    /// Precedencia declarada: primero una coincidencia exacta en cualquier ambito, y solo si no la
+    /// hay, un descendiente, en los dos casos recorriendo scenario, feature y suite en ese orden.
+    /// Que el tipo exacto gane a un descendiente mas cercano es deliberado: pedir el tipo que se
+    /// registro no puede contestarlo un hijo suyo por estar mas cerca del step.
+    /// </remarks>
     /// <returns>La instancia encontrada o nil si no hay ninguna compatible</returns>
-    class function Resolve(AClass: TClass): TObject; overload;
-    class function Resolve<T: class>: T; overload;
+    function Resolve(AClass: TClass): TObject; overload;
+    function Resolve<T: class>: T; overload;
 
     /// <summary>
-    /// Inyecta en todas las propiedades del Target marcadas con [Inject].
-    /// Para cada propiedad, resuelve por tipo y asigna.
+    /// Inyecta en todos los campos y propiedades del Target marcados con [MiniInject].
+    /// Para cada uno, resuelve por tipo y asigna.
     /// </summary>
+    /// <remarks>
+    /// Los campos entran por la RTTI de campos, que en Delphi alcanza tambien a los privados; las
+    /// propiedades, por la suya, que solo alcanza a las publicas y publicadas. Un campo strict
+    /// private marcado se rellena; una propiedad private marcada no la ve nadie.
+    /// </remarks>
     /// <exception cref="EInjectionError">
-    /// Si una propiedad [Inject] no es escribible, no es de tipo clase,
+    /// Si un miembro [MiniInject] no es escribible, no es de tipo clase,
     /// o no se encuentra ningún servicio compatible registrado.
     /// </exception>
-    class procedure InjectInto(Target: TObject);
+    procedure InjectInto(Target: TObject);
 
     /// <summary>
-    /// Limpia todos los servicios registrados.
+    /// Vacia los tres ambitos.
     /// </summary>
-    class procedure Clear;
+    procedure Clear;
   end;
 
 implementation
 
 { TInjectorService }
 
-class constructor TInjectorService.Create;
+procedure TInjectorService.Register(const Scope: TContextScope; Instance: TObject);
 begin
-  FServices := TDictionary<TClass, TObject>.Create;
+  FContexts[Scope] := Instance;
 end;
 
-class destructor TInjectorService.Destroy;
+procedure TInjectorService.Unregister(const Scope: TContextScope);
 begin
-  FServices.Free;
+  FContexts[Scope] := nil;
 end;
 
-class procedure TInjectorService.Register(Instance: TObject);
-begin
-  if Instance = nil then
-    Exit;
-  FServices.AddOrSetValue(Instance.ClassType, Instance);
-end;
-
-class procedure TInjectorService.Unregister(Instance: TObject);
-begin
-  if Instance = nil then
-    Exit;
-  Unregister(Instance.ClassType);
-end;
-
-class procedure TInjectorService.Unregister(AClass: TClass);
-begin
-  if AClass = nil then
-    Exit;
-  FServices.Remove(AClass);
-end;
-
-class procedure TInjectorService.Clear;
-begin
-  FServices.Clear;
-end;
-
-class function TInjectorService.Resolve(AClass: TClass): TObject;
+procedure TInjectorService.Clear;
 var
-  Pair: TPair<TClass, TObject>;
+  Scope: TContextScope;
+begin
+  for Scope := Low(TContextScope) to High(TContextScope) do
+    FContexts[Scope] := nil;
+end;
+
+function TInjectorService.Resolve(AClass: TClass): TObject;
+var
+  Scope: TContextScope;
 begin
   Result := nil;
   if AClass = nil then
     Exit;
 
-  // Primero buscar coincidencia exacta
-  if FServices.TryGetValue(AClass, Result) then
-    Exit;
+  for Scope := Low(TContextScope) to High(TContextScope) do
+    if Assigned(FContexts[Scope]) and (FContexts[Scope].ClassType = AClass) then
+      Exit(FContexts[Scope]);
 
-  // Luego buscar por herencia (la instancia registrada hereda del tipo solicitado)
-  for Pair in FServices do
-  begin
-    if Pair.Key.InheritsFrom(AClass) then
-      Exit(Pair.Value);
-  end;
+  for Scope := Low(TContextScope) to High(TContextScope) do
+    if Assigned(FContexts[Scope]) and FContexts[Scope].ClassType.InheritsFrom(AClass) then
+      Exit(FContexts[Scope]);
 end;
 
-class function TInjectorService.Resolve<T>: T;
+function TInjectorService.Resolve<T>: T;
 begin
   Result := T(Resolve(T));
 end;
 
-class procedure TInjectorService.InjectInto(Target: TObject);
+class function TInjectorService.IsMarked(Member: TRttiMember): Boolean;
+var
+  Attr: TCustomAttribute;
+begin
+  for Attr in Member.GetAttributes do
+    if Attr is MiniInjectAttribute then
+      Exit(True);
+  Result := False;
+end;
+
+function TInjectorService.ResolveFor(Target: TObject; const AKind, AName: string;
+  AType: TRttiType; const AWritable: Boolean): TObject;
+var
+  MemberClass: TClass;
+begin
+  if not AWritable then
+    raise EInjectionError.CreateFmt(
+      '%s "%s" in %s is marked with [MiniInject] but is not writable',
+      [AKind, AName, Target.ClassName]);
+
+  if (AType = nil) or (AType.TypeKind <> tkClass) then
+    raise EInjectionError.CreateFmt(
+      '%s "%s" in %s is marked with [MiniInject] but is not a class type',
+      [AKind, AName, Target.ClassName]);
+
+  MemberClass := AType.AsInstance.MetaclassType;
+  Result := Resolve(MemberClass);
+  if Result = nil then
+    raise EInjectionError.CreateFmt(
+      'Cannot resolve service for %s "%s" of type %s in %s: no compatible service registered',
+      [LowerCase(AKind), AName, MemberClass.ClassName, Target.ClassName]);
+end;
+
+procedure TInjectorService.InjectInto(Target: TObject);
 var
   RttiContext: TRttiContext;
   RttiType: TRttiType;
+  Field: TRttiField;
   Prop: TRttiProperty;
-  Attr: TCustomAttribute;
-  HasInjectAttr: Boolean;
-  PropType: TRttiType;
-  PropClass: TClass;
-  ResolvedValue: TObject;
 begin
   if Target = nil then
     Exit;
@@ -153,47 +190,15 @@ begin
     if RttiType = nil then
       Exit;
 
+    for Field in RttiType.GetFields do
+      if IsMarked(Field) then
+        Field.SetValue(Target, TValue.From<TObject>(
+          ResolveFor(Target, 'Field', Field.Name, Field.FieldType, True)));
+
     for Prop in RttiType.GetProperties do
-    begin
-      // Buscar atributo [Inject]
-      HasInjectAttr := False;
-      for Attr in Prop.GetAttributes do
-      begin
-        if Attr is InjectAttribute then
-        begin
-          HasInjectAttr := True;
-          Break;
-        end;
-      end;
-
-      if not HasInjectAttr then
-        Continue;
-
-      // Verificar que la propiedad es escribible
-      if not Prop.IsWritable then
-        raise EInjectionError.CreateFmt(
-          'Property "%s" in %s is marked with [Inject] but is not writable',
-          [Prop.Name, Target.ClassName]);
-
-      // Obtener el tipo de la propiedad
-      PropType := Prop.PropertyType;
-      if PropType.TypeKind <> tkClass then
-        raise EInjectionError.CreateFmt(
-          'Property "%s" in %s is marked with [Inject] but is not a class type',
-          [Prop.Name, Target.ClassName]);
-
-      PropClass := PropType.AsInstance.MetaclassType;
-
-      // Resolver el servicio por tipo
-      ResolvedValue := Resolve(PropClass);
-      if ResolvedValue = nil then
-        raise EInjectionError.CreateFmt(
-          'Cannot resolve service for property "%s" of type %s in %s: no compatible service registered',
-          [Prop.Name, PropClass.ClassName, Target.ClassName]);
-
-      // Inyectar
-      Prop.SetValue(Target, TValue.From<TObject>(ResolvedValue));
-    end;
+      if IsMarked(Prop) then
+        Prop.SetValue(Target, TValue.From<TObject>(
+          ResolveFor(Target, 'Property', Prop.Name, Prop.PropertyType, Prop.IsWritable)));
   finally
     RttiContext.Free;
   end;

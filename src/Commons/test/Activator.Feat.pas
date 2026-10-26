@@ -1,4 +1,4 @@
-unit Activator.Feat;
+﻿unit Activator.Feat;
 
 interface
 

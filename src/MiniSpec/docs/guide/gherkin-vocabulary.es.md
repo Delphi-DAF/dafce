@@ -12,7 +12,7 @@ Referencia completa del vocabulario Gherkin en MiniSpec:
 |---------------|----------|-------------|
 | Feature | `Feature('...')` | Funcionalidad que se especifica |
 | Rule | `.Rule('...')` | Agrupa escenarios bajo una regla de negocio |
-| Background | `.Background` | Pasos comunes a todos los escenarios |
+| Background | `.Background` | Pasos comunes a todos los escenarios; si uno falla, el escenario falla sin ejecutar sus propios pasos |
 | Scenario | `.Scenario('...')` | Un ejemplo concreto de comportamiento |
 | Scenario Outline | `.ScenarioOutline('...')` | Ejemplo parametrizado con tabla |
 | Examples | `.Examples([...])` | Tabla de datos para el Outline |
@@ -25,6 +25,33 @@ Referencia completa del vocabulario Gherkin en MiniSpec:
 | @tag | En descripción | Para filtrar escenarios |
 
 > 💡 El `&` antes de `Then` y `And` es necesario porque son palabras reservadas en Delphi.
+
+## Qué afirma cada fase
+
+Un escenario afirma el comportamiento de **un evento**. Las tres fases son esa afirmación repartida,
+así que cada una tiene su trabajo y una pieza que no le toca:
+
+| Fase | Afirma | **No** le toca |
+|---|---|---|
+| `Given` | el estado que el evento necesita para tener sentido | provocar el evento |
+| `When` | el evento, uno y nombrado | comprobar nada |
+| `Then` | lo que se puede observar después | provocar nada |
+
+**La prueba, escenario a escenario: nombra el evento.** ¿Cuál es la acción cuyo comportamiento afirmo
+aquí? Si se puede nombrar, va al `When`. Si no se puede, el escenario no tiene sujeto — y eso no se
+arregla moviendo el código a otra fase.
+
+⚠️ **Un escenario con el evento fuera del `When` sigue pasando y fallando**, así que no hay rojo que
+te lo diga. Lo que se pierde es esto:
+
+- **Evento en el `Given`** — un fallo del evento se informa como fallo de montaje, y manda al lector
+  al sitio equivocado. Y el `Then` solo puede comparar lo que el `Given` dejó escrito, así que la
+  aserción mide el montaje en vez del sujeto.
+- **Evento en el `Then`** — el fallo se informa como aserción fallida. Con varios `Then`, o cada uno
+  repite el evento —y entonces son eventos distintos, no el mismo observado dos veces— o solo el
+  primero lo ejecuta.
+
+Ver [Pending y NoAction](pending-noaction.es.md) para qué significa dejar una fase vacía.
 
 ## Features con Narrativa
 

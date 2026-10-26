@@ -47,7 +47,6 @@
     </PropertyGroup>
     <Import Project="..\source.optset" Condition="'$(Base)'!='' And Exists('..\source.optset')"/>
     <PropertyGroup Condition="'$(Base)'!=''">
-        <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
         <DCC_E>false</DCC_E>
         <DCC_N>false</DCC_N>
         <DCC_S>false</DCC_S>
@@ -114,7 +113,10 @@
         <DCCReference Include="Daf.Commons.dcp"/>
         <DCCReference Include="Daf.Extensions.DependencyInjection.pas"/>
         <DCCReference Include="Daf.DependencyInjection.ActivatorUtilities.pas"/>
+        <DCCReference Include="Daf.DependencyInjection.OpenGenerics.pas"/>
         <DCCReference Include="Daf.AppModule.pas"/>
+        <DCCReference Include="Daf.Extensions.Options.pas"/>
+        <DCCReference Include="Daf.Options.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\source.optset</DependentOn>

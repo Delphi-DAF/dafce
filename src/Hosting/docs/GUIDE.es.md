@@ -9,23 +9,27 @@
 1. [Visión general de la arquitectura](#visión-general-de-la-arquitectura)
 2. [Construir un host](#construir-un-host)
 3. [Pipeline de configuración](#pipeline-de-configuración)
-4. [Registrar servicios](#registrar-servicios)
-5. [Hosted services (workers en segundo plano)](#hosted-services-workers-en-segundo-plano)
-6. [Entorno](#entorno)
-7. [Ciclo de vida de la aplicación](#ciclo-de-vida-de-la-aplicación)
-8. [Acceder a servicios tras el Build](#acceder-a-servicios-tras-el-build)
-9. [Apagado elegante](#apagado-elegante)
-10. [Patrón AppModule con Hosting](#patrón-appmodule-con-hosting)
+4. [Compartir datos entre piezas del arranque](#compartir-datos-entre-piezas-del-arranque)
+5. [Registrar servicios](#registrar-servicios)
+6. [Hosted services (workers en segundo plano)](#hosted-services-workers-en-segundo-plano)
+7. [Tareas de arranque](#tareas-de-arranque)
+8. [Entorno](#entorno)
+9. [Ciclo de vida de la aplicación](#ciclo-de-vida-de-la-aplicación)
+10. [Acceder a servicios tras el Build](#acceder-a-servicios-tras-el-build)
+11. [Apagado elegante](#apagado-elegante)
+12. [Patrón AppModule con Hosting](#patrón-appmodule-con-hosting)
 
 ---
 
 ## Visión general de la arquitectura
 
 ```
-THostBuilder
-  ├── ConfigureHostConfiguration   ← configuración de bajo nivel (variables de entorno, etc.)
-  ├── ConfigureAppConfiguration    ← configuración de app (JSON, INI, env)
-  ├── ConfigureServices            ← registros DI
+THost.CreateBuilder ──► IGenericHostBuilder
+  ├── Configuration: IConfigurationManager   ← las fuentes, y su lectura
+  ├── Environment: IHostEnvironment          ← resuelto al leerlo, derivado de la config de host
+  ├── Services: IServiceCollection           ← registros DI
+  ├── Logging: ILoggingBuilder               ← solo se compone si lo tocas
+  ├── Properties                             ← datos que comparten las piezas del arranque
   └── Build ──► IHost
                  ├── Services: IServiceProvider
                  ├── IHostEnvironment
@@ -42,86 +46,130 @@ El host se construye una vez, se arranca una vez y se para una vez. Todos los se
 ```pascal
 uses Daf.Hosting, Daf.Extensions.Hosting, Daf.Extensions.DependencyInjection;
 
-var Host := THostBuilder.Create
-  .ConfigureServices(procedure(Context: IHostBuilderContext;
-                               Services: IServiceCollection)
-  begin
-    Services.AddSingleton<IMyService, TMyService>;
-  end)
-  .Build;
+var Builder := THost.CreateBuilder;
 
-Host.Start;
-Host.WaitForShutdown; // bloquea hasta la señal de parada
+Builder.Services.AddSingleton<IMyService, TMyService>;
+
+var Host := Builder.Build;
+try
+  Host.Start;
+  Host.WaitForShutdown; // bloquea hasta la señal de parada
+finally
+  StopAndNil(Host);
+end;
 ```
 
-`THostBuilder` es un **singleton** — una sola instancia por proceso.  
-`Build` solo puede llamarse **una vez**; congela la configuración y crea el contenedor DI.
+`THost.CreateBuilder` entrega un `IGenericHostBuilder`, así que una sola variable posee el builder
+y llega a `Build`. Cada builder es independiente: puede haber varios builders y varios hosts vivos
+a la vez en un mismo proceso.  
+`Build` solo puede llamarse **una vez** por builder; congela la configuración y crea el contenedor DI.
+
+`StopAndNil(Host)` para el host y deja la variable vacía, como `FreeAndNil` con un objeto: parar
+libera el host, y una variable que sigue apuntando a él toca memoria devuelta al salir de su
+ámbito.
 
 ---
 
 ## Pipeline de configuración
 
-El host ejecuta la configuración en tres fases ordenadas:
+Hay **una** configuración, y se puebla la primera vez que se lee.
+`Builder.Configuration` es un `IConfigurationManager` —constructor y lector a la vez—, así que una
+fuente se puede elegir a partir de lo ya configurado.
 
-### 1. Configuración del host
+### 1. Lo que siembra el builder
 
-Ajustes de bootstrap — se aplican antes de que se conozca el entorno:
+La primera vez que la composición lee `Configuration` o `Environment` —o en el `Build`, si no lee
+ninguna—, el builder carga las fuentes que carga `Host.CreateApplicationBuilder`, en este orden, y
+cada una gana a las anteriores:
 
-```pascal
-.ConfigureHostConfiguration(procedure(Builder: IConfigurationBuilder)
-begin
-  Builder.AddEnvironmentVariables; // lee DAF_APP_ENV, DAF_APP_NAME, etc.
-end)
-```
-
-### 2. Configuración de la app
-
-Ajustes completos — se ejecuta tras resolver el entorno:
-
-```pascal
-.ConfigureAppConfiguration(procedure(Context: IHostBuilderContext;
-                                     Builder: IConfigurationBuilder)
-begin
-  Builder
-    .AddJsonFile('appsettings.json')
-    .AddJsonFile('appsettings.' + string(Context.Environment.EnvironmentName) + '.json',
-      {optional:} True);
-end)
-```
-
-### 3. Servicios
-
-Registros DI — `Context.Configuration` está completamente poblado aquí:
+1. las variables de entorno del proceso con prefijo `DAF_`, sin el prefijo —`DAF_ENVIRONMENT` fija
+   `environment`— y, si se le dieron argumentos, la línea de comandos;
+2. `appsettings.json`, `appsettings.{Entorno}.json`, `{ApplicationName}.settings.json` y
+   `{ApplicationName}.settings.{Entorno}.json` del content root, todos opcionales; un separador de
+   ruta en el nombre de la aplicación pasa a `_`;
+3. todas las variables de entorno, con `__` como separador de sección: `Db__Server` es `Db:Server`;
+4. otra vez la línea de comandos.
 
 ```pascal
-.ConfigureServices(procedure(Context: IHostBuilderContext;
-                              Services: IServiceCollection)
-begin
-  var Db := Context.Configuration['Database:ConnectionString'];
-  Services.AddSingleton<IDatabase>(TDatabase.Create(Db));
-end)
+var Builder := THost.CreateBuilder(CommandLineConfig.ProcessArgs);
 ```
 
-Puedes llamar a `ConfigureServices` varias veces — todos los callbacks se aplican en orden de registro.
+De esas primeras fuentes sale el entorno, por las claves que usa .NET y que nombra `THostDefaults`:
+`environment`, `applicationName` y `contentRoot`. Así que `--environment Staging` y
+`DAF_ENVIRONMENT=Staging` dicen lo mismo, y gana el argumento.
+
+El content root es el directorio actual, como en .NET, salvo que `contentRoot` diga otro; uno
+relativo se resuelve contra la carpeta del ejecutable. La excepción es el directorio del sistema,
+que es donde arranca un servicio de Windows: ahí el content root es la carpeta del ejecutable.
+`Environment.BinPath` es siempre esa carpeta, sea cual sea el directorio de trabajo.
+
+Los ficheros se leen una vez, en esa primera lectura: un cambio en ellos no se nota mientras el
+proceso sigue vivo, y crear el builder no abre ninguno.
+
+Un fichero por defecto que no se puede leer —un `appsettings.json` mal formado— se informa por el
+canal de arranque al abrirse, y la lectura sigue con las demás fuentes; el `Build` falla después con
+esa misma excepción. Una fuente que añades tú falla al añadirla, en tu código.
+
+### 2. El entorno, ya resuelto
+
+`Builder.Environment` se deriva de esa siembra al cargarla. Eso es lo que permite que el paso
+siguiente dependa de él: no hay ninguna fase que esperar.
+
+### 3. Tus propias fuentes
+
+Se añaden donde estás, entre el builder y `Build`. Van detrás de las de por defecto, así que les
+ganan, línea de comandos incluida, como en .NET:
+
+```pascal
+JsonConfig.AddFile(Builder.Configuration,
+  TPath.Combine(Builder.Environment.ContentRootPath, 'features.json'), [csoOptional]);
+```
+
+Y como el manager lee además de construir, un registro consume configuración en el sitio:
+
+```pascal
+var Db := Builder.Configuration['Database:ConnectionString'];
+Builder.Services.AddSingleton<IDatabase>(TDatabase.Create(Db));
+```
+
+Para eso existían los callbacks diferidos, y por eso no hay ninguno: con una configuración que se
+lee mientras se compone, no queda nada que diferir.
+
+`Build` la congela. A partir de ahí, esa misma configuración es la que entrega
+`IHostBuilderContext.Configuration`.
+
+---
+
+## Compartir datos entre piezas del arranque
+
+`Properties` es un `TDictionary<string, TValue>` que lleva el builder, para los datos que las piezas
+que componen el arranque necesitan pasarse entre sí. Está en `IHostApplicationBuilder`, y el mismo
+diccionario se lee desde el otro lado por `IHostBuilderContext.Properties`, que está registrado en
+el contenedor.
+
+```pascal
+Builder.Properties.AddOrSetValue('tenant', 'acme');
+
+// ...en cualquier sitio que tenga el contexto:
+var Tenant := Context.Properties['tenant'].AsString;
+```
 
 ---
 
 ## Registrar servicios
 
-Dentro de `ConfigureServices` está disponible la API completa de `IServiceCollection`:
+La API completa de `IServiceCollection` está disponible en `Builder.Services`:
 
 ```pascal
-.ConfigureServices(procedure(Context: IHostBuilderContext;
-                              Services: IServiceCollection)
-begin
-  // Tiempos de vida
-  Services.AddSingleton<ICache, TMemoryCache>;
-  Services.AddScoped<IUnitOfWork, TDbUnitOfWork>;
-  Services.AddTransient<IEmailSender, TSmtpSender>;
+var Services := Builder.Services;
 
-  // Hosted service (arranca/para con el host)
-  Services.AddHostedService<TBackgroundIndexer>;
-end)
+// Tiempos de vida
+Services.AddSingleton<ICache, TMemoryCache>;
+Services.AddScoped<IUnitOfWork, TDbUnitOfWork>;
+Services.AddTransient<IEmailSender, TSmtpSender>;
+
+// Hosted service (arranca/para con el host)
+Services.AddHostedService<TBackgroundIndexer>;
 ```
 
 Consulta [DependencyInjection](../../DependencyInjection/docs/GUIDE.es.md) para la referencia completa de registro.
@@ -159,8 +207,62 @@ Services.AddHostedService<TOrderProcessor>;
 ```
 
 - `Start` se llama para cada hosted service cuando se ejecuta `Host.Start`, **en orden de registro**.
-- `Stop` se llama en **orden inverso de registro** durante el apagado.
-- Los hosted services son Singletons — también puedes inyectarlos como `IOrderProcessor` si es necesario.
+- `Stop` se llama en el orden **inverso** durante el apagado —el mismo en que el contenedor libera—,
+  así que un servicio para antes que los registrados delante de él, que puede estar usando.
+- `AddHostedService<T>` registra `T` bajo `IHostedService` y nada más. Para llegar a esa misma
+  instancia como `IOrderProcessor`, regístralo también y que el registro del hosted service lo
+  resuelva.
+
+---
+
+## Tareas de arranque
+
+Un `IStartupTask` corre **una vez** al arrancar, con el proveedor ya construido. Tiene un `Run` y
+nada que parar: es inicialización, no un servicio con ciclo de vida.
+
+```pascal
+type
+  TWarmUpCache = class(TInterfacedObject, IStartupTask)
+  public
+    procedure Run;
+  end;
+
+procedure TWarmUpCache.Run;
+begin
+  // leer lo que la aplicación necesita antes de atender nada
+end;
+```
+
+Se registra en la colección:
+
+```pascal
+Services.AddStartupTask<TWarmUpCache>;
+```
+
+`THost.Start` ejecuta las tareas **en orden de registro, antes de todos los `IHostedService` y
+antes de `ApplicationStarted`** — un servicio alojado puede depender del estado que prepara una
+tarea, así que el orden es el punto y no una casualidad.
+
+**Una tarea que lanza aborta el arranque.** La excepción se informa y se vuelve a lanzar, así que
+no arranca ningún servicio alojado y la aplicación nunca se declara arrancada. Eso es lo que hace
+de una tarea de arranque el sitio de una precondición: una caché que no se puede llenar, una
+carpeta que no es escribible, un esquema que no es el esperado.
+
+### Cuando el helper queda ensombrecido
+
+En Delphi solo hay un `record helper` visible por tipo, así que una unit que traiga un segundo
+helper para `IServiceCollection` esconde a este. La fachada de clase es la vía, y toma la
+implementación como metaclase:
+
+```pascal
+Hosting.AddStartupTask(Services, TWarmUpCache);
+```
+
+Es el mismo registro: con ella un paquete aporta su propia inicialización sin que el `.dpr` nombre
+la tarea — ver [PackageInit](../../Cli/samples/PackageInit/README.md).
+
+Elegir entre un `IStartupTask` y un `IHostedService` se decide en
+[Composición del arranque](../../DependencyInjection/docs/STARTUP-COMPOSITION.es.md).
 
 ---
 
@@ -183,10 +285,16 @@ Env.IsTesting       // True en Testing (útil para test runners)
 
 Establece el entorno mediante variable de OS antes de lanzar:
 ```
-DAF_APP_ENV=Development
+DAF_ENVIRONMENT=Development
 ```
 
-Abreviaturas aceptadas: `deve`, `stag`, `prod`, `test` (sin distinción de mayúsculas).
+Cualquier otro nombre, como `QA`, es un entorno más, con su propio `appsettings.QA.json`. Las preguntas
+`Is…` comparan el nombre sin distinguir mayúsculas.
+
+En `Development` el host además valida el contenedor al construirlo: un registro cuyas dependencias
+no se pueden satisfacer, o un Singleton que captura un Scoped, detiene `Build` con todos los hallazgos
+juntos, y un Scoped pedido al proveedor raíz se rechaza al resolverlo. `ServiceProviderOptions` en el builder fija esa elección sea cual sea el entorno — ver
+*Validación del contenedor* en el README del módulo.
 
 También puedes leer variables de entorno arbitrarias:
 ```pascal
@@ -204,17 +312,17 @@ var Lifetime := Services.GetRequiredService<IHostApplicationLifetime>;
 
 // Se dispara cuando todos los hosted services han arrancado
 Lifetime.ApplicationStarted.Register(procedure begin
-  Logger.LogInfo('Aplicación lista');
+  Logger.LogInformation('Aplicación lista');
 end);
 
 // Se dispara cuando se solicita un apagado (antes de que paren los servicios)
 Lifetime.ApplicationStopping.Register(procedure begin
-  Logger.LogInfo('Apagado iniciado');
+  Logger.LogInformation('Apagado iniciado');
 end);
 
 // Se dispara cuando todos los hosted services han parado
 Lifetime.ApplicationStopped.Register(procedure begin
-  Logger.LogInfo('Aplicación detenida');
+  Logger.LogInformation('Aplicación detenida');
 end);
 
 // Solicitar apagado elegante por programa
@@ -228,14 +336,17 @@ Lifetime.StopApplication;
 ## Acceder a servicios tras el Build
 
 ```pascal
-var Host := HostBuilder.Build;
-Host.Start;
+var Host := Builder.Build;
+try
+  Host.Start;
+  // Acceder a servicios desde fuera del grafo DI
+  var Svc := Host.Services.GetRequiredService<IMyService>;
+  Svc.Execute;
 
-// Acceder a servicios desde fuera del grafo DI
-var Svc := Host.Services.GetRequiredService<IMyService>;
-Svc.Execute;
-
-Host.WaitForShutdown;
+  Host.WaitForShutdown;
+finally
+  StopAndNil(Host);
+end;
 ```
 
 Para operaciones con scope (p. ej. un job en segundo plano que necesita una unidad de trabajo):
@@ -255,14 +366,36 @@ end;
 
 ## Apagado elegante
 
-`Host.WaitForShutdown` bloquea hasta que el proceso recibe una señal de apagado (`Ctrl+C`, `SIGTERM` o `Lifetime.StopApplication`). La secuencia de apagado es:
+`Host.WaitForShutdown` bloquea hasta que el proceso recibe una señal de apagado (`Ctrl+C`, `SIGTERM` o `Lifetime.StopApplication`). `Host.Stop` ejecuta la secuencia de apagado:
 
 1. Se disparan los callbacks de `IHostApplicationLifetime.ApplicationStopping`
-2. Se llama a `IHostedService.Stop` para cada servicio (en orden inverso)
-3. El contenedor DI libera las instancias Singleton (en orden inverso de creación)
-4. Se disparan los callbacks de `IHostApplicationLifetime.ApplicationStopped`
+2. Se llama a `IHostedService.Stop` para cada servicio, en orden inverso al de registro
+3. Se disparan los callbacks de `IHostApplicationLifetime.ApplicationStopped`
+4. El contenedor DI suelta cada Singleton cuando ya no lo sostiene nadie más que él, así que un
+   servicio cae después de todo lo que depende de él
 
-Usa siempre `WaitForShutdown` en lugar de busy-waiting — se integra con el manejador de señales del SO mediante `TShutdownHook`.
+Un paso que falla no impide los siguientes. Un servicio alojado cuyo `Stop` lanza se informa por el
+logger cuando ocurre, y el resto de la secuencia se ejecuta igual. `Host.Stop` lanza lo que falló al
+final, con el host ya liberado:
+
+- un fallo: esa misma excepción, sin envolver;
+- varios: una `EAggregateException` (unit `System.Threading`) que los contiene todos, y cuyo mensaje
+  dice cuántos pasos fallaron.
+
+`StopAndNil(Host)` deja la variable vacía también cuando `Stop` lanza, y lanza lo mismo. Solo
+vacía esa variable: una copia de la referencia guardada aparte sigue apuntando al host liberado.
+La copia se suelta en `ApplicationStopped`, que llega con el host todavía vivo — el sample
+[HostLifetime](../samples/HostLifetime/README.md) guarda una y la suelta ahí.
+
+Liberar un host que no se paró ejecuta la misma secuencia una vez. Lo que falle ahí se informa, y el
+destructor no lo lanza.
+
+`Stop` llega a todos los servicios alojados de un host cuyo `Start` empezó, también a los que no
+llegaron a arrancar o cuyo `Start` lanzó, así que el `Stop` de un servicio tolera que su `Start` no
+corriera. Un host que no llegó a arrancar notifica la parada y cierra el contenedor sin llamar al
+`Stop` de ningún servicio, así que `Host.Start` va dentro del `try`, como en los ejemplos de arriba.
+
+`WaitForShutdown` se integra con el manejador de señales del SO mediante `TShutdownHook`.
 
 ---
 
@@ -286,15 +419,25 @@ begin
 end;
 ```
 
-Carga todos los módulos en `ConfigureServices`:
+Carga los módulos en `Builder.Services`, un `AddModule<T>` por módulo:
 
 ```pascal
-.ConfigureServices(procedure(Context: IHostBuilderContext;
-                              Services: IServiceCollection)
-begin
-  TInfraModule.Create.AddServices(Services);
-  TDomainModule.Create.AddServices(Services);
-end)
+Builder.Services
+  .AddModule<TInfraModule>
+  .AddModule<TDomainModule>;
 ```
 
-Con `TDafApplication` (módulo Application), los módulos que implementan `IAppModule` se descubren y cargan automáticamente — consulta [Application](../../Application/docs/GUIDE.es.md).
+`AddModule<T>` instancia el módulo, llama a su `AddServices` en el sitio y se hace cargo de su
+vida. No llames a `TInfraModule.Create.AddServices(Services)` a mano: el módulo es un
+`TInterfacedObject` creado con contador de referencias a cero, así que nadie lo libera.
+
+Cuando un módulo necesita configuración, constrúyelo tú y pasa la instancia:
+`Services.AddModule(TInfraModule.Create(...))`. Entregarlo como `IAppModule` es lo que le da un
+dueño, y es la única vía de pasarle configuración.
+
+**No hay descubrimiento automático.** `AddModules(Package)`, el escaneo por RTTI de los
+`IAppModule`, se retiró: escondía la declaración en un `uses`, dejaba el arranque ciego en
+silencio ante una RTTI recortada y ponía el orden de registro en manos de la reflexión. Ninguna
+variante de la familia registra módulos por su cuenta — los suyos se declaran donde se compongan
+los servicios, igual que arriba. Las dos fases y las reglas de orden, en
+[Composición del arranque](../../DependencyInjection/docs/STARTUP-COMPOSITION.es.md).

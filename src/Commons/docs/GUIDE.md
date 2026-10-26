@@ -1,4 +1,4 @@
-# Commons — Usage Guide
+﻿# Commons — Usage Guide
 
 **🌍 Language: English | [Español](GUIDE.es.md)**
 
@@ -9,11 +9,16 @@
 1. [Daf.MemUtils — Smart pointers](#dafmemutils--smart-pointers)
 2. [Daf.Threading — Cancellation tokens and shutdown](#dafthreading--cancellation-tokens-and-shutdown)
 3. [Daf.Enumerable](#dafenumerable)
-4. [Daf.SystemProcess](#dafsystemprocess)
-5. [Daf.CmdLn.Parser](#dafcmdlnparser)
-6. [Daf.Rtti](#dafrtti)
-7. [Daf.Activator](#dafactivator)
-8. [Daf.Arrays](#dafarrays)
+4. [Daf.Rtti](#dafrtti)
+5. [Daf.Activator](#dafactivator)
+6. [Daf.Arrays](#dafarrays)
+7. [Daf.Nullable](#dafnullable)
+8. [Daf.Comparers](#dafcomparers)
+9. [Daf.Application.Version](#dafapplicationversion)
+10. [Daf.Types](#daftypes)
+
+`Daf.SystemProcess` lives in a package of its own — see [SystemProcess](../../SystemProcess/README.md).
+`Daf.CmdLn.Parser` was withdrawn in 2.0; the command line is [`Daf.CommandLine`](../../CommandLine/README.md).
 
 ---
 
@@ -81,7 +86,8 @@ Cts.Cancel;
 
 ### TShutdownHook
 
-Connect OS shutdown signals (Ctrl+C, SIGTERM) to application cleanup:
+Connects the console's shutdown signals to the application. The host subscribes on its own when it
+starts; assign the listener by hand only in a program without a host:
 
 ```pascal
 uses Daf.Threading;
@@ -92,6 +98,19 @@ begin
   App.Stop;
 end;
 ```
+
+The console handler is installed while there is a listener, as `ConsoleLifetime` does in .NET:
+
+| Event | With a listener | Without one |
+|---|---|---|
+| Ctrl+C, Ctrl+Break; SIGINT, SIGQUIT and SIGTERM outside Windows | asks for the shutdown, each time it arrives | left to the system, which ends the process |
+| Closing the console window, logging off | left to the system | left to the system |
+
+`TShutdownHook.HandleConsoleSignal(Signal)` is what the handler does with each event, and answers
+whether it takes it. What the listener raises goes to the error output and does not leave the
+handler. `RequestShutdown` asks for the shutdown from code; without a listener, the request waits for
+the next one that subscribes. A Windows system shutdown does not reach a Delphi console application,
+which loads `user32.dll`.
 
 ---
 
@@ -116,126 +135,87 @@ for var Item in Seq do
 var Arr := ToIEnumerable<Integer>(List).ToArray;
 ```
 
+### TDeferredEnumerable\<T\>
+
+`IEnumerable<T>` built from a closure that returns the enumerator — the deferred sequence
+primitive. Nothing runs until `GetEnumerator` is called, and every iteration invokes the factory
+again, so the same sequence can be walked more than once.
+
+```pascal
+uses Daf.Enumerable;
+
+var Calls := 0;
+var Seq: IEnumerable<Integer> := TDeferredEnumerable<Integer>.Create(
+  function: IEnumerator<Integer>
+  var
+    N: Integer;
+  begin
+    Inc(Calls);
+    N := 0;
+    Result := TGeneratorEnumerator<Integer>.Create(
+      function(var Current: Integer): Boolean
+      begin
+        Result := N < 3;
+        if Result then
+        begin
+          Inc(N);
+          Current := N;
+        end;
+      end);
+  end);
+
+// Calls is still 0: declaring the sequence enumerated nothing
+
+for var I in Seq do    // Calls = 1, yields 1, 2, 3
+  Process(I);
+
+for var I in Seq do    // Calls = 2 — a new enumerator, walked from the start
+  Process(I);
+```
+
+This is the primitive `Daf.Linq` is built on: `Where`, `Select`, `Take` and the rest each return one
+of these wrapping the previous sequence, which is what makes a chain of operators traverse the
+source once, and only when a terminal asks for an element. See [Daf.Linq](../../Linq/README.md).
+
+### TGeneratorEnumerator\<T\>
+
+The enumerator of the pair above, built from an advance-and-yield closure: a `TGeneratorFunc<T>` is
+a `function(var Current: T): Boolean` that returns `False` when the sequence is exhausted and
+otherwise writes the next element into `Current`. The state of the walk lives in the closure, so a
+sequence with no collection behind it — a counter, a file being read, a computed series — needs no
+enumerator class of its own.
+
+`Reset` raises `ENotImplemented`: a closure that has already advanced cannot be rewound. Walking a
+sequence a second time is what `TDeferredEnumerable<T>` is for — it asks its factory for a **new**
+enumerator, with its own state.
+
 ### IInterfaceList\<T\>
 
-Type-safe list of interface references, with `GetEnumerator` support.
+The RTL's `TInterfaceList` with a typed `GetEnumerator` on top, which is all it adds: the loop
+variable is a `T`, not an `IInterface`.
 
 ```pascal
 var List := TInterfaceList<IMyService>.Create;
 List.Add(ServiceA);
 List.Add(ServiceB);
 
-if not List.IsEmpty then
-  for var Svc in List do
-    Svc.Execute;
+for var Svc in List do          // Svc is IMyService
+  Svc.Execute;
+```
 
-// Search by predicate
+`IsEmpty`, `TryFind`, `First`, `Last` and `ItemType` are on the **non-generic** `TInterfaceList`
+this unit also declares, not on the generic one:
+
+```pascal
+var Any := TInterfaceList.Create;
+Any.Add(ServiceA);
+
 var Found: IMyService;
-if List.TryFind(
+if not Any.IsEmpty and Any.TryFind(
     function(I: IInterface): Boolean
-    begin Result := (I as IMyService).Name = 'target'; end,
+    begin Result := Supports(I, IMyService); end,
     Found) then
   Found.Execute;
-```
-
----
-
-## Daf.SystemProcess
-
-Run external processes asynchronously with event callbacks.
-
-```pascal
-uses Daf.SystemProcess;
-
-var Proc := TSystemProcess.Builder
-  .Command('git')
-  .CmdArgs(['log', '--oneline', '-10'])
-  .WorkingDir('C:\MyRepo')
-  .Timeout(30000)               // ms, INFINITE = 0
-  .KillAfterTimeout(True)
-  .HideWindow(True)
-  .OnStdOut(procedure(Line: string) begin WriteLn(Line); end)
-  .OnStdErr(procedure(Line: string) begin WriteLn('ERR: ', Line); end)
-  .OnCompleted(procedure(R: TProcessResult)
-    begin
-      WriteLn('Exit=', R.ExitCode, ' duration=', R.Duration.TotalMilliseconds, 'ms');
-    end)
-  .OnFailed(procedure(R: TProcessResult)
-    begin
-      WriteLn('Failed: ', R.LastError);
-    end)
-  .Build;
-
-// Synchronous
-var Result := Proc.Execute;
-
-// Or asynchronous
-var Future := Proc.ExecuteAsync;
-```
-
-### TProcessResult
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `Status` | `TStatus` | `Completed`, `Failed`, `Timeout`, `Canceled`, `Killed` |
-| `ExitCode` | `DWORD` | Process exit code |
-| `Duration` | `TTimeSpan` | Wall-clock execution time |
-| `LastError` | `string` | Error description (failed/killed cases) |
-| `Succeeded` | `function: Boolean` | `Status = Completed` and `ExitCode = 0` |
-
-### Integration with TShutdownHook
-
-```pascal
-TShutdownHook.OnShutdownRequested := procedure
-begin
-  Proc.Kill;
-end;
-```
-
----
-
-## Daf.CmdLn.Parser
-
-Builds a typed argument grammar with `TCmdLnParserBuilder`, then parses the command line into `ICmdLParams`.
-
-```pascal
-uses Daf.CmdLn.Parser;
-
-// 1. Define the grammar
-var Parser := TCmdLnParserBuilder.Create
-  .Arg<string>('file')      // named string argument
-  .Arg<Integer>('port')     // named integer argument
-  .Arg<Boolean>('verbose')  // boolean flag
-  .Build;                   // returns ICmdLnParser
-
-// 2. Parse the actual command line
-var Params := Parser.Parse(GetCommandLine);
-
-// 3. Read values (ICmdLParams.Item[] is the default property)
-var FilePath  := Params['file'].AsString;
-var Port      := Params['port'].AsInteger;
-var IsVerbose := Params['verbose'].AsBoolean;
-```
-
-### Subcommands
-
-```pascal
-var Parser := TCmdLnParserBuilder.Create
-  .Command('build')
-    .Arg<string>('output')
-  .EndCommand
-  .Command('run')
-    .Arg<Boolean>('watch')
-  .EndCommand
-  .Build;
-
-var Params := Parser.Parse(GetCommandLine);
-var Cmd := Params.Command;   // 'build' or 'run'
-if Cmd = 'build' then
-begin
-  var Section := Params.GetSection('build');
-  var OutDir  := Section['output'].AsString;
-end;
 ```
 
 ---
@@ -250,7 +230,7 @@ uses Daf.Rtti;
 // Type names and GUIDs
 var Name := _T.NameOf<IMyService>;            // 'IMyService'
 var Guid := _T.GUID<IMyService>;              // TGUID
-var Unit := _T.UnitNameOf<IMyService>;        // 'MyUnit'
+var UnitName := _T.UnitNameOf<IMyService>;    // 'MyUnit'
 
 // Check interface hierarchy (PTypeInfo overloads)
 if _T.Extends(TypeInfo(IChildService), TypeInfo(IMyService)) then
@@ -339,3 +319,303 @@ var More: TSmartArray<string> := Items + ['delta', 'epsilon'];
 // Sort
 Items.Sort;
 ```
+`Where` / `Any` take a `TFilterSpec<T>` and `Select` a `TFunc<T, TTarget>` — the very
+types the lazy `Daf.Linq` operators take, so a filter or a
+mapper written once works with both APIs. Inline closures convert implicitly, as
+above; build the value separately when you want to reuse or compose it:
+
+```pascal
+uses Daf.FilterSpec;
+
+var Long: TFilterSpec<string> := TPredicate<string>(
+  function(S: string): Boolean begin Result := Length(S) > 4; end);
+var Loud: TFilterSpec<string> := TPredicate<string>(
+  function(S: string): Boolean begin Result := S = S.ToUpper; end);
+
+Items.Where(Long and not Loud);          // composed with and / or / not
+```
+
+---
+
+## Daf.Nullable
+
+### TNullable\<T\>
+
+An optional value: either an absent value — SQL NULL — or a present value of `T`. What it buys is
+the distinction between **no value** and a present default: `0`, `''` and `False` are values, and a
+`T` alone cannot say which of the two it is.
+
+```pascal
+uses Daf.Nullable;
+
+var Age: TNullable<Integer> := TNullable<Integer>.Null;
+Age.IsNull;                     // True
+Age.GetValueOrDefault(-1);      // -1
+
+Age := 42;                      // implicit conversion from T
+Age.HasValue;                   // True
+Age.Value;                      // 42
+
+var Plain: Integer := Age;      // implicit conversion back to T
+```
+
+| Member | Answers |
+|--------|---------|
+| `Null` | An explicitly absent nullable |
+| `From(Value)` | Wraps a present value; the implicit conversion from `T` does the same |
+| `IsNull` | True when no value is present |
+| `HasValue` | True when one is. `HasValue = not IsNull` |
+| `GetValueOrDefault(Fallback)` | The value when present, otherwise the fallback given |
+| `Value` | The present value. When NULL it raises `EInvalidOpException`, and so does the implicit conversion to `T` |
+
+**Both presence predicates ship on purpose.** `IsNull` is the data-domain idiom, the one that
+matches Delphi's own `TField.IsNull` and SQLCute's `IS NULL`; `HasValue` is the .NET one. Whichever
+reads better where it is written is the right one.
+
+A newly declared `TNullable<T>` starts absent: `Initialize` sets it so, and that is a managed
+record operator, so a field of a class or an element of an array starts absent too without anybody
+initializing it.
+
+## Daf.Comparers
+
+NULL-aware comparison, in two coordinated policies: **ordering** puts NULL below every non-NULL
+value — nulls-first ascending, nulls-last descending — and two NULLs compare equal; **equality**
+makes NULLs equal, which is what collapses duplicate NULLs under `DISTINCT`.
+
+```pascal
+uses Daf.Comparers;
+
+// Over TValue — the value currency of the in-memory query engine
+var Order := TValueComparers.Ordinal;
+var Same  := TValueComparers.Equality;
+
+// Over TNullable<T>
+var ByAge := TNullableComparers.Ordinal<Integer>;
+```
+
+| Entry point | Answers |
+|-------------|---------|
+| `TValueComparers.Ordinal` | `IComparer<TValue>`: NULL below every non-NULL value, NULLs equal; two values of different families raise `EArgumentException` |
+| `TValueComparers.Equality` | `IEqualityComparer<TValue>`: values of different families are never equal, NULLs are equal, and equal values share their hash |
+| `TNullableComparers.Ordinal<T>` | The same order over `TNullable<T>` |
+| `TNullableComparers.Equality<T>` | Two absent values are equal |
+| `IsNullValue(V)` | Whether a `TValue` represents SQL NULL: empty, a `Null`/`Unassigned` Variant, or an absent `TNullable` |
+| `CompareValuesNullSmallest(L, R)` | The comparison itself, without going through a comparer |
+
+Every non-NULL value belongs to a family: Boolean, number, date, text or other. A value of one
+family is never equal to one of another: the text `'1'` is not the number `1`, as in .NET. Two
+numbers are equal when they are worth the same, whatever their type: `1` and `1.0` are equal, as in
+SQL; in .NET, `1.Equals(1.0)` is false. Ordering two values of different families raises
+`EArgumentException`, like .NET's `Comparer<object>`. Within a family, text orders ordinally, `False`
+comes before `True`, and dates and numbers order by value.
+
+Over `TValue`, SQL NULL is modelled as an **empty** `TValue`, a Variant-kind one holding `Null` or
+`Unassigned`, or an absent `TNullable`; a present `TNullable` counts as the value it holds. This is
+what `SQLCute.InMemory` builds its ANSI NULL semantics on — see
+[SQLCute.InMemory](../../SQLCute.InMemory/README.md).
+
+---
+
+## Daf.Application.Version
+
+### TVersionInfo / [Version]
+
+A class declares its version with the `[Version]` attribute — SemVer tag, application name,
+company and, optionally, whether the binary is a debug build — and `TVersionInfo.GetFrom` reads it
+back by RTTI:
+
+```pascal
+uses
+  Daf.Application.Version;
+
+type
+  [Version('1.2.3-rc.2+build.7', 'Invoicer', 'Acme')]
+  TInvoicerApp = class
+  end;
+
+var Info := TVersionInfo.GetFrom(TInvoicerApp);
+// Info.Major = 1, Info.Minor = 2, Info.Patch = 3
+// Info.PreRelease = 'rc.2', Info.Metadata = 'build.7'
+// Info.ApplicationName = 'Invoicer', Info.Company = 'Acme'
+```
+
+| Member | What it answers |
+|---|---|
+| `Tag` | the string the attribute declared, verbatim |
+| `VersionTag(Template)` | the version formatted with a template of `${...}` markers; `VersionTemplate` is the default, `VersionTemplateWithBuild` adds the compiled metadata |
+| `IsEmpty` | whether a version was set at all |
+| `IsSemVer` | whether the declared tag follows the SemVer grammar |
+| `Major` / `Minor` / `Patch` / `PreRelease` / `Metadata` | the SemVer pieces |
+| `ApplicationName` / `Company` | the other two arguments of the attribute |
+| `ArchBits` / `Platform` | what the **compiler** saw: 32 or 64, and the target platform |
+| `Debug` | whether the binary declared itself a debug build; `False` when it declared nothing |
+
+**`Debug` is declared by the binary.** Only the binary's own code sees its build configuration — the
+framework is compiled apart —, and the attribute's arguments are evaluated when that code compiles:
+
+```pascal
+[Version('1.2.3', 'Invoicer', 'Acme', {$IFDEF DEBUG}True{$ELSE}False{$ENDIF})]
+TInvoicerApp = class
+end;
+```
+
+`TVersionInfo.Create` takes the same fourth argument. The information is fixed when it is built:
+`Debug` has no setter.
+
+**A class with no attribute gives an empty record**, not an error: `IsEmpty` answers `True`, `Tag`
+and the two names come back as empty strings, the numeric pieces as zero, and `VersionTag` as the
+empty string.
+
+**A tag that is not SemVer keeps its text.** `IsSemVer` answers `False`, and `VersionTag` reports the
+declared string rather than rebuilding it from pieces that were never filled.
+
+The markers a template can name:
+
+| Marker | Emits |
+|---|---|
+| `${Major}` `${Minor}` `${Patch}` `${Metadata}` `${Tag}` | the SemVer pieces and the declared string, raw |
+| `${PreRelease}` | the pre-release with its own `-`, or nothing |
+| `${Platform}` `${ArchBits}` | the target platform and the word size |
+| `${CompiledMeta}` | both together — `Win32` —, followed by `.Dbg` when the binary declared a debug build |
+| `${Build}` / `${BuildFull}` | the build section, opened with `+`. The first carries what the tag declared; the second joins it with the compiled metadata inside that single section. They are alternatives: a template names one |
+
+SemVer admits one build section, so `${BuildFull}` separates the two sources with `.` rather than
+opening a second `+`.
+
+The attribute is read by RTTI, so the linker has to keep the class: a program that relies on this
+declares `STRONGLINKTYPES` and puts the class in its `interface` section.
+
+---
+
+## Daf.Types
+
+### TDeferred\<T\>
+
+A value given either directly or as a thunk, and **re-evaluated on every read**. The implicit
+conversions are what make the two forms interchangeable at the call site:
+
+```pascal
+uses Daf.Types;
+
+var Source := 'before';
+
+var Fixed: TDeferred<string> := 'literal';
+var Live: TDeferred<string> := TFunc<string>(
+  function: string
+  begin
+    Result := Source;
+  end);
+
+Source := 'after';
+
+var A: string := Fixed;   // 'literal'
+var B: string := Live;    // 'after' — read now, not when it was registered
+```
+
+**It is not `Lazy<T>`.** That one memoizes: it runs the thunk once and keeps the answer. This one
+runs it again on each read, which is what macro resolution needs — a macro whose value tracks
+something that moves.
+
+**Nor is it .NET's `Expression<TDelegate>`.** An expression there is an inspectable tree; a
+`TDeferred<T>` is a closure and nothing can look inside it. The inspectable tree is `IExpr` and
+`TSpecification<T>` in [Daf.Specification](../../Specification/README.md).
+
+`TMacroExpression` is `TDeferred<string>` under the name the macro list uses.
+
+### TMacrosList
+
+A named set of `TMacroExpression`, and the substitution of `${name}` inside a string.
+
+```pascal
+var Macros := TMacrosList.Create;
+try
+  Macros['product'] := 'DAF';
+  Macros['edition'] := TFunc<string>(
+    function: string begin Result := CurrentEdition; end);
+
+  Macros.ResolveMacros('${product} ${edition}');   // 'DAF Community'
+finally
+  Macros.Free;
+end;
+```
+
+| Member | Answers |
+|--------|---------|
+| `Value[Name]` (the default property) | Reads and writes a macro. Reading resolves the thunk |
+| `ResolveMacros(Source, MaxRecursionLevel)` | Substitutes every `${name}` in `Source`. A macro whose value names another macro is resolved too, up to `MaxRecursionLevel` — 100 by default, which is what stops a pair that names each other |
+| `Contains(Key)` `Count` | What is registered |
+| `Keys[I]` `ValueFromIndex[I]` | Registration order is kept: the list is an ordered dictionary |
+
+#### A macro that is not registered
+
+Out of the box, a reference to a macro that is not registered resolves to the empty string.
+`MissingMacroPolicy` changes that, and `OnMissingMacro` is asked first:
+
+```pascal
+Macros.MissingMacroPolicy := mmpError;
+Macros.ResolveMacros('${root}/charts');
+// EMacroNotFound: No macro is registered with the name "root"
+```
+
+| Member | Answers |
+|--------|---------|
+| `MissingMacroPolicy` | `mmpReturnDefault`, the default, substitutes `MissingMacroValue`, which is empty unless set · `mmpKeepToken` leaves `${name}` in the result · `mmpError` raises `EMacroNotFound` |
+| `OnMissingMacro` | Called for each reference to a macro that is not registered, before the policy. It sets `Value` and `Handled` to resolve it, or leaves `Handled` False to hand it to the policy |
+| `MissingMacroError(Name)` | The exception `mmpError` raises. A hook that has to fail raises this one: `raise TMacrosList(Sender).MissingMacroError(Name)` |
+
+The policy applies to `ResolveMacros` only: reading `Macros['name']` of a macro that is not
+registered answers empty whatever the policy. `Contains` asks whether it is there.
+
+### TEnvVars
+
+The process's environment variables read into a dictionary, and written back out as the
+environment block a child process takes.
+
+```pascal
+var Env := TEnvVars.Create;
+try
+  for var Pair in Env.Vars do
+    Writeln(Pair.Key, '=', Pair.Value);
+
+  Env.Refresh;             // read the system again, in case it moved
+finally
+  Env.Free;
+end;
+```
+
+| Member | Answers |
+|--------|---------|
+| `Vars` | The dictionary collected at construction. `Refresh` reads the system again |
+| `Buffer` | The same set as the null-separated block `CreateProcess` expects |
+| `WriteTo(Buffer)` | Writes that block into a caller's pointer — how a child process is given an environment with entries added to the parent's |
+| `ClearBuffer` | Releases the block |
+
+`Daf.Configuration` reads `Vars` to turn the environment into a configuration source, and
+`Daf.SystemProcess` uses `WriteTo` to hand a child its own environment.
+
+### Coalesce
+
+The first of several interface references that is not `nil`.
+
+```pascal
+var Chosen := Coalesce.From<ILogger>(Explicit, FromContainer);
+var First  := Coalesce.From<ILogger>([Explicit, FromContainer, Fallback]);
+```
+
+Both arguments are evaluated before the call, as in any function: this picks between references
+already held, and it is not a short-circuit.
+
+### Debugger
+
+```pascal
+Debugger.Write('cache primed with %d entries', [Count]);
+if Debugger.Enabled then
+  Debugger.Write(Report);
+```
+
+| Member | Answers |
+|--------|---------|
+| `Write(Text)` / `Write(FmtStr, Args)` | Writes to the system debug output. On Windows that is `OutputDebugString`; **outside Windows it writes nothing** — for a destination that works there, see `TPlatformLogBootstrapSink` in [Daf.FMX](../../FMX/README.md) |
+| `Enabled` | Whether a debugger is **attached** (`System.DebugHook`). Not whether the build is a Debug one |
+| `CurrentProcessId` `CurrentThreadId` | The ids, for a report that has to say which process or thread wrote it |
+

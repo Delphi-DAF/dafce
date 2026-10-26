@@ -1,0 +1,28 @@
+name: Spec unit shape
+
+# A `.Feat.pas` promises a `Feature(...)`, and nothing else checks it: a unit no `.dpr`
+# names does not exist for the build, and one that is named but declares nothing links in
+# silence — the suite stays green and the scenario count does not move. Needs no Delphi,
+# it reads the source text.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**/*.Feat.pas'
+      - 'eng/check-feat-units.py'
+      - '.github/workflows/spec-unit-shape.yml'
+  pull_request:
+    paths:
+      - 'src/**/*.Feat.pas'
+      - 'eng/check-feat-units.py'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Every .Feat.pas declares a feature
+        run: python3 eng/check-feat-units.py

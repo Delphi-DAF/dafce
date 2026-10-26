@@ -98,6 +98,15 @@
         </DelphiCompile>
         <DCCReference Include="Configuration.Feat.pas"/>
         <DCCReference Include="Configuration.Steps.pas"/>
+        <DCCReference Include="CommandLine.Feat.pas"/>
+        <DCCReference Include="CommandLine.Steps.pas"/>
+        <DCCReference Include="KeyPresence.Feat.pas"/>
+        <DCCReference Include="BinderAbsence.Feat.pas"/>
+        <DCCReference Include="BinderKeyName.Feat.pas"/>
+        <DCCReference Include="ConfigManager.Feat.pas"/>
+        <DCCReference Include="ChainedConfig.Feat.pas"/>
+        <DCCReference Include="OptionsBinding.Feat.pas"/>
+        <DCCReference Include="BinderConversion.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>

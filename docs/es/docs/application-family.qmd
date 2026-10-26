@@ -1,0 +1,6 @@
+---
+sidebar: docs-es
+lang: es
+---
+
+{{< include ../../../src/Hosting/docs/APPLICATION-FAMILY.es.md >}}

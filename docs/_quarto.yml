@@ -23,14 +23,18 @@ website:
           - text: "Overview"
             href: en/modules/index.qmd
           - text: "---"
-          - text: "Application"
-            href: en/modules/application.qmd
+          - text: "Cli"
+            href: en/modules/cli.qmd
+          - text: "CommandLine"
+            href: en/modules/commandline.qmd
           - text: "Commons"
             href: en/modules/commons.qmd
           - text: "Configuration"
             href: en/modules/configuration.qmd
           - text: "Dependency Injection"
             href: en/modules/di.qmd
+          - text: "FMX"
+            href: en/modules/fmx.qmd
           - text: "Hosting"
             href: en/modules/hosting.qmd
           - text: "Logging"
@@ -43,8 +47,22 @@ website:
             href: en/modules/nnlog.qmd
           - text: "SQLCute"
             href: en/modules/sqlcute.qmd
+          - text: "SQLCute.InMemory"
+            href: en/modules/sqlcute-inmemory.qmd
+          - text: "SQLCute.Specification"
+            href: en/modules/sqlcute-specification.qmd
+          - text: "Linq"
+            href: en/modules/linq.qmd
+          - text: "Specification"
+            href: en/modules/specification.qmd
+          - text: "SystemProcess"
+            href: en/modules/systemprocess.qmd
+          - text: "VCL"
+            href: en/modules/vcl.qmd
           - text: "Web"
             href: en/modules/web.qmd
+      - href: en/migration/index.qmd
+        text: Migration
       - href: en/blog/index.qmd
         text: News
       - href: en/about.qmd
@@ -69,6 +87,19 @@ website:
           href: en/docs/getting-started.qmd
         - text: "Architecture"
           href: en/docs/architecture.qmd
+        - text: "Startup composition"
+          href: en/docs/startup-composition.qmd
+        - text: "The application family"
+          href: en/docs/application-family.qmd
+
+    - id: migration
+      title: "Migration"
+      style: "docked"
+      contents:
+        - text: "Overview"
+          href: en/migration/index.qmd
+        - text: "1.x → 2.0"
+          href: en/migration/2.0.qmd
 
     - id: modules
       title: "Modules"
@@ -78,40 +109,80 @@ website:
           href: en/modules/index.qmd
         - section: "Foundation"
           contents:
-            - text: "Application"
-              href: en/modules/application.qmd
             - text: "Hosting"
               href: en/modules/hosting.qmd
+            - text: "Hosting Guide"
+              href: en/modules/hosting-guide.qmd
             - text: "Dependency Injection"
               href: en/modules/di.qmd
+            - text: "Dependency Injection Guide"
+              href: en/modules/di-guide.qmd
             - text: "Configuration"
               href: en/modules/configuration.qmd
+            - text: "Configuration Guide"
+              href: en/modules/configuration-guide.qmd
         - section: "Observability"
           contents:
             - text: "Logging"
               href: en/modules/logging.qmd
+            - text: "Logging Guide"
+              href: en/modules/logging-guide.qmd
             - text: "NNLog"
               href: en/modules/nnlog.qmd
+            - text: "NNLog Guide"
+              href: en/modules/nnlog-guide.qmd
         - section: "Messaging"
           contents:
             - text: "MediatR"
               href: en/modules/mediator.qmd
+            - text: "MediatR Guide"
+              href: en/modules/mediator-guide.qmd
         - section: "Testing"
           contents:
             - text: "MiniSpec"
               href: en/modules/minispec.qmd
+            - text: "MiniSpec Guide"
+              href: en/modules/minispec-guide.qmd
         - section: "Data"
           contents:
             - text: "SQLCute"
               href: en/modules/sqlcute.qmd
             - text: "SQLCute Guide"
               href: en/modules/sqlcute-guide.qmd
+            - text: "SQLCute.InMemory"
+              href: en/modules/sqlcute-inmemory.qmd
+            - text: "SQLCute.InMemory Guide"
+              href: en/modules/sqlcute-inmemory-guide.qmd
+            - text: "SQLCute.Specification"
+              href: en/modules/sqlcute-specification.qmd
+            - text: "SQLCute.Specification Guide"
+              href: en/modules/sqlcute-specification-guide.qmd
+            - text: "Linq"
+              href: en/modules/linq.qmd
+            - text: "Specification"
+              href: en/modules/specification.qmd
+            - text: "Specification Guide"
+              href: en/modules/specification-guide.qmd
         - section: "Utilities"
           contents:
             - text: "Commons"
               href: en/modules/commons.qmd
+            - text: "Commons Guide"
+              href: en/modules/commons-guide.qmd
             - text: "Web"
               href: en/modules/web.qmd
+            - text: "Web Guide"
+              href: en/modules/web-guide.qmd
+            - text: "FMX"
+              href: en/modules/fmx.qmd
+            - text: "Cli"
+              href: en/modules/cli.qmd
+            - text: "CommandLine"
+              href: en/modules/commandline.qmd
+            - text: "VCL"
+              href: en/modules/vcl.qmd
+            - text: "SystemProcess"
+              href: en/modules/systemprocess.qmd
 
     - id: modules-es
       title: "Módulos"
@@ -121,40 +192,80 @@ website:
           href: es/modules/index.qmd
         - section: "Fundación"
           contents:
-            - text: "Application"
-              href: es/modules/application.qmd
             - text: "Hosting"
               href: es/modules/hosting.qmd
+            - text: "Guía Hosting"
+              href: es/modules/hosting-guide.qmd
             - text: "Inyección de Dependencias"
               href: es/modules/di.qmd
+            - text: "Guía Inyección de Dependencias"
+              href: es/modules/di-guide.qmd
             - text: "Configuración"
               href: es/modules/configuration.qmd
+            - text: "Guía Configuración"
+              href: es/modules/configuration-guide.qmd
         - section: "Observabilidad"
           contents:
             - text: "Logging"
               href: es/modules/logging.qmd
+            - text: "Guía Logging"
+              href: es/modules/logging-guide.qmd
             - text: "NNLog"
               href: es/modules/nnlog.qmd
+            - text: "Guía NNLog"
+              href: es/modules/nnlog-guide.qmd
         - section: "Mensajería"
           contents:
             - text: "MediatR"
               href: es/modules/mediator.qmd
+            - text: "Guía MediatR"
+              href: es/modules/mediator-guide.qmd
         - section: "Testing"
           contents:
             - text: "MiniSpec"
               href: es/modules/minispec.qmd
+            - text: "Guía MiniSpec"
+              href: es/modules/minispec-guide.qmd
         - section: "Datos"
           contents:
             - text: "SQLCute"
               href: es/modules/sqlcute.qmd
             - text: "Guía SQLCute"
               href: es/modules/sqlcute-guide.qmd
+            - text: "SQLCute.InMemory"
+              href: es/modules/sqlcute-inmemory.qmd
+            - text: "Guía SQLCute.InMemory"
+              href: es/modules/sqlcute-inmemory-guide.qmd
+            - text: "SQLCute.Specification"
+              href: es/modules/sqlcute-specification.qmd
+            - text: "Guía SQLCute.Specification"
+              href: es/modules/sqlcute-specification-guide.qmd
+            - text: "Linq"
+              href: es/modules/linq.qmd
+            - text: "Specification"
+              href: es/modules/specification.qmd
+            - text: "Guía Specification"
+              href: es/modules/specification-guide.qmd
         - section: "Utilidades"
           contents:
             - text: "Commons"
               href: es/modules/commons.qmd
+            - text: "Guía Commons"
+              href: es/modules/commons-guide.qmd
             - text: "Web"
               href: es/modules/web.qmd
+            - text: "Guía Web"
+              href: es/modules/web-guide.qmd
+            - text: "FMX"
+              href: es/modules/fmx.qmd
+            - text: "Cli"
+              href: es/modules/cli.qmd
+            - text: "CommandLine"
+              href: es/modules/commandline.qmd
+            - text: "VCL"
+              href: es/modules/vcl.qmd
+            - text: "SystemProcess"
+              href: es/modules/systemprocess.qmd
 
     - id: docs-es
       title: "Documentación"
@@ -164,11 +275,24 @@ website:
           href: es/docs/getting-started.qmd
         - text: "Arquitectura"
           href: es/docs/architecture.qmd
+        - text: "Composición del arranque"
+          href: es/docs/startup-composition.qmd
+        - text: "La familia de aplicaciones"
+          href: es/docs/application-family.qmd
+
+    - id: migration-es
+      title: "Migración"
+      style: "docked"
+      contents:
+        - text: "Resumen"
+          href: es/migration/index.qmd
+        - text: "1.x → 2.0"
+          href: es/migration/2.0.qmd
 
   page-footer:
     left: |
       DAF — Delphi Application Foundation (Community Edition)
-      [MIT License](../../legal/LICENSE.md)
+      [MIT License](https://github.com/Delphi-DAF/dafce/blob/main/legal/LICENSE.md)
     right: |
       Built with [Quarto](https://quarto.org)
 
@@ -191,4 +315,4 @@ execute:
   freeze: auto
 
 filters:
-  - _filters/fix-readme-links.lua
+  - _gen/include-links.lua

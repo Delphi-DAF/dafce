@@ -2,10 +2,10 @@
 sidebar: modules
 ---
 
-{{< include ../../../src/SQLCute.Abstractions/README.md >}}
+{{< include ../../../src/SQLCute/README.md >}}
 
 ---
 
-## Compilers
+## Abstractions
 
-{{< include ../../../src/SQLCute.Compilers/README.md >}}
+{{< include ../../../src/SQLCute.Abstractions/README.md >}}

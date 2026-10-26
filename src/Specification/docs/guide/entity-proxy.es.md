@@ -1,0 +1,105 @@
+# El proxy de entidad y la resolución de nombres
+
+**🌍 Idioma: [English](entity-proxy.md) | Español**
+
+← [Volver a la guía](../GUIDE.es.md)
+
+---
+
+## Por qué hace falta un proxy
+
+`Prop('Price')` nombra un miembro y no pregunta nada sobre él. Eso vale para una regla escrita junto a la entidad, pero significa que una errata viaja: el back-end de SQL enviará tranquilamente una columna sin mapear al servidor, mientras el carril en memoria no puede resolverla. El fallo aparece entonces lejos de su causa, y en un solo back-end.
+
+`TEntityExpr<T>` cierra ese hueco validando el miembro contra el RTTI de la entidad allí donde se escribe la expresión:
+
+```pascal
+var P := TEntityExpr<TProduct>.Create(nil);
+
+P.Prop('Price') > 100         // bien
+P.Prop('price') > 100         // también — resuelve a 'Price', como lo escribe el RTTI
+P.Prop('Pricee') > 100        // EExprMemberError: nombra el miembro y el tipo
+```
+
+Las propiedades ganan a los campos, igual que en la resolución del propio carril en memoria. Un registro funciona igual que una clase — aquí nada necesita una clase base.
+
+---
+
+## La hoja lleva un nombre de propiedad
+
+No un nombre de columna.
+
+- Un nombre de columna es vocabulario de persistencia, y este paquete permanece libre de SQL.
+
+- El nombre de propiedad es la moneda correcta para el carril en memoria, que no necesita mapeo alguno. Solo SQL necesita la columna, y la obtiene en el momento de emitir, en un único sitio, una sola vez.
+
+---
+
+## Una estrategia, dos preguntas
+
+`INameResolver` responde a las dos preguntas de nombres, porque son la misma clase de pregunta:
+
+```pascal
+INameResolver = interface
+  function ColumnFor(EntityType: PTypeInfo; const Member: string): string;
+  function TableFor(EntityType: PTypeInfo): string;
+end;
+```
+
+Los valores por defecto son deliberadamente mínimos:
+
+| Pregunta | Por defecto |
+|----------|-------------|
+| ¿Qué columna para este miembro? | El nombre del miembro, sin cambios |
+| ¿Qué tabla para este tipo? | El nombre del tipo sin la `T` inicial |
+
+La `T` se quita solo cuando le sigue una mayúscula, así que `TProduct` → `Product` mientras `Thing` se deja en paz. Sin pluralización y sin conversión de caso.
+
+Aportar la tuya es una clase:
+
+```pascal
+TMappedResolver = class(TInterfacedObject, INameResolver)
+public
+  function ColumnFor(EntityType: PTypeInfo; const Member: string): string;
+  function TableFor(EntityType: PTypeInfo): string;
+end;
+
+function TMappedResolver.ColumnFor(EntityType: PTypeInfo; const Member: string): string;
+begin
+  if SameText(Member, 'Price') then Result := 'price_eur' else Result := Member;
+end;
+
+function TMappedResolver.TableFor(EntityType: PTypeInfo): string;
+begin
+  Result := 'products';
+end;
+```
+
+Luego, o se le pregunta al proxy:
+
+```pascal
+var P := TEntityExpr<TProduct>.Create(TMappedResolver.Create);
+P.Column('Price');    // 'price_eur'
+P.Table;              // 'products'
+```
+
+…o se le entrega la estrategia a la emisión, que es donde de verdad hace falta un nombre de columna:
+
+```pascal
+TExprEmitter.Where(Q, MyExpr, TMappedResolver.Create, TypeInfo(TProduct));
+TExprEmitter.Apply<TProduct>(Q, Spec, TMappedResolver.Create);
+```
+
+---
+
+## Lo que la estrategia no es
+
+Es una costura para nombres, no un modelo de mapeo: claves, columnas de bloqueo, atributos, mapeo de herencia y DML dirigido por instancia están ausentes.
+
+
+---
+
+## El accesor reservado
+
+`IMemberExpr.Accessor` existe y hoy siempre vale `nil`.
+
+Los dos caminos de autoría lo dejan en `nil`.

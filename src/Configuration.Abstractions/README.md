@@ -11,18 +11,24 @@ Core contracts for the DAF configuration system. This module defines **interface
 
 ## What's in this module
 
-All types live in `Daf.Extensions.Configuration`.
+**Two units, and which one declares a type is what goes in your `uses`:**
+
+| Unit | What it declares |
+|---|---|
+| `Daf.Extensions.Configuration` | the contracts below, `TConfigurationPath`, `TConfigurationSourceOption` and `ConfigurationKeyName` |
+| `Daf.Configuration.Binder` | `TConfigurationBinder` and `TBindOption` |
 
 ### Core interfaces
 
 | Interface | Role |
 |-----------|------|
-| `IConfiguration` | Read/write key-value store with section navigation |
+| `IConfiguration` | Read/write key-value store with section navigation; `Exists` and `Find` answer presence |
 | `IConfigurationSection` | A named subtree of `IConfiguration` — adds `Key`, `Path`, `Value`, `HasChildren` |
 | `IConfigurationRoot` | Root of the tree — adds `Reload` and `Providers` |
 | `IConfigurationBuilder` | Fluent builder: add sources, then call `Build` |
 | `IConfigurationProvider` | Single source implementation: `TryGet`, `Set`, `Load`, `GetChildKeys` |
 | `IConfigurationSource` | Factory for a provider: `Build(Builder): IConfigurationProvider` |
+| `IConfigurationManager` | Builder **and** reader on one object: it is read while it is still being built |
 
 ### Key access
 
@@ -33,12 +39,28 @@ Config.GetSection('Database')['Host'] // via section
 
 Key separator is `:`. Sections expose `GetChildren` to iterate sub-keys.
 
+### Binding a subtree onto an object
+
+```pascal
+uses Daf.Configuration.Binder;
+
+var Settings := TConfigurationBinder.Bind<TAppSettings>(Config, 'AppSettings');
+```
+
+`Bind<T>` constructs the instance and returns it, and **the caller owns it**. The overload taking an
+`Instance: TObject` fills one that already exists. `TBindOption` says what gets filled:
+`boProperties`, the default, or `boFields`.
+
+Binding needs this package and nothing else: the binder works over any `IConfiguration` and knows
+nothing about JSON, INI or the environment. What it does with an absent key, nested objects,
+collections and a member it cannot convert is in the [`Configuration` guide](../Configuration/docs/GUIDE.md).
+
 ### `TConfigurationPath`
 
 Utility class for path manipulation:
 
 ```pascal
-TConfigurationPath.Combine('Database', 'Host')  // 'Database:Host'
+TConfigurationPath.Combine(['Database', 'Host']) // 'Database:Host'
 TConfigurationPath.GetSectionKey('Database:Host') // 'Host'
 TConfigurationPath.GetParentPath('Database:Host') // 'Database'
 ```
@@ -46,13 +68,38 @@ TConfigurationPath.GetParentPath('Database:Host') // 'Database'
 ### `TConfigurationSourceOption`
 
 ```pascal
-type TConfigurationSourceOption = (csoOptional, csoReloadOnChange);
+type
+  TConfigurationSourceOption  = (csoOptional);
+  TConfigurationSourceOptions = set of TConfigurationSourceOption;
 ```
+
+What a source takes is the **set**, and `csoOptional` is the value that changes what happens: without
+it, a file that is not there aborts the load with `File "<name>" not Found`; with it, the source
+warns and contributes nothing.
+
+### `ConfigurationKeyName`
+
+```pascal
+type
+  TDbSettings = class
+  private
+    FConnectionString: string;
+  public
+    [ConfigurationKeyName('connection-string')]
+    property ConnectionString: string read FConnectionString write FConnectionString;
+  end;
+```
+
+The attribute names the key a member is read from, so a key a file writes as `connection-string`
+reaches a property Delphi cannot name that way. It **replaces** the member name: with the attribute
+there, a value under `ConnectionString` no longer answers for that member. On a member of object
+type it renames the whole section. It applies under `boProperties` and `boFields` alike, where
+.NET declares it for properties only.
 
 ---
 
 ## Dependencies
 
-No dependencies on other DAF modules. Delphi RTL only.
+`Daf.Commons` only, for the `TNullable<T>` that `Find` returns and the RTTI the binder walks types with.
 
 The implementation is in [`Configuration`](../Configuration/README.md).

@@ -1,0 +1,27 @@
+﻿program HostQuickStart;
+
+{$APPTYPE CONSOLE}
+{$STRONGLINKTYPES ON}
+
+uses
+  Daf.Extensions.Hosting,
+  Daf.Hosting,
+  HostQuickStart.Worker in 'HostQuickStart.Worker.pas';
+
+// El host generico, sin ninguna variante de la familia por encima: se compone, se construye, y lo
+// registrado arranca y para con el.
+//
+//   HostQuickStart  -> arranca el servicio, informa, y lo para
+begin
+  var Builder := THost.CreateBuilder;
+
+  Builder.Services.AddHostedService<TGreetingWorker>;
+
+  var Host := Builder.Build;
+  try
+    Host.Start;
+    Writeln('El host esta arrancado');
+  finally
+    StopAndNil(Host);
+  end;
+end.

@@ -7,6 +7,107 @@ lang: es
 
 ---
 
-## Patrones de Testing
+## Primeros Pasos
+
+{{< include ../../../src/MiniSpec/docs/guide/getting-started.es.md >}}
+
+---
+
+## El World
+
+{{< include ../../../src/MiniSpec/docs/guide/world.es.md >}}
+
+---
+
+## Scenario Outline
+
+{{< include ../../../src/MiniSpec/docs/guide/scenario-outline.es.md >}}
+
+---
+
+## DataTables
+
+{{< include ../../../src/MiniSpec/docs/guide/datatables.es.md >}}
+
+---
+
+## Step Bindings
+
+{{< include ../../../src/MiniSpec/docs/guide/step-bindings.es.md >}}
+
+---
+
+## Tags y Filtrado
+
+{{< include ../../../src/MiniSpec/docs/guide/tags-filtering.es.md >}}
+
+---
+
+## Rules
+
+{{< include ../../../src/MiniSpec/docs/guide/rules.es.md >}}
+
+---
+
+## Assertions (Expect)
+
+{{< include ../../../src/MiniSpec/docs/guide/assertions.es.md >}}
+
+---
+
+## Vocabulario Gherkin
+
+{{< include ../../../src/MiniSpec/docs/guide/gherkin-vocabulary.es.md >}}
+
+---
+
+## Pending y NoAction
+
+{{< include ../../../src/MiniSpec/docs/guide/pending-noaction.es.md >}}
+
+---
+
+## Hooks (Before/After)
+
+{{< include ../../../src/MiniSpec/docs/guide/hooks.es.md >}}
+
+---
+
+## Configuración Global
+
+{{< include ../../../src/MiniSpec/docs/guide/configuration.es.md >}}
+
+---
+
+## Inyección de Dependencias
+
+{{< include ../../../src/MiniSpec/docs/guide/injection.es.md >}}
+
+---
+
+## Test Doubles
+
+{{< include ../../../src/MiniSpec/docs/guide/doubles.es.md >}}
+
+---
+
+## Reporters
+
+{{< include ../../../src/MiniSpec/docs/guide/reporters.es.md >}}
+
+---
+
+## Línea de Comandos
+
+{{< include ../../../src/MiniSpec/docs/guide/cli.es.md >}}
+
+---
+
+## Ejecuciones anidadas
+
+{{< include ../../../src/MiniSpec/docs/guide/nested-runs.es.md >}}
+---
+
+## Testing Patterns
 
 {{< include ../../../src/MiniSpec/docs/TESTING-PATTERNS.es.md >}}

@@ -5,7 +5,7 @@ uses
   System.SysUtils,
   System.TypInfo,
   System.Rtti,
-  Daf.Expression,
+  Daf.FilterSpec,
   Daf.Arrays;
 
 type
@@ -33,6 +33,21 @@ type
     class function ElementType<T>: PTypeInfo;overload; static;inline;
     class function ElementType(ATypeInfo: PTypeInfo): PTypeInfo;overload;static;
 
+    /// <summary>Un tipo generico CERRADO -- el unico que existe en el binario -- se reconoce
+    /// por su nombre: Delphi no emite nada mas sobre su condicion de generico.</summary>
+    class function IsGeneric(PInfo: PTypeInfo): Boolean;static;
+    /// <summary>El nombre hasta el primer &lt;, o cadena vacia si no es generico. Es lo que dos
+    /// instanciaciones de la misma familia comparten, y por si solo NO las distingue de otra
+    /// familia del mismo nombre y distinta aridad: eso lo dice GenericArgs.</summary>
+    class function GenericName(PInfo: PTypeInfo): string;static;
+    /// <summary>Los argumentos de una instanciacion cerrada, uno por argumento declarado.
+    /// Extiende lo que da la RTL, que no expone ninguno: hay que trocear el nombre, y trocearlo
+    /// RESPETANDO EL ANIDAMIENTO, porque un argumento que a su vez es generico trae sus propias
+    /// comas. Una posicion queda a nil cuando el argumento no esta registrado en la RTTI; la
+    /// LONGITUD es la aridad real en todo caso, que es lo que hace falta para emparejar.</summary>
+    class function GenericArgs<T>: TArray<PTypeInfo>;overload; static;inline;
+    class function GenericArgs(PInfo: PTypeInfo): TArray<PTypeInfo>;overload;static;
+
     class function PackageOf<T>: TRttiPackage;overload;static;inline;
     class function PackageOf(PInfo: PTypeInfo): TRttiPackage; overload; static;inline;
     class function PackageOf(AClass: TClass): TRttiPackage; overload; static;inline;
@@ -58,6 +73,12 @@ type
     procedure SetValue(Instance: Pointer;const AValue: TValue);
   end;
 
+  TRttiFieldHelper = class Helper for TRttiField
+  public
+    /// <summary>Smart set (coercion + record Implicit operator), symmetric with the property helper.</summary>
+    procedure SetValue(Instance: Pointer; const AValue: TValue);
+  end;
+
   TRttiTypeHelper = class helper for TRttiType
   private
   public
@@ -76,18 +97,24 @@ type
   public
   end;
 
-  // Representa un marcador para un argumento genérico abierto
+  /// <summary>
+  ///   Marcador para un argumento generico sin fijar. <c>IX&lt;_&gt;</c> es una instanciacion
+  ///   cerrada legitima con su propio tipo, y eso es lo que permite registrar un contrato
+  ///   generico una sola vez para todos sus cierres.
+  /// </summary>
+  /// <remarks>
+  ///   El constructor protesta a proposito. Dentro de una implementacion registrada sin fijar
+  ///   sus argumentos, <c>T</c> ES este marcador, asi que <c>T.Create</c> construiria un <c>_</c>
+  ///   y seguiria adelante: el unico fallo mudo del mecanismo. Aqui aborta explicando, y el mismo
+  ///   codigo generico instanciado sobre un cierre real sigue construyendo lo suyo.
+  /// </remarks>
   _ = class
+  public
+    constructor Create;
   end;
 
   TEnum = record
     class function ToString<T>(Value: T): string;static;inline;
-  end;
-
-  TGenericRTTI = class
-  public
-    class function GetGenericArguments(AType: TRttiType): TArray<TRttiType>;
-    class function MakeGenericType(GenericType: TRttiType; const TypeArgs: array of TRttiType): TRttiType;
   end;
 
   TPropInjector = class
@@ -100,11 +127,24 @@ function TryGetMethod(const Instance: TObject; const MethodName: string; out Met
 function GetInterfaceIID(const I: IInterface; var IID: TGUID): Boolean;
 function GetRttiFromInterface(AIntf: IInterface; out RttiType: TRttiInterfaceType): Boolean;
 function HasRtti(PInfo: PTypeInfo): Boolean;
+/// <summary>
+///   Converts <c>Source</c> to a value assignable to <c>Target</c>, returning False when no
+///   reasonable conversion exists. Handles: exact type; a NULL source -- an empty <c>TValue</c> or
+///   a Variant <c>Null</c> -- towards a <c>TNullable&lt;X&gt;</c>, which gives the absent nullable;
+///   a record with an <c>Implicit(X)</c> operator returning <c>Target</c> (the value is coerced to
+///   <c>X</c> then wrapped — e.g. <c>TNullable&lt;X&gt;</c>); a direct cast; and the same cast after a round-trip through a
+///   Variant, which turns an enumeration into its ordinal and a Variant into the value it holds.
+///   It does not convert between families -- an integer into a Boolean, a number into a string.
+///   Shared by the smart <c>SetValue</c> helpers and by callers that materialize values (e.g.
+///   the in-memory query engine).
+/// </summary>
+function CoerceForAssign(const Target: TRttiType; const Source: TValue; out Res: TValue): Boolean;
 
 implementation
 
 uses
-  System.StrUtils,
+  System.Variants,
+  Daf.Nullable,
   Daf.Types;
 
 function TryGetMethod(const Instance: TObject; const MethodName: string; out Method: TMethod): Boolean;
@@ -318,6 +358,85 @@ begin
     Exit(ref^);
 end;
 
+class function _T.IsGeneric(PInfo: PTypeInfo): Boolean;
+begin
+  Result := (PInfo <> nil) and (Pos('<', string(PInfo.Name)) > 0);
+end;
+
+class function _T.GenericName(PInfo: PTypeInfo): string;
+begin
+  Result := '';
+  if PInfo = nil then Exit;
+  var Name := string(PInfo.Name);
+  var Opening := Pos('<', Name);
+  if Opening = 0 then Exit;
+  Result := Copy(Name, 1, Opening - 1);
+end;
+
+class function _T.GenericArgs<T>: TArray<PTypeInfo>;
+begin
+  Result := _T.GenericArgs(TypeInfo(T));
+end;
+
+class function _T.GenericArgs(PInfo: PTypeInfo): TArray<PTypeInfo>;
+begin
+  Result := nil;
+  if PInfo = nil then Exit;
+
+  // Troceo por PROFUNDIDAD, no por comas. Un argumento que a su vez es generico trae las
+  // suyas -- IPair<TDictionary<string,Integer>,TAlpha> tiene dos argumentos y tres comas--,
+  // y contarlas a lo bruto da una aridad equivocada y con ella un emparejamiento equivocado.
+  var Name := string(PInfo.Name);
+  var Depth := 0;
+  var Current := '';
+  var Names: TArray<string> := nil;
+  var Closed := False;
+  for var Idx := 1 to Length(Name) do
+  begin
+    var C := Name[Idx];
+    if C = '<' then
+    begin
+      Inc(Depth);
+      if Depth = 1 then Continue;   // la apertura del nivel 1 no forma parte de ningun argumento
+    end
+    else if C = '>' then
+    begin
+      Dec(Depth);
+      if Depth = 0 then
+      begin
+        Names := Names + [Current.Trim];
+        Closed := True;
+        Break;
+      end;
+    end
+    else if (C = ',') and (Depth = 1) then
+    begin
+      Names := Names + [Current.Trim];
+      Current := '';
+      Continue;
+    end;
+    if Depth >= 1 then
+      Current := Current + C;
+  end;
+  if not Closed then Exit;
+
+  // El nombre de una instanciacion cerrada YA trae sus argumentos cualificados, asi que
+  // FindType basta. Se lee Name y no QualifiedName a proposito: QualifiedName lanza para un
+  // tipo que no esta declarado en la interface de una unit, y aqui eso no es un error.
+  SetLength(Result, Length(Names));
+  var RC := TRttiContext.Create;
+  try
+    for var Idx := 0 to High(Names) do
+    begin
+      var RType := RC.FindType(Names[Idx]);
+      if RType <> nil then
+        Result[Idx] := RType.Handle;
+    end;
+  finally
+    RC.Free;
+  end;
+end;
+
 class function _T.HasProperty(T: TClass;const PropName:string): Boolean;
 begin
   Result :=(GetPropInfo(T, PropName) <> nil);
@@ -432,30 +551,91 @@ end;
 
 { TRttiPropertyHelper }
 
-procedure TRttiPropertyHelper.SetValue(Instance: Pointer;const AValue: TValue);
+function CoerceForAssign(const Target: TRttiType; const Source: TValue; out Res: TValue): Boolean;
 begin
-  var
-  ValueToSet := AValue;
-  if PropertyType is TRttiRecordType then
+  Res := TValue.Empty;
+  if Target = nil then
+    Exit(False);
+
+  // 1. Exact type — nothing to convert.
+  if Source.TypeInfo = Target.Handle then
   begin
-    // Probar si existe operador de conversion implicita
-    for var M in PropertyType.GetMethods do
-    begin
-      if(M.Name = '&op_Implicit')then
+    Res := Source;
+    Exit(True);
+  end;
+
+  // 2. NULL towards a TNullable<X> is the absent nullable, not one holding Default(X).
+  if (TNullableRtti.ValueTypeOf(Target.Handle) <> nil)
+     and (Source.IsEmpty or ((Source.Kind = tkVariant) and VarIsNull(Source.AsVariant))) then
+  begin
+    Res := TNullableRtti.Absent(Target.Handle);
+    Exit(True);
+  end;
+
+  // 3. Record with an Implicit(X) operator returning Target (e.g. TNullable<X>):
+  //    coerce the source to X, then wrap it through the operator.
+  if Target is TRttiRecordType then
+    for var Op in Target.GetMethods do
+      if SameText(Op.Name, '&op_Implicit') and (Op.ReturnType <> nil)
+         and (Op.ReturnType.Handle = Target.Handle) and (Length(Op.GetParameters) = 1) then
       begin
-        var
-        P := M.GetParameters[0];
-        if P.ParamType.Handle = ValueToSet.TypeInfo then
+        var ParamT := Op.GetParameters[0].ParamType;
+        var Inner: TValue;
+        if (ParamT <> nil) and CoerceForAssign(ParamT, Source, Inner) then
         begin
-          ValueToSet := M.Invoke(GetValue(Instance),[ValueToSet]);
-          inherited SetValue(Instance, ValueToSet);
-          Break;
+          var Dummy: TValue;
+          TValue.Make(nil, Target.Handle, Dummy);   // static operator: instance is a dummy
+          Res := Op.Invoke(Dummy, [Inner]);
+          Exit(True);
         end;
       end;
+
+  // 4. Direct cast (compatible ordinals, class/interface hierarchy, …).
+  if Source.TryCast(Target.Handle, Res) then
+    Exit(True);
+
+  // 5. Round-trip through a Variant: an enumeration comes back as its ordinal and a Variant
+  //    as the value it holds, so either can take one of the casts above. It does not convert
+  //    between families; the property helper leaves that to SetPropValue.
+  try
+    var Tmp := TValue.FromVariant(Source.AsVariant);
+    if Tmp.TypeInfo = Target.Handle then
+    begin
+      Res := Tmp;
+      Exit(True);
     end;
-  end
+    Result := Tmp.TryCast(Target.Handle, Res);
+  except
+    Result := False;
+  end;
+end;
+
+procedure TRttiPropertyHelper.SetValue(Instance: Pointer;const AValue: TValue);
+var
+  V: TValue;
+begin
+  // CoerceForAssign first: exact type, a record Implicit operator (e.g. TNullable), a
+  // direct cast. What it does not convert goes to SetPropValue, which converts by the
+  // kind of the property: an ordinal or a name into an enumeration or a set, a number
+  // into a string, a string into a number. A record has no such conversion, so modern
+  // RTTI raises EInvalidCast.
+  if CoerceForAssign(PropertyType, AValue, V) then
+    inherited SetValue(Instance, V)
+  else if (Self is TRttiInstanceProperty) and not (PropertyType is TRttiRecordType) then
+    SetPropValue(TObject(Instance), TRttiInstanceProperty(Self).PropInfo, AValue.AsVariant)
   else
-    SetPropValue(Instance, Self.Name, ValueToSet.AsVariant);
+    inherited SetValue(Instance, AValue);
+end;
+
+procedure TRttiFieldHelper.SetValue(Instance: Pointer; const AValue: TValue);
+var
+  V: TValue;
+begin
+  // Same smart coercion as the property helper (see CoerceForAssign), via modern RTTI.
+  if CoerceForAssign(FieldType, AValue, V) then
+    inherited SetValue(Instance, V)
+  else
+    inherited SetValue(Instance, AValue);
 end;
 
 { TRttiTypeHelper }
@@ -512,71 +692,23 @@ begin
   Result := not (IsObject or IsCollection or IsDictionary or IsArray);
 end;
 
+{ _ }
+
+constructor _.Create;
+begin
+  inherited Create;
+  raise EInvalidOpException.Create(
+    '_ is the placeholder for an unbound generic argument, not a type to build. This is a ' +
+    'T.Create inside an implementation registered with its type arguments left open, where T ' +
+    'IS the placeholder: read the concrete class out of the _ClosedArgs field the container ' +
+    'fills, and build that one.');
+end;
+
 { TEnum }
 
 class function TEnum.ToString<T>(Value: T): string;
 begin
   Result := TRttiEnumerationType.GetName<T>(Value);
-end;
-
-{ TGenericRTTI }
-
-class function TGenericRTTI.GetGenericArguments(AType: TRttiType): TArray<TRttiType>;
-var
-  Ctx: TRttiContext;
-  QualifiedName: string;
-  ArgList: TArray<string>;
-  ArgType: TRttiType;
-  I: Integer;
-begin
-  Ctx := TRttiContext.Create;
-  QualifiedName := AType.QualifiedName;
-
-  // Buscar apertura de genéricos
-  if not ContainsText(QualifiedName, '<') then
-    Exit(nil);
-
-  QualifiedName := Copy(QualifiedName, Pos('<', QualifiedName) + 1, MaxInt);
-  QualifiedName := Copy(QualifiedName, 1, Pos('>', QualifiedName) - 1);
-
-  ArgList := QualifiedName.Split([',']);
-  SetLength(Result, Length(ArgList));
-
-  for I := 0 to High(ArgList) do
-  begin
-    ArgType := Ctx.FindType(Trim(ArgList[I]));
-    if not Assigned(ArgType) then
-      raise Exception.CreateFmt('Tipo genérico no encontrado: %s', [ArgList[I]]);
-    Result[I] := ArgType;
-  end;
-end;
-
-class function TGenericRTTI.MakeGenericType(GenericType: TRttiType; const TypeArgs: array of TRttiType): TRttiType;
-var
-  Ctx: TRttiContext;
-  TI: PTypeInfo;
-  Name: string;
-  I: Integer;
-  QualifiedName: string;
-begin
-  // Construir el nombre calificado como TMiClase<T1, T2>
-  Name := GenericType.Name;
-  QualifiedName := Name + '<';
-  for I := Low(TypeArgs) to High(TypeArgs) do
-  begin
-    QualifiedName := QualifiedName + TypeArgs[I].QualifiedName;
-    if I < High(TypeArgs) then
-      QualifiedName := QualifiedName + ', ';
-  end;
-  QualifiedName := QualifiedName + '>';
-
-  // Buscar el tipo construido en el contexto actual
-  Ctx := TRttiContext.Create;
-  TI := Ctx.FindType(QualifiedName).Handle;
-  if not Assigned(TI) then
-    raise Exception.CreateFmt('No se pudo construir tipo genérico: %s', [QualifiedName]);
-
-  Result := Ctx.GetType(TI);
 end;
 
 class procedure TPropInjector.AssignTo<TTarget, TSource>(const Source: TSource; const Target: TTarget);
@@ -590,7 +722,6 @@ var
   SrcType, DstType: TRttiType;
   SrcProp, DstProp: TRttiProperty;
 begin
-  //if not Assigned(Source) or not Assigned(Target) then  Exit;
 
   Ctx := TRttiContext.Create;
   try

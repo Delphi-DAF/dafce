@@ -1,8 +1,31 @@
 # Editor configuration, see http://editorconfig.org
+#
+# Este fichero obliga a los EDITORES y a nadie más. Un fichero escrito por un
+# script o por un agente —que no abre editor— no lo consulta, y cada vez se
+# escribe más repo por esa vía.
+#
+# ⚠️ .gitattributes NO respalda lo de aquí abajo: declara el final de línea y la
+# binariedad, y se acabó. De todo lo que este fichero pide, git solo aplica esa
+# una al indexar — charset, BOM, sangrado, salto final, espacios al final y ancho
+# de línea no tienen ahí equivalente ni lo pueden tener. El final de línea, que es
+# lo único con red, se audita así:
+#
+#   git ls-files --eol \
+#     | awk '($2=="w/lf" && /eol=crlf/) || ($2=="w/crlf" && /eol=lf/) || ($2=="w/mixed")'
+#
+# w/mixed importa: un fichero con finales mezclados no es ni w/lf ni w/crlf, así que
+# se escapa de un chequeo que solo busque esos dos.
+#
+# Las dos ediciones comparten este fichero: mantenerlo igual en DAFce y DAFpro.
+
 root = true
 
+# Fuentes Delphi. utf-8-bom, NO utf-8: el IDE de Rad Studio exige el BOM
+# siempre, no solo cuando el fichero tiene caracteres no ASCII. Sin BOM el
+# fichero se lee como ANSI y cualquier no-ASCII se corrompe en silencio, sin
+# que el compilador diga nada — por eso hay una auditoría de BOM en las notas.
 [*.{pas,dpr,dpk}]
-charset = utf-8
+charset = utf-8-bom
 end_of_line = crlf
 indent_style = space
 indent_size = 2
@@ -10,35 +33,76 @@ max_line_length = 132
 insert_final_newline = true
 trim_trailing_whitespace = true
 
-[*.md]
+# Ficheros de proyecto. Los escribe el IDE, así que aquí solo se declara lo que
+# no debe cambiar; ni se recorta ni se reindenta. Son merge=binary en
+# .gitattributes, de modo que un cambio de solo espacios no es ruido: es un
+# conflicto que no se puede fusionar.
+[*.{dproj,groupproj,optset,dfm}]
+end_of_line = crlf
+indent_style = space
+indent_size = 4
+insert_final_newline = false
+trim_trailing_whitespace = false
+
+# Markdown y Quarto van juntos: .qmd es el mismo material, solo que renderizado.
+# Sin recorte de espacios finales — en Markdown dos al final son un salto de línea.
+[*.{md,qmd}]
 charset = utf-8
 end_of_line = crlf
 max_line_length = off
 trim_trailing_whitespace = false
 
-[*.js]
+[*.ini]
 charset = utf-8
 end_of_line = crlf
 indent_style = space
+indent_size = 2
 max_line_length = 132
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Scripts de Windows: los consume cmd.exe en la VM.
+[*.{bat,cmd}]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+
+# Herramientas y configuración, en convención de su propio ecosistema.
+[*.lua]
+charset = utf-8
+end_of_line = lf
+indent_style = space
 indent_size = 2
 insert_final_newline = true
 trim_trailing_whitespace = true
 
-[*.json]
+[*.py]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{json,yml,yaml}]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# .js va aquí y no con .ini, donde estaba por arrastre del grupo: .ini es formato
+# de Windows y el CRLF es suyo, JavaScript no. El lenguaje acepta los dos —ECMA-262
+# admite LF, CR y CRLF—, así que no hay estándar que obligue; lo que hay es una
+# convención unánime: Prettier pasó su endOfLine de auto a lf en la 2.0, y la regla
+# linebreak-style de ESLint trae "unix" por defecto. Y Prettier CEDE ante este
+# fichero, así que lo que se declare aquí es lo que acaba mandando.
+[*.js]
 charset = utf-8
 end_of_line = lf
 indent_style = space
 indent_size = 2
 max_line_length = 132
-insert_final_newline = true
-trim_trailing_whitespace = true
-
-[*.ini]
-charset = utf-8
-end_of_line = crlf
-indent_style = space
-max_line_length = 132
-indent_size = 2
 insert_final_newline = true
 trim_trailing_whitespace = true

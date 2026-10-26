@@ -1,4 +1,4 @@
-unit DependencyInjection.Feat;
+﻿unit DependencyInjection.Feat;
 
 interface
 
@@ -16,11 +16,18 @@ type
     property Value: string read GetValue write SetValue;
   end;
 
-  TTestableService = class(TDIObject<TTestableService>, ITestableService)
+  TTestableService = class(TInterfacedObject, ITestableService)
   private
+    // Cuantas instancias de este doble siguen vivas. Vive aqui, en el proyecto de test, y no en
+    // una clase base del framework, porque "el objeto se destruyo" es lo unico que las specs de
+    // tiempo de vida necesitan observar y es justo lo que el contenedor NO puede afirmar: un
+    // transient no lo retiene, asi que para el ya no existe en cuanto lo entrega.
+    class var FInstanceCount: Integer;
     FValue: string;
   public
+    class property InstanceCount: Integer read FInstanceCount;
     procedure AfterConstruction; override;
+    procedure BeforeDestruction; override;
     function GetImplementorClass: TClass;
     function GetValue: string;
     procedure SetValue(const Value: string);
@@ -50,7 +57,14 @@ uses
 procedure TTestableService.AfterConstruction;
 begin
   inherited;
+  AtomicIncrement(FInstanceCount);
   FValue := 'value is not assigned';
+end;
+
+procedure TTestableService.BeforeDestruction;
+begin
+  AtomicDecrement(FInstanceCount);
+  inherited;
 end;
 
 function TTestableService.GetImplementorClass: TClass;

@@ -114,7 +114,7 @@ begin
     Captured := Scenario.CapturedRaise;
     if Captured.WasRaised then
       raise ExpectFail.CreateFmt(
-        'Unhandled exception from When step: %s. Use ExpectRaised.ToRaise() to verify it.',
+        'Unhandled exception from When step: %s. Verify it with ExpectException(Raised).',
         [Captured.ExceptionMessage]);
   end;
 end;

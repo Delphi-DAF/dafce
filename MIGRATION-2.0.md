@@ -1,0 +1,895 @@
+﻿# Migrating to DAF 2.0
+
+This release is a **major**: some changes break compilation, and others change behaviour at run time
+where the compiler says nothing. The list below covers both; step 6 of "How to do it" names the
+run-time ones.
+
+You upgrade from **1.6.0**. There was no published 1.7.0 — its content ships here —, so 1.6 to 2.0
+is a single step.
+
+## What to change, most likely first
+
+### 1. Application modules are registered by name
+
+`AddModules(Package)` — the RTTI discovery of `IAppModule` — **is gone**. Each module is applied by
+name, in whatever order the application wants:
+
+```pascal
+// before
+ServiceCollection.AddModules(_T.PackageOf<TSomething>);
+
+// now
+ServiceCollection
+  .AddModule<TEnvironmentModule>
+  .AddModule<TEvaluationModule>
+  .AddModule<TSuiteModule>;
+```
+
+The `uses` marked `// force-link:` go with it — they only existed so the RTTI would see the module,
+and naming the type in `AddModule<T>` already links its unit.
+
+`IAppModule` and `TAppModule` **do not change**, and each module's body — its `AddServices` — is
+untouched. What disappears is how they were found, not what they are.
+
+⚠️ **If your application derives from `TDafApplication`, this affects you even if you never wrote
+`AddModules`.** That builder used to discover the modules of the application class's package on
+its own. `TDafApplication` is **retired** in 2.0 — your entry point is your variant's builder,
+further down — and no variant registers a module for you. Declare yours where you compose
+services:
+
+```pascal
+Builder.Services
+  .AddModule<TEnvironmentModule>
+  .AddModule<TEvaluationModule>;
+```
+
+**What changes when it runs.** Modules register in the order of the `AddModule<T>` calls, no longer
+in the order the reflection walk found them, and each module's own constructor runs.
+
+### 2. `Daf.Commons` has been split
+
+`Daf.Commons` now holds **only what extends the standard library**. What left has its own package,
+and it must be added to the `requires` of whichever package uses it:
+
+| What you used | Now lives in |
+|---|---|
+| `Daf.CmdLn.Parser` | nowhere: withdrawn — see the next section |
+| `Daf.SystemProcess` | package `Daf.SystemProcess` |
+
+`KillAfterTimeout` is gone from `ISystemProcess` and from its builder: the deadline always kills the
+process. Drop the call.
+
+A stream with no destination declared now **inherits** the parent's: what the child writes appears
+where your process writes. To keep it quiet, as in 1.6.0, discard both:
+
+```pascal
+  .StandardOutput(TProcessOutput.Discard)
+  .StandardError(TProcessOutput.Discard)
+```
+
+A stream takes one declaration: `OnStdOut` twice, or `OnStdOut` and then `StandardOutput`, raises
+`EInvalidOpException`. Keep one per stream.
+
+`HideWindow(False)`, the default, no longer opens a console window of its own: the child runs in
+your console. There is no option that brings the separate window back.
+
+Sharing your console, the child also receives its Ctrl+C: the user's Ctrl+C now stops the child
+together with your application, where in 1.6.0 the child's own console kept it out. A child that has
+to outlive a Ctrl+C is launched with `HideWindow(True)`.
+
+`ExecuteAsync` now launches the child before it returns, on the thread that calls it, and only the
+wait runs in the task. A launch that fails calls `OnFailed` on that same thread, before
+`ExecuteAsync` returns: a handler that counted on running in the background no longer does.
+
+`Kill` with no child launched —before running, or after a launch that failed— now raises
+`EInvalidOpException`; it used to do nothing visible and cut the next run short. A call that can
+arrive before the launch or after the end, such as one from a shutdown hook, asks `IsRunning` first:
+
+```pascal
+if Proc.IsRunning then
+  Proc.Kill;
+```
+
+With a deadline, a descendant that inherits a captured stream —a grandchild left running in the
+background— no longer holds `Execute` past it: when the deadline expires with the stream still
+open, the result is `Timeout`, where it used to wait for the descendant and come back `Completed`.
+A cancellation token bounds that wait the same way. With neither, `Execute` still waits for the
+stream to close.
+
+### 3. `Daf.CmdLn.Parser` is gone
+
+The unit 1.6.0 shipped inside `Daf.Commons` **is no longer distributed**. Its replacement is
+`Daf.CommandLine`, a port of .NET's
+[`System.CommandLine`](https://learn.microsoft.com/dotnet/standard/commandline) — the library the
+`dotnet` CLI itself is built on. There is **no adapter and no unit alias**: they are different APIs,
+and existing `uses` clauses do not keep compiling.
+
+The same grammar, declared both ways:
+
+```pascal
+// before
+uses Daf.CmdLn.Parser;
+
+var Parser := TCmdLnParserBuilder.Create
+  .Arg<string>('file')
+  .Arg<Integer>('port')
+  .Arg<Boolean>('verbose')
+  .Build;
+
+var Params := Parser.Parse(GetCommandLine);
+if Params = nil then Exit;                    // nil was the whole report of a bad invocation
+
+var FilePath  := Params['file'].AsString;     // 'file' written a second time, unchecked
+var Port      := Params['port'].AsInteger;    // and the type chosen again, at run time
+var IsVerbose := Params['verbose'].AsBoolean;
+```
+
+```pascal
+// now
+uses Daf.CommandLine;
+
+var FileOpt    := CommandLine.Option<string>('--file').Description('File to compile');
+var PortOpt    := CommandLine.Option<Integer>('--port').Description('Port to listen on');
+var VerboseOpt := CommandLine.Option<Boolean>('--verbose').Description('Say more');
+
+var Root := CommandLine.Root('mytool', 'A tool');
+Root.Add([FileOpt, PortOpt, VerboseOpt]);
+
+var Parsed := Root.Parse;                     // no argument: reads ParamStr
+if Parsed.IsHelpRequested or Parsed.IsVersionRequested or not Parsed.Succeeded then
+begin
+  ExitCode := Parsed.Invoke;                  // the help, the version, or each error naming the
+  Exit;                                       // option and the text it received
+end;
+
+var FilePath  := FileOpt.ValueIn(Parsed);     // a string, statically
+var Port      := PortOpt.ValueIn(Parsed);     // an Integer, statically
+var IsVerbose := VerboseOpt.ValueIn(Parsed);
+```
+
+**Where the repeated name goes.** On the left, `'file'` is written once to declare and again to
+read, and nothing checks that the two agree: a typo gives back an empty value rather than an error.
+On the right the option object **is** the key, so the name exists once and asking for one that was
+never declared is not representable. Reading an `IOption<Integer>` into a `string` is a **compile**
+error, where `AsInteger` was a decision taken again at every read.
+
+The mechanical part, term by term:
+
+| `Daf.CmdLn` | `Daf.CommandLine` |
+|---|---|
+| `TCmdLnParserBuilder.Create` … `.Build` | `CommandLine.Root(name, description)` |
+| `.Arg<T>('name')` | `CommandLine.Option<T>('--name')`, added with `Root.Add` — the dashes are written now |
+| `.Arg<string>('output\|o')` | `CommandLine.Option<string>('--output', ['-o'])` |
+| `A.Default(V)` | `.DefaultValue(V)`, and `.DefaultValueFactory(…)` for a default that has to be worked out |
+| `A.Required(True)` | `.Required` — on a `Boolean` it never fails: a `Boolean` has `false` for its default |
+| `A.Help('…')` | `.Description('…')` — and this one is **shown**: help is generated |
+| `.Command('build')` … `.EndCommand` | `CommandLine.Command('build', description)`, hung with `Parent.Add(Child)` |
+| `Params['x'].AsString` / `.AsInteger` / `.AsBoolean` | `XOpt.ValueIn(Parsed)`, typed by the option itself |
+| `Params.GetSection('build')['output']` | `OutputOpt.ValueIn(Parsed)`: there is no section to navigate |
+| `Params.Command = 'build'` | `Parsed.Command`, an `ICommand` — compare it against the object you declared |
+| `Parser.Parse(…) = nil` | `Parsed.Succeeded` false. `Parsed.Errors` holds each error with the result of its symbol, and `Parsed.ErrorText` their text |
+
+**What does not carry over unchanged:**
+
+- **`Parse(string)` is not `Parser.Parse(GetCommandLine)`.** For the command line of the process,
+  `Parse` with no arguments reads `ParamStr`. `Parse(string)` splits a line with
+  `CommandLine.SplitCommandLine`, and takes its first token for the root only when it is the root's
+  name or the path of the running executable: a line from `GetCommandLine` that starts with `app.exe`,
+  for a root called `app`, reads `app.exe` as a value.
+- **Names tell cases apart.** `Daf.CmdLn` took `--Verbose` for `--verbose`; `Daf.CommandLine` does
+  not, as in .NET. A parse configured with `TParserConfiguration.EnableCaseInsensitiveNames` compares
+  them as before.
+- **Order stopped mattering, so some invocations that used to fail now work.** In `Daf.CmdLn` a
+  command's arguments were consumed *before* its subcommand, so `app build -o dir --flag` did not
+  parse. A `Recursive` option is read from the leaf, and that invocation now parses. Nothing that
+  worked stops working; a test that asserted the failure will.
+- **Two limitations of the old value engine are gone, and their outcome changed.** A negative number
+  could not be passed at all, and `--port 80xyz` was accepted as `80`. Now `-5` is a value, and
+  `80xyz` is refused naming the option, and reading the option raises that error. If anything
+  relied on that truncation, it gets an error where it used to get a number.
+- **Two values for an option that takes one are an error.** `Daf.CmdLn` kept the last one:
+  `--port 1 --port 2` read 2. Now the parse fails with
+  `Option '--port' expects a single argument but 2 were provided.`, and reading the option raises it.
+  Naming it again with no value works as before: `--port 1 --port` reads 1.
+- **Dispatching can move into the grammar.** `Daf.CmdLn` handed back values and left dispatching to
+  the application. In `Daf.CommandLine` each command can declare its action with `SetAction`, and
+  `Invoke` on the parse result runs the one of the command reached and answers the exit code. Code
+  that dispatches by hand on `Parsed.Command` keeps working.
+
+`Daf.Configuration.CommandLine` is untouched. Reading the command line as a **configuration
+source** — `--Logging:LogLevel=Debug` overriding `appsettings.json` — is a different job and shares
+no engine with either module.
+
+### 4. Types renamed or moved out of `Daf.Commons`
+
+| Before | Now |
+|---|---|
+| `TExpresion<T>` | **`TDeferred<T>`**, in `Daf.Types` |
+| `TFilterSpec<T>`, in `Daf.Expression` | same class, in `Daf.FilterSpec` |
+| unit `Daf.Expression` | dissolved into `Daf.FilterSpec` and `Daf.Types` |
+| `TBooleanExpresion` | removed |
+| `&If.Exp<T>` | removed — on Delphi 13, the ternary operator (`if … then … else` as an expression) replaces it and evaluates only the branch it takes; on Delphi 12, an `if` statement |
+| `TGenericRTTI.GetGenericArguments(TRttiType)` | **`_T.GenericArgs(PTypeInfo)`**, in `Daf.Rtti` — returns type information rather than reflected types, and counts an argument that is itself generic as one |
+| `TGenericRTTI.MakeGenericType` | removed with no replacement — see below |
+| `TSmartArray<T>.Select(TDeferred<TMapper<T, TTarget>>)` | `Select(TFunc<T, TTarget>)` |
+
+`Daf.Linq.Where` / `Filter` take `TFilterSpec<T>`, the type that already lived in Commons:
+`Daf.Linq` does not introduce a filtering vocabulary of its own, it evaluates the one already
+named.
+
+`MakeGenericType` has no replacement because it promised something Delphi does not do: build a
+generic instantiation at run time. It failed with an access violation even in the case it was
+written for. If you were calling it to obtain a closed generic the compiler never saw, there is
+nothing to migrate to — but if what you actually needed was one registration serving every closure
+of a contract, that is now
+[registering a generic contract once](src/DependencyInjection.Abstractions/README.md#registering-a-generic-contract-once).
+
+### 5. `Daf.SQLCute.Compilers` is dissolved into `Daf.SQLCute`
+
+The six dialect compilers live in `Daf.SQLCute`, next to the ANSI one, and keep their unit names:
+`uses` clauses compile unchanged. Remove `Daf.SQLCute.Compilers` from `requires`, and from any
+`DCCReference`.
+
+### 6. Logging: the mute mode is gone
+
+- **`DAFInternalLogger` removed.** It was a global `ILogger` under the `DAF` category that wrote
+  warnings and errors to the debugger. `BootstrapLog.LoggerFor(<category>)` replaces it: an
+  `ILogger` under the category you give it, which reports through the bootstrap channel — to the
+  debugger and to the standard error output, by default.
+- **Composing the pipeline with no provider at all now fails when the host is built**, with
+  `ELoggingCompositionError`, instead of handing back an `ILogger` that accepts everything and
+  writes nothing. If your startup composed logging without providers and you had not noticed, this
+  is what will tell you.
+- Startup reports go out under the category of the class reporting, through the `ILogger` pipeline.
+  That is not API, it is output: if you filtered on the `DAF` category, revisit the filter.
+- **`ILogger` gained `IsEnabled(Level)`, and this one breaks at compile time.** A logger now answers
+  whether an entry of a given level would reach any destination, so a caller can skip building
+  arguments that cost more than the line itself — a state dump, a query. A `TLogger`
+  descendant inherits a default that answers `True`, so a logging provider written outside DAF keeps
+  compiling untouched; only a type that implements `ILogger` **by hand** has to add it. Answer
+  `True` if in doubt:
+
+  ```pascal
+  // add to any hand-written ILogger implementer
+  function TMyLogger.IsEnabled(const Level: TLogLevel): Boolean;
+  begin
+    Result := True;  // or your own level test, matching what Log actually writes
+  end;
+  ```
+
+### 7. A closed container no longer answers
+
+- **Resolving from a closed container raises `EContainerShutDownError`**, and the message names the
+  service that was asked for. It used to do two different things and neither was that: an
+  `EAccessViolation` if the service was a Singleton, and serving it silently if it was Scoped — an
+  instance nobody was going to collect. `EContainerShutDownError` derives from
+  `EServiceProviderError`, so whoever already catches the parent still catches it.
+- **Creating a scope from a closed container fails the same way**, instead of handing out a scope
+  that cannot resolve.
+- **Asking a closed container whether it can resolve fails the same way.** `CanResolve` used to
+  answer as if the container were still open.
+- **Closing twice no longer breaks.** If your code closed in two places — the application's explicit
+  shutdown and the teardown of whoever owns the provider — and you avoided the second one with a
+  flag, that flag is no longer needed.
+
+The only thing to revisit is the last resolution before the shutdown:
+
+```pascal
+// Before: worked by accident if the service was Scoped
+Provider.ShutDown;
+var Report := Provider.GetRequiredService<IReport>;   // now: EContainerShutDownError
+
+// Now: resolve while the container is still alive
+var Report := Provider.GetRequiredService<IReport>;
+Provider.ShutDown;
+```
+
+### 8. The application family, and one builder style
+
+This is the largest front of 2.0 for anything that had a `.dpr`.
+
+- **`IHostBuilder` is gone, and with it the deferred style.** Registering through
+  `ConfigureServices` / `ConfigureAppConfiguration` / `ConfigureHostConfiguration` callbacks no
+  longer exists. There is one style, the immediate one: the builder is usable the moment it is
+  created, and what you register happens where it is written.
+
+  ```pascal
+  // Before
+  var Builder: IHostBuilder := THostBuilder.Create;
+  Builder.ConfigureServices(
+    procedure(Context: IHostBuilderContext; Services: IServiceCollection)
+    begin
+      Services.AddSingleton<IMyService, TMyService>;
+    end);
+  var Host := Builder.Build;
+
+  // Now
+  var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
+  B.Services.AddSingleton<IMyService, TMyService>;
+  B.ParseArgs(CommandLineConfig.ProcessArgs);
+  ExitCode := B.Build.Run;
+  ```
+
+  The machinery survives whole — `THostBuilder` drops to implementation detail. What changed is who
+  calls it and when.
+
+- **Your entry point is now your variant.** `TCliApplication` (`Daf.Cli`), `TWebApplication`
+  (`Daf.Web`), `TVclApplication` (`Daf.VCL`) and `TFmxApplication` (`Daf.FMX`). They share
+  `Services`, `Configuration`, `Environment`, `Logging`, `Properties` and `ServiceProviderOptions`
+  through `IHostApplicationBuilder`.
+
+- **`TDafApplication` and `TDafApplicationBuilder` are retired**, and so is the `Daf.Application`
+  package. Their replacement is the variant from the entry above, and each member goes somewhere:
+  `CreateHostBuilder` becomes your variant's `CreateBuilder`; `IDafApplication` becomes the
+  `I…Application` that `Build` returns; `RunAsync` is `Run` under its own name;
+  `VersionRequested` is `IParseResult.IsVersionRequested`, answered by the grammar; and
+  `App` becomes `DafApp`, which exists **only in VCL and FMX** — in CLI and Web there is no
+  application global on purpose.
+
+  The template-method side of `TDafApplication` —`AppClass`, the virtual `Create(Host)`, `Execute`
+  and `VersionInfo`— has no counterpart in the variants. In CLI the work is the root's action,
+  declared with `B.SetAction`, which receives the `IServiceProvider`; what ran around it is a startup
+  task (`AddStartupTask<T>`) or a hosted service; and the version is a `[Version]` attribute on any
+  class.
+
+- **The `try`/`except` around `Run` becomes a policy.** Catching what escapes, reporting it and
+  choosing the exit code is `B.OnException(Policy)` in the CLI and Web variants, declared before the
+  rest of the composition. The `except` of the `.dpr` only hands what escapes before `Run` to
+  `B.HandleException(E)`, which passes it to that same policy and returns the exit code. `Daf.Cli`'s
+  `GreetTool` sample shows the whole `.dpr`.
+
+- **`Daf.Application.Version` moved to `Daf.Commons`.** Add `Daf.Commons` to `requires` if you used
+  `TVersionInfo` and did not already. Two things changed in it:
+
+  - `TVersionInfo.Debug` is read-only, and the binary declares it: a fourth argument to the attribute
+    or to `TVersionInfo.Create`. Without it, `Debug` is `False` — in 1.6 it reported how DAF itself
+    was compiled, whatever the configuration of your binary.
+  - `VersionTag` takes a template instead of the `WithCompiledMeta` flag.
+
+  ```pascal
+  // before
+  Info.Debug := {$IFDEF DEBUG}True{$ELSE}False{$ENDIF};
+  Text := Info.VersionTag(True);
+
+  // now
+  [Version('2.9.0', 'MyApp', 'Acme', {$IFDEF DEBUG}True{$ELSE}False{$ENDIF})]
+  TMyApp = class
+  end;
+
+  Text := TVersionInfo.GetFrom(TMyApp).VersionTag(VersionTemplateWithBuild);
+  ```
+
+- **`ILoggingBuilder` moved to `Daf.Logging.Abstractions`**, where .NET has it. Composing logging no
+  longer requires the implementation package. And the builder exposes it as a live property — the
+  pipeline is only composed **if you touch it**, so an application that never configures logging
+  still starts.
+
+- **The environment is now derived from the host configuration**, so it can be set on the command
+  line as well as through a variable. Its keys have been renamed too: see section 20.
+
+- **`IConfiguration` gained two members**, so a key that is absent can be told from one whose value
+  is empty. This breaks **implementors** of the interface, not callers: the indexer still returns a
+  `string`, and every existing expression through it still compiles.
+
+  ```pascal
+  if Config.Exists('Features:Beta') then ;                   // presence
+  var Read := Config.Find('Features:Beta');                  // presence AND value, one lookup
+  if Read.HasValue and (Read.Value = 'on') then ;
+  var Value := Config['Features:Beta'];                      // '' when absent AND when empty
+  ```
+
+- **A failure reading a configuration file now surfaces when the source is added**, not inside
+  `Build`, because that is when the file is opened. It still propagates, and it is also reported
+  on the bootstrap channel.
+
+### 9. MiniSpec: the injection mark is renamed, and the injector holds the three contexts
+
+- **`[Inject]` is now `[MiniInject]`.** `Inject` on its own is a name several tools claim, and two
+  units exporting the same one in the same `uses` is not an error — the last one wins, in silence.
+  The attribute travels in the facade now, so the extra `uses` goes away:
+
+  ```pascal
+  // Before
+  uses Daf.MiniSpec, Daf.MiniSpec.Injection;
+  ...
+    [Inject]
+    property Shared: TSharedContext read FShared write FShared;
+
+  // Now
+  uses Daf.MiniSpec;
+  ...
+    [MiniInject]
+    property Shared: TSharedContext read FShared write FShared;
+  ```
+
+  Leaving `[Inject]` in place does **not** fail the build: the compiler emits `W1074 Unknown custom
+  attribute` and at run time the member has no attribute, so nothing is injected and nothing says
+  so. Search your specs for `[Inject]`.
+
+- **The mark now works on a field too**, which is what the guide always showed and what never
+  worked. A field is reached whatever its visibility; a property only when it is public or
+  published.
+
+- **`TInjectorService` is no longer a class-wide registry of loose services.** It is an instance
+  owned by the run, and what it holds are the three contexts alive while a step runs. `Register`
+  takes the scope, so a suite that registered mocks of its own does not compile:
+
+  ```pascal
+  // Before: any object, keyed by its class
+  TInjectorService.Register(TDatabaseMock.Create);
+
+  // Now: there is no loose registry. Build the collaborator in the World, or share it
+  // through the feature or suite context, which is what gets injected.
+  MiniSpec.UseSuiteContext<TTestResources>;   // TTestResources owns the mocks
+  ```
+
+### 10. A scope now destroys what it created
+
+- **Releasing a scope destroys the Scoped services it built.** The container used to retain every
+  scope it handed out and release nothing until it was closed, so a process that opens a scope per
+  request — the pattern the guide recommends — accumulated one instance per request for its whole
+  life.
+- **What breaks**: keeping a reference to a Scoped service without holding its scope. Until now it
+  survived the scope it came from; now it does not.
+- **The provider a service receives does not hold its scope**, so a service that keeps it does not
+  keep the scope alive. Using it once the scope is released raises `EContainerShutDownError`, and it
+  is not the same object as `Scope.ServiceProvider`. A singleton receives the container's provider,
+  not that of the scope that asked for it first.
+
+```pascal
+// Before: the cache outlived its scope by accident
+var Scope := Provider.CreateScope;
+FCache := Scope.ServiceProvider.GetRequiredService<ICache>;
+Scope := nil;
+FCache.Get('k');                       // now: the instance is already gone
+
+// Now: hold the scope for as long as you hold what it built
+FScope := Provider.CreateScope;
+FCache := FScope.ServiceProvider.GetRequiredService<ICache>;
+```
+
+### 11. A duplicate registration now yields two instances
+
+Registering the same pair twice and then asking for all of them returned the first one twice: the
+second registration was declared, was counted, and was never built.
+
+- **What breaks**: a composition that registers a default and then registers it again instead of
+  replacing it. `TryAdd*` registers only if absent, and `Replace` substitutes.
+- Resolving a single service does not change — the last registration still wins — and neither does
+  the order in which they are closed.
+
+### 12. SQLCute: a query declares its kind
+
+`IQuery` gains `Kind: TQueryKind`. It defaults to `Select` and is set by `AsInsert`, `AsUpdate` and
+their siblings, instead of being deduced from the clauses present.
+
+- **What breaks**: implementing `IQuery` yourself. The new member has to be provided.
+- Declaring two kinds on the same query now keeps the last one, where the first used to win. A query
+  with a single kind emits exactly what it emitted before.
+
+### 13. MiniSpec: which context satisfies a `[MiniInject]` is now declared
+
+- **The precedence is declared, and it was the internal order of a dictionary before.** Two passes:
+  first an **exact** type match, walking scenario → feature → suite; and only if there is none, a
+  descendant, in the same order. So an exact match in the suite beats a nearer descendant in the
+  scenario — asking for the type you wrote is not a guess.
+- **What breaks**: a step that injects a base type while two scopes hold compatible objects. It
+  compiles, and it gets a different instance than before — the old winner depended on hash order,
+  so it was never a decision. Name the exact type you want, or keep one of the two.
+
+### 14. `csoReloadOnChange` is gone
+
+`TConfigurationSourceOption` is left with `csoOptional`. The withdrawn value was never read by any provider, so nothing that a source did changes.
+
+- **What breaks**: naming it. Drop it from the set — `[csoOptional, csoReloadOnChange]` becomes `[csoOptional]`, and a set that only carried it becomes `[]`.
+
+### 15. NNLog: a target that cannot write no longer raises
+
+A write that fails inside a target used to travel back to whoever logged. `TTarget.Write` now
+catches it and reports it on the bootstrap channel, under the target's class name and naming the
+target, so a line that never reaches its destination stops aborting the code that was only trying
+to log.
+
+- **What breaks**: a spec that asserts the propagation. Rewrite it against the bootstrap channel,
+  below.
+- **Where the failure shows now**: `BootstrapLog`, as a `LogError` carrying the exception and the
+  target's name. A target whose failures have to be seen is watched there.
+- **A custom target overrides `DoWrite`, not `Write`**, and this half the compiler does tell you:
+  `Write` is no longer virtual. Move the body across and drop your own locking — `TTarget.Write`
+  takes a critical section held by that target instance before calling `DoWrite`, so two threads
+  writing through one target no longer overlap.
+
+```pascal
+// before
+procedure TMyTarget.Write(const Entry: TLogEntry);
+begin
+  Send(RenderEvent(Entry));   // a failure here reached the caller
+end;
+
+// now
+procedure TMyTarget.DoWrite(const Entry: TLogEntry);
+begin
+  Send(RenderEvent(Entry));   // a failure here is reported on the bootstrap channel
+end;
+```
+
+### 16. NNLog: a rule's `name` filters, and an unknown layout token stays visible
+
+In 1.6 a rule's `name` was ignored: every rule received every category. It now filters, as a
+**regular expression** anchored to the whole category. `*`, and an absent or empty `name`, still
+match every category.
+
+- **What breaks**: a rule whose `name` is not `*` stops receiving the categories its pattern does
+  not match. An NLog glob mostly keeps working — `Daf.*` does —, but a `?` wildcard is written
+  `.` and a literal dot `\.`, and a `name` that is not a valid regular expression makes the
+  configuration fail to load, naming the rule.
+- **`enabled`** takes the literals `true` and `false`, in any case. A rule that does not declare it
+  is enabled, and any other value disables it.
+- **A layout token with no renderer** — a misspelled `${mesage}` — is now written as it is, where
+  1.6 wrote nothing.
+
+### 17. Web: `TDafHttpServer.Start` on a port in use raises
+
+When the port is already in use, `Start` raises an exception that names the port, after the
+`OnError` event. In 1.6 it ended with `Abort`.
+
+- **What breaks**: an `except on EAbort` around `Start` no longer catches it. Catch `Exception`
+  instead.
+
+### 18. Hosted services stop in reverse order
+
+The `IHostedService`s stop in the reverse order of their registration — the order the container
+releases in —, so a service started later stops before the one it may be using. In 1.6 they stopped
+in registration order.
+
+- **What breaks**: a service whose `Stop` counted on one registered after it having stopped already.
+  Register the service that is used before the one that uses it.
+
+### 19. The host loads `appsettings.json` and the environment by default
+
+The builder loads `appsettings.json`, `appsettings.{Environment}.json`,
+`{ApplicationName}.settings.json` and `{ApplicationName}.settings.{Environment}.json` from the
+content root, all optional, and every environment variable, with `__` as the section separator, before the
+command line: the sources of `Host.CreateApplicationBuilder`. In 1.6 the host loaded no source of
+its own.
+
+- **What breaks**: an environment variable whose name matches a configuration key now overrides it
+  — `Db__Server` overrides `Db:Server` —, and an `appsettings.json` in the content root is read
+  without being asked for. Remove the calls that loaded those two files by hand.
+
+### 20. The host settings take .NET's names, and the content root is the current directory
+
+The host reads its own settings under the keys of .NET's `HostDefaults` — `environment`,
+`applicationName` and `contentRoot` —, as an argument or as a variable with the `DAF_` prefix,
+which is stripped: `--environment Staging` and `DAF_ENVIRONMENT=Staging` set the same key.
+`THostDefaults` replaces `TDafEnvVars`. And with no `contentRoot`, the content root is the current
+directory, as in .NET, except in the system directory — where a Windows service starts —, which
+keeps the folder of the executable.
+
+```pascal
+// before
+TDafEnvVars.APP_ENV            // 'DAF_APP_ENV'
+
+// now
+THostDefaults.EnvironmentKey   // 'environment', and DAF_ENVIRONMENT as a variable
+```
+
+- **What breaks**: `DAF_APP_ENV`, `DAF_APP_NAME` and `DAF_CONTENT_ROOT` are no longer read, and
+  nothing says so — an application started with `DAF_APP_ENV=Development` runs as `Production`.
+  Rename them to `DAF_ENVIRONMENT`, `DAF_APPLICATIONNAME` and `DAF_CONTENTROOT`. An application
+  started from another directory no longer finds the `appsettings.json` next to its executable:
+  set `contentRoot`, or start it from its folder. And a log configuration that writes under
+  `${contentRootPath}` now follows the current directory; write `${binPath}` to keep the log next
+  to the executable.
+
+### 21. Logging: an entry's message no longer carries the scope
+
+`TLogEntry.Message` is the formatted message and nothing else; the open scopes travel only in
+`TLogEntry.Scope`, innermost first, each prefixed with ` | `. In 1.6 the message carried them
+appended, so every line showed them without asking.
+
+- **What breaks**, and the compiler does not say it: an NNLog layout with `${message}` and no
+  `${scope}` stops showing the scopes — the default layout among them —, and one with both stops
+  writing them twice. `${message}${scope}` gives the line of 1.6; a target that relied on the
+  default layout needs one of its own.
+
+```
+before  ${level} [${category}] ${message}
+now     ${level} [${category}] ${message}${scope}
+```
+
+- **A provider of your own** that writes `Entry.Message` stops writing the scopes. Append
+  `Entry.Scope`, which already brings its separator:
+
+```pascal
+// before
+procedure TMyLogger.Log(const Entry: TLogEntry);
+begin
+  Send(Entry.Message);                 // the scopes came inside the message
+end;
+
+// now
+procedure TMyLogger.Log(const Entry: TLogEntry);
+begin
+  Send(Entry.Message + Entry.Scope);   // empty outside any scope
+end;
+```
+
+### 22. SQLCute: the `in` operator by name binds its values
+
+`Where(col, 'in', V)` — and `'not in'`, `OrWhere`, `WhereNot` and `OrWhereNot` — binds its values
+like `WhereIn`: one parameter per element when `V` is an array, and one for the whole value
+otherwise. In 1.6 the value was written into the SQL text.
+
+- **What breaks**: a string holding a list, `Where('id', 'in', '1,2,3')`, is now one value and
+  matches nothing. Pass the values with `WhereIn`.
+
+```pascal
+// before
+Q.Where('id', 'in', '1,2,3');
+// now
+Q.WhereIn('id', [1, 2, 3]);
+```
+
+### 23. MiniSpec: what a suite written for 1.6 sees differently
+
+How MiniSpec runs and counts a suite changes in these cases, and none of them is a compiler error. A
+suite that was green can come out with scenarios Pending or Undefined, or red.
+
+- **A Pending or Undefined step of a Background decides the scenario.** The rest of the Background
+  and the steps of the scenario do not run, and the scenario counts as Pending or Undefined. In 1.6
+  the scenario ran, and could count as passed. **What breaks**: an Undefined step in a Background
+  now makes the run exit with 1.
+- **Each Background runs once per scenario, the feature's before the rule's.** In 1.6 the feature's
+  Background ran twice for every scenario, and the Background of a rule replaced the feature's in
+  every scenario of the feature. **What breaks**: a Background step that is not idempotent ran
+  twice; and a feature with its own Background and rules with theirs now prepares the scenarios of
+  those rules with both.
+- **A step declared `.Pending` in a Scenario Outline is pending in every row.** In 1.6 the rows ran
+  it. **What breaks**: an outline that passed with a pending step now counts its rows as Pending.
+- **A Scenario Outline without `.Examples` runs once, as a scenario.** In 1.6 it was left out of the
+  run and of the report. **What breaks**: an outline written without its table now runs, and a step
+  of it with neither lambda nor binding is Undefined.
+- **A hook of the suite that raises counts as a failure.** Every `Before` runs, and when one raised
+  no feature runs; every `After` runs too. In 1.6 the error was lost and the run exited with 0.
+  **What breaks**: a suite whose set-up or clean-up hook raises now comes out red.
+- **The JUnit report counts like the run.** An Undefined scenario or row is a `<failure>` and a
+  Pending one a `<skipped>`; a scenario that did not run is not listed; and each hook that raised is
+  a failed case. In 1.6 Undefined and Pending came out as passed, and a filtered scenario as skipped.
+  **What breaks**: a CI that read the report as green now sees the Undefined scenarios as failures.
+- **The JSON report gives each element the state it ended in.** A scenario or a row is `pending` or
+  `undefined` when it ends so; each step carries a `status`; `success` is true only for a step that
+  passed; and the root adds `undefinedCount`. **What breaks**: a reader that took every status other
+  than `pass` as `fail`, or that read `success` as "did not fail".
+
+### 24. A constructor the container cannot satisfy fails, and the container ignores the mark
+
+- **A class whose constructors the container cannot satisfy is no longer built.** Resolving it raises
+  `EServiceProviderError` naming the parameter, its type and the class. In 1.6 the container fell back
+  to the constructor of an ancestor, such as `TInterfacedObject`'s, and handed the instance over with
+  the dependency at `nil`. A class that declares no public constructor still uses its ancestor's.
+- **The container no longer chooses the constructor marked with `[ActivatorUtilitiesConstructor]`.**
+  The mark only counts in `TActivatorUtilities.CreateInstance`, which takes the marked constructor as
+  its only candidate and fails, naming its parameter, when it cannot satisfy it. In 1.6 the container
+  chose the marked one whenever it could satisfy it.
+- **What breaks**: a registration that only worked thanks to the fallback, and one that relied on the
+  container choosing the marked constructor.
+
+### 25. Two constructors that compete make the choice fail
+
+- **In the container**, when a constructor it can satisfy asks for a service the longest one does not
+  ask for, resolving fails with `EServiceProviderError` naming the class and both constructors.
+  **In `TActivatorUtilities.CreateInstance`**, when the two longest it can satisfy tie. In 1.6 the
+  first of the longest won. `ValidateOnBuild` reports it when the provider is built.
+- **What breaks**: a class with two constructors the container can satisfy that do not contain one
+  another. Leave it a single public constructor, or make the shorter one ask only for what the longer
+  one asks for.
+
+### 26. A Singleton that resolves a Scoped
+
+- **Without `ValidateScopes` it is no longer rejected.** A Singleton that resolves a Scoped — by
+  constructor, by factory, through an `ILazy` or through the provider it kept — receives the root
+  provider's instance, the same one `Provider` gives, which lives until the container shuts down. In
+  1.6 the resolution raised an `Exception` while the Singleton was being built.
+- **With `ValidateScopes` it fails with `EServiceProviderError`**, naming the Scoped and, while it is
+  being built, the Singleton — also when a Singleton already built resolves it through the provider
+  it kept. A Scoped resolved in a scope the Singleton opens itself is not a capture.
+- **What breaks**: code that caught that `Exception`. A Singleton that needs a Scoped opens a scope
+  through `IServiceScopeFactory` and resolves it there.
+
+### 27. SQLCute: a derived compiler receives the compilation
+
+- **The protected methods of `TAnsiSqlCompiler` that emit SQL take the compilation as their first
+  parameter**, a `TSqlCompilation`, and add their bindings to it with `C.AddBinding`. They write every
+  placeholder as `?`: `ParamPlaceholder` is gone, and a dialect that numbers its placeholders
+  overrides `FormatPlaceholder(Index)`, which receives the position counted from 0.
+- **A `?` in a raw expression is a placeholder in every dialect**, counted with the others. A literal
+  question mark, such as the `?` operator of Postgres on `jsonb`, is written `\?`.
+- **What breaks**: a compiler derived from `TAnsiSqlCompiler` that overrides an emitting method or
+  `ParamPlaceholder`, at compile time and in that method; and a raw expression with a literal `?` on
+  Postgres, SQL Server or Oracle.
+
+```pascal
+// Before
+function TMyCompiler.CompileDateWhere(const Clause: TDateWhereClause): string;
+begin
+  AddBinding(Clause.Value);
+  Result := 'CAST(' + WrapColumn(Clause.Column) + ' AS DATE) ' + Clause.Op + ' ' + ParamPlaceholder;
+end;
+
+// Now
+function TMyCompiler.CompileDateWhere(const C: TSqlCompilation; const Clause: TDateWhereClause): string;
+begin
+  C.AddBinding(Clause.Value);
+  Result := 'CAST(' + WrapColumn(Clause.Column) + ' AS DATE) ' + OperatorSymbol(Clause.Op) + ' ?';
+end;
+```
+
+### 28. SQLCute: an operator written as text is validated
+
+- **`Having`, `WhereColumns` and `OrWhereColumns` reject `in` and `not in`** with `EArgumentException`;
+  they used to emit `=`. A set of values goes through `WhereIn`, and an `IN` on an aggregate through
+  `HavingRaw`.
+- **The operator of `WhereTime`, `OrWhereTime` and of a join by columns is validated**: one of `=`,
+  `<>`, `!=`, `<`, `<=`, `>`, `>=`, `like` and `not like`, and any other raises `EArgumentException`.
+  It used to be written into the SQL as it came.
+- **In the AST, the `Op` of `TJoinClause` and `TDateWhereClause` is a `TWhereOp`**, not a string; a
+  compiler emits it with `OperatorSymbol`.
+- **What breaks**: a call that passed `in` to those methods or an operator outside the list, and code
+  that reads that `Op` as a string.
+
+### 29. SQLCute: comparing with Null asks about NULL
+
+- **`Where(col, Null)` emits `col IS NULL`**, with no binding, and with any operator other than `=` it
+  emits `col IS NOT NULL`; the same in `OrWhere`, `WhereNot`, `OrWhereNot` and `Having`. `WhereNot`
+  keeps its negation: `NOT (col IS NULL)`. In 1.6 they bound `Null` to `col = ?`, which matches no row
+  on any engine.
+- **What breaks**: code that counted that binding, or relied on the condition matching nothing.
+
+### 30. SQLCute: a logical value is compared with the dialect's literal
+
+- **`WhereTrue('active')` and `Where('active', True)` emit `active = true`**, with no binding. The
+  literal is `true` and `false` in ANSI, Postgres, MySQL, Oracle and Firebird, `1` and `0` in
+  SQLite, and `cast(1 as bit)` and `cast(0 as bit)` in SQL Server. With an operator other than `=`
+  the comparison is negated: `Where('active', '<>', False)` emits `NOT (active = false)`. In 1.6 the
+  value was bound to `active = ?`.
+- **Oracle understands `true` from Oracle 23**: before it, write the condition with `WhereRaw`.
+- **A Firebird `SMALLINT` flag column rejects `= true`** with a conversion error: compare it with a
+  number, `Where('flag', 1)`.
+- **What breaks**: code that counted the bindings, or relied on the binding being typed as a Boolean.
+
+### 31. SQLCute: the column of `Having` is an identifier
+
+- **`Having` quotes its column** like any other column of the dialect: it names a grouped column or
+  the alias of an output column. `Having('count(*)', '>', 5)`, the form the guide showed in 1.6, emits
+  `"count(*)" > ?` in Postgres, and no such column exists.
+- **An aggregate goes through `HavingRaw`**: `HavingRaw('count(*) > 5')`, which every engine accepts.
+  An output alias in `HAVING` is rejected by Postgres, SQL Server and Firebird.
+- **What breaks**: a `Having` whose column is an aggregate expression, in a dialect that quotes.
+
+### 32. Commons: cancelling runs every callback, last registered first, and the linked source is gone
+
+- **`Cancel` runs the callbacks last registered first**, as in .NET, and runs all of them even when
+  one raises. What they raise comes out together in an `EAggregateException` (`System.Threading`)
+  once all have run, also when only one raised: its `InnerExceptions[I]`, from `0` to `Count - 1`, are
+  the callbacks' exceptions. Each callback runs once, so cancelling again runs nothing.
+- **`CreateLinkedCancellationTokenSource` is gone.** A source that is cancelled when any of several
+  tokens is cancelled is built by hand, registering on each token a callback that cancels it. The
+  callback stays on each token until that token is cancelled, and keeps the source alive until then.
+- **What breaks**: code that relied on registration order; an `except on E: EMyError` around
+  `Cancel`, which now receives the `EAggregateException`; and every call to
+  `CreateLinkedCancellationTokenSource`.
+
+```pascal
+var Linked := CreateCancellationTokenSource;
+for var Token in Tokens do
+  Token.Register(procedure begin Linked.Cancel; end);
+```
+
+### 33. Hosting: the environment name is kept as given
+
+- **`EnvironmentName` is the name as it is written**, trimmed. `IsDevelopment`, `IsStaging`,
+  `IsProduction` and `IsTesting` compare it without regard to case, so `development` still answers
+  `IsDevelopment`.
+- **`deve`, `stag`, `prod` and `test` are names like any other.** `DAF_ENVIRONMENT=prod` is an
+  environment called `prod`: `IsProduction` answers `False`, and the host loads `appsettings.prod.json`
+  and not `appsettings.Production.json`.
+- **A name of your own is one more environment.** In 1.6 a name that was not one of the four known
+  ones, nor one of their abbreviations, ran as `Production`.
+- **What breaks**: an abbreviation in `DAF_ENVIRONMENT` or `--environment`, and a name of your own that
+  relied on loading `appsettings.Production.json`. Write the full name.
+
+### 34. Commons: a program without a host ends with Ctrl+C again
+
+- **The console handler is installed while there is a listener** of
+  `TShutdownHook.OnShutdownRequested`, which the host assigns when it starts and releases when it
+  stops. In 1.6 it was installed when the unit loaded, so every process that linked Commons took every
+  console event.
+- **Without a listener, Ctrl+C and Ctrl+Break are left to the system**, which ends the process. In 1.6
+  a process without a host survived them.
+- **With a host, every Ctrl+C and every Ctrl+Break ask for the shutdown.** In 1.6 only the first
+  Ctrl+C did.
+- **Closing the console window is left to the system**, with a host or without one: the process ends
+  without stopping the host, as in .NET.
+- **What breaks**: a program without a host that relied on surviving a Ctrl+C. It assigns a listener
+  to `TShutdownHook.OnShutdownRequested` for as long as it has to hold the signal.
+
+### 35. Web: a `[FromBody]` object lives as long as the request
+
+- **It is built with its parameterless constructor** and filled from the body. In 1.6 the constructor
+  did not run.
+- **The router frees it after executing the action's result**, as it frees the controller. In 1.6 it
+  leaked, so an action that kept it worked.
+- **A body that is not a JSON object answers `400 Bad Request`**, naming the parameter, without
+  invoking the action.
+- **What breaks**: an action that keeps the object past the request, in a field, a list or a service.
+  It copies what it needs.
+
+### 36. Web: requests are served at once
+
+- **The router no longer serializes requests.** In 1.6 it served them one at a time behind a lock, so
+  state shared between requests never saw two threads at once.
+- **What breaks**: a Singleton, or a field a controller reaches outside its request, that is not safe
+  across threads. It becomes thread-safe, or it is registered Scoped so each request has its own.
+
+### 37. Web: the server's error event receives the exception as an argument
+
+- **`IDafHttpServer.OnError` is a `TServerErrorEvent`**: `Sender` is the server, and the exception
+  comes in `Error`. In 1.6 it was a `TNotifyEvent` whose `Sender` was the exception.
+- **The exception stays its raiser's**: `Start` raises it right after the event, so the handler reads
+  it and neither frees nor keeps it.
+- **What breaks**: every `OnError` handler, which stops compiling until it takes the new signature.
+
+```pascal
+// before
+procedure TMyForm.ServerError(Sender: TObject);
+// now
+procedure TMyForm.ServerError(Sender: TObject; const Error: Exception);
+```
+
+### 38. Configuration: a value that does not convert stops the binding
+
+- **Binding converts with the invariant culture**: a decimal carries a point. In 1.6 it followed the
+  process format, and with a decimal comma `1.5` was bound as 15.
+- **A present value that does not convert raises `EConfigurationBindingError`**, naming the value, the
+  key and the type. In 1.6 the member was left at zero, or at the first value of an enumeration, and the
+  application started.
+- **An enumeration binds by the name of a value, in any case, or by its number.**
+- **What breaks**: a configuration with a value that does not convert, which now stops at binding, and
+  a decimal written with a comma.
+
+### 39. SQLCute: every compiler writes `?`
+
+- **Every compiler writes `?` for each binding**, in every dialect: the placeholder FireDAC binds on any
+  engine and translates into the engine's own. In 1.6 the Postgres, SQL Server and Oracle compilers
+  wrote `$1`, `@p0` and `:p1`.
+- **A `\?` comes out as `??`**, FireDAC's literal `?`, outside a string between single quotes, and as
+  `?` inside one.
+- **The native style brings the engine's placeholders back**, and writes `\?` as `?`. Set it before the
+  instance compiles; `TPlaceholderStyle` lives in `Daf.SQLCute.Compiler`:
+
+```pascal
+var Postgres := TPostgresCompiler.Create;
+Postgres.Placeholders := TPlaceholderStyle.Native;
+var Compiler: IQueryCompiler := Postgres;
+```
+
+- **What breaks**: the SQL of those three compilers run through something that expects `$1`, `@p0` or
+  `:p1`.
+
+## How to do it
+
+1. Compile. Whatever is missing comes out as a compiler error, not as odd behaviour at run time.
+2. Replace each `AddModules` with one call per module, and drop the force-link `uses`.
+3. Fix `requires`: add the packages you now use — your variant's (`Daf.Cli`, `Daf.Web`, `Daf.VCL`
+   or `Daf.FMX`), `Daf.SystemProcess` if you launch processes, and `Daf.CommandLine` if you parse a
+   command line — and remove `Daf.Application` and `Daf.SQLCute.Compilers`.
+4. Rename the types and units from the tables above.
+5. Compile again and run your tests. Then start the application once with `DAF_ENVIRONMENT=Development`:
+   the host validates the container, and a registration that went missing stops the build naming it.
+   A Scoped service asked of the root provider is rejected too, when it is resolved: resolve it from a
+   scope the work opens, `Services.CreateScope`. So is a Scoped a Singleton resolves: the Singleton
+   resolves it in a scope it opens through `IServiceScopeFactory`.
+6. Sections 2, 6 to 13 and 15 to 39 carry **run-time** changes: the compiler says nothing about them. Read them
+   against your own composition — scope lifetimes, duplicate registrations, logging rules and
+   host settings.

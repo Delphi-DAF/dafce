@@ -42,24 +42,24 @@ A single `ILogger` delegates every write to **all registered providers**. Each p
 ## ILogger API
 
 ```pascal
-ILogger = interface
+ILogger = interface(IInvokable)
   // Core write
-  procedure Log(Level: TLogLevel; const Msg: string; const Args: array of const); overload;
-  procedure Log(Level: TLogLevel; E: Exception; const Msg: string; const Args: array of const); overload;
+  procedure Log(const Level: TLogLevel; const Msg: string; const Args: TArray<TValue> = nil); overload;
+  procedure Log(const Level: TLogLevel; const Ex: Exception; const Msg: string; const Args: TArray<TValue> = nil); overload;
 
   // Convenience wrappers
-  procedure LogTrace      (const Msg: string; const Args: array of const); overload;
-  procedure LogDebug      (const Msg: string; const Args: array of const); overload;
-  procedure LogInformation(const Msg: string; const Args: array of const); overload;
-  procedure LogWarning    (const Msg: string; const Args: array of const); overload;
-  procedure LogError      (const Msg: string; const Args: array of const); overload;
-  procedure LogError      (E: Exception; const Msg: string; const Args: array of const); overload;
-  procedure LogCritical   (const Msg: string; const Args: array of const); overload;
-  procedure LogCritical   (E: Exception; const Msg: string; const Args: array of const); overload;
+  procedure LogTrace      (const Msg: string; const Args: TArray<TValue> = nil); overload;
+  procedure LogDebug      (const Msg: string; const Args: TArray<TValue> = nil); overload;
+  procedure LogInformation(const Msg: string; const Args: TArray<TValue> = nil); overload;
+  procedure LogWarning    (const Msg: string; const Args: TArray<TValue> = nil); overload;
+  procedure LogError      (const Msg: string; const Args: TArray<TValue> = nil); overload;
+  procedure LogError      (const Ex: Exception; const Msg: string = ''; const Args: TArray<TValue> = nil); overload;
+  procedure LogCritical   (const Msg: string; const Args: TArray<TValue> = nil); overload;
+  procedure LogCritical   (const Ex: Exception; const Msg: string; const Args: TArray<TValue> = nil); overload;
 
   // Scopes
-  function BeginScope(const Msg: string; const Args: array of const;
-                      ScopedProc: TProc): ILogScopeVoid; overload;
+  function BeginScope(const Msg: string; const Args: TArray<TValue>;
+                      const ScopedProc: TProc = nil): ILogScopeVoid; overload;
 end;
 ```
 
@@ -98,9 +98,11 @@ Internally, `TLogState` holds the template string and the argument array. Provid
 
 ```pascal
 TLogState = record
-  Template: string;          // '{UserId} logged in from {IP}'
-  Args: TArray<TVarRec>;     // positional values
-  function Format: string;   // renders the final string
+  property Template: string;                             // '{UserId} logged in from {IP}'
+  property Arguments: TArray<TValue>;                    // in the order they were passed
+  property KeyValuePairs: TArray<TPair<string, TValue>>; // ('UserId', ...), ('IP', ...)
+  property Formatter: TLogFormatter;                     // what renders the final line
+  function TryGetValue(const Key: string; out Value: TValue): Boolean;
 end;
 ```
 
@@ -116,30 +118,38 @@ Logger.BeginScope('Processing order {OrderId}', [OrderId],
   begin
     Logger.LogInformation('Checking stock', []);
     Logger.LogInformation('Payment authorised', []);
-    // Both lines carry the scope data
+    // Both entries carry the scope, apart from their message
   end);
 ```
 
 Scopes are stack-based — nested scope data accumulates. On exit the scope is popped automatically.
+
+The scope reaches the entry as `TLogEntry.Scope`, apart from its message: `TLogEntry.Message` is the
+formatted message and nothing else. `Scope` holds the open scopes from the innermost to the
+outermost, each prefixed with ` | `, and is empty outside any scope. A provider decides whether to
+write it and where. With NNLog the token is `${scope}`: `${message}${scope}` puts the scopes right
+after the message, and a layout without `${scope}` does not write them.
 
 ---
 
 ## ILoggerFactory
 
 ```pascal
-ILoggerFactory = interface
-  function  CreateLogger(const Category: string): ILogger; overload;
-  function  CreateLogger(AClass: TClass): ILogger; overload;
-  function  CreateLogger(TypeInfo: PTypeInfo): ILogger; overload;
-  procedure AddProvider(Provider: ILoggerProvider);
+ILoggerFactory = interface(IInvokable)
+  function CreateLogger(const Category: string): ILogger; overload;
+  function CreateLogger(const AClass: TClass): ILogger; overload;
+  function CreateLogger(const AType: PTypeInfo): ILogger; overload;
 end;
 ```
 
 ### Generic helper
 
+On the **concrete** factory, not on the contract: a Delphi interface cannot declare a parameterized
+method. Through `ILoggerFactory` the same result is `CreateLogger(TMyService)`.
+
 ```pascal
-// Returns a logger categorised by class name
-var Logger := Factory.CreateLogger<TMyService>;
+var Factory := TMultiProviderLoggerFactory.Create;
+var Logger  := Factory.CreateLogger<TMyService>;
 ```
 
 ### Direct instantiation (no DI)
@@ -165,7 +175,13 @@ end;
 
 | Provider | Unit | Description |
 |----------|------|-------------|
-| `TNNLogProvider` | `DAF.NNLog` | Rule-based targets (file, console, …) |
+| `TNNLogProvider` | `Daf.NNLog` | Rule-based targets (file, console, …) |
+| `TNullLoggerProvider` | `Daf.Extensions.Logging` | Drops every entry — how to ask for silence on purpose |
+
+**There is no `Daf.Logging.Console` and no `Daf.Logging.Debug`.** NNLog brings `Console`, `Debug`,
+`File_` and `UDP`, with filtering rules and layouts. And a startup failure reaches somebody without
+any of that: the bootstrap channel writes to the error output and to the system debug output with
+nothing configured.
 
 ### Adding a provider
 
@@ -178,19 +194,57 @@ Factory.AddProvider(TNNLogProvider.Create(Targets, Rules));
 ## Dependency Injection Integration
 
 ```pascal
-uses DAF.Logging.Builder, DAF.NNLog;
+uses Daf.Extensions.Logging, Daf.Logging.Builder, Daf.NNLog;
 
-// In ConfigureServices:
-AddLogging(Services,
-  procedure(Builder: ILoggingBuilder)
+// While composing startup, on the builder's Services:
+AddLogging(Builder.Services,
+  procedure(Log: ILoggingBuilder)
   begin
-    Builder.AddProvider(TNNLogProvider.Create(Targets, Rules));
+    Log.AddProvider(TNNLogProvider.Create(Targets, Rules));
   end);
 ```
 
 `AddLogging` registers:
 - `ILoggerFactory` as singleton
 - Internally calls `Builder.Build` to wire providers before the host starts
+
+### Composing with no destination is an error
+
+A pipeline with no provider accepts every entry and drops it, which is indistinguishable from one that
+works — until someone debugs an incident reading records that were never written. So `AddLogging`
+refuses it:
+
+```pascal
+AddLogging(Services,
+  procedure(Builder: ILoggingBuilder)
+  begin
+    // the AddProvider that is not there
+  end);
+// ELoggingCompositionError
+```
+
+The check runs **once, where the pipeline is composed** — inside the host builder's `Build`, before a
+single hosted service exists and before the first entry, and never on the write path.
+
+Silence on purpose is still fine. It just has to be said:
+
+```pascal
+AddLogging(Services,
+  procedure(Builder: ILoggingBuilder)
+  begin
+    Builder.AddNullProvider;
+  end);
+```
+
+| What you write | What you get |
+|----------------|--------------|
+| No `AddLogging` at all | No `ILoggerFactory` in the container. Startup reports still come out through the bootstrap channel |
+| `AddLogging` with `AddNullProvider` | A factory that drops every entry — declared silence |
+| `AddLogging` with no provider | `ELoggingCompositionError` while the host is being built |
+
+The middle row is the one you want when your own code resolves `ILoggerFactory` or takes an injected
+`ILogger`: without `AddLogging` there is no factory to inject. If your application simply does not log,
+not calling `AddLogging` is the cheaper route and there is nothing to declare.
 
 Resolve in services:
 
@@ -219,13 +273,13 @@ begin
 end;
 ```
 
-2. Implement `ILogger` (usually via `TLoggerBase`):
+2. Implement `ILogger`:
 
 ```pascal
 type
   TMyLogger = class(TInterfacedObject, ILogger)
-    procedure Log(Level: TLogLevel; const Msg: string;
-                  const Args: array of const); overload;
+    procedure Log(const Level: TLogLevel; const Msg: string;
+                  const Args: TArray<TValue> = nil); overload;
     // … other overloads delegate to this one
   end;
 ```
@@ -245,12 +299,15 @@ Factory.AddProvider(TMyProvider.Create);
 TLogEntry = record
   Level     : TLogLevel;
   Category  : string;
-  EventId   : Integer;
+  EventId   : TEventId;
   Exception : Exception;      // nil when no exception
   Scope     : string;         // rendered scope chain
-  State     : TLogState;      // template + args
-  Message   : string;         // pre-rendered string
+  State     : TLogState;      // template + values
+  Formatter : TLogFormatter;  // what turns State into the line
 end;
 ```
 
-All fields are populated before `Write(Entry)` is called on a `TTarget`.
+Every field is populated before `Write(Entry)` is called on a `TTarget`. `Message` is not among them:
+it is a read-only property, and the first read runs `Formatter` over `State` and keeps the result —
+so a target that renders its own layout out of `State` never pays for it. `Message` does not include
+`Scope`: a provider that wants the scopes writes them from `Scope`.

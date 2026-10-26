@@ -10,7 +10,6 @@ uses
 type
   TConfigurationProvider = class(TInterfacedObject, IConfigurationProvider)
   private
-    //_reloadToken: TConfigurationReloadToken;
     FData: TDictionary<string, string>;
   class function Segment(const Key: string; const PrefixLength: Integer): string;
   public
@@ -56,11 +55,6 @@ type
     /// <param name="ParentPath">The path for the parent IConfiguration.</param>
     /// <returns>The list of keys for this provider.</returns>
     function GetChildKeys(const EarlierKeys: IEnumerable<string>; const ParentPath: string): IEnumerable<string>; virtual;
-    /// <summary>
-    /// Returns a <see cref="IChangeToken"/> that can be used to listen when this provider is reloaded.
-    /// </summary>
-    /// <returns>The <see cref="IChangeToken"/>.</returns>
-    /// function  GetReloadToken: IChangeToken;
   public
     /// <summary>
     /// Generates a string representing this provider name and relevant details.
@@ -79,7 +73,6 @@ uses
 constructor TConfigurationProvider.Create;
 begin
   inherited;
-  //_reloadToken := TConfigurationReloadToken.Create;
   FData := TDictionary<string, string>.Create(TIStringComparer.Ordinal);
 end;
 
@@ -115,7 +108,11 @@ end;
 
 procedure TConfigurationProvider.&Set(const Key: string; const value: string);
 begin
-  Data[Key] := value;
+  // AddOrSetValue y no Data[Key] := : el setter de TDictionary EXIGE que la clave ya exista
+  // y levanta 'Item not found' si no. Escribir una clave nueva es lo normal en una
+  // configuracion --y lo unico que hace SetItem--, asi que con el indexador este proveedor
+  // solo sabia sobrescribir.
+  Data.AddOrSetValue(Key, value);
 end;
 
 destructor TConfigurationProvider.Destroy;
@@ -155,7 +152,7 @@ begin
       if not Results.Contains(Key) then
         Results.Add(Key);
 
-  Results.Sort;
+  Results.Sort(TConfigurationKeyComparer.Instance);
   Result := ToIEnumerable<string>(Results);
 end;
 

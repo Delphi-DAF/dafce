@@ -26,8 +26,9 @@ Structured logging infrastructure for Delphi inspired by .NET's `Microsoft.Exten
 uses
   Daf.Extensions.Logging,
   Daf.Logging,
-  DAF.Logging.Builder,
-  DAF.NNLog; // any provider
+  Daf.Logging.Builder,
+  Daf.Logging.Provider,
+  Daf.NNLog; // any provider
 
 // Standalone (no DI)
 var Factory := TMultiProviderLoggerFactory.Create;
@@ -70,18 +71,23 @@ The template and arguments are kept together in `TLogState`, letting providers f
 ## Integration with DI and Hosting
 
 ```pascal
-uses DAF.Logging.Builder, DAF.NNLog;
+uses Daf.Extensions.Logging, Daf.Logging.Builder, Daf.NNLog;
 
-// In ConfigureServices:
-AddLogging(Services, procedure(Builder: ILoggingBuilder)
+// While composing startup, on the builder's Services:
+AddLogging(Builder.Services, procedure(Log: ILoggingBuilder)
 begin
-  Builder.AddProvider(TNNLogProvider.Create(Targets, Rules));
+  Log.AddProvider(TNNLogProvider.Create(Targets, Rules));
 end);
 
 // Resolve in a service:
 var Factory := Provider.GetRequiredService<ILoggerFactory>;
 var Logger  := Factory.CreateLogger<TMyService>;
 ```
+
+`AddLogging` with no provider raises `ELoggingCompositionError`: a pipeline with no destination accepts
+every entry and drops it, and that is indistinguishable from one that works. If you want the entries
+dropped, say so with `Builder.AddNullProvider`. See
+[Composing with no destination is an error](docs/GUIDE.md#composing-with-no-destination-is-an-error).
 
 ---
 

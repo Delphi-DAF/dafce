@@ -1,0 +1,36 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{94FEE9BF-84EB-4FC1-935D-EA88394E3F68}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="test\SQLCuteInMemorySpecs.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="SQLCuteInMemorySpecs">
+        <MSBuild Projects="test\SQLCuteInMemorySpecs.dproj"/>
+    </Target>
+    <Target Name="SQLCuteInMemorySpecs:Clean">
+        <MSBuild Projects="test\SQLCuteInMemorySpecs.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="SQLCuteInMemorySpecs:Make">
+        <MSBuild Projects="test\SQLCuteInMemorySpecs.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="SQLCuteInMemorySpecs"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="SQLCuteInMemorySpecs:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="SQLCuteInMemorySpecs:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

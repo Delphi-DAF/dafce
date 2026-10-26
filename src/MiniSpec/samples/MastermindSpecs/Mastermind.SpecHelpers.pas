@@ -1,4 +1,4 @@
-unit Mastermind.SpecHelpers;
+﻿unit Mastermind.SpecHelpers;
 
 interface
 uses

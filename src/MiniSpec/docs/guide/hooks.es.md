@@ -43,6 +43,34 @@ Feature('Database Tests')
 
 **Nota**: Los hooks no reciben World porque se ejecutan antes de que exista cualquier instancia.
 
+## Hooks de la suite
+
+`Before` y `After` declarados sobre `MiniSpec`, en el programa que ejecuta la suite, se ejecutan una
+vez antes de la primera feature y una vez después de la última, también cuando alguna feature falla:
+
+```pascal
+MiniSpec
+  .Before('Arrancar el servidor compartido', procedure
+    begin
+      // ...
+    end)
+  .After('Parar el servidor compartido', procedure
+    begin
+      // ...
+    end)
+  .Run;
+```
+
+## Cuando un hook lanza
+
+En una feature, un `Before` que lanza detiene los `Before` que le siguen, y los escenarios de la
+feature no se ejecutan. La feature cuenta como un fallo, y el informe muestra el mensaje bajo su
+cabecera. Sus `After` se ejecutan igual.
+
+En la suite, todos los `Before` se ejecutan aunque uno lance, y entonces no se ejecuta ninguna
+feature. Todos los `After` se ejecutan también. Cada hook que lanza cuenta como un fallo, su mensaje
+sale al principio del informe de consola, y la ejecución sale con 1.
+
 ---
 
 [← Pending y NoAction](pending-noaction.es.md) | [Siguiente: Configuración →](configuration.es.md)

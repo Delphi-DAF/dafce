@@ -5,42 +5,188 @@ sidebar: docs
 
 ## Requirements
 
-- **Delphi 12+ (Alexandria)** — required for inline variables, generics improvements and managed records
-- **Windows** — primary target; Linux via FMX/FireMonkey is experimental
+- **Delphi 12+ (Athens)** — required for multi-line string literals (`'''`), which five shipped units use
+- **Windows** — Win32 and Win64. No package declares a Linux target
 
 ## Installation
 
-DAF is distributed as a set of Delphi packages (`.dpk`). Clone the repo and open the group project:
+DAF is distributed as source: a set of Delphi packages (`.dpk`). Every release on GitHub carries it
+as a zip, **Source code (zip)** under the release's *Assets*:
+<https://github.com/Delphi-DAF/dafce/releases>. Unzip it anywhere, a path with spaces included, and
+run everything below from that folder. Or clone the repo:
 
 ```bash
 git clone https://github.com/Delphi-DAF/dafce.git
 ```
 
-Then open `src/DAFGroup.groupproj` in Delphi IDE and build all packages.
+### Building the packages
 
-Alternatively, add the `src/[Module]/` paths you need directly to your project's search path — every module is self-contained.
+Every project takes its output paths from `src/paths.optset`, which derives all of them from
+`PRJ_OUT_DIR`. `BDS.bat` sets that variable from its own location, so the IDE is started through it:
+
+```cmd
+BDS start
+```
+
+That opens RAD Studio with the project's environment and loads `src/DAFGroup.groupproj`. An IDE
+started any other way leaves `PRJ_OUT_DIR` undefined, and every output path is then built from an
+empty value. `BDS inspect` prints what is set; the project's own variables live in `project.cmd`,
+and per-machine overrides go in a `%COMPUTERNAME%.project.cmd` beside it.
+
+`BDS.bat` keeps each folder's IDE profile under `HKCU\Software\Embarcadero\DAF\<folder name>`.
+Deleting the folder leaves that key behind, and
+`reg delete "HKCU\Software\Embarcadero\DAF\<folder name>" /f` removes it.
+
+From the command line there is nothing to set up — both scripts call `BDS.bat` themselves:
+
+```cmd
+buildall.bat all
+runtests.bat all
+```
+
+With no options, `buildall.bat` builds the framework in Debug and Release, then the samples and the
+specs in Debug. These options build only part of it, and they combine:
+
+| Option | Builds |
+|---|---|
+| `--framework` | the framework, in Debug and Release |
+| `--samples` | the framework in Debug, then the samples |
+| `--specs` | the framework in Debug, then the specs |
+
+`runtests.bat` runs every suite the specs group declares. Both take `Win32`, `Win64` or `all`, and
+`buildall.bat` also takes `--clean`, which deletes `out/` first.
+
+### Choosing the Delphi version
+
+`project.cmd` selects Delphi 13 (`PRJ_IDE=D370`). Delphi 12 is `PRJ_IDE=D290`, and either of these
+selects it without editing `project.cmd`:
+
+- a `%COMPUTERNAME%.project.cmd` next to `project.cmd`, holding the line `set "PRJ_IDE=D290"`;
+- `set "PRJ_IDE=D290"` on its own line in the console, before running `buildall.bat`.
+
+With Delphi 12, `buildall.bat --framework --samples` builds the framework and the samples. The
+specs of the VCL module need Delphi 13, so `--specs`, and `buildall.bat` with no options, end in
+`BUILD FAILED`.
+
+When the version asked for is not installed, `BDS.bat` builds nothing, exits with code 2 and lists
+the installed versions with the `PRJ_IDE` of each.
+
+### Using what is built
+
+Add `out\Win32\Release\lib` or `out\Win64\Release\lib` to your project's search path, and the DAF
+units your program uses compile against it. `out\<Platform>\Debug\lib` holds the Debug build of the
+same units, for debugging.
+
+### Using the source directly
+
+Adding the `src/[Module]/` paths you need to your own project's search path compiles those units with
+your project's output paths, so none of the above applies. Every module is self-contained.
 
 ## Your first DAF application
 
-The minimal entry point uses the **Hosting** + **DependencyInjection** modules:
+This is the `QuickStart` sample, verbatim — it is the file the compiler reads, and a check
+compares the two, so what you copy from here is what builds:
+
+<!-- quickstart: src/Cli/samples/QuickStart/QuickStart.dpr -->
 
 ```pascal
-program MyApp;
+program QuickStart;
+
+{$APPTYPE CONSOLE}
 
 uses
-  Daf.Application.Builder;
+  Daf.Extensions.DependencyInjection,
+  Daf.CommandLine,
+  Daf.Configuration.CommandLine,
+  Daf.Cli;
 
+// El ejemplo de entrada de una herramienta de linea de comandos: el builder, la accion de la raiz
+// escrita en el sitio, los argumentos que recibe la gramatica, y el codigo de salida que devuelve
+// esa accion.
+//
+//   QuickStart         -> 0, saluda
+//   QuickStart --help  -> 0, la ayuda
+//
+// Como se anade un servicio esta en el sample ServiceWiring, que es el nivel siguiente.
 begin
-  TDafApplicationBuilder
-    .Create
-    .ConfigureServices(procedure(Services: IServiceCollection)
+  var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
+
+  B.SetAction(
+    function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
     begin
-      Services.AddSingleton<IMyService, TMyServiceImpl>;
-    end)
-    .Build
-    .Run;
+      Writeln('Hola desde DAF');
+      Result := TCliExit.Ok;
+    end);
+
+  B.ParseArgs(CommandLineConfig.ProcessArgs);
+  ExitCode := B.Build.Run;
 end.
 ```
+
+Three things about the shape, all of them easy to get wrong:
+
+- The builder is held in a variable, not chained, and registration happens where it is written:
+  there is no deferred `ConfigureServices` callback. `TCliApplication.CreateBuilder` returns an
+  `ICliApplicationBuilder`, whose `Build` returns the `ICliApplication` whose `Run` is the exit code.
+- The arguments go to two calls, and each one feeds one reader: `CreateBuilder` adds them to the
+  configuration, and `ParseArgs` hands them to the grammar, which answers `--help` with no option
+  declared. Without `ParseArgs`, the grammar parses an empty invocation.
+- `Daf.Extensions.DependencyInjection` is in the `uses` although nothing is registered: the
+  signature of the action names `IServiceProvider`, and Delphi needs the type visible to write it.
+
+## Adding a service
+
+The `ServiceWiring` sample is the same program with one service registered and resolved:
+
+<!-- quickstart: src/Cli/samples/ServiceWiring/ServiceWiring.dpr -->
+
+```pascal
+program ServiceWiring;
+
+{$APPTYPE CONSOLE}
+{$STRONGLINKTYPES ON}
+
+uses
+  System.SysUtils,
+  Daf.Extensions.DependencyInjection,
+  Daf.CommandLine,
+  Daf.Configuration.CommandLine,
+  Daf.Cli,
+  ServiceWiring.Greeter in 'ServiceWiring.Greeter.pas';
+
+// Como entra un servicio en una herramienta de linea de comandos: se registra en el builder, que
+// ya esta vivo, y la accion lo resuelve del proveedor que recibe.
+//
+//   ServiceWiring  -> 0, saluda a traves del servicio
+begin
+  var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
+
+  B.Services.AddSingleton<IGreeter, TGreeter>;
+
+  B.SetAction(
+    function(const Services: IServiceProvider; const Parsed: IParseResult): Integer
+    begin
+      Writeln(Services.GetRequiredService<IGreeter>.Greet);
+      Result := TCliExit.Ok;
+    end);
+
+  B.ParseArgs(CommandLineConfig.ProcessArgs);
+  ExitCode := B.Build.Run;
+end.
+```
+
+- `Services` answers before anything is built, so `AddSingleton` takes effect where it is written,
+  and the action declared with `SetAction` resolves from the provider it receives.
+- The service lives in its own unit. A type declared in the `.dpr` is not in the `interface`
+  section of any unit, and resolving it fails at run time with `ENonPublicType`. That is also why
+  the program carries `{$STRONGLINKTYPES ON}`: without it the linker drops the RTTI the container
+  resolves by.
+
+There is a second, lower-level entry point — `THostBuilder` from the **Hosting** module — for when
+you want the host without the application layer around it, with
+[`Hosting/samples/HostQuickStart`](https://github.com/Delphi-DAF/dafce/tree/main/src/Hosting/samples/HostQuickStart)
+as its own entry example. The
+[Application guide](../modules/application-guide.qmd) says what each one gives you.
 
 ## Module map
 

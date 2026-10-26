@@ -19,7 +19,6 @@ type
   TCalculatorWorld = class
   public
     Calculator: TCalculator;  // El objeto bajo prueba
-    Result: Integer;          // El resultado a verificar
     destructor Destroy; override;
   end;
 

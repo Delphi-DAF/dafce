@@ -91,7 +91,6 @@
         <VerInfo_Locale>1033</VerInfo_Locale>
         <VerInfo_Keys>CompanyName=;FileDescription=$(MSBuildProjectName);FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductName=$(MSBuildProjectName);ProductVersion=1.0.0.0;Comments=;ProgramID=com.embarcadero.$(MSBuildProjectName)</VerInfo_Keys>
         <Manifest_File>(None)</Manifest_File>
-        <Debugger_DebugSourcePath>Z:\ProjectsWK\jcangas\DAFce\src\MiniSpec\;$(Debugger_DebugSourcePath)</Debugger_DebugSourcePath>
     </PropertyGroup>
     <ItemGroup>
         <DelphiCompile Include="$(MainSource)">
@@ -110,6 +109,17 @@
         <DCCReference Include="StepStatus.Feat.pas"/>
         <DCCReference Include="OutlinePlaceholderStep.Feat.pas"/>
         <DCCReference Include="Doubles.Feat.pas"/>
+        <DCCReference Include="ExitCode.Feat.pas"/>
+        <DCCReference Include="SuiteContext.Feat.pas"/>
+        <DCCReference Include="InjectionPrecedence.Feat.pas"/>
+        <DCCReference Include="NestedRun.Feat.pas"/>
+        <DCCReference Include="FailureVisibility.Feat.pas"/>
+        <DCCReference Include="FailureReason.Feat.pas"/>
+        <DCCReference Include="BackgroundSteps.Feat.pas"/>
+        <DCCReference Include="ScenarioOutline.Feat.pas"/>
+        <DCCReference Include="SuiteHooks.Feat.pas"/>
+        <DCCReference Include="JUnitReport.Feat.pas"/>
+        <DCCReference Include="JsonReport.Feat.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
             <DependentOn>..\..\test.optset</DependentOn>

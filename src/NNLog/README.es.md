@@ -2,7 +2,9 @@
 
 **🌍 Idioma: [English](README.md) | Español**
 
-Proveedor de logging basado en reglas para DAFce. Se conecta al pipeline `ILoggerFactory` mediante `ILoggerProvider` y enruta las entradas de log a uno o más **targets** (consola, fichero, …) según **reglas** configurables.
+Proveedor de logging basado en reglas — un porte de NLog («NNLog is Not NLog»). Se conecta al
+pipeline `ILoggerFactory` mediante `ILoggerProvider` y enruta las entradas de log a uno o más
+**targets** (consola, fichero, UDP, salida de depuración) según **reglas** configurables.
 
 [![Delphi 12+](https://img.shields.io/badge/Delphi-12%2B-red.svg)](https://www.embarcadero.com/products/delphi)
 [![Licencia](https://img.shields.io/badge/licencia-MIT-blue.svg)](../../legal/LICENSE.md)
@@ -11,27 +13,43 @@ Proveedor de logging basado en reglas para DAFce. Se conecta al pipeline `ILogge
 
 ## Inicio rápido
 
+Los targets y las reglas salen de una sección de configuración:
+
+```json
+{
+  "Logging": {
+    "NLog": {
+      "targets": {
+        "console": {
+          "targetType": "Console",
+          "layout": "${timestamp} [${level}] ${category} | ${message}",
+          "UseColors": "true"
+        }
+      },
+      "rules": [
+        { "name": "*", "writeTo": "console", "minLevel": "Debug" }
+      ]
+    }
+  }
+}
+```
+
+`TNNLogLoader` lee la sección y construye el proveedor:
+
 ```pascal
 uses
-  DAF.NNLog,
-  DAF.NNLog.Targets.Console,
-  DAF.Logging.Builder;
+  Daf.Cli,
+  Daf.Configuration.CommandLine,
+  Daf.Extensions.Configuration,
+  Daf.Extensions.Logging,
+  Daf.NNLog.Loader;
 
-// 1. Definir un target
-var ConsoleTarget := TNNLogConsoleTarget.Create;
-ConsoleTarget.Name   := 'console';
-ConsoleTarget.Layout := '${timestamp} [${level}] ${category} | ${message}';
-
-// 2. Definir reglas
-var Rule := TLogRule.Create;
-Rule.Name    := '*';             // coincide con todas las categorías
-Rule.MinLevel := TLogLevel.Debug;
-Rule.WriteTo  := [ConsoleTarget];
-
-// 3. Crear el proveedor y conectarlo a la factory
-var Provider := TNNLogProvider.Create([ConsoleTarget], [Rule]);
-Factory.AddProvider(Provider);
+var B := TCliApplication.CreateBuilder(CommandLineConfig.ProcessArgs);
+B.Logging.AddProvider(TNNLogLoader.BuildProvider(B.Environment, B.Configuration.GetSection('Logging:NLog')));
 ```
+
+`BuildProvider` acepta también un `TNNLogConfiguration` montado con código, para unos ajustes que no
+vienen de un fichero.
 
 ---
 
@@ -39,44 +57,88 @@ Factory.AddProvider(Provider);
 
 | Token | Descripción |
 |-------|-------------|
-| `${timestamp}` | Timestamp ISO-8601 |
+| `${timestamp}` | el momento de renderizar, como `yyyy-MM-dd HH:mm:ss.zzz` |
+| `${date:formato}` | el momento de renderizar, con formato |
 | `${pid}` | ID del proceso |
 | `${thread}` | ID del hilo |
-| `${level}` | Nombre del nivel de log |
-| `${category}` | Categoría del logger |
-| `${message}` | Mensaje renderizado |
-| `${exception}` | Clase + mensaje de excepción (vacío si no hay) |
-| `${scope}` | Cadena del scope activo |
+| `${level}` | nombre del nivel: `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `CRIT` |
+| `${category}` | categoría del logger |
+| `${scope}` | los ámbitos abiertos alrededor de la entrada, el más interno primero, cada uno precedido de ` \| `; vacío fuera de todo ámbito |
+| `${message}` | mensaje renderizado, sin el ámbito |
+| `${exception}` | clase + mensaje de la excepción, vacío si no hay |
+| `${env:NOMBRE}` | variable de entorno |
+| `${event-properties:clave}` | un valor del estado de la entrada |
+| `${binPath}`, `${contentRootPath}`, `${environment}`, `${ApplicationName}` | de `IHostEnvironment` |
 
-Layout por defecto: `${timestamp} #${pid}:${thread} [${level}] ${category} | ${message} ${exception}`
+Layout por defecto: `${timestamp} #${pid}:${thread} [${level}] ${category} | ${message} ${exception}`.
+No lleva `${scope}`: un destino sin layout propio no escribe los ámbitos.
+
+La tabla completa, con el argumento que acepta cada token, está en la [guía](docs/GUIDE.es.md#tokens-de-layout).
 
 ---
 
-## Integración con DI / Hosting
+## Reglas
 
-```pascal
-uses DAF.Logging.Builder, DAF.NNLog, DAF.NNLog.Targets.Console;
+Una regla elige a qué loggers se aplica por **categoría**, mediante su `name`:
 
-AddLogging(Services,
-  procedure(Builder: ILoggingBuilder)
-  var
-    Target : TNNLogConsoleTarget;
-    Rule   : TLogRule;
-  begin
-    Target := TNNLogConsoleTarget.Create;
-    Target.Name := 'console';
+- `*` —y un `name` **ausente o vacío**— empareja **todas** las categorías.
+- Cualquier otro valor es una **expresión regular**, anclada a la categoría **completa**: el patrón
+  tiene que emparejar la categoría entera, así que `Daf` nombra una categoría, no todas las que la
+  contienen.
+- La caja (mayúsculas/minúsculas) la decide el propio patrón, con un `(?i)` en línea; por defecto
+  distingue mayúsculas.
 
-    Rule := TLogRule.Create;
-    Rule.Name     := '*';
-    Rule.MinLevel := TLogLevel.Information;
-    Rule.WriteTo  := [Target];
+Es una **divergencia de NLog**, donde `name` es un glob de dos comodines (`*` y `?`). `Daf.*` sigue
+funcionando, porque `.*` y `*` coinciden ahí; un comodín `?` se escribe como `.`, y un punto literal
+como `\.`.
 
-    Builder.AddProvider(TNNLogProvider.Create([Target], [Rule]));
-  end);
-```
+Un `name` que no sea una expresión regular válida es un **error de composición**: la configuración
+falla al cargar, nombrando la regla y el patrón.
+
+Una regla está **activa salvo que su configuración diga lo contrario**: una regla que no declara
+`enabled` está activa. `enabled` toma los literales `true` y `false`, con cualquier caja — los
+valores que documenta NLog; cualquier otro valor desactiva la regla.
+
+Qué niveles acepta una regla es la conjunción de `minLevel`, `maxLevel` y `levels`. Ausentes, valen
+`Trace`, `Critical` y ninguna lista, así que una regla con `name` y `writeTo` lo acepta todo.
+
+---
+
+## Targets incluidos
+
+| `targetType` | Clase | Salida |
+|--------------|-------|--------|
+| `Console` | `TConsoleTarget` | salida estándar, con color por nivel si se pide |
+| `File` | `TFileTarget` | un fichero de log, con rotación por fecha, edad, mes o tamaño |
+| `Debug` | `TDebugTarget` | la salida de depuración del sistema, en Windows |
+| `UDP` | `TUDPTarget` | un endpoint UDP |
+
+`targetType` se resuelve por RTTI a `Daf.NNLog.Targets.<Tipo>.T<Tipo>Target`, que es también cómo se
+alcanza un target propio desde la configuración. Cualquier otra clave de la sección de un target se
+asigna al target como una propiedad escribible de ese nombre.
+
+Un target propio sobrescribe `DoWrite`, no `Write`: `TTarget.Write` toma un candado de esa instancia
+de destino y lo llama, así que las escrituras de varios hilos por un mismo destino nunca se solapan.
+La garantía es dentro de un proceso — dos procesos escribiendo en el mismo fichero de log no están
+cubiertos.
+
+Un target que no puede escribir no lanza hacia quien registra. Lo informa por el
+[canal de arranque](../Logging.Abstractions/README.es.md#canal-de-arranque) una vez por racha de
+fallos, y cuando vuelve a escribir informa cuántas líneas perdió.
+
+Un fichero de log lo tiene abierto para escribir un solo proceso a la vez, así que varios procesos
+que registran en una misma carpeta necesitan cada uno el suyo: `${pid}` en `fileName` se lo da. Los
+ficheros que otras ejecuciones dejaron en la carpeta se mueven a `history` cuando vence su periodo de
+rotación — salvo que el nombre del fichero no tenga texto literal además de su extensión. En
+`history`, `maxArchivedFiles` cuenta los archivos del propio destino, de todas sus ejecuciones, y
+nada más.
+
+El tipo tiene que sobrevivir al enlazado inteligente para que la búsqueda lo encuentre: `{$STRONGLINKTYPES ON}` en el
+`.dpr`, y cada unit de target que configure nombrada en su `uses`. Un `targetType` cuya unit no está
+enlazada da `Unknown target type`.
 
 ---
 
 ## Documentación
 
-- 📖 [Guía de uso](docs/GUIDE.es.md) — reglas, targets, layout, múltiples targets, targets personalizados
+- 📖 [Guía de uso](docs/GUIDE.es.md) — composición, configuración, reglas, targets, layout, targets personalizados

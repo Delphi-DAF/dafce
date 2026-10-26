@@ -1,4 +1,4 @@
-# web — Guía de uso
+# Daf.Web — Guía de uso
 
 **🌍 Idioma: [English](GUIDE.md) | Español**
 
@@ -11,9 +11,10 @@
 3. [Atributos de enrutamiento](#atributos-de-enrutamiento)
 4. [Binding de parámetros](#binding-de-parámetros)
 5. [Referencia de action results](#referencia-de-action-results)
-6. [TDafHttpServer](#tdafhttpserver)
-7. [Integración con DI](#integración-con-di)
-8. [Action results personalizados](#action-results-personalizados)
+6. [La variante de aplicación Web](#la-variante-de-aplicación-web)
+7. [TDafHttpServer](#tdafhttpserver)
+8. [Integración con DI](#integración-con-di)
+9. [Action results personalizados](#action-results-personalizados)
 
 ---
 
@@ -29,8 +30,11 @@ TDafHttpServer  (Indy TIdHTTPWebBrokerBridge)
 TWebModule      (dispatcher WebBroker)
      │
      ▼
-TWebControllerBase / TWebController
-     │  (enrutamiento por atributos [WebRoute])
+TWebRouter      (BeforeDispatch — casa [WebRoute] por RTTI)
+     │
+     ▼
+TWebController  (construido para esta petición desde el scope de servicios)
+     │
      ▼
 Método de acción → IActionResult → Respuesta HTTP
 ```
@@ -39,30 +43,31 @@ Método de acción → IActionResult → Respuesta HTTP
 
 ## Controladores
 
-### TWebControllerBase
+### TWebController
 
-Clase plana — compatible con DI, sin dependencia de VCL / DataModule. Preferido para nuevos controladores.
+Un controlador desciende de `TWebController`. Es la clase que construye el router, y la que hay que usar.
 
 ```pascal
-uses Daf.Web.Controller;
+uses Web.HTTPApp, Daf.Web.Controller;
 
 type
-  TUserController = class(TWebControllerBase)
+  [WebRoutePrefix('/api/usuarios')]
+  TUserController = class(TWebController)
   private
     FService: IUserService;
   public
-    constructor Create(Service: IUserService);
-    [WebRoute('GET', '/{id}')]
-    function ObtenerUsuario(Id: Integer): IActionResult;
+    constructor Create(const Service: IUserService); reintroduce;
+    [WebRoute(mtGet, '/{id}')]
+    function GetUser(Id: Integer): IActionResult;
   end;
 
-constructor TUserController.Create(Service: IUserService);
+constructor TUserController.Create(const Service: IUserService);
 begin
   inherited Create;
   FService := Service;
 end;
 
-function TUserController.ObtenerUsuario(Id: Integer): IActionResult;
+function TUserController.GetUser(Id: Integer): IActionResult;
 var User: TUserDTO;
 begin
   User := FService.FindById(Id);
@@ -73,9 +78,11 @@ begin
 end;
 ```
 
-### TWebController
+`TWebController` extiende `TDataModule`, que es lo que lo hace usable desde el diseñador del IDE junto a los action items de WebBroker. Los métodos de acción deben ser `public` o `published`, o el RTTI no los verá.
 
-Extiende `TDataModule` — compatible con los action items de WebBroker y código heredado.
+### TWebControllerBase
+
+Variante de clase plana que no desciende de `TDataModule`. **El router no la construye**: construye la clase que ha casado y la trata como un `TWebController`, así que enrutar un descendiente de `TWebControllerBase` no está soportado. Úsala solo fuera del router, o no la uses.
 
 ---
 
@@ -83,152 +90,282 @@ Extiende `TDataModule` — compatible con los action items de WebBroker y códig
 
 ### [WebRoutePrefix]
 
-Se aplica a la clase del controlador. Todos los paths de rutas de la clase llevan este prefijo.
+Se aplica a la clase del controlador. Prefija todas las rutas de la clase.
 
 ```pascal
 [WebRoutePrefix('/api/usuarios')]
-TUserController = class(TWebControllerBase)
+TUserController = class(TWebController)
 ```
 
 ### [WebRoute]
 
-Se aplica a un método de acción.
+Se aplica a un método de acción. El verbo es un `TMethodType`, no una cadena — las constantes están en `Web.HTTPApp`.
 
 ```pascal
-[WebRoute('GET',    '/')]           // GET /api/usuarios/
-[WebRoute('GET',    '/{id}')]       // GET /api/usuarios/42
-[WebRoute('POST',   '/')]           // POST /api/usuarios/
-[WebRoute('PUT',    '/{id}')]       // PUT /api/usuarios/42
-[WebRoute('DELETE', '/{id}')]       // DELETE /api/usuarios/42
+[WebRoute(mtGet,    '/')]           // GET /api/usuarios/
+[WebRoute(mtGet,    '/{id}')]       // GET /api/usuarios/42
+[WebRoute(mtPost,   '/')]           // POST /api/usuarios/
+[WebRoute(mtPut,    '/{id}')]       // PUT /api/usuarios/42
+[WebRoute(mtDelete, '/{id}')]       // DELETE /api/usuarios/42
+[WebRoute(mtAny,    '/health')]     // cualquier verbo
 ```
 
-Los segmentos de ruta que comienzan con `{nombre}` son parámetros de path — se mapean a los parámetros del método por nombre.
+Los segmentos escritos `{nombre}` son parámetros de ruta — se casan por nombre con los parámetros del método.
+
+Un segmento literal se prueba antes que un parámetro en la misma posición, se declaren las acciones en
+el orden que se declaren: con `/{id}` y `/me` en el mismo prefijo, `/api/usuarios/me` llega a la acción
+de `/me`. Dos rutas que casan igual con un path —`/{id}` y `/{nombre}` en el mismo verbo— no son un
+error: se queda la petición la primera que el router descubrió.
+
+Una petición cuyo path casa pero cuyo verbo no declara ninguna acción **no** se despacha a una acción de otro verbo: el router la deja sin atender, y el módulo web de la variante contesta `404 Not found`, igual que a un path que no declara ninguna acción. Un módulo web propio pasado a `WebApp.AddHttpServer` contesta esas peticiones como decida.
 
 ---
 
 ## Binding de parámetros
 
-| Atributo | Fuente | Ejemplo |
-|----------|--------|---------|
-| *(ninguno)* | Segmento de path | `[WebRoute('GET','/{id}')] function Get(Id: Integer)` |
-| `[FromQuery]` | Query string | `function Buscar([FromQuery] Q: string)` |
-| `[FromBody]` | Cuerpo de la petición (JSON) | `function Crear([FromBody] Cmd: TCreateUserCmd)` |
-| `[FromServices]` | Contenedor DI | `function Ping([FromServices] Logger: ILogger)` |
+| Atributo | Origen | Ejemplo |
+|-----------|--------|---------|
+| *(ninguno)* | Segmento de path | `[WebRoute(mtGet,'/{id}')] function Get(Id: Integer)` |
+| `[FromQuery]` | Query string | `function Search([FromQuery] Q: string)` |
+| `[FromBody]` | Cuerpo de la petición (JSON) | `function Create([FromBody] Cmd: TCreateUserCmd)` |
+| `[FromServices]` | Contenedor DI | `function Ping([FromServices] Clock: IClock)` |
+
+Un parámetro de tipo `TWebRequest` o `TWebResponse` recibe la propia petición o respuesta, sin necesidad de atributo.
+
+Un parámetro `[FromServices]` es una interfaz y se resuelve del ámbito de la petición. Un servicio que
+nadie registró hace fallar la petición nombrando el servicio: la acción no recibe nunca un `nil`.
+
+Un parámetro `[FromBody]` es una clase: se construye con su constructor sin parámetros y se rellena con
+el cuerpo, que tiene que ser un objeto JSON. Un cuerpo vacío, que no se analiza, de otro tipo JSON o
+que no rellena la clase responde `400 Bad Request` nombrando el parámetro, y la acción no se invoca. El
+objeto vive lo que la petición: el router lo libera después de ejecutar el resultado de la acción, así
+que una acción que tiene que guardar algo lo copia.
+
+Un valor de ruta o de `[FromQuery]` se convierte al tipo de su parámetro con la cultura invariante,
+como en ASP.NET Core: enteros, decimales con punto sea cual sea el locale del proceso, fechas en ISO
+8601 o en el formato invariante, booleanos como `true` o `false` en cualquier caja, y enumerados por
+nombre o por número. Un valor que no convierte responde `400 Bad Request` nombrando el parámetro, y la
+acción no se invoca. Una clave de consulta que la petición no trae llega como el valor por defecto de
+su tipo: vacío, cero o falso. Un valor de ruta llega decodificado, salvo `%2F`, que se queda codificado
+y dentro de su segmento.
 
 ---
 
 ## Referencia de action results
 
-Todos los helpers son métodos de `TWebControllerBase`:
+Todos los helpers son métodos protected del controlador. Cada helper de estado acepta un mensaje opcional, que pasa a ser el **cuerpo** de la respuesta — ninguno pone cabecera `Location`.
 
 ```pascal
 // 2xx
-Ok(Value: TObject): IActionResult;       overload;
-Ok(const S: string): IActionResult;      overload;
-Ok(B: Boolean): IActionResult;           overload;
-Created(const Location: string): IActionResult;
-Accepted: IActionResult;
-NoContent: IActionResult;
-NotModified: IActionResult;
+Ok(const Value: TObject): IActionResult;   overload;   // serializado como JSON
+Ok(const Value: string): IActionResult;    overload;
+Ok(const Value: Boolean): IActionResult;   overload;
+Created(const Msg: string = 'Created'): IActionResult;
+Accepted(const Msg: string = 'Accepted'): IActionResult;
+NoContent(const Msg: string = 'No content'): IActionResult;
 
-// HTML
-Html(const Body: string): IActionResult;
-Page(const FileName: string): IActionResult;
-Partial(const FileName: string): IActionResult;
+// 3xx
+MovedPermanently(const Msg: string = 'Moved permanently'): IActionResult;
+MovedTemporarily(const Msg: string = 'Moved temporarily'): IActionResult;
+NotModified(const Msg: string = 'Not modified'): IActionResult;
+
+// Contenido
+Html(const HtmlText: string): IActionResult;
+Page(const FileName: string): IActionResult;      // <raíz>/pages/<nombre>.html
+Partial(const FileName: string): IActionResult;   // <raíz>/partials/<nombre>.html
 
 // 4xx / 5xx
-BadRequest: IActionResult;               overload;
-BadRequest(const Msg: string): IActionResult; overload;
-Unauthorized: IActionResult;
-Forbidden: IActionResult;
-NotFound: IActionResult;
-Conflict: IActionResult;
-InternalServerError: IActionResult;      overload;
-InternalServerError(const Msg: string): IActionResult; overload;
+BadRequest(const Msg: string = 'Bad request'): IActionResult;
+Unauthorized(const Msg: string = 'Unauthorized'): IActionResult;
+Forbidden(const Msg: string = 'Forbidden'): IActionResult;
+NotFound(const Msg: string = 'Not found'): IActionResult;
+NotAcceptable(const Msg: string = 'Not acceptable'): IActionResult;
+Conflict(const Msg: string = 'Conflict'): IActionResult;
+UnprocessableEntity(const Msg: string = 'Unprocessable entity'): IActionResult;
+InternalServerError(const Msg: string = 'Internal server error'): IActionResult;
 ```
+
+Una acción también puede devolver un `string` a secas, que se envía como `text/plain`.
+
+---
+
+## La variante de aplicación Web
+
+`Daf.Web` es una de la familia de aplicaciones, y su punto de entrada es `TWebApplication`. Componer
+el host, el servidor y el enrutado son cuatro líneas:
+
+```pascal
+uses
+  Daf.Extensions.DependencyInjection,   // IServiceCollection, AddScoped
+  Daf.Web.Application;                  // TWebApplication, WebApp
+
+begin
+  var Builder := TWebApplication.CreateBuilder;
+  Builder.Services.AddScoped<IUserService, TUserService>;
+
+  WebApp.AddHttpServer(Builder.Services);
+
+  var App := Builder.Build;
+  App.MapControllers;
+  ExitCode := App.Run;
+end.
+```
+
+- **`WebApp.AddHttpServer`** registra el router y el servidor. Es una fachada de `Daf.Web` y no un
+  miembro del componedor común, así que el paquete genérico no nombra a ninguna variante y el grafo
+  de paquetes va en un solo sentido.
+- **`MapControllers`** resuelve el router, y resolverlo **es** el descubrimiento: el router recorre
+  la RTTI buscando `[WebRoute]` al construirse.
+- **`Run`** arranca el host, arranca el servidor, espera al apagado y para los dos, y devuelve
+  `TAppExit.Ok` si termina bien. Aquí el bucle es de DAF, así que el `.dpr` acaba cuando acaba `Run`
+  —al contrario que en VCL y FMX, donde el bucle es de la plataforma—.
+
+### Lo que se escapa
+
+`Builder.OnException(Policy)` declara qué pasa con lo que se escapa, y con qué código de salida; sin
+ella, `ExitPolicy.LogAndFail`. Es la política de la familia de aplicaciones: los mismos `TAppFailure`
+y `ExitPolicy` que la variante CLI, y `Daf.Web.Application` los expone.
+
+```pascal
+begin
+  var Builder := TWebApplication.CreateBuilder;
+  Builder.OnException(ExitPolicy.LogAndFail());
+  try
+    Builder.Services.AddScoped<IUserService, TUserService>;
+    WebApp.AddHttpServer(Builder.Services);
+    var App := Builder.Build;
+    App.MapControllers;
+    ExitCode := App.Run;
+  except
+    on E: Exception do
+      ExitCode := Builder.HandleException(E);
+  end;
+end.
+```
+
+- Lo que se escapa del arranque del host, del arranque del servidor o de la parada va a la política,
+  y `Run` devuelve el código que ella dio al primer fallo. Un fallo del arranque llega con
+  `Failure.Reported` a `True`; el servidor no arranca, y el host se para igual. Un fallo de la parada
+  llega con `Failure.Services` a `nil`.
+- Lo que se escapa antes del `Run` —la composición, el `Build`— llega a la misma política cuando el
+  `except` del `.dpr` se lo pasa a `HandleException`, que devuelve el código de salida. Antes de
+  declarar `OnException`, decide la política por defecto.
+- Un `EAbort` no llega a la política: `Run` devuelve `TAppExit.Failure` y no se informa nada.
+- Lo que falla dentro de una petición no llega a la política: el servidor lo contesta con su
+  respuesta de error. El gancho `ApplicationHandleException` del RTL sigue siendo el que pone el
+  manejador de peticiones de WebBroker.
+
+### El puerto
+
+La variante **siembra** `Web:Port` con `8080` antes de entregar la configuración, así que un
+argumento o una variable de entorno leídos después lo pisan:
+
+```
+MyApp --Web:Port=9000
+```
+
+`AddHttpServer` le entrega al servidor la **sección** `Web`, y por eso la clave es `Web:Port` desde
+fuera y `Port` a secas dentro de `TDafHttpServer.Create`.
+
+Ver [La familia de aplicaciones](../../Hosting/docs/APPLICATION-FAMILY.es.md) para lo que comparten las cuatro variantes.
 
 ---
 
 ## TDafHttpServer
 
 ```pascal
-TDafHttpServer = class
-  constructor Create(WebModuleClass: TComponentClass;
-                     Config: IConfiguration;
-                     LoggerFactory: ILoggerFactory);
-  property Port   : Integer;
-  property Active : Boolean;  // solo lectura
+TDafHttpServer = class(TInterfacedObject, IDafHttpServer)
+  constructor Create(const WebModuleClass: TComponentClass;
+                     const Config: IConfiguration;
+                     const LoggerFactory: ILoggerFactory = nil);
   procedure Start;
   procedure Stop;
-  // Eventos: OnBeforeDispatch, OnAfterDispatch, OnException
+  function CanBindPort: Boolean; overload;
+  function CanBindPort(const APort: Integer): Boolean; overload;
+  property Port      : Word;
+  property Active    : Boolean;      // solo lectura
+  property SessionID : string;       // solo lectura
+  // Eventos: OnStarting, OnStarted, OnStopping, OnStopped, OnError, OnDestroy
 end;
 ```
 
-### Configuración mínima
+`Create` lee el puerto de `Config['Port']`. `Start` se niega a arrancar sobre un puerto ocupado: dispara `OnError` y después lanza una excepción que nombra el puerto, antes de tocar el socket. `CanBindPort` responde a lo mismo por adelantado, y suelta lo que haya reservado.
+
+`OnError` es un `TServerErrorEvent`, `procedure(Sender: TObject; const Error: Exception) of object`, con
+el servidor como `Sender`. La excepción sigue siendo de quien la lanza: el manejador la lee, y ni la
+libera ni la guarda. ASP.NET Core no tiene un evento equivalente.
+
+### Manejarlo tú
+
+`WebApp.AddHttpServer` lo registra por ti, y esa es la vía. Construirlo a mano es para un proceso que no
+es una aplicación DAF —un banco de specs, un programa existente que adopta DAF a trozos—:
 
 ```pascal
-var Srv := TDafHttpServer.Create(TMyWebModule, AppConfig, LogFactory);
+uses
+  Daf.Extensions.HttpServer,   // IDafHttpServer
+  Daf.HttpServer;              // TDafHttpServer
+
+var Srv: IDafHttpServer := TDafHttpServer.Create(TMyWebModule, AppConfig, LogFactory);
 Srv.Port := 8080;
 Srv.Start;
 ```
 
-### Con Hosting (recomendado)
+⚠️ **La variable es una `IDafHttpServer` y no la clase.** `TDafHttpServer` lleva contador de
+referencias, así que sostenerlo por su tipo de clase lo deja sin dueño.
 
-```pascal
-// En ConfigureServices:
-Services.AddSingleton<IDafHttpServer>(
-  function(P: IServiceProvider): IDafHttpServer
-  begin
-    Result := TDafHttpServer.Create(TMyWebModule,
-                P.GetService<IConfiguration>,
-                P.GetService<ILoggerFactory>);
-  end);
+⚠️ **Lo que pases como `AppConfig` se lee con la clave `Port`, no `Web:Port`.** La fachada le entrega
+al servidor `GetSection('Web')`; una configuración pasada directamente se lee en su raíz.
 
-// En el hosted service:
-FServer.Port := 8080;
-FServer.Start;
-```
+El servidor todavía no es un `IHostedService` — ver la nota del [README](../README.es.md).
 
 ---
 
 ## Integración con DI
 
-Los controladores se resuelven desde el contenedor DI en cada petición. Regístralos como transitorios:
+Cada petición tiene su propio scope, y el controlador se construye dentro de él a partir de `IServiceProvider`, se invoca y se libera una vez escrita la respuesta. Todo lo scoped vive y muere, por tanto, con la petición.
+
+Las peticiones se atienden a la vez: dos pueden ejecutar la misma acción al mismo tiempo. Lo que tiene
+un controlador o un servicio Scoped es de su petición; un Singleton, o cualquier estado que un
+controlador alcance fuera de su petición, se comparte entre hilos y tiene que ser seguro para ellos.
+
+La clase del controlador **no** hace falta registrarla: la construye `TActivatorUtilities`, que elige el constructor cuyos parámetros puede satisfacer el contenedor. Lo que sí hay que registrar es lo que el controlador pide.
 
 ```pascal
-Services.AddTransient<TUserController>;
-Services.AddTransient<TOrdersController>;
+Services.AddScoped<IUserService, TUserService>;
 ```
-
-El dispatcher de enrutamiento resolverá el controlador coincidente desde `IServiceProvider`, inyectará sus dependencias, llamará a la acción y dispondrá el controlador después de que se envíe la respuesta.
 
 ---
 
 ## Action results personalizados
 
-Implementa `IActionResult`:
+Los helpers de arriba cubren los casos corrientes. Para un tipo de contenido que no producen, hereda de `TActionResult` — implementa `IActionResult` y deja `Execute` abstracto:
 
 ```pascal
 type
-  TJsonResult<T> = class(TInterfacedObject, IActionResult)
+  TCsvResult = class(TActionResult)
   private
-    FData: T;
-    FStatus: Integer;
+    FRows: TArray<string>;
   public
-    constructor Create(Data: T; Status: Integer = 200);
-    procedure Execute(Response: TWebResponse);
+    constructor Create(const Rows: TArray<string>);
+    procedure Execute(Response: TWebResponse); override;
   end;
 
-procedure TJsonResult<T>.Execute(Response: TWebResponse);
+constructor TCsvResult.Create(const Rows: TArray<string>);
 begin
-  Response.StatusCode   := FStatus;
-  Response.ContentType  := 'application/json; charset=utf-8';
-  Response.Content      := TJsonSerializer.Serialize<T>(FData);
+  inherited Create;
+  FRows := Rows;
+end;
+
+procedure TCsvResult.Execute(Response: TWebResponse);
+begin
+  Response.StatusCode  := 200;
+  Response.ContentType := 'text/csv; charset=utf-8';
+  Response.Content     := string.Join(sLineBreak, FRows);
 end;
 ```
 
 Úsalo en cualquier controlador:
 
 ```pascal
-Result := TJsonResult<TMyRecord>.Create(MisDatos, 201);
+Result := TCsvResult.Create(Rows);
 ```

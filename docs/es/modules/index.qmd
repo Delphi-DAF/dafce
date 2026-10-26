@@ -5,19 +5,36 @@ toc: false
 lang: es
 ---
 
-DAFce incluye **10 módulos** organizados en paquetes independientes. Cada módulo tiene su propio search path — añade solo los que necesites.
+DAFce incluye **25 paquetes** en search paths independientes — añade solo los que necesites. La tabla lista los diecinueve que tienen página propia; los otros seis son los paquetes de contrato `.Abstractions`. Cuando un módulo porta un diseño de otra comunidad, la tabla dice cuál.
 
 | Módulo | Paquete | Descripción |
 |--------|---------|-------------|
-| [Application](application.qmd) | `Daf.Application` | Builder y runner de `IDafApplication` |
-| [Commons](commons.qmd) | `Daf.Commons` | Smart pointers, RTTI, threading, arrays, parser CLI |
+| [Cli](cli.qmd) | `Daf.Cli` | El **miembro CLI** de la familia de aplicaciones — porta la forma de `Host.CreateApplicationBuilder` de .NET, y su `Run` devuelve el código de salida |
+| [CommandLine](commandline.qmd) | `Daf.CommandLine` | Un porte de `System.CommandLine` de .NET, la librería sobre la que está construido el propio CLI de `dotnet`: comandos, subcomandos, opciones y argumentos |
+| [Commons](commons.qmd) | `Daf.Commons` | Smart pointers, RTTI, threading, arrays, valores nulables |
 | [Configuración](configuration.qmd) | `Daf.Configuration` | Config JSON / env / memoria, binding tipado |
 | [Inyección de Dependencias](di.qmd) | `Daf.DependencyInjection` | Contenedor DI completo con scopes y lifetimes |
-| [Hosting](hosting.qmd) | `Daf.Hosting` | Modelo de ciclo de vida `IHost` / `IHostBuilder` |
+| [Hosting](hosting.qmd) | `Daf.Hosting` | Modelo de ciclo de vida `IHost` / `IHostApplicationBuilder` |
 | [Logging](logging.qmd) | `Daf.Logging` | Logging estructurado con scopes |
 | [MediatR](mediator.qmd) | `Daf.MediatR` | CQRS: comandos, queries, notificaciones, pipelines |
 | [MiniSpec](minispec.qmd) | `Daf.MiniSpec` | Testing BDD: specs Gherkin, expectations, live dashboard |
 | [NNLog](nnlog.qmd) | `Daf.NNLog` | Motor de logging inspirado en NLog integrado con DAF |
-| [Web](web.qmd) | `Daf.Web` | Servidor HTTP ligero y routing |
+| [SQLCute](sqlcute.qmd) | `Daf.SQLCute` | Builder SQL fluido a la manera de **SqlKata**: `IQuery` como AST público y un compilador por dialecto |
+| [SQLCute.InMemory](sqlcute-inmemory.qmd) | `Daf.SQLCute.InMemory` | Segundo back-end: ejecuta el mismo `IQuery` sobre colecciones ya cargadas, con semántica ANSI de NULL. **Sin equivalente** — SqlKata solo compila a texto |
+| [SQLCute.Specification](sqlcute-specification.qmd) | `Daf.SQLCute.Specification` | La costura: baja una especificación entera —filtro, orden y paginación— a un `IQuery` |
+| [Linq](linq.qmd) | `Daf.Linq` | **LINQ-to-Objects**: secuencias perezosas sobre `IEnumerable<T>`, closures, sin SQL |
+| [Specification](specification.qmd) | `Daf.Specification` | **Patrón Specification** — filtro, orden y paginación sobre un árbol de predicados acotado a propósito, más estrecho que `System.Linq.Expressions` para que lo intraducible sea indecible |
+| [Web](web.qmd) | `Daf.Web` | Servidor HTTP ligero, enrutamiento por atributos y action results — y sin pila de remoting: no enlaza ni DataSnap ni DBX |
+| [VCL](vcl.qmd) | `Daf.VCL` | El **miembro VCL** de la familia de aplicaciones: el mismo arranque que las variantes CLI y Web, hasta el punto en que la plataforma toma el bucle |
+| [SystemProcess](systemprocess.qmd) | `Daf.SystemProcess` | `TSystemProcess` — ejecuta procesos externos de forma síncrona o asíncrona, con callbacks de salida, error, fin y fallo. El análogo .NET es `System.Diagnostics.Process` |
+| [FMX](fmx.qmd) | `Daf.FMX` | Lo que se apoya en FireMonkey, aislado para que ningún otro paquete lo enlace: hoy el destino de arranque que escribe por el servicio de log de la plataforma. Existe para que fuera de Windows el informe de arranque no se pierda en silencio — **no** es soporte de plataforma |
 
-Los módulos marcados con **Abstractions** incluyen también un paquete `Daf.X.Abstractions` con solo interfaces, para dependencias de compilación más limpias.
+Seis módulos incluyen también un paquete `Daf.X.Abstractions` con solo interfaces, para dependencias de compilación más limpias: Configuration, DependencyInjection, Hosting, Logging, MediatR y SQLCute.
+
+## Qué depende de qué
+
+Instala solo los módulos que quieras — pero un módulo se lleva los paquetes que requiere, y algunos
+de ellos se llevan un paquete del runtime de RAD Studio. Las dos cosas están abajo; las flechas se
+leen *requiere*.
+
+{{< include ../../_partials/module-graph.es.md >}}

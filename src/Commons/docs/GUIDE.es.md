@@ -1,4 +1,4 @@
-# Commons — Guía de uso
+﻿# Commons — Guía de uso
 
 **🌍 Idioma: [English](GUIDE.md) | Español**
 
@@ -9,11 +9,16 @@
 1. [Daf.MemUtils — Punteros inteligentes](#dafmemutils--punteros-inteligentes)
 2. [Daf.Threading — Tokens de cancelación y apagado](#dafthreading--tokens-de-cancelación-y-apagado)
 3. [Daf.Enumerable](#dafenumerable)
-4. [Daf.SystemProcess](#dafsystemprocess)
-5. [Daf.CmdLn.Parser](#dafcmdlnparser)
-6. [Daf.Rtti](#dafrtti)
-7. [Daf.Activator](#dafactivator)
-8. [Daf.Arrays](#dafarrays)
+4. [Daf.Rtti](#dafrtti)
+5. [Daf.Activator](#dafactivator)
+6. [Daf.Arrays](#dafarrays)
+7. [Daf.Nullable](#dafnullable)
+8. [Daf.Comparers](#dafcomparers)
+9. [Daf.Application.Version](#dafapplicationversion)
+10. [Daf.Types](#daftypes)
+
+`Daf.SystemProcess` vive en un paquete propio —ver [SystemProcess](../../SystemProcess/README.es.md)—.
+`Daf.CmdLn.Parser` se retiró en 2.0; la línea de comandos es [`Daf.CommandLine`](../../CommandLine/README.es.md).
 
 ---
 
@@ -81,7 +86,8 @@ Cts.Cancel;
 
 ### TShutdownHook
 
-Conecta las señales de apagado del OS (Ctrl+C, SIGTERM) a la limpieza de la aplicación:
+Conecta las señales de parada de la consola con la aplicación. El host se suscribe solo al arrancar;
+el oyente se asigna a mano únicamente en un programa sin host:
 
 ```pascal
 uses Daf.Threading;
@@ -92,6 +98,18 @@ begin
   App.Stop;
 end;
 ```
+
+El manejador de consola está instalado mientras hay un oyente, como hace `ConsoleLifetime` en .NET:
+
+| Evento | Con oyente | Sin oyente |
+|---|---|---|
+| Ctrl+C, Ctrl+Break; SIGINT, SIGQUIT y SIGTERM fuera de Windows | pide la parada, cada vez que llega | se deja al sistema, que termina el proceso |
+| Cierre de la ventana de consola, cierre de sesión | se deja al sistema | se deja al sistema |
+
+`TShutdownHook.HandleConsoleSignal(Signal)` es lo que el manejador hace con cada evento, y responde si
+lo da por atendido. Lo que lanza el oyente se escribe en la salida de error y no sale del manejador.
+`RequestShutdown` pide la parada desde código; sin oyente, la petición espera al siguiente que se
+suscriba. El apagado de Windows no llega a una aplicación de consola Delphi, que carga `user32.dll`.
 
 ---
 
@@ -116,126 +134,88 @@ for var Item in Seq do
 var Arr := ToIEnumerable<Integer>(Lista).ToArray;
 ```
 
+### TDeferredEnumerable\<T\>
+
+`IEnumerable<T>` construido a partir de un closure que devuelve el enumerador — la primitiva de
+secuencia diferida. No se ejecuta nada hasta que se llama a `GetEnumerator`, y cada iteración vuelve
+a invocar la factoría, así que la misma secuencia se puede recorrer más de una vez.
+
+```pascal
+uses Daf.Enumerable;
+
+var Llamadas := 0;
+var Seq: IEnumerable<Integer> := TDeferredEnumerable<Integer>.Create(
+  function: IEnumerator<Integer>
+  var
+    N: Integer;
+  begin
+    Inc(Llamadas);
+    N := 0;
+    Result := TGeneratorEnumerator<Integer>.Create(
+      function(var Current: Integer): Boolean
+      begin
+        Result := N < 3;
+        if Result then
+        begin
+          Inc(N);
+          Current := N;
+        end;
+      end);
+  end);
+
+// Llamadas sigue en 0: declarar la secuencia no enumeró nada
+
+for var I in Seq do    // Llamadas = 1, entrega 1, 2, 3
+  Procesar(I);
+
+for var I in Seq do    // Llamadas = 2 — un enumerador nuevo, recorrido desde el principio
+  Procesar(I);
+```
+
+Es la primitiva sobre la que está construido `Daf.Linq`: `Where`, `Select`, `Take` y los demás
+devuelven uno de estos envolviendo la secuencia anterior, y eso es lo que hace que una cadena de
+operadores recorra la fuente una sola vez, y solo cuando un terminal pide un elemento. Ver
+[Daf.Linq](../../Linq/README.md).
+
+### TGeneratorEnumerator\<T\>
+
+El enumerador de la pareja anterior, construido con un closure de avanzar y entregar: un
+`TGeneratorFunc<T>` es una `function(var Current: T): Boolean` que devuelve `False` cuando la
+secuencia se agotó y, si no, escribe el elemento siguiente en `Current`. El estado del recorrido
+vive en el closure, así que una secuencia sin colección detrás — un contador, un fichero que se
+lee, una serie calculada — no necesita una clase enumeradora propia.
+
+`Reset` lanza `ENotImplemented`: un closure que ya avanzó no se puede rebobinar. Recorrer una
+secuencia por segunda vez es para lo que está `TDeferredEnumerable<T>` — le pide a su factoría un
+enumerador **nuevo**, con su propio estado.
+
 ### IInterfaceList\<T\>
 
-Lista con tipo seguro de referencias a interfaces, con soporte `GetEnumerator`.
+La `TInterfaceList` de la RTL con un `GetEnumerator` tipado encima, que es todo lo que añade: la
+variable del bucle es una `T` y no una `IInterface`.
 
 ```pascal
 var Lista := TInterfaceList<IMyService>.Create;
 Lista.Add(ServicioA);
 Lista.Add(ServicioB);
 
-if not Lista.IsEmpty then
-  for var Svc in Lista do
-    Svc.Execute;
+for var Svc in Lista do         // Svc es IMyService
+  Svc.Execute;
+```
 
-// Buscar por predicado
+`IsEmpty`, `TryFind`, `First`, `Last` e `ItemType` están en la `TInterfaceList` **no genérica** que
+esta unit también declara, no en la genérica:
+
+```pascal
+var Cualquiera := TInterfaceList.Create;
+Cualquiera.Add(ServicioA);
+
 var Encontrado: IMyService;
-if Lista.TryFind(
+if not Cualquiera.IsEmpty and Cualquiera.TryFind(
     function(I: IInterface): Boolean
-    begin Result := (I as IMyService).Name = 'objetivo'; end,
+    begin Result := Supports(I, IMyService); end,
     Encontrado) then
   Encontrado.Execute;
-```
-
----
-
-## Daf.SystemProcess
-
-Ejecuta procesos externos de forma asíncrona con callbacks de eventos.
-
-```pascal
-uses Daf.SystemProcess;
-
-var Proc := TSystemProcess.Builder
-  .Command('git')
-  .CmdArgs(['log', '--oneline', '-10'])
-  .WorkingDir('C:\MiRepo')
-  .Timeout(30000)               // ms, INFINITE = 0
-  .KillAfterTimeout(True)
-  .HideWindow(True)
-  .OnStdOut(procedure(Line: string) begin WriteLn(Line); end)
-  .OnStdErr(procedure(Line: string) begin WriteLn('ERR: ', Line); end)
-  .OnCompleted(procedure(R: TProcessResult)
-    begin
-      WriteLn('Exit=', R.ExitCode, ' duración=', R.Duration.TotalMilliseconds, 'ms');
-    end)
-  .OnFailed(procedure(R: TProcessResult)
-    begin
-      WriteLn('Fallido: ', R.LastError);
-    end)
-  .Build;
-
-// Síncrono
-var Resultado := Proc.Execute;
-
-// O asíncrono
-var Future := Proc.ExecuteAsync;
-```
-
-### TProcessResult
-
-| Campo | Tipo | Descripción |
-|-------|------|-------------|
-| `Status` | `TStatus` | `Completed`, `Failed`, `Timeout`, `Canceled`, `Killed` |
-| `ExitCode` | `DWORD` | Código de salida del proceso |
-| `Duration` | `TTimeSpan` | Tiempo de ejecución de reloj de pared |
-| `LastError` | `string` | Descripción del error (casos de fallo/kill) |
-| `Succeeded` | `function: Boolean` | `Status = Completed` y `ExitCode = 0` |
-
-### Integración con TShutdownHook
-
-```pascal
-TShutdownHook.OnShutdownRequested := procedure
-begin
-  Proc.Kill;
-end;
-```
-
----
-
-## Daf.CmdLn.Parser
-
-Construye una gramática de argumentos tipados con `TCmdLnParserBuilder` y luego parsea la línea de comandos en `ICmdLParams`.
-
-```pascal
-uses Daf.CmdLn.Parser;
-
-// 1. Definir la gramática
-var Parser := TCmdLnParserBuilder.Create
-  .Arg<string>('file')      // argumento string con nombre
-  .Arg<Integer>('port')     // argumento integer con nombre
-  .Arg<Boolean>('verbose')  // flag booleano
-  .Build;                   // devuelve ICmdLnParser
-
-// 2. Parsear la línea de comandos real
-var Params := Parser.Parse(GetCommandLine);
-
-// 3. Leer valores (ICmdLParams.Item[] es la propiedad default)
-var Archivo   := Params['file'].AsString;
-var Puerto    := Params['port'].AsInteger;
-var EsVerbose := Params['verbose'].AsBoolean;
-```
-
-### Subcomandos
-
-```pascal
-var Parser := TCmdLnParserBuilder.Create
-  .Command('build')
-    .Arg<string>('output')
-  .EndCommand
-  .Command('run')
-    .Arg<Boolean>('watch')
-  .EndCommand
-  .Build;
-
-var Params := Parser.Parse(GetCommandLine);
-var Cmd := Params.Command;   // 'build' o 'run'
-if Cmd = 'build' then
-begin
-  var Seccion := Params.GetSection('build');
-  var DirSal  := Seccion['output'].AsString;
-end;
 ```
 
 ---
@@ -339,3 +319,306 @@ var Más: TSmartArray<string> := Items + ['delta', 'epsilon'];
 // Ordenar
 Items.Sort;
 ```
+`Where` / `Any` toman un `TFilterSpec<T>` y `Select` un `TFunc<T, TTarget>` — los
+mismos tipos que toman los operadores perezosos de `Daf.Linq`,
+así que un filtro o un mapper escrito una vez sirve para las dos APIs. Los closures
+en línea convierten implícitamente, como arriba; construye el valor por separado
+cuando quieras reutilizarlo o componerlo:
+
+```pascal
+uses Daf.FilterSpec;
+
+var Largos: TFilterSpec<string> := TPredicate<string>(
+  function(S: string): Boolean begin Result := Length(S) > 4; end);
+var Gritos: TFilterSpec<string> := TPredicate<string>(
+  function(S: string): Boolean begin Result := S = S.ToUpper; end);
+
+Items.Where(Largos and not Gritos);      // compuesto con and / or / not
+```
+
+---
+
+## Daf.Nullable
+
+### TNullable\<T\>
+
+Un valor opcional: o un valor ausente —el NULL de SQL— o un valor presente de `T`. Lo que aporta es
+la distinción entre **ningún valor** y un valor por defecto presente: `0`, `''` y `False` son
+valores, y un `T` a solas no puede decir cuál de las dos cosas es.
+
+```pascal
+uses Daf.Nullable;
+
+var Edad: TNullable<Integer> := TNullable<Integer>.Null;
+Edad.IsNull;                     // True
+Edad.GetValueOrDefault(-1);      // -1
+
+Edad := 42;                      // conversión implícita desde T
+Edad.HasValue;                   // True
+Edad.Value;                      // 42
+
+var Plano: Integer := Edad;       // conversión implícita de vuelta a T
+```
+
+| Miembro | Responde |
+|---------|----------|
+| `Null` | Un nullable explícitamente ausente |
+| `From(Value)` | Envuelve un valor presente; la conversión implícita desde `T` hace lo mismo |
+| `IsNull` | True cuando no hay valor presente |
+| `HasValue` | True cuando sí lo hay. `HasValue = not IsNull` |
+| `GetValueOrDefault(Fallback)` | El valor si está presente y, si no, el que se le pase |
+| `Value` | El valor presente. Cuando es NULL lanza `EInvalidOpException`, y también la conversión implícita a `T` |
+
+**Los dos predicados de presencia se publican a propósito.** `IsNull` es el idioma del dominio de
+datos, el que casa con el `TField.IsNull` de Delphi y con el `IS NULL` de SQLCute; `HasValue` es el
+de .NET. El correcto es el que se lea mejor donde se escribe.
+
+Un `TNullable<T>` recién declarado arranca ausente: `Initialize` lo deja así, y es un operador de
+record gestionado, así que un campo de una clase o un elemento de un array arrancan ausentes
+también sin que nadie los inicialice.
+
+## Daf.Comparers
+
+Comparación consciente de NULL, en dos políticas coordinadas: el **orden** pone NULL por debajo de
+todo valor no NULL —nulls primero ascendiendo, nulls al final descendiendo— y dos NULL comparan
+iguales; la **igualdad** hace iguales los NULL, que es lo que colapsa los NULL duplicados bajo
+`DISTINCT`.
+
+```pascal
+uses Daf.Comparers;
+
+// Sobre TValue — la moneda de valor del motor de consultas en memoria
+var Orden := TValueComparers.Ordinal;
+var Igual := TValueComparers.Equality;
+
+// Sobre TNullable<T>
+var PorEdad := TNullableComparers.Ordinal<Integer>;
+```
+
+| Punto de entrada | Responde |
+|------------------|----------|
+| `TValueComparers.Ordinal` | `IComparer<TValue>`: NULL por debajo de todo valor no NULL, NULL iguales; dos valores de familias distintas lanzan `EArgumentException` |
+| `TValueComparers.Equality` | `IEqualityComparer<TValue>`: dos valores de familias distintas nunca son iguales, los NULL sí, y los valores iguales comparten hash |
+| `TNullableComparers.Ordinal<T>` | El mismo orden sobre `TNullable<T>` |
+| `TNullableComparers.Equality<T>` | Dos valores ausentes son iguales |
+| `IsNullValue(V)` | Si un `TValue` representa el NULL de SQL: vacío, un Variant con `Null`/`Unassigned`, o un `TNullable` ausente |
+| `CompareValuesNullSmallest(L, R)` | La comparación en sí, sin pasar por un comparador |
+
+Todo valor no NULL pertenece a una familia: lógico, número, fecha, texto u otro. Un valor de una
+familia nunca es igual a uno de otra: el texto `'1'` no es el número `1`, como en .NET. Dos números son
+iguales cuando valen lo mismo, sea cual sea su tipo: `1` y `1.0` son iguales, como en SQL; en .NET,
+`1.Equals(1.0)` es falso. Ordenar dos valores de familias distintas lanza `EArgumentException`, como el
+`Comparer<object>` de .NET. Dentro de una familia, el texto se ordena por ordinal, `False` va antes que
+`True`, y las fechas y los números, por su valor.
+
+Sobre `TValue`, el NULL de SQL se modela como un `TValue` **vacío**, uno de clase Variant con `Null` o
+`Unassigned`, o un `TNullable` ausente; un `TNullable` presente cuenta como el valor que guarda. Es
+sobre esto que `SQLCute.InMemory` construye su semántica ANSI de NULL —
+ver [SQLCute.InMemory](../../SQLCute.InMemory/README.es.md).
+
+---
+
+## Daf.Application.Version
+
+### TVersionInfo / [Version]
+
+Una clase declara su versión con el atributo `[Version]` —tag SemVer, nombre de aplicación,
+compañía y, si se quiere, si el binario es una build de depuración— y `TVersionInfo.GetFrom` la lee
+de vuelta por RTTI:
+
+```pascal
+uses
+  Daf.Application.Version;
+
+type
+  [Version('1.2.3-rc.2+build.7', 'Invoicer', 'Acme')]
+  TInvoicerApp = class
+  end;
+
+var Info := TVersionInfo.GetFrom(TInvoicerApp);
+// Info.Major = 1, Info.Minor = 2, Info.Patch = 3
+// Info.PreRelease = 'rc.2', Info.Metadata = 'build.7'
+// Info.ApplicationName = 'Invoicer', Info.Company = 'Acme'
+```
+
+| Miembro | Qué contesta |
+|---|---|
+| `Tag` | la cadena que declaró el atributo, tal cual |
+| `VersionTag(Plantilla)` | la versión formateada con una plantilla de marcadores `${...}`; `VersionTemplate` es la de por defecto y `VersionTemplateWithBuild` añade los datos de compilación |
+| `IsEmpty` | si se fijó alguna versión |
+| `IsSemVer` | si el tag declarado sigue la gramática SemVer |
+| `Major` / `Minor` / `Patch` / `PreRelease` / `Metadata` | las piezas del SemVer |
+| `ApplicationName` / `Company` | los otros dos argumentos del atributo |
+| `ArchBits` / `Platform` | lo que vio el **compilador**: 32 o 64, y la plataforma destino |
+| `Debug` | si el binario se declaró build de depuración; `False` si no declaró nada |
+
+**`Debug` lo declara el binario.** Solo el código del propio binario ve su configuración de
+compilación —el framework se compila aparte—, y los argumentos del atributo se evalúan al compilar
+ese código:
+
+```pascal
+[Version('1.2.3', 'Invoicer', 'Acme', {$IFDEF DEBUG}True{$ELSE}False{$ENDIF})]
+TInvoicerApp = class
+end;
+```
+
+`TVersionInfo.Create` recibe el mismo cuarto argumento. La información queda fijada al construirse:
+`Debug` no tiene setter.
+
+**Una clase sin atributo da un record vacío**, no un error: `IsEmpty` responde `True`, `Tag` y los
+dos nombres vuelven como cadena vacía, las piezas numéricas como cero y `VersionTag` como cadena
+vacía.
+
+**Un tag que no es SemVer conserva su texto.** `IsSemVer` responde `False` y `VersionTag` informa la
+cadena declarada en vez de rearmarla desde piezas que nunca se llenaron.
+
+Los marcadores que una plantilla puede nombrar:
+
+| Marcador | Emite |
+|---|---|
+| `${Major}` `${Minor}` `${Patch}` `${Metadata}` `${Tag}` | las piezas del SemVer y la cadena declarada, crudas |
+| `${PreRelease}` | el pre-release con su propio `-`, o nada |
+| `${Platform}` `${ArchBits}` | la plataforma destino y el tamaño de palabra |
+| `${CompiledMeta}` | los dos juntos —`Win32`—, seguidos de `.Dbg` si el binario se declaró build de depuración |
+| `${Build}` / `${BuildFull}` | la sección de build, abierta con `+`. El primero lleva lo que declaró el tag; el segundo lo une con los datos de compilación dentro de esa única sección. Son alternativas: una plantilla nombra uno |
+
+SemVer admite una sola sección de build, así que `${BuildFull}` separa las dos fuentes con `.` en
+lugar de abrir un segundo `+`.
+
+El atributo se lee por RTTI, así que el enlazador tiene que conservar la clase: un programa que se
+apoye en esto declara `STRONGLINKTYPES` y pone la clase en su sección `interface`.
+
+---
+
+## Daf.Types
+
+### TDeferred\<T\>
+
+Un valor que se da directamente o como thunk, y que **se reevalúa en cada lectura**. Las
+conversiones implícitas son lo que hace intercambiables las dos formas en el punto de llamada:
+
+```pascal
+uses Daf.Types;
+
+var Origen := 'antes';
+
+var Fijo: TDeferred<string> := 'literal';
+var Vivo: TDeferred<string> := TFunc<string>(
+  function: string
+  begin
+    Result := Origen;
+  end);
+
+Origen := 'después';
+
+var A: string := Fijo;   // 'literal'
+var B: string := Vivo;   // 'después' — leído ahora, no cuando se registró
+```
+
+**No es `Lazy<T>`.** Ese memoriza: ejecuta el thunk una vez y se queda con la respuesta. Este lo
+ejecuta otra vez en cada lectura, que es lo que necesita la resolución de macros — una macro cuyo
+valor sigue algo que se mueve.
+
+**Ni es el `Expression<TDelegate>` de .NET.** Allí una expresión es un árbol inspeccionable; un
+`TDeferred<T>` es un closure y nadie puede mirar dentro. El árbol inspeccionable es `IExpr` y
+`TSpecification<T>`, en [Daf.Specification](../../Specification/README.es.md).
+
+`TMacroExpression` es `TDeferred<string>` con el nombre que usa la lista de macros.
+
+### TMacrosList
+
+Un conjunto de `TMacroExpression` con nombre, y la sustitución de `${nombre}` dentro de una cadena.
+
+```pascal
+var Macros := TMacrosList.Create;
+try
+  Macros['product'] := 'DAF';
+  Macros['edition'] := TFunc<string>(
+    function: string begin Result := EdicionActual; end);
+
+  Macros.ResolveMacros('${product} ${edition}');   // 'DAF Community'
+finally
+  Macros.Free;
+end;
+```
+
+| Miembro | Responde |
+|---------|----------|
+| `Value[Name]` (la propiedad por defecto) | Lee y escribe una macro. Leerla resuelve el thunk |
+| `ResolveMacros(Source, MaxRecursionLevel)` | Sustituye cada `${nombre}` de `Source`. Una macro cuyo valor nombra otra macro se resuelve también, hasta `MaxRecursionLevel` — 100 por defecto, que es lo que detiene a un par que se nombra mutuamente |
+| `Contains(Key)` `Count` | Qué hay registrado |
+| `Keys[I]` `ValueFromIndex[I]` | El orden de registro se conserva: la lista es un diccionario ordenado |
+
+#### Una macro que no está registrada
+
+De fábrica, una referencia a una macro que no está registrada se resuelve como cadena vacía.
+`MissingMacroPolicy` cambia eso, y a `OnMissingMacro` se le pregunta antes:
+
+```pascal
+Macros.MissingMacroPolicy := mmpError;
+Macros.ResolveMacros('${root}/charts');
+// EMacroNotFound: No macro is registered with the name "root"
+```
+
+| Miembro | Responde |
+|---------|----------|
+| `MissingMacroPolicy` | `mmpReturnDefault`, la de por defecto, sustituye `MissingMacroValue`, que está vacío salvo que se asigne · `mmpKeepToken` deja `${nombre}` en el resultado · `mmpError` lanza `EMacroNotFound` |
+| `OnMissingMacro` | Se llama por cada referencia a una macro que no está registrada, antes que la política. Asigna `Value` y `Handled` para resolverla, o deja `Handled` en False para pasársela a la política |
+| `MissingMacroError(Name)` | La excepción que lanza `mmpError`. Un gancho que tenga que fallar lanza esta: `raise TMacrosList(Sender).MissingMacroError(Name)` |
+
+La política solo se aplica en `ResolveMacros`: leer `Macros['nombre']` de una macro que no está
+registrada devuelve vacío sea cual sea la política. `Contains` pregunta si está.
+
+### TEnvVars
+
+Las variables de entorno del proceso leídas a un diccionario, y escritas de vuelta como el bloque
+de entorno que recibe un proceso hijo.
+
+```pascal
+var Env := TEnvVars.Create;
+try
+  for var Pair in Env.Vars do
+    Writeln(Pair.Key, '=', Pair.Value);
+
+  Env.Refresh;             // volver a leer el sistema, por si cambió
+finally
+  Env.Free;
+end;
+```
+
+| Miembro | Responde |
+|---------|----------|
+| `Vars` | El diccionario recogido al construirse. `Refresh` vuelve a leer el sistema |
+| `Buffer` | El mismo conjunto como el bloque separado por nulos que espera `CreateProcess` |
+| `WriteTo(Buffer)` | Escribe ese bloque en un puntero de quien llama — así se le da a un proceso hijo un entorno con entradas añadidas al del padre |
+| `ClearBuffer` | Libera el bloque |
+
+`Daf.Configuration` lee `Vars` para convertir el entorno en una fuente de configuración, y
+`Daf.SystemProcess` usa `WriteTo` para entregarle a un hijo su propio entorno.
+
+### Coalesce
+
+La primera de varias referencias a interfaz que no es `nil`.
+
+```pascal
+var Elegido := Coalesce.From<ILogger>(Explicito, DelContenedor);
+var Primero := Coalesce.From<ILogger>([Explicito, DelContenedor, PorDefecto]);
+```
+
+Los dos argumentos se evalúan antes de la llamada, como en cualquier función: esto elige entre
+referencias que ya se tienen, y no es un cortocircuito.
+
+### Debugger
+
+```pascal
+Debugger.Write('caché cargada con %d entradas', [Count]);
+if Debugger.Enabled then
+  Debugger.Write(Informe);
+```
+
+| Miembro | Responde |
+|---------|----------|
+| `Write(Text)` / `Write(FmtStr, Args)` | Escribe en la salida de depuración del sistema. En Windows es `OutputDebugString`; **fuera de Windows no escribe nada** — para un destino que sí funcione allí, ver `TPlatformLogBootstrapSink` en [Daf.FMX](../../FMX/README.es.md) |
+| `Enabled` | Si hay un depurador **enganchado** (`System.DebugHook`). No si el build es Debug |
+| `CurrentProcessId` `CurrentThreadId` | Los ids, para un informe que tenga que decir qué proceso o qué hilo lo escribió |
+

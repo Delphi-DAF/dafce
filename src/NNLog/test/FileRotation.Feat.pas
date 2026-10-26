@@ -1,0 +1,1183 @@
+﻿unit FileRotation.Feat;
+
+// La rotacion esta documentada entera --seis propiedades en una tabla del GUIDE-- y no la tocaba
+// ningun escenario. Estos afirman lo que un lector VE: como se llama el archivo y que pasa con la
+// linea que provoco la rotacion.
+//
+// La politica Size es la unica que se dispara sin esperar a que cambie el reloj, asi que es la que
+// usan los escenarios que solo necesitan que rote. El de la fecha usa Daily y fija la fecha de
+// creacion del fichero a mano, porque es justo la fecha que la funcion de nombrado recibe y que
+// hoy ignora: sin fijarla, "ayer" y "ahora" caen el mismo dia y el defecto no se ve.
+//
+// El layout se fija a la linea literal por la misma razon que en TargetRecovery: los renderers no
+// estan registrados fuera de un host, y mezclar ese defecto con este haria ilegibles los dos.
+
+interface
+
+uses
+  System.SysUtils,
+  Daf.Extensions.Logging,
+  Daf.NNLog,
+  Daf.NNLog.Targets.File_;
+
+type
+  TRotationWorld = class
+  strict private
+    FDir: string;
+    FTarget: TFileTarget;
+    FHolds: TArray<TObject>;
+    FSavedSinks: TArray<IBootstrapSink>;
+    FChannel: IBootstrapSink;
+    FTakenName: string;
+    FTakenCompressed: Boolean;
+  public
+    Failure: string;
+    constructor Create;
+    destructor Destroy; override;
+    function LogPath: string;
+    function HistoryDir: string;
+    procedure WriteLine(const Line: string);
+    /// Deja un fichero con esa antiguedad como log actual, sin pasar por el destino: es la unica
+    /// forma de que la fecha del contenido y la del momento de rotar no coincidan.
+    procedure ExistingLogCreatedDaysAgo(const Days: Integer; const Line: string);
+    procedure ExistingLogCreatedAt(const When: TDateTime; const Line: string);
+    procedure RotateOnEverySize;
+    procedure RotateDaily;
+    procedure RotateWhenDaysOld(const Days: Byte);
+    procedure RotateHourly;
+    procedure RotateMonthly;
+    procedure KeepAtMostOneArchive;
+    /// TODOS los archivos del historico retenidos: la limpieza no puede borrar ninguno, asi que
+    /// lanza con seguridad. Retener solo uno dependia de en que orden cayera al ordenar por fecha.
+    procedure HoldEveryArchive;
+    /// Que sigan ahi ES la prueba de que la limpieza fallo. Sin ella, "la linea se escribio" lo
+    /// cumple tambien una limpieza que nunca llego a intentarlo.
+    function HeldArchivesStillThere: Boolean;
+    function ArchivedNames: TArray<string>;
+    function OneArchivedName: string;
+    function CurrentText: string;
+    /// Un fichero por proceso: app-${pid}.log, con el renderer de pid registrado como lo registra
+    /// el host.
+    procedure OneFilePerProcess;
+    /// Lo mismo, con la carpeta escrita como un marcador que resuelve a la de siempre, como ${binPath}.
+    procedure OneFilePerProcessInMarkedFolder;
+    procedure RotateBySize(const MaxBytes: Int64);
+    procedure NeverRotate;
+    /// Un fichero de la carpeta que no escribe este destino, cerrado y con esa antiguedad.
+    procedure ForeignFileCreatedDaysAgo(const Name: string; const Days: Integer);
+    procedure ForeignFileOfSize(const Name: string; const Bytes: Integer);
+    /// Retenido como lo retiene otro proceso que escribe en el con NNLog.
+    procedure HoldForWriting(const Name: string);
+    procedure WatchStartupChannel;
+    function ChannelText: string;
+    function InFolder(const Name: string): Boolean;
+    /// El nombre en history/ del archivo que procede de ese fichero, o vacio si no hay.
+    function ArchivedNameOf(const Name: string): string;
+    procedure KeepAtMostArchives(const Count: Byte);
+    /// Un archivo ya en history/, escrito por ultima vez hace esos dias.
+    procedure ArchivedDaysAgo(const Name: string; const Days: Integer);
+    function HistoryHas(const Name: string): Boolean;
+    function ArchivesStartingWith(const Prefix: string): Integer;
+    /// El fichero de este proceso cuando escribe uno por proceso.
+    function OwnFileName: string;
+    procedure Compress;
+    /// 'HOY' o 'AYER' segun la fecha de creacion del fichero actual: texto, porque un Boolean sin
+    /// asignar ya vale False.
+    function CurrentCreatedWhen: string;
+    /// Deja en history/, con el contenido dado, el archivo cuyo nombre le daria la rotacion al log
+    /// actual: el de su fecha de creacion, leida del disco tal como la leera el destino.
+    procedure ArchiveTakenFor(const Content: string; const Compressed: Boolean);
+    /// Lo que guarda ahora ese archivo, en claro o dentro del comprimido.
+    function TakenArchiveText: string;
+    /// Los archivos de history/ del periodo del archivo ocupado, comprimidos o no.
+    function ArchivesOfTakenPeriod: Integer;
+    /// El contenido de todos los archivos en claro de history/, por orden de nombre.
+    function HistoryText: string;
+    /// Un fichero normal llamado history donde iria la carpeta: el destino no puede llevar nada a
+    /// history/, y puede seguir escribiendo su fichero. Si la carpeta ya existe, se va con lo que tenga.
+    procedure BlockHistory;
+    procedure UnblockHistory;
+    /// Cuantas veces ha dicho el canal de arranque que el destino no pudo archivar su fichero.
+    function ArchiveFailureReports: Integer;
+    /// Fija a ayer la fecha de creacion del fichero actual mientras el destino lo tiene abierto. Pide
+    /// solo FILE_WRITE_ATTRIBUTES, que el modo de comparticion del destino no impide:
+    /// TFile.SetCreationTime pide escribir y, si no puede, no hace nada.
+    procedure BackdateCurrentFile;
+  end;
+
+implementation
+
+uses
+  {$IFDEF MSWINDOWS}
+  Winapi.Windows,
+  {$ENDIF}
+  System.Classes,
+  System.IOUtils,
+  System.DateUtils,
+  System.Generics.Collections,
+  System.Zip,
+  Daf.Types,
+  Daf.NNLog.Layout,
+  Daf.MiniSpec;
+
+type
+  TChannelRecorder = class(TInterfacedObject, IBootstrapSink)
+  strict private
+    FText: string;
+  public
+    function IsAvailable: Boolean;
+    procedure Write(const Line: string);
+    property Text: string read FText;
+  end;
+
+function TChannelRecorder.IsAvailable: Boolean;
+begin
+  Result := True;
+end;
+
+procedure TChannelRecorder.Write(const Line: string);
+begin
+  FText := FText + Line + sLineBreak;
+end;
+
+const
+  // Archivos del propio destino: la limpieza solo intenta borrar los que proceden de su FileName.
+  HeldArchive = 'app_2026-01-0%d_100000000.log';
+
+function ReadAllTextShared(const Path: string): string;
+begin
+  if not TFile.Exists(Path) then
+    Exit(EmptyStr);
+  var FS := TFileStream.Create(Path, fmOpenRead or fmShareDenyNone);
+  try
+    var SR := TStreamReader.Create(FS);
+    try
+      Result := SR.ReadToEnd;
+    finally
+      SR.Free;
+    end;
+  finally
+    FS.Free;
+  end;
+end;
+
+function EntryFor: TLogEntry;
+begin
+  Result := Default(TLogEntry);
+  Result.Level := TLogLevel.Information;
+  Result.Category := 'Prueba';
+  Result.State := TLogState.Create('linea');
+end;
+
+{ TRotationWorld }
+
+constructor TRotationWorld.Create;
+begin
+  inherited Create;
+  FDir := TPath.Combine(TPath.GetTempPath, 'nnlog-rot-' + TGuid.NewGuid.ToString);
+  TDirectory.CreateDirectory(FDir);
+  FTarget := TFileTarget.Create;
+  FTarget.Name := 'fichero';
+  FTarget.FileName := LogPath;
+  FSavedSinks := BootstrapLog.Sinks;
+end;
+
+destructor TRotationWorld.Destroy;
+begin
+  FTarget.Free;
+  for var H in FHolds do
+    H.Free;
+  // El canal es global: cada escenario lo deja como lo encontro.
+  BootstrapLog.ClearSinks;
+  for var Sink in FSavedSinks do
+    BootstrapLog.AddSink(Sink);
+  FChannel := nil;
+  if TDirectory.Exists(FDir) then
+    TDirectory.Delete(FDir, True);
+  inherited;
+end;
+
+function TRotationWorld.LogPath: string;
+begin
+  Result := TPath.Combine(FDir, 'app.log');
+end;
+
+function TRotationWorld.HistoryDir: string;
+begin
+  Result := TPath.Combine(FDir, 'history');
+end;
+
+procedure TRotationWorld.WriteLine(const Line: string);
+begin
+  Failure := EmptyStr;
+  FTarget.Layout := Line;
+  try
+    FTarget.Write(EntryFor);
+  except
+    on E: Exception do
+      Failure := E.ClassName;
+  end;
+end;
+
+procedure TRotationWorld.ExistingLogCreatedDaysAgo(const Days: Integer; const Line: string);
+begin
+  ExistingLogCreatedAt(IncDay(Now, -Days), Line);
+end;
+
+procedure TRotationWorld.ExistingLogCreatedAt(const When: TDateTime; const Line: string);
+begin
+  TFile.WriteAllText(LogPath, Line + sLineBreak);
+  TFile.SetCreationTime(LogPath, When);
+end;
+
+procedure TRotationWorld.RotateWhenDaysOld(const Days: Byte);
+begin
+  FTarget.RotationPolicy := TRotationPolicy.Days;
+  FTarget.MaxFileAge := Days;
+end;
+
+procedure TRotationWorld.RotateHourly;
+begin
+  FTarget.RotationPolicy := TRotationPolicy.hourly;
+end;
+
+procedure TRotationWorld.RotateMonthly;
+begin
+  FTarget.RotationPolicy := TRotationPolicy.Monthly;
+end;
+
+procedure TRotationWorld.RotateOnEverySize;
+begin
+  FTarget.RotationPolicy := TRotationPolicy.Size;
+  FTarget.MaxFileSize := 1;
+end;
+
+procedure TRotationWorld.RotateDaily;
+begin
+  FTarget.RotationPolicy := TRotationPolicy.Daily;
+end;
+
+procedure TRotationWorld.KeepAtMostOneArchive;
+begin
+  FTarget.MaxArchivedFiles := 1;
+end;
+
+procedure TRotationWorld.HoldEveryArchive;
+begin
+  TDirectory.CreateDirectory(HistoryDir);
+  for var I := 1 to 3 do
+  begin
+    var P := TPath.Combine(HistoryDir, Format(HeldArchive, [I]));
+    TFile.WriteAllText(P, 'x');
+    FHolds := FHolds + [TFileStream.Create(P, fmOpenRead or fmShareExclusive)];
+  end;
+end;
+
+function TRotationWorld.HeldArchivesStillThere: Boolean;
+begin
+  Result := True;
+  for var I := 1 to 3 do
+    if not TFile.Exists(TPath.Combine(HistoryDir, Format(HeldArchive, [I]))) then
+      Exit(False);
+end;
+
+function TRotationWorld.ArchivedNames: TArray<string>;
+begin
+  SetLength(Result, 0);
+  if not TDirectory.Exists(HistoryDir) then
+    Exit;
+  for var F in TDirectory.GetFiles(HistoryDir) do
+    Result := Result + [TPath.GetFileName(F)];
+end;
+
+function TRotationWorld.OneArchivedName: string;
+begin
+  Result := EmptyStr;
+  for var N in ArchivedNames do
+    if N.StartsWith('app_') then
+      Exit(N);
+end;
+
+function TRotationWorld.CurrentText: string;
+begin
+  Result := ReadAllTextShared(LogPath);
+end;
+
+procedure TRotationWorld.OneFilePerProcess;
+begin
+  TLogLayoutEngine.RegisterRenderer('pid',
+    function(const Arg: string; const Entry: TLogEntry): string
+    begin
+      Result := IntToStr(Debugger.CurrentProcessId);
+    end);
+  FTarget.FileName := TPath.Combine(FDir, 'app-${pid}.log');
+end;
+
+procedure TRotationWorld.OneFilePerProcessInMarkedFolder;
+begin
+  OneFilePerProcess;
+  var Dir := FDir;
+  TLogLayoutEngine.RegisterRenderer('rotationSpecDir',
+    function(const Arg: string; const Entry: TLogEntry): string
+    begin
+      Result := Dir;
+    end);
+  FTarget.FileName := '${rotationSpecDir}/app-${pid}.log';
+end;
+
+procedure TRotationWorld.RotateBySize(const MaxBytes: Int64);
+begin
+  FTarget.RotationPolicy := TRotationPolicy.Size;
+  FTarget.MaxFileSize := MaxBytes;
+end;
+
+procedure TRotationWorld.NeverRotate;
+begin
+  FTarget.RotationPolicy := TRotationPolicy.None;
+end;
+
+procedure TRotationWorld.ForeignFileCreatedDaysAgo(const Name: string; const Days: Integer);
+begin
+  var P := TPath.Combine(FDir, Name);
+  TFile.WriteAllText(P, 'DE-OTRA-EJECUCION' + sLineBreak);
+  TFile.SetCreationTime(P, IncDay(Now, -Days));
+end;
+
+procedure TRotationWorld.ForeignFileOfSize(const Name: string; const Bytes: Integer);
+begin
+  TFile.WriteAllText(TPath.Combine(FDir, Name), StringOfChar('x', Bytes));
+end;
+
+procedure TRotationWorld.HoldForWriting(const Name: string);
+begin
+  FHolds := FHolds + [TFileStream.Create(TPath.Combine(FDir, Name), fmOpenWrite or fmShareDenyWrite)];
+end;
+
+procedure TRotationWorld.WatchStartupChannel;
+begin
+  FChannel := TChannelRecorder.Create;
+  BootstrapLog.ClearSinks;
+  BootstrapLog.AddSink(FChannel);
+end;
+
+function TRotationWorld.ChannelText: string;
+begin
+  if FChannel = nil then
+    Exit(EmptyStr);
+  Result := (FChannel as TChannelRecorder).Text;
+end;
+
+function TRotationWorld.InFolder(const Name: string): Boolean;
+begin
+  Result := TFile.Exists(TPath.Combine(FDir, Name));
+end;
+
+function TRotationWorld.ArchivedNameOf(const Name: string): string;
+begin
+  Result := EmptyStr;
+  var Stem := TPath.GetFileNameWithoutExtension(Name) + '_';
+  for var N in ArchivedNames do
+    if N.StartsWith(Stem) then
+      Exit(N);
+end;
+
+procedure TRotationWorld.KeepAtMostArchives(const Count: Byte);
+begin
+  FTarget.MaxArchivedFiles := Count;
+end;
+
+procedure TRotationWorld.ArchivedDaysAgo(const Name: string; const Days: Integer);
+begin
+  TDirectory.CreateDirectory(HistoryDir);
+  var P := TPath.Combine(HistoryDir, Name);
+  TFile.WriteAllText(P, 'ARCHIVADO');
+  TFile.SetLastWriteTime(P, IncDay(Now, -Days));
+end;
+
+function TRotationWorld.HistoryHas(const Name: string): Boolean;
+begin
+  Result := TFile.Exists(TPath.Combine(HistoryDir, Name));
+end;
+
+function TRotationWorld.ArchivesStartingWith(const Prefix: string): Integer;
+begin
+  Result := 0;
+  for var N in ArchivedNames do
+    if N.StartsWith(Prefix) then
+      Inc(Result);
+end;
+
+function TRotationWorld.OwnFileName: string;
+begin
+  Result := Format('app-%d.log', [Debugger.CurrentProcessId]);
+end;
+
+procedure TRotationWorld.Compress;
+begin
+  FTarget.CompressOnRotate := True;
+end;
+
+function TRotationWorld.CurrentCreatedWhen: string;
+begin
+  if Trunc(TFile.GetCreationTime(LogPath)) < Trunc(Now) then
+    Result := 'AYER'
+  else
+    Result := 'HOY';
+end;
+
+procedure TRotationWorld.ArchiveTakenFor(const Content: string; const Compressed: Boolean);
+begin
+  FTakenName := 'app_' + FormatDateTime('yyyy-mm-dd_hhnnsszzz', TFile.GetCreationTime(LogPath)) + '.log';
+  FTakenCompressed := Compressed;
+  TDirectory.CreateDirectory(HistoryDir);
+  var P := TPath.Combine(HistoryDir, FTakenName);
+  if not Compressed then
+  begin
+    TFile.WriteAllText(P, Content + sLineBreak);
+    Exit;
+  end;
+  var Zip := TZipFile.Create;
+  try
+    Zip.Open(P + '.zip', zmWrite);
+    Zip.Add(TEncoding.UTF8.GetBytes(Content + sLineBreak), FTakenName);
+    Zip.Close;
+  finally
+    Zip.Free;
+  end;
+end;
+
+function TRotationWorld.TakenArchiveText: string;
+begin
+  var P := TPath.Combine(HistoryDir, FTakenName);
+  if not FTakenCompressed then
+    Exit(ReadAllTextShared(P));
+  var Bytes: TBytes;
+  var Zip := TZipFile.Create;
+  try
+    Zip.Open(P + '.zip', zmRead);
+    Zip.Read(FTakenName, Bytes);
+    Zip.Close;
+  finally
+    Zip.Free;
+  end;
+  Result := TEncoding.UTF8.GetString(Bytes);
+end;
+
+function TRotationWorld.ArchivesOfTakenPeriod: Integer;
+begin
+  Result := ArchivesStartingWith(TPath.GetFileNameWithoutExtension(FTakenName));
+end;
+
+procedure TRotationWorld.BlockHistory;
+begin
+  if TDirectory.Exists(HistoryDir) then
+    TDirectory.Delete(HistoryDir, True);
+  TFile.WriteAllText(HistoryDir, 'no es una carpeta');
+end;
+
+procedure TRotationWorld.UnblockHistory;
+begin
+  TFile.Delete(HistoryDir);
+end;
+
+function TRotationWorld.ArchiveFailureReports: Integer;
+begin
+  Result := 0;
+  var Text := ChannelText;
+  var At := Text.IndexOf('no pudo archivar su fichero');
+  while At >= 0 do
+  begin
+    Inc(Result);
+    At := Text.IndexOf('no pudo archivar su fichero', At + 1);
+  end;
+end;
+
+procedure TRotationWorld.BackdateCurrentFile;
+begin
+  {$IFDEF MSWINDOWS}
+  var Handle := CreateFile(PChar(LogPath), FILE_WRITE_ATTRIBUTES,
+    FILE_SHARE_READ or FILE_SHARE_WRITE or FILE_SHARE_DELETE, nil, OPEN_EXISTING, 0, 0);
+  if Handle = INVALID_HANDLE_VALUE then
+    RaiseLastOSError;
+  try
+    var Clock: TSystemTime;
+    DateTimeToSystemTime(TTimeZone.Local.ToUniversalTime(IncDay(Now, -1)), Clock);
+    var Created: TFileTime;
+    if not SystemTimeToFileTime(Clock, Created) or not SetFileTime(Handle, @Created, nil, nil) then
+      RaiseLastOSError;
+  finally
+    CloseHandle(Handle);
+  end;
+  {$ENDIF}
+end;
+
+function TRotationWorld.HistoryText: string;
+begin
+  Result := EmptyStr;
+  var Names := ArchivedNames;
+  TArray.Sort<string>(Names);
+  for var N in Names do
+    Result := Result + ReadAllTextShared(TPath.Combine(HistoryDir, N));
+end;
+
+initialization
+
+Feature('''
+Feature La rotacion de NNLog archiva con un nombre que se puede leer @nnlog @targets @rotation
+
+  Como quien deja un servicio escribiendo su log durante dias
+  Quiero que el archivo rotado se llame como el fichero que archiva y por el periodo que contiene
+  Para poder encontrar el log de un dia por su nombre, y para que archivar no me cueste una linea
+''')
+
+.UseWorld<TRotationWorld>
+
+.Rule('El archivo rotado conserva la extension del fichero que archiva')
+
+  .Scenario('El nombre rotado tiene un solo punto antes de la extension')
+    .Given('un destino que escribe en un fichero con extension, y que rota por tamano',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('PRIMERA');
+        W.RotateOnEverySize;
+      end)
+    .When('la escritura siguiente dispara la rotacion',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('SEGUNDA');
+      end)
+    .&Then('el archivo aparece en el historico',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.OneArchivedName).ToContain('app_');
+      end)
+    .&And('y lleva la extension del original una sola vez',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.OneArchivedName).ToEndWith('.log');
+      end)
+    .&And('sin el punto de mas que delata la concatenacion',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.OneArchivedName.Contains('..')).ToBeFalse;
+      end)
+
+.Rule('El archivo rotado se nombra por el periodo que contiene')
+
+  .Scenario('El log de ayer se archiva con la fecha de ayer')
+    .Given('un log actual cuyo contenido es de hace dos dias, y rotacion diaria',
+      procedure(W: TRotationWorld)
+      begin
+        W.ExistingLogCreatedDaysAgo(2, 'DE-HACE-DOS-DIAS');
+        W.RotateDaily;
+      end)
+    .When('se escribe ya entrado otro dia, y la rotacion se dispara',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('DE-HOY');
+      end)
+    .&Then('el archivo lleva la fecha del contenido que archiva',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.OneArchivedName).ToContain(FormatDateTime('yyyy-mm-dd', IncDay(Now, -2)));
+      end)
+
+.Rule('La rotacion no deja el destino sin recurso mientras trabaja')
+
+  .Scenario('CONTROL: tras rotar, el fichero actual tiene la linea nueva y el archivo la vieja')
+    .Given('un destino que ya escribio una linea, y que rota por tamano',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('VIEJA');
+        W.RotateOnEverySize;
+      end)
+    .When('la escritura siguiente dispara la rotacion',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('NUEVA');
+      end)
+    .&Then('el fichero actual tiene la linea nueva',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.CurrentText).ToContain('NUEVA');
+      end)
+    .&And('y ya no tiene la vieja, que esta archivada',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.CurrentText.Contains('VIEJA')).ToBeFalse;
+      end)
+
+  .Scenario('Una rotacion cuya limpieza falla no cuesta la linea')
+    .Given('un historico con un archivo retenido, y un destino que solo guarda uno',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('VIEJA');
+        W.HoldEveryArchive;
+        W.KeepAtMostOneArchive;
+        W.RotateOnEverySize;
+      end)
+    .When('la escritura siguiente dispara una rotacion cuya limpieza no puede borrar',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('SOBREVIVE');
+      end)
+    .&Then('la linea se escribe igual',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.CurrentText).ToContain('SOBREVIVE');
+      end)
+    .&And('y los archivos que la limpieza no pudo borrar siguen ahi, que es lo que prueba que fallo',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.HeldArchivesStillThere).ToBeTrue;
+      end)
+
+.Rule('Un fichero de otra ejecucion del destino rota cuando vence su periodo')
+
+  .Scenario('El fichero de ayer de otra ejecucion se archiva')
+    .Given('un destino con rotacion diaria y un fichero por proceso, y en su carpeta el de otra ejecucion, cerrado y creado ayer',
+      procedure(W: TRotationWorld)
+      begin
+        W.OneFilePerProcess;
+        W.RotateDaily;
+        W.ForeignFileCreatedDaysAgo('app-4242.log', 1);
+      end)
+    .When('este proceso registra su primera linea',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('PRIMERA');
+      end)
+    .&Then('ese fichero esta en el historico, nombrado con la fecha de ayer',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.ArchivedNameOf('app-4242.log')).ToContain(FormatDateTime('yyyy-mm-dd', IncDay(Now, -1)));
+      end)
+    .&And('ya no esta en la carpeta',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.InFolder('app-4242.log')).ToBeFalse;
+      end)
+
+  .Scenario('Un marcador en la carpeta no impide archivar')
+    .Given('un destino diario con la carpeta escrita como marcador y un fichero por proceso, y el de otra ejecucion creado ayer',
+      procedure(W: TRotationWorld)
+      begin
+        W.OneFilePerProcessInMarkedFolder;
+        W.RotateDaily;
+        W.ForeignFileCreatedDaysAgo('app-4242.log', 1);
+      end)
+    .When('este proceso registra su primera linea',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('PRIMERA');
+      end)
+    .&Then('ese fichero esta en el historico',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.ArchivedNameOf('app-4242.log')).ToStartWith('app-4242_');
+      end)
+
+  .Scenario('El fichero de hoy de otra ejecucion se queda')
+    .Given('un destino con rotacion diaria y un fichero por proceso, y en su carpeta el de otra ejecucion, cerrado y creado hoy',
+      procedure(W: TRotationWorld)
+      begin
+        W.OneFilePerProcess;
+        W.RotateDaily;
+        W.ForeignFileCreatedDaysAgo('app-4242.log', 0);
+      end)
+    .When('este proceso registra su primera linea',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('PRIMERA');
+      end)
+    .&Then('ese fichero sigue en la carpeta',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.InFolder('app-4242.log')).ToBeTrue;
+      end)
+
+  .Scenario('Un fichero que otro proceso tiene abierto se queda, sin informe')
+    .Given('un destino diario con un fichero por proceso, y el de otra ejecucion creado ayer y abierto para escribir',
+      procedure(W: TRotationWorld)
+      begin
+        W.WatchStartupChannel;
+        W.OneFilePerProcess;
+        W.RotateDaily;
+        W.ForeignFileCreatedDaysAgo('app-4242.log', 1);
+        W.HoldForWriting('app-4242.log');
+      end)
+    .When('este proceso registra su primera linea',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('PRIMERA');
+      end)
+    .&Then('ese fichero sigue en la carpeta',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.InFolder('app-4242.log')).ToBeTrue;
+      end)
+    .&And('el canal de arranque no recibe nada',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.ChannelText).ToEqual(EmptyStr);
+      end)
+
+  .Scenario('Un fichero que no es del destino no se toca')
+    .Given('un destino con rotacion diaria y un fichero por proceso, y en su carpeta uno creado ayer que su FileName no produce',
+      procedure(W: TRotationWorld)
+      begin
+        W.OneFilePerProcess;
+        W.RotateDaily;
+        W.ForeignFileCreatedDaysAgo('app-viejo.log', 1);
+      end)
+    .When('este proceso registra su primera linea',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('PRIMERA');
+      end)
+    .&Then('ese fichero sigue en la carpeta',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.InFolder('app-viejo.log')).ToBeTrue;
+      end)
+
+  .Scenario('Sin rotacion no se archiva nada')
+    .Given('un destino sin rotacion y con un fichero por proceso, y en su carpeta el de otra ejecucion, creado ayer',
+      procedure(W: TRotationWorld)
+      begin
+        W.OneFilePerProcess;
+        W.NeverRotate;
+        W.ForeignFileCreatedDaysAgo('app-4242.log', 1);
+      end)
+    .When('este proceso registra su primera linea',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('PRIMERA');
+      end)
+    .&Then('ese fichero sigue en la carpeta',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.InFolder('app-4242.log')).ToBeTrue;
+      end)
+
+  .Scenario('Por tamano, rota el que se paso')
+    .Given('un destino por tamano con un fichero por proceso, y dos de otras ejecuciones: uno pasado del maximo y otro no',
+      procedure(W: TRotationWorld)
+      begin
+        W.OneFilePerProcess;
+        W.RotateBySize(10);
+        W.ForeignFileOfSize('app-4242.log', 20);
+        W.ForeignFileOfSize('app-4343.log', 2);
+      end)
+    .When('este proceso registra su primera linea',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('PRIMERA');
+      end)
+    .&Then('el que se paso esta en el historico',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.ArchivedNameOf('app-4242.log')).ToStartWith('app-4242_');
+      end)
+    .&And('y el otro sigue en la carpeta',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.InFolder('app-4343.log')).ToBeTrue;
+      end)
+
+.Rule('La limpieza del historico solo cuenta los archivos de su destino')
+
+  .Scenario('Los archivos de otro destino no cuentan')
+    .Given('un destino que guarda dos archivos y rota por tamano, y en su historico tres archivos de otro destino',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('VIEJA');
+        W.KeepAtMostArchives(2);
+        W.RotateOnEverySize;
+        W.ArchivedDaysAgo('errores_2026-01-01_100000000.log', 3);
+        W.ArchivedDaysAgo('errores_2026-01-02_100000000.log', 2);
+        W.ArchivedDaysAgo('errores_2026-01-03_100000000.log', 1);
+      end)
+    .When('el destino rota',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('NUEVA');
+      end)
+    .&Then('los tres archivos del otro destino siguen en el historico',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.ArchivesStartingWith('errores_')).ToEqual(3);
+      end)
+
+  .Scenario('Las ejecuciones de un destino comparten el cupo')
+    .Given('un destino por proceso que rota por tamano y guarda dos, y en su historico archivos de tres ejecuciones, uno comprimido',
+      procedure(W: TRotationWorld)
+      begin
+        W.OneFilePerProcess;
+        W.KeepAtMostArchives(2);
+        W.RotateOnEverySize;
+        W.WriteLine('VIEJA');
+        W.ArchivedDaysAgo('app-1001_2026-01-01_100000000.log', 3);
+        W.ArchivedDaysAgo('app-1002_2026-01-02_100000000.log.zip', 2);
+        W.ArchivedDaysAgo('app-1003_2026-01-03_100000000.log', 1);
+      end)
+    .When('el destino rota',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('NUEVA');
+      end)
+    .&Then('en el historico quedan dos archivos del destino',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.ArchivesStartingWith('app-')).ToEqual(2);
+      end)
+    .&And('que son los dos mas recientes: el de la tercera ejecucion',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.HistoryHas('app-1003_2026-01-03_100000000.log')).ToBeTrue;
+      end)
+    .&And('y el de la rotacion de ahora',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.ArchivedNameOf(W.OwnFileName)).ToStartWith(TPath.GetFileNameWithoutExtension(W.OwnFileName) + '_');
+      end)
+
+.Rule('La rotacion por dias compara la edad del fichero con MaxFileAge')
+
+  .Scenario('Un fichero con la edad maxima rota')
+    .Given('un destino que rota a los tres dias, y un log actual de hace tres dias y dos horas',
+      procedure(W: TRotationWorld)
+      begin
+        W.RotateWhenDaysOld(3);
+        W.ExistingLogCreatedAt(IncHour(IncDay(Now, -3), -2), 'VIEJA');
+      end)
+    .When('se escribe una linea',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('NUEVA');
+      end)
+    .&Then('el log se archiva',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.OneArchivedName).ToStartWith('app_');
+      end)
+
+  .Scenario('Un fichero mas joven que la edad maxima no rota')
+    .Given('un destino que rota a los tres dias, y un log actual de hace dos dias y dos horas',
+      procedure(W: TRotationWorld)
+      begin
+        W.RotateWhenDaysOld(3);
+        W.ExistingLogCreatedAt(IncHour(IncDay(Now, -2), -2), 'VIEJA');
+      end)
+    .When('se escribe una linea',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('NUEVA');
+      end)
+    .&Then('no se archiva nada',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.OneArchivedName).ToEqual(EmptyStr);
+      end)
+
+  .Scenario('Con MaxFileAge a cero rota en cada entrada')
+    .Given('un destino que rota por dias sin edad maxima, y que ya escribio una linea',
+      procedure(W: TRotationWorld)
+      begin
+        W.RotateWhenDaysOld(0);
+        W.WriteLine('PRIMERA');
+      end)
+    .When('se escribe otra linea',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('SEGUNDA');
+      end)
+    .&Then('la primera esta archivada',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.OneArchivedName).ToStartWith('app_');
+      end)
+
+.Rule('La rotacion por horas y por meses compara el periodo del fichero con el de ahora')
+
+  .Scenario('Un fichero de otra hora rota')
+    .Given('un destino que rota cada hora, y un log actual de hace dos horas',
+      procedure(W: TRotationWorld)
+      begin
+        W.RotateHourly;
+        W.ExistingLogCreatedAt(IncHour(Now, -2), 'VIEJA');
+      end)
+    .When('se escribe una linea',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('NUEVA');
+      end)
+    .&Then('el log se archiva',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.OneArchivedName).ToStartWith('app_');
+      end)
+
+  .Scenario('Un fichero de esta hora no rota')
+    .Given('un destino que rota cada hora, y un log actual creado ahora',
+      procedure(W: TRotationWorld)
+      begin
+        W.RotateHourly;
+        W.ExistingLogCreatedAt(Now, 'VIEJA');
+      end)
+    .When('se escribe una linea',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('NUEVA');
+      end)
+    .&Then('no se archiva nada',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.OneArchivedName).ToEqual(EmptyStr);
+      end)
+
+  .Scenario('Un fichero del mes anterior rota')
+    .Given('un destino que rota cada mes, y un log actual de hace un mes',
+      procedure(W: TRotationWorld)
+      begin
+        W.RotateMonthly;
+        W.ExistingLogCreatedAt(IncMonth(Now, -1), 'VIEJA');
+      end)
+    .When('se escribe una linea',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('NUEVA');
+      end)
+    .&Then('el log se archiva',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.OneArchivedName).ToStartWith('app_');
+      end)
+
+  .Scenario('Un fichero de este mes no rota')
+    .Given('un destino que rota cada mes, y un log actual creado ahora',
+      procedure(W: TRotationWorld)
+      begin
+        W.RotateMonthly;
+        W.ExistingLogCreatedAt(Now, 'VIEJA');
+      end)
+    .When('se escribe una linea',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('NUEVA');
+      end)
+    .&Then('no se archiva nada',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.OneArchivedName).ToEqual(EmptyStr);
+      end)
+
+.Rule('El fichero que crea un destino empieza su periodo al crearse')
+
+  .Scenario('Tras rotar, el fichero nuevo es de hoy')
+    .Given('un destino con rotacion diaria cuyo fichero actual se creo ayer, y un receptor del canal de arranque',
+      procedure(W: TRotationWorld)
+      begin
+        W.RotateDaily;
+        W.ExistingLogCreatedDaysAgo(1, 'AYER');
+        W.WatchStartupChannel;
+        Expect(W.CurrentCreatedWhen).ToEqual('AYER');
+      end)
+    .When('registra una linea, que dispara la rotacion, y despues otra',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('NUEVA');
+        W.WriteLine('OTRA');
+      end)
+    .&Then('el fichero actual tiene fecha de creacion de hoy',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.CurrentCreatedWhen).ToEqual('HOY');
+      end)
+    .&And('la segunda linea fue al mismo fichero sin rotarlo, y el receptor no recibio nada',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(Length(W.ArchivedNames)).ToEqual(1);
+        Expect(W.CurrentText).ToEqual('NUEVA' + sLineBreak + 'OTRA' + sLineBreak);
+        Expect(W.ChannelText).ToEqual(EmptyStr);
+      end)
+
+.Rule('Archivar no sobrescribe un archivo anterior')
+
+  .Scenario('El nombre que le toca ya esta ocupado')
+    .Given('un destino diario cuyo fichero actual se creo ayer, y en history/ un archivo con el nombre que la rotacion le daria',
+      procedure(W: TRotationWorld)
+      begin
+        W.RotateDaily;
+        W.ExistingLogCreatedDaysAgo(1, 'AYER');
+        W.ArchiveTakenFor('PREVIO', False);
+      end)
+    .When('registra una linea, y la rotacion se dispara',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('NUEVA');
+      end)
+    .&Then('el archivo que habia tiene su contenido seguido del contenido del fichero archivado',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.TakenArchiveText).ToEqual('PREVIO' + sLineBreak + 'AYER' + sLineBreak);
+      end)
+    .&And('el fichero actual solo tiene la linea nueva',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.CurrentText).ToEqual('NUEVA' + sLineBreak);
+      end)
+
+  .Scenario('El nombre que le toca esta ocupado por un comprimido')
+    .Given('el mismo destino, que comprime al rotar, y en history/ el .zip con el nombre que la rotacion le daria',
+      procedure(W: TRotationWorld)
+      begin
+        W.RotateDaily;
+        W.Compress;
+        W.ExistingLogCreatedDaysAgo(1, 'AYER');
+        W.ArchiveTakenFor('PREVIO', True);
+      end)
+    .When('registra una linea, y la rotacion se dispara',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('NUEVA');
+      end)
+    .&Then('lo que guarda el .zip que habia es su contenido seguido del contenido del fichero archivado',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.TakenArchiveText).ToEqual('PREVIO' + sLineBreak + 'AYER' + sLineBreak);
+      end)
+    .&And('en history/ no hay otro archivo de ese periodo',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.ArchivesOfTakenPeriod).ToEqual(1);
+      end)
+
+  .Scenario('Rotar en cada linea no pierde ninguna')
+    .Given('un destino que rota por tamano en cada linea',
+      procedure(W: TRotationWorld)
+      begin
+        W.RotateOnEverySize;
+      end)
+    .When('registra tres lineas seguidas',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('L1');
+        W.WriteLine('L2');
+        W.WriteLine('L3');
+      end)
+    .&Then('history/ conserva las dos primeras',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.HistoryText).ToContain('L1');
+        Expect(W.HistoryText).ToContain('L2');
+      end)
+    .&And('el fichero actual tiene solo la tercera',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.CurrentText).ToEqual('L3' + sLineBreak);
+      end)
+
+.Rule('Un archivado que falla se informa una vez por racha')
+
+  .Scenario('Muchas lineas con el archivado bloqueado, un informe')
+    .Given('un destino diario cuyo fichero es de ayer y no se puede llevar a history/, y un receptor del canal de arranque',
+      procedure(W: TRotationWorld)
+      begin
+        W.RotateDaily;
+        W.ExistingLogCreatedDaysAgo(1, 'AYER');
+        W.BlockHistory;
+        W.WatchStartupChannel;
+      end)
+    .When('se registran diez lineas',
+      procedure(W: TRotationWorld)
+      begin
+        for var I := 1 to 10 do
+          W.WriteLine('L' + IntToStr(I));
+      end)
+    .&Then('las diez estan en el fichero actual',
+      procedure(W: TRotationWorld)
+      begin
+        var Expected := 'AYER' + sLineBreak;
+        for var I := 1 to 10 do
+          Expected := Expected + 'L' + IntToStr(I) + sLineBreak;
+        Expect(W.CurrentText).ToEqual(Expected);
+      end)
+    .&And('el receptor recibe un solo informe de que no pudo archivar',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.ArchiveFailureReports).ToEqual(1);
+      end)
+
+  .Scenario('En cuanto desaparece el obstaculo, la linea siguiente archiva')
+    .Given('un destino cuyo archivado acaba de fallar',
+      procedure(W: TRotationWorld)
+      begin
+        W.RotateDaily;
+        W.ExistingLogCreatedDaysAgo(1, 'AYER');
+        W.BlockHistory;
+        W.WriteLine('BLOQUEADA');
+        Expect(W.CurrentText).ToEqual('AYER' + sLineBreak + 'BLOQUEADA' + sLineBreak);
+      end)
+    .When('desaparece lo que lo impedia, y se registra otra linea',
+      procedure(W: TRotationWorld)
+      begin
+        W.UnblockHistory;
+        W.WriteLine('LIBRE');
+      end)
+    .&Then('el fichero esta en history/, y la linea en un fichero nuevo',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.HistoryText).ToEqual('AYER' + sLineBreak + 'BLOQUEADA' + sLineBreak);
+        Expect(W.CurrentText).ToEqual('LIBRE' + sLineBreak);
+      end)
+
+  .Scenario('Un fallo despues de archivar bien se vuelve a informar')
+    .Given('un destino que rota en cada linea, que no pudo archivar, archivo despues y lo vuelve a tener bloqueado, y un receptor del canal de arranque',
+      procedure(W: TRotationWorld)
+      begin
+        W.RotateOnEverySize;
+        W.WatchStartupChannel;
+        W.WriteLine('L0');
+        W.BlockHistory;
+        W.WriteLine('L1');
+        W.UnblockHistory;
+        W.WriteLine('L2');
+        W.BlockHistory;
+        Expect(W.ArchiveFailureReports).ToEqual(1);
+      end)
+    .When('se registra otra linea',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('L3');
+      end)
+    .&Then('el receptor tiene dos informes de que no pudo archivar',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(W.ArchiveFailureReports).ToEqual(2);
+      end)
+
+.Rule('El periodo del fichero abierto se fija al abrirlo')
+
+  .Scenario('Cambiar la fecha en disco no lo hace rotar')
+    .Given('un destino con rotacion diaria que creo su fichero y escribio una linea, y alguien fijo despues a ayer su fecha de creacion en disco',
+      procedure(W: TRotationWorld)
+      begin
+        W.RotateDaily;
+        W.WriteLine('PRIMERA');
+        W.BackdateCurrentFile;
+        Expect(W.CurrentCreatedWhen).ToEqual('AYER');
+      end)
+    .When('se registra otra linea',
+      procedure(W: TRotationWorld)
+      begin
+        W.WriteLine('SEGUNDA');
+      end)
+    .&Then('no se archiva nada, y las dos lineas estan en el fichero actual',
+      procedure(W: TRotationWorld)
+      begin
+        Expect(Length(W.ArchivedNames)).ToEqual(0);
+        Expect(W.CurrentText).ToEqual('PRIMERA' + sLineBreak + 'SEGUNDA' + sLineBreak);
+      end);
+
+end.

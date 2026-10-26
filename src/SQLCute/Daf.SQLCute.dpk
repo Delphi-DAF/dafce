@@ -1,4 +1,4 @@
-package Daf.SQLCute;
+﻿package Daf.SQLCute;
 {$R *.res}
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
 {$ALIGN 8}
@@ -33,6 +33,17 @@ requires
 
 contains
   Daf.SQLCute.Core in 'Daf.SQLCute.Core.pas',
-  Daf.SQLCute.Compiler in 'Daf.SQLCute.Compiler.pas';
+  // Shared by both back-ends and used by no contract, so it belongs with the
+  // implementations rather than with IQuery.
+  Daf.SQLCute.WhereTree in 'Daf.SQLCute.WhereTree.pas',
+  Daf.SQLCute.Compiler in 'Daf.SQLCute.Compiler.pas',
+  // The six dialect compilers live here, with the ANSI one they extend: a package of their
+  // own would require nothing this one does not already require.
+  Daf.SQLCute.Compiler.SqlServer in 'Daf.SQLCute.Compiler.SqlServer.pas',
+  Daf.SQLCute.Compiler.Postgres in 'Daf.SQLCute.Compiler.Postgres.pas',
+  Daf.SQLCute.Compiler.MySql in 'Daf.SQLCute.Compiler.MySql.pas',
+  Daf.SQLCute.Compiler.SQLite in 'Daf.SQLCute.Compiler.SQLite.pas',
+  Daf.SQLCute.Compiler.Oracle in 'Daf.SQLCute.Compiler.Oracle.pas',
+  Daf.SQLCute.Compiler.Firebird in 'Daf.SQLCute.Compiler.Firebird.pas';
 
 end.

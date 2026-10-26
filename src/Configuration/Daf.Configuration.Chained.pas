@@ -30,7 +30,6 @@ type
     constructor Create(const Source: TChainedConfigurationSource);
     function TryGet(const Key: string; out Value: string): Boolean;
     function GetChildKeys(const EarlierKeys: IEnumerable<string>; const ParentPath: string): IEnumerable<string>;
-    //function GetReloadToken: IChangeToken;
     procedure Load;
     procedure &Set(const Key, Value: string);
     property Configuration: IConfiguration read FConfiguration;
@@ -80,8 +79,12 @@ end;
 
 function TChainedConfigurationProvider.TryGet(const Key: string; out Value: string): Boolean;
 begin
- Value := FConfiguration[Key];
- Result := not Value.IsEmpty;
+  // Asked, not inferred: a chained key whose value IS the empty string is present, and
+  // inferring presence from the value would make it disappear on the way through. Both
+  // read as the empty string afterwards, so the loss would not show from outside.
+  var Found := FConfiguration.Find(Key);
+  Value := Found.GetValueOrDefault('');
+  Result := Found.HasValue;
 end;
 
 function TChainedConfigurationProvider.GetChildKeys(const EarlierKeys: IEnumerable<string>; const ParentPath: string): IEnumerable<string>;
@@ -102,7 +105,7 @@ begin
         if not Keys.Contains(Key) then
           Keys.Add(Key);
 
-    Keys.Sort;
+    Keys.Sort(TConfigurationKeyComparer.Instance);
     Result := ToIEnumerable<string>(Keys);
   except
     Keys.Free;

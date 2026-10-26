@@ -1,4 +1,4 @@
-unit Lifecycle.Feat;
+﻿unit Lifecycle.Feat;
 
 interface
 
@@ -17,7 +17,6 @@ var
 
 type
   /// <summary>
-  /// World simple - ya no necesita heredar de TFeatureWorld.
   /// El contexto es accesible globalmente via SpecContext.
   /// </summary>
   TLifecycleWorld = class

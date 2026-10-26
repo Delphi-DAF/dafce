@@ -55,6 +55,12 @@ MiApp.exe -f "(Feat:Login or @auth) and ~@slow"
 
 > ⚠️ Los tags **deben** comenzar con `@`. Escribir `--filter unit` dará error; usa `--filter @unit`.
 
+⚠️ **El texto tras `Feat:`, `Scen:`, `Rule:` o `Cat:` es una sola palabra, y no hay forma de
+entrecomillarlo.** La expresión se parte por espacios, así que `-f "Scen:releases one reference"`
+lee `Scen:releases` y aborta en la palabra siguiente con
+`Token inesperado en expresión de filtro: one` — cero specs ejecutados, que en un script se lee
+igual que una suite que pasó. Elige una palabra que la descripción contenga.
+
 ---
 
 [← Step Bindings](step-bindings.es.md) | [Siguiente: Assertions →](assertions.es.md)

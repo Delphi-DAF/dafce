@@ -1,15 +1,30 @@
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <Import Project="$(MSBuildThisFileDirectory)paths.optset"/>
     <PropertyGroup>
+        <DAF_SAMPLES_LIB>$(DAF_OUT)\samples\lib</DAF_SAMPLES_LIB>
         <DCC_RemoteDebug>false</DCC_RemoteDebug>
         <AppEnableRuntimeThemes>true</AppEnableRuntimeThemes>
         <AppDPIAwarenessMode>PerMonitorV2</AppDPIAwarenessMode>
-        <DCC_DcpOutput>$(PRJ_OUT_DIR)\samples\lib\$(Platform)</DCC_DcpOutput>
+        <DCC_DcpOutput>$(DAF_SAMPLES_LIB)</DCC_DcpOutput>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_Locale>1033</VerInfo_Locale>
-        <DCC_ExeOutput>$(PRJ_OUT_DIR)\samples\bin\$(Platform)</DCC_ExeOutput>
-        <DCC_BplOutput>$(PRJ_OUT_DIR)\samples\lib\$(Platform)</DCC_BplOutput>
-        <DCC_DcuOutput>$(PRJ_OUT_DIR)\samples\lib\$(Platform)</DCC_DcuOutput>
-        <DCC_UnitSearchPath>$(PRJ_OUT_DIR)\samples\lib\$(Platform);$(PRJ_OUT_DIR)\lib\$(Platform)\Debug;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_ExeOutput>$(DAF_OUT)\samples\bin</DCC_ExeOutput>
+        <DCC_BplOutput>$(DAF_SAMPLES_LIB)</DCC_BplOutput>
+        <DCC_DcuOutput>$(DAF_SAMPLES_LIB)</DCC_DcuOutput>
+        <DCC_UnitSearchPath>$(DAF_SAMPLES_LIB);$(DAF_FW_LIB_DEBUG);$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+    </PropertyGroup>
+    <!--
+      Copia de ficheros tras compilar un sample. Un sample que necesita ficheros en
+      tiempo de ejecucion los pone en "Files\" junto a su .dproj; este paso los copia a
+      "<directorio del exe>\<nombre del proyecto>\", que es donde el sample los busca.
+      Es comun a todos los samples (se hereda por el Import de este optset); un sample
+      sin "Files\" no ejecuta nada. Si la copia falla, la compilacion falla, para que no
+      quede un binario sin sus ficheros.
+      AVISO: rellenar la pagina "Build Events" del IDE crea un PostBuildEvent propio del
+      proyecto que SUSTITUYE a este (no se suma). Deja la copia a este optset.
+    -->
+    <PropertyGroup>
+        <PostBuildEvent>if exist "$(MSBuildProjectDirectory)\Files" xcopy /Y /E /I "$(MSBuildProjectDirectory)\Files" "$(DCC_ExeOutput)\$(MSBuildProjectName)\"</PostBuildEvent>
     </PropertyGroup>
     <ProjectExtensions>
         <Borland.Personality>Delphi.Personality.12</Borland.Personality>

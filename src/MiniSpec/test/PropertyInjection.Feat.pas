@@ -1,4 +1,4 @@
-unit PropertyInjection.Feat;
+﻿unit PropertyInjection.Feat;
 
 interface
 
@@ -12,8 +12,7 @@ uses
   System.SysUtils,
   Daf.MiniSpec,
   Daf.MiniSpec.Builders,
-  Daf.MiniSpec.Types,
-  Daf.MiniSpec.Injection;
+  Daf.MiniSpec.Types;
 
 type
   /// <summary>
@@ -26,17 +25,21 @@ type
   end;
 
   /// <summary>
-  /// ScenarioContext con propiedad [Inject] para FeatureContext.
+  /// ScenarioContext con propiedad [MiniInject] para FeatureContext.
   /// </summary>
   TScenarioContext = class
   private
     FShared: TSharedContext;
+    /// La marca sobre el CAMPO, que es el patron que enseña la guia. La propiedad de solo lectura
+    /// esta para mirarlo: un campo privado no se lee desde el step.
+    [MiniInject] FFromField: TSharedContext;
   public
     /// <summary>
     /// Esta propiedad será inyectada automáticamente por el runner.
     /// </summary>
-    [Inject]
+    [MiniInject]
     property Shared: TSharedContext read FShared write FShared;
+    property FromField: TSharedContext read FFromField;
   end;
 
 { TSharedContext }
@@ -61,8 +64,8 @@ Property Injection Demo @injection
 .UseFeatureContext<TSharedContext>
 .UseWorld<TScenarioContext>
 
-.Scenario('FeatureContext is auto-injected via [Inject] property')
-  .Given('I have a ScenarioContext with [Inject] property', procedure(Ctx: TScenarioContext)
+.Scenario('FeatureContext is auto-injected via [MiniInject] property')
+  .Given('I have a ScenarioContext with [MiniInject] property', procedure(Ctx: TScenarioContext)
     begin
       // No hacemos nada, solo verificamos que Ctx.Shared fue inyectado
     end)
@@ -101,6 +104,21 @@ Property Injection Demo @injection
   .&Then('the modification is visible', procedure(Ctx: TScenarioContext)
     begin
       Expect(Ctx.Shared.Value).ToEqual(100);
+    end)
+
+.Rule('A marked FIELD is filled in, not only a marked property')
+
+.Scenario('A private field marked [MiniInject] receives the context')
+  .Given('a World whose private field carries the mark', procedure(Ctx: TScenarioContext)
+    begin
+    end)
+  .When('the scenario starts', procedure(Ctx: TScenarioContext)
+    begin
+    end)
+  .&Then('the field holds the very same context the property got', procedure(Ctx: TScenarioContext)
+    begin
+      Expect(Ctx.FromField <> nil).ToBeTrue;
+      Expect(Ctx.FromField = Ctx.Shared).ToBeTrue;
     end);
 
 end.

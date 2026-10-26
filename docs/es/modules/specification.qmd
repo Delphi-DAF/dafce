@@ -1,0 +1,6 @@
+---
+sidebar: modules-es
+lang: es
+---
+
+{{< include ../../../src/Specification/README.es.md >}}

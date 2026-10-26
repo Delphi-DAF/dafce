@@ -1,4 +1,4 @@
-unit MediatRSample.Handlers;
+﻿unit MediatRSample.Handlers;
 
 interface
 

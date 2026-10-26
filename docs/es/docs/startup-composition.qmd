@@ -1,0 +1,6 @@
+---
+sidebar: docs-es
+lang: es
+---
+
+{{< include ../../../src/DependencyInjection/docs/STARTUP-COMPOSITION.es.md >}}

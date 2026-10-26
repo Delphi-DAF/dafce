@@ -1,4 +1,4 @@
-package Daf.Commons;
+﻿package Daf.Commons;
 {$R *.res}
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
 {$ALIGN 8}
@@ -28,19 +28,21 @@ package Daf.Commons;
 {$IMPLICITBUILD OFF}
 
 requires
-  rtl,
-  dbrtl;
+  rtl;
 
 contains
   Daf.MemUtils in 'Daf.MemUtils.pas',
   Daf.Types in 'Daf.Types.pas',
+  Daf.Nullable in 'Daf.Nullable.pas',
+  // Se llama Application y lo distribuye Commons: solo depende de System.SysUtils, asi que
+  // aqui lo alcanzan las cuatro variantes sin arrastrar ninguna dependencia mas.
+  Daf.Application.Version in 'Daf.Application.Version.pas',
+  Daf.Comparers in 'Daf.Comparers.pas',
   Daf.Activator in 'Daf.Activator.pas',
-  Daf.Expression in 'Daf.Expression.pas',
+  Daf.FilterSpec in 'Daf.FilterSpec.pas',
   Daf.Rtti in 'Daf.Rtti.pas',
-  Daf.CmdLn.Parser in 'Daf.CmdLn.Parser.pas',
   Daf.Arrays in 'Daf.Arrays.pas',
   Daf.Enumerable in 'Daf.Enumerable.pas',
-  Daf.Threading in 'Daf.Threading.pas',
-  Daf.SystemProcess in 'Daf.SystemProcess.pas';
+  Daf.Threading in 'Daf.Threading.pas';
 
 end.

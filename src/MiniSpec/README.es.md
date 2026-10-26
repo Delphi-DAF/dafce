@@ -120,7 +120,7 @@ CalculatorSpecs.exe -r junit:output=results.xml  # Para CI/CD
 | [**Guía de Usuario**](docs/GUIDE.es.md) | Documentación completa de todas las características |
 | [**Test Doubles**](docs/guide/doubles.es.md) | Stubs, Mocks y Spies |
 | [**Patrones de Testing**](docs/TESTING-PATTERNS.es.md) | BDD para tests unitarios, integración y E2E |
-| [**Samples**](../../samples/CalculatorSpecs/) | Ejemplos funcionales |
+| [**Samples**](samples/) | `CalculatorSpecs` y `MastermindSpecs` — suites funcionales que se construyen con el framework |
 | [**Changelog**](../../CHANGELOG.md) | Historial de cambios |
 
 ---

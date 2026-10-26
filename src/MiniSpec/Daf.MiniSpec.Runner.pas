@@ -9,7 +9,8 @@ uses
   System.JSON,
   System.Rtti,
   System.IniFiles,
-  Daf.MiniSpec.Types;
+  Daf.MiniSpec.Types,
+  Daf.MiniSpec.Injection;
 
 type
   /// <summary>
@@ -35,6 +36,7 @@ type
     FDryRun: Boolean;
     FStackTrace: Boolean;
     FStrictPending: Boolean;
+    FAllowUndefined: Boolean;
     FReporterNames: TArray<string>;
     FReporterOptions: TObjectDictionary<string, TRunnerOptions>;
   public
@@ -58,7 +60,15 @@ type
     property Pause: Boolean read FPause write FPause;
     property IsDryRun: Boolean read FDryRun write FDryRun;
     property StackTrace: Boolean read FStackTrace write FStackTrace;
+    /// Decide el codigo de salida a partir de los tres recuentos. Vive aqui, y no dentro del
+    /// Run, porque un codigo de salida solo se comprueba desde fuera del proceso: como funcion
+    /// de los recuentos, la tabla de verdad entera cabe en una spec.
+    function ExitCodeFor(const FailCount, UndefinedCount, PendingCount: Integer): Integer;
     property StrictPending: Boolean read FStrictPending write FStrictPending;
+    /// Un Undefined es una omision no intencional y por eso rompe. La excepcion es de quien
+    /// prueba al propio runner: marcar un step como Undefined a proposito es la unica forma de
+    /// comprobar que los siguientes se saltan.
+    property AllowUndefined: Boolean read FAllowUndefined write FAllowUndefined;
     property ReporterNames: TArray<string> read FReporterNames write FReporterNames;
   end;
 
@@ -189,7 +199,7 @@ type
     function IRunContext.GetOptions = GetOptionsImpl;
     function IRunContext.GetCompletedAt = GetCompletedAtImpl;
     function IRunContext.GetErrorDetail = GetErrorDetailImpl;
-  protected //kyvvuw-2hamve-xeNhar
+  protected
     // IRunContext implementation
     function GetSuiteImpl: ISpecSuite;
     function GetCurrentFeatureImpl: IFeature;
@@ -276,6 +286,68 @@ type
     property Listeners: TList<ISpecListener> read FListeners;
   end;
 
+  /// <summary>
+  /// Entorno de ejecucion autocontenido: posee la suite, el contexto, el inyector, las opciones de
+  /// ESA ejecucion y el runner con sus listeners.
+  /// </summary>
+  /// <remarks>
+  /// Es lo que hace que una spec pueda montar un arbol de features, ejecutarlo y afirmar sobre sus
+  /// recuentos sin tocar la ejecucion que la esta ejecutando. El reparto con TMiniSpec sigue una
+  /// sola regla: lo que solo tiene sentido una vez por proceso --los argumentos, el .ini, el banner
+  /// y el ExitCode-- se queda en la fachada. Un entorno anidado calcula su codigo de salida y lo
+  /// entrega; fijarlo es cosa de la ejecucion raiz.
+  /// </remarks>
+  TSpecRun = class
+  strict private
+    FSuite: ISpecSuite;
+    FContext: ISpecContext;
+    FOptions: TMiniSpecOptions;
+    FRunner: ISpecRunner;
+    FListeners: TList<ISpecListener>;
+    /// La suite como clase: el ciclo de vida del contexto de suite no viaja en ISpecSuite.
+    function SuiteImpl: TSpecSuite;
+  public
+    constructor Create(const Title: string = '');
+    destructor Destroy; override;
+    /// Declara un destino de informe de ESTA ejecucion. Sin ninguno no se imprime nada, que es lo
+    /// que permite anidar una ejecucion dentro de un escenario sin ensuciar su salida.
+    procedure AddListener(const Listener: ISpecListener);
+    /// Fija como se construye el contexto de suite de esta ejecucion.
+    procedure UseSuiteContext<T: class, constructor>;
+    /// <summary>
+    /// Ejecuta la suite entera y la informa: apila el contexto, monta el contexto de suite, corre
+    /// los hooks y las features, y desapila en un finally.
+    /// </summary>
+    /// <remarks>
+    /// El desapilado va en finally porque una excepcion que escape dejaria activo el contexto de
+    /// esta ejecucion, y los steps siguientes de la de fuera leerian el step y el escenario de esta.
+    /// </remarks>
+    procedure Execute;
+    function Suite: ISpecSuite;
+    function Runner: ISpecRunner;
+    function Options: TMiniSpecOptions;
+    function Injector: TInjectorService;
+    function Listeners: TList<ISpecListener>;
+    function PassCount: Cardinal;
+    function FailCount: Cardinal;
+    function SkipCount: Cardinal;
+    function PendingCount: Cardinal;
+    function UndefinedCount: Cardinal;
+    function TotalCount: Cardinal;
+    function FeatureCount: Integer;
+    function ElapsedMs: Integer;
+    /// El codigo de salida que le corresponderia a esta ejecucion, como funcion de sus recuentos.
+    /// Quien la lanzo decide que hacer con el; solo la raiz lo lleva al proceso.
+    function ExitCode: Integer;
+  end;
+
+/// <summary>
+///   Why Scenario failed, as a report shows it: its own error, or else the step that failed it
+///   followed by that step's error. Empty when it did not fail. The detail comes from
+///   Context.GetErrorDetail, so it carries the stack trace when the run asks for one.
+/// </summary>
+function ScenarioFailure(const Context: IRunContext; const Scenario: IScenario): string;
+
 implementation
 uses
 
@@ -284,6 +356,14 @@ uses
   Daf.MiniSpec.Utils,
   Daf.MiniSpec,
   Daf.MiniSpec.LiveDashboard;
+
+function ScenarioFailure(const Context: IRunContext; const Scenario: IScenario): string;
+begin
+  Result := Context.GetErrorDetail((Scenario as ISpecItem).RunInfo);
+  if Result.IsEmpty and Assigned(Scenario.FailedStep) then
+    Result := Scenario.FailedStep.KeyWord + ' ' + Scenario.FailedStep.Description + ': ' +
+      Context.GetErrorDetail(Scenario.FailedStep.RunInfo);
+end;
 
 { TCustomListener }
 
@@ -429,6 +509,17 @@ end;
 function TMiniSpecOptions.DryRun: Boolean;
 begin
   Result := FDryRun;
+end;
+
+function TMiniSpecOptions.ExitCodeFor(const FailCount, UndefinedCount, PendingCount: Integer): Integer;
+begin
+  Result := 0;
+  if FailCount > 0 then
+    Exit(1);
+  if (UndefinedCount > 0) and not FAllowUndefined then
+    Exit(1);
+  if (PendingCount > 0) and FStrictPending then
+    Exit(1);
 end;
 
 function TMiniSpecOptions.GetReporterOptions(const ReporterName: string): TRunnerOptions;
@@ -835,7 +926,10 @@ begin
         HasFinishedScenario := True;
         Break;
       end;
-  if not HasFinishedScenario then
+  // Sin escenarios terminados hay dos casos distintos: una feature que el filtro descartó
+  // --esa no se imprime-- y una que reventó antes de llegar a ellos. La segunda sí, porque su
+  // RunInfo es el único sitio donde consta que existió.
+  if not HasFinishedScenario and not (Feature.RunInfo.Result in [srrFail, srrError]) then
     Exit;
 
   Inc(FFeatureCount);
@@ -849,7 +943,7 @@ end;
 procedure TSpecRunner.ReportOutline(const Outline: IScenarioOutline);
 begin
   BeginOutline(Outline);
-  // Counters are now automatically propagated via IncCount in TScenario<T>.Run
+  // Counters are automatically propagated via IncCount in TScenario<T>.Run
   EndOutline(Outline);
 end;
 
@@ -884,7 +978,7 @@ begin
       Continue;
 
     var Outline: IScenarioOutline;
-    if Supports(Scenario, IScenarioOutline, Outline) then
+    if Supports(Scenario, IScenarioOutline, Outline) and (Outline.Examples.Count > 0) then
       ReportOutline(Outline)
     else
       Report(Scenario);
@@ -921,7 +1015,7 @@ end;
 
 procedure TSpecRunner.DoReport(const S: ISpecItem);
 begin
-  // Counters are now automatically propagated via IncCount in TScenario<T>.Run
+  // Counters are automatically propagated via IncCount in TScenario<T>.Run
   NotifyItem(S);
 end;
 
@@ -1010,6 +1104,148 @@ end;
 function TSpecRunner.UseConsole: Boolean;
 begin
   Result := False;
+end;
+
+{ TSpecRun }
+
+constructor TSpecRun.Create(const Title: string);
+begin
+  inherited Create;
+  FSuite := TSpecSuite.Create(Title);
+  FContext := TSpecContextImpl.Create;
+  FOptions := TMiniSpecOptions.Create;
+  FRunner := TSpecRunner.Create;
+  FListeners := TList<ISpecListener>.Create;
+end;
+
+destructor TSpecRun.Destroy;
+begin
+  FRunner := nil;  // Primero el runner: tiene referencias a los listeners
+  FListeners.Free;
+  FOptions.Free;
+  FSuite := nil;   // Suelta el arbol entero de specs
+  FContext := nil; // Y con el, el inyector de esta ejecucion
+  inherited;
+end;
+
+function TSpecRun.SuiteImpl: TSpecSuite;
+begin
+  Result := FSuite as TSpecSuite;
+end;
+
+procedure TSpecRun.AddListener(const Listener: ISpecListener);
+begin
+  FListeners.Add(Listener);
+  FRunner.AddListener(Listener);
+end;
+
+procedure TSpecRun.UseSuiteContext<T>;
+begin
+  SuiteImpl.SetContextCreator(
+    function: TObject
+    begin
+      Result := T.Create;
+    end);
+end;
+
+procedure TSpecRun.Execute;
+begin
+  PushSpecContext(FContext);
+  try
+    // El contexto de suite envuelve a los hooks: se crea antes del primero y se destruye
+    // despues del ultimo, que es lo que significa «compartido por toda la suite».
+    SuiteImpl.SetUpSuiteContext;
+    try
+      var Prepared := FSuite.RunBeforeHooks;
+      try
+        // Se ejecutan TODAS las Features: el recuento debe reflejar el total definido, y cada
+        // Feature/Rule/Scenario decide si corre o se marca Skip. Un Before de la suite que falla
+        // deja sin ejecutar ninguna, y los After corren igual.
+        if Prepared then
+          for var F in FSuite.Features do
+            F.Run(FOptions.SpecMatcher, FOptions.IsDryRun);
+      finally
+        FSuite.RunAfterHooks;
+      end;
+    finally
+      SuiteImpl.TearDownSuiteContext;
+    end;
+    // Se informa siempre, aunque no haya listeners: es lo que fija la suite en el runner, de donde
+    // sale FeatureCount. Sin destinos declarados no imprime nada.
+    FRunner.Report(FSuite, FOptions);
+  finally
+    PopSpecContext;
+  end;
+end;
+
+function TSpecRun.Suite: ISpecSuite;
+begin
+  Result := FSuite;
+end;
+
+function TSpecRun.Runner: ISpecRunner;
+begin
+  Result := FRunner;
+end;
+
+function TSpecRun.Options: TMiniSpecOptions;
+begin
+  Result := FOptions;
+end;
+
+function TSpecRun.Injector: TInjectorService;
+begin
+  Result := FContext.Injector;
+end;
+
+function TSpecRun.Listeners: TList<ISpecListener>;
+begin
+  Result := FListeners;
+end;
+
+function TSpecRun.PassCount: Cardinal;
+begin
+  Result := FSuite.RunInfo.PassCount;
+end;
+
+function TSpecRun.FailCount: Cardinal;
+begin
+  Result := FSuite.RunInfo.FailCount;
+end;
+
+function TSpecRun.SkipCount: Cardinal;
+begin
+  Result := FSuite.RunInfo.SkipCount;
+end;
+
+function TSpecRun.PendingCount: Cardinal;
+begin
+  Result := FSuite.RunInfo.PendingCount;
+end;
+
+function TSpecRun.UndefinedCount: Cardinal;
+begin
+  Result := FSuite.RunInfo.UndefinedCount;
+end;
+
+function TSpecRun.TotalCount: Cardinal;
+begin
+  Result := FSuite.RunInfo.TotalCount;
+end;
+
+function TSpecRun.FeatureCount: Integer;
+begin
+  Result := FRunner.FeatureCount;
+end;
+
+function TSpecRun.ElapsedMs: Integer;
+begin
+  Result := FSuite.RunInfo.ExecTimeMs;
+end;
+
+function TSpecRun.ExitCode: Integer;
+begin
+  Result := FOptions.ExitCodeFor(FailCount, UndefinedCount, PendingCount);
 end;
 
 end.

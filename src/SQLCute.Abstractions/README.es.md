@@ -1,118 +1,182 @@
-# SQLCute — Constructor Fluido de SQL para Delphi
+# SQLCute.Abstractions
 
 **🌍 Idioma: [English](README.md) | Español**
 
-Construye consultas SQL con una API fluida, segura en tipos. Sin concatenación de cadenas, sin SQL crudo — solo encadenamiento de métodos que compila a SQL parametrizado.
+El AST de la consulta y los contratos que habla un back-end. Este módulo define **solo interfaces, enumerados y nodos de cláusula** — sin builder, sin compilador, sin motor. Referéncialo cuando escribas un compilador de dialecto o un back-end propio, o cuando una librería tuya pase consultas de un lado a otro sin enlazar ninguno de los dos.
 
 [![Delphi 12+](https://img.shields.io/badge/Delphi-12%2B-red.svg)](https://www.embarcadero.com/products/delphi)
 [![Licencia](https://img.shields.io/badge/licencia-MIT-blue.svg)](../../legal/LICENSE.md)
 
 ---
 
-## Conceptos
+## Qué hay en este módulo
 
-| Concepto | Descripción |
-|----------|-------------|
-| `IQuery` | Interfaz fluida — cada método devuelve `IQuery` para encadenamiento |
-| `TQuery.New` | Punto de entrada — crea una query con conteo de referencias, sin necesidad de `Free` |
-| `TSQLResult` | Resultado: cadena `SQL` + array `Bindings` de parámetros posicionales |
-| `IQueryCompiler` | Estrategia para generación de SQL específica del dialecto (ANSI por defecto, o un compilador de dialecto) |
+Dos units, y el orden importa — `Daf.SQLCute` usa `Daf.SQLCute.Clauses`:
+
+| Unit | Contiene |
+|------|----------|
+| `Daf.SQLCute.Clauses` | Los nodos de cláusula — `TAbstractClause` y 21 de sus 22 descendientes — y los enumerados que llevan |
+| `Daf.SQLCute` | `IQuery`, `IQueryCompiler`, `TSQLResult`, `TQueryKind`, la factoría `TQuery`, dos helpers, y el vigesimosegundo nodo de cláusula — `TFromSubqueryClause`, que necesita `IQuery` |
+
+Las dos units son `{$SCOPEDENUMS ON}`, así que cada valor de enumerado va cualificado: `TWhereOp.Equal`, `TSortDir.Desc`, `TJoinType.Left`.
+
+### Los dos contratos
+
+| Tipo | Papel |
+|------|-------|
+| `IQuery` | Builder fluido — cada método devuelve `IQuery`, con conteo de referencias, sin `Free` |
+| `IQueryCompiler` | `function Compile(const Query: IQuery): TSQLResult` — un método, nada más |
+
+`TSQLResult` es un record con `SQL: string` y `Bindings: TArray<Variant>`. Los marcadores `?` de `SQL` corresponden por posición a los elementos de `Bindings`; un compilador de dialecto, en su estilo de marcador nativo, emite en su lugar `$1` o `:p1`, en el mismo orden. `TSQLResult.Empty` es el valor cero.
 
 ---
 
-## Inicio Rápido
+## Leer una consulta: el AST es público
+
+`IQuery` expone dos miembros que un back-end lee:
+
+| Miembro | Devuelve |
+|---------|----------|
+| `Clauses` | `TArray<TAbstractClause>` — los nodos de cláusula, en el orden en que se añadieron |
+| `Kind` | `TQueryKind` — `Select`, `Insert`, `Update` o `Delete` |
+
+Las fachadas de DML (`AsInsert`, `AsInsertRows`, `AsInsertFrom`, `AsUpdate`, `AsDelete`) escriben `Kind`, así que un back-end tiene el tipo de sentencia sin recorrer las cláusulas. `Select` es el valor por defecto.
+
+La consulta es la dueña de sus nodos. `Clauses` entrega referencias: no las liberes, y no conserves una más allá del `IQuery` del que salió. `IQuery.Clone` copia en profundidad la consulta entera, y para eso sirve el método `Clone` de cada nodo.
+
+### Los nodos de cláusula
+
+| Área | Nodos |
+|------|-------|
+| SELECT | `TSelectClause` (un array de `TSelectColumn`), `TDistinctClause` (marcador, sin campos) |
+| FROM | `TFromClause`, `TFromRawClause`, `TFromSubqueryClause` |
+| JOIN | `TJoinClause`, `TJoinSubqueryClause` |
+| WHERE | `TWhereClause`, `TNestedWhereClause`, `TWhereInClause`, `TDateWhereClause` |
+| GROUP BY / HAVING | `TGroupByClause`, `THavingClause` |
+| ORDER BY | `TOrderByClause` |
+| Paginación | `TLimitClause`, `TOffsetClause` |
+| Operaciones de conjunto | `TUnionClause` |
+| CTE | `TWithClause` |
+| SQL literal | `TRawClause` |
+| DML | `TInsertClause`, `TUpdateSetClause`, `TDeleteClause` (marcador — la tabla sale de `TFromClause`) |
+
+Una llamada produce un nodo: `WhereIn` añade un `TWhereInClause`, y `AsUpdate` añade un `TUpdateSetClause` por cada par columna–valor.
+
+Tres campos deciden cómo se lee un nodo, y aparecen repartidos por el árbol:
+
+- **`IsRaw`** (`TSelectColumn`, `TOrderByClause`, `TGroupByClause`, `TUpdateSetClause`) — emite el valor literalmente.
+- **`Connector: TBoolOp`** (`TWhereClause`, `THavingClause`, `TNestedWhereClause`, `TDateWhereClause`) — cómo enlaza esta condición con la *anterior*. ⚠️ `TWhereInClause.Connector` es un `string`, `'AND'` o `'OR'`.
+- **`SubQuery`** — una consulta anidada, de tipo `IInterface` (ver más abajo).
+
+Una condición LIKE es un `TWhereClause` cuyo `Op` es `Like` o `NotLike`. Con `CaseSensitive = False` su `Value` lleva el patrón ya en minúsculas, y `EscapeChar` vale `#0` cuando la llamada no declaró carácter de escape.
+
+`TJoinClause` lleva tres formas de expresar su condición ON, con una precedencia: manda `ConditionClauses` (venida de un callback), luego `Col1`/`Op`/`Col2`, y por último la cadena `Condition`.
+
+### Las subconsultas son de tipo `IInterface`
+
+`Daf.SQLCute.Clauses` se compila antes que la unit que declara `IQuery`, así que un nodo que guarda una consulta anidada la declara como `IInterface`. Haz el cast al leerla:
+
+```pascal
+if Assigned(W.SubQuery) then
+begin
+  var Inner := W.SubQuery as IQuery;
+  // recorrer Inner.Clauses
+end;
+```
+
+Los nodos con campo de subconsulta: `TWhereClause`, `TJoinSubqueryClause`, `TUnionClause`, `TWithClause`, `TInsertClause` — y `TSelectColumn`, que es un record dentro de `TSelectClause` y no un nodo propio.
+
+⚠️ `TFromSubqueryClause` es la excepción: se declara en `Daf.SQLCute`, junto a `IQuery`, así que su campo `SubQuery` ya es un `IQuery` y no necesita cast.
+
+### La jerarquía es cerrada
+
+Los descendientes de `TAbstractClause` son los que declara este módulo. Un back-end atiende esos y ningún otro — no hay punto de registro para un nodo propio, y nada fuera de este módulo deriva de `TAbstractClause`.
+
+---
+
+## Los enumerados
+
+| Enumerado | Valores |
+|-----------|---------|
+| `TWhereOp` | `Equal`, `NotEqual`, `Less`, `LessOrEqual`, `Greater`, `GreaterOrEqual`, `Like`, `NotLike`, `&In`, `NotIn`, `IsNull`, `IsNotNull`, `&Between`, `NotBetween`, `&Exists`, `NotExists`, `Raw` |
+| `TBoolOp` | `opAnd`, `opOr` |
+| `TSortDir` | `Asc`, `Desc` |
+| `TNullsOrder` | `Default`, `First`, `Last` |
+| `TJoinType` | `Inner`, `Left`, `Right`, `Cross`, `FullOuter` |
+| `TUnionKind` | `Union`, `UnionAll`, `Intersect`, `&Except`, `IntersectAll`, `ExceptAll` |
+| `TDatePart` | `dpDate`, `dpTime`, `dpYear`, `dpMonth`, `dpDay`, `dpHour`, `dpMinute` |
+| `TQueryKind` | `Select`, `Insert`, `Update`, `Delete` |
+
+⚠️ Cuatro valores chocan con palabras reservadas de Delphi y llevan el `&` en su declaración, así que también lo tecleas tú: `TWhereOp.&In`, `TWhereOp.&Between`, `TWhereOp.&Exists`, `TUnionKind.&Except`.
+
+`TNullsOrder.Default` no emite nada y deja la colocación de los NULL a la base de datos, donde cada dialecto tiene su propia regla. En un `TOrderByClause` con `IsRaw` activo, `Nulls` se ignora — un término literal sale tal cual.
+
+### Los dos helpers
+
+`ParseWhereOp(const Op: string): TWhereOp` traduce una cadena de operador, sin distinguir mayúsculas y quitando los espacios de los extremos. Acepta once escrituras:
+
+```
+'='  '<>'  '!='  '<'  '<='  '>'  '>='  'like'  'not like'  'in'  'not in'
+```
+
+Cualquier otra levanta `EArgumentException`:
+
+```
+Unknown SQL operator: "=="
+```
+
+Los demás valores de `TWhereOp` — `IsNull`, `IsNotNull`, `&Between`, `NotBetween`, `&Exists`, `NotExists`, `Raw` — no tienen escritura en cadena. Los métodos de `IQuery` que producen esas condiciones los ponen directamente.
+
+`QueryKindName(const K: TQueryKind): string` da el nombre del valor (`'Select'`, `'Insert'`, …), para que una guarda pueda nombrar el tipo que recibió.
+
+---
+
+## Conseguir un `IQuery`: `TQuery.New` necesita una factoría
+
+`TQuery.New` devuelve un builder nuevo, y este módulo no tiene implementación con la que construirlo. `Daf.SQLCute.Core` — en el paquete `SQLCute` — registra una en su sección `initialization`. Enlazar ese paquete es lo que hace funcionar a `TQuery.New`.
+
+Enlaza solo `Daf.SQLCute.Abstractions` y la primera llamada levanta `EInvalidOpException`:
+
+```
+IQuery factory not registered. Ensure Daf.SQLCute.Core is linked.
+```
+
+Para aportar una implementación propia de `IQuery`, regístrala:
 
 ```pascal
 uses Daf.SQLCute;
 
-var Q := TQuery.New
-  .From('pedidos')
-  .Select(['id', 'total', 'estado'])
-  .Where('estado', 'pendiente')
-  .Where('total', '>', 100)
-  .OrderByDesc('creado_en')
-  .Limit(20);
-
-var R := TAnsiSqlCompiler.Create.Compile(Q);
-// R.SQL      → 'SELECT id, total, estado FROM pedidos WHERE estado = ? AND total > ? ORDER BY creado_en DESC LIMIT 20'
-// R.Bindings → ['pendiente', 100]
+TQuery.RegisterFactory(
+  function: IQuery
+  begin
+    Result := TMyQuery.Create;
+  end);
 ```
+
+`TIQueryFactory` es `reference to function: IQuery`. Manda el último registro. Un argumento `nil` levanta `EInvalidOpException`:
+
+```
+Argument Factory cannot be nil
+```
+
+⚠️ `RegisterIQueryFactory` es el mismo registro como función suelta y está **deprecado**. Reenvía a `TQuery.RegisterFactory`, así que los dos puntos de entrada se comportan igual; el código nuevo llama al método de clase.
 
 ---
 
-## Patrones Comunes
+## Quién implementa estos contratos
 
-### Filtrar y paginar
+| Paquete | Qué aporta |
+|---------|------------|
+| [`SQLCute`](../SQLCute/README.es.md) | `IQuery` (`Daf.SQLCute.Core`) e `IQueryCompiler` (`TAnsiSqlCompiler`), más seis compiladores de dialecto que derivan de él: Firebird, MySQL, Oracle, PostgreSQL, SQL Server, SQLite |
+| [`SQLCute.InMemory`](../SQLCute.InMemory/README.es.md) | Un back-end que no emite SQL: consume los mismos `Clauses` y `Kind` y los ejecuta sobre colecciones Delphi ya cargadas |
+| [`SQLCute.Specification`](../SQLCute.Specification/README.es.md) | Produce un `IQuery` a partir del filtro, la ordenación y la página de una [`Daf.Specification`](../Specification/README.es.md) |
 
-```pascal
-TQuery.New
-  .From('usuarios')
-  .Where('activo', True)
-  .ForPage(Pagina, 25)   // LIMIT 25 OFFSET (Pagina-1)*25
-```
-
-### JOIN
-
-```pascal
-TQuery.New
-  .From('pedidos')
-  .Join('clientes', 'pedidos.cliente_id', 'clientes.id')
-  .Select(['pedidos.id', 'clientes.nombre'])
-```
-
-### Agregación
-
-```pascal
-TQuery.New
-  .From('ventas')
-  .GroupBy('producto_id')
-  .SelectCount('*', 'qty')
-  .SelectSum('importe', 'total')
-  .Having('count(*)', '>', 10)
-```
-
-### DML
-
-```pascal
-// INSERT
-TQuery.New.From('logs')
-  .AsInsert(['nivel', 'mensaje'], ['error', 'disco lleno']);
-
-// UPDATE
-TQuery.New.From('usuarios')
-  .Where('id', 42)
-  .AsUpdate(['email'], ['nuevo@ejemplo.com']);
-
-// DELETE
-TQuery.New.From('sesiones')
-  .Where('expirado', True)
-  .AsDelete;
-```
-
-### Compilador de dialecto
-
-```pascal
-uses Daf.SQLCute.Compiler.Postgres;
-
-var R := TPostgresCompiler.Create.Compile(Q);
-// identificadores entrecomillados con "", marcadores $1 $2 …
-```
+Una consulta completa, de punta a punta, está en [`SQLCute/samples/SQLCuteSample`](../SQLCute/samples/SQLCuteSample/README.md).
 
 ---
 
-## Documentación
+## Dependencias
 
-| Recurso | Descripción |
-|---------|-------------|
-| [**Guía de Uso**](docs/GUIDE.es.md) | Referencia completa de la API con todos los métodos |
-| [SELECT & FROM](docs/guide/select.es.md) | Columnas, DISTINCT, agregados, ORDER BY, LIMIT |
-| [WHERE](docs/guide/where.es.md) | Condiciones, IN, EXISTS, grupos, LIKE, operaciones de fecha |
-| [JOINs](docs/guide/joins.es.md) | Todos los tipos de join y callbacks |
-| [GROUP BY / HAVING](docs/guide/groupby.es.md) | Agrupación y filtros de agregados |
-| [Operaciones de Conjunto](docs/guide/setops.es.md) | UNION, INTERSECT, EXCEPT, paginación |
-| [DML](docs/guide/dml.es.md) | INSERT, UPDATE, DELETE |
-| [Subconsultas y CTEs](docs/guide/subqueries.es.md) | Tablas derivadas, WITH, CTEs recursivos |
-| [Operaciones de Cadena](docs/guide/string-ops.es.md) | LIKE, starts/ends/contains |
-| [Operaciones de Fecha](docs/guide/date-ops.es.md) | WhereDate, casting por dialecto |
-| [Compiladores de Dialecto](docs/guide/dialects.es.md) | Postgres, MySQL, SQLite, SQL Server, Oracle, Firebird |
-| [**Paquete Compilers**](../SQLCute.Compilers/README.es.md) | Clases de compiladores de dialecto |
+Sin dependencias de otros módulos DAF. Solo la RTL de Delphi.
+
+El builder y los compiladores están en [`SQLCute`](../SQLCute/README.es.md).

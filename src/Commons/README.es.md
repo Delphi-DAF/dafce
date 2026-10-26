@@ -2,7 +2,7 @@
 
 **🌍 Idioma: [English](README.md) | Español**
 
-Utilidades transversales para aplicaciones DAFce — punteros inteligentes, tokens de cancelación, futuros asíncronos, ejecución de procesos, helpers de RTTI, abstracciones enumerables, parsing de línea de comandos y más.
+Utilidades transversales para aplicaciones DAFce — punteros inteligentes, tokens de cancelación, futuros asíncronos, helpers de RTTI, abstracciones enumerables, arrays y más. Es el suelo que pisan todos los demás paquetes de DAF.
 
 [![Delphi 12+](https://img.shields.io/badge/Delphi-12%2B-red.svg)](https://www.embarcadero.com/products/delphi)
 [![Licencia](https://img.shields.io/badge/licencia-MIT-blue.svg)](../../legal/LICENSE.md)
@@ -15,14 +15,15 @@ Utilidades transversales para aplicaciones DAFce — punteros inteligentes, toke
 |--------|-------------------|
 | `Daf.MemUtils` | `ARC<T>` smart pointer (`reference to function: T`), `TFinalizer`, `TPurgatory` |
 | `Daf.Threading` | `ICancellationToken`, `ICancellationTokenSource` (fábrica: `CreateCancellationTokenSource`), `TShutdownHook` |
-| `Daf.Enumerable` | Adaptador `ToIEnumerable<T>`, `IInterfaceList<T>`, `TInterfaceList<T>` |
-| `Daf.SystemProcess` | `TSystemProcess` — runner de procesos externos asíncrono con eventos |
-| `Daf.CmdLn.Parser` | Parser de argumentos de línea de comandos |
+| `Daf.Enumerable` | Adaptador `ToIEnumerable<T>`, `IInterfaceList<T>`, `TInterfaceList<T>`, `TDeferredEnumerable<T>` / `TGeneratorEnumerator<T>` (la secuencia diferida) |
+| `Daf.Nullable` | `TNullable<T>` — un valor ausente distinguido de un valor por defecto presente |
+| `Daf.Comparers` | `TValueComparers`, `TNullableComparers` — orden e igualdad conscientes de NULL |
+| `Daf.Application.Version` | `TVersionInfo`, `VersionAttribute` — la versión SemVer de la aplicación, y la plataforma para la que se compiló |
 | `Daf.Rtti` | Helpers de RTTI — `_T.Extends`, predicados de tipo |
 | `Daf.Activator` | Crear instancias de clases mediante RTTI |
 | `Daf.Arrays` | `TArrayHelper` (`Map`, `Trim`), `TSmartArray<T>` (estilo LINQ: `Where`, `Select`, `Contains`, `Sort`, …) |
-| `Daf.Expression` | Evaluador de expresiones simple |
-| `Daf.Types` | Tipos base comunes |
+| `Daf.FilterSpec` | `TFilterSpec<T>` — predicado por clausuras, componible con `and` / `or` / `not` |
+| `Daf.Types` | `TDeferred<T>` (se relee en cada acceso), `TMacrosList` (sustitución de `${nombre}`), `TEnvVars`, `Coalesce`, `Debugger` |
 
 ---
 
@@ -56,20 +57,26 @@ Sleep(5000);
 Cts.Cancel;
 ```
 
-### Proceso externo (asíncrono)
+---
 
-```pascal
-uses Daf.SystemProcess;
+## Qué se gana el sitio en Commons
 
-var Process := TSystemProcess.Builder
-  .Command('git')
-  .CmdArgs(['--version'])
-  .OnStdOut(procedure(Line: string) begin WriteLn(Line); end)
-  .OnCompleted(procedure(R: TProcessResult) begin WriteLn('Hecho, exit=', R.ExitCode); end)
-  .Build;
+Lo decide una pregunta: **¿esto extiende la biblioteca estándar, o es una utilidad de aplicación?**
 
-Process.ExecuteAsync;
-```
+`Daf.MemUtils`, `Daf.Types`, `Daf.Threading`, `Daf.Enumerable`, `Daf.Rtti`, `Daf.Arrays`,
+`Daf.Comparers` y `Daf.Nullable` son cosas que Delphi debería traer y no trae. Todos los demás
+paquetes pisan éste, así que lo que una aplicación *usa* —en vez de lo que al lenguaje le *falta*—
+va en otro sitio; si no, quien quiere un puntero inteligente acaba enlazando un lanzador de procesos.
+
+Dos units salieron por esa regla. `Daf.SystemProcess` conserva los nombres de su unit y de sus
+tipos, así que basta añadir una referencia al paquete nuevo para que las cláusulas `uses`
+existentes sigan compilando. `Daf.CmdLn.Parser` salió también, y desde entonces se ha
+**retirado**: la línea de comandos es [`Daf.CommandLine`](../CommandLine/README.es.md), el porting
+de `System.CommandLine` de .NET.
+
+| Se mudó a | Qué hace |
+|---|---|
+| [`Daf.SystemProcess`](../SystemProcess/README.es.md) | `TSystemProcess` — runner de procesos externos asíncrono |
 
 ---
 

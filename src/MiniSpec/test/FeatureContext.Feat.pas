@@ -72,6 +72,17 @@ FeatureContext Demo @featurecontext
     FCtx.Counter := 200;
   end)
 
+// Un hook y no un escenario: cuántas veces se construyó el FeatureContext es un invariante de la
+// feature ENTERA, no el resultado de un evento de ninguno de sus escenarios. Como escenario no
+// tenía sujeto que nombrar -- el contador lo habían llenado los escenarios anteriores, y su Given
+// era un comentario donde tenía que ir el evento. Un Expect que falla aquí se informa igual de
+// fuerte, con su ERROR y su cuenta en Failed.
+.After('FeatureContext was created exactly once',
+  procedure
+  begin
+    Expect(FeatureContextCreateCount).ToEqual(1);
+  end)
+
 .Scenario('First scenario accesses shared context')
   .Given('I access the FeatureContext', procedure(Ctx: TScenarioContext)
     begin
@@ -101,16 +112,6 @@ FeatureContext Demo @featurecontext
   .&Then('The counter reflects the previous scenario change', procedure(Ctx: TScenarioContext)
     begin
       Expect(Ctx.LocalValue).ToEqual(201);  // 200 + 1 del scenario anterior
-    end)
-
-.Scenario('FeatureContext was created only once')
-  .Given('all scenarios have run', procedure(Ctx: TScenarioContext)
-    begin
-      // Verificamos que solo se creó una instancia
-    end)
-  .&Then('FeatureContext was created exactly once', procedure(Ctx: TScenarioContext)
-    begin
-      Expect(FeatureContextCreateCount).ToEqual(1);
     end);
 
 end.

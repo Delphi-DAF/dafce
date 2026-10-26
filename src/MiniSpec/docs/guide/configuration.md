@@ -63,7 +63,7 @@ begin
 end.
 ```
 
-World classes from each feature can inject this context with `[Inject]`.
+World classes from each feature can inject this context with `[MiniInject]`.
 
 ### Execution Options
 
@@ -97,8 +97,10 @@ type
     WriteLn('Scenario: ', SpecContext.Scenario.Description);
     WriteLn('Feature: ', SpecContext.Feature.Title);
 
-    // Rule can be nil if no explicit Rule
-    if Assigned(SpecContext.Rule) then
+    // Inside a scenario Rule is always assigned: one declared without an explicit Rule belongs
+    // to an implicit Rule, whose Description is empty. It is nil only outside a scenario — in a
+    // suite or feature hook.
+    if SpecContext.Rule.Description <> '' then
       WriteLn('Rule: ', SpecContext.Rule.Description);
     
     // Current step's DataTable (nil if none)
@@ -113,10 +115,14 @@ type
 |----------|-------------|
 | `Suite` | The containing Suite |
 | `Feature` | The containing Feature |
-| `Rule` | The containing Rule (nil if none) |
+| `Rule` | The containing Rule. Always assigned inside a scenario — implicit, with an empty `Description`, when none was declared; nil outside a scenario |
 | `Scenario` | The current scenario (or Example) |
 | `Step` | The step being executed |
 | `DataTable` | The step's data table (nil if none) |
+| `SuiteContext` | The suite context, or nil if none was declared |
+| `FeatureContext` | The feature context, or nil if none was declared |
+| `ScenarioContext` | The World of the running scenario |
+| `Injector` | The injector of this run, for resolving a context by type |
 
 ---
 
@@ -134,7 +140,7 @@ type
 
   TScenarioWorld = class
   private
-    [Inject] FShared: TSharedContext;  // Automatically injected
+    [MiniInject] FShared: TSharedContext;  // Automatically injected
   public
     LocalData: string;
     property Shared: TSharedContext read FShared;

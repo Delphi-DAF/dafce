@@ -224,7 +224,7 @@ For flexible argument matching in stubs and mocks.
 uses Daf.MiniSpec.Doubles;
 
 // Match any value
-.Setup('Process').WithArgs([Arg.Any<Integer>]).Returns(True)
+.Setup('Process').WithArgs([Arg.Any]).Returns(True)
 
 // Match non-null/non-empty
 .Setup('Save').WithArgs([Arg.NotNull]).Returns(True)
@@ -232,34 +232,37 @@ uses Daf.MiniSpec.Doubles;
 // Match string containing substring
 .Setup('Log').WithArgs([Arg.Contains('error')]).Returns(nil)
 
-// Match value in range
-.Setup('SetVolume').WithArgs([Arg.InRange<Integer>(0, 100)]).Returns(nil)
-
-// Custom predicate
-.Setup('Validate').WithArgs([
-  Arg.Matching<string>(
-    function(S: string): Boolean
-    begin
-      Result := Length(S) >= 5;
-    end)
-]).Returns(True)
+// Match whatever a predicate accepts
+.Setup('Listen').WithArgs([Arg.Matching<Integer>(
+  function(Port: Integer): Boolean
+  begin
+    Result := (Port >= 1) and (Port <= 65535);
+  end)]).Returns(True)
 ```
 
+`Arg.Matching<T>` takes the condition itself. The value reaches the predicate already
+converted to `T`, so a range is one of these and not a matcher of its own. An argument of
+another type does not match, and the predicate is not asked.
+
 ### Example with Matchers
+
+Setups are resolved **from the last declared backwards**, and one carrying matchers is
+preferred to one without. So the narrowest goes **last**: declaring it first does not protect
+it from a wider one declared after.
 
 ```pascal
 var EmailService := Stub<IEmailService>
   .Setup('Send')
-    .WithArgs([Arg.Contains('@admin'), Arg.Any<string>])
-    .Raises(ESecurityException.Create('Cannot email admins'))
-  .Setup('Send')
     .WithArgs([Arg.NotNull, Arg.NotNull])
     .Returns(True)
+  .Setup('Send')
+    .WithArgs([Arg.Contains('@admin'), Arg.Any])
+    .Raises(ESecurityException.Create('Cannot email admins'))
   .Instance;
 
 // EmailService.Send('admin@co.com', 'Hi') → raises
 // EmailService.Send('user@co.com', 'Hi') → True
-// EmailService.Send('', 'Hi') → False (NotNull fails)
+// EmailService.Send('', 'Hi') → False: nothing matched, so the return type's zero comes back
 ```
 
 ---

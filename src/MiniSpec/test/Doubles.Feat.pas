@@ -1,4 +1,4 @@
-unit Doubles.Feat;
+﻿unit Doubles.Feat;
 {******************************************************************************
   MiniSpec Doubles - Specification Tests
   Tests for Stub<T>, Mock<T>, Spy<T> and Arg matchers using BDD/Gherkin style
@@ -10,6 +10,7 @@ uses
   System.SysUtils,
   System.Rtti,
   Daf.MiniSpec,
+  Daf.MiniSpec.Types,
   Daf.MiniSpec.Doubles;
 
 type
@@ -64,8 +65,7 @@ type
     UserSvc: IUserService;
     IntResult: Integer;
     StrResult: string;
-    ExceptionRaised: Boolean;
-    ExceptionMessage: string;
+    Captured: TCapturedRaise;
     CallbackExecuted: Boolean;
     CallbackArgs: TArray<TValue>;
   end;
@@ -77,8 +77,6 @@ type
     Calc: ICalculator;
     Logger: ILogger;
     IntResult: Integer;
-    VerifyPassed: Boolean;
-    VerifyError: string;
   end;
 
   TSpyWorld = class
@@ -96,6 +94,10 @@ type
     Logger: ILogger;
     UserSvc: IUserService;
     StrResult: string;
+    IntResult: Integer;
+    OtherResult: Integer;
+    OtherStr: string;
+    Captured: TCapturedRaise;
   end;
 
   {$ENDREGION}
@@ -229,24 +231,17 @@ Feature('Stub<T> - Creating test stubs for interfaces @doubles @stub')
       end)
     .When('I call Divide', procedure(W: TStubWorld)
       begin
-        W.ExceptionRaised := False;
-        try
-          W.Calc.Divide(10, 0);
-        except
-          on E: EDivByZero do
-          begin
-            W.ExceptionRaised := True;
-            W.ExceptionMessage := E.Message;
-          end;
-        end;
+        W.Calc.Divide(10, 0);
       end)
     .&Then('it raises EDivByZero', procedure(W: TStubWorld)
       begin
-        Expect(W.ExceptionRaised).ToBeTrue;
+        // Raised consumes what the When left, so it is read once and held.
+        W.Captured := Raised;
+        ExpectException(W.Captured).ToBe(EDivByZero);
       end)
     .&And('the message is correct', procedure(W: TStubWorld)
       begin
-        Expect(W.ExceptionMessage).ToEqual('Cannot divide by zero');
+        ExpectException(W.Captured).ToMatchMessage('^Cannot divide by zero$');
       end)
 
 .Rule('Custom behavior with Executes')
@@ -394,13 +389,11 @@ Feature('Mock<T> - Creating mocks with expectations @doubles @mock')
       end)
     .&Then('Verify passes', procedure(W: TMockWorld)
       begin
-        W.VerifyPassed := True;
-        try
-          W.MockCalc.Verify;
-        except
-          W.VerifyPassed := False;
-        end;
-        Expect(W.VerifyPassed).ToBeTrue;
+        ExpectException(
+          procedure
+          begin
+            W.MockCalc.Verify;
+          end).ToBeNone;
       end)
 
   .Scenario('Expects method called once - fails when called twice')
@@ -417,17 +410,11 @@ Feature('Mock<T> - Creating mocks with expectations @doubles @mock')
       end)
     .&Then('Verify fails', procedure(W: TMockWorld)
       begin
-        W.VerifyPassed := True;
-        try
-          W.MockCalc.Verify;
-        except
-          on E: EExpectationFailed do
+        ExpectException(
+          procedure
           begin
-            W.VerifyPassed := False;
-            W.VerifyError := E.Message;
-          end;
-        end;
-        Expect(W.VerifyPassed).ToBeFalse;
+            W.MockCalc.Verify;
+          end).ToBe(EExpectationFailed);
       end)
 
 .Rule('Expectation: Never')
@@ -445,13 +432,11 @@ Feature('Mock<T> - Creating mocks with expectations @doubles @mock')
       end)
     .&Then('Verify passes', procedure(W: TMockWorld)
       begin
-        W.VerifyPassed := True;
-        try
-          W.MockCalc.Verify;
-        except
-          W.VerifyPassed := False;
-        end;
-        Expect(W.VerifyPassed).ToBeTrue;
+        ExpectException(
+          procedure
+          begin
+            W.MockCalc.Verify;
+          end).ToBeNone;
       end)
 
   .Scenario('Expects method never called - fails when called')
@@ -467,14 +452,11 @@ Feature('Mock<T> - Creating mocks with expectations @doubles @mock')
       end)
     .&Then('Verify fails', procedure(W: TMockWorld)
       begin
-        W.VerifyPassed := True;
-        try
-          W.MockCalc.Verify;
-        except
-          on E: EExpectationFailed do
-            W.VerifyPassed := False;
-        end;
-        Expect(W.VerifyPassed).ToBeFalse;
+        ExpectException(
+          procedure
+          begin
+            W.MockCalc.Verify;
+          end).ToBe(EExpectationFailed);
       end)
 
 .Rule('Expectation: AtLeastOnce')
@@ -494,13 +476,11 @@ Feature('Mock<T> - Creating mocks with expectations @doubles @mock')
       end)
     .&Then('Verify passes', procedure(W: TMockWorld)
       begin
-        W.VerifyPassed := True;
-        try
-          W.MockCalc.Verify;
-        except
-          W.VerifyPassed := False;
-        end;
-        Expect(W.VerifyPassed).ToBeTrue;
+        ExpectException(
+          procedure
+          begin
+            W.MockCalc.Verify;
+          end).ToBeNone;
       end)
 
 .Rule('Expectation: Exactly(N)')
@@ -520,13 +500,11 @@ Feature('Mock<T> - Creating mocks with expectations @doubles @mock')
       end)
     .&Then('Verify passes', procedure(W: TMockWorld)
       begin
-        W.VerifyPassed := True;
-        try
-          W.MockCalc.Verify;
-        except
-          W.VerifyPassed := False;
-        end;
-        Expect(W.VerifyPassed).ToBeTrue;
+        ExpectException(
+          procedure
+          begin
+            W.MockCalc.Verify;
+          end).ToBeNone;
       end)
 
   .Scenario('Expects method called exactly N times - fails with different count')
@@ -543,14 +521,11 @@ Feature('Mock<T> - Creating mocks with expectations @doubles @mock')
       end)
     .&Then('Verify fails', procedure(W: TMockWorld)
       begin
-        W.VerifyPassed := True;
-        try
-          W.MockCalc.Verify;
-        except
-          on E: EExpectationFailed do
-            W.VerifyPassed := False;
-        end;
-        Expect(W.VerifyPassed).ToBeFalse;
+        ExpectException(
+          procedure
+          begin
+            W.MockCalc.Verify;
+          end).ToBe(EExpectationFailed);
       end)
 
 .Rule('Combined Setup and Expectations')
@@ -573,13 +548,11 @@ Feature('Mock<T> - Creating mocks with expectations @doubles @mock')
       end)
     .&And('Verify passes', procedure(W: TMockWorld)
       begin
-        W.VerifyPassed := True;
-        try
-          W.MockCalc.Verify;
-        except
-          W.VerifyPassed := False;
-        end;
-        Expect(W.VerifyPassed).ToBeTrue;
+        ExpectException(
+          procedure
+          begin
+            W.MockCalc.Verify;
+          end).ToBeNone;
       end);
 
 {$ENDREGION}
@@ -775,6 +748,140 @@ Feature('Arg matchers - Flexible argument matching @doubles @matchers')
     .&Then('all calls match and return the configured value', procedure(W: TArgWorld)
       begin
         Expect(W.StrResult).ToEqual('AnyUser,AnyUser,AnyUser');
+      end)
+
+  .Scenario('Arg.NotNull refuses a value that is empty')
+    .Given('I create a stub whose setup demands a non-empty name', procedure(W: TArgWorld)
+      begin
+        W.StubUser := Stub<IUserService>.New
+          .Setup('FindByName').WithArgs([Arg.NotNull]).Returns(7);
+        W.UserSvc := W.StubUser;
+      end)
+    .When('I call it with a name and with an empty string', procedure(W: TArgWorld)
+      begin
+        W.IntResult := W.UserSvc.FindByName('ana');
+        W.OtherResult := W.UserSvc.FindByName('');
+      end)
+    .&Then('the name matches and the empty string is left to the default', procedure(W: TArgWorld)
+      begin
+        // Nothing matched the second call, so what comes back is the zero of the
+        // return type. That is also the control: a matcher that accepted everything
+        // would return 7 twice.
+        Expect(W.IntResult).ToEqual(7);
+        Expect(W.OtherResult).ToEqual(0);
+      end)
+
+  .Scenario('Arg.Contains matches on a substring')
+    .Given('I create a stub whose setup demands a substring', procedure(W: TArgWorld)
+      begin
+        W.StubUser := Stub<IUserService>.New
+          .Setup('FindByName').WithArgs([Arg.Contains('@admin')]).Returns(1);
+        W.UserSvc := W.StubUser;
+      end)
+    .When('I call it with a name that carries it and with one that does not', procedure(W: TArgWorld)
+      begin
+        W.IntResult := W.UserSvc.FindByName('root@admin.co');
+        W.OtherResult := W.UserSvc.FindByName('user@corp.co');
+      end)
+    .&Then('only the one carrying the substring matches', procedure(W: TArgWorld)
+      begin
+        Expect(W.IntResult).ToEqual(1);
+        Expect(W.OtherResult).ToEqual(0);
+      end)
+
+  .Scenario('The setup declared last is the one that answers')
+    .Given('I create a stub with two setups whose matchers both accept the value', procedure(W: TArgWorld)
+      begin
+        W.StubUser := Stub<IUserService>.New
+          .Setup('FindByName').WithArgs([Arg.Contains('@admin')]).Returns(1)
+          .Setup('FindByName').WithArgs([Arg.NotNull]).Returns(2);
+        W.UserSvc := W.StubUser;
+      end)
+    .When('I call it with a value both of them accept', procedure(W: TArgWorld)
+      begin
+        W.IntResult := W.UserSvc.FindByName('root@admin.co');
+      end)
+    .&Then('the later setup wins, and declaring the narrow one first does not protect it', procedure(W: TArgWorld)
+      begin
+        Expect(W.IntResult).ToEqual(2);
+      end)
+
+  .Scenario('A setup with matchers is preferred to one without')
+    .Given('I create a stub with a catch-all setup and a narrower one', procedure(W: TArgWorld)
+      begin
+        W.StubUser := Stub<IUserService>.New
+          .Setup('FindByName').Returns(9)
+          .Setup('FindByName').WithArgs([Arg.NotNull]).Returns(1);
+        W.UserSvc := W.StubUser;
+      end)
+    .When('I call it with a value the matcher accepts and with one it refuses', procedure(W: TArgWorld)
+      begin
+        W.IntResult := W.UserSvc.FindByName('ana');
+        W.OtherResult := W.UserSvc.FindByName('');
+      end)
+    .&Then('the matcher answers what it accepts and the catch-all takes the rest', procedure(W: TArgWorld)
+      begin
+        Expect(W.IntResult).ToEqual(1);
+        Expect(W.OtherResult).ToEqual(9);
+      end)
+
+  .Scenario('Arg.Matching accepts exactly what its predicate accepts')
+    .Given('I create a stub whose setup demands an id within a range', procedure(W: TArgWorld)
+      begin
+        W.StubUser := Stub<IUserService>.New
+          .Setup('FindById').WithArgs([Arg.Matching<Integer>(
+            function(Id: Integer): Boolean
+            begin
+              Result := (Id >= 1) and (Id <= 10);
+            end)]).Returns('in range');
+        W.UserSvc := W.StubUser;
+      end)
+    .When('I call it with an id inside the range and one outside', procedure(W: TArgWorld)
+      begin
+        W.StrResult := W.UserSvc.FindById(7);
+        W.OtherStr := W.UserSvc.FindById(99);
+      end)
+    .&Then('only the one the predicate accepts matches', procedure(W: TArgWorld)
+      begin
+        // Both halves are the control: a predicate nobody calls leaves the first empty,
+        // and one whose answer is discarded answers the second one too.
+        Expect(W.StrResult).ToEqual('in range');
+        Expect(W.OtherStr).ToEqual('');
+      end)
+
+  .Scenario('A predicate declared over another type does not match')
+    .Given('I create a stub with a catch-all and a predicate over strings', procedure(W: TArgWorld)
+      begin
+        W.StubUser := Stub<IUserService>.New
+          .Setup('FindById').Returns('fallback')
+          .Setup('FindById').WithArgs([Arg.Matching<string>(
+            function(Name: string): Boolean
+            begin
+              Result := True;
+            end)]).Returns('matched');
+        W.UserSvc := W.StubUser;
+      end)
+    .When('I call the method, whose argument is an integer', procedure(W: TArgWorld)
+      begin
+        W.StrResult := W.UserSvc.FindById(7);
+      end)
+    .&Then('the catch-all answers, and the predicate is never asked', procedure(W: TArgWorld)
+      begin
+        // The predicate says yes to everything, so 'matched' is what comes back if the
+        // argument reaches it at all.
+        Expect(W.StrResult).ToEqual('fallback');
+      end)
+
+  .Scenario('A matcher handed no predicate is refused where it is declared')
+    .When('I ask for a matcher and give it nothing', procedure(W: TArgWorld)
+      begin
+        Arg.Matching<Integer>(nil);
+      end)
+    .&Then('it breaks at the setup, and not on a call that would silently not match', procedure(W: TArgWorld)
+      begin
+        W.Captured := Raised;
+        ExpectException(W.Captured).ToBe(EDoubleError);
+        ExpectException(W.Captured).ToHaveMessage('requires a predicate');
       end);
 
 {$ENDREGION}

@@ -1,4 +1,4 @@
-package Daf.Configuration.Abstractions;
+﻿package Daf.Configuration.Abstractions;
 
 {$R *.res}
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
@@ -29,9 +29,15 @@ package Daf.Configuration.Abstractions;
 {$IMPLICITBUILD OFF}
 
 requires
-  rtl;
+  rtl,
+  // For Daf.Rtti, which the binder walks types with. Same reason
+  // Daf.DependencyInjection.Abstractions requires it, for ActivatorUtilities.
+  Daf.Commons;
 
 contains
-  Daf.Extensions.Configuration in 'Daf.Extensions.Configuration.pas';
+  Daf.Extensions.Configuration in 'Daf.Extensions.Configuration.pas',
+  // Behaviour over this package's own contract, not a provider: it binds any
+  // IConfiguration to an object and knows nothing about JSON, INI or env.
+  Daf.Configuration.Binder in 'Daf.Configuration.Binder.pas';
 
 end.

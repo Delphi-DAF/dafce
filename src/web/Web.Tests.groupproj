@@ -1,0 +1,36 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{91FC3814-D5C1-4320-9110-68E2CA663B2C}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="test\WebSpecs.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="WebSpecs">
+        <MSBuild Projects="test\WebSpecs.dproj"/>
+    </Target>
+    <Target Name="WebSpecs:Clean">
+        <MSBuild Projects="test\WebSpecs.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="WebSpecs:Make">
+        <MSBuild Projects="test\WebSpecs.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="WebSpecs"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="WebSpecs:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="WebSpecs:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

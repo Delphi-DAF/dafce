@@ -1,4 +1,4 @@
-unit Daf.MiniSpec.Reporter.Json;
+﻿unit Daf.MiniSpec.Reporter.Json;
 
 interface
 
@@ -20,7 +20,7 @@ type
     FCurrentScenarios: TJSONArray;
     FCurrentScenario: TJSONObject;
     FCurrentSteps: TJSONArray;
-    procedure AddStep(const Kind, Description: string; Success: Boolean; Duration: Integer; const ErrorMessage: string = '');
+    procedure AddStep(const Kind, Description: string; const RunInfo: TSpecRunInfo);
     procedure AddStepWithTable(const Step: IScenarioStep);
     procedure CloseCurrentScenario;
     procedure CloseCurrentFeature;
@@ -48,10 +48,29 @@ function TJsonReporter.GetStatus(const Item: ISpecItem): string;
 begin
   if Item.RunInfo.State <> srsFinished then
     Result := 'skip'
-  else if Item.RunInfo.Result = srrSuccess then
-    Result := 'pass'
   else
-    Result := 'fail';
+    case Item.RunInfo.Result of
+      srrSuccess: Result := 'pass';
+      srrPending: Result := 'pending';
+      srrUndefined: Result := 'undefined';
+    else
+      Result := 'fail';
+    end;
+end;
+
+// The status of a step, with the names of Cucumber's JSON formatter.
+function StepStatus(const RunInfo: TSpecRunInfo): string;
+begin
+  if RunInfo.State <> srsFinished then
+    Exit('skipped');
+  case RunInfo.Result of
+    srrSuccess: Result := 'passed';
+    srrFail, srrError: Result := 'failed';
+    srrPending: Result := 'pending';
+    srrUndefined: Result := 'undefined';
+  else
+    Result := 'skipped';
+  end;
 end;
 
 procedure TJsonReporter.CloseCurrentScenario;
@@ -90,7 +109,6 @@ begin
   for var H in Table.Headers do
     RowArr.Add(H);
   Result.AddElement(RowArr);
-  // Add data rows
   for Row in Table.Rows do
   begin
     RowArr := TJSONArray.Create;
@@ -100,7 +118,7 @@ begin
   end;
 end;
 
-procedure TJsonReporter.AddStep(const Kind, Description: string; Success: Boolean; Duration: Integer; const ErrorMessage: string);
+procedure TJsonReporter.AddStep(const Kind, Description: string; const RunInfo: TSpecRunInfo);
 var
   StepObj: TJSONObject;
 begin
@@ -108,10 +126,11 @@ begin
   StepObj := TJSONObject.Create;
   StepObj.AddPair('kind', Kind);
   StepObj.AddPair('description', Description);
-  StepObj.AddPair('success', TJSONBool.Create(Success));
-  StepObj.AddPair('duration', TJSONNumber.Create(Duration));
-  if not Success and (ErrorMessage <> '') then
-    StepObj.AddPair('error', ErrorMessage);
+  StepObj.AddPair('status', StepStatus(RunInfo));
+  StepObj.AddPair('success', TJSONBool.Create(StepStatus(RunInfo) = 'passed'));
+  StepObj.AddPair('duration', TJSONNumber.Create(RunInfo.ExecTimeMs));
+  if RunInfo.ErrMsg <> '' then
+    StepObj.AddPair('error', RunInfo.ErrMsg);
   FCurrentSteps.AddElement(StepObj);
 end;
 
@@ -123,9 +142,10 @@ begin
   StepObj := TJSONObject.Create;
   StepObj.AddPair('kind', Step.KeyWord);
   StepObj.AddPair('description', Step.Description);
-  StepObj.AddPair('success', TJSONBool.Create(Step.RunInfo.IsSuccess));
+  StepObj.AddPair('status', StepStatus(Step.RunInfo));
+  StepObj.AddPair('success', TJSONBool.Create(StepStatus(Step.RunInfo) = 'passed'));
   StepObj.AddPair('duration', TJSONNumber.Create(Step.RunInfo.ExecTimeMs));
-  if not Step.RunInfo.IsSuccess and (Step.RunInfo.ErrMsg <> '') then
+  if Step.RunInfo.ErrMsg <> '' then
     StepObj.AddPair('error', Step.RunInfo.ErrMsg);
   if Assigned(Step.DataTable) then
     StepObj.AddPair('dataTable', DataTableToJsonArray(Step.DataTable));
@@ -170,6 +190,7 @@ begin
     Root.AddPair('failCount', TJSONNumber.Create(Context.Suite.RunInfo.FailCount));
     Root.AddPair('skipCount', TJSONNumber.Create(Context.Suite.RunInfo.SkipCount));
     Root.AddPair('pendingCount', TJSONNumber.Create(Context.Suite.RunInfo.PendingCount));
+    Root.AddPair('undefinedCount', TJSONNumber.Create(Context.Suite.RunInfo.UndefinedCount));
     Root.AddPair('completedAt', FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', Context.CompletedAt));
     FOutput := Root.Format(4);
   finally
@@ -213,15 +234,21 @@ begin
         FCurrentScenario.AddPair('error', Item.RunInfo.ErrMsg);
       FCurrentSteps := TJSONArray.Create;
     end;
-    sikScenario, sikExample: begin
+    // An outline without rows is reported as a scenario.
+    sikScenario, sikExample, sikScenarioOutline: begin
       CloseCurrentScenario;
       FCurrentScenario := TJSONObject.Create;
       FCurrentScenario.AddPair('kind', Item.KeyWord);
       FCurrentScenario.AddPair('description', Item.Description);
       FCurrentScenario.AddPair('status', GetStatus(Item));
       FCurrentScenario.AddPair('duration', TJSONNumber.Create(Item.RunInfo.ExecTimeMs));
-      if (GetStatus(Item) = 'fail') and (Item.RunInfo.ErrMsg <> '') then
-        FCurrentScenario.AddPair('error', Item.RunInfo.ErrMsg);
+      var Scenario: IScenario;
+      if (GetStatus(Item) = 'fail') and Supports(Item, IScenario, Scenario) then
+      begin
+        var Reason := ScenarioFailure(Context, Scenario);
+        if Reason <> '' then
+          FCurrentScenario.AddPair('error', Reason);
+      end;
       FCurrentSteps := TJSONArray.Create;
     end;
     sikExampleInit: ;
@@ -230,8 +257,7 @@ begin
       if Supports(Item, IScenarioStep, Step) then
         AddStepWithTable(Step)
       else
-        AddStep(Item.KeyWord, Item.Description, Item.RunInfo.Result = srrSuccess,
-                Item.RunInfo.ExecTimeMs, Item.RunInfo.ErrMsg);
+        AddStep(Item.KeyWord, Item.Description, Item.RunInfo);
     end;
   end;
 end;
@@ -268,8 +294,12 @@ begin
     ExampleObj.AddPair('values', ValuesArr);
     ExampleObj.AddPair('status', GetStatus(Example as ISpecItem));
     ExampleObj.AddPair('duration', TJSONNumber.Create((Example as ISpecItem).RunInfo.ExecTimeMs));
-    if (Example as ISpecItem).RunInfo.Result = srrFail then
-      ExampleObj.AddPair('error', (Example as ISpecItem).RunInfo.ErrMsg);
+    if GetStatus(Example as ISpecItem) = 'fail' then
+    begin
+      var Reason := ScenarioFailure(Context, Example);
+      if Reason <> '' then
+        ExampleObj.AddPair('error', Reason);
+    end;
     ExamplesArr.AddElement(ExampleObj);
   end;
   OutlineObj.AddPair('examples', ExamplesArr);

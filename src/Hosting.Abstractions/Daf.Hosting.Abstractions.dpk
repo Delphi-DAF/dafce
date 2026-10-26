@@ -1,4 +1,4 @@
-package Daf.Hosting.Abstractions;
+﻿package Daf.Hosting.Abstractions;
 
 {$R *.res}
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
@@ -30,10 +30,15 @@ package Daf.Hosting.Abstractions;
 
 requires
   rtl,
+  Daf.Commons,
   Daf.DependencyInjection.Abstractions,
+  // Por ILoggingBuilder, que el contrato de la familia expone como propiedad. Vive en el
+  // paquete de contratos de logging justamente para que esto no sea requerir un concreto.
+  Daf.Logging.Abstractions,
   Daf.Configuration.Abstractions;
 
 contains
-  Daf.Extensions.Hosting in 'Daf.Extensions.Hosting.pas';
+  Daf.Extensions.Hosting in 'Daf.Extensions.Hosting.pas',
+  Daf.Extensions.Hosting.Failures in 'Daf.Extensions.Hosting.Failures.pas';
 
 end.

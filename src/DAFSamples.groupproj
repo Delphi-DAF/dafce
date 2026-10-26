@@ -1,4 +1,4 @@
-<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
     <PropertyGroup>
         <ProjectGuid>{763F15D5-4337-4E6A-A248-E9B8CBDBFA3E}</ProjectGuid>
     </PropertyGroup>
@@ -9,25 +9,85 @@
         <Projects Include="MediatR\samples\MediatRSample\MediatRSample.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="Application\samples\ConsoleSample\ConsoleSample.dproj">
+        <Projects Include="Cli\samples\ConsoleSample\ConsoleSample.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="Application\samples\HostedService\HostedService.dproj">
+        <Projects Include="Hosting\samples\HostQuickStart\HostQuickStart.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="Commons\samples\PingProcess\PingProcess.dproj">
+        <Projects Include="Hosting\samples\StartupReport\StartupReport.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="Hosting\samples\HostLifetime\HostLifetime.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="Cli\samples\PackageInit\PackageInit.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="Cli\samples\GreetTool\GreetTool.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="samples\HostedService\HostedService.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="Cli\samples\QuickStart\QuickStart.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="Cli\samples\ServiceWiring\ServiceWiring.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="SystemProcess\samples\PingProcess\PingProcess.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="CommandLine\samples\BuildTool\BuildTool.dproj">
             <Dependencies/>
         </Projects>
         <Projects Include="MiniSpec\samples\CalculatorSpecs\CalculatorSpecs.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="MiniSpec\samples\FirstSpec\FirstSpec.dproj">
+            <Dependencies/>
+        </Projects>
         <Projects Include="MiniSpec\samples\MastermindSpecs\MasterMind.Specs.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="Application\samples\TicTacToeApp\TicTacToeApp.dproj">
+        <Projects Include="VCL\samples\TicTacToeApp\TicTacToeApp.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="SQLCute.Abstractions\samples\SQLCuteSample\SQLCuteSample.dproj">
+        <Projects Include="VCL\samples\TicTacToeApp\TicTacToeSpecs.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="SQLCute\samples\SQLCuteSample\SQLCuteSample.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="SQLCute.InMemory\samples\InMemoryQuerySample\InMemoryQuerySample.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="SQLCute.InMemory\samples\InMemoryJoinSample\InMemoryJoinSample.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="SQLCute.Specification\samples\CatalogServiceSample\CatalogServiceSample.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="DependencyInjection\samples\ModuleComposition\ModuleComposition.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="Linq\samples\LinqPipeline\LinqPipeline.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="Specification\samples\SpecAuthoring\SpecAuthoring.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="Logging\samples\CustomProvider\CustomProvider.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="NNLog\samples\NNLogTargets\NNLogTargets.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="web\samples\MiniApi\MiniApi.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="FMX\samples\FmxQuickStart\FmxQuickStart.dproj">
             <Dependencies/>
         </Projects>
     </ItemGroup>
@@ -57,31 +117,103 @@
         <MSBuild Projects="MediatR\samples\MediatRSample\MediatRSample.dproj" Targets="Make"/>
     </Target>
     <Target Name="ConsoleSample">
-        <MSBuild Projects="Application\samples\ConsoleSample\ConsoleSample.dproj"/>
+        <MSBuild Projects="Cli\samples\ConsoleSample\ConsoleSample.dproj"/>
     </Target>
     <Target Name="ConsoleSample:Clean">
-        <MSBuild Projects="Application\samples\ConsoleSample\ConsoleSample.dproj" Targets="Clean"/>
+        <MSBuild Projects="Cli\samples\ConsoleSample\ConsoleSample.dproj" Targets="Clean"/>
     </Target>
     <Target Name="ConsoleSample:Make">
-        <MSBuild Projects="Application\samples\ConsoleSample\ConsoleSample.dproj" Targets="Make"/>
+        <MSBuild Projects="Cli\samples\ConsoleSample\ConsoleSample.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="HostQuickStart">
+        <MSBuild Projects="Hosting\samples\HostQuickStart\HostQuickStart.dproj"/>
+    </Target>
+    <Target Name="HostQuickStart:Clean">
+        <MSBuild Projects="Hosting\samples\HostQuickStart\HostQuickStart.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="HostQuickStart:Make">
+        <MSBuild Projects="Hosting\samples\HostQuickStart\HostQuickStart.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="StartupReport">
+        <MSBuild Projects="Hosting\samples\StartupReport\StartupReport.dproj"/>
+    </Target>
+    <Target Name="StartupReport:Clean">
+        <MSBuild Projects="Hosting\samples\StartupReport\StartupReport.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="StartupReport:Make">
+        <MSBuild Projects="Hosting\samples\StartupReport\StartupReport.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="HostLifetime">
+        <MSBuild Projects="Hosting\samples\HostLifetime\HostLifetime.dproj"/>
+    </Target>
+    <Target Name="HostLifetime:Clean">
+        <MSBuild Projects="Hosting\samples\HostLifetime\HostLifetime.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="HostLifetime:Make">
+        <MSBuild Projects="Hosting\samples\HostLifetime\HostLifetime.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="PackageInit">
+        <MSBuild Projects="Cli\samples\PackageInit\PackageInit.dproj"/>
+    </Target>
+    <Target Name="PackageInit:Clean">
+        <MSBuild Projects="Cli\samples\PackageInit\PackageInit.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="PackageInit:Make">
+        <MSBuild Projects="Cli\samples\PackageInit\PackageInit.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="GreetTool">
+        <MSBuild Projects="Cli\samples\GreetTool\GreetTool.dproj"/>
+    </Target>
+    <Target Name="GreetTool:Clean">
+        <MSBuild Projects="Cli\samples\GreetTool\GreetTool.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="GreetTool:Make">
+        <MSBuild Projects="Cli\samples\GreetTool\GreetTool.dproj" Targets="Make"/>
     </Target>
     <Target Name="HostedService">
-        <MSBuild Projects="Application\samples\HostedService\HostedService.dproj"/>
+        <MSBuild Projects="samples\HostedService\HostedService.dproj"/>
     </Target>
     <Target Name="HostedService:Clean">
-        <MSBuild Projects="Application\samples\HostedService\HostedService.dproj" Targets="Clean"/>
+        <MSBuild Projects="samples\HostedService\HostedService.dproj" Targets="Clean"/>
     </Target>
     <Target Name="HostedService:Make">
-        <MSBuild Projects="Application\samples\HostedService\HostedService.dproj" Targets="Make"/>
+        <MSBuild Projects="samples\HostedService\HostedService.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="QuickStart">
+        <MSBuild Projects="Cli\samples\QuickStart\QuickStart.dproj"/>
+    </Target>
+    <Target Name="QuickStart:Clean">
+        <MSBuild Projects="Cli\samples\QuickStart\QuickStart.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="QuickStart:Make">
+        <MSBuild Projects="Cli\samples\QuickStart\QuickStart.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="ServiceWiring">
+        <MSBuild Projects="Cli\samples\ServiceWiring\ServiceWiring.dproj"/>
+    </Target>
+    <Target Name="ServiceWiring:Clean">
+        <MSBuild Projects="Cli\samples\ServiceWiring\ServiceWiring.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="ServiceWiring:Make">
+        <MSBuild Projects="Cli\samples\ServiceWiring\ServiceWiring.dproj" Targets="Make"/>
     </Target>
     <Target Name="PingProcess">
-        <MSBuild Projects="Commons\samples\PingProcess\PingProcess.dproj"/>
+        <MSBuild Projects="SystemProcess\samples\PingProcess\PingProcess.dproj"/>
     </Target>
     <Target Name="PingProcess:Clean">
-        <MSBuild Projects="Commons\samples\PingProcess\PingProcess.dproj" Targets="Clean"/>
+        <MSBuild Projects="SystemProcess\samples\PingProcess\PingProcess.dproj" Targets="Clean"/>
     </Target>
     <Target Name="PingProcess:Make">
-        <MSBuild Projects="Commons\samples\PingProcess\PingProcess.dproj" Targets="Make"/>
+        <MSBuild Projects="SystemProcess\samples\PingProcess\PingProcess.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="BuildTool">
+        <MSBuild Projects="CommandLine\samples\BuildTool\BuildTool.dproj"/>
+    </Target>
+    <Target Name="BuildTool:Clean">
+        <MSBuild Projects="CommandLine\samples\BuildTool\BuildTool.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="BuildTool:Make">
+        <MSBuild Projects="CommandLine\samples\BuildTool\BuildTool.dproj" Targets="Make"/>
     </Target>
     <Target Name="CalculatorSpecs">
         <MSBuild Projects="MiniSpec\samples\CalculatorSpecs\CalculatorSpecs.dproj"/>
@@ -91,6 +223,15 @@
     </Target>
     <Target Name="CalculatorSpecs:Make">
         <MSBuild Projects="MiniSpec\samples\CalculatorSpecs\CalculatorSpecs.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="FirstSpec">
+        <MSBuild Projects="MiniSpec\samples\FirstSpec\FirstSpec.dproj"/>
+    </Target>
+    <Target Name="FirstSpec:Clean">
+        <MSBuild Projects="MiniSpec\samples\FirstSpec\FirstSpec.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="FirstSpec:Make">
+        <MSBuild Projects="MiniSpec\samples\FirstSpec\FirstSpec.dproj" Targets="Make"/>
     </Target>
     <Target Name="MasterMind_Specs">
         <MSBuild Projects="MiniSpec\samples\MastermindSpecs\MasterMind.Specs.dproj"/>
@@ -102,31 +243,130 @@
         <MSBuild Projects="MiniSpec\samples\MastermindSpecs\MasterMind.Specs.dproj" Targets="Make"/>
     </Target>
     <Target Name="TicTacToeApp">
-        <MSBuild Projects="Application\samples\TicTacToeApp\TicTacToeApp.dproj"/>
+        <MSBuild Projects="VCL\samples\TicTacToeApp\TicTacToeApp.dproj"/>
     </Target>
     <Target Name="TicTacToeApp:Clean">
-        <MSBuild Projects="Application\samples\TicTacToeApp\TicTacToeApp.dproj" Targets="Clean"/>
+        <MSBuild Projects="VCL\samples\TicTacToeApp\TicTacToeApp.dproj" Targets="Clean"/>
     </Target>
     <Target Name="TicTacToeApp:Make">
-        <MSBuild Projects="Application\samples\TicTacToeApp\TicTacToeApp.dproj" Targets="Make"/>
+        <MSBuild Projects="VCL\samples\TicTacToeApp\TicTacToeApp.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="TicTacToeSpecs">
+        <MSBuild Projects="VCL\samples\TicTacToeApp\TicTacToeSpecs.dproj"/>
+    </Target>
+    <Target Name="TicTacToeSpecs:Clean">
+        <MSBuild Projects="VCL\samples\TicTacToeApp\TicTacToeSpecs.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="TicTacToeSpecs:Make">
+        <MSBuild Projects="VCL\samples\TicTacToeApp\TicTacToeSpecs.dproj" Targets="Make"/>
     </Target>
     <Target Name="SQLCuteSample">
-        <MSBuild Projects="SQLCute.Abstractions\samples\SQLCuteSample\SQLCuteSample.dproj"/>
+        <MSBuild Projects="SQLCute\samples\SQLCuteSample\SQLCuteSample.dproj"/>
     </Target>
     <Target Name="SQLCuteSample:Clean">
-        <MSBuild Projects="SQLCute.Abstractions\samples\SQLCuteSample\SQLCuteSample.dproj" Targets="Clean"/>
+        <MSBuild Projects="SQLCute\samples\SQLCuteSample\SQLCuteSample.dproj" Targets="Clean"/>
     </Target>
     <Target Name="SQLCuteSample:Make">
-        <MSBuild Projects="SQLCute.Abstractions\samples\SQLCuteSample\SQLCuteSample.dproj" Targets="Make"/>
+        <MSBuild Projects="SQLCute\samples\SQLCuteSample\SQLCuteSample.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="InMemoryQuerySample">
+        <MSBuild Projects="SQLCute.InMemory\samples\InMemoryQuerySample\InMemoryQuerySample.dproj"/>
+    </Target>
+    <Target Name="InMemoryQuerySample:Clean">
+        <MSBuild Projects="SQLCute.InMemory\samples\InMemoryQuerySample\InMemoryQuerySample.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="InMemoryQuerySample:Make">
+        <MSBuild Projects="SQLCute.InMemory\samples\InMemoryQuerySample\InMemoryQuerySample.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="InMemoryJoinSample">
+        <MSBuild Projects="SQLCute.InMemory\samples\InMemoryJoinSample\InMemoryJoinSample.dproj"/>
+    </Target>
+    <Target Name="InMemoryJoinSample:Clean">
+        <MSBuild Projects="SQLCute.InMemory\samples\InMemoryJoinSample\InMemoryJoinSample.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="InMemoryJoinSample:Make">
+        <MSBuild Projects="SQLCute.InMemory\samples\InMemoryJoinSample\InMemoryJoinSample.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="CatalogServiceSample">
+        <MSBuild Projects="SQLCute.Specification\samples\CatalogServiceSample\CatalogServiceSample.dproj"/>
+    </Target>
+    <Target Name="CatalogServiceSample:Clean">
+        <MSBuild Projects="SQLCute.Specification\samples\CatalogServiceSample\CatalogServiceSample.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="CatalogServiceSample:Make">
+        <MSBuild Projects="SQLCute.Specification\samples\CatalogServiceSample\CatalogServiceSample.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="ModuleComposition">
+        <MSBuild Projects="DependencyInjection\samples\ModuleComposition\ModuleComposition.dproj"/>
+    </Target>
+    <Target Name="ModuleComposition:Clean">
+        <MSBuild Projects="DependencyInjection\samples\ModuleComposition\ModuleComposition.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="ModuleComposition:Make">
+        <MSBuild Projects="DependencyInjection\samples\ModuleComposition\ModuleComposition.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="LinqPipeline">
+        <MSBuild Projects="Linq\samples\LinqPipeline\LinqPipeline.dproj"/>
+    </Target>
+    <Target Name="LinqPipeline:Clean">
+        <MSBuild Projects="Linq\samples\LinqPipeline\LinqPipeline.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="LinqPipeline:Make">
+        <MSBuild Projects="Linq\samples\LinqPipeline\LinqPipeline.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="SpecAuthoring">
+        <MSBuild Projects="Specification\samples\SpecAuthoring\SpecAuthoring.dproj"/>
+    </Target>
+    <Target Name="SpecAuthoring:Clean">
+        <MSBuild Projects="Specification\samples\SpecAuthoring\SpecAuthoring.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="SpecAuthoring:Make">
+        <MSBuild Projects="Specification\samples\SpecAuthoring\SpecAuthoring.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="CustomProvider">
+        <MSBuild Projects="Logging\samples\CustomProvider\CustomProvider.dproj"/>
+    </Target>
+    <Target Name="CustomProvider:Clean">
+        <MSBuild Projects="Logging\samples\CustomProvider\CustomProvider.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="CustomProvider:Make">
+        <MSBuild Projects="Logging\samples\CustomProvider\CustomProvider.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="NNLogTargets">
+        <MSBuild Projects="NNLog\samples\NNLogTargets\NNLogTargets.dproj"/>
+    </Target>
+    <Target Name="NNLogTargets:Clean">
+        <MSBuild Projects="NNLog\samples\NNLogTargets\NNLogTargets.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="NNLogTargets:Make">
+        <MSBuild Projects="NNLog\samples\NNLogTargets\NNLogTargets.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="MiniApi">
+        <MSBuild Projects="web\samples\MiniApi\MiniApi.dproj"/>
+    </Target>
+    <Target Name="MiniApi:Clean">
+        <MSBuild Projects="web\samples\MiniApi\MiniApi.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="MiniApi:Make">
+        <MSBuild Projects="web\samples\MiniApi\MiniApi.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="FmxQuickStart">
+        <MSBuild Projects="FMX\samples\FmxQuickStart\FmxQuickStart.dproj"/>
+    </Target>
+    <Target Name="FmxQuickStart:Clean">
+        <MSBuild Projects="FMX\samples\FmxQuickStart\FmxQuickStart.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="FmxQuickStart:Make">
+        <MSBuild Projects="FMX\samples\FmxQuickStart\FmxQuickStart.dproj" Targets="Make"/>
     </Target>
     <Target Name="Build">
-        <CallTarget Targets="ConfigExample;MediatRSample;ConsoleSample;HostedService;PingProcess;CalculatorSpecs;MasterMind_Specs;TicTacToeApp;SQLCuteSample"/>
+        <CallTarget Targets="ConfigExample;MediatRSample;ConsoleSample;HostQuickStart;StartupReport;HostLifetime;HostedService;PackageInit;GreetTool;PingProcess;BuildTool;CalculatorSpecs;FirstSpec;MasterMind_Specs;TicTacToeApp;TicTacToeSpecs;SQLCuteSample;InMemoryQuerySample;InMemoryJoinSample;CatalogServiceSample;QuickStart;ServiceWiring;ModuleComposition;LinqPipeline;SpecAuthoring;CustomProvider;NNLogTargets;MiniApi;FmxQuickStart"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="ConfigExample:Clean;MediatRSample:Clean;ConsoleSample:Clean;HostedService:Clean;PingProcess:Clean;CalculatorSpecs:Clean;MasterMind_Specs:Clean;TicTacToeApp:Clean;SQLCuteSample:Clean"/>
+        <CallTarget Targets="ConfigExample:Clean;MediatRSample:Clean;ConsoleSample:Clean;HostQuickStart:Clean;StartupReport:Clean;HostLifetime:Clean;HostedService:Clean;PackageInit:Clean;GreetTool:Clean;PingProcess:Clean;BuildTool:Clean;CalculatorSpecs:Clean;FirstSpec:Clean;MasterMind_Specs:Clean;TicTacToeApp:Clean;TicTacToeSpecs:Clean;SQLCuteSample:Clean;InMemoryQuerySample:Clean;InMemoryJoinSample:Clean;CatalogServiceSample:Clean;QuickStart:Clean;ServiceWiring:Clean;ModuleComposition:Clean;LinqPipeline:Clean;SpecAuthoring:Clean;CustomProvider:Clean;NNLogTargets:Clean;MiniApi:Clean;FmxQuickStart:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="ConfigExample:Make;MediatRSample:Make;ConsoleSample:Make;HostedService:Make;PingProcess:Make;CalculatorSpecs:Make;MasterMind_Specs:Make;TicTacToeApp:Make;SQLCuteSample:Make"/>
+        <CallTarget Targets="ConfigExample:Make;MediatRSample:Make;ConsoleSample:Make;HostQuickStart:Make;StartupReport:Make;HostLifetime:Make;HostedService:Make;PackageInit:Make;GreetTool:Make;PingProcess:Make;BuildTool:Make;CalculatorSpecs:Make;FirstSpec:Make;MasterMind_Specs:Make;TicTacToeApp:Make;TicTacToeSpecs:Make;SQLCuteSample:Make;InMemoryQuerySample:Make;InMemoryJoinSample:Make;CatalogServiceSample:Make;QuickStart:Make;ServiceWiring:Make;ModuleComposition:Make;LinqPipeline:Make;SpecAuthoring:Make;CustomProvider:Make;NNLogTargets:Make;MiniApi:Make;FmxQuickStart:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

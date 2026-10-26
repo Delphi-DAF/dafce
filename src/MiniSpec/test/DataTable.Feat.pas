@@ -1,4 +1,4 @@
-unit DataTable.Feat;
+﻿unit DataTable.Feat;
 
 interface
 
@@ -19,7 +19,6 @@ type
   end;
 
   /// <summary>
-  /// World simple - ya no necesita heredar de TFeatureWorld.
   /// El contexto es accesible globalmente via SpecContext.
   /// </summary>
   TDataTableWorld = class
@@ -53,7 +52,6 @@ Feature DataTable @datatable
       User: TUser;
     begin
       World.Table := SpecContext.DataTable;
-      // Store users from table
       for Row in World.Table.Rows do
       begin
         User.Name := Row[0].AsString;

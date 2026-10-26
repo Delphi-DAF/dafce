@@ -1,4 +1,4 @@
-program MasterMind.Specs;
+﻿program MasterMind.Specs;
 
 {$APPTYPE CONSOLE}
 

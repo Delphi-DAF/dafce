@@ -1,0 +1,36 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{4951DCA0-BC8C-4F2E-B08A-FCC52F72E09A}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="samples\CatalogServiceSample\CatalogServiceSample.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="CatalogServiceSample">
+        <MSBuild Projects="samples\CatalogServiceSample\CatalogServiceSample.dproj"/>
+    </Target>
+    <Target Name="CatalogServiceSample:Clean">
+        <MSBuild Projects="samples\CatalogServiceSample\CatalogServiceSample.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="CatalogServiceSample:Make">
+        <MSBuild Projects="samples\CatalogServiceSample\CatalogServiceSample.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="CatalogServiceSample"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="CatalogServiceSample:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="CatalogServiceSample:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

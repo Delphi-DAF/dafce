@@ -4,6 +4,7 @@ interface
 uses
   System.SysUtils,
   System.Rtti,
+  System.TypInfo,
   System.Generics.Collections,
   Daf.Extensions.Logging;
 
@@ -43,9 +44,20 @@ type
     FCategory: string;
     FScopes: TLogScopes;
     function GetScopeMessage: string;
+  protected
+    // Accesible para los descendientes en otras units (TNNLogLogger) que contestan IsEnabled con el
+    // mismo predicado que la escritura y necesitan la categoria de la entrada.
+    property Category: string read FCategory;
   public
     constructor Create(const ACategory: string);
     destructor Destroy; override;
+    // La puerta: contesta si una entrada de ese nivel llegaria a algun destino. VIRTUAL con
+    // defecto True, y no abstracta, por la asimetria del error: el defecto que traga una linea es
+    // False, no True. Un descendiente que no la sobreescriba sigue escribiendo todo lo que le
+    // llega, y solo se queda sin el ahorro. Y TLogger es punto de extension: quien
+    // escribe un proveedor devuelve un ILogger que desciende de aqui, asi que un metodo abstracto
+    // nuevo romperia a todos sin salida posible.
+    function IsEnabled(const Level: TLogLevel): Boolean; virtual;
     procedure Log(const Entry: TLogEntry); overload; virtual; abstract;
 
     function BeginScope(const Msg: string; const Args: TArray<TValue>; const ScopedProc: TProc = nil): ILogScopeVoid;overload;
@@ -88,6 +100,42 @@ type
     procedure LogCritical(const Ex: Exception; const Msg: string; const Args: TArray<TValue> = nil); overload;
     procedure LogCritical(const EventId: TEventId; const Ex: Exception; const Msg: string;
       const Args: TArray<TValue> = nil); overload;
+  end;
+
+  /// <summary>
+  ///   Por donde el contenedor le dice a TTypedLogger de quien es el registrador que esta
+  ///   construyendo. Va fuera de la clase porque dentro T1 seria el parametro generico.
+  ///   TClass y no una cota mas estrecha: cualquier clase puede querer su propio registrador.
+  /// </summary>
+  TTypedLoggerArgs = record
+    T1: TClass;
+  end;
+
+  /// <summary>
+  ///   El registrador que lleva la categoria de quien lo pide. Es un reenviador puro: no
+  ///   escribe nada, sostiene el registrador de verdad y le pasa la entrada ya compuesta.
+  /// </summary>
+  /// <remarks>
+  ///   Su unica relacion con el argumento de tipo es usar su NOMBRE como categoria, y ahi
+  ///   esta el detalle que hay que leer despacio: registrado con los argumentos sin fijar, T
+  ///   ES el marcador dentro de esta clase, asi que TypeInfo(T) no sirve de nada. El tipo de
+  ///   verdad llega en _ClosedArgs, que el contenedor escribe ANTES de que corra este
+  ///   constructor -- y tiene que ser antes, porque un registrador elige su categoria al
+  ///   construirse.
+  ///   _ClosedArgs se lee y no se asigna nunca.
+  /// </remarks>
+  TTypedLogger<T: class> = class(TLogger, ILogger<T>)
+  strict private
+    FInner: ILogger;
+  private
+    // Privado, no publico: lo escribe el contenedor por RTTI y lo lee esta clase, y las
+    // directivas RTTI por defecto acotan a public/published los metodos y las propiedades, no
+    // los campos. Ponerlo en la superficie del tipo seria ensancharla a cambio de nada.
+    _ClosedArgs: TTypedLoggerArgs;
+  public
+    constructor Create(const Factory: ILoggerFactory);
+    function IsEnabled(const Level: TLogLevel): Boolean; override;
+    procedure Log(const Entry: TLogEntry); override;
   end;
 
 implementation
@@ -211,6 +259,13 @@ destructor TLogger.Destroy;
 begin
   FScopes.Free;
   inherited
+end;
+
+function TLogger.IsEnabled(const Level: TLogLevel): Boolean;
+begin
+  // El que no sabe contesta que si. Perder una linea por no saber es peor que componer una de mas,
+  // que es lo mismo que hace el pipeline con un destino que no puede decir que niveles acepta.
+  Result := True;
 end;
 
 function TLogger.BeginScope(const Msg: string; const ScopedProc: TProc): ILogScopeVoid;
@@ -391,6 +446,10 @@ end;
 procedure TLogger.Log(const Level: TLogLevel; const EventId: TEventId; const Ex: Exception; const Msg: string;
 const Args: TArray<TValue> = nil);
 begin
+  // La puerta: el embudo al que llegan los treinta y pico LogXxx. Una entrada que ningun
+  // destino aceptaria no analiza su plantilla, no compone la entrada y no llega a ningun proveedor.
+  // El MISMO predicado que la escritura, preguntado al logger concreto por IsEnabled virtual.
+  if not IsEnabled(Level) then Exit;
   var
   State := TLogState.Create(Msg, Args);
   var
@@ -403,6 +462,34 @@ begin
   Entry.State := State;
   Entry.Formatter := Entry.State.Formatter;
   Log(Entry);
+end;
+
+{ TTypedLogger<T> }
+
+constructor TTypedLogger<T>.Create(const Factory: ILoggerFactory);
+begin
+  if _ClosedArgs.T1 = nil then
+    raise EInvalidOpException.Create('TTypedLogger has no closed type to take its category from. It is ' +
+      'built by the container out of an open registration, which is what fills _ClosedArgs; ' +
+      'constructing one by hand skips that.');
+  // La categoria sale del tipo que el contenedor escribio, no del parametro generico. Y sale de
+  // la misma regla que usa la factoria, que es lo que garantiza que un registrador tipado y uno
+  // pedido por tipo a mano escriben bajo el mismo nombre.
+  inherited Create(LogCategoryOf(_ClosedArgs.T1.ClassInfo));
+  FInner := Factory.CreateLogger(_ClosedArgs.T1.ClassInfo);
+end;
+
+function TTypedLogger<T>.IsEnabled(const Level: TLogLevel): Boolean;
+begin
+  // Reenviador puro: la puerta la decide el pipeline de verdad, no este envoltorio.
+  Result := FInner.IsEnabled(Level);
+end;
+
+procedure TTypedLogger<T>.Log(const Entry: TLogEntry);
+begin
+  // La entrada llega ya compuesta por TLogger, con la categoria de este registrador dentro.
+  // Aqui no se decide nada: se pasa.
+  FInner.Log(Entry);
 end;
 
 end.

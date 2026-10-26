@@ -1,6 +1,0 @@
----
-sidebar: modules-es
-lang: es
----
-
-{{< include ../../../src/Application/docs/GUIDE.es.md >}}

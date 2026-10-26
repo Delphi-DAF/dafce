@@ -4,6 +4,8 @@
 
 Esta guía complementa la [Guía de Usuario](GUIDE.es.md) mostrando cómo adaptar BDD a diferentes niveles de testing. Aunque BDD nació para capturar requisitos de negocio, su vocabulario expresivo es útil en cualquier nivel de la pirámide de tests.
 
+⚠️ **Los nombres de fichero de esta guía son una sugerencia para tu proyecto, no la convención del propio DAF.** Aquí el sufijo lleva el nivel del test: `.Spec.pas` para una clase, `.Feat.pas` para una feature. El árbol de DAF llama `[Feature].Feat.pas` a todas sus specs y `[Feature].Steps.pas` a sus ficheros de pasos, sea cual sea el nivel.
+
 ---
 
 ## Tabla de Contenidos
@@ -13,6 +15,7 @@ Esta guía complementa la [Guía de Usuario](GUIDE.es.md) mostrando cómo adapta
 - [Tests Unitarios: Especificando Clases](#tests-unitarios-especificando-clases)
 - [Tests de Integración: Especificando APIs](#tests-de-integración-especificando-apis)
 - [Organizando por Tipo de Test](#organizando-por-tipo-de-test)
+- [Conclusión](#conclusión)
 
 ---
 
@@ -89,7 +92,7 @@ Cuando el SUT es una **clase individual**, BDD sigue siendo útil. Piensa en fra
 ### El Patrón: Feature = Clase, Scenario = Método/Comportamiento
 
 ```pascal
-unit TStringBuilder.Spec.pas;
+unit TStringBuilder.Spec;
 
 interface
 
@@ -250,7 +253,7 @@ Cuando el SUT es un **API** (REST, GraphQL, gRPC...), cada **endpoint** o **oper
 ### El Patrón: Feature = Recurso/Endpoint, Scenario = Operación
 
 ```pascal
-unit API.Users.Spec.pas;
+unit API.Users.Spec;
 
 interface
 
@@ -414,6 +417,15 @@ API: /users @integration @api
 end.
 ```
 
+### Convenciones para Tests de Integración
+
+| Elemento | Convención | Ejemplo |
+|----------|------------|---------|
+| Feature | Endpoint o recurso | `API: /users`, `GraphQL: User` |
+| Rule | Método HTTP + ruta | `GET /users`, `POST /users` |
+| Scenario | Caso de uso concreto | `Crear usuario con datos válidos` |
+| Tag | `@integration` o `@api` | `API: /users @integration @api` |
+
 ### Usando FeatureContext para Estado Compartido
 
 En tests de API, a menudo necesitas datos creados en un escenario para usarlos en otro:
@@ -431,7 +443,7 @@ type
 
   TApiWorld = class
   private
-    [Inject] FCtx: TApiContext;
+    [MiniInject] FCtx: TApiContext;
   public
     Client: THTTPClient;
     Response: IHTTPResponse;
@@ -482,7 +494,7 @@ end;
 
 Hay dos estrategias principales: **un solo ejecutable con tags** o **ejecutables separados por nivel**.
 
-### Opción A: Un Solo Ejecutable con Tags
+### Opción A: Un Solo Ejecutable con Tags (Recomendado)
 
 Todos los tests en un único proyecto, filtrados por tags en tiempo de ejecución.
 
@@ -540,6 +552,13 @@ AllSpecs.exe -f "~@slow"
 # Unit + Integration, sin E2E
 AllSpecs.exe -f "(@unit or @integration) and ~@e2e"
 ```
+
+**Convenciones de tags:**
+- `@unit` — tests unitarios (rápidos, sin dependencias)
+- `@integration` — tests de integración (necesitan servicios)
+- `@e2e` — tests de extremo a extremo (sistema completo)
+- `@slow` — tests lentos (base de datos, red)
+- `@pending` — todavía sin implementar
 
 **Ventajas:** Simple, un solo proyecto, filtrado flexible.  
 **Desventajas:** El ejecutable incluye todas las dependencias (incluso las de E2E).

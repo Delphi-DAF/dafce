@@ -1,0 +1,12 @@
+---
+title: "Migration guides"
+sidebar: migration
+lang: en
+---
+
+One guide per major version. Each one lists what breaks, at compile time and at run time, and the diff
+that fixes it.
+
+| Jump | Guide |
+|---|---|
+| 1.x → 2.0 | [Migrating to DAF 2.0](2.0.qmd) |

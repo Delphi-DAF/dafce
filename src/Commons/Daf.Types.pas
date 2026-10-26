@@ -7,14 +7,71 @@ uses
   System.Classes,
   System.Rtti,
   System.SysUtils,
-  System.Generics.Collections,
-  Daf.Expression;
+  System.Generics.Collections;
 
 type
-  TMacroExpression = TExpresion<string>;
+  /// <summary>
+  ///   A value that may be given either directly or as a thunk, and that is
+  ///   re-evaluated on <b>every</b> read.
+  /// </summary>
+  /// <remarks>
+  ///   Named for what it does, and deliberately not for what it resembles.
+  ///   It is <i>not</i> .NET's <c>Expression&lt;TDelegate&gt;</c>, which is an
+  ///   inspectable expression tree — that world is <c>IExpr</c> /
+  ///   <c>TSpecification&lt;T&gt;</c> in <c>Daf.Specification</c>.
+  ///   Nor is it <c>Lazy&lt;T&gt;</c>, which memoizes: here the thunk runs
+  ///   again on each read, which is exactly what macro resolution wants.
+  /// </remarks>
+  TDeferred<T> = record
+  private
+    FFunc: TFunc<T>;
+  public
+    class operator Initialize(out Dest: TDeferred<T>);
+    class operator Implicit(const Value: T): TDeferred<T>;
+    class operator Implicit(const Func: TFunc<T>): TDeferred<T>;
+    class operator Implicit(const Deferred: TDeferred<T>): T;
+  end;
+
+  TMacroExpression = TDeferred<string>;
+
+  /// <summary>
+  ///   Raised by <c>TMacrosList.ResolveMacros</c> for a macro that is not registered, when
+  ///   <c>MissingMacroPolicy</c> is <c>mmpError</c>. <c>TMacrosList.MissingMacroError</c>
+  ///   builds it.
+  /// </summary>
+  EMacroNotFound = class(Exception);
+
+  /// <summary>
+  ///   What <c>TMacrosList.ResolveMacros</c> does with a reference to a macro that is not
+  ///   registered.
+  /// </summary>
+  TMissingMacroPolicy = (
+    /// <summary>Substitutes <c>MissingMacroValue</c>, which is empty unless set.</summary>
+    mmpReturnDefault,
+    /// <summary>
+    ///   Leaves the reference in the result as it was written, so the string shows which
+    ///   macro was missing.
+    /// </summary>
+    mmpKeepToken,
+    /// <summary>Raises the exception <c>MissingMacroError</c> builds.</summary>
+    mmpError);
+
+  /// <summary>
+  ///   Resolves a macro that is not registered before the policy applies. Set <c>Value</c>
+  ///   and <c>Handled</c> to substitute it, or leave <c>Handled</c> False to hand it to
+  ///   <c>MissingMacroPolicy</c>. To fail, raise
+  ///   <c>TMacrosList(Sender).MissingMacroError(Name)</c>: it is the exception
+  ///   <c>mmpError</c> raises.
+  /// </summary>
+  TMissingMacroEvent = reference to procedure(Sender: TObject; const Name: string;
+    var Value: string; var Handled: Boolean);
+
   TMacrosList = class
   strict private
     FExpresions: TOrderedDictionary<string, TMacroExpression>;
+    FOnMissingMacro: TMissingMacroEvent;
+    FMissingMacroPolicy: TMissingMacroPolicy;
+    FMissingMacroValue: string;
   private
     function GetKeys(Index: Integer):string;
     function GetValueFromIndex(Index: Integer):string;
@@ -31,12 +88,29 @@ type
     property Keys[Index: Integer]:string read GetKeys;
     property Value[const Name:string]: TMacroExpression read GetExpression write SetExpression;default;
     property ValueFromIndex[Index: Integer]:string read GetValueFromIndex;
+    /// <summary>
+    ///   The exception for a macro that is not registered, built in one place so that the
+    ///   policy and a hook fail alike. The caller owns it until it raises it.
+    /// </summary>
+    function MissingMacroError(const Name: string): Exception;
+    /// <summary>
+    ///   Called for each reference to a macro that is not registered, before the policy.
+    /// </summary>
+    property OnMissingMacro: TMissingMacroEvent read FOnMissingMacro write FOnMissingMacro;
+    /// <summary>
+    ///   What becomes of a reference that no hook resolved: <c>mmpReturnDefault</c> unless
+    ///   set. It applies to <c>ResolveMacros</c> only. Reading <c>Value[Name]</c> of a macro
+    ///   that is not registered answers empty whatever the policy, and <c>Contains</c> is
+    ///   how to ask.
+    /// </summary>
+    property MissingMacroPolicy: TMissingMacroPolicy read FMissingMacroPolicy write FMissingMacroPolicy;
+    /// <summary>What <c>mmpReturnDefault</c> substitutes. Empty unless set.</summary>
+    property MissingMacroValue: string read FMissingMacroValue write FMissingMacroValue;
   end;
 
   /// <summary>
   ///   Clase para leer y almacenar las variables de entorno en un diccionario.
   ///   Llama a Refresh() para actualizar la lista en cualquier momento.
-  ///   Usa
   /// </summary>
   TEnvVars = class
   private
@@ -78,11 +152,6 @@ type
     class function CurrentThreadId: Cardinal; static;
   end;
 
-  &If = class
-  public
-    class function Exp<T>(const Cond: Boolean; const WhenTrue: T; WhenFalse: T): T;
-  end;
-
 implementation
 
 uses
@@ -91,6 +160,8 @@ uses
   Winapi.Messages,
 {$ENDIF MSWINDOWS}
 {$IFDEF POSIX}
+  Posix.Unistd,
+  Posix.Dlfcn, // lo pide la expansion inline de environ
 {$IFDEF MACOS}
 {$ENDIF MACOS}
 {$IFDEF ANDROID}
@@ -101,6 +172,34 @@ uses
   System.RegularExpressions,
   System.Generics.Defaults,
   System.StrUtils;
+
+{ TDeferred<T> }
+
+class operator TDeferred<T>.Implicit(const Value: T): TDeferred<T>;
+begin
+  Result.FFunc := function: T
+    begin
+      Result := Value
+    end;
+end;
+
+class operator TDeferred<T>.Implicit(const Func: TFunc<T>): TDeferred<T>;
+begin
+  Result.FFunc := Func;
+end;
+
+class operator TDeferred<T>.Implicit(const Deferred: TDeferred<T>): T;
+begin
+  Result := Deferred.FFunc();
+end;
+
+class operator TDeferred<T>.Initialize(out Dest: TDeferred<T>);
+begin
+  Dest.FFunc := function: T
+    begin
+      Result := Default(T);
+    end;
+end;
 
 { TEnvVars }
 
@@ -149,6 +248,7 @@ begin
   ClearBuffer;
   FVars.Clear;
 
+{$IFDEF MSWINDOWS}
   FBuffer := GetEnvironmentStringsW;
 
   if FBuffer = nil then
@@ -174,6 +274,26 @@ begin
     FreeEnvironmentStringsW(FBuffer);
     FBuffer := nil;
   end;
+{$ENDIF MSWINDOWS}
+{$IFDEF POSIX}
+  // Las claves se guardan en mayusculas, como en Windows, para que una busqueda encuentre la variable
+  // igual en todas las plataformas. El entorno POSIX si distingue mayusculas: dos variables que solo
+  // difieran en ellas quedan en una, la ultima que entrega environ.
+  var Entry: PMarshaledAString := environ;
+  if Entry = nil then
+    Exit;
+
+  while Entry^ <> nil do
+  begin
+    var EnvLine := UTF8ToString(Entry^);
+
+    var i := EnvLine.IndexOf('=');
+    if i > 0 then
+      FVars.AddOrSetValue(EnvLine.Substring(0, i).ToUpper, EnvLine.Substring(i + 1));
+
+    Inc(Entry);
+  end;
+{$ENDIF POSIX}
 end;
 
 { TMacrosList }
@@ -221,15 +341,41 @@ begin
   for var Match in Matches do
   begin
     var Token := Match.Groups[1].Value;
-    var Resolved := Self[Token];
-    Result := Result.Replace(Match.Value, Resolved);
+    var idx := IndexOf(Token);
+    if idx >= 0 then
+    begin
+      Result := Result.Replace(Match.Value, ValueFromIndex[idx]);
+      Continue;
+    end;
+
+    var Value := '';
+    var Handled := False;
+    if Assigned(FOnMissingMacro) then
+      FOnMissingMacro(Self, Token, Value, Handled);
+    if Handled then
+      Result := Result.Replace(Match.Value, Value)
+    else
+      case FMissingMacroPolicy of
+        mmpReturnDefault: Result := Result.Replace(Match.Value, FMissingMacroValue);
+        mmpKeepToken: ;
+        mmpError: raise MissingMacroError(Token);
+      end;
   end;
+  // A pass that changed nothing leaves nothing the next one could resolve: without this,
+  // a reference kept by mmpKeepToken would be scanned again on every recursion level.
+  if Result = Source then
+    Exit;
   Result := ResolveMacros(Result, MaxRecursionLevel - 1);
+end;
+
+function TMacrosList.MissingMacroError(const Name: string): Exception;
+begin
+  Result := EMacroNotFound.CreateFmt('No macro is registered with the name "%s"', [Name]);
 end;
 
 function TMacrosList.GetValueFromIndex(Index: Integer):string;
 begin
-  FExpresions.ValueList[Index];
+  Result := FExpresions.ValueList[Index];
 end;
 
 function TMacrosList.GetExpression(const Name:string): TMacroExpression;
@@ -302,16 +448,6 @@ end;
 class procedure Debugger.Write(const FmtStr:string; Args: array of const);
 begin
   Write(Format(FmtStr, Args));
-end;
-
-{ &If }
-
-class function &If.Exp<T>(const Cond: Boolean; const WhenTrue: T; WhenFalse: T): T;
-begin
-  if Cond then
-    Result := WhenTrue
-  else
-    Result := WhenFalse;
 end;
 
 end.
