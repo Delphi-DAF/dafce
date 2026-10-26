@@ -190,7 +190,7 @@ Hay un segundo punto de entrada, más abajo: `THostBuilder`, del módulo **Hosti
 quieres el host sin la capa de aplicación alrededor, con
 [`Hosting/samples/HostQuickStart`](https://github.com/Delphi-DAF/dafce/tree/main/src/Hosting/samples/HostQuickStart)
 como su propio ejemplo de entrada. La
-[guía de Application](../modules/application-guide.qmd) dice qué te da cada uno.
+[guía de la familia de aplicaciones](application-family.qmd) dice qué te da cada uno.
 
 ## Mapa de módulos
 

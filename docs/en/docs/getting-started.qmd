@@ -186,7 +186,7 @@ There is a second, lower-level entry point — `THostBuilder` from the **Hosting
 you want the host without the application layer around it, with
 [`Hosting/samples/HostQuickStart`](https://github.com/Delphi-DAF/dafce/tree/main/src/Hosting/samples/HostQuickStart)
 as its own entry example. The
-[Application guide](../modules/application-guide.qmd) says what each one gives you.
+[application family guide](application-family.qmd) says what each one gives you.
 
 ## Module map
 
