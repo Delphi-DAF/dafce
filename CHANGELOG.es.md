@@ -10,6 +10,8 @@ con [Semantic Versioning](https://semver.org/spec/v2.0.0.html) y los commits sig
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-10-26
+
 Los cambios que rompen una aplicación, al compilar o en ejecución, están recogidos con su diff de ejemplo en `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` en español).
 
 ### Added
@@ -425,7 +427,8 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - Framework de tests BDD MiniSpec
 - Proyectos de ejemplo: Calculator, Config, Console, HostedService, Mastermind, MediatR, Ping
 
-[Unreleased]: https://github.com/Delphi-DAF/dafce/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/Delphi-DAF/dafce/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/Delphi-DAF/dafce/compare/v1.6.0...v2.0.0
 [1.6.0]: https://github.com/Delphi-DAF/dafce/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/Delphi-DAF/dafce/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/Delphi-DAF/dafce/compare/v1.3.0...v1.4.0
