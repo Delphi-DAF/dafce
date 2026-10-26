@@ -76,8 +76,9 @@ Qué constructor elige:
   registra. Cuando eso no deja ninguno, la resolución falla nombrando el parámetro, su tipo y la
   clase.
 
-Un parámetro puede pedir una clave —ver [Keyed Services](#keyed-services)— y una dependencia que
-cerraría un ciclo entra por propiedad; ver [Property Injection](#property-injection).
+Un parámetro puede pedir una clave —ver [Servicios con clave](#servicios-con-clave)— y una
+dependencia que cerraría un ciclo entra por propiedad; ver
+[Inyección por propiedad](#inyección-por-propiedad).
 
 ### Por lambda de factoría
 
