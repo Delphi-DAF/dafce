@@ -105,6 +105,7 @@ SQLCute sigue el constructor y los compiladores de [SqlKata](https://sqlkata.com
 | `Where(col, 'in', valores)` | lo rechaza | liga los valores, como `WhereIn` |
 | `WhereNot` con `Null` o con un valor lógico | pierde la negación | la conserva: `NOT (col IS NULL)` |
 | Una comparación negada con un valor lógico | `col != true` | `NOT (col = true)` |
+| Un valor lógico en Firebird | `col = 1`, que una columna `BOOLEAN` rechaza | `col = true`, que una columna `SMALLINT` que hace de indicador rechaza |
 | Carácter de escape de la familia LIKE | cualquier carácter | una comilla simple o un `?` lanzan `EArgumentException` |
 | `\?` en una expresión en bruto | queda `\?` en el SQL | pasa a ser `??`, el `?` literal de FireDAC, fuera de una cadena, y `?` dentro de una y en el estilo nativo |
 | Una página de SQL Server sobre una consulta `Distinct` sin `OrderBy` | `ORDER BY (SELECT 0)`, que SQL Server rechaza con `DISTINCT` | `ORDER BY 1` |

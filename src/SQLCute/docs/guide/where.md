@@ -70,7 +70,7 @@ Passing `Null` directly to `Where`, `OrWhere`, `WhereNot` or `OrWhereNot` compar
 .WhereFalse('blocked')  // → WHERE blocked = false
 ```
 
-The comparison is with the dialect's literal, with no binding: `true` and `false` in ANSI, Postgres, MySQL and Oracle, `1` and `0` in SQLite and Firebird, and `cast(1 as bit)` and `cast(0 as bit)` in SQL Server — see [Dialect compilers](dialects.md). `Where`, `OrWhere`, `WhereNot` and `OrWhereNot` with a logical value emit the same: with `=` or no operator, the comparison with the literal; with any other operator, its negation, which adds to that of `WhereNot`:
+The comparison is with the dialect's literal, with no binding: `true` and `false` in ANSI, Postgres, MySQL, Oracle and Firebird, `1` and `0` in SQLite, and `cast(1 as bit)` and `cast(0 as bit)` in SQL Server — see [Dialect compilers](dialects.md). `Where`, `OrWhere`, `WhereNot` and `OrWhereNot` with a logical value emit the same: with `=` or no operator, the comparison with the literal; with any other operator, its negation, which adds to that of `WhereNot`:
 
 ```pascal
 .Where('active', True)          // → WHERE active = true

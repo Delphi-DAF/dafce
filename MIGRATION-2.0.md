@@ -749,12 +749,13 @@ end;
 ### 30. SQLCute: a logical value is compared with the dialect's literal
 
 - **`WhereTrue('active')` and `Where('active', True)` emit `active = true`**, with no binding. The
-  literal is `true` and `false` in ANSI, Postgres, MySQL and Oracle, `1` and `0` in SQLite and
-  Firebird, and `cast(1 as bit)` and `cast(0 as bit)` in SQL Server. With an operator other than `=`
+  literal is `true` and `false` in ANSI, Postgres, MySQL, Oracle and Firebird, `1` and `0` in
+  SQLite, and `cast(1 as bit)` and `cast(0 as bit)` in SQL Server. With an operator other than `=`
   the comparison is negated: `Where('active', '<>', False)` emits `NOT (active = false)`. In 1.6 the
   value was bound to `active = ?`.
-- **Oracle understands `true` from Oracle 23, and a Firebird `BOOLEAN` column rejects `= 1`**: on
-  either, write the condition with `WhereRaw`.
+- **Oracle understands `true` from Oracle 23**: before it, write the condition with `WhereRaw`.
+- **A Firebird `SMALLINT` flag column rejects `= true`** with a conversion error: compare it with a
+  number, `Where('flag', 1)`.
 - **What breaks**: code that counted the bindings, or relied on the binding being typed as a Boolean.
 
 ### 31. SQLCute: the column of `Having` is an identifier

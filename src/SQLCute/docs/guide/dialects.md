@@ -34,7 +34,7 @@ Every compiler writes `?` by default. The placeholder column is what each one wr
 
 A quoting dialect quotes each part of a qualified name on its own — `"public"."users"`, `[users].[id]` — leaves a trailing `*` bare, and doubles its closing character inside a name. A column written `name as alias` is split: `Select('users.name as n')` compiles to `SELECT "users"."name" AS "n"` in Postgres. Oracle writes its aliases without `AS`: `FROM "USERS" "U"`.
 
-A logical comparison — `WhereTrue`, `WhereFalse`, or `Where` with a logical value — compares with the dialect's literal, with no binding: `true` and `false` in ANSI, Postgres, MySQL and Oracle, `1` and `0` in SQLite and Firebird, and `cast(1 as bit)` and `cast(0 as bit)` in SQL Server. Oracle understands `true` from Oracle 23. In Firebird, `= 1` suits a `SMALLINT` flag column, and a `BOOLEAN` column (Firebird 3 and later) rejects it with a conversion error: for one, write the condition with `WhereRaw`.
+A logical comparison — `WhereTrue`, `WhereFalse`, or `Where` with a logical value — compares with the dialect's literal, with no binding: `true` and `false` in ANSI, Postgres, MySQL, Oracle and Firebird, `1` and `0` in SQLite, and `cast(1 as bit)` and `cast(0 as bit)` in SQL Server. Oracle understands `true` from Oracle 23. In Firebird, a `SMALLINT` flag column rejects `= true` with a conversion error: compare it with a number, `Where('flag', 1)`.
 
 All dialect compilers ship in the `Daf.SQLCute` package, alongside the `TAnsiSqlCompiler` they extend. Requiring `Daf.SQLCute` is enough — there is no separate compilers package to add.
 
@@ -196,7 +196,7 @@ compiler emulates it with a leading sort key. Neither form adds a binding.
 | ANSI / Postgres | `col ASC NULLS LAST` (native) | NULLs **last** ascending, **first** descending (NULL sorts as the largest value) |
 | Oracle | `"COL" ASC NULLS LAST` (native) | NULLs **last** ascending, **first** descending |
 | SQLite | `"col" ASC NULLS LAST` (native, **needs SQLite ≥ 3.30**) | NULLs **first** ascending, **last** descending (NULL is the smallest value) |
-| Firebird | `col ASC NULLS LAST` (native) | **Firebird ≥ 2.0:** NULLs **first** ascending, **last** descending. Firebird 1.0/1.5 put them last in both directions |
+| Firebird | `col ASC NULLS LAST` (native) | NULLs **first** ascending, **last** descending |
 | MySQL | `` (`col` IS NULL) ASC, `col` ASC `` (emulated) | NULLs **first** ascending, **last** descending |
 | SQL Server | `CASE WHEN [col] IS NULL THEN 1 ELSE 0 END ASC, [col] ASC` (emulated) | NULLs **first** ascending, **last** descending |
 

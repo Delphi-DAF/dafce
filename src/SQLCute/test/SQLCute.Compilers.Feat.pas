@@ -14,6 +14,7 @@ uses
   Daf.MiniSpec,
   Daf.SQLCute,
   Daf.SQLCute.Compiler,
+  Daf.SQLCute.Compiler.Firebird,
   Daf.SQLCute.Compiler.Postgres,
   Daf.SQLCute.Compiler.SqlServer,
   Daf.SQLCute.Compiler.SQLite,
@@ -296,6 +297,34 @@ TQuery — Dialect Compilers @unit @sqlcute
       begin
         Expect(Format('%s | %d', [W.LastResult.SQL, Length(W.LastResult.Bindings)]))
           .ToEqual('SELECT * FROM "users" WHERE "active" = 1 | 0');
+      end)
+
+  .Scenario('WhereTrue in Firebird')
+    .When('query calls From(''users'').WhereTrue(''active''), compiled with TFirebirdCompiler',
+      procedure(W: TSQLCuteWorld)
+      begin
+        W.Compiler := TFirebirdCompiler.Create;
+        W.LastResult := W.Compiler.Compile(TQuery.New.From('users').WhereTrue('active'));
+      end)
+    .&Then('SQL is SELECT * FROM users WHERE active = true with 0 bindings',
+      procedure(W: TSQLCuteWorld)
+      begin
+        Expect(Format('%s | %d', [W.LastResult.SQL, Length(W.LastResult.Bindings)]))
+          .ToEqual('SELECT * FROM users WHERE active = true | 0');
+      end)
+
+  .Scenario('WhereFalse in Firebird')
+    .When('query calls From(''users'').WhereFalse(''active''), compiled with TFirebirdCompiler',
+      procedure(W: TSQLCuteWorld)
+      begin
+        W.Compiler := TFirebirdCompiler.Create;
+        W.LastResult := W.Compiler.Compile(TQuery.New.From('users').WhereFalse('active'));
+      end)
+    .&Then('SQL is SELECT * FROM users WHERE active = false with 0 bindings',
+      procedure(W: TSQLCuteWorld)
+      begin
+        Expect(Format('%s | %d', [W.LastResult.SQL, Length(W.LastResult.Bindings)]))
+          .ToEqual('SELECT * FROM users WHERE active = false | 0');
       end)
 
   .Scenario('Where with True in SQL Server')

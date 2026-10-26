@@ -753,12 +753,13 @@ end;
 ### 30. SQLCute: un valor lógico se compara con el literal del dialecto
 
 - **`WhereTrue('activo')` y `Where('activo', True)` emiten `activo = true`**, sin enlace. El literal es
-  `true` y `false` en ANSI, Postgres, MySQL y Oracle, `1` y `0` en SQLite y Firebird, y
+  `true` y `false` en ANSI, Postgres, MySQL, Oracle y Firebird, `1` y `0` en SQLite, y
   `cast(1 as bit)` y `cast(0 as bit)` en SQL Server. Con un operador distinto de `=` la comparación se
   niega: `Where('activo', '<>', False)` emite `NOT (activo = false)`. En 1.6 el valor se ligaba a
   `activo = ?`.
-- **Oracle entiende `true` desde Oracle 23, y una columna `BOOLEAN` de Firebird rechaza `= 1`**: en
-  cualquiera de los dos, la condición se escribe con `WhereRaw`.
+- **Oracle entiende `true` desde Oracle 23**: antes, la condición se escribe con `WhereRaw`.
+- **Una columna `SMALLINT` de Firebird que hace de indicador rechaza `= true`** con un error de
+  conversión: se compara con un número, `Where('flag', 1)`.
 - **Qué rompe**: el código que contaba los enlaces, o que contaba con que ese enlace fuera de tipo
   lógico.
 
