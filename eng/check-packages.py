@@ -36,13 +36,21 @@ Invariants
    bound its port perfectly well while dragging DataSnap and DBX behind it, because
    what was wrong was the dependency, and tests are blind to dependencies by
    construction.
+
+5. A package is called what it says. The `.dpk` and its `.dproj`, with the names git
+   records for them, match the `package` clause exactly, case included. The names come
+   from git and not from the disk: on a case-insensitive file system a rename that only
+   changes case stays on the disk, git keeps the old name, and so does every checkout on
+   a case-sensitive one -- CI's, and the docs dependency graph built there. Every other
+   check here folds case, so none of them can see it.
 """
 
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import NamedTuple
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -209,6 +217,42 @@ def loose_units(contains):
     return len(packaged), loose
 
 
+def name_breaches():
+    """Invariant 5: each tracked src/*/*.dpk, and its .dproj, named exactly as its `package`."""
+    listed = subprocess.run(["git", "-C", str(ROOT), "ls-files", "-z", "src"],
+                            capture_output=True, text=True)
+    if listed.returncode != 0:
+        # Not a skip: without git there is no record to compare with, and a silent pass here
+        # would read exactly like a clean one.
+        return [f"cannot read the names git records (git ls-files: {listed.stderr.strip()}), "
+                f"so the package names were not checked."]
+    tracked = [p for p in listed.stdout.split("\0") if p]
+    by_lower = {p.lower(): p for p in tracked}
+    breaches, examined = [], 0
+    for path in tracked:
+        dpk = PurePosixPath(path)
+        if dpk.suffix.lower() != ".dpk" or len(dpk.parts) != 3:
+            continue
+        examined += 1
+        text = (ROOT / path).read_text(encoding="utf-8-sig")
+        declared = re.search(r"^\s*package\s+([\w.]+)\s*;", text, re.M | re.I)
+        if not declared:
+            breaches.append(f"{path} has no `package` clause to compare its name with.")
+            continue
+        name = declared.group(1)
+        if dpk.stem != name:
+            breaches.append(f"{path} declares `package {name}`, and git records the file as "
+                            f"{dpk.name}. Rename it in git: git mv {path} {dpk.with_stem(name)}")
+        dproj = by_lower.get(str(dpk.with_suffix(".dproj")).lower())
+        if dproj and PurePosixPath(dproj).stem != name:
+            breaches.append(f"{dproj} goes with `package {name}`, and git records it as "
+                            f"{PurePosixPath(dproj).name}. Rename it in git: "
+                            f"git mv {dproj} {PurePosixPath(dproj).with_stem(name)}")
+    if not examined:
+        breaches.append("git lists no src/*/*.dpk, so the package names were not checked.")
+    return breaches
+
+
 def main():
     requires, contains, owner = parse()
     canon = {p.lower(): p for p in requires}
@@ -278,6 +322,8 @@ def main():
             breaches.append(
                 f"{pkg} uses {dep} without requiring it — it arrives transitively today, so it "
                 f"compiles, and breaks the day that path changes. Declare it.")
+
+    breaches += name_breaches()
 
     if breaches:
         print(f"{len(breaches)} package invariant breach(es):\n", file=sys.stderr)
