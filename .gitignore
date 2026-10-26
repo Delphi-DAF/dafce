@@ -29,6 +29,8 @@ Thumbs.db
 releases/
 # Private local files
 .private/
+# Machine overrides of project.cmd: %COMPUTERNAME%.project.cmd
+*.project.cmd
 
 
 # Quarto

@@ -1,14 +1,23 @@
 @echo off
 setlocal enableextensions enabledelayedexpansion
 
-rem Build everything this edition ships: framework, samples and specs, in that
-rem order, for every platform asked for.
+rem Build what this edition ships: framework, samples and specs, in that order,
+rem for every platform asked for.
 rem
-rem   buildall [Win32^|Win64^|all] [--clean]      default: all, no clean
+rem   buildall [Win32^|Win64^|all] [--framework] [--samples] [--specs] [--clean]
 rem
-rem The framework is built in Debug AND Release; samples and specs only in Debug,
-rem which is the only config their optsets describe -- they consume the Debug
-rem framework whatever else was built.
+rem   Win32, Win64, all   the platforms; all by default
+rem   --framework         the framework, in Debug and Release
+rem   --samples           the samples
+rem   --specs             the specs
+rem   --clean             deletes out\ before building
+rem
+rem The scope options combine, and with none of them everything is built.
+rem
+rem Samples and specs are built only in Debug, which is the only config their optsets
+rem describe, and they link the Debug framework whatever else was built. So
+rem --samples and --specs build the Debug framework first, even without --framework:
+rem it is an incremental make, and a framework already up to date costs nothing.
 rem
 rem The order is not cosmetic. Samples and specs link the framework's DCU and DCP,
 rem so a framework left stale produces F2051 downstream -- and the suites of the
@@ -29,16 +38,32 @@ if "%SELF_DIR:~-1%"=="\" set "SELF_DIR=%SELF_DIR:~0,-1%"
 
 set "PLATFORMS=Win32 Win64"
 set "DO_CLEAN="
+set "DO_FRAMEWORK="
+set "DO_SAMPLES="
+set "DO_SPECS="
 :parse_args
 if "%~1"=="" goto :args_done
-if /i "%~1"=="Win32" (set "PLATFORMS=Win32") else if /i "%~1"=="Win64" (set "PLATFORMS=Win64") else if /i "%~1"=="all" (set "PLATFORMS=Win32 Win64") else if /i "%~1"=="--clean" (set "DO_CLEAN=1") else (
-  echo ERROR: unknown argument [%~1]
-  echo Usage: %~n0 [Win32^|Win64^|all] [--clean]
-  exit /B 2
-)
+set "_arg=%~1"
+if /i "%_arg%"=="Win32"       (set "PLATFORMS=Win32"       & goto :next_arg)
+if /i "%_arg%"=="Win64"       (set "PLATFORMS=Win64"       & goto :next_arg)
+if /i "%_arg%"=="all"         (set "PLATFORMS=Win32 Win64" & goto :next_arg)
+if /i "%_arg%"=="--framework" (set "DO_FRAMEWORK=1"        & goto :next_arg)
+if /i "%_arg%"=="--samples"   (set "DO_SAMPLES=1"          & goto :next_arg)
+if /i "%_arg%"=="--specs"     (set "DO_SPECS=1"            & goto :next_arg)
+if /i "%_arg%"=="--clean"     (set "DO_CLEAN=1"            & goto :next_arg)
+echo ERROR: unknown argument [%~1]
+echo Usage: %~n0 [Win32^|Win64^|all] [--framework] [--samples] [--specs] [--clean]
+exit /B 2
+:next_arg
 shift
 goto :parse_args
 :args_done
+
+if not defined DO_FRAMEWORK if not defined DO_SAMPLES if not defined DO_SPECS (
+  set "DO_FRAMEWORK=1"
+  set "DO_SAMPLES=1"
+  set "DO_SPECS=1"
+)
 
 if defined DO_CLEAN (
   echo Removing "%SELF_DIR%\out" ...
@@ -51,18 +76,21 @@ if defined DO_CLEAN (
 
 set "STEPS=0"
 set "FAILED="
+set "FW_CONFIGS=Debug  [linked by samples and specs]"
+if defined DO_FRAMEWORK set "FW_CONFIGS=Debug+Release"
 
 echo ============================================================
 echo  DAF Build All
-echo  Framework:     %PLATFORMS%  x  Debug+Release
-echo  Samples+Specs: %PLATFORMS%  x  Debug
+echo  Framework:     %PLATFORMS%  x  %FW_CONFIGS%
+if defined DO_SAMPLES echo  Samples:       %PLATFORMS%  x  Debug
+if defined DO_SPECS echo  Specs:         %PLATFORMS%  x  Debug
 echo ============================================================
 
 for %%P in (%PLATFORMS%) do (
   call :step %%P Debug   framework src/DAFGroup.groupproj
-  if not errorlevel 1 call :step %%P Release framework src/DAFGroup.groupproj
-  if not errorlevel 1 call :step %%P Debug   samples   src/DAFSamples.groupproj
-  if not errorlevel 1 call :step %%P Debug   specs     src/DAFSpecs.groupproj
+  if not errorlevel 1 if defined DO_FRAMEWORK call :step %%P Release framework src/DAFGroup.groupproj
+  if not errorlevel 1 if defined DO_SAMPLES call :step %%P Debug   samples   src/DAFSamples.groupproj
+  if not errorlevel 1 if defined DO_SPECS call :step %%P Debug   specs     src/DAFSpecs.groupproj
 )
 
 echo.

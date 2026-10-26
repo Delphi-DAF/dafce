@@ -81,3 +81,12 @@ C++ files
 *.yaml      text eol=lf
 *.js        text eol=lf
 *.lua       text eol=lf
+
+########################################################
+# Left out of the release archive (git archive, and the "Source code" zip
+# GitHub builds with it): the repository's tooling and the site's source.
+# Anchored at the root, so a module's own docs/ under src/ stays in.
+########################################################
+/.github    export-ignore
+/eng        export-ignore
+/docs       export-ignore

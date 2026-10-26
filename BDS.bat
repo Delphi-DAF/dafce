@@ -2,7 +2,7 @@
 setlocal enableextensions enabledelayedexpansion
 
 set SELF_NAME=%~n0
-set SELF_VS=4.3.0
+set SELF_VS=4.4.0
 
 :: Análisis de argumentos
 for %%A in (%*) do (
@@ -39,10 +39,6 @@ set "PRJ_DIR=%WORK_DIR%"
 set "PRJ_VENDOR_DIR=%PRJ_DIR%\vendor"
 set "PRJ_OUT_DIR=%PRJ_DIR%\out"
 
-for %%i IN ("%PRJ_DIR%") DO set "PRJ_NAME=%%~ni"
-
-set "PRJ_REG_KEY=%PRJ_ROOT_KEY%\%PRJ_NAME%"
-
 :: load .env if present (KEY=VALUE lines; # comments and blank lines are ignored)
 if exist "%WORK_DIR%\.env" (
   for /f "usebackq tokens=1,* delims== eol=#" %%K in ("%WORK_DIR%\.env") do (
@@ -64,10 +60,16 @@ for /R "%PRJ_DIR%" %%F in (*.dproj) do (
 )
 :found_prj
 
-if exist "%WORK_DIR%\%COMPUTERNAME%.project.cmd" (call "%WORK_DIR%\%COMPUTERNAME%.project.cmd" :on_init)
-
 :: load project specific settings so we can override defaults
 if exist "%WORK_DIR%\project.cmd" (call "%WORK_DIR%\project.cmd" :on_init)
+
+:: then the machine's, which override the project's
+if exist "%WORK_DIR%\%COMPUTERNAME%.project.cmd" (call "%WORK_DIR%\%COMPUTERNAME%.project.cmd" :on_init)
+
+:: the registry key is composed after both on_init, so the PRJ_ROOT_KEY they set applies;
+:: the folder's whole name, so dafce-2.0.0 and dafce-2.0.1 do not share a key
+for %%i IN ("%PRJ_DIR%") DO set "PRJ_NAME=%%~nxi"
+set "PRJ_REG_KEY=%PRJ_ROOT_KEY%\%PRJ_NAME%"
 
 :: Normalizar: --project: es alias de --path: (compatibilidad hacia atras)
 if not defined ARG_path (
@@ -166,34 +168,42 @@ call :%CMD% %*
 exit /B !ERRORLEVEL!
 goto :eof
 
-:: Error handling
+:: Error handling. Both exit with 2, as a missing RAD Studio bin does in MAKE, BUILD
+:: and CLEAN: nothing was built, which is a different failure from msbuild's 1.
 :ERR_PRJ_IDE_NOT_DEFINED
-echo ERROR: PRJ_IDE variable not defined
-echo.
-echo The PRJ_IDE variable must be set in project.cmd to specify the RAD Studio version.
-echo.
-echo Example values:
-echo   set "PRJ_IDE=D270"  for RAD Studio 11.0 Alexandria 
-echo   set "PRJ_IDE=D280"  for RAD Studio 11.3 Alexandria 
-echo   set "PRJ_IDE=D290"  for RAD Studio 12.0 Athens
-echo   set "PRJ_IDE=D370"  for RAD Studio 13.0 Florence
-echo etc.
-echo.
-echo Please use INIT command to create a valid project.cmd (or edit it manually) and add the appropriate PRJ_IDE setting.
-goto :eof
+echo ERROR: PRJ_IDE is not defined - nothing was built
+echo project.cmd sets it in its :on_init; "%SELF_NAME% init" creates a default project.cmd.
+call :LIST_INSTALLED
+exit /B 2
 
 :ERR_IDE_VS_NOT_FOUND
-echo ERROR: RAD Studio IDE version !IDE_VER! not found
+echo ERROR: RAD Studio !IDE_VER! [PRJ_IDE=%PRJ_IDE%] is not installed - nothing was built
+call :LIST_INSTALLED
+exit /B 2
+
+:: The installed RAD Studio versions, each with the PRJ_IDE that selects it, and the two
+:: ways of selecting one. The mapping is the inverse of the one that turns PRJ_IDE into
+:: a registry key above.
+:LIST_INSTALLED
 echo.
-echo The specified IDE version is not installed or not properly configured.
+set "_found="
+set "_example=D370"
+for /f "tokens=*" %%k in ('reg query "HKCU\Software\Embarcadero\BDS" 2^>nul') do (
+  reg query "%%k" /v App >nul 2>&1 && (
+    for /f "tokens=1 delims=." %%n in ("%%~nxk") do set /a "_n=%%n"
+    if !_n! LEQ 12 (set /a "_d=_n+7") else if !_n! LEQ 23 (set /a "_d=_n+6") else (set /a "_d=_n")
+    if not defined _found echo Installed RAD Studio versions:
+    set "_found=1"
+    set "_example=D!_d!0"
+    echo   PRJ_IDE=D!_d!0   RAD Studio %%~nxk
+  )
+)
+if not defined _found echo No RAD Studio version is installed for this user [HKCU\Software\Embarcadero\BDS].
 echo.
-echo Please check:
-echo   1. RAD Studio !IDE_VER! is installed
-echo   2. PRJ_IDE variable in project.cmd matches your installed version
-echo   3. Registry entries are properly configured
-echo.
-echo Current PRJ_IDE setting: %PRJ_IDE%
-goto :eof
+echo To select one without editing project.cmd, either:
+echo   - create %COMPUTERNAME%.project.cmd next to project.cmd, with the line  set "PRJ_IDE=!_example!"
+echo   - or run  set "PRJ_IDE=!_example!"  on its own line before %SELF_NAME% or buildall
+exit /B 0
 
 :CREATE_PROJECT_CMD
 echo Creating default project.cmd file...
@@ -222,7 +232,7 @@ goto :eof
 
 :: Show version banner
 :BANNER
-echo %SELF_NAME% v%SELF_VS% - Project build and management tool for EmbarcaderoRAD Studio
+echo %SELF_NAME% v%SELF_VS% - Project build and management tool for Embarcadero RAD Studio
 echo -- (c) j.cangas@pm.me ^| Use %SELF_NAME% help to see available commands --
 exit /B 0
 

@@ -80,6 +80,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - **SystemProcess**: `Id` — the identifier the system gave the child, from the moment it is launched
 - **Linq**: `Linq.FromOwned` — query a temporary list that nobody else keeps: Linq frees it with the query, and each object a terminal returns passes to the caller
 - **Linq**: `MoveToList` and `MoveToArray` — terminals that take the selected elements out of the source list as they deliver them, so each object keeps a single owner
+- **buildall.bat**: `--framework`, `--samples` and `--specs` build only part of the edition, and they combine; with none of them it builds everything
 
 ### Changed
 
@@ -142,6 +143,8 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - ⚠️ **SystemProcess**: `Kill` with no child launched —before running, or after a launch that failed— **raises `EInvalidOpException`**, as `Id` does. **Breaks** a shutdown hook that kills unconditionally: ask `IsRunning` first
 - **SystemProcess**: A killed child —by `Kill`, the deadline or the cancellation— exits with code `-1` (`$FFFFFFFF`), as in .NET, and `TProcessResult.ExitCode` carries the child's real exit code whenever it has exited; it used to be 0
 - ⚠️ **SystemProcess**: With a deadline or a token, a descendant that keeps a captured stream open past them ends the run as `Timeout` or `Canceled`, with what was already read delivered; it used to be waited for, and the run came back `Completed`
+- **BDS.bat**: Each folder's IDE profile is kept under `HKCU\Software\Embarcadero\DAF\<folder>`, by the folder's whole name, and the `PRJ_ROOT_KEY` that `project.cmd` sets applies. It was `USR_PRJ\<folder>` without what followed the last dot, so `dafce-2.0.0` and `dafce-2.0.1` shared one; `reg copy` brings an existing profile across
+- **Release archive**: The source zip of a release carries what is built and read: `.github`, `eng` and the site's source, `docs`, stay out
 
 ### Deprecated
 
@@ -251,6 +254,8 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - **NNLog**: A target property whose configured value does not convert was set to zero, with no warning; it is now reported through the bootstrap channel and keeps its value, as in NLog
 - **VCL**: Stopping the application left its forms alive until the process ended, with the container already closed, so a form that used services while it was destroyed no longer found them; `Stop` now frees them first
 - **FMX**: Stopping the application left its forms alive until the process ended, with the container already closed, so a form that used services while it was destroyed no longer found them; `Stop` now frees them first
+- **BDS.bat**: A RAD Studio version that is not installed, or no `PRJ_IDE` at all, exits with code 2 and lists the installed versions with the `PRJ_IDE` of each; it exited with 0, so `buildall.bat` ended in `BUILD OK` having built nothing
+- **BDS.bat**: `%COMPUTERNAME%.project.cmd` overrides `project.cmd`, as documented, and a `PRJ_IDE` set in the environment is kept, so either selects the Delphi version; `project.cmd` used to override both
 
 ### Security
 

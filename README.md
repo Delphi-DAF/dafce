@@ -49,7 +49,52 @@ DAF Community Edition is distributed under the [MIT License](./legal/LICENSE.md)
 A Pro edition is available: everything in this edition, plus the DAL — a data access layer over
 FireDAC — documentation and commercial support.
 
+## Getting the sources
+
+Every release on GitHub carries its sources as a zip, **Source code (zip)** under the release's
+*Assets*: <https://github.com/Delphi-DAF/dafce/releases>. Unzip it anywhere, a path with spaces
+included, and run everything below from that folder. Cloning the repository also works.
+
 ## Building
+
+Requires Delphi 12 (Athens) or later, on Windows: Win32 and Win64. No package declares a Linux
+target.
+
+`buildall.bat` builds from the command line, with nothing to set up:
+
+| Command | Builds |
+|---|---|
+| `buildall.bat` | everything: the framework in Debug and Release, the samples and the specs |
+| `buildall.bat --framework` | the framework, in Debug and Release |
+| `buildall.bat --samples` | the framework in Debug, then the samples |
+| `buildall.bat --specs` | the framework in Debug, then the specs |
+
+The three options combine. `Win32`, `Win64` or `all` choose the platforms, all by default, and
+`--clean` deletes `out\` first. `runtests.bat all` runs every suite the specs group declares.
+
+### Choosing the Delphi version
+
+`project.cmd` selects Delphi 13 (`PRJ_IDE=D370`). Delphi 12 is `PRJ_IDE=D290`, and either of these
+selects it without editing `project.cmd`:
+
+- a file named after the machine, `%COMPUTERNAME%.project.cmd`, next to `project.cmd`, holding the
+  line `set "PRJ_IDE=D290"`;
+- `set "PRJ_IDE=D290"` on its own line in the console, before running `buildall.bat`.
+
+With Delphi 12, `buildall.bat --framework --samples` builds the framework and the samples. The
+specs of the VCL module need Delphi 13, so `--specs`, and `buildall.bat` with no options, end in
+`BUILD FAILED`.
+
+When the version asked for is not installed, `BDS.bat` builds nothing, exits with code 2 and lists
+the installed versions with the `PRJ_IDE` of each.
+
+### Using what is built
+
+Add `out\Win32\Release\lib` or `out\Win64\Release\lib` to your project's search path, and the DAF
+units your program uses compile against it. `out\<Platform>\Debug\lib` holds the Debug build of the
+same units, for debugging.
+
+### The IDE
 
 Every project takes its output paths from `src/paths.optset`, which derives all of them from
 `PRJ_OUT_DIR`. `BDS.bat` sets that variable from its own location, so the IDE is started through it:
@@ -62,12 +107,12 @@ That opens RAD Studio with the project's environment and loads `src/DAFGroup.gro
 started any other way leaves `PRJ_OUT_DIR` undefined, and every output path is then built from an
 empty value.
 
-From the command line there is nothing to set up, because both scripts call `BDS.bat` themselves:
-`buildall.bat all` builds the framework, the samples and the specs on Win32 and Win64, and
-`runtests.bat all` runs every suite the specs group declares.
+`BDS.bat` keeps each folder's IDE profile under `HKCU\Software\Embarcadero\DAF\<folder name>`.
+Deleting the folder leaves that key behind, and this removes it:
 
-Requires Delphi 12 (Athens) or later, on Windows: Win32 and Win64. No package declares a Linux
-target.
+```cmd
+reg delete "HKCU\Software\Embarcadero\DAF\<folder name>" /f
+```
 
 The full documentation is at <https://delphi-daf.github.io/dafce>.
 

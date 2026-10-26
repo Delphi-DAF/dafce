@@ -79,6 +79,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - **SystemProcess**: `Id` — el identificador que el sistema dio al hijo, desde que se lanza
 - **Linq**: `Linq.FromOwned` — consultar una lista temporal que nadie más guarda: Linq la libera con la consulta, y cada objeto que devuelve un terminal pasa al llamante
 - **Linq**: `MoveToList` y `MoveToArray` — terminales que sacan de la lista fuente los elementos seleccionados al entregarlos, así que cada objeto conserva un solo dueño
+- **buildall.bat**: `--framework`, `--samples` y `--specs` compilan solo una parte de la edición, y se combinan; sin ninguna lo compila todo
 
 ### Changed
 
@@ -141,6 +142,8 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - ⚠️ **SystemProcess**: `Kill` sin un hijo lanzado —antes de ejecutar, o tras un lanzamiento que falló— **lanza `EInvalidOpException`**, como `Id`. **Rompe** un gancho de parada que mata sin mirar: se pregunta antes por `IsRunning`
 - **SystemProcess**: Un hijo al que se mata —con `Kill`, el plazo o la cancelación— sale con el código `-1` (`$FFFFFFFF`), como en .NET, y `TProcessResult.ExitCode` lleva el código real del hijo siempre que terminó; antes era 0
 - ⚠️ **SystemProcess**: Con plazo o con token, un descendiente que mantiene abierto un flujo capturado más allá de ellos termina la ejecución como `Timeout` o `Canceled`, con lo ya leído entregado; antes se le esperaba, y la ejecución volvía como `Completed`
+- **BDS.bat**: el perfil del IDE de cada carpeta se guarda bajo `HKCU\Software\Embarcadero\DAF\<carpeta>`, con el nombre entero de la carpeta, y se aplica el `PRJ_ROOT_KEY` que fija `project.cmd`. Era `USR_PRJ\<carpeta>` sin lo que seguía al último punto, así que `dafce-2.0.0` y `dafce-2.0.1` compartían uno; `reg copy` trae un perfil existente
+- **Archivo de la release**: el zip de fuentes de una release lleva lo que se compila y se lee: `.github`, `eng` y la fuente del sitio, `docs`, se quedan fuera
 
 ### Deprecated
 
@@ -250,6 +253,8 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - **NNLog**: una propiedad de destino cuyo valor configurado no convierte se ponía a cero, sin aviso; ahora se avisa por el canal de arranque y conserva su valor, como en NLog
 - **VCL**: parar la aplicación dejaba vivos sus formularios hasta el final del proceso, con el contenedor ya cerrado, así que un formulario que usaba servicios al destruirse ya no los encontraba; ahora `Stop` los libera antes
 - **FMX**: parar la aplicación dejaba vivos sus formularios hasta el final del proceso, con el contenedor ya cerrado, así que un formulario que usaba servicios al destruirse ya no los encontraba; ahora `Stop` los libera antes
+- **BDS.bat**: una versión de RAD Studio que no está instalada, o la falta de `PRJ_IDE`, sale con código 2 y lista las versiones instaladas con el `PRJ_IDE` de cada una; salía con 0, así que `buildall.bat` acababa en `BUILD OK` sin haber compilado nada
+- **BDS.bat**: `%COMPUTERNAME%.project.cmd` manda sobre `project.cmd`, como decía la documentación, y se respeta un `PRJ_IDE` del entorno, así que cualquiera de los dos elige la versión de Delphi; `project.cmd` mandaba sobre ambos
 
 ### Security
 

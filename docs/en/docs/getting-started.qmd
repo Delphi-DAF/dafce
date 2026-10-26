@@ -10,7 +10,10 @@ sidebar: docs
 
 ## Installation
 
-DAF is distributed as a set of Delphi packages (`.dpk`). Clone the repo:
+DAF is distributed as source: a set of Delphi packages (`.dpk`). Every release on GitHub carries it
+as a zip, **Source code (zip)** under the release's *Assets*:
+<https://github.com/Delphi-DAF/dafce/releases>. Unzip it anywhere, a path with spaces included, and
+run everything below from that folder. Or clone the repo:
 
 ```bash
 git clone https://github.com/Delphi-DAF/dafce.git
@@ -30,6 +33,10 @@ started any other way leaves `PRJ_OUT_DIR` undefined, and every output path is t
 empty value. `BDS inspect` prints what is set; the project's own variables live in `project.cmd`,
 and per-machine overrides go in a `%COMPUTERNAME%.project.cmd` beside it.
 
+`BDS.bat` keeps each folder's IDE profile under `HKCU\Software\Embarcadero\DAF\<folder name>`.
+Deleting the folder leaves that key behind, and
+`reg delete "HKCU\Software\Embarcadero\DAF\<folder name>" /f` removes it.
+
 From the command line there is nothing to set up — both scripts call `BDS.bat` themselves:
 
 ```cmd
@@ -37,9 +44,38 @@ buildall.bat all
 runtests.bat all
 ```
 
-`buildall.bat` builds the framework in Debug and Release, then the samples and the specs in Debug.
+With no options, `buildall.bat` builds the framework in Debug and Release, then the samples and the
+specs in Debug. These options build only part of it, and they combine:
+
+| Option | Builds |
+|---|---|
+| `--framework` | the framework, in Debug and Release |
+| `--samples` | the framework in Debug, then the samples |
+| `--specs` | the framework in Debug, then the specs |
+
 `runtests.bat` runs every suite the specs group declares. Both take `Win32`, `Win64` or `all`, and
 `buildall.bat` also takes `--clean`, which deletes `out/` first.
+
+### Choosing the Delphi version
+
+`project.cmd` selects Delphi 13 (`PRJ_IDE=D370`). Delphi 12 is `PRJ_IDE=D290`, and either of these
+selects it without editing `project.cmd`:
+
+- a `%COMPUTERNAME%.project.cmd` next to `project.cmd`, holding the line `set "PRJ_IDE=D290"`;
+- `set "PRJ_IDE=D290"` on its own line in the console, before running `buildall.bat`.
+
+With Delphi 12, `buildall.bat --framework --samples` builds the framework and the samples. The
+specs of the VCL module need Delphi 13, so `--specs`, and `buildall.bat` with no options, end in
+`BUILD FAILED`.
+
+When the version asked for is not installed, `BDS.bat` builds nothing, exits with code 2 and lists
+the installed versions with the `PRJ_IDE` of each.
+
+### Using what is built
+
+Add `out\Win32\Release\lib` or `out\Win64\Release\lib` to your project's search path, and the DAF
+units your program uses compile against it. `out\<Platform>\Debug\lib` holds the Debug build of the
+same units, for debugging.
 
 ### Using the source directly
 

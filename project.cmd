@@ -3,10 +3,13 @@ goto %1
 :: Called early to set PRJ_IDE and basic variables
 :on_init
 :: mandatory project vars
-set "PRJ_IDE=D370"
+:: a PRJ_IDE from the environment or .env is kept; %COMPUTERNAME%.project.cmd,
+:: called after this file, overrides it
+if not defined PRJ_IDE set "PRJ_IDE=D370"
 
 :: custom project vars
-set "PRJ_ROOT_KEY=BDSDEFAULTS"
+:: BDS.bat keeps each folder's IDE profile under HKCU\Software\Embarcadero\DAF, one key per folder name
+set "PRJ_ROOT_KEY=DAF"
 
 set "PRJ_BUILD_FILE=%PRJ_DIR%\src\DAFGroup.groupproj"
 SET "PRJ_LOAD=%PRJ_DIR%\src\DAFGroup.groupproj"
