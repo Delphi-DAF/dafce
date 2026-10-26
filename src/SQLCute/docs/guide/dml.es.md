@@ -97,7 +97,7 @@ TQuery.New.From('pedidos')
   .Where('creado_en', '<', EncodeDate(Año - 1, Mes, Dia))
   .WhereNotExists(
     TQuery.New.From('lineas_pedido')
-      .Where('pedido_id', '=', 'pedidos.id')
+      .WhereColumns('pedido_id', '=', 'pedidos.id')
       .WhereNot('estado', 'enviado'))
   .AsDelete
 ```

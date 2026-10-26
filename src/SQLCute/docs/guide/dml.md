@@ -97,7 +97,7 @@ TQuery.New.From('orders')
   .Where('created_at', '<', EncodeDate(Year - 1, Month, Day))
   .WhereNotExists(
     TQuery.New.From('order_items')
-      .Where('order_id', '=', 'orders.id')
+      .WhereColumns('order_id', '=', 'orders.id')
       .WhereNot('status', 'shipped'))
   .AsDelete
 ```

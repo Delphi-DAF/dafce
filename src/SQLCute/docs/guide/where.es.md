@@ -134,11 +134,11 @@ responden igual.
 ## WHERE EXISTS (subconsulta)
 
 ```pascal
-var Sub := TQuery.New.From('lineas_pedido').Where('pedido_id', '=', 'pedidos.id');
+var Sub := TQuery.New.From('lineas_pedido').WhereColumns('pedido_id', '=', 'pedidos.id');
 
 TQuery.New.From('pedidos')
   .WhereExists(Sub)
-// → WHERE EXISTS (SELECT * FROM lineas_pedido WHERE pedido_id = ?)
+// → WHERE EXISTS (SELECT * FROM lineas_pedido WHERE pedido_id = pedidos.id)
 ```
 
 ---

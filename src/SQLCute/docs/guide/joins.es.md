@@ -68,12 +68,14 @@ TQuery.New.From('pedidos')
   .Join('lineas_pedido', function(Q: IQuery): IQuery
     begin
       Result := Q
-        .Where('lineas_pedido.pedido_id', '=', 'pedidos.id')
-        .OrWhere('lineas_pedido.pedido_alt_id', '=', 'pedidos.id');
+        .WhereColumns('lineas_pedido.pedido_id', '=', 'pedidos.id')
+        .OrWhereColumns('lineas_pedido.pedido_alt_id', '=', 'pedidos.id');
     end)
 // → INNER JOIN lineas_pedido ON (lineas_pedido.pedido_id = pedidos.id
 //                                 OR lineas_pedido.pedido_alt_id = pedidos.id)
 ```
+
+En el callback, una columna al otro lado va por `WhereColumns`; `Where` liga su valor como parámetro.
 
 `LeftJoin`, `RightJoin` y `FullOuterJoin` admiten el mismo overload de callback.
 
@@ -90,11 +92,11 @@ var Sub := TQuery.New.From('lineas_pedido')
 TQuery.New.From('pedidos')
   .Join(Sub, 'li', function(Q: IQuery): IQuery
     begin
-      Result := Q.Where('li.pedido_id', '=', 'pedidos.id');
+      Result := Q.WhereColumns('li.pedido_id', '=', 'pedidos.id');
     end)
 // → INNER JOIN (SELECT pedido_id, SUM(qty) AS qty_total
-//               FROM lineas_pedido GROUP BY pedido_id) li
-//   ON li.pedido_id = pedidos.id
+//               FROM lineas_pedido GROUP BY pedido_id) AS li
+//   ON (li.pedido_id = pedidos.id)
 ```
 
 ---

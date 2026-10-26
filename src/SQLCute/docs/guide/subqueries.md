@@ -72,11 +72,13 @@ Variants: `WhereNotInQuery`, `OrWhereInQuery`, `OrWhereNotInQuery`.
 TQuery.New.From('orders')
   .WhereExists(
     TQuery.New.From('payments')
-      .Where('order_id', '=', 'orders.id')
+      .WhereColumns('order_id', '=', 'orders.id')
       .Where('status', 'complete'))
 // → WHERE EXISTS (SELECT * FROM payments
 //                WHERE order_id = orders.id AND status = ?)
 ```
+
+The column of the outer query goes through `WhereColumns`; `Where` binds its value as a parameter.
 
 ---
 
@@ -85,11 +87,11 @@ TQuery.New.From('orders')
 ```pascal
 var ItemCount := TQuery.New.From('order_items')
   .SelectCount('*')
-  .Where('order_id', '=', 'orders.id');
+  .WhereColumns('order_id', '=', 'orders.id');
 
 TQuery.New.From('orders')
   .Select(ItemCount, 'item_count')
-// → SELECT (SELECT COUNT(*) FROM order_items WHERE order_id = orders.id)
+// → SELECT (SELECT COUNT(*) AS count FROM order_items WHERE order_id = orders.id)
 //          AS item_count FROM orders
 ```
 

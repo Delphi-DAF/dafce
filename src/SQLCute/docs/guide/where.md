@@ -133,11 +133,11 @@ identically.
 ## WHERE EXISTS (subquery)
 
 ```pascal
-var Sub := TQuery.New.From('order_items').Where('order_id', '=', 'orders.id');
+var Sub := TQuery.New.From('order_items').WhereColumns('order_id', '=', 'orders.id');
 
 TQuery.New.From('orders')
   .WhereExists(Sub)
-// → WHERE EXISTS (SELECT * FROM order_items WHERE order_id = ?)
+// → WHERE EXISTS (SELECT * FROM order_items WHERE order_id = orders.id)
 ```
 
 ---

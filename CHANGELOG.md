@@ -222,6 +222,7 @@ example diff in `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` in Spanish).
 - **Docs**: The startup the documentation taught **did not compile**, and Hosting's guide still promised automatic discovery of `IAppModule`s. It now teaches `AddModule<T>`
 - **Docs**: Hosting's examples waited for the shutdown signal and never called `Host.Stop`: copied as they were, the hosted services never stopped and the container was never released. They now stop the host in a `finally`
 - **Docs**: The Scenario Outline example in the English MiniSpec guide compared the result with itself, so copied as it was it could never fail
+- **Docs**: SQLCute's guide wrote the correlation of a subquery or a join with `Where`, which binds the outer column's name as a value: copied as they were, the examples compared the column with that name as text, and the `DELETE … WHERE NOT EXISTS` did not select what its comment said. They now use `WhereColumns`
 - **Commons**: A version tag that is not SemVer was reported as `0.0.0`; the declared text now survives
 - **Commons**: A tag carrying its own build metadata produced two `+` sections, which SemVer does not admit; what the tag declares and what the compiler saw now share the one section
 - **Commons**: A callback that raised during `Cancel` left the ones after it unrun, and cancelling again ran the earlier ones a second time

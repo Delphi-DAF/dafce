@@ -72,11 +72,13 @@ Variantes: `WhereNotInQuery`, `OrWhereInQuery`, `OrWhereNotInQuery`.
 TQuery.New.From('pedidos')
   .WhereExists(
     TQuery.New.From('pagos')
-      .Where('pedido_id', '=', 'pedidos.id')
+      .WhereColumns('pedido_id', '=', 'pedidos.id')
       .Where('estado', 'completo'))
 // → WHERE EXISTS (SELECT * FROM pagos
 //                WHERE pedido_id = pedidos.id AND estado = ?)
 ```
+
+La columna de la consulta de fuera va por `WhereColumns`; `Where` liga su valor como parámetro.
 
 ---
 
@@ -85,11 +87,11 @@ TQuery.New.From('pedidos')
 ```pascal
 var NumLineas := TQuery.New.From('lineas_pedido')
   .SelectCount('*')
-  .Where('pedido_id', '=', 'pedidos.id');
+  .WhereColumns('pedido_id', '=', 'pedidos.id');
 
 TQuery.New.From('pedidos')
   .Select(NumLineas, 'num_lineas')
-// → SELECT (SELECT COUNT(*) FROM lineas_pedido WHERE pedido_id = pedidos.id)
+// → SELECT (SELECT COUNT(*) AS count FROM lineas_pedido WHERE pedido_id = pedidos.id)
 //          AS num_lineas FROM pedidos
 ```
 

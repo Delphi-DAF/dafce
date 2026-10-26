@@ -221,6 +221,7 @@ Los cambios que rompen una aplicación, al compilar o en ejecución, están reco
 - **Docs**: El arranque que enseñaba la documentación **no compilaba**, y la guía de Hosting seguía prometiendo el descubrimiento automático de los `IAppModule`. Ahora enseña `AddModule<T>`
 - **Docs**: Los ejemplos de Hosting esperaban la señal de parada y no llamaban nunca a `Host.Stop`: copiados tal cual, los servicios alojados no se paraban y el contenedor no se liberaba. Ahora paran el host en un `finally`
 - **Docs**: El ejemplo de Scenario Outline de la guía de MiniSpec en inglés comparaba el resultado consigo mismo, así que copiado tal cual no podía fallar nunca
+- **Docs**: La guía de SQLCute escribía la correlación de una subconsulta o de un join con `Where`, que liga el nombre de la columna de fuera como un valor: copiados tal cual, los ejemplos comparaban la columna con ese nombre como texto, y el `DELETE … WHERE NOT EXISTS` no seleccionaba lo que decía su comentario. Ahora usan `WhereColumns`
 - **Commons**: un tag de versión que no es SemVer se informaba como `0.0.0`; ahora el texto declarado sobrevive
 - **Commons**: un tag con sus propios metadatos de build producía dos secciones `+`, que SemVer no admite; lo que declara el tag y lo que vio el compilador comparten ya la única sección
 - **Commons**: un callback que lanzaba durante `Cancel` dejaba sin ejecutar los siguientes, y cancelar otra vez volvía a ejecutar los anteriores
