@@ -65,6 +65,7 @@ type
     UserSvc: IUserService;
     IntResult: Integer;
     StrResult: string;
+    OtherResult: Integer;
     Captured: TCapturedRaise;
     CallbackExecuted: Boolean;
     CallbackArgs: TArray<TValue>;
@@ -77,6 +78,7 @@ type
     Calc: ICalculator;
     Logger: ILogger;
     IntResult: Integer;
+    Captured: TCapturedRaise;
   end;
 
   TSpyWorld = class
@@ -334,6 +336,154 @@ Feature('Stub<T> - Creating test stubs for interfaces @doubles @stub')
         LastCall := W.StubCalc.LastCallTo('Add');
         Expect(LastCall.Args[0].AsInteger).ToEqual(10);
         Expect(LastCall.Args[1].AsInteger).ToEqual(20);
+      end)
+
+.Rule('Strict doubles')
+
+  .Scenario('A strict stub with no Setup raises on a function call')
+    .Given('I create a strict stub for ICalculator with no Setup', procedure(W: TStubWorld)
+      begin
+        W.StubCalc := Stub<ICalculator>.New.Strict;
+        W.Calc := W.StubCalc;
+      end)
+    .When('I call Add(5, 3)', procedure(W: TStubWorld)
+      begin
+        W.Calc.Add(5, 3);
+      end)
+    .&Then('it raises EUnconfiguredCall', procedure(W: TStubWorld)
+      begin
+        W.Captured := Raised;
+        ExpectException(W.Captured).ToBe(EUnconfiguredCall);
+      end)
+    .&And('the message names the interface, the method and the arguments', procedure(W: TStubWorld)
+      begin
+        ExpectException(W.Captured).ToHaveMessage('ICalculator');
+        ExpectException(W.Captured).ToHaveMessage('Add');
+        ExpectException(W.Captured).ToHaveMessage('5');
+        ExpectException(W.Captured).ToHaveMessage('3');
+      end)
+
+  .Scenario('A strict stub whose WithArgs does not match raises')
+    .Given('I create a strict stub whose setup demands a non-empty name', procedure(W: TStubWorld)
+      begin
+        W.StubUser := Stub<IUserService>.New.Strict
+          .Setup('FindByName').WithArgs([Arg.NotNull]).Returns(7);
+        W.UserSvc := W.StubUser;
+      end)
+    .When('I call FindByName with an empty string', procedure(W: TStubWorld)
+      begin
+        W.UserSvc.FindByName('');
+      end)
+    .&Then('it raises EUnconfiguredCall', procedure(W: TStubWorld)
+      begin
+        ExpectException(Raised).ToBe(EUnconfiguredCall);
+      end)
+
+  .Scenario('A strict stub with a matching Setup returns the configured value')
+    .Given('I create a strict stub with Add(5, 3) returning 42', procedure(W: TStubWorld)
+      begin
+        W.Calc := Stub<ICalculator>.New.Strict
+          .Setup('Add').WithArgs([5, 3]).Returns(42);
+      end)
+    .When('I call Add(5, 3)', procedure(W: TStubWorld)
+      begin
+        W.IntResult := W.Calc.Add(5, 3);
+      end)
+    .&Then('it returns 42', procedure(W: TStubWorld)
+      begin
+        Expect(W.IntResult).ToEqual(42);
+      end)
+
+  .Scenario('A Setup without arguments accepts any call on a strict stub')
+    .Given('I create a strict stub with Add returning 1', procedure(W: TStubWorld)
+      begin
+        W.Calc := Stub<ICalculator>.New.Strict
+          .Setup('Add').Returns(1);
+      end)
+    .When('I call Add(5, 3) and Add(0, 0)', procedure(W: TStubWorld)
+      begin
+        W.IntResult := W.Calc.Add(5, 3);
+        W.OtherResult := W.Calc.Add(0, 0);
+      end)
+    .&Then('both return 1 without raising', procedure(W: TStubWorld)
+      begin
+        Expect(W.IntResult).ToEqual(1);
+        Expect(W.OtherResult).ToEqual(1);
+      end)
+
+  .Scenario('A Setup that only raises counts as configuration')
+    .Given('I create a strict stub that raises on Divide', procedure(W: TStubWorld)
+      begin
+        W.Calc := Stub<ICalculator>.New.Strict
+          .Setup('Divide').Raises(EDivByZero.Create('Cannot divide by zero'));
+      end)
+    .When('I call Divide(1, 0)', procedure(W: TStubWorld)
+      begin
+        W.Calc.Divide(1, 0);
+      end)
+    .&Then('it raises EDivByZero and not EUnconfiguredCall', procedure(W: TStubWorld)
+      begin
+        ExpectException(Raised).ToBe(EDivByZero);
+      end)
+
+  .Scenario('CallsTo counts the call that raised')
+    .Given('I create a strict stub for ICalculator with no Setup', procedure(W: TStubWorld)
+      begin
+        W.StubCalc := Stub<ICalculator>.New.Strict;
+        W.Calc := W.StubCalc;
+      end)
+    .When('I call Add(5, 3) and catch the exception', procedure(W: TStubWorld)
+      begin
+        try
+          W.Calc.Add(5, 3);
+        except
+          on EUnconfiguredCall do;
+        end;
+      end)
+    .&Then('CallsTo(Add) is 1', procedure(W: TStubWorld)
+      begin
+        Expect(W.StubCalc.CallsTo('Add')).ToEqual(1);
+      end)
+    .&And('LastCallTo(Add) carries the arguments 5 and 3', procedure(W: TStubWorld)
+      var
+        LastCall: TInvocation;
+      begin
+        LastCall := W.StubCalc.LastCallTo('Add');
+        Expect(LastCall.Args[0].AsInteger).ToEqual(5);
+        Expect(LastCall.Args[1].AsInteger).ToEqual(3);
+      end)
+
+  .Scenario('A procedure with no Setup does not raise on a strict stub')
+    .Given('I create a strict stub for ILogger with no Setup', procedure(W: TStubWorld)
+      begin
+        W.StubLogger := Stub<ILogger>.New.Strict;
+        W.Logger := W.StubLogger;
+      end)
+    .When('I call Log', procedure(W: TStubWorld)
+      begin
+        W.Logger.Log('hola');
+      end)
+    .&Then('nothing is raised', procedure(W: TStubWorld)
+      begin
+        ExpectException(Raised).ToBeNone;
+      end)
+    .&And('CallsTo(Log) is 1', procedure(W: TStubWorld)
+      begin
+        Expect(W.StubLogger.CallsTo('Log')).ToEqual(1);
+      end)
+
+  .Scenario('EUnconfiguredCall is an EDoubleError')
+    .Given('I create a strict stub for ICalculator with no Setup', procedure(W: TStubWorld)
+      begin
+        W.Calc := Stub<ICalculator>.New.Strict;
+      end)
+    .When('I call Add(5, 3)', procedure(W: TStubWorld)
+      begin
+        W.Calc.Add(5, 3);
+      end)
+    .&Then('the captured exception is an EDoubleError', procedure(W: TStubWorld)
+      begin
+        ExpectException(Raised).ToBe(EDoubleError);
       end);
 
 {$ENDREGION}
@@ -543,6 +693,73 @@ Feature('Mock<T> - Creating mocks with expectations @doubles @mock')
         W.IntResult := W.Calc.Add(5, 5);
       end)
     .&Then('it returns the configured value', procedure(W: TMockWorld)
+      begin
+        Expect(W.IntResult).ToEqual(100);
+      end)
+    .&And('Verify passes', procedure(W: TMockWorld)
+      begin
+        ExpectException(
+          procedure
+          begin
+            W.MockCalc.Verify;
+          end).ToBeNone;
+      end)
+
+.Rule('Strict doubles')
+
+  .Scenario('A procedure that is expected on a strict mock does not raise and verifies')
+    .Given('I create a strict mock expecting Log once, with no Setup', procedure(W: TMockWorld)
+      begin
+        W.MockLogger := Mock<ILogger>.New.Strict
+          .Expects('Log').Once;
+        W.Logger := W.MockLogger;
+      end)
+    .When('I call Log', procedure(W: TMockWorld)
+      begin
+        W.Logger.Log('hola');
+      end)
+    .&Then('nothing is raised', procedure(W: TMockWorld)
+      begin
+        ExpectException(Raised).ToBeNone;
+      end)
+    .&And('Verify passes', procedure(W: TMockWorld)
+      begin
+        ExpectException(
+          procedure
+          begin
+            W.MockLogger.Verify;
+          end).ToBeNone;
+      end)
+
+  .Scenario('A function that is only expected raises on a strict mock')
+    .Given('I create a strict mock expecting Add once, with no Setup', procedure(W: TMockWorld)
+      begin
+        W.MockCalc := Mock<ICalculator>.New.Strict
+          .Expects('Add').Once;
+        W.Calc := W.MockCalc;
+      end)
+    .When('I call Add(1, 2)', procedure(W: TMockWorld)
+      begin
+        W.Calc.Add(1, 2);
+      end)
+    .&Then('it raises EUnconfiguredCall', procedure(W: TMockWorld)
+      begin
+        ExpectException(Raised).ToBe(EUnconfiguredCall);
+      end)
+
+  .Scenario('A function that is expected and configured returns and verifies on a strict mock')
+    .Given('I create a strict mock with Add returning 100 and expected once', procedure(W: TMockWorld)
+      begin
+        W.MockCalc := Mock<ICalculator>.New.Strict
+          .Setup('Add').Returns(100)
+          .Expects('Add').Once;
+        W.Calc := W.MockCalc;
+      end)
+    .When('I call Add(5, 5)', procedure(W: TMockWorld)
+      begin
+        W.IntResult := W.Calc.Add(5, 5);
+      end)
+    .&Then('it returns 100', procedure(W: TMockWorld)
       begin
         Expect(W.IntResult).ToEqual(100);
       end)

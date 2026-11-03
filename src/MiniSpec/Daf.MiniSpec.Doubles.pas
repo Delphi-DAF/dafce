@@ -52,6 +52,12 @@ type
   EDoubleError = class(Exception);
 
   /// <summary>
+  /// Exception raised by a strict double when a function is called and no
+  /// Setup matches it
+  /// </summary>
+  EUnconfiguredCall = class(EDoubleError);
+
+  /// <summary>
   /// Invocation count expectation
   /// </summary>
   TCallExpectation = (
@@ -180,6 +186,11 @@ type
     function Returns(const Value: Variant): Stub<T>; overload;
     function Raises(E: Exception): Stub<T>;
     function Executes(Proc: TProc<TArray<TValue>>): Stub<T>;
+    /// <summary>
+    /// Marks the double as strict: a function call no Setup matches raises
+    /// EUnconfiguredCall instead of returning the zero of the return type
+    /// </summary>
+    function Strict: Stub<T>;
     // Get instance
     function Instance: T;
     // Query calls
@@ -211,6 +222,11 @@ type
     function WithArgs(const Args: TArray<TValue>): Mock<T>; overload;
     function Returns(const Value: TValue): Mock<T>; overload;
     function Returns(const Value: Variant): Mock<T>; overload;
+    /// <summary>
+    /// Marks the double as strict: a function call no Setup matches raises
+    /// EUnconfiguredCall instead of returning the zero of the return type
+    /// </summary>
+    function Strict: Mock<T>;
     // Expectations
     function Expects(const MethodName: string): Mock<T>;
     function Never: Mock<T>;
@@ -863,6 +879,11 @@ begin
   Result := Value.Instance;
 end;
 
+function Stub<T>.Strict: Stub<T>;
+begin
+  Result := Self;
+end;
+
 function Stub<T>.GetCurrentSetup: TMethodSetup;
 begin
   if FInterceptor.CurrentSetupIdx < 0 then
@@ -1000,6 +1021,11 @@ end;
 class operator Mock<T>.Implicit(const Value: Mock<T>): T;
 begin
   Result := Value.Instance;
+end;
+
+function Mock<T>.Strict: Mock<T>;
+begin
+  Result := Self;
 end;
 
 function Mock<T>.GetCurrentSetup: TMethodSetup;
