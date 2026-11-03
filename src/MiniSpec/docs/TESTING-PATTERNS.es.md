@@ -41,6 +41,10 @@ Esta guía complementa la [Guía de Usuario](GUIDE.es.md) mostrando cómo adapta
 
 MiniSpec puede usarse en los tres niveles. La clave está en **qué describes** y **cómo estructuras** tus especificaciones.
 
+**Cada nivel es el criterio de aceptación de un contrato con su consumidor:** el producto, con quien lo usa (lenguaje de negocio); una API, con otros sistemas (lenguaje técnico); una clase, con los desarrolladores que la usan (su API pública). La pirámide es un criterio de **coste** (velocidad, fragilidad), no de qué nivel "es" criterio de aceptación.
+
+**E2E no es un nivel más, sino la fidelidad con que se ejecutan las specs:** las mismas specs, contra infraestructura real en vez de con dobles. Va en una suite aparte, con su coste a la vista. En esta guía "E2E" nombra el nivel de producto, que es donde ese coste suele notarse.
+
 ---
 
 ## Tests E2E: Especificando el Sistema
@@ -80,8 +84,8 @@ Proceso de Checkout
 
 - Vocabulario de **negocio**, no técnico
 - El World orquesta múltiples componentes
-- Pueden ser lentos (base de datos real, servicios externos)
-- Ideales para **criterios de aceptación**
+- Son el criterio de aceptación del **producto** frente a quien lo usa (cada nivel tiene el suyo: ver la pirámide)
+- Se pueden ejecutar con dobles o, en una suite E2E aparte, contra infraestructura real (base de datos, servicios externos); esa fidelidad es lo que los hace lentos, no el nivel
 
 ---
 
@@ -89,7 +93,7 @@ Proceso de Checkout
 
 Cuando el SUT es una **clase individual**, BDD sigue siendo útil. Piensa en frameworks como RSpec (Ruby) o Jest (JavaScript) que usan `describe()` para agrupar comportamientos.
 
-### El Patrón: Feature = Clase, Scenario = Método/Comportamiento
+### El Patrón: Feature = Clase, Rule = Método/Responsabilidad, Scenario = Ejemplo
 
 ```pascal
 unit TStringBuilder.Spec;
@@ -175,6 +179,11 @@ TStringBuilder @unit
 .Rule('Length: devuelve la longitud actual')
 
   .Scenario('Length inicial es cero')
+    .When('construyo un StringBuilder', procedure(W: TStringBuilderWorld)
+      begin
+        W.SUT.Free; // El evento es la construcción: reemplaza el SUT del Background
+        W.SUT := TStringBuilder.Create;
+      end)
     .&Then('Length es 0', procedure(W: TStringBuilderWorld)
       begin
         Expect(W.SUT.Length).ToEqual(0);
@@ -250,7 +259,7 @@ La estructura es similar:
 
 Cuando el SUT es un **API** (REST, GraphQL, gRPC...), cada **endpoint** o **operación** puede ser una Feature o Rule.
 
-### El Patrón: Feature = Recurso/Endpoint, Scenario = Operación
+### El Patrón: Feature = Recurso, Rule = Obligación de un endpoint, Scenario = Ejemplo
 
 ```pascal
 unit API.Users.Spec;
@@ -299,10 +308,18 @@ API: /users @integration @api
       W.Client := THTTPClient.Create;
       W.Client.ContentType := 'application/json';
     end)
+  .&And('un servidor sin datos de escenarios anteriores', procedure(W: TApiWorld)
+    begin
+      TestServer.CleanupTestData; // cada escenario parte limpio: no depende del orden
+    end)
 
 .Rule('GET /users - Listar usuarios')
 
   .Scenario('Lista vacía cuando no hay usuarios')
+    .Given('un servidor sin usuarios', procedure(W: TApiWorld)
+      begin
+        TestServer.CleanupTestData;
+      end)
     .When('GET /users', procedure(W: TApiWorld)
       begin
         W.Response := W.Client.Get('http://localhost:3000/api/v1/users');
@@ -404,6 +421,11 @@ API: /users @integration @api
       end)
 
   .Scenario('Usuario no existente')
+    .Given('no existe el usuario 999999', procedure(W: TApiWorld)
+      begin
+        // El Background dejó el servidor sin usuarios; lo afirmamos
+        Expect(W.Client.Get('http://localhost:3000/api/v1/users/999999').StatusCode).ToEqual(404);
+      end)
     .When('GET /users/999999', procedure(W: TApiWorld)
       begin
         W.Response := W.Client.Get(
@@ -426,9 +448,9 @@ end.
 | Scenario | Caso de uso concreto | `Crear usuario con datos válidos` |
 | Tag | `@integration` o `@api` | `API: /users @integration @api` |
 
-### Usando FeatureContext para Estado Compartido
+### Usando FeatureContext para Recursos Compartidos
 
-En tests de API, a menudo necesitas datos creados en un escenario para usarlos en otro:
+En tests de API, `FeatureContext` sirve para compartir **recursos** (configuración, token, conexión), no datos: un escenario no debe leer lo que creó otro, porque dependería del orden. Cada escenario crea sus datos en su `Given`:
 
 ```pascal
 type
@@ -614,7 +636,7 @@ begin
     .Run;
 end.
 
-// IntegrationSpecs.dpr - Requiere servicios externos
+// IntegrationSpecs.dpr - Levanta un TestServer local en el Before
 program IntegrationSpecs;
 {$APPTYPE CONSOLE}
 uses
@@ -668,7 +690,7 @@ end.
 | ¿El SUT es una clase aislada? | ✓ | | |
 | ¿Pruebas un API o servicio? | | ✓ | |
 | ¿Describes requisitos de negocio? | | | ✓ |
-| ¿Necesitas base de datos real? | | A veces | ✓ |
+| ¿Necesitas infraestructura real (BD, servicios)? | | Solo en la suite E2E | Solo en la suite E2E |
 | ¿El test debe ser muy rápido? | ✓ | | |
 | ¿Stakeholders no técnicos lo leerán? | | | ✓ |
 
@@ -678,8 +700,10 @@ end.
 
 BDD no es exclusivo de tests E2E. El vocabulario de MiniSpec — Feature, Rule, Scenario, Given/When/Then — proporciona una estructura clara para **cualquier nivel de testing**:
 
-- **Unit tests**: Feature = Clase, Rule = Método
-- **Integration tests**: Feature = API/Recurso, Rule = Endpoint
-- **E2E tests**: Feature = Funcionalidad de negocio, Scenario = Criterio de aceptación
+- **Unit tests**: Feature = Clase, Rule = Método o responsabilidad
+- **Integration tests**: Feature = Recurso, Rule = la obligación de un endpoint
+- **Producto (E2E)**: Feature = Capacidad, Rule = Regla de negocio
+
+En los tres, la `Rule` es el criterio de aceptación del contrato con su consumidor y el `Scenario` es un ejemplo suyo.
 
 La clave está en adaptar el **vocabulario** y la **granularidad** al nivel que estás probando, manteniendo siempre el principio fundamental de BDD: **especificar comportamiento con ejemplos concretos**.

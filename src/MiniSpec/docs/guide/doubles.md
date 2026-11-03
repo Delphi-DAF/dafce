@@ -42,9 +42,12 @@ Feature('User Service')
         .Setup('FindById').WithArgs([42]).Returns(TUser.Create('John'))
         .Instance;
     end)
+  .&And('a user service', procedure(W: TUserWorld)
+    begin
+      W.Service := TUserService.Create(W.Repo);  // building the SUT is setup, not the event
+    end)
   .When('updating the email', procedure(W: TUserWorld)
     begin
-      W.Service := TUserService.Create(W.Repo);
       W.Service.UpdateEmail(42, 'john@new.com');
     end)
   .&Then('the user is saved', procedure(W: TUserWorld)
@@ -75,13 +78,15 @@ var Calculator := Stub<ICalculator>
 var Service := Stub<IUserService>
   .Setup('FindById').WithArgs([1]).Returns(User1)
   .Setup('FindById').WithArgs([2]).Returns(User2)
-  .Setup('FindById').Returns(nil)  // Default fallback
+  .Setup('FindById').Raises(Exception.Create('FindById has no Setup for these arguments'))  // Default: make it fail
   .Instance;
 
 // Service.FindById(1) → User1
 // Service.FindById(2) → User2  
-// Service.FindById(999) → nil
+// Service.FindById(999) → raises: the scenario never said what to return
 ```
+
+⚠️ **A Stub with no matching `Setup` returns the type's zero** (`False`, `nil`, `0`, `''`), silently. That zero may be exactly a "good" value and give a **false green**: the test passes although the scenario never said what the double should return. That is why the example ends with a default `Setup` that **raises an exception** instead of `.Returns(nil)`: a double the scenario has not told what to return must fail. Do the same in your stubs whenever the type's zero could pass for a valid result.
 
 ### Raising Exceptions
 
@@ -263,6 +268,7 @@ var EmailService := Stub<IEmailService>
 // EmailService.Send('admin@co.com', 'Hi') → raises
 // EmailService.Send('user@co.com', 'Hi') → True
 // EmailService.Send('', 'Hi') → False: nothing matched, so the return type's zero comes back
+// (careful: a silent False can be a false green; add a default Setup that raises)
 ```
 
 ---

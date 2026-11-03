@@ -9,8 +9,8 @@
 El **World** es el pegamento entre los pasos de un escenario. Cada paso recibe la misma instancia, permitiendo:
 
 - **Given** prepara el estado inicial
-- **When** modifica ese estado
-- **Then** verifica el estado resultante
+- **When** es el evento, uno y nombrado, que ejercita el SUT sobre ese estado
+- **Then** verifica el resultado observable
 
 MiniSpec **crea y destruye el World automáticamente** para cada escenario. Por eso tu clase World debe tener un **constructor sin parámetros** (el constructor por defecto de `TObject` es suficiente). Si necesitas liberar recursos, sobrescribe `Destroy`:
 

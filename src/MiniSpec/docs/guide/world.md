@@ -9,8 +9,8 @@
 The **World** is the glue between scenario steps. Each step receives the same instance, allowing:
 
 - **Given** prepares initial state
-- **When** modifies that state
-- **Then** verifies the resulting state
+- **When** is the event, one and named, that exercises the SUT over that state
+- **Then** verifies the observable outcome
 
 MiniSpec **creates and destroys the World automatically** for each scenario. That's why your World class must have a **parameterless constructor** (the default `TObject` constructor is sufficient). If you need to free resources, override `Destroy`:
 

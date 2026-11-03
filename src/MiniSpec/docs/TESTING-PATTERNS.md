@@ -41,6 +41,10 @@ This guide complements the [User Guide](GUIDE.md) by showing how to adapt BDD to
 
 MiniSpec can be used at all three levels. The key is **what you describe** and **how you structure** your specifications.
 
+**Each level is the acceptance criterion of a contract with its consumer:** the product, with whoever uses it (business language); an API, with other systems (technical language); a class, with the developers who use it (its public API). The pyramid is a **cost** criterion (speed, fragility), not a statement about which level "is" the acceptance criterion.
+
+**E2E is not one more level, but the fidelity at which specs are run:** the same specs, against real infrastructure instead of doubles. It goes in a separate suite, with its cost in plain sight. In this guide "E2E" names the product level, where that cost is usually felt.
+
 ---
 
 ## E2E Tests: Specifying the System
@@ -80,8 +84,8 @@ Checkout Process
 
 - **Business** vocabulary, not technical
 - The World orchestrates multiple components
-- Can be slow (real database, external services)
-- Ideal for **acceptance criteria**
+- They are the acceptance criterion of the **product** towards whoever uses it (every level has its own: see the pyramid)
+- They can run with doubles or, in a separate E2E suite, against real infrastructure (database, external services); that fidelity is what makes them slow, not the level
 
 ---
 
@@ -89,7 +93,7 @@ Checkout Process
 
 When the SUT is an **individual class**, BDD remains useful. Think of frameworks like RSpec (Ruby) or Jest (JavaScript) that use `describe()` to group behaviors.
 
-### The Pattern: Feature = Class, Scenario = Method/Behavior
+### The Pattern: Feature = Class, Rule = Method/Responsibility, Scenario = Example
 
 ```pascal
 unit TStringBuilder.Spec;
@@ -175,6 +179,11 @@ TStringBuilder @unit
 .Rule('Length: returns current length')
 
   .Scenario('Initial Length is zero')
+    .When('I construct a StringBuilder', procedure(W: TStringBuilderWorld)
+      begin
+        W.SUT.Free; // The event is the construction, replacing the Background's SUT
+        W.SUT := TStringBuilder.Create;
+      end)
     .&Then('Length is 0', procedure(W: TStringBuilderWorld)
       begin
         Expect(W.SUT.Length).ToEqual(0);
@@ -250,7 +259,7 @@ The structure is similar:
 
 When the SUT is an **API** (REST, GraphQL, gRPC...), each **endpoint** or **operation** can be a Feature or Rule.
 
-### The Pattern: Feature = Resource/Endpoint, Scenario = Operation
+### The Pattern: Feature = Resource, Rule = Obligation of an endpoint, Scenario = Example
 
 ```pascal
 unit API.Users.Spec;
@@ -299,10 +308,18 @@ API: /users @integration @api
       W.Client := THTTPClient.Create;
       W.Client.ContentType := 'application/json';
     end)
+  .&And('a server free of data from earlier scenarios', procedure(W: TApiWorld)
+    begin
+      TestServer.CleanupTestData; // every scenario starts clean: no order dependence
+    end)
 
 .Rule('GET /users - List users')
 
   .Scenario('Empty list when no users exist')
+    .Given('a server with no users', procedure(W: TApiWorld)
+      begin
+        TestServer.CleanupTestData;
+      end)
     .When('GET /users', procedure(W: TApiWorld)
       begin
         W.Response := W.Client.Get('http://localhost:3000/api/v1/users');
@@ -404,6 +421,11 @@ API: /users @integration @api
       end)
 
   .Scenario('User does not exist')
+    .Given('user 999999 does not exist', procedure(W: TApiWorld)
+      begin
+        // The Background left the server with no users; we assert it
+        Expect(W.Client.Get('http://localhost:3000/api/v1/users/999999').StatusCode).ToEqual(404);
+      end)
     .When('GET /users/999999', procedure(W: TApiWorld)
       begin
         W.Response := W.Client.Get(
@@ -426,9 +448,9 @@ end.
 | Scenario | Specific use case | `Create user with valid data` |
 | Tag | `@integration` or `@api` | `API: /users @integration @api` |
 
-### Using FeatureContext for Shared State
+### Using FeatureContext for Shared Resources
 
-API specs often need data created in one scenario to be available in another:
+In API specs, `FeatureContext` is for sharing **resources** (configuration, token, connection), not data: one scenario must not read what another created, or it would depend on order. Each scenario creates its data in its own `Given`:
 
 ```pascal
 type
@@ -617,7 +639,7 @@ begin
     .Run;
 end.
 
-// IntegrationSpecs.dpr - needs external services
+// IntegrationSpecs.dpr - starts a local TestServer in the Before
 program IntegrationSpecs;
 {$APPTYPE CONSOLE}
 uses
@@ -671,7 +693,7 @@ end.
 | Is the SUT an isolated class? | ✓ | | |
 | Are you testing an API or a service? | | ✓ | |
 | Are you describing business requirements? | | | ✓ |
-| Do you need a real database? | | Sometimes | ✓ |
+| Do you need real infrastructure (DB, services)? | | Only in the E2E suite | Only in the E2E suite |
 | Must the test be very fast? | ✓ | | |
 | Will non-technical stakeholders read it? | | | ✓ |
 
@@ -681,9 +703,11 @@ end.
 
 BDD is not exclusive to E2E tests. MiniSpec's vocabulary — Feature, Rule, Scenario, Given/When/Then — gives a clear structure at **any testing level**:
 
-- **Unit tests**: Feature = class, Rule = method
-- **Integration tests**: Feature = API/resource, Rule = endpoint
-- **E2E tests**: Feature = business capability, Scenario = acceptance criterion
+- **Unit tests**: Feature = class, Rule = method or responsibility
+- **Integration tests**: Feature = resource, Rule = the obligation of an endpoint
+- **Product (E2E)**: Feature = capability, Rule = business rule
+
+At all three, the `Rule` is the acceptance criterion of the contract with its consumer and the `Scenario` is an example of it.
 
 What changes is the **vocabulary** and the **granularity**, never the underlying principle: **specify behaviour with concrete examples**.
 

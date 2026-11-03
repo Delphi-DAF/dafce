@@ -22,20 +22,20 @@ A veces un paso necesita datos más complejos que simples valores. Las **DataTab
       for var I := 0 to Table.RowCount - 1 do
       begin
         var Row := Table.AsMap(I);  // Fila como diccionario
-        World.Users.Add(
+        World.Input.Add(            // datos de entrada, aún sin procesar
           Row['nombre'].AsString,
           Row['email'].AsString,
           Row['rol'].AsString
         );
       end;
     end)
-  .When('cuento los usuarios', procedure(World: TMyWorld)
+  .When('los importo en el directorio', procedure(World: TMyWorld)
     begin
-      World.Count := World.Users.Count;
+      World.Directory.Import(World.Input);  // el SUT: aquí ocurre el evento
     end)
-  .&Then('tengo 3 usuarios', procedure(World: TMyWorld)
+  .&Then('el directorio tiene 3 usuarios', procedure(World: TMyWorld)
     begin
-      Expect(World.Count).ToEqual(3);
+      Expect(World.Directory.Count).ToEqual(3);
     end)
 ```
 
