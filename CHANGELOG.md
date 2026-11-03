@@ -10,6 +10,11 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **MiniSpec**: `.Strict` on `Stub<T>` and `Mock<T>` — a function called with no matching `Setup` raises `EUnconfiguredCall` instead of returning the type's zero, which could pass for a valid result. Procedures are not affected, and in a mock `Expects` does not count as a `Setup`. Without `.Strict` nothing changes
+
+
 ## [2.0.0] - 2026-10-26
 
 The changes that break an application, at compile time or at run time, are collected with their

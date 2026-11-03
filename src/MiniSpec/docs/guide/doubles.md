@@ -86,7 +86,28 @@ var Service := Stub<IUserService>
 // Service.FindById(999) → raises: the scenario never said what to return
 ```
 
-⚠️ **A Stub with no matching `Setup` returns the type's zero** (`False`, `nil`, `0`, `''`), silently. That zero may be exactly a "good" value and give a **false green**: the test passes although the scenario never said what the double should return. That is why the example ends with a default `Setup` that **raises an exception** instead of `.Returns(nil)`: a double the scenario has not told what to return must fail. Do the same in your stubs whenever the type's zero could pass for a valid result.
+⚠️ **A Stub with no matching `Setup` returns the type's zero** (`False`, `nil`, `0`, `''`), silently. That zero may be exactly a "good" value and give a **false green**: the test passes although the scenario never said what the double should return. That is why the example ends with a default `Setup` that **raises an exception** instead of `.Returns(nil)`: a double the scenario has not told what to return must fail. Do the same in your stubs whenever the type's zero could pass for a valid result, or mark the double [strict](#strict-mode).
+
+### Strict Mode
+
+`.Strict` makes a `Stub` or a `Mock` raise `EUnconfiguredCall` when a **function** is called and no `Setup` matches, instead of returning the type's zero. The message names the interface, the method and the arguments:
+
+```pascal
+var Service := Stub<IUserService>.New.Strict
+  .Setup('FindByName').WithArgs([Arg.NotNull]).Returns(7)
+  .Instance;
+
+// Service.FindByName('ana') returns 7
+// Service.FindByName('') raises EUnconfiguredCall: no Setup matches IUserService.FindByName('')
+```
+
+- Any `Setup` that matches counts, whatever it configures (`Returns`, `Raises`, `Executes`). A `Setup` without `WithArgs` accepts every call.
+- Procedures are not affected: a call to a procedure with no `Setup` is recorded and does not raise.
+- The call that raises is recorded first, so `CallsTo` and `WasCalled` count it.
+- `EUnconfiguredCall` descends from `EDoubleError`.
+- Call `.Strict` right after `New`, in the `Given`. It only affects the calls that come after it.
+
+⚠️ If the code under test catches every exception, it also swallows `EUnconfiguredCall` and the scenario can still pass. Without `.Strict`, a double returns the type's zero.
 
 ### Raising Exceptions
 
@@ -184,6 +205,17 @@ PaymentGateway.Verify;
 var Notifier := Mock<INotifier>
   .Expects('Send').WithArgs(['admin@example.com']).Once
   .Expects('Send').WithArgs(['user@example.com']).Once
+  .Instance;
+```
+
+### Strict Mocks
+
+`Mock<T>.New.Strict` behaves like a strict stub. In a mock, `Expects` does **not** count as configuration: a function with `Expects` and no `Setup` that matches raises `EUnconfiguredCall`, because `Expects` says how many times it is called, not what it returns. Add the `Setup`:
+
+```pascal
+var Calc := Mock<ICalculator>.New.Strict
+  .Setup('Add').Returns(100)
+  .Expects('Add').Once
   .Instance;
 ```
 

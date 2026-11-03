@@ -86,7 +86,28 @@ var Service := Stub<IUserService>
 // Service.FindById(999) → lanza: el escenario no dijo qué devolver
 ```
 
-⚠️ **Un Stub sin `Setup` que case devuelve el cero del tipo** (`False`, `nil`, `0`, `''`), sin avisar. Ese cero puede ser justo un valor «bueno» y dar un **falso verde**: la prueba pasa sin que el escenario haya dicho nunca qué debía devolver el doble. Por eso el ejemplo cierra con un `Setup` por defecto que **lanza una excepción** en vez de `.Returns(nil)`: un doble al que el escenario no ha dicho qué devolver tiene que fallar. Haz lo mismo en tus stubs cuando el cero del tipo pudiera pasar por un resultado válido.
+⚠️ **Un Stub sin `Setup` que case devuelve el cero del tipo** (`False`, `nil`, `0`, `''`), sin avisar. Ese cero puede ser justo un valor «bueno» y dar un **falso verde**: la prueba pasa sin que el escenario haya dicho nunca qué debía devolver el doble. Por eso el ejemplo cierra con un `Setup` por defecto que **lanza una excepción** en vez de `.Returns(nil)`: un doble al que el escenario no ha dicho qué devolver tiene que fallar. Haz lo mismo en tus stubs cuando el cero del tipo pudiera pasar por un resultado válido, o marca el doble como [estricto](#modo-estricto).
+
+### Modo Estricto
+
+`.Strict` hace que un `Stub` o un `Mock` lance `EUnconfiguredCall` cuando se llama a una **función** y ningún `Setup` casa, en vez de devolver el cero del tipo. El mensaje nombra la interfaz, el método y los argumentos:
+
+```pascal
+var Service := Stub<IUserService>.New.Strict
+  .Setup('FindByName').WithArgs([Arg.NotNull]).Returns(7)
+  .Instance;
+
+// Service.FindByName('ana') devuelve 7
+// Service.FindByName('') lanza EUnconfiguredCall: no Setup matches IUserService.FindByName('')
+```
+
+- Cuenta cualquier `Setup` que case, configure lo que configure (`Returns`, `Raises`, `Executes`). Un `Setup` sin `WithArgs` acepta todas las llamadas.
+- Los procedimientos no se ven afectados: la llamada a un procedimiento sin `Setup` se registra y no lanza.
+- La llamada que lanza se registra antes, así que `CallsTo` y `WasCalled` la cuentan.
+- `EUnconfiguredCall` desciende de `EDoubleError`.
+- Llama a `.Strict` justo después de `New`, en el `Given`. Solo afecta a las llamadas posteriores.
+
+⚠️ Si el código bajo prueba captura todas las excepciones, también se traga `EUnconfiguredCall` y el escenario puede pasar igualmente. Sin `.Strict`, un doble devuelve el cero del tipo.
 
 ### Lanzar Excepciones
 
@@ -184,6 +205,17 @@ PaymentGateway.Verify;
 var Notifier := Mock<INotifier>
   .Expects('Send').WithArgs(['admin@example.com']).Once
   .Expects('Send').WithArgs(['user@example.com']).Once
+  .Instance;
+```
+
+### Mocks Estrictos
+
+`Mock<T>.New.Strict` se comporta como un stub estricto. En un mock, `Expects` **no** cuenta como configuración: una función con `Expects` y sin `Setup` que case lanza `EUnconfiguredCall`, porque `Expects` dice cuántas veces se llama, no qué devuelve. Añade el `Setup`:
+
+```pascal
+var Calc := Mock<ICalculator>.New.Strict
+  .Setup('Add').Returns(100)
+  .Expects('Add').Once
   .Instance;
 ```
 

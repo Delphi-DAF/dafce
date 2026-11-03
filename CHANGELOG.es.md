@@ -10,6 +10,11 @@ con [Semantic Versioning](https://semver.org/spec/v2.0.0.html) y los commits sig
 
 ## [Unreleased]
 
+### Added
+
+- **MiniSpec**: `.Strict` en `Stub<T>` y `Mock<T>` — una función llamada sin `Setup` que case lanza `EUnconfiguredCall` en vez de devolver el cero del tipo, que podía pasar por un resultado válido. Los procedimientos no se ven afectados, y en un mock `Expects` no cuenta como `Setup`. Sin `.Strict` nada cambia
+
+
 ## [2.0.0] - 2026-10-26
 
 Los cambios que rompen una aplicación, al compilar o en ejecución, están recogidos con su diff de ejemplo en `MIGRATION-2.0.md` (`MIGRATION-2.0.es.md` en español).
