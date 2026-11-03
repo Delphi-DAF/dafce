@@ -357,11 +357,7 @@ Feature('Stub<T> - Creating test stubs for interfaces @doubles @stub')
       end)
     .&And('the message names the interface, the method and the arguments', procedure(W: TStubWorld)
       begin
-        ExpectException(W.Captured).ToHaveMessage('ICalculator');
         ExpectException(W.Captured).ToHaveMessage('no Setup matches ICalculator.Add(5, 3)');
-        ExpectException(W.Captured).ToHaveMessage('Add');
-        ExpectException(W.Captured).ToHaveMessage('5');
-        ExpectException(W.Captured).ToHaveMessage('3');
       end)
 
   .Scenario('A strict stub whose WithArgs does not match raises')
