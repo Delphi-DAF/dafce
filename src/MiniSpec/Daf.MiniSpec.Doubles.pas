@@ -124,9 +124,12 @@ type
     FExpectations: TList<TMethodExpectation>;
     FCurrentSetupIdx: Integer;
     FCurrentExpectIdx: Integer;
+    FInterfaceName: string;
+    FStrict: Boolean;
   protected
     procedure DoInvoke(Method: TRttiMethod; const Args: TArray<TValue>;
       out Result: TValue);
+    function DescribeCall(const MethodName: string; const Args: TArray<TValue>): string;
     function FindSetup(const MethodName: string; const Args: TArray<TValue>): Integer;
   public
     constructor Create(TypeInfo: PTypeInfo);
@@ -139,6 +142,7 @@ type
     procedure ClearInvocations;
     property CurrentSetupIdx: Integer read FCurrentSetupIdx write FCurrentSetupIdx;
     property CurrentExpectIdx: Integer read FCurrentExpectIdx write FCurrentExpectIdx;
+    property Strict: Boolean read FStrict write FStrict;
   end;
 
   /// <summary>
@@ -722,6 +726,7 @@ begin
   FExpectations := TList<TMethodExpectation>.Create;
   FCurrentSetupIdx := -1;
   FCurrentExpectIdx := -1;
+  FInterfaceName := string(TypeInfo^.Name);
 end;
 
 destructor TDoubleInterceptor.Destroy;
@@ -790,12 +795,38 @@ begin
   end
   else
   begin
+    // Strict doubles refuse to invent the zero of a function's return type
+    if FStrict and (Method.ReturnType <> nil) then
+      raise EUnconfiguredCall.CreateFmt('no Setup matches %s.%s',
+        [FInterfaceName, DescribeCall(Method.Name, RealArgs)]);
     // Default return value based on method return type
     if Method.ReturnType <> nil then
       TValue.Make(nil, Method.ReturnType.Handle, Result)
     else
       Result := TValue.Empty;
   end;
+end;
+
+function TDoubleInterceptor.DescribeCall(const MethodName: string;
+  const Args: TArray<TValue>): string;
+var
+  I: Integer;
+  Arg: string;
+begin
+  Result := '';
+  for I := 0 to High(Args) do
+  begin
+    if Args[I].Kind in [tkUString, tkString, tkLString, tkWString] then
+      Arg := QuotedStr(Args[I].ToString)
+    else if Args[I].IsEmpty then
+      Arg := 'nil'
+    else
+      Arg := Args[I].ToString;
+    if I > 0 then
+      Result := Result + ', ';
+    Result := Result + Arg;
+  end;
+  Result := MethodName + '(' + Result + ')';
 end;
 
 function TDoubleInterceptor.FindSetup(const MethodName: string;
@@ -881,6 +912,7 @@ end;
 
 function Stub<T>.Strict: Stub<T>;
 begin
+  FInterceptor.Strict := True;
   Result := Self;
 end;
 
@@ -1025,6 +1057,7 @@ end;
 
 function Mock<T>.Strict: Mock<T>;
 begin
+  FInterceptor.Strict := True;
   Result := Self;
 end;
 
