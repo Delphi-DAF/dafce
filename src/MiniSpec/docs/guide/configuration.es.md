@@ -126,16 +126,15 @@ type
 
 ---
 
-## FeatureContext: Estado Compartido entre Escenarios
+## FeatureContext: Recursos Compartidos entre Escenarios
 
-A diferencia del **World** (que se crea nuevo para cada escenario), el **FeatureContext** permite compartir estado entre todos los escenarios de una Feature. Es útil para recursos costosos de crear:
+A diferencia del **World** (que se crea nuevo para cada escenario), el **FeatureContext** permite compartir **recursos** entre todos los escenarios de una Feature. Es útil para recursos costosos de crear (una conexión, una caché de solo lectura). **No es para datos de escenario:** si un escenario lee lo que dejó otro, la Feature depende del orden de ejecución; cada escenario crea sus datos en su `Given`:
 
 ```pascal
 type
   TSharedContext = class
   public
-    Connection: TDbConnection;
-    Cache: TDictionary<string, TObject>;
+    Connection: TDbConnection;  // recurso costoso, de solo lectura para los escenarios
   end;
 
   TScenarioWorld = class
@@ -143,6 +142,7 @@ type
     [MiniInject] FShared: TSharedContext;  // Inyectado automáticamente
   public
     LocalData: string;
+    Result: string;
     property Shared: TSharedContext read FShared;
   end;
 
@@ -153,15 +153,15 @@ Feature('Database operations')
   .Scenario('First query')
     .When('query data', procedure(W: TScenarioWorld)
       begin
-        // W.Shared apunta al mismo TSharedContext
-        W.Shared.Cache.Add('key', SomeObject);
+        // W.Shared apunta al mismo TSharedContext: la misma conexión
+        W.Result := W.Shared.Connection.Query('SELECT COUNT(*) FROM users');
       end)
   
   .Scenario('Second query')
-    .When('use cached data', procedure(W: TScenarioWorld)
+    .When('query other data', procedure(W: TScenarioWorld)
       begin
-        // Accede a datos creados en el escenario anterior
-        var Obj := W.Shared.Cache['key'];
+        // Reutiliza la conexión; no lee nada que haya dejado el escenario anterior
+        W.Result := W.Shared.Connection.Query('SELECT COUNT(*) FROM orders');
       end)
 ```
 

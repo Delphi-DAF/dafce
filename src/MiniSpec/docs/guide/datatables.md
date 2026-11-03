@@ -22,20 +22,20 @@ Sometimes a step needs more complex data than simple values. **DataTables** allo
       for var I := 0 to Table.RowCount - 1 do
       begin
         var Row := Table.AsMap(I);  // Row as dictionary
-        World.Users.Add(
+        World.Input.Add(            // input data, not yet processed
           Row['name'].AsString,
           Row['email'].AsString,
           Row['role'].AsString
         );
       end;
     end)
-  .When('I count the users', procedure(World: TMyWorld)
+  .When('I import them into the directory', procedure(World: TMyWorld)
     begin
-      World.Count := World.Users.Count;
+      World.Directory.Import(World.Input);  // the SUT: the event happens here
     end)
-  .&Then('I have 3 users', procedure(World: TMyWorld)
+  .&Then('the directory has 3 users', procedure(World: TMyWorld)
     begin
-      Expect(World.Count).ToEqual(3);
+      Expect(World.Directory.Count).ToEqual(3);
     end)
 ```
 

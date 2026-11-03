@@ -126,16 +126,15 @@ type
 
 ---
 
-## FeatureContext: Shared State Between Scenarios
+## FeatureContext: Shared Resources Between Scenarios
 
-Unlike the **World** (which is created fresh for each scenario), the **FeatureContext** allows sharing state between all scenarios in a Feature. Useful for expensive-to-create resources:
+Unlike the **World** (which is created fresh for each scenario), the **FeatureContext** allows sharing **resources** between all scenarios in a Feature. Useful for expensive-to-create resources (a connection, a read-only cache). **It is not for scenario data:** if one scenario reads what another left behind, the Feature depends on execution order; each scenario creates its data in its own `Given`:
 
 ```pascal
 type
   TSharedContext = class
   public
-    Connection: TDbConnection;
-    Cache: TDictionary<string, TObject>;
+    Connection: TDbConnection;  // expensive resource, read-only for the scenarios
   end;
 
   TScenarioWorld = class
@@ -143,6 +142,7 @@ type
     [MiniInject] FShared: TSharedContext;  // Automatically injected
   public
     LocalData: string;
+    Result: string;
     property Shared: TSharedContext read FShared;
   end;
 
@@ -153,15 +153,15 @@ Feature('Database operations')
   .Scenario('First query')
     .When('query data', procedure(W: TScenarioWorld)
       begin
-        // W.Shared points to same TSharedContext
-        W.Shared.Cache.Add('key', SomeObject);
+        // W.Shared points to same TSharedContext: the same connection
+        W.Result := W.Shared.Connection.Query('SELECT COUNT(*) FROM users');
       end)
   
   .Scenario('Second query')
-    .When('use cached data', procedure(W: TScenarioWorld)
+    .When('query other data', procedure(W: TScenarioWorld)
       begin
-        // Access data created in previous scenario
-        var Obj := W.Shared.Cache['key'];
+        // Reuses the connection; reads nothing the previous scenario left behind
+        W.Result := W.Shared.Connection.Query('SELECT COUNT(*) FROM orders');
       end)
 ```
 

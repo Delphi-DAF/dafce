@@ -42,9 +42,12 @@ Feature('Servicio de Usuario')
         .Setup('FindById').WithArgs([42]).Returns(TUser.Create('John'))
         .Instance;
     end)
+  .&And('un servicio de usuarios', procedure(W: TUserWorld)
+    begin
+      W.Service := TUserService.Create(W.Repo);  // montar el SUT es preparación, no el evento
+    end)
   .When('actualizo el email', procedure(W: TUserWorld)
     begin
-      W.Service := TUserService.Create(W.Repo);
       W.Service.UpdateEmail(42, 'john@new.com');
     end)
   .&Then('el usuario es guardado', procedure(W: TUserWorld)
@@ -75,13 +78,15 @@ var Calculator := Stub<ICalculator>
 var Service := Stub<IUserService>
   .Setup('FindById').WithArgs([1]).Returns(User1)
   .Setup('FindById').WithArgs([2]).Returns(User2)
-  .Setup('FindById').Returns(nil)  // Valor por defecto
+  .Setup('FindById').Raises(Exception.Create('FindById sin Setup para estos argumentos'))  // Por defecto: que falle
   .Instance;
 
 // Service.FindById(1) → User1
 // Service.FindById(2) → User2  
-// Service.FindById(999) → nil
+// Service.FindById(999) → lanza: el escenario no dijo qué devolver
 ```
+
+⚠️ **Un Stub sin `Setup` que case devuelve el cero del tipo** (`False`, `nil`, `0`, `''`), sin avisar. Ese cero puede ser justo un valor «bueno» y dar un **falso verde**: la prueba pasa sin que el escenario haya dicho nunca qué debía devolver el doble. Por eso el ejemplo cierra con un `Setup` por defecto que **lanza una excepción** en vez de `.Returns(nil)`: un doble al que el escenario no ha dicho qué devolver tiene que fallar. Haz lo mismo en tus stubs cuando el cero del tipo pudiera pasar por un resultado válido.
 
 ### Lanzar Excepciones
 
@@ -263,6 +268,7 @@ var EmailService := Stub<IEmailService>
 // EmailService.Send('admin@co.com', 'Hola') → lanza excepción
 // EmailService.Send('user@co.com', 'Hola') → True
 // EmailService.Send('', 'Hola') → False: no casó ninguno, así que vuelve el cero del tipo
+// (ojo: un False silencioso puede ser un falso verde; añade un Setup por defecto que lance)
 ```
 
 ---
