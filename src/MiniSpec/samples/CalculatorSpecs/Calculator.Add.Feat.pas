@@ -2,18 +2,17 @@
 
 interface
 
-type
-  /// <summary>
-  /// Marker type for unit identification.
-  /// Convention: Use .Category(TUnitMarker) to enable Cat: filter.
-  /// </summary>
-  TUnitMarker = class end;
-
 implementation
 uses
   Calculator.Engine,
   Calculator.SpecHelpers,
   Daf.MiniSpec;
+
+type
+  /// <summary>
+  /// Names the feature's category after this unit: .Category(TThisUnit) enables the Cat: filter.
+  /// </summary>
+  TThisUnit = class end;
 
 initialization
 
@@ -27,7 +26,7 @@ initialization
     I need to add and subtract numbers
     In order to complete my calculations
   ''')
-  .Category(TUnitMarker)
+  .Category(TThisUnit)
   .UseWorld<TCalculatorWorld>
   .Background
     .Given('I have a calculator', procedure(World: TCalculatorWorld)
