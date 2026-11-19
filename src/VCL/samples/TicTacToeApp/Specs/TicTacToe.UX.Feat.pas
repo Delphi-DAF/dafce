@@ -2,13 +2,6 @@
 
 interface
 
-type
-  /// <summary>
-  /// Marker type for unit identification.
-  /// Convention: Use .Category(TUnitMarker) to enable Cat: filter.
-  /// </summary>
-  TUnitMarker = class end;
-
 implementation
 
 uses
@@ -16,6 +9,12 @@ uses
   Daf.MiniSpec.Types,
   Daf.MiniSpec.DataTable,
   TicTacToe.SpecHelpers;
+
+type
+  /// <summary>
+  /// Names the feature's category after this unit: .Category(TThisUnit) enables the Cat: filter.
+  /// </summary>
+  TThisUnit = class end;
 
 initialization
 
@@ -26,7 +25,7 @@ initialization
     Quiero ver información visual clara del estado del juego
     Para poder jugar intuitivamente
   ''')
-  .Category(TUnitMarker)
+  .Category(TThisUnit)
   .UseWorld<TGameWorld>
 
   .Rule('Cada celda muestra el símbolo del jugador que la ocupa')

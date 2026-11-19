@@ -2,13 +2,6 @@
 
 interface
 
-type
-  /// <summary>
-  /// Marker type for unit identification.
-  /// Convention: Use .Category(TUnitMarker) to enable Cat: filter.
-  /// </summary>
-  TUnitMarker = class end;
-
 implementation
 
 uses
@@ -16,6 +9,12 @@ uses
   Daf.MiniSpec.Types,
   Daf.MiniSpec.DataTable,
   TicTacToe.SpecHelpers;
+
+type
+  /// <summary>
+  /// Names the feature's category after this unit: .Category(TThisUnit) enables the Cat: filter.
+  /// </summary>
+  TThisUnit = class end;
 
 initialization
 
@@ -26,7 +25,7 @@ initialization
     Quiero mover mis fichas a casillas adyacentes
     Para intentar formar una línea de 3
   ''')
-  .Category(TUnitMarker)
+  .Category(TThisUnit)
   .UseWorld<TGameWorld>
 
   .Rule('Se permite mover a casilla vacía adyacente en la misma fila')
