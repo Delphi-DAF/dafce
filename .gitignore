@@ -32,6 +32,12 @@ releases/
 # Machine overrides of project.cmd: %COMPUTERNAME%.project.cmd
 *.project.cmd
 
+# AI assistant instructions (local only)
+.github/copilot-instructions.md
+.claude/
+
+# minispec run results (per project)
+.minispec/
 
 # Quarto
 docs/_freeze/
