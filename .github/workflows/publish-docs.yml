@@ -29,6 +29,10 @@ concurrency:
 
 jobs:
   build:
+    # Only this repository publishes the site. A fork, or an edition that inherits this
+    # repository, would otherwise try to deploy it to its own Pages on every push.
+    # deploy needs build, so skipping build skips both.
+    if: github.repository == 'Delphi-DAF/dafce'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

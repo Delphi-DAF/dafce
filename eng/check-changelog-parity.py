@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Comprueba que CHANGELOG.md y CHANGELOG.es.md son el mismo documento en dos idiomas.
+"""Comprueba que cada changelog y su .es.md son el mismo documento en dos idiomas.
 
 POR QUE EXISTE
 --------------
@@ -19,6 +19,14 @@ QUE COMPRUEBA, Y POR QUE ASI
    README de la raiz, los dos en ingles. Un marcador de castellano ahi es el defecto que
    motivo la division, y la estructura NO lo ve.
 
+QUE PARES
+---------
+Cada CHANGELOG*.md de la raiz con su CHANGELOG*.es.md: CHANGELOG.md con CHANGELOG.es.md, y
+cualquier otro que exista, como el de una edicion que herede este repositorio y anada el
+suyo. Salen del arbol y no de una lista, porque una lista escrita a mano deja fuera el
+fichero nuevo sin decirlo. Por lo mismo, un .es.md sin su ingles es un fallo, y no
+encontrar ningun changelog tambien: cero pares comprobados se leeria como todo en orden.
+
 Lo que NO comprueba, a proposito: que la traduccion sea fiel. Eso lo lee una persona. Y
 tampoco la "englishness" del fichero espanol: nombres como Live Dashboard o Test Doubles
 son identificadores publicados, asi que una lista de palabras inglesas daria falsos rojos
@@ -36,7 +44,6 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-EN, ES = ROOT / "CHANGELOG.md", ROOT / "CHANGELOG.es.md"
 
 # Palabras funcion del castellano que no son identificadores ni nombres de producto.
 ES_MARKERS = re.compile(
@@ -64,14 +71,19 @@ def perfil(path):
     return out
 
 
-def main():
+def pares():
+    """(ingles, castellano) de cada changelog de la raiz, y los .es.md que no tienen ingles."""
+    ingleses = sorted(p for p in ROOT.glob("CHANGELOG*.md") if not p.name.endswith(".es.md"))
+    huerfanos = sorted(p.name for p in ROOT.glob("CHANGELOG*.es.md")
+                       if not (ROOT / (p.name[:-len(".es.md")] + ".md")).exists())
+    return [(en, en.with_name(en.name[:-len(".md")] + ".es.md")) for en in ingleses], huerfanos
+
+
+def comprobar(EN, ES):
+    """Los fallos de un par, y su resumen si no los hay."""
     fallos = []
-    for f in (EN, ES):
-        if not f.exists():
-            fallos.append(f"falta {f.name}")
-    if fallos:
-        print("FAIL changelog parity ·", "; ".join(fallos))
-        return 1
+    if not ES.exists():
+        return [f"falta {ES.name}"], ""
 
     a, b = perfil(EN), perfil(ES)
     ver_a, ver_b = [v for v, _, _ in a], [v for v, _, _ in b]
@@ -90,15 +102,29 @@ def main():
         fallos.append(f"{EN.name} tiene {len(hits)} marcadores de castellano "
                       f"(p.ej. {', '.join(sorted(set(h.lower() for h in hits))[:5])})")
 
-    n = len(ver_a)
-    if fallos:
-        print(f"FAIL changelog parity · {n} versiones")
-        for f in fallos:
-            print(f"  {f}")
+    return fallos, (f"{len(ver_a)} versiones, "
+                    f"{sum(sum(c) for _, _, c in a)} entradas en cada idioma")
+
+
+def main():
+    lista, huerfanos = pares()
+    if not lista:
+        print("FAIL changelog parity · no hay ningun CHANGELOG*.md en la raiz")
         return 1
-    print(f"ok   changelog parity · {n} versiones, "
-          f"{sum(sum(c) for _, _, c in a)} entradas en cada idioma")
-    return 0
+    rc = 0
+    for en, es in lista:
+        fallos, resumen = comprobar(en, es)
+        if fallos:
+            rc = 1
+            print(f"FAIL changelog parity · {en.name}")
+            for f in fallos:
+                print(f"  {f}")
+        else:
+            print(f"ok   changelog parity · {en.name}: {resumen}")
+    for h in huerfanos:
+        rc = 1
+        print(f"FAIL changelog parity · {h} no tiene su changelog en ingles")
+    return rc
 
 
 if __name__ == "__main__":
