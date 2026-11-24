@@ -84,8 +84,13 @@ if defined ARG_path (
   )
 )
 
-:: add vendor_bin to path, so you can install your vendor pkg
-set PATH=%PATH%;%PRJ_VENDOR_DIR%\bin
+:: add the vendor packages to the path, so the IDE finds them: bin for the 32-bit IDE, bin64 for
+:: the 64-bit one, because a package has the same file name on both platforms
+if (%ARG_64%)==(true) (
+  set "PATH=%PATH%;%PRJ_VENDOR_DIR%\bin64"
+) else (
+  set "PATH=%PATH%;%PRJ_VENDOR_DIR%\bin"
+)
 
 :: create output dir
 mkdir "%PRJ_OUT_DIR%" 2>nul

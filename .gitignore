@@ -15,6 +15,8 @@
 *.dcp
 
 out/
+# Third-party packages built here, with their sources (see BDS.bat: vendor\bin on the IDE path)
+vendor/
 __history/
 __recovery
 
