@@ -43,6 +43,14 @@ Invariants
    changes case stays on the disk, git keeps the old name, and so does every checkout on
    a case-sensitive one -- CI's, and the docs dependency graph built there. Every other
    check here folds case, so none of them can see it.
+
+Scope
+-----
+Every `.dpk` under `src/`, at any depth. Until 2026-11-24 it was `src/*/*.dpk`, one level,
+and a package nested deeper -- a tool's IDE package, under `src/Tools/<tool>/` -- was never
+read: its invariants went unchecked, and its units were reported as loose although a package
+distributes them. The names of invariant 5 had the same limit, through a scope of their own. Nothing said so, because a scope that misses a package prints the same
+"hold across N packages" as one that reads it.
 """
 
 from __future__ import annotations
@@ -137,9 +145,9 @@ FORBIDDEN = (
 
 
 def parse():
-    """Returns (requires, contains, owner) read from every src/*/*.dpk."""
+    """Returns (requires, contains, owner) read from every .dpk under src/, at any depth."""
     requires, contains, owner = {}, {}, {}
-    for dpk in sorted(ROOT.glob("src/*/*.dpk")):
+    for dpk in sorted(ROOT.glob("src/**/*.dpk")):
         pkg = dpk.stem
         text = dpk.read_text(encoding="utf-8-sig")
 
@@ -154,7 +162,7 @@ def parse():
             owner[unit.lower()] = pkg
 
     if not requires:
-        sys.exit("no .dpk found under src/*/ — is the repo root right?")
+        sys.exit("no .dpk found under src/ — is the repo root right?")
     return requires, contains, owner
 
 
@@ -201,7 +209,10 @@ def loose_units(contains):
     path, and it is absent from the build otherwise -- it does not break, it
     *disappears*. Since a package is the unit of installation, a source file that
     belongs to no package is a file nobody can install. Tests and samples are out of
-    scope: they are compiled by their own projects, not distributed.
+    scope: they are compiled by their own projects, not distributed. So is `src/Tools/`:
+    it holds programs and the packages that serve them, not framework units, and a unit
+    only a program uses is compiled by that program. A package there is still read by
+    the invariants.
 
     The parse this needs is the same one the invariants above already do, which is why
     it lives here rather than as a shell one-liner somebody keeps in a notebook.
@@ -209,8 +220,9 @@ def loose_units(contains):
     packaged = {u.lower() for units in contains.values() for u in units}
     loose = []
     for pas in sorted((ROOT / "src").rglob("*.pas")):
-        parts = {p.lower() for p in pas.relative_to(ROOT / "src").parts[:-1]}
-        if parts & {"test", "tests", "samples"}:
+        rel = pas.relative_to(ROOT / "src")
+        parts = {p.lower() for p in rel.parts[:-1]}
+        if parts & {"test", "tests", "samples"} or rel.parts[0].lower() == "tools":
             continue
         if pas.stem.lower() not in packaged:
             loose.append(pas.relative_to(ROOT).as_posix())
@@ -218,7 +230,7 @@ def loose_units(contains):
 
 
 def name_breaches():
-    """Invariant 5: each tracked src/*/*.dpk, and its .dproj, named exactly as its `package`."""
+    """Invariant 5: each tracked .dpk under src/, and its .dproj, named exactly as its `package`."""
     listed = subprocess.run(["git", "-C", str(ROOT), "ls-files", "-z", "src"],
                             capture_output=True, text=True)
     if listed.returncode != 0:
@@ -231,7 +243,7 @@ def name_breaches():
     breaches, examined = [], 0
     for path in tracked:
         dpk = PurePosixPath(path)
-        if dpk.suffix.lower() != ".dpk" or len(dpk.parts) != 3:
+        if dpk.suffix.lower() != ".dpk":
             continue
         examined += 1
         text = (ROOT / path).read_text(encoding="utf-8-sig")
@@ -249,7 +261,7 @@ def name_breaches():
                             f"{PurePosixPath(dproj).name}. Rename it in git: "
                             f"git mv {dproj} {PurePosixPath(dproj).with_stem(name)}")
     if not examined:
-        breaches.append("git lists no src/*/*.dpk, so the package names were not checked.")
+        breaches.append("git lists no .dpk under src/, so the package names were not checked.")
     return breaches
 
 
