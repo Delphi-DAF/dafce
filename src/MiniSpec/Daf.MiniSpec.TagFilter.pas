@@ -163,10 +163,10 @@ begin
       else if Word = 'not' then
         AddToken(tkNot)
       else
-        raise Exception.CreateFmt('Token inesperado en expresión de tags: %s', [Word]);
+        raise Exception.CreateFmt('Unexpected token in tag expression: %s', [Word]);
     end
     else
-      raise Exception.CreateFmt('Carácter inesperado en expresión de tags: %s', [Expr[i]]);
+      raise Exception.CreateFmt('Unexpected character in tag expression: %s', [Expr[i]]);
   end;
 
   AddToken(tkEOF);
@@ -243,11 +243,11 @@ begin
         Advance;
         Result := ParseOr;
         if CurrentToken.Kind <> tkRParen then
-          raise Exception.Create('Se esperaba ) en expresión de tags');
+          raise Exception.Create('Expected ) in tag expression');
         Advance;
       end;
   else
-    raise Exception.CreateFmt('Token inesperado en expresión de tags: %d', [Ord(CurrentToken.Kind)]);
+    raise Exception.CreateFmt('Unexpected token in tag expression: %d', [Ord(CurrentToken.Kind)]);
   end;
 end;
 

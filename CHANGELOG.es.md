@@ -14,6 +14,10 @@ con [Semantic Versioning](https://semver.org/spec/v2.0.0.html) y los commits sig
 
 - **MiniSpec**: `.Strict` en `Stub<T>` y `Mock<T>` — una función llamada sin `Setup` que case lanza `EUnconfiguredCall` en vez de devolver el cero del tipo, que podía pasar por un resultado válido. Los procedimientos no se ven afectados, y en un mock `Expects` no cuenta como `Setup`. Sin `.Strict` nada cambia
 
+### Changed
+
+- **MiniSpec**: los errores de una expresión de filtro o de tags salen en inglés, como el resto de mensajes del runner. Un script que buscaba el texto en castellano ya no lo encuentra
+
 
 ## [2.0.0] - 2026-10-26
 

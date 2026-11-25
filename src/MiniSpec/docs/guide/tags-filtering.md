@@ -58,7 +58,7 @@ MyApp.exe -f "(Feat:Login or @auth) and ~@slow"
 ⚠️ **The text after `Feat:`, `Scen:`, `Rule:` or `Cat:` is a single word, and there is no
 quoting.** The expression is split on spaces, so `-f "Scen:releases one reference"` reads
 `Scen:releases` and then aborts on the next word with
-`Token inesperado en expresión de filtro: one` — zero specs run, which in a script reads exactly
+`Unexpected token in filter expression: one` — zero specs run, which in a script reads exactly
 like a suite that passed. Pick one word the description contains.
 
 ---
