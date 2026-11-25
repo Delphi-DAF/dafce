@@ -14,6 +14,10 @@ and [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
 - **MiniSpec**: `.Strict` on `Stub<T>` and `Mock<T>` — a function called with no matching `Setup` raises `EUnconfiguredCall` instead of returning the type's zero, which could pass for a valid result. Procedures are not affected, and in a mock `Expects` does not count as a `Setup`. Without `.Strict` nothing changes
 
+### Changed
+
+- **MiniSpec**: the errors of a filter or tag expression come in English, like the rest of the runner's messages. A script that matched the Spanish text no longer finds it
+
 
 ## [2.0.0] - 2026-10-26
 

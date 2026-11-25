@@ -512,8 +512,8 @@ begin
     except
       on E: Exception do
       begin
-        WriteLn('Error en expresión de filtro: ' + E.Message);
-        WriteLn('Use --help para ver la sintaxis válida.');
+        WriteLn('Error in filter expression: ' + E.Message);
+        WriteLn('Use --help to see the valid syntax.');
         ExitCode := 1;
         // No usar Exit aquí para evitar memory leaks de la excepción
       end;

@@ -2375,7 +2375,7 @@ end;
 procedure PopSpecContext;
 begin
   if Length(GContextStack) = 0 then
-    raise Exception.Create('PopSpecContext sin Push: la pila de contextos de ejecucion esta vacia');
+    raise Exception.Create('PopSpecContext without Push: the stack of execution contexts is empty');
   GSpecContext := GContextStack[High(GContextStack)];
   SetLength(GContextStack, Length(GContextStack) - 1);
 end;
